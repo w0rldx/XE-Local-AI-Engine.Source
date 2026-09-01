@@ -106,9 +106,26 @@ export function DevWorkflowNodeCard({ id, data, selected }: NodeProps<DevWorkflo
 					<Badge size="xs" variant="light" color="gray">
 						{t(`pages.devWorkflows.nodeType.${nodeData.nodeType}`, nodeData.nodeType)}
 					</Badge>
+					{/* An apply node LANDS patches; a validation node judges a checkout. Same kind badge, opposite
+					    consequence — and on a DRAFT preview the card is the only place that difference can be seen at all,
+					    because nothing has run and there is no report to read it off. */}
+					{nodeData.isApplyTool ? (
+						<Badge size="xs" variant="light" color="grape" data-testid={`dev-workflow-graph-node-apply-${id}`}>
+							{t("pages.devWorkflows.nodes.appliesPatches", "applies patches")}
+						</Badge>
+					) : null}
+					{/* "3 of 5" names the CHILD this card belongs to, so a card says how much of a decomposition it is one
+					    card of. The index is the server's, rendered unchanged: `MaterializationIndex` is already 1-based
+					    (C2), and adding one to it made the only child of a decomposition read "2 of 2". A materialization
+					    of one carries no count — "1 of 1" is noise, and the dashed border already said it. */}
 					{nodeData.isMaterialized ? (
-						<Badge size="xs" variant="outline" color="gray">
-							{t("pages.devWorkflows.nodes.materialized", "generated")}
+						<Badge size="xs" variant="outline" color="gray" data-testid={`dev-workflow-graph-node-materialized-${id}`}>
+							{(nodeData.materializationCount ?? 0) > 1 && nodeData.materializationIndex !== undefined
+								? t("pages.devWorkflows.nodes.materializedOf", "generated · {{index}} of {{count}}", {
+										index: nodeData.materializationIndex,
+										count: nodeData.materializationCount ?? 0,
+									})
+								: t("pages.devWorkflows.nodes.materialized", "generated")}
 						</Badge>
 					) : null}
 					{nodeData.hasStaleInputs ? (

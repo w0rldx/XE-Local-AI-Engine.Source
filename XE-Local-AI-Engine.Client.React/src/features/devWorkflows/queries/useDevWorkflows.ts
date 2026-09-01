@@ -63,6 +63,36 @@ export function devWorkflowInvalidationKey(
 /** The events feed is cursor-paged on `sinceSeq`; the artifact feed is `sinceSeq`-bounded and read whole. */
 const FULL_FEED = { sinceSeq: 0 } as const;
 export const devWorkflowEventsPageSize = 200;
+/**
+ * The tail page asks for two windows' worth so it always reaches the run's true last sequence — see
+ * `devWorkflowEventsAnchorParam`. Comfortably under R7's 500-row server clamp.
+ */
+const devWorkflowEventsTailPageSize = devWorkflowEventsPageSize * 2;
+
+/** Which end of the log the feed opens on. The operator switches ends; nothing else does (R-C4). */
+export type DevWorkflowEventsAnchor = "newest" | "oldest";
+
+/**
+ * The cursor the newest-first feed opens on, QUANTIZED to a page boundary.
+ *
+ * `sinceSeq` is an exclusive lower bound and the server answers forward, so "the newest page" is a cursor one page
+ * below the run's high-water mark. Deriving it from `lastSequence` directly would mint a new cursor — and therefore a
+ * new cache entry — on every single event, which throws away any older pages the operator has loaded. Quantizing to a
+ * page boundary changes it once per page instead, and the tail request asks for TWO pages so it still spans from the
+ * boundary all the way to `lastSequence` however far past the boundary that has moved.
+ *
+ * ponytail: crossing a boundary on a live run does re-anchor and discard loaded history. That is once per 200
+ * sequences, and the alternative — a cursor that moves with every event — discards it on every one.
+ */
+function devWorkflowEventsAnchorParam(lastSequence: number | undefined, anchor: DevWorkflowEventsAnchor): number {
+	if (anchor === "oldest" || !lastSequence || lastSequence <= devWorkflowEventsTailPageSize) {
+		return 0;
+	}
+	// Windows are half-open `(start, start + pageSize]`, so sequence N sits in the window starting at `(N-1) / page`.
+	const window = Math.floor((lastSequence - 1) / devWorkflowEventsPageSize) * devWorkflowEventsPageSize;
+	return Math.max(0, window - devWorkflowEventsPageSize);
+}
+
 /** Work-item list cadence while any listed run is still live (X16 Q7). A run-scoped hub cannot feed a list. */
 const devWorkflowListPollIntervalMs = 5_000;
 
@@ -147,9 +177,21 @@ export function useDevWorkflowNodeRun(runId: string | undefined, nodeRunId: stri
 
 /**
  * The event log — the one feed that grows without bound, so the one that is cursor-paged. `sinceSeq` is an EXCLUSIVE
- * lower bound and the rows come back ascending, so "load more" reads the NEXT page from the watermark rather than
- * re-asking for a bigger first page. Growing `limit` instead stops at the server's 500-row clamp, which made every
- * event past the 500th unreachable for the rest of the run's life.
+ * lower bound and the rows come back ascending. Growing `limit` instead stops at the server's 500-row clamp, which
+ * made every event past the 500th unreachable for the rest of the run's life.
+ *
+ * **The feed opens on the NEWEST events (R-C4), not the oldest.** A fan-out run — Slice C's whole point — writes
+ * hundreds of events, and a feed that opened at sequence 1 pinned the operator to the run's first minute and made
+ * "what is happening now" a dozen clicks away. There is no wire change behind this: R7 takes `sinceSeq` and nothing
+ * else, so the tail is reached by COMPUTING the cursor from `lastSequence`, which the run payload already carries, and
+ * then walking BACKWARD a page at a time.
+ *
+ * Walking backward is exact rather than approximate because run sequences are strictly increasing and unique — the
+ * counter is shared with node-runs and artifacts, so a window of N sequence NUMBERS holds at most N events. A request
+ * for one window's width therefore returns that whole window and can skip nothing.
+ *
+ * `anchor: "oldest"` is the other end: the cursor is 0 and paging runs FORWARD off the server's `hasMore` probe, which
+ * is the original behaviour and is what an operator reading a run from its beginning wants.
  *
  * Wired onto the generated SDK fn rather than `listDevWorkflowRunEventsOptions`, because hey-api emits `*InfiniteOptions`
  * only for the pagination parameters it recognises and `sinceSeq` is not one — the same reason `useBenchmarkRuns` pages
@@ -158,30 +200,52 @@ export function useDevWorkflowNodeRun(runId: string | undefined, nodeRunId: stri
  *
  * A ping invalidates this query and TanStack then refetches every loaded page in order, recomputing each cursor from
  * the page before it. That default is kept rather than resetting to page one: events are append-only and never
- * re-stamped, so the cursors are stable, and at A0 scale the feed is a page or two — while a reset would silently take
- * the operator back to the top of a log they had scrolled through.
+ * re-stamped, so the cursors are stable, and a reset would silently take the operator back to the top of a log they
+ * had scrolled through.
  */
-export function useDevWorkflowRunEvents(runId: string | undefined, options: FeedOptions = {}) {
+export function useDevWorkflowRunEvents(
+	runId: string | undefined,
+	lastSequence: number | undefined,
+	options: FeedOptions & { readonly anchor?: DevWorkflowEventsAnchor } = {},
+) {
+	const anchor = options.anchor ?? "newest";
+	const anchorParam = devWorkflowEventsAnchorParam(lastSequence, anchor);
 	return useInfiniteQuery({
-		// The first page's request, which is what this cache entry IS: the feed from the start, in pages of 200.
+		// The first page's request, which is what this cache entry IS: the feed from `anchorParam`, in pages of 200.
 		queryKey: listDevWorkflowRunEventsQueryKey({
 			path: { runId: runId ?? "" },
-			query: { sinceSeq: 0, limit: devWorkflowEventsPageSize },
+			query: { sinceSeq: anchorParam, limit: devWorkflowEventsPageSize },
 		}),
-		initialPageParam: 0,
-		// `hasMore` is the server's one-over-the-limit probe and `lastSequence` the highest sequence in the page, which is
-		// the next exclusive cursor. Requiring it to ADVANCE is what stops a "load more" loop if a page ever reports more
-		// without carrying a higher sequence.
+		initialPageParam: anchorParam,
+		// Backward: the next page is the window below this one, and a cursor of 0 is the start of the log — there is
+		// nothing older to ask for. Forward (the "oldest" anchor): `hasMore` is the server's one-over-the-limit probe and
+		// `lastSequence` the highest sequence in the page, which is the next exclusive cursor. Requiring it to ADVANCE is
+		// what stops a "load more" loop if a page ever reports more without carrying a higher sequence.
 		getNextPageParam: (
 			lastPage: ListDevWorkflowRunEventsResponse,
 			_pages: readonly ListDevWorkflowRunEventsResponse[],
 			lastPageParam: number,
-		) => (lastPage.hasMore === true && (lastPage.lastSequence ?? 0) > lastPageParam ? lastPage.lastSequence : undefined),
+		) => {
+			// A cursor of 0 is the start of the log: there is nothing older, so the only honest continuation is the
+			// server's own forward probe. That covers the short run whose whole feed IS the first page, and the run
+			// payload not having landed yet — with no `lastSequence` there is no tail to anchor on, and answering
+			// "nothing more" to a feed that has hundreds of unread events would be the truncation this replaced.
+			if (anchorParam === 0) {
+				return lastPage.hasMore === true && (lastPage.lastSequence ?? 0) > lastPageParam ? lastPage.lastSequence : undefined;
+			}
+			return lastPageParam <= 0 ? undefined : Math.max(0, lastPageParam - devWorkflowEventsPageSize);
+		},
 		queryFn: async ({ pageParam, signal }) => {
 			const { data } = await callWithResponseValidation(
 				listDevWorkflowRunEvents({
 					path: { runId: runId ?? "" },
-					query: { sinceSeq: pageParam, limit: devWorkflowEventsPageSize },
+					query: {
+						sinceSeq: pageParam,
+						// Only a genuine tail page spans two windows, which is what carries it past the quantized boundary to
+						// the run's actual last sequence. Every backward page is exactly one window wide, and an anchor of 0
+						// has no boundary to span.
+						limit: anchorParam > 0 && pageParam === anchorParam ? devWorkflowEventsTailPageSize : devWorkflowEventsPageSize,
+					},
 					signal,
 					throwOnError: true,
 				}),

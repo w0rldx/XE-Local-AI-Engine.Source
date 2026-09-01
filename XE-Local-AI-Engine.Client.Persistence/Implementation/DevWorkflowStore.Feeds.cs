@@ -31,6 +31,19 @@ internal sealed partial class DevWorkflowStore
                         .ToListAsync(cancellationToken)
                         .ConfigureAwait(false);
 
+    /// <summary>
+    ///     Latest wins, and latest is the node run created last; the id breaks a tie inside one materialization's
+    ///     insert rather than leaving the answer to whatever order the database happens to return.
+    /// </summary>
+    public async Task<Guid?> FindRunIdForDevelopmentTaskAsync(Guid developmentTaskId, CancellationToken cancellationToken = default) =>
+        await _dbContext.DevWorkflowNodeRuns.AsNoTracking()
+                        .Where(entity => entity.DevelopmentTaskId == developmentTaskId)
+                        .OrderByDescending(entity => entity.CreatedAtUtc)
+                        .ThenByDescending(entity => entity.Id)
+                        .Select(entity => (Guid?)entity.RunId)
+                        .FirstOrDefaultAsync(cancellationToken)
+                        .ConfigureAwait(false);
+
     public async Task<DevWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid nodeRunId, CancellationToken cancellationToken = default)
     {
         var nodeRun = await _dbContext.DevWorkflowNodeRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == nodeRunId, cancellationToken).ConfigureAwait(false)

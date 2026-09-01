@@ -47,6 +47,10 @@ internal static class AddNodeDevWorkflowsExtensions
         // delay a node asks for before trying again outlives the tick that scheduled it.
         builder.Services.AddSingleton<DevWorkflowRetryPolicy>();
 
+        // A singleton for the same reason, and because it holds nothing between ticks: everything it reads it is
+        // handed, and everything it writes goes through the store inside the tick's own serialization.
+        builder.Services.AddSingleton<DevWorkflowMaterializer>();
+
         // Scoped: both reach the run store and the work-session family through scoped stores, and the dispatcher
         // resolves them inside the per-tick scope it already opens.
         builder.Services.AddScoped<DevWorkflowArtifactPromotion>();
@@ -68,6 +72,11 @@ internal static class AddNodeDevWorkflowsExtensions
         if (configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true))
         {
             builder.Services.AddScoped<IDevWorkflowToolCommands, DevWorkflowToolCommands>();
+
+            // The integration variant of the same lane, registered under the same condition and for a stronger reason:
+            // what it drives IS Dev Mode's apply gate, so with Development Mode off there is nothing for it to call.
+            // The lane then answers such a node run with a configuration reason, as it does a validation node's.
+            builder.Services.AddScoped<DevWorkflowApplyCommands>();
         }
 
         // Before both, and independent of both: a template has to exist before anyone can start a run from it, and

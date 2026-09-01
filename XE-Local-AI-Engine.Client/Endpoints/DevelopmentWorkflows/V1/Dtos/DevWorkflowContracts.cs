@@ -172,6 +172,13 @@ public sealed record DevWorkflowGraph(int SchemaVersion, IReadOnlyList<DevWorkfl
     public static DevWorkflowGraph Empty { get; } = new(1, [], []);
 }
 
+/// <summary>
+///     <c>ToolMode</c> is what a Tool node does with the repository it names — <c>Validate</c> or <c>Apply</c> — and it
+///     rides the wire because a definition that loses it loses its apply node: copying the seeded template through this
+///     contract silently produced an ordinary validation node where "apply the approved patches" had been. Absent means
+///     <c>Validate</c>, exactly as the runtime's parser reads it, so a definition written before this field keeps every
+///     byte it had.
+/// </summary>
 public sealed record DevWorkflowGraphNode(
     string NodeKey,
     string NodeType,
@@ -188,7 +195,8 @@ public sealed record DevWorkflowGraphNode(
     int? NodeTimeoutSeconds,
     string? RetryTarget,
     DevWorkflowMaterialization? Materialization,
-    IReadOnlyDictionary<string, string>? RequiredCapabilities);
+    IReadOnlyDictionary<string, string>? RequiredCapabilities,
+    string? ToolMode);
 
 public sealed record DevWorkflowMaterialization(string TemplateNodeKey, string ArtifactKind, string JoinNodeKey, int MaxChildren);
 

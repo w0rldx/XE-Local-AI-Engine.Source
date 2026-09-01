@@ -4,9 +4,19 @@ import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
+import type { ChatScope } from "@/features/chat/models/ChatModels";
 import { DevWorkflowNodePanel } from "@/features/devWorkflows/components/DevWorkflowNodePanel";
-import type { DevWorkflowNodeRunDetailResponse } from "@/features/devWorkflows/models/DevWorkflowModels";
-import { devWorkflowNodeRunDetail } from "@/features/devWorkflows/test/DevWorkflowFixtures";
+import type {
+	DevWorkflowNodeRunDetailResponse,
+	DevWorkflowRunEventResponse,
+	DevWorkflowRunResponse,
+} from "@/features/devWorkflows/models/DevWorkflowModels";
+import {
+	devWorkflowNodeRunDetail,
+	devWorkflowNodeRunSummary,
+	devWorkflowRun,
+	devWorkflowRunEvent,
+} from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const navigate = vi.hoisted(() => vi.fn());
@@ -16,9 +26,47 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
 	useNavigate: () => navigate,
 }));
 
-const sessionId = "88888888-8888-4888-8888-888888888888";
+// The transcript IS the real chat page, whose own contract is pinned by Chat.scope.test.tsx. What this file owes is
+// the SCOPE the node panel hands it — and, for a purged session, that it is never handed one at all.
+const lastScope = vi.hoisted(() => ({ current: undefined as ChatScope | undefined }));
 
-function renderPanel(nodeRun: DevWorkflowNodeRunDetailResponse, options: { onShowArtifacts?: () => void; interruptedCount?: number } = {}) {
+vi.mock("@/features/chat/pages/Chat", () => ({
+	Chat: ({ scope }: { scope?: ChatScope }) => {
+		lastScope.current = scope;
+		return <div data-testid="embedded-chat" data-conversation={scope?.conversationId} />;
+	},
+}));
+
+// The agent panel subscribes to the work-session hub for its resume nonce (R-C6). A unit test needs the subscription
+// not to reach the network, not a real one.
+const hubMock = vi.hoisted(() => {
+	// `invoke` answers a promise because the hook's own cleanup unsubscribes through it and chains off the result.
+	const connection = { state: "Connected", on: vi.fn(), off: vi.fn(), invoke: vi.fn(() => Promise.resolve()) };
+	return {
+		connection,
+		acquire: vi.fn(() => ({
+			connection,
+			whenStarted: Promise.resolve(),
+			onReconnected: vi.fn(() => vi.fn()),
+			release: vi.fn(),
+		})),
+	};
+});
+
+vi.mock("@/core/api/signalr/SharedHubConnection", () => ({ acquireHubConnection: hubMock.acquire }));
+
+const sessionId = "88888888-8888-4888-8888-888888888888";
+const conversationId = "77777777-7777-4777-8777-777777777777";
+const agentDefinitionId = "66666666-6666-4666-8666-666666666666";
+
+interface PanelOptions {
+	readonly onShowArtifacts?: () => void;
+	/** The run's loaded event pages, exactly as the detail page hands them over — unfiltered, every node's rows. */
+	readonly events?: readonly DevWorkflowRunEventResponse[];
+	readonly run?: DevWorkflowRunResponse;
+}
+
+function renderPanel(nodeRun: DevWorkflowNodeRunDetailResponse, options: PanelOptions = {}) {
 	const onShowArtifacts = options.onShowArtifacts ?? vi.fn();
 	renderWithProviders(
 		<ConfirmProvider>
@@ -26,7 +74,8 @@ function renderPanel(nodeRun: DevWorkflowNodeRunDetailResponse, options: { onSho
 				nodeRun={nodeRun}
 				isPending={false}
 				isDeciding={false}
-				interruptedCount={options.interruptedCount}
+				events={options.events}
+				run={options.run}
 				onDecide={vi.fn()}
 				onShowArtifacts={onShowArtifacts}
 				onClose={vi.fn()}
@@ -36,16 +85,30 @@ function renderPanel(nodeRun: DevWorkflowNodeRunDetailResponse, options: { onSho
 	return { onShowArtifacts };
 }
 
+/** `node.interrupted` rows for the fixture node, which is what the panel counts restarts from. */
+function interruptedEvents(count: number): readonly DevWorkflowRunEventResponse[] {
+	return Array.from({ length: count }, (_, index) =>
+		devWorkflowRunEvent({
+			id: `interrupted-${index}`,
+			sequence: index + 1,
+			eventType: "node.interrupted",
+			nodeRunId: devWorkflowNodeRunDetail().id,
+		}),
+	);
+}
+
 describe("DevWorkflowNodePanel", () => {
 	beforeEach(() => {
 		navigate.mockClear();
+		hubMock.acquire.mockClear();
+		lastScope.current = undefined;
 	});
 
 	afterEach(() => {
 		cleanup();
 	});
 
-	it("links an agent node out to its work session rather than re-hosting the session view", () => {
+	it("keeps the link-out to the full session view beside the embedded transcript, not instead of it", () => {
 		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Agent", workSessionId: sessionId, workSessionAvailable: true }));
 
 		fireEvent.click(screen.getByTestId("dev-workflow-node-session-link"));
@@ -53,17 +116,53 @@ describe("DevWorkflowNodePanel", () => {
 		expect(navigate).toHaveBeenCalledWith({ to: "/work-sessions/$sessionId", params: { sessionId } });
 	});
 
+	it("embeds the node's transcript with the composer taken away, because the runtime is the single writer", () => {
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				nodeType: "Agent",
+				workSessionId: sessionId,
+				conversationId,
+				agentDefinitionId,
+				workSessionAvailable: true,
+			}),
+		);
+
+		expect(screen.getByTestId("dev-workflow-node-transcript")).toBeDefined();
+		// N2: a follow-up typed here would be a second writer of invocations on the node's conversation.
+		expect(lastScope.current).toMatchObject({
+			conversationId,
+			pinnedAgentId: agentDefinitionId,
+			composerDisabled: true,
+			embedded: true,
+		});
+		expect(typeof lastScope.current?.resumeNonce).toBe("number");
+		// The runtime writes the invocations, so the panel offers neither override — a redirected composer would be
+		// the second writer this scope exists to prevent.
+		expect(lastScope.current?.onSendOverride).toBeUndefined();
+	});
+
 	it("says the transcript is gone — not that the node is empty — when the work session was purged", () => {
-		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Agent", workSessionId: sessionId, workSessionAvailable: false }));
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				nodeType: "Agent",
+				workSessionId: sessionId,
+				conversationId,
+				workSessionAvailable: false,
+			}),
+		);
 
 		// The node-run row outlives its session on purpose (the reference is loose), so the UI must name WHICH thing is
 		// missing: the workflow-owned events and artifacts are still there.
 		expect(screen.getByTestId("dev-workflow-node-session-purged")).toBeDefined();
 		expect(screen.queryByTestId("dev-workflow-node-session-link")).toBeNull();
+		// And nothing mounts against the dead conversation id: an empty chat pane is indistinguishable from a session
+		// that has simply not spoken yet, which was the explicitly rejected round-1 behaviour.
+		expect(screen.queryByTestId("embedded-chat")).toBeNull();
+		expect(hubMock.acquire).not.toHaveBeenCalled();
 	});
 
 	it("reports restart survival from the event log, which is the module's whole claim", () => {
-		renderPanel(devWorkflowNodeRunDetail({ sessionResumes: 0 }), { interruptedCount: 1 });
+		renderPanel(devWorkflowNodeRunDetail({ sessionResumes: 0 }), { events: interruptedEvents(1) });
 
 		expect(screen.getByTestId("dev-workflow-node-interrupted").textContent).toBe("interrupted and re-dispatched 1×");
 	});
@@ -71,10 +170,135 @@ describe("DevWorkflowNodePanel", () => {
 	it("does not pass step-budget parking off as a restart — they are different facts, shown separately", () => {
 		// Live proof of the bug this replaces: a node that had NEVER been interrupted parked 4× and the pane claimed
 		// "resumed 4×", while the node that actually survived a restart showed nothing at all.
-		renderPanel(devWorkflowNodeRunDetail({ sessionResumes: 4 }), { interruptedCount: 0 });
+		renderPanel(devWorkflowNodeRunDetail({ sessionResumes: 4 }), { events: interruptedEvents(0) });
 
 		expect(screen.getByTestId("dev-workflow-node-resumes").textContent).toBe("paused for step budget 4×");
 		expect(screen.queryByTestId("dev-workflow-node-interrupted")).toBeNull();
+	});
+
+	it("counts only THIS node's interruptions, out of a feed that carries every node's", () => {
+		// The panel is handed the whole run feed now. A sibling's restart is not this node's evidence.
+		renderPanel(devWorkflowNodeRunDetail(), {
+			events: [
+				...interruptedEvents(1),
+				devWorkflowRunEvent({ id: "other", sequence: 9, eventType: "node.interrupted", nodeRunId: "some-other-node" }),
+			],
+		});
+
+		expect(screen.getByTestId("dev-workflow-node-interrupted").textContent).toBe("interrupted and re-dispatched 1×");
+	});
+
+	it("lists prior attempts from the event log, which is the only place they exist", () => {
+		const nodeRunId = devWorkflowNodeRunDetail().id;
+		renderPanel(devWorkflowNodeRunDetail({ attempt: 2, maxAttempts: 3 }), {
+			events: [
+				devWorkflowRunEvent({
+					id: "attached-1",
+					sequence: 1,
+					eventType: "worksession.attached",
+					nodeRunId,
+					detailJson: JSON.stringify({ workSessionId: sessionId, attempt: 1, sessionResumes: 0 }),
+				}),
+				devWorkflowRunEvent({
+					id: "retry-1",
+					sequence: 2,
+					eventType: "node.retry.scheduled",
+					nodeRunId,
+					outcome: "provider-error",
+				}),
+			],
+		});
+
+		expect(screen.getByTestId("dev-workflow-node-attempt-1").textContent).toContain("provider-error");
+		// Attempt 2 is the one running: the row exists because the node-run says so, with nothing claimed about it yet.
+		expect(screen.getByTestId("dev-workflow-node-attempt-2")).toBeDefined();
+		fireEvent.click(screen.getByTestId("dev-workflow-node-attempt-session-1"));
+		expect(navigate).toHaveBeenCalledWith({ to: "/work-sessions/$sessionId", params: { sessionId } });
+	});
+
+	it("still offers the transcript of an attempt whose row the store wrote in PascalCase", () => {
+		// The pre-FX-D spelling, which every existing run keeps for ever. Read only under the new one, the session id
+		// is undefined and this link simply does not render — the failure this whole class of bug has: silence.
+		const nodeRunId = devWorkflowNodeRunDetail().id;
+		// Two attempts, because a one-row list renders nothing — the header already says "attempt 1 of N".
+		renderPanel(devWorkflowNodeRunDetail({ attempt: 2, maxAttempts: 3 }), {
+			events: [
+				devWorkflowRunEvent({
+					id: "attached-legacy",
+					sequence: 1,
+					eventType: "worksession.attached",
+					nodeRunId,
+					detailJson: JSON.stringify({ WorkSessionId: sessionId, Attempt: 1, SessionResumes: 0 }),
+				}),
+				devWorkflowRunEvent({ id: "retry-legacy", sequence: 2, eventType: "node.retry.scheduled", nodeRunId }),
+			],
+		});
+
+		fireEvent.click(screen.getByTestId("dev-workflow-node-attempt-session-1"));
+		expect(navigate).toHaveBeenCalledWith({ to: "/work-sessions/$sessionId", params: { sessionId } });
+	});
+
+	it("does not blame an unrelated fix loop for a node's own retry", () => {
+		// A same-node retry emits `node.retry.scheduled` with NO routed event of its own, so the newest routed event
+		// anywhere in the run sits at-or-before it — under C2's N subtrees that is the ordinary case, not a corner.
+		// Reading it would name a node that has nothing to do with this reset.
+		const nodeRunId = devWorkflowNodeRunDetail().id;
+		renderPanel(devWorkflowNodeRunDetail({ nodeKey: "implement", attempt: 2 }), {
+			run: devWorkflowRun({
+				nodes: [devWorkflowNodeRunSummary({ id: "node-validate", nodeKey: "validate", label: "Validate the patch" })],
+			}),
+			events: [
+				devWorkflowRunEvent({
+					id: "routed-elsewhere",
+					sequence: 3,
+					eventType: "node.retry.routed",
+					nodeRunId: "node-validate",
+					detailJson: JSON.stringify({ from: "validate", to: "document" }),
+				}),
+				devWorkflowRunEvent({ id: "reset", sequence: 5, eventType: "node.retry.scheduled", nodeRunId }),
+			],
+		});
+
+		expect(screen.queryByTestId("dev-workflow-node-cascade-rerun")).toBeNull();
+	});
+
+	it("says why a completed node is running again, rather than letting it silently un-complete", () => {
+		const nodeRunId = devWorkflowNodeRunDetail().id;
+		renderPanel(devWorkflowNodeRunDetail({ nodeKey: "implement", attempt: 2 }), {
+			run: devWorkflowRun({
+				nodes: [devWorkflowNodeRunSummary({ id: "node-validate", nodeKey: "validate", label: "Validate the patch" })],
+			}),
+			events: [
+				devWorkflowRunEvent({
+					id: "routed",
+					sequence: 4,
+					eventType: "node.retry.routed",
+					nodeRunId: "node-validate",
+					detailJson: JSON.stringify({ from: "validate", to: "implement" }),
+				}),
+				devWorkflowRunEvent({ id: "reset", sequence: 5, eventType: "node.retry.scheduled", nodeRunId }),
+			],
+		});
+
+		expect(screen.getByTestId("dev-workflow-node-cascade-rerun").textContent).toContain("Validate the patch");
+	});
+
+	it("does not call a node's own retry a cascade — that is just this node trying again", () => {
+		const nodeRunId = devWorkflowNodeRunDetail().id;
+		renderPanel(devWorkflowNodeRunDetail({ nodeKey: "implement", attempt: 2 }), {
+			events: [
+				devWorkflowRunEvent({
+					id: "routed",
+					sequence: 4,
+					eventType: "node.retry.routed",
+					nodeRunId,
+					detailJson: JSON.stringify({ from: "implement", to: "implement" }),
+				}),
+				devWorkflowRunEvent({ id: "reset", sequence: 5, eventType: "node.retry.scheduled", nodeRunId }),
+			],
+		});
+
+		expect(screen.queryByTestId("dev-workflow-node-cascade-rerun")).toBeNull();
 	});
 
 	it("explains a failed node with its failure class and sanitized reason", () => {
@@ -119,6 +343,267 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.queryByTestId("dev-workflow-node-agent")).toBeNull();
 		expect(screen.queryByTestId("dev-workflow-node-tool")).toBeNull();
 		expect(screen.queryByTestId("dev-workflow-node-devtask")).toBeNull();
+	});
+
+	it("shows a Join's dependencies split into satisfied and outstanding, mirroring the state machine's edge rule", () => {
+		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Join", nodeKey: "integrate", label: "Integrate" }), {
+			run: devWorkflowRun({
+				graph: {
+					schemaVersion: 1,
+					nodes: [],
+					edges: [
+						{ from: "implement#0", to: "integrate" },
+						{ from: "implement#1", to: "integrate" },
+					],
+				},
+				nodes: [
+					devWorkflowNodeRunSummary({ id: "n0", nodeKey: "integrate", waitingOnNodeKeys: ["implement#1"] }),
+					devWorkflowNodeRunSummary({ id: "n1", nodeKey: "implement#0", label: "Slice one", status: "Succeeded" }),
+					devWorkflowNodeRunSummary({ id: "n2", nodeKey: "implement#1", label: "Slice two", status: "Running" }),
+				],
+			}),
+		});
+
+		expect(screen.getByTestId("dev-workflow-node-dependency-implement#0").textContent).toContain("satisfied");
+		expect(screen.getByTestId("dev-workflow-node-dependency-implement#1").textContent).toContain("outstanding");
+		expect(screen.getByTestId("dev-workflow-node-dependency-implement#0").textContent).toContain("Slice one");
+	});
+
+	it("badges a DEAD inbound branch dead rather than satisfied, which is what the join will do with it", () => {
+		// LIVE-3 P2: the verdict came off `waitingOnNodeKeys`, which the runtime sends only while the join is Pending and
+		// which drops every SETTLED source — so a Skipped branch arrived as "not waited on" and read SATISFIED. Under the
+		// C1 rule (`DevWorkflowStateMachine.EdgeState`) a source that settled any way but Succeeded makes the edge DEAD,
+		// and that dead edge is precisely why an `All` join skips. The panel said the opposite of what was about to happen.
+		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Join", nodeKey: "join", label: "Join" }), {
+			run: devWorkflowRun({
+				graph: {
+					schemaVersion: 1,
+					nodes: [{ nodeKey: "join", nodeType: "Join", label: "Join" }],
+					edges: [
+						{ from: "landed", to: "join" },
+						{ from: "skipped", to: "join" },
+						{ from: "failed", to: "join" },
+						{ from: "cancelled", to: "join" },
+						{ from: "live", to: "join" },
+					],
+				},
+				nodes: [
+					devWorkflowNodeRunSummary({ id: "n0", nodeKey: "join" }),
+					devWorkflowNodeRunSummary({ id: "n1", nodeKey: "landed", label: "Landed", status: "Succeeded" }),
+					devWorkflowNodeRunSummary({ id: "n2", nodeKey: "skipped", label: "Skipped one", status: "Skipped" }),
+					devWorkflowNodeRunSummary({ id: "n3", nodeKey: "failed", label: "Failed one", status: "Failed" }),
+					devWorkflowNodeRunSummary({ id: "n4", nodeKey: "cancelled", label: "Cancelled one", status: "Cancelled" }),
+					devWorkflowNodeRunSummary({ id: "n5", nodeKey: "live", label: "Live one", status: "Running" }),
+				],
+			}),
+		});
+
+		for (const key of ["skipped", "failed", "cancelled"]) {
+			const row = screen.getByTestId(`dev-workflow-node-dependency-${key}`).textContent ?? "";
+			// `All` is the default policy, so the wording names the consequence: the join skips.
+			expect(row).toContain("dead — the join skips once nothing is pending");
+			expect(row).not.toContain("satisfied");
+			expect(row).not.toContain("outstanding");
+		}
+		expect(screen.getByTestId("dev-workflow-node-dependency-landed").textContent).toContain("satisfied");
+		// Unsettled is a WAIT, not a verdict — the same answer `EdgeState` gives for a source that has not landed.
+		expect(screen.getByTestId("dev-workflow-node-dependency-live").textContent).toContain("outstanding");
+	});
+
+	it("does not tell an Any join it will skip: there a dead branch is ignored while a sibling landed", () => {
+		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Join", nodeKey: "join", label: "Join" }), {
+			run: devWorkflowRun({
+				graph: {
+					schemaVersion: 1,
+					nodes: [{ nodeKey: "join", nodeType: "Join", label: "Join", joinPolicy: "Any" }],
+					edges: [
+						{ from: "landed", to: "join" },
+						{ from: "skipped", to: "join" },
+					],
+				},
+				nodes: [
+					devWorkflowNodeRunSummary({ id: "n0", nodeKey: "join" }),
+					devWorkflowNodeRunSummary({ id: "n1", nodeKey: "landed", label: "Landed", status: "Succeeded" }),
+					devWorkflowNodeRunSummary({ id: "n2", nodeKey: "skipped", label: "Skipped one", status: "Skipped" }),
+				],
+			}),
+		});
+
+		const row = screen.getByTestId("dev-workflow-node-dependency-skipped").textContent ?? "";
+		expect(row).toContain("dead — this branch will not carry the join");
+		expect(row).not.toContain("skips once nothing is pending");
+	});
+
+	it("shows a Gate's branches with their stored conditions, and marks the one the run actually took", () => {
+		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Gate", nodeKey: "verdict", label: "Verdict" }), {
+			run: devWorkflowRun({
+				graph: {
+					schemaVersion: 1,
+					nodes: [],
+					edges: [
+						{ from: "verdict", to: "ship", condition: { path: "$.passed", op: "eq", value: true } },
+						{ from: "verdict", to: "fix", condition: { path: "$.passed", op: "eq", value: false } },
+					],
+				},
+				nodes: [
+					devWorkflowNodeRunSummary({ id: "n0", nodeKey: "verdict" }),
+					devWorkflowNodeRunSummary({ id: "n1", nodeKey: "ship", label: "Ship it", status: "Running" }),
+					devWorkflowNodeRunSummary({ id: "n2", nodeKey: "fix", label: "Fix it", status: "Pending" }),
+				],
+			}),
+		});
+
+		// The condition is rendered as stored. A client paraphrase the runtime evaluates differently is worse than none.
+		expect(screen.getByTestId("dev-workflow-node-branch-condition-ship").textContent).toBe("$.passed eq true");
+		// There is no conditionResult field on the wire; the taken branch is the successor the run actually entered.
+		expect(screen.getByTestId("dev-workflow-node-branch-taken-ship")).toBeDefined();
+		expect(screen.queryByTestId("dev-workflow-node-branch-taken-fix")).toBeNull();
+	});
+
+	it("does not call a SKIPPED branch taken — which is what the branch not taken actually looks like", () => {
+		// A gate that has settled leaves its dead branch `Skipped`, not `Pending`: the state machine reads the dead edge
+		// as Admission.Skip and the dispatcher writes the row. So "not Pending" as a proxy for "taken" badged BOTH
+		// branches of every decided gate, which is a lie on the one surface that answers which way the run went.
+		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Gate", nodeKey: "verdict", label: "Verdict" }), {
+			run: devWorkflowRun({
+				graph: {
+					schemaVersion: 1,
+					nodes: [],
+					edges: [
+						{ from: "verdict", to: "ship", condition: { path: "$.passed", op: "eq", value: true } },
+						{ from: "verdict", to: "fix", condition: { path: "$.passed", op: "eq", value: false } },
+						{ from: "verdict", to: "audit", condition: { path: "$.passed", op: "eq", value: false } },
+					],
+				},
+				nodes: [
+					devWorkflowNodeRunSummary({ id: "n0", nodeKey: "verdict", status: "Succeeded" }),
+					devWorkflowNodeRunSummary({ id: "n1", nodeKey: "ship", label: "Ship it", status: "Succeeded" }),
+					devWorkflowNodeRunSummary({ id: "n2", nodeKey: "fix", label: "Fix it", status: "Skipped" }),
+					devWorkflowNodeRunSummary({ id: "n3", nodeKey: "audit", label: "Audit it", status: "Cancelled" }),
+				],
+			}),
+		});
+
+		expect(screen.getByTestId("dev-workflow-node-branch-taken-ship")).toBeDefined();
+		expect(screen.queryByTestId("dev-workflow-node-branch-taken-fix")).toBeNull();
+		// A run cancelled before a branch ran did not choose that branch either.
+		expect(screen.queryByTestId("dev-workflow-node-branch-taken-audit")).toBeNull();
+	});
+
+	it("names a row-less TEMPLATE dependency as a template rather than calling it satisfied", () => {
+		// A template key never gets a row — its children get them — so a row-less template is neither satisfied nor dead
+		// nor waited on; before FX-F it rendered SATISFIED, met by a node that had not run and could not run.
+		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Join", nodeKey: "join", label: "Join" }), {
+			run: devWorkflowRun({
+				graph: {
+					schemaVersion: 1,
+					nodes: [
+						{
+							nodeKey: "decompose",
+							nodeType: "Agent",
+							label: "Decompose",
+							materialization: { templateNodeKey: "implement", artifactKind: "TaskPackage", joinNodeKey: "join" },
+						},
+						{ nodeKey: "implement", nodeType: "DevTask", label: "Implement" },
+						{ nodeKey: "validate", nodeType: "Tool", label: "Validate" },
+						{ nodeKey: "plan", nodeType: "Agent", label: "Plan" },
+						{ nodeKey: "join", nodeType: "Join", label: "Join" },
+					],
+					edges: [
+						{ from: "implement", to: "validate" },
+						{ from: "validate", to: "join" },
+						{ from: "plan", to: "join" },
+					],
+				},
+				nodes: [
+					devWorkflowNodeRunSummary({ id: "n0", nodeKey: "join", waitingOnNodeKeys: ["plan"] }),
+					devWorkflowNodeRunSummary({ id: "n1", nodeKey: "plan", label: "Plan", status: "Running" }),
+				],
+			}),
+		});
+
+		// `validate` is reached from the template root without passing the join, so it is part of the template subtree.
+		expect(screen.getByTestId("dev-workflow-node-dependency-validate").textContent).toContain("template");
+		expect(screen.getByTestId("dev-workflow-node-dependency-validate").textContent).not.toContain("satisfied");
+		// A real dependency the runtime IS waiting on is unaffected.
+		expect(screen.getByTestId("dev-workflow-node-dependency-plan").textContent).toContain("outstanding");
+	});
+
+	it("shows a settled HumanGate's branches, because the seeded template's gates are the only gates it has", () => {
+		// `feature-development-v1` ships only HumanGates, so a decision panel with no branch view meant the branch a
+		// run actually took was unreachable from the one template that matters.
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				nodeType: "HumanGate",
+				nodeKey: "planapproval",
+				label: "Approve the plan",
+				status: "Succeeded",
+				pendingDecisionKind: null,
+			}),
+			{
+				run: devWorkflowRun({
+					graph: {
+						schemaVersion: 1,
+						nodes: [],
+						edges: [
+							{ from: "planapproval", to: "decompose", condition: { path: "$.decision", op: "eq", value: "Approve" } },
+							{ from: "planapproval", to: "replan", condition: { path: "$.decision", op: "eq", value: "Reject" } },
+						],
+					},
+					nodes: [
+						devWorkflowNodeRunSummary({ id: "n0", nodeKey: "planapproval", status: "Succeeded" }),
+						devWorkflowNodeRunSummary({ id: "n1", nodeKey: "decompose", label: "Decompose", status: "Running" }),
+						devWorkflowNodeRunSummary({ id: "n2", nodeKey: "replan", label: "Re-plan", status: "Skipped" }),
+					],
+				}),
+			},
+		);
+
+		expect(screen.getByTestId("dev-workflow-node-branch-condition-decompose").textContent).toBe('$.decision eq "Approve"');
+		// The same untaken semantics as a `Gate`: the loser is Skipped, and Skipped is not taken.
+		expect(screen.getByTestId("dev-workflow-node-branch-taken-decompose")).toBeDefined();
+		expect(screen.queryByTestId("dev-workflow-node-branch-taken-replan")).toBeNull();
+		// A HumanGate is not a Parallel: its successors are alternatives, not concurrent work.
+		expect(screen.getByTestId("dev-workflow-node-structural-branches").textContent).toContain("Branches");
+	});
+
+	it("shows an OPEN HumanGate no branches at all, because nothing has been decided to show", () => {
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				nodeType: "HumanGate",
+				nodeKey: "planapproval",
+				label: "Approve the plan",
+				status: "WaitingForApproval",
+				pendingDecisionKind: "Approve",
+				allowedDecisions: ["Approve", "Reject"],
+			}),
+			{
+				run: devWorkflowRun({
+					graph: { schemaVersion: 1, nodes: [], edges: [{ from: "planapproval", to: "decompose" }] },
+					nodes: [
+						devWorkflowNodeRunSummary({ id: "n0", nodeKey: "planapproval", status: "WaitingForApproval" }),
+						devWorkflowNodeRunSummary({ id: "n1", nodeKey: "decompose", label: "Decompose", status: "Pending" }),
+					],
+				}),
+			},
+		);
+
+		// Every successor is still Pending, so a branch list here would name no branch — the decision controls are the
+		// whole surface until the gate is answered.
+		expect(screen.getByTestId("dev-workflow-gate-panel")).toBeDefined();
+		expect(screen.queryByTestId("dev-workflow-node-structural")).toBeNull();
+	});
+
+	it("still lists a branch whose node has not been created yet, rather than shrinking the graph", () => {
+		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Parallel", nodeKey: "fanout", label: "Fan out" }), {
+			run: devWorkflowRun({
+				graph: { schemaVersion: 1, nodes: [], edges: [{ from: "fanout", to: "implement" }] },
+				nodes: [devWorkflowNodeRunSummary({ id: "n0", nodeKey: "fanout" })],
+			}),
+		});
+
+		// A materialization template has no node-run row until its children exist; hiding it would be a smaller graph.
+		expect(screen.getByTestId("dev-workflow-node-branch-implement").textContent).toContain("not created yet");
 	});
 
 	it("renders inputJson as raw text, because nothing parses it in v1", () => {

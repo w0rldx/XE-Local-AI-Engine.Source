@@ -87,7 +87,7 @@ public sealed class DevWorkflowStateMachineTests
     }
 
     [Test]
-    public void Admission_UnderAll_WaitsForEveryBranchAndSkipsOnAnyDeadOne()
+    public void Admission_UnderAll_WaitsForEveryBranchToSettleAndThenSkipsOnAnyDeadOne()
     {
         var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.FanOut);
         var join = graph.Nodes["join"];
@@ -100,6 +100,11 @@ public sealed class DevWorkflowStateMachineTests
             DevWorkflowStateMachine.Admission(join,
                 graph,
                 ByKey(NodeRun("lint", DevWorkflowNodeRunStatus.Succeeded), NodeRun("test", DevWorkflowNodeRunStatus.Succeeded))));
+
+        AssertEx.Equal(DevWorkflowNodeAdmission.Wait,
+            DevWorkflowStateMachine.Admission(join, graph, ByKey(NodeRun("test", DevWorkflowNodeRunStatus.Failed))),
+            "dead AND pending: the join can no longer fire, but settling that in front of a branch still running skips it, "
+            + "and everything after it, over work the run has not finished.");
 
         AssertEx.Equal(DevWorkflowNodeAdmission.Skip,
             DevWorkflowStateMachine.Admission(join,
@@ -126,6 +131,11 @@ public sealed class DevWorkflowStateMachineTests
                 graph,
                 ByKey(NodeRun("ship", DevWorkflowNodeRunStatus.Succeeded), NodeRun("revise", DevWorkflowNodeRunStatus.Skipped))),
             "the not-taken branch of a gate is dead, and the taken one carries the join.");
+
+        AssertEx.Equal(DevWorkflowNodeAdmission.Wait,
+            DevWorkflowStateMachine.Admission(done, graph, ByKey(NodeRun("ship", DevWorkflowNodeRunStatus.Skipped))),
+            "dead AND pending, the other way round: the surviving branch could still carry this join, so it is not "
+            + "answered off the one that died.");
 
         AssertEx.Equal(DevWorkflowNodeAdmission.Skip,
             DevWorkflowStateMachine.Admission(done,

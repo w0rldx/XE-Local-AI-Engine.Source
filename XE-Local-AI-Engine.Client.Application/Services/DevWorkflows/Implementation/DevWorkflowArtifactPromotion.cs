@@ -39,8 +39,19 @@ internal sealed class DevWorkflowArtifactPromotion
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <summary>Promotes every readable artifact of the session and answers how many landed on the run.</summary>
-    public async Task<int> PromoteAsync(DevWorkflowRunSnapshot run, DevWorkflowNodeRunSnapshot nodeRun, Guid sessionId, CancellationToken cancellationToken)
+    /// <summary>
+    ///     Promotes every readable artifact of the session and answers how many landed on the run.
+    ///     <para>
+    ///         <paramref name="declaredKind" /> is what the NODE says it produces, which is the only place that fact can
+    ///         come from: the work session's own four kinds have no word for a task package or a plan, so a node that
+    ///         another node reads a specific kind from has to declare it. See <see cref="MapKind" />.
+    ///     </para>
+    /// </summary>
+    public async Task<int> PromoteAsync(DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        Guid sessionId,
+        DevWorkflowArtifactKind? declaredKind,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(nodeRun);
@@ -72,7 +83,7 @@ internal sealed class DevWorkflowArtifactPromotion
                                              nodeRun.Id,
                                              DevWorkflowVersions.Any,
                                              DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"promote:{artifact.Name}"),
-                                             MapKind(artifact.Kind),
+                                             MapKind(artifact.Kind, declaredKind),
                                              artifact.Name,
                                              artifact.MediaType,
                                              write.ContentHash,
@@ -105,16 +116,18 @@ internal sealed class DevWorkflowArtifactPromotion
     /// <summary>
     ///     The session's four artifact kinds onto the run's ten.
     ///     <para>
-    ///         Two map exactly and the other two do not exist on this side, so they land as <c>Report</c> — a readable
-    ///         thing the run produced, which is what they are. <b>Seam:</b> the richer kinds (<c>Plan</c>,
-    ///         <c>TaskPackage</c>, <c>Specification</c>) are what a decomposition reads to find its task list, so the
-    ///         node that produces one has to declare it; that declaration is C2's, and it replaces this default.
+    ///         <c>Patch</c> maps exactly. <c>Report</c> is the session's word for "the structured result of this work",
+    ///         so it — and only it — takes the node's DECLARED kind when the node declares one: that is how the richer
+    ///         kinds (<c>TaskPackage</c>, <c>Plan</c>, <c>Specification</c>) become reachable at all, since the work
+    ///         session enum has no member for any of them and inferring one from the bytes would be guessing. Note and
+    ///         File are the session's scratch, and a node's declared output is not what they are.
     ///     </para>
     /// </summary>
-    private static DevWorkflowArtifactKind MapKind(AgentWorkSessionArtifactKind kind) =>
+    private static DevWorkflowArtifactKind MapKind(AgentWorkSessionArtifactKind kind, DevWorkflowArtifactKind? declaredKind) =>
         kind switch
         {
             AgentWorkSessionArtifactKind.Patch => DevWorkflowArtifactKind.Patch,
+            AgentWorkSessionArtifactKind.Report => declaredKind ?? DevWorkflowArtifactKind.Report,
             _ => DevWorkflowArtifactKind.Report
         };
 }

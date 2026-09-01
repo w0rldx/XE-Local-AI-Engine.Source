@@ -11,6 +11,24 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class DevWorkflowGraphTests
 {
+    /// <summary>
+    ///     The smallest legal integration shape: work, a human gate, an apply behind it — with the gate's edge
+    ///     conditioned on the approval, which is half the rule rather than decoration. Every answer a gate takes
+    ///     SUCCEEDS it, so an edge that does not name the approval carries the rejection through as well.
+    /// </summary>
+    private const string GatedApply = """
+                                      {
+                                        "nodes": [{ "nodeKey": "check", "nodeType": "Tool" },
+                                                  { "nodeKey": "gate", "nodeType": "HumanGate" },
+                                                  { "nodeKey": "apply", "nodeType": "Tool", "toolMode": "Apply" }],
+                                        "edges": [{ "from": "check", "to": "gate" },
+                                                  { "from": "gate", "to": "apply", "condition": { "path": "decision", "op": "eq", "value": "Approve" } }]
+                                      }
+                                      """;
+
+    /// <summary>The approval condition on its own, so a test can take it out or put something else in its place.</summary>
+    private const string ApprovalCondition = """, "condition": { "path": "decision", "op": "eq", "value": "Approve" }""";
+
     [Test]
     public void Parse_ReadsNodesEdgesAndTheirDefaults()
     {
@@ -66,25 +84,124 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
-    ///     A template with edges of its own is refused, because the alternative hangs rather than fails: the template is
-    ///     the one node deliberately never instantiated, so a successor it declared would get a node run at run start and
-    ///     then wait forever on an inbound edge whose source has no row and never will.
+    ///     A template is a SUBTREE, so it may declare its own internal edges — that is what keeps the per-task fix loop
+    ///     (<c>Implement → Validate → Implement</c>) authorable at all. What the subtree carries is the set of nodes a
+    ///     run start gives no row to, and the join is deliberately not one of them: it belongs to the graph.
     /// </summary>
     [Test]
-    public void Parse_WithATemplateThatDeclaresItsOwnEdges_IsRejected()
+    public void Parse_ReadsATemplateAsTheWholeSubtreeShortOfItsJoin()
     {
-        const string TemplateSubtree = """
-                                       {
-                                         "nodes": [{ "nodeKey": "decompose", "nodeType": "Agent",
-                                                     "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
-                                                   { "nodeKey": "implement", "nodeType": "DevTask" },
-                                                   { "nodeKey": "verify", "nodeType": "Tool" },
-                                                   { "nodeKey": "join", "nodeType": "Join" }],
-                                         "edges": [{ "from": "decompose", "to": "join" }, { "from": "implement", "to": "verify" }]
-                                       }
-                                       """;
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.DecompositionSubtree);
 
-        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(TemplateSubtree)).Message, "declares edges of its own");
+        AssertEx.Equal("implement, validate", string.Join(", ", graph.TemplateKeys.OrderBy(static key => key, StringComparer.Ordinal)));
+        AssertEx.False(graph.TemplateKeys.Contains("join"), "walking through the join would make the rest of the run part of the template.");
+        AssertEx.Equal("decompose", string.Join(", ", graph.EntryNodeKeys.Where(key => !graph.TemplateKeys.Contains(key))));
+    }
+
+    /// <summary>
+    ///     An edge INTO the subtree from outside is refused, because the alternative hangs rather than fails: its source
+    ///     would be waiting on the one node deliberately never instantiated.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnEdgeIntoTheTemplateSubtreeFromOutside_IsRejected()
+    {
+        const string PointingIn = """
+                                  {
+                                    "nodes": [{ "nodeKey": "decompose", "nodeType": "Agent",
+                                                "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                              { "nodeKey": "implement", "nodeType": "DevTask" },
+                                              { "nodeKey": "join", "nodeType": "Join" }],
+                                    "edges": [{ "from": "decompose", "to": "join" }, { "from": "decompose", "to": "implement" }]
+                                  }
+                                  """;
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(PointingIn)).Message, "points into the materialization template");
+    }
+
+    /// <summary>
+    ///     The same rule catches the shape that would otherwise be silent: a node the run really does have to execute,
+    ///     which the template also reaches, is swallowed into the template — given no row at run start while the live
+    ///     graph waits on it. That is the mirror of the plan's "no edge leaves the subtree except to the join", and it
+    ///     is the half a subtree defined by what it reaches cannot break any other way.
+    /// </summary>
+    [Test]
+    public void Parse_WithATemplateSubtreeThatSwallowsALiveNode_IsRejected()
+    {
+        const string Swallowed = """
+                                 {
+                                   "nodes": [{ "nodeKey": "decompose", "nodeType": "Agent",
+                                               "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                             { "nodeKey": "implement", "nodeType": "DevTask" },
+                                             { "nodeKey": "deploy", "nodeType": "Tool" },
+                                             { "nodeKey": "join", "nodeType": "Join" }],
+                                   "edges": [{ "from": "decompose", "to": "deploy" }, { "from": "implement", "to": "deploy" }, { "from": "deploy", "to": "join" }]
+                                 }
+                                 """;
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(Swallowed)).Message, "points into the materialization template");
+    }
+
+    /// <summary>
+    ///     Nested materialization is named as v2 and refused here rather than discovered at run time: a clone that
+    ///     decomposed again would expand a template that has already been expanded, under keys nothing can tell apart.
+    /// </summary>
+    [Test]
+    public void Parse_WithAMaterializationInsideATemplateSubtree_IsRejected()
+    {
+        const string Nested = """
+                              {
+                                "nodes": [{ "nodeKey": "decompose", "nodeType": "Agent",
+                                            "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                          { "nodeKey": "implement", "nodeType": "Agent",
+                                            "materialization": { "templateNodeKey": "subtask", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                          { "nodeKey": "subtask", "nodeType": "DevTask" },
+                                          { "nodeKey": "join", "nodeType": "Join" }],
+                                "edges": [{ "from": "decompose", "to": "join" }]
+                              }
+                              """;
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(Nested)).Message, "Nested materialization is not supported");
+    }
+
+    /// <summary>
+    ///     Two edges between the same pair of nodes are refused. An author writing them means "either of these", and
+    ///     that is the one thing they cannot mean: admission judges every inbound edge on its own, so the second one's
+    ///     condition failing makes that edge DEAD and SKIPS the target — the opposite of the intent. Refusing it is also
+    ///     what lets the materialization key an authored edge on its endpoints, which is where this was found.
+    /// </summary>
+    [Test]
+    public void Parse_WithTheSameEdgeDeclaredTwice_IsRejected()
+    {
+        const string Twice = """
+                             {
+                               "nodes": [{ "nodeKey": "gate", "nodeType": "Gate" }, { "nodeKey": "ship", "nodeType": "Join" }],
+                               "edges": [{ "from": "gate", "to": "ship", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                         { "from": "gate", "to": "ship", "condition": { "path": "decision", "op": "eq", "value": "RequestChanges" } }]
+                             }
+                             """;
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(Twice)).Message, "declares edge 'gate' → 'ship' twice");
+    }
+
+    /// <summary>
+    ///     The width bound (R5) is checked where a definition asks for it, not where a run tries to commit it: the
+    ///     expansion rewrites the run's whole encrypted graph blob, so the fan-out a template allows is the size of that
+    ///     write.
+    /// </summary>
+    [Test]
+    public void Parse_WithAMaterializationOverTheChildCap_IsRejected()
+    {
+        const string TooWide = """
+                               {
+                                 "nodes": [{ "nodeKey": "decompose", "nodeType": "Agent",
+                                             "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 21 } },
+                                           { "nodeKey": "implement", "nodeType": "DevTask" },
+                                           { "nodeKey": "join", "nodeType": "Join" }],
+                                 "edges": [{ "from": "decompose", "to": "join" }]
+                               }
+                               """;
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(TooWide)).Message, "more than the 20");
     }
 
     [Test]
@@ -218,5 +335,170 @@ public sealed class DevWorkflowGraphTests
                                      """;
 
         AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(GhostTemplate)).Message, "names template node");
+    }
+
+    /// <summary>
+    ///     The apply variant is a Tool node with a config field, not an eighth node type (Y6): the seven stay closed and
+    ///     what a Tool node does with the repository is a property of the node.
+    /// </summary>
+    [Test]
+    public void Parse_ReadsTheToolModeAndDefaultsItToValidate()
+    {
+        var graph = DevWorkflowGraph.Parse(GatedApply);
+
+        AssertEx.Equal(DevWorkflowToolMode.Apply, graph.Nodes["apply"].ToolMode);
+        AssertEx.Equal(DevWorkflowToolMode.Validate, graph.Nodes["check"].ToolMode, "a Tool node that says nothing runs commands, as every Tool node did before this field existed.");
+        AssertEx.Equal(DevWorkflowToolMode.Validate, DevWorkflowGraph.Parse(DevWorkflowGraphs.SingleTool).Nodes["validate"].ToolMode);
+    }
+
+    [Test]
+    public void Parse_WithAnUnknownToolMode_IsRejected()
+    {
+        const string Nonsense = """{"nodes":[{"nodeKey":"only","nodeType":"Tool","toolMode":"Deploy"}],"edges":[]}""";
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(Nonsense)).Message, "unknown 'toolMode'");
+    }
+
+    /// <summary>A field that does nothing where it is written is a definition claiming something the runtime will not do.</summary>
+    [Test]
+    public void Parse_WithAToolModeOnANodeThatIsNotATool_IsRejected()
+    {
+        const string Misplaced = """{"nodes":[{"nodeKey":"only","nodeType":"DevTask","toolMode":"Apply","nodeTimeoutSeconds":60}],"edges":[]}""";
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(Misplaced)).Message, "only a Tool node runs one");
+    }
+
+    [Test]
+    public void Parse_WithValidationCommandsOnAnApplyNode_IsRejected()
+    {
+        var contradictory = GatedApply.Replace("""{ "nodeKey": "apply", "nodeType": "Tool", "toolMode": "Apply" }""",
+            """{ "nodeKey": "apply", "nodeType": "Tool", "toolMode": "Apply", "validationCommandIds": ["dotnet_build"] }""",
+            StringComparison.Ordinal);
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(contradictory)).Message, "will never run");
+    }
+
+    /// <summary>
+    ///     Y3 made structural. The rule is that no AI-authored patch reaches a real repository without an operator
+    ///     decision in the run's own audit trail, and a definition is the only place that can be checked before the fact:
+    ///     by the time an ungated apply runs, the approval it should have waited for does not exist to be missed.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnApplyNodeReachedFromSomethingOtherThanAHumanGate_IsRejected()
+    {
+        var ungated = GatedApply.Replace("""{ "nodeKey": "gate", "nodeType": "HumanGate" }""",
+            """{ "nodeKey": "gate", "nodeType": "Gate" }""",
+            StringComparison.Ordinal);
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(ungated)).Message, "other than a human gate");
+    }
+
+    /// <summary>
+    ///     One branch may not route around the gate: EVERY inbound edge has to be the decision, or the apply happens on
+    ///     whichever branch arrives first.
+    /// </summary>
+    [Test]
+    public void Parse_WithOneBranchReachingTheApplyWithoutTheGate_IsRejected()
+    {
+        const string SideDoor = """
+                                {
+                                  "nodes": [{ "nodeKey": "split", "nodeType": "Parallel" },
+                                            { "nodeKey": "gate", "nodeType": "HumanGate" },
+                                            { "nodeKey": "check", "nodeType": "Tool" },
+                                            { "nodeKey": "apply", "nodeType": "Tool", "toolMode": "Apply" }],
+                                  "edges": [{ "from": "split", "to": "gate" }, { "from": "split", "to": "check" },
+                                            { "from": "gate", "to": "apply" }, { "from": "check", "to": "apply" }]
+                                }
+                                """;
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(SideDoor)).Message, "other than a human gate");
+    }
+
+    /// <summary>
+    ///     An apply node with no inbound edge at all is the same refusal arriving from the other side: a graph whose
+    ///     entry point applies patches asks nobody anything.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnApplyNodeThatNothingLeadsTo_IsRejected()
+    {
+        const string Lonely = """{"nodes":[{"nodeKey":"only","nodeType":"Tool","toolMode":"Apply"}],"edges":[]}""";
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(Lonely)).Message, "other than a human gate");
+    }
+
+    /// <summary>
+    ///     The exploit the source-only rule left open, refused at the definition. A gate in front of an apply is not the
+    ///     rule if the edge takes every answer: <c>Reject</c> SUCCEEDS the gate exactly as <c>Approve</c> does — the
+    ///     rejection is meant to reach the run through an edge that matches nothing — so an unconditional edge routes it
+    ///     straight into the apply and the patches the operator declined go into the repository.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnApplyEdgeThatCarriesEveryGateAnswer_IsRejected()
+    {
+        var unconditional = GatedApply.Replace(ApprovalCondition, string.Empty, StringComparison.Ordinal);
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(unconditional)).Message, "also carries a Reject answer");
+    }
+
+    /// <summary>
+    ///     The same exploit written out: an edge that names the refusal is an apply-on-rejection in one line. It is
+    ///     refused by the rule's OTHER half — an edge conditioned on the rejection is false for the approval — which is
+    ///     the same refusal reached from the side that also catches an apply nothing could ever route to.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnApplyEdgeConditionedOnTheRejection_IsRejected()
+    {
+        var backwards = GatedApply.Replace("""{ "path": "decision", "op": "eq", "value": "Approve" }""",
+            """{ "path": "decision", "op": "eq", "value": "Reject" }""",
+            StringComparison.Ordinal);
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(backwards)).Message, "does not carry an approval");
+    }
+
+    /// <summary>
+    ///     And the rule's other side, which is a HANG rather than an apply: an edge no approval satisfies leaves the one
+    ///     answer that may reach an apply with nowhere to go, so the definition never integrates anything.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnApplyEdgeNoApprovalSatisfies_IsRejected()
+    {
+        var unreachable = GatedApply.Replace("""{ "path": "decision", "op": "eq", "value": "Approve" }""",
+            """{ "path": "status", "op": "eq", "value": "Failed" }""",
+            StringComparison.Ordinal);
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(unreachable)).Message, "does not carry an approval");
+    }
+
+    /// <summary>
+    ///     The definition-time rule is the runtime's own routing asked a question, not a second reading of it: the same
+    ///     call the tick makes to decide where a landed answer goes is the call that refuses the definition.
+    /// </summary>
+    [Test]
+    public void GateEdgeFires_AnswersTheApprovalAndNeitherOfTheOtherTwo()
+    {
+        var edge = DevWorkflowGraph.Parse(GatedApply).InboundEdges("apply").Single();
+
+        AssertEx.Equal("Approve, Reject, RequestChanges", string.Join(", ", DevWorkflowStateMachine.GateAnswers));
+        AssertEx.True(DevWorkflowStateMachine.GateEdgeFires(edge, DevWorkflowDecisionKind.Approve));
+        AssertEx.False(DevWorkflowStateMachine.GateEdgeFires(edge, DevWorkflowDecisionKind.Reject));
+        AssertEx.False(DevWorkflowStateMachine.GateEdgeFires(edge, DevWorkflowDecisionKind.RequestChanges));
+    }
+
+    /// <summary>An apply inside a template would be cloned per task, and each clone would apply the whole fan-out again.</summary>
+    [Test]
+    public void Parse_WithAnApplyNodeInsideAMaterializationTemplate_IsRejected()
+    {
+        const string ClonedApply = """
+                                   {
+                                     "nodes": [{ "nodeKey": "decompose", "nodeType": "Agent",
+                                                 "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                               { "nodeKey": "implement", "nodeType": "DevTask" },
+                                               { "nodeKey": "apply", "nodeType": "Tool", "toolMode": "Apply" },
+                                               { "nodeKey": "join", "nodeType": "Join" }],
+                                     "edges": [{ "from": "decompose", "to": "join" }, { "from": "implement", "to": "apply" }, { "from": "apply", "to": "join" }]
+                                   }
+                                   """;
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(ClonedApply)).Message, "Integration runs once");
     }
 }

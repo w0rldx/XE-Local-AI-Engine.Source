@@ -1,12 +1,10 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
-using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -110,10 +108,10 @@ public sealed class DevWorkflowDevTaskTests
     /// <summary>
     ///     A re-attempt KEEPS the task the previous one drove, rather than clearing the pointer.
     ///     <para>
-    ///         The development schema allows one task per project, so there is no second task a re-attempt could point
-    ///         at: the pointer names the task this node implements for the life of the run, and clearing it would only
-    ///         take away the operator's link to the work while it is being retried. The plan's own §7.2 text says the
-    ///         pointer is cleared and a new task created; the schema is the older and stronger fact.
+    ///         The pointer names the task this node implements for the life of the run: clearing it would take away the
+    ///         operator's link to the work while it is being retried, and — now that a project can carry several tasks —
+    ///         would let the re-attempt bind to a sibling's. The plan's own §7.2 text says the pointer is cleared and a
+    ///         new task created; the evidence on the task it already drove is the stronger fact.
     ///     </para>
     /// </summary>
     [Test]
@@ -128,7 +126,7 @@ public sealed class DevWorkflowDevTaskTests
 
         var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
         AssertEx.Equal(expected: 2, implemented.Attempt, "the failed development attempt cost the node run one of its own.");
-        AssertEx.Equal(taskId, implemented.DevelopmentTaskId, "the pointer survived the re-attempt, because there is no other task it could name.");
+        AssertEx.Equal(taskId, implemented.DevelopmentTaskId, "the pointer survived the re-attempt: the task it names holds the evidence of the attempt that failed.");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status);
 
@@ -159,6 +157,97 @@ public sealed class DevWorkflowDevTaskTests
         AssertEx.Equal(DevWorkflowDecisionKind.Abandon, blocked.PendingDecisionKind);
         AssertEx.Equal(expected: 2, harness.Chain.Actions.Count, "each node-run attempt asked the chain for its own action rather than re-reading the last one's failure.");
         AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked, (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
+    ///     L5: a workspace policy refusing the attempt's own diff is not the provider failing. Classed as
+    ///     <c>ProviderError</c> it was retried until the budget ran out — live, four attempts and about ten minutes of
+    ///     real model time — and the operator was then handed a generic sentence naming no rule. Classed as a policy
+    ///     refusal it goes to a human on the first answer, carrying the sentence that says what to change.
+    /// </summary>
+    [Test]
+    public async Task AWorkspacePolicyRefusalStandsTheNodeDownForAHumanInsteadOfSpendingTheRetryBudget()
+    {
+        await using var harness = NewHarness();
+        var (projectId, _) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        harness.Chain.RefuseNextAttemptsOnPolicy(5);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.Policy, blocked.FailureClass);
+        AssertEx.Equal(expected: 1, blocked.Attempt, "a refusal on evidence answers the same way every time, so the second attempt is not spent finding that out.");
+        AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason),
+            "test that existed at the base commit",
+            message: "the policy's own sentence is what tells the operator which rule was broken.");
+    }
+
+    /// <summary>
+    ///     N2: a task inside its own deterministic-validation window is WORKING, not misconfigured.
+    ///     <para>
+    ///         Dev Mode drives that phase from its own supervisor and holds no attempt row while it does, so a tick that
+    ///         lands inside it is told the task has no executable next action — which is true, and which the lane read
+    ///         as a configuration fault. Live, that stood two children down 24 ms after validation started, each with a
+    ///         SUCCEEDED coder attempt on it, and every operator Retry that recovered one spent an attempt out of the
+    ///         very budget the fix loop needs.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ATaskInsideItsOwnValidationWindowIsWaitedOnRatherThanStoodDown()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        harness.Chain.StallInValidation(1);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var waiting = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, waiting.Status, $"the node was left on {waiting.Status}: {waiting.TerminalReason}");
+        AssertEx.Null(waiting.FailureClass, "nothing failed — Dev Mode is one status ahead of this tick, and will move the task on itself.");
+        AssertEx.Equal(expected: 1, waiting.Attempt, "and the wait cost the node none of its budget.");
+        AssertEx.Equal(DevelopmentTaskStatus.Validation, (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
+            (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status,
+            "the window closed and the chain carried on from where it was, without an operator being asked for anything.");
+    }
+
+    /// <summary>
+    ///     The same race one hop later, which naming a single status would lose: the supervisor FINISHES between the ask
+    ///     and the guard's re-read, so the task is no longer in Validation by the time anyone looks — it is in InReview,
+    ///     with a bumped version and still no attempt row. A guard that matched only <c>Validation</c> would stand a
+    ///     healthy task down here. A task that MOVED since the snapshot this tick opened with is working, whatever it
+    ///     moved to.
+    /// </summary>
+    [Test]
+    public async Task ATaskThatMovedOnBetweenTheAskAndTheReReadIsWaitedOnRatherThanStoodDown()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        harness.Chain.StallInValidation(1, advance: true);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var waiting = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, waiting.Status, $"the node was left on {waiting.Status}: {waiting.TerminalReason}");
+        AssertEx.Null(waiting.FailureClass, "the task is one status FURTHER on than the window, and nothing about that is a fault.");
+        AssertEx.Equal(DevelopmentTaskStatus.InReview,
+            (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status,
+            "the supervisor had already moved it past Validation by the time the guard looked.");
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status);
     }
 
     /// <summary>
@@ -299,55 +388,325 @@ public sealed class DevWorkflowDevTaskTests
         AssertEx.Equal(driven, harness.Chain.Actions.Count, "the node run asked the chain for nothing: there was nothing left for it to do.");
     }
 
-    /// <summary>The workflow host with the development chain scripted, and its own development project to drive.</summary>
-    private static DevWorkflowHarness NewHarness(TimeProvider? clock = null) =>
-        new(services =>
-        {
-            services.RemoveAll<IDevelopmentManagementService>();
-            services.AddSingleton<IDevelopmentManagementService>(provider => new FakeDevelopmentTaskChain(provider.GetRequiredService<IServiceScopeFactory>()));
-            if (clock is not null)
-            {
-                services.AddSingleton(clock);
-            }
-        });
-
     /// <summary>
-    ///     A development project and the one task it owns, created the way Dev Mode creates them.
-    ///     <para>
-    ///         The selected folder is registered rather than invented: the project row has a foreign key to it. Its host
-    ///         path is never opened, because nothing in these tests prepares a workspace — the chain that would is the
-    ///         part they script.
-    ///     </para>
+    ///     A node run that already names a task drives THAT task, whatever else the project carries. The pointer is
+    ///     written once and survives a reset, so re-resolving here would let a re-attempt walk away from the work its
+    ///     first attempt started — and now that a project can carry several tasks, it would walk onto somebody else's.
     /// </summary>
-    private static async Task<(Guid ProjectId, Guid TaskId)> SeedDevelopmentTaskAsync(DevWorkflowHarness harness)
+    [Test]
+    public async Task ANodeRunThatAlreadyNamesATaskDrivesThatOneAndNotTheProjectsFirst()
     {
-        await using var scope = harness.Services.CreateAsyncScope();
-        var folder = await scope.ServiceProvider.GetRequiredService<ISelectedFolderResolver>()
-                                .RegisterAsync(new SelectedFolderRegistration($"devtask-{Guid.NewGuid():N}"[..20],
-                                    Path.Combine(Path.GetTempPath(), $"xe-devtask-{Guid.NewGuid():N}")))
-                                .ConfigureAwait(false);
+        await using var harness = NewHarness();
+        var (projectId, firstTaskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var secondTaskId = await AddTaskAsync(harness, projectId, "Implement the second slice").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        await PinTaskAsync(harness, runId, "implement", secondTaskId).ConfigureAwait(false);
 
-        var projectId = Guid.NewGuid();
-        var taskId = Guid.NewGuid();
-        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>()
-                       .CreateProjectAsync(new DevelopmentCreateProjectCommand(projectId,
-                           taskId,
-                           Guid.NewGuid(),
-                           "Keep the product working.",
-                           Guid.Parse(folder.Id),
-                           "repository-identity-hash",
-                           "main",
-                           "Add the feature",
-                           "It has to do the thing.",
-                           "[\"it does the thing\"]"))
-                       .ConfigureAwait(false);
-        return (projectId, taskId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
+        AssertEx.Equal(secondTaskId, implemented.DevelopmentTaskId, "the row's own pointer decides, not the order the project's tasks happen to be in.");
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, secondTaskId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevelopmentTaskStatus.Planned,
+            (await ReadTaskAsync(harness, firstTaskId).ConfigureAwait(false)).Status,
+            "and the project's first task was never touched, which is the whole point of naming one.");
     }
 
-    private static async Task<DevelopmentTaskSnapshot> ReadTaskAsync(DevWorkflowHarness harness, Guid taskId)
+    /// <summary>
+    ///     The undecomposed graph is unchanged: a node run that names no task and was not materialized from anything
+    ///     drives the project's first task, exactly as it did when that was the only task a project could have.
+    /// </summary>
+    [Test]
+    public async Task AnOrdinaryNodeRunStillDrivesTheProjectsFirstTask()
+    {
+        await using var harness = NewHarness();
+        var (projectId, firstTaskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var secondTaskId = await AddTaskAsync(harness, projectId, "Implement the second slice").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(firstTaskId, implemented.DevelopmentTaskId, "the project's own task is the one an undecomposed graph implements.");
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, firstTaskId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevelopmentTaskStatus.Planned,
+            (await ReadTaskAsync(harness, secondTaskId).ConfigureAwait(false)).Status,
+            "and nothing else in the project moved.");
+        AssertEx.Equal(expected: 2,
+            (await ListTasksAsync(harness, projectId).ConfigureAwait(false)).Count,
+            "no task was created: this node had one to drive.");
+    }
+
+    /// <summary>
+    ///     A materialized child implements its own slice, so it gets a task of its OWN in the same project — inheriting
+    ///     that project's acceptance criteria and review budget, and taking its title and requirements from the brief
+    ///     its materialization wrote onto the row.
+    ///     <para>
+    ///         Nothing materializes <c>DevTask</c> children yet; this is the branch decomposition will arrive on, and
+    ///         driving it by hand is the only way to hold it to the contract before then.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AMaterializedChildImplementsATaskOfItsOwnInTheSameProject()
+    {
+        await using var harness = NewHarness();
+        var (projectId, firstTaskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        await MaterializeChildAsync(harness,
+                runId,
+                "implement",
+                "implement#1",
+                projectId,
+                """{"title":"Implement the second slice","requirements":"Do the other half."}""")
+            .ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var child = await harness.ReadNodeRunAsync(runId, "implement#1").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, child.Status, AssertEx.NotNull(child.TerminalReason ?? child.OutputJson));
+        var tasks = await ListTasksAsync(harness, projectId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 2, tasks.Count, "the child implements its own slice, so it created its own task rather than sharing one.");
+        AssertEx.Equal(firstTaskId,
+            (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).DevelopmentTaskId,
+            "the template's own node still drives the project's task.");
+
+        var childTaskId = tasks.Single(task => task.Id != firstTaskId).Id;
+        AssertEx.Equal(childTaskId, child.DevelopmentTaskId, "and the child names the task it created, which is how a reader reaches its evidence.");
+
+        var created = await ReadTaskAsync(harness, childTaskId).ConfigureAwait(false);
+        var parent = await ReadTaskAsync(harness, firstTaskId).ConfigureAwait(false);
+        AssertEx.Equal("Implement the second slice", created.Title, "the brief the materialization wrote is what the child implements.");
+        AssertEx.Equal("Do the other half.", created.Requirements);
+        AssertEx.Equal(parent.AcceptanceCriteriaJson, created.AcceptanceCriteriaJson, "a slice of a project is done by that project's standard.");
+        AssertEx.Equal(parent.MaxReviewRounds, created.MaxReviewRounds, "and gets the review budget the operator configured for it.");
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, created.Status, "the child drove its own task through the same chain.");
+    }
+
+    /// <summary>
+    ///     A child whose brief does not say what to implement stands down for a human rather than inheriting the
+    ///     project's whole feature — and, as much to the point, rather than staying <c>Pending</c>: a row that never
+    ///     started carries no deadline anything can fire, so an exception escaping the resolve would leave it to be
+    ///     re-dispatched by every sweep for the life of the run.
+    /// </summary>
+    [Test]
+    public async Task AMaterializedChildWithNothingToImplementStandsDownInsteadOfWedging()
+    {
+        await using var harness = NewHarness();
+        var (projectId, firstTaskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        await MaterializeChildAsync(harness, runId, "implement", "implement#1", projectId, """{"title":"Implement the second slice","requirements":"   "}""")
+            .ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var child = await harness.ReadNodeRunAsync(runId, "implement#1").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, child.Status, $"the row settled on {child.Status} rather than waiting for a sweep that would never finish it.");
+        AssertEx.Equal(DevWorkflowFailureClasses.Configuration, child.FailureClass, "a brief that names nothing to build is a decided fact, not something another attempt answers.");
+        AssertEx.Contains(AssertEx.NotNull(child.TerminalReason), "implement#1");
+        AssertEx.Contains(AssertEx.NotNull(child.TerminalReason), "requirements");
+        AssertEx.Null(child.DevelopmentTaskId, "and it names no task, because it never created one.");
+        AssertEx.Equal(expected: 1,
+            (await ListTasksAsync(harness, projectId).ConfigureAwait(false)).Count,
+            "the project still carries only its own task: a child with nothing to implement must not add one.");
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
+            (await ReadTaskAsync(harness, firstTaskId).ConfigureAwait(false)).Status,
+            "and the sibling that could run was unaffected.");
+    }
+
+    /// <summary>
+    ///     The other side of a DevTask node's deep link: the Development task it drives names the run back, which is
+    ///     what lets that page defer the apply to the workflow's gate. A task nobody's workflow drives names nothing.
+    /// </summary>
+    [Test]
+    public async Task ATaskADevTaskNodeRunDrives_NamesThatRunBackOnTheDevelopmentTask()
+    {
+        // A host of its own with the REAL Development management service: this is about what Dev Mode's own page reads.
+        await using var harness = new DevWorkflowHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var undrivenTaskId = await AddTaskAsync(harness, projectId, "Nobody's workflow drives this").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        await PinTaskAsync(harness, runId, "implement", taskId).ConfigureAwait(false);
+
+        await using var scope = harness.Services.CreateAsyncScope();
+        var management = scope.ServiceProvider.GetRequiredService<IDevelopmentManagementService>();
+
+        AssertEx.Equal(runId,
+            (await management.GetTaskAsync(projectId, taskId).ConfigureAwait(false)).WorkflowRunId,
+            "the task a node run named names that node run's run back.");
+        AssertEx.Null((await management.GetTaskAsync(projectId, undrivenTaskId).ConfigureAwait(false)).WorkflowRunId,
+            "and a task an operator drives themselves says nothing about workflows, which is every task on a node that runs none.");
+    }
+
+    /// <summary>
+    ///     Y3 is enforced by the SERVER, not by a hidden button: while the run driving a task is live, Dev Mode's own
+    ///     apply refuses — for the endpoint, for a script, for anything that is not that run's apply lane.
+    ///     <para>
+    ///         The three answers in one test because they are one rule: no run named ⇒ refused; the OWNING run named ⇒
+    ///         through; the run ENDED ⇒ through again, because a terminal run answers no further gate and withholding
+    ///         the apply then would strand an already-validated patch.
+    ///     </para>
+    ///     <para>
+    ///         "Through" is asserted as "not refused for this reason" rather than as a landed patch: past the guard the
+    ///         apply reaches the repository binding and the approved-subject preconditions, and neither this harness's
+    ///         seeded folder nor its untouched task can satisfy them. What the guard owns is exactly the sentence.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ADevModeApply_IsRefusedWhileALiveWorkflowRunOwnsTheTask_AndOnlyForACallerThatIsNotThatRun()
+    {
+        // The REAL Development management service: the scripted chain is the thing under test's stand-in everywhere
+        // else, and a guard asserted against a stand-in is not asserted at all.
+        await using var harness = new DevWorkflowHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        await PinTaskAsync(harness, runId, "implement", taskId).ConfigureAwait(false);
+
+        var operatorApply = await ApplyFailureAsync(harness, projectId, taskId, onBehalfOfWorkflowRunId: null).ConfigureAwait(false);
+        AssertEx.Contains(operatorApply, "has not ended");
+        AssertEx.Contains(operatorApply, runId.ToString("D"));
+
+        var strangerApply = await ApplyFailureAsync(harness, projectId, taskId, Guid.NewGuid()).ConfigureAwait(false);
+        AssertEx.Contains(strangerApply, "has not ended", message: "and naming SOME run is not naming this one.");
+
+        var ownApply = await ApplyFailureAsync(harness, projectId, taskId, runId).ConfigureAwait(false);
+        AssertEx.False(ownApply.Contains("has not ended", StringComparison.Ordinal), $"the run's own lane must get past its own gate: {ownApply}");
+
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Completed).ConfigureAwait(false);
+        var afterTheRunEnded = await ApplyFailureAsync(harness, projectId, taskId, onBehalfOfWorkflowRunId: null).ConfigureAwait(false);
+        AssertEx.False(afterTheRunEnded.Contains("has not ended", StringComparison.Ordinal), $"a terminal run hands the authority back: {afterTheRunEnded}");
+    }
+
+    /// <summary>
+    ///     With the module SWITCHED OFF the ownership guard stands down, and it has to.
+    ///     <para>
+    ///         The dispatcher only runs when <c>DevWorkflows:Enabled</c> is set, so a run that was live when the switch
+    ///         flipped never reaches a terminal status and never answers another gate. An unconditional guard would
+    ///         then refuse that run's tasks from Dev Mode for ever — behind a workflow UI that is off too, so there is
+    ///         no way to approve them anywhere. Off means there is no competing gate to protect.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task WithTheModuleSwitchedOff_ALiveRunsTaskIsStillTheOperatorsToApply()
+    {
+        await using var harness = new DevWorkflowHarness(("DevWorkflows:Enabled", "false"));
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        await PinTaskAsync(harness, runId, "implement", taskId).ConfigureAwait(false);
+
+        // The run really is live and really does own the task — this is the same row that is refused with the module on.
+        AssertEx.False(DevWorkflowStateMachine.IsTerminal((await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status));
+
+        var failure = await ApplyFailureAsync(harness, projectId, taskId, onBehalfOfWorkflowRunId: null).ConfigureAwait(false);
+        AssertEx.False(failure.Contains("has not ended", StringComparison.Ordinal),
+            $"a run nothing can advance cannot hold a patch hostage: {failure}");
+    }
+
+    /// <summary>A task no node run ever named is nobody's but the operator's, which is nearly every task there is.</summary>
+    [Test]
+    public async Task ADevModeApply_OnATaskNoWorkflowDrives_IsNotRefusedByTheOwnershipGuard()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var undriven = await AddTaskAsync(harness, projectId, "Nobody's workflow drives this").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        await PinTaskAsync(harness, runId, "implement", taskId).ConfigureAwait(false);
+
+        var failure = await ApplyFailureAsync(harness, projectId, undriven, onBehalfOfWorkflowRunId: null).ConfigureAwait(false);
+        AssertEx.False(failure.Contains("has not ended", StringComparison.Ordinal), $"a live run next door owns its own task, not the project: {failure}");
+    }
+
+    /// <summary>The message Development refused an apply with, whatever refused it.</summary>
+    private static async Task<string> ApplyFailureAsync(DevWorkflowHarness harness, Guid projectId, Guid taskId, Guid? onBehalfOfWorkflowRunId)
     {
         await using var scope = harness.Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().GetTaskAsync(taskId).ConfigureAwait(false);
+        var management = scope.ServiceProvider.GetRequiredService<IDevelopmentManagementService>();
+        return (await AssertEx.ThrowsAsync<Exception>(() => management.ApplyAsync(projectId, taskId, Guid.NewGuid(), onBehalfOfWorkflowRunId),
+                                 "an apply on a task with neither a connected repository nor an approved subject cannot succeed.")
+                              .ConfigureAwait(false)).Message;
+    }
+
+    /// <summary>The workflow host with the development chain scripted, and its own development project to drive.</summary>
+    private static DevWorkflowHarness NewHarness(TimeProvider? clock = null) =>
+        DevWorkflowHarness.WithAScriptedChain(clock);
+
+    private static Task<(Guid ProjectId, Guid TaskId)> SeedDevelopmentTaskAsync(DevWorkflowHarness harness) =>
+        harness.SeedDevelopmentProjectAsync();
+
+    private static Task<DevelopmentTaskSnapshot> ReadTaskAsync(DevWorkflowHarness harness, Guid taskId) =>
+        harness.ReadDevelopmentTaskAsync(taskId);
+
+    private static Task<IReadOnlyList<DevelopmentTaskSnapshot>> ListTasksAsync(DevWorkflowHarness harness, Guid projectId) =>
+        harness.ListDevelopmentTasksAsync(projectId);
+
+    /// <summary>A second task on the project, through the internal capability decomposition uses.</summary>
+    private static async Task<Guid> AddTaskAsync(DevWorkflowHarness harness, Guid projectId, string title)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        var created = await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>()
+                                 .CreateTaskAsync(new DevelopmentCreateTaskCommand(projectId,
+                                     Guid.NewGuid(),
+                                     Guid.NewGuid(),
+                                     title,
+                                     "It has to do the other thing.",
+                                     "[\"it does the other thing\"]"))
+                                 .ConfigureAwait(false);
+        return created.TaskId ?? throw new AssertionException("The create answered without naming the task it created.");
+    }
+
+    /// <summary>
+    ///     Writes the pointer onto a node run before it is dispatched — what a materialization that already knew the
+    ///     task, or an attempt that has already run, leaves behind.
+    /// </summary>
+    private static async Task PinTaskAsync(DevWorkflowHarness harness, Guid runId, string nodeKey, Guid taskId)
+    {
+        var nodeRun = await harness.ReadNodeRunAsync(runId, nodeKey).ConfigureAwait(false);
+        await using var scope = harness.Services.CreateAsyncScope();
+        _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
+                       .TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(runId,
+                           nodeRun.Id,
+                           DevWorkflowVersions.Any,
+                           DevWorkflowNodeRunStatus.Pending,
+                           DevelopmentTaskId: taskId))
+                       .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Materializes one child of <paramref name="templateNodeKey" />, rewriting the run's graph to carry it — the
+    ///     shape decomposition will produce, driven by hand because nothing produces it yet.
+    /// </summary>
+    private static async Task MaterializeChildAsync(DevWorkflowHarness harness,
+        Guid runId,
+        string templateNodeKey,
+        string childNodeKey,
+        Guid projectId,
+        string inputJson)
+    {
+        var template = await harness.ReadNodeRunAsync(runId, templateNodeKey).ConfigureAwait(false);
+        await using var scope = harness.Services.CreateAsyncScope();
+        _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
+                       .MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(runId,
+                           DevWorkflowVersions.Any,
+                           Guid.NewGuid(),
+                           [
+                               new DevWorkflowNodeRunSeed(Guid.NewGuid(),
+                                   childNodeKey,
+                                   DevWorkflowNodeType.DevTask,
+                                   MaxAttempts: 1,
+                                   DevelopmentProjectId: projectId,
+                                   InputJson: inputJson,
+                                   MaterializedFromNodeRunId: template.Id,
+                                   MaterializationIndex: 1)
+                           ],
+                           $$"""
+                             {
+                               "schemaVersion": 1,
+                               "nodes": [{ "nodeKey": "{{templateNodeKey}}", "nodeType": "DevTask", "label": "Implement", "maxAttempts": 2 },
+                                         { "nodeKey": "{{childNodeKey}}", "nodeType": "DevTask", "label": "Implement (1)", "maxAttempts": 1 }],
+                               "edges": [{ "from": "{{templateNodeKey}}", "to": "{{childNodeKey}}" }]
+                             }
+                             """))
+                       .ConfigureAwait(false);
     }
 
     /// <summary>Lands the held attempt the way its runner would have, so the drain has nothing left to wait for.</summary>

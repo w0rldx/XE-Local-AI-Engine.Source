@@ -22,15 +22,22 @@ using XE_Local_AI_Engine.Client.Services.Development;
 ///         this run's own audit trail.
 ///     </para>
 ///     <para>
-///         <b>One task per project, which the Development schema enforces with a unique index, so the node run drives
-///         the project's EXISTING task rather than creating one.</b> A re-attempt therefore re-drives the same task —
-///         which is Dev Mode's own rework loop, and leaves the per-round evidence where the rest of that evidence
-///         already lives: on the task's own attempts and artifacts, reachable through the Development views this module
-///         deliberately does not duplicate.
+///         <b>Which task it drives is decided once and then remembered.</b> A node run that already names one drives
+///         that one — the pointer survives a reset, so a re-attempt re-drives the same task, which is Dev Mode's own
+///         rework loop and leaves the per-round evidence where the rest of it already lives. A MATERIALIZED child gets
+///         a task of its OWN in the same project, because it implements its own slice and two children sharing one task
+///         would overwrite each other's work. Anything else — the ordinary undecomposed graph — drives the project's
+///         existing task rather than creating one.
 ///     </para>
 /// </summary>
 internal sealed class DevWorkflowDevTaskExecutor
 {
+    /// <summary>
+    ///     The attempt a child task's creation is keyed under. Not any real attempt number — attempts start at one —
+    ///     because the task belongs to the node for the whole run and every re-attempt must find the same one.
+    /// </summary>
+    private const int ChildTaskAttempt = 0;
+
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -108,17 +115,32 @@ internal sealed class DevWorkflowDevTaskExecutor
                 .ConfigureAwait(false);
         }
 
-        var tasks = await development.ListTasksAsync(projectId, cancellationToken).ConfigureAwait(false);
-        if (tasks.Count == 0)
+        Guid taskId;
+        try
         {
-            return await BlockAsync(store,
-                    graph,
-                    run,
-                    nodeRun,
-                    nodeRuns,
-                    DevWorkflowFailureClasses.Configuration,
-                    "The development project this node implements carries no task to implement.",
-                    cancellationToken)
+            if (await ResolveTaskAsync(graph, run, nodeRun, development, projectId, cancellationToken).ConfigureAwait(false) is not { } resolved)
+            {
+                return await BlockAsync(store,
+                        graph,
+                        run,
+                        nodeRun,
+                        nodeRuns,
+                        DevWorkflowFailureClasses.Configuration,
+                        "The development project this node implements carries no task to implement.",
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            taskId = resolved;
+        }
+        catch (Exception exception) when (exception is ArgumentException or KeyNotFoundException)
+        {
+            // A brief this node cannot be given a task from, or a project that is gone. Both are decided facts, and an
+            // escape here would be the worst of the failure modes available: the row is still Pending, so no deadline
+            // can fire on it and the sweep would re-dispatch it every tick forever. Both messages are this engine's own
+            // text about its own rows — no host path, no model output. A DevelopmentConcurrencyException deliberately
+            // does NOT land here: a lost ledger race is transient, and the next sweep is the right answer to it.
+            return await BlockAsync(store, graph, run, nodeRun, nodeRuns, DevWorkflowFailureClasses.Configuration, exception.Message, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -134,7 +156,7 @@ internal sealed class DevWorkflowDevTaskExecutor
                                nodeRun.Id,
                                DevWorkflowVersions.Any,
                                DevWorkflowNodeRunStatus.Running,
-                               DevelopmentTaskId: tasks[0].Id),
+                               DevelopmentTaskId: taskId),
                            cancellationToken)
                        .ConfigureAwait(false);
 
@@ -144,17 +166,118 @@ internal sealed class DevWorkflowDevTaskExecutor
                 nodeRun with
                 {
                     Status = DevWorkflowNodeRunStatus.Running,
-                    DevelopmentTaskId = tasks[0].Id,
+                    DevelopmentTaskId = taskId,
                     StartedAtUtc = startedAt
                 },
                 nodeRuns,
                 development,
                 management,
                 projectId,
-                tasks[0].Id,
+                taskId,
                 cancellationToken)
             .ConfigureAwait(false);
     }
+
+    /// <summary>
+    ///     The task this node run implements: the one it already names, its own newly created one when it is a
+    ///     materialized child, or the project's existing task.
+    ///     <para>
+    ///         The pointer comes FIRST and is never second-guessed. It survives a reset by design (a previous attempt's
+    ///         task is that attempt's evidence), so re-resolving here would let a re-attempt walk away from work that
+    ///         is already under way.
+    ///     </para>
+    ///     <para>
+    ///         A materialized child implements its own slice of the project, so it gets its own task. Creating it is
+    ///         keyed on the run and node key WITHOUT the attempt — the task belongs to the node for the life of the run
+    ///         — so a crash between the create and the pointer write is answered by the same task on re-dispatch rather
+    ///         than by a second one nothing points at.
+    ///     </para>
+    ///     <para>
+    ///         Throws rather than answering null when a child's brief cannot describe a task: the caller turns both into
+    ///         the same <c>Configuration</c> stand-down, and the two conditions need different sentences.
+    ///     </para>
+    /// </summary>
+    private static async Task<Guid?> ResolveTaskAsync(DevWorkflowGraph graph,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        IDevelopmentStore development,
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        if (nodeRun.DevelopmentTaskId is { } pinned)
+        {
+            return pinned;
+        }
+
+        var tasks = await development.ListTasksAsync(projectId, cancellationToken).ConfigureAwait(false);
+        if (tasks.Count == 0)
+        {
+            return null;
+        }
+
+        if (nodeRun.MaterializedFromNodeRunId is null)
+        {
+            return tasks[0].Id;
+        }
+
+        // The project's first task is the operator-authored one, and it carries the standard this project's work is
+        // judged against: the child inherits its acceptance criteria and review budget. What it must NOT inherit is the
+        // requirements — that would hand every child the whole feature, N times over, and each of them would look like
+        // a legitimately configured task while doing it.
+        var brief = Brief(nodeRun.InputJson);
+        var requirements = Present(brief?.Requirements)
+                           ?? throw new ArgumentException($"Node run '{nodeRun.NodeKey}' is a materialized development task whose input names no 'requirements' to implement.",
+                               nameof(nodeRun));
+        var created = await development.CreateTaskAsync(new DevelopmentCreateTaskCommand(projectId,
+                                           Guid.NewGuid(),
+                                           DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, ChildTaskAttempt, "devtask-create"),
+                                           Present(brief?.Title) ?? Label(graph, nodeRun.NodeKey),
+                                           requirements,
+                                           Present(brief?.AcceptanceCriteriaJson) ?? tasks[0].AcceptanceCriteriaJson,
+                                           tasks[0].MaxReviewRounds),
+                                       cancellationToken)
+                                   .ConfigureAwait(false);
+        return created.TaskId;
+    }
+
+    /// <summary>A brief's field, or nothing — a present-but-blank string is an absent one, not a value to pass on.</summary>
+    private static string? Present(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
+
+    /// <summary>
+    ///     What a materialized child was told to implement — the seam decomposition writes through.
+    ///     <para>
+    ///         <c>requirements</c> is MANDATORY: an input that is absent, unparseable, shaped for something else, or
+    ///         blank there stands the node down for a human. The only thing in this repository that writes these rows is
+    ///         decomposition, so a missing brief is a bug in the thing that materialized the child — and inheriting the
+    ///         parent's requirements would hide it behind N children each implementing the entire feature.
+    ///     </para>
+    ///     <para>
+    ///         <c>title</c> falls back to the node's own label, and <c>acceptanceCriteriaJson</c> to the project's first
+    ///         task: neither says what to build, and the project's standard of done is the right one for a slice of it.
+    ///     </para>
+    /// </summary>
+    private static DevTaskBrief? Brief(string? inputJson)
+    {
+        if (string.IsNullOrWhiteSpace(inputJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<DevTaskBrief>(inputJson, JsonOptions);
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            // NotSupportedException as well as JsonException: a document whose shape the converter refuses outright
+            // throws the former, and it would otherwise escape a path that has no answer for it.
+            return null;
+        }
+    }
+
+    private static string Label(DevWorkflowGraph graph, string nodeKey) =>
+        graph.Nodes.TryGetValue(nodeKey, out var node) && !string.IsNullOrWhiteSpace(node.Label) ? node.Label : nodeKey;
 
     /// <summary>
     ///     Reads what the development chain has made of the task and settles the node run when it has finished with it,
@@ -447,6 +570,23 @@ internal sealed class DevWorkflowDevTaskExecutor
                 return 0;
             }
 
+            // An attempt row is not the only way Dev Mode is busy. Deterministic validation is a phase its own
+            // supervisor drives with NO attempt row at all — it runs the project's command profile and then moves the
+            // task on to InReview or ChangesRequested — so a tick landing inside that window is told there is no next
+            // action, which is true and is not a fault. It stood tasks down 24 ms after validation started, with a
+            // SUCCEEDED coder attempt on them and Dev Mode calmly finishing.
+            //
+            // The VERSION is what makes that general rather than a patch for one status. Naming Validation alone loses
+            // the same race one hop later: the supervisor can finish and move the task to InReview between the ask and
+            // this read, and a task that MOVED since the snapshot this tick opened with is working, whatever it moved
+            // to. Only a task sitting exactly where this tick found it, with no attempt and no next action, is
+            // genuinely stuck — and that is the one this blocks.
+            var current = await development.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+            if (current.Status == DevelopmentTaskStatus.Validation || current.Version != task.Version)
+            {
+                return 0;
+            }
+
             return await BlockAsync(store, graph, run, nodeRun, nodeRuns, DevWorkflowFailureClasses.Configuration, exception.Message, cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -491,9 +631,12 @@ internal sealed class DevWorkflowDevTaskExecutor
         DevelopmentTaskSnapshot task,
         Guid taskId)
     {
-        var failureClass = attempt.Status == DevelopmentAttemptStatus.Interrupted
-            ? DevWorkflowFailureClasses.Interrupted
+        // A workspace policy refusing the attempt's diff is not the provider failing: it is the engine declining work on
+        // evidence, so it goes straight to a human instead of spending three more attempts to be refused identically.
+        var refused = DevelopmentAttemptEvidenceException.Names(attempt.TerminalReason, DevelopmentAttemptFailureCodes.WorkspacePolicyRefused)
+            ? DevWorkflowFailureClasses.Policy
             : DevWorkflowFailureClasses.ProviderError;
+        var failureClass = attempt.Status == DevelopmentAttemptStatus.Interrupted ? DevWorkflowFailureClasses.Interrupted : refused;
         return new DevWorkflowFailure(failureClass,
             attempt.TerminalReason ?? $"The development {attempt.Role} attempt this node run was driving did not succeed.",
             Output(nodeRun, task, taskId, failureClass));
@@ -562,6 +705,12 @@ internal sealed class DevWorkflowDevTaskExecutor
             task?.Status.ToString(),
             task?.CurrentReviewRound),
             JsonOptions);
+
+    /// <summary>
+    ///     What a materialized child's input document says about the task it is there to implement.
+    ///     <see cref="Requirements" /> is required; the other two have somewhere honest to fall back to.
+    /// </summary>
+    private sealed record DevTaskBrief(string? Title, string? Requirements, string? AcceptanceCriteriaJson);
 
     private sealed record DevTaskOutput(
         string Status,

@@ -13,7 +13,10 @@ import type { Edge, Node, NodeTypes } from "@xyflow/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DevWorkflowGraphView } from "@/features/devWorkflows/components/DevWorkflowGraphView";
-import { DEV_WORKFLOW_MAX_RENDERED_NODES } from "@/features/devWorkflows/models/DevWorkflowGraphModels";
+import {
+	DEV_WORKFLOW_MAX_RENDERED_NODES,
+	toDevWorkflowDefinitionCanvasGraph,
+} from "@/features/devWorkflows/models/DevWorkflowGraphModels";
 import type { DevWorkflowRunResponse } from "@/features/devWorkflows/models/DevWorkflowModels";
 import { devWorkflowNodeRunSummary, devWorkflowRun } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -157,6 +160,88 @@ describe("DevWorkflowGraphView", () => {
 		);
 		expect(hasProgressIndicator(card("node-research"))).toBe(false);
 		expect(screen.getByTestId("dev-workflow-graph-node-attempt-node-research").textContent).toBe("attempt 3 of 3");
+	});
+
+	it("says which part of a decomposition a generated card is, and stays quiet about a group of one", () => {
+		renderWithProviders(
+			<DevWorkflowGraphView
+				run={chainRun([
+					...[1, 2].map((index) =>
+						devWorkflowNodeRunSummary({
+							id: `node-implement-${index}`,
+							nodeKey: `implement#${index}`,
+							isMaterialized: true,
+							materializedFromNodeKey: "decompose",
+							materializationIndex: index,
+						}),
+					),
+					devWorkflowNodeRunSummary({
+						id: "node-verify",
+						nodeKey: "verify#1",
+						isMaterialized: true,
+						materializedFromNodeKey: "review",
+						materializationIndex: 1,
+					}),
+				])}
+				onSelect={vi.fn()}
+			/>,
+		);
+
+		// `MaterializationIndex` is the SERVER's and is already 1-based (C2), so the card renders it as it stands.
+		// Adding one to it is what made a decomposition of one read "generated · 2 of 2" on live hardware.
+		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-implement-1").textContent).toBe(
+			"generated · 1 of 2",
+		);
+		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-implement-2").textContent).toBe(
+			"generated · 2 of 2",
+		);
+		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-verify").textContent).toBe("generated");
+	});
+
+	it("badges a cloned subtree by its CHILD, so two children of a two-node template never read 3 or 4", () => {
+		renderWithProviders(
+			<DevWorkflowGraphView
+				run={chainRun(
+					[1, 2].flatMap((child) =>
+						["implement", "validate"].map((step) =>
+							devWorkflowNodeRunSummary({
+								id: `node-${step}-${child}`,
+								nodeKey: `${step}#child-${child}`,
+								isMaterialized: true,
+								materializedFromNodeKey: "decompose",
+								materializationIndex: child,
+							}),
+						),
+					),
+				)}
+				onSelect={vi.fn()}
+			/>,
+		);
+
+		expect(
+			[1, 2]
+				.flatMap((child) => ["implement", "validate"].map((step) => `node-${step}-${child}`))
+				.map((id) => screen.getByTestId(`dev-workflow-graph-node-materialized-${id}`).textContent),
+		).toEqual(["generated · 1 of 2", "generated · 1 of 2", "generated · 2 of 2", "generated · 2 of 2"]);
+	});
+
+	it("badges an apply node as one, because a validation node's card is otherwise identical", () => {
+		renderWithProviders(
+			<DevWorkflowGraphView
+				graph={toDevWorkflowDefinitionCanvasGraph({
+					schemaVersion: 1,
+					nodes: [
+						{ nodeKey: "integrate", nodeType: "Tool", label: "Integrate", toolMode: "Apply" },
+						{ nodeKey: "validate", nodeType: "Tool", label: "Validate" },
+					],
+					edges: [{ from: "validate", to: "integrate" }],
+				})}
+				onSelect={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByTestId("dev-workflow-graph-node-apply-integrate").textContent).toBe("applies patches");
+		expect(screen.queryByTestId("dev-workflow-graph-node-apply-validate")).toBeNull();
 	});
 
 	it("selects a node-run when its card is clicked, the same change a table row makes", () => {

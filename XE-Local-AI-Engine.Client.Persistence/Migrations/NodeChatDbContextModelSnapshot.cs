@@ -3376,8 +3376,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasKey("Id");
 
                     b.HasIndex("ProjectId")
-                        .IsUnique()
-                        .HasDatabaseName("ux_development_tasks_project_id");
+                        .HasDatabaseName("ix_development_tasks_project_id");
 
                     b.ToTable("development_tasks", (string)null);
                 });

@@ -177,6 +177,18 @@
 	},
 	"pages": {
 		"development": {
+			"tasks": {
+				"label": "Aufgabe",
+				"untitled": "Aufgabe {{index}}",
+				"count": "{{count}} in diesem Projekt"
+			},
+			"workflow": {
+				"body": "Ein Entwicklungs-Workflow hat diese Aufgabe erstellt und steuert sie. Die Freigabe, mit der ihr Patch übernommen wird, ist ein Gate-Knoten in diesem Workflow — diese Seite zeigt die Nachweise, entschieden wird im Workflow.",
+				"open": "Workflow-Lauf öffnen",
+				"ended": "Der Entwicklungs-Workflow, der diese Aufgabe erstellt hat, ist beendet und kann daher nichts mehr freigeben. Diese Seite ist die verbleibende Instanz für ihren Patch.",
+				"unreadable": "Der Status des Entwicklungs-Workflows, der diese Aufgabe erstellt hat, konnte nicht gelesen werden — ob dieser Workflow die Entscheidung noch besitzt, ist daher unbekannt. Diese Seite bleibt schreibgeschützt, bis er gelesen werden kann.",
+				"retry": "Workflow erneut prüfen"
+			},
 			"validation": {
 				"noReport": "Für diese Aufgabe wurde noch keine deterministische Validierung ausgeführt.",
 				"loading": "Validierungsbericht wird geladen",
@@ -266,7 +278,8 @@
 			"templateUnavailable": "nicht verfügbar",
 			"repositoryUnavailableDescription": "Das registrierte Repository ist nicht verfügbar oder passt nicht mehr zu diesem Projekt. Entwicklungsaktionen sind blockiert.",
 			"timeline": {
-				"title": "Dauerhafte Ereignis-Chronik"
+				"title": "Dauerhafte Ereignis-Chronik",
+				"projectScope": "Keiner Aufgabe zugeordnet"
 			},
 			"empty": {
 				"title": "Noch keine Entwicklungsprojekte",
@@ -301,6 +314,7 @@
 			"apply": {
 				"title": "Vom Menschen gesteuertes Anwenden des Patches",
 				"awaiting": "Wartet auf ausdrückliche Freigabe",
+				"workflowOwned": "Der Workflow entscheidet",
 				"preview": "Aktuellen Patch ansehen",
 				"apply": "Geprüften Patch anwenden",
 				"previewLabel": "Vorschau des geprüften Patches",
@@ -4915,6 +4929,42 @@
 			}
 		},
 		"devWorkflows": {
+			"apply": {
+				"passed": "Alle Patches übernommen",
+				"failed": "Die Übernahme wurde nicht abgeschlossen",
+				"count": "{{landed}} von {{total}} Patches übernommen",
+				"noTasks": "Dieser Knoten hat keine abgeschlossene Aufgabe mit einem zu übernehmenden Patch gefunden.",
+				"stopped": "Die Abfolge wurde beendet, bevor alle Patches angeboten wurden. Nach einer Ablehnung ist das Repository nicht mehr in dem Zustand, für den die übrigen Patches freigegeben wurden — sie wurden daher nicht versucht."
+			},
+			"applyOutcome": {
+				"applied": "übernommen",
+				"already-applied": "bereits übernommen",
+				"blocked": "blockiert",
+				"refused": "abgelehnt",
+				"cancelled": "nicht versucht"
+			},
+			"attempts": {
+				"title": "Versuche",
+				"number": "Versuch {{attempt}}",
+				"noEvidence": "kein Nachweis zu diesem Versuch in den bisher geladenen Ereignissen",
+				"interrupted": "unterbrochen und {{count}}× neu gestartet",
+				"session": "Transkript"
+			},
+			"structural": {
+				"dependencies": "Abhängigkeiten",
+				"noDependencies": "Dieser Knoten hat im festgeschriebenen Graphen keine vorgelagerten Abhängigkeiten.",
+				"branches": "Zweige",
+				"parallelBranches": "Parallele Zweige",
+				"noBranches": "Dieser Knoten hat im festgeschriebenen Graphen keine ausgehenden Zweige.",
+				"unconditional": "immer genommen",
+				"taken": "genommen",
+				"outstanding": "offen",
+				"satisfied": "erfüllt",
+				"dead": "tot – dieser Zweig trägt den Join nicht",
+				"deadAll": "tot – der Join wird übersprungen, sobald nichts mehr offen ist",
+				"notMaterialized": "noch nicht angelegt",
+				"template": "Vorlage – wird pro Aufgabe erzeugt"
+			},
 			"title": "Workflow-Läufe",
 			"subtitle": "Dauerhafte Entwicklungs-Workflows: Jedes Arbeitspaket führt einen Graphen aus Agenten-, Tool- und Freigabeknoten aus, der einen Neustart übersteht.",
 			"empty": "Noch keine Arbeitspakete. Beschreiben Sie, was gebaut werden soll, und wählen Sie eine Workflow-Vorlage aus.",
@@ -4997,16 +5047,22 @@
 				"finished": "abgeschlossen",
 				"attempt": "Versuch {{attempt}} von {{maxAttempts}}",
 				"materialized": "erzeugt",
+				"appliesPatches": "wendet Patches an",
+				"materializedOf": "erzeugt · {{index}} von {{count}}",
 				"staleInputs": "Veraltete Eingaben",
 				"agentWithModel": "{{agent}} · {{model}}"
 			},
 			"events": {
 				"title": "Ereignisse",
 				"empty": "In diesem Lauf ist noch nichts passiert.",
+				"emptyWindow": "Keine Ereignisse im jüngsten Abschnitt des Protokolls. Ältere Ereignisse, falls vorhanden, sind einen Schritt zurück.",
 				"meta": "#{{sequence}}",
 				"showDetail": "Details anzeigen",
 				"hideDetail": "Details ausblenden",
-				"loadMore": "Mehr laden"
+				"loadMore": "Mehr laden",
+				"loadOlder": "Ältere laden",
+				"jumpNewest": "Neueste",
+				"jumpOldest": "Älteste"
 			},
 			"artifacts": {
 				"title": "Artefakte",
@@ -5127,22 +5183,28 @@
 				"sessionPurged": "Das Transkript des Agenten ist nicht mehr verfügbar. Die Ereignisse und Artefakte dieses Knotens sind davon nicht betroffen.",
 				"tool": "Prüfung",
 				"openReport": "Prüfbericht öffnen",
-				"noReport": "Noch kein Prüfbericht.",
+				"report": "Bericht",
+				"openStoredReport": "Gespeicherten Bericht öffnen",
+				"apply": "Patch-Übernahme",
+				"openApplyReport": "Übernahmebericht öffnen",
+				"noReport": "Noch kein Bericht.",
 				"devTask": "Entwicklungsaufgabe",
 				"openDevelopment": "Development Mode öffnen",
 				"devTaskReviewRound": "Prüfrunde {{round}}",
 				"devTaskNoStage": "Diese Aufgabe hat noch keinen Stand gemeldet.",
 				"devTaskEvidence": "Development Mode zeigt Versuche, Patch und Prüfnachweise dieser Aufgabe. Die Freigabe, mit der ein Patch übernommen wird, ist ein Gate-Knoten in diesem Workflow.",
-				"objective": "Zielvorgabe"
+				"objective": "Zielvorgabe",
+				"cascadeRerun": "Dieser Knoten läuft erneut, weil „{{node}}“ fehlgeschlagen ist und der Lauf die davon abhängige Arbeit wiederholt."
 			},
 			"validation": {
-				"loadFailed": "Der Prüfbericht dieses Knotens konnte nicht geladen werden.",
-				"unreadable": "Der Prüfbericht dieses Knotens konnte nicht gelesen werden, sein Ergebnis ist deshalb nicht belastbar. Öffnen Sie ihn im Reiter „Artefakte“, um den gespeicherten Inhalt zu sehen.",
-				"refused": "Es wurde kein Prüfbericht geschrieben, hier steht daher nichts, was den Code belegt.",
+				"loadFailed": "Der Bericht dieses Knotens konnte nicht geladen werden.",
+				"unreadable": "Der Bericht dieses Knotens konnte nicht gelesen werden, sein Ergebnis ist deshalb nicht belastbar. Öffnen Sie ihn im Reiter „Artefakte“, um den gespeicherten Inhalt zu sehen.",
+				"refused": "Es wurde kein Bericht geschrieben, hier steht daher nichts, was belegt, was dieser Knoten getan hat.",
 				"priorAttempt": "Der gespeicherte Bericht stammt aus Versuch {{reportAttempt}}, dieser Knoten ist bei Versuch {{attempt}}. Er ist nicht das aktuelle Ergebnis — öffnen Sie ihn im Reiter „Artefakte“, wenn Sie den früheren Nachweis brauchen.",
 				"passed": "Prüfung bestanden",
 				"failed": "Prüfung fehlgeschlagen",
 				"base": "Basis {{commit}} · Profil {{profile}}",
+				"basedOn": "Bewertet wurde der freigegebene Patch {{hash}} der Implementierungsaufgabe · Aufgabe {{task}}",
 				"partial": "Dieser Bericht ist unvollständig: Dem Knoten lief die Zeit davon, bevor alle deklarierten Befehle gelaufen waren.",
 				"noCommands": "Es lief kein Prüfbefehl, dieser Bericht belegt daher nichts über den Code.",
 				"command": {

@@ -67,7 +67,9 @@ public sealed class ApplyDevelopmentPatchEndpoint(IDevelopmentManagementService 
     {
         try
         {
-            var result = await _service.ApplyAsync(req.ProjectId, req.TaskId, req.OperationId, ct).ConfigureAwait(false);
+            // No run named: this is the operator's own apply, and it is refused for a task a LIVE workflow run is
+            // driving. The 409 that refusal becomes is the same shape every other Development precondition uses.
+            var result = await _service.ApplyAsync(req.ProjectId, req.TaskId, req.OperationId, onBehalfOfWorkflowRunId: null, ct).ConfigureAwait(false);
             await Send.OkAsync(new DevelopmentApplyResponse(result.OperationId,
                     result.Phase,
                     result.Outcome,

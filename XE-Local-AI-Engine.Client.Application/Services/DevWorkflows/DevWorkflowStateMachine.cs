@@ -53,6 +53,33 @@ internal static class DevWorkflowStateMachine
     public static string GateOutputJson(DevWorkflowDecisionKind decision) =>
         JsonSerializer.Serialize(new GateOutput(DevWorkflowNodeOutputStatuses.Succeeded, decision.ToString()), JsonOptions);
 
+    /// <summary>
+    ///     Every answer a human gate SUCCEEDS on — the three that part company in the graph rather than on the row. What
+    ///     a gate's out-edges route is exactly this set, so anything that reasons about where an answer can go reads it
+    ///     from <see cref="TargetFor" /> rather than listing the three by hand.
+    /// </summary>
+    public static IReadOnlyList<DevWorkflowDecisionKind> GateAnswers { get; } =
+    [
+        .. Enum.GetValues<DevWorkflowDecisionKind>().Where(static decision => TargetFor(decision) == DevWorkflowNodeRunStatus.Succeeded)
+    ];
+
+    /// <summary>
+    ///     Whether an out-edge of a human gate fires for one answer, asked of the gate's own output document rather than
+    ///     of a row — which is what a check made BEFORE the run has instead of one.
+    ///     <para>
+    ///         Composed from this class's own <see cref="GateOutputJson" /> and read by the same pair
+    ///         <see cref="EdgeState" /> reads a landed row's output with, so a definition-time rule about where an answer
+    ///         goes and the routing that actually takes it there cannot answer differently. Three callers ask: the parse
+    ///         rule that refuses an apply a rejection could reach, the dispatcher when a recorded answer has landed, and
+    ///         the API when it tells an operator in advance whether an answer has anywhere to go.
+    ///     </para>
+    /// </summary>
+    public static bool GateEdgeFires(DevWorkflowGraphEdge edge, DevWorkflowDecisionKind decision)
+    {
+        ArgumentNullException.ThrowIfNull(edge);
+        return Fires(edge, GateOutputJson(decision));
+    }
+
     /// <summary>A node run nothing further will happen to on its own.</summary>
     public static bool IsTerminal(DevWorkflowNodeRunStatus status) =>
         status is DevWorkflowNodeRunStatus.Succeeded
@@ -90,18 +117,27 @@ internal static class DevWorkflowStateMachine
             return DevWorkflowEdgeState.Dead;
         }
 
-        return DevWorkflowCondition.Evaluate(edge.Condition, ParseOutput(source.OutputJson))
-            ? DevWorkflowEdgeState.Satisfied
-            : DevWorkflowEdgeState.Dead;
+        return Fires(edge, source.OutputJson) ? DevWorkflowEdgeState.Satisfied : DevWorkflowEdgeState.Dead;
     }
+
+    /// <summary>Whether one edge's condition accepts one output document. The only place either question is answered.</summary>
+    private static bool Fires(DevWorkflowGraphEdge edge, string? outputJson) =>
+        DevWorkflowCondition.Evaluate(edge.Condition, ParseOutput(outputJson));
 
     /// <summary>
     ///     Whether a <c>Pending</c> node run may be queued, must be skipped, or is still waiting.
     ///     <para>
     ///         <c>All</c> over ZERO inbound edges is vacuously satisfied, and that is load-bearing rather than pedantic:
-    ///         it is how an entry node becomes eligible at all (Start is implicit, so an entry node is one with no
-    ///         inbound edges), and it is what lets a decomposition that produced no tasks finish — the join is left with
-    ///         no inbound edges, proceeds, and the run completes. The opposite reading hangs such a run forever.
+    ///         it is how an entry node becomes eligible at all, Start being implicit, so an entry node is one with no
+    ///         inbound edges. A decomposition that produced no tasks is a neighbouring case and no longer this one: it
+    ///         rewrites nothing, so its join keeps its edge from the decomposition, and that one Satisfied edge is what
+    ///         carries it — which is why the materializer preserves that edge on the expanding path too.
+    ///     </para>
+    ///     <para>
+    ///         An edge whose source is a materialization TEMPLATE is not a dependency and is dropped here. The template
+    ///         is the one node deliberately never instantiated, so its edge into the join can never be satisfied and can
+    ///         never die either — it is the authored shape the clones' own edges stand in for, and reading it as a
+    ///         dependency would leave every decomposing run waiting on a row that is never written.
     ///     </para>
     /// </summary>
     public static DevWorkflowNodeAdmission Admission(DevWorkflowGraphNode node,
@@ -113,26 +149,26 @@ internal static class DevWorkflowStateMachine
         ArgumentNullException.ThrowIfNull(nodeRunsByKey);
 
         var states = graph.InboundEdges(node.NodeKey)
+                          .Where(edge => !graph.TemplateKeys.Contains(edge.From))
                           .Select(edge => EdgeState(edge, nodeRunsByKey.GetValueOrDefault(edge.From)))
                           .ToList();
 
-        if (node.JoinPolicy == DevWorkflowJoinPolicy.All)
-        {
-            if (states.Contains(DevWorkflowEdgeState.Dead))
-            {
-                return DevWorkflowNodeAdmission.Skip;
-            }
-
-            return states.Contains(DevWorkflowEdgeState.Pending) ? DevWorkflowNodeAdmission.Wait : DevWorkflowNodeAdmission.Eligible;
-        }
-
-        // Any: one satisfied branch is enough, but only once no sibling could still satisfy one — otherwise the join
-        // would fire on whichever branch happened to land first.
+        // Pending outranks Dead under BOTH policies, and for the same reason: the answer is not allowed to depend on
+        // which branch happened to land first. A dead inbound edge already settles what an `All` join will DO — it can
+        // never fire, so it will be skipped — but settling it while a sibling branch is still running skips the node,
+        // and everything after it, in front of work the run has not finished. Live, one clone's validate was skipped
+        // and the integration stage went terminal with the other clone's implementation still to come.
         if (states.Contains(DevWorkflowEdgeState.Pending))
         {
             return DevWorkflowNodeAdmission.Wait;
         }
 
+        if (node.JoinPolicy == DevWorkflowJoinPolicy.All)
+        {
+            return states.Contains(DevWorkflowEdgeState.Dead) ? DevWorkflowNodeAdmission.Skip : DevWorkflowNodeAdmission.Eligible;
+        }
+
+        // Any: one satisfied branch is enough, but only once no sibling could still satisfy one.
         return states.Contains(DevWorkflowEdgeState.Satisfied) ? DevWorkflowNodeAdmission.Eligible : DevWorkflowNodeAdmission.Skip;
     }
 
@@ -356,9 +392,14 @@ internal static class DevWorkflowStateMachine
                 or DevWorkflowNodeRunStatus.Failed
                 or DevWorkflowNodeRunStatus.Cancelled,
 
+            // Succeeded has one move the other terminals do not, and exactly one: a decomposition's output is JUDGED
+            // after the row that produced it settled, so a task package nothing can use has to stand its own author
+            // down for a human. Leaving it Succeeded would let the run complete over work it never decomposed, and
+            // failing it would say the agent broke when what it did was answer badly.
+            DevWorkflowNodeRunStatus.Succeeded => to is DevWorkflowNodeRunStatus.Pending or DevWorkflowNodeRunStatus.Blocked,
+
             // The fix loop's reset, and only it. See the remarks above.
-            DevWorkflowNodeRunStatus.Succeeded
-                or DevWorkflowNodeRunStatus.Failed
+            DevWorkflowNodeRunStatus.Failed
                 or DevWorkflowNodeRunStatus.Skipped
                 or DevWorkflowNodeRunStatus.Cancelled => to is DevWorkflowNodeRunStatus.Pending,
             _ => false

@@ -65,6 +65,36 @@ public sealed class DevWorkflowNodeRunTests
     }
 
     /// <summary>
+    ///     The detail this store writes is READ BY NAME, so its casing is a contract and not a formatting choice.
+    ///     <para>
+    ///         Serialized with the framework default it came out <c>{"WorkSessionId":…,"Attempt":1}</c> while every
+    ///         reader — and every payload the Application layer writes — is camelCase, so the attempt walk and the
+    ///         transcript link saw nothing at all and said so silently. This pins the spelling at the writer, which is
+    ///         the only place it can be pinned: the log is append-only and the rows already written keep theirs.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task TheAttachedDetail_IsWrittenInTheCasingItsReadersUse()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var nodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "implement", seed.RunVersion).ConfigureAwait(false);
+        _ = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand(seed.RunId, nodeRunId, version, Guid.NewGuid())).ConfigureAwait(false);
+
+        var events = await store.ListEventsAsync(seed.RunId).ConfigureAwait(false);
+        var detail = AssertEx.NotNull(events.Single(item => item.EventType == DevWorkflowEventTypes.WorkSessionAttached).DetailJson);
+        AssertEx.True(detail.Contains("\"workSessionId\":", StringComparison.Ordinal),
+            "the client reads this key; PascalCase makes the transcript link vanish with no error.");
+        AssertEx.True(detail.Contains("\"attempt\":", StringComparison.Ordinal),
+            "and this one, which is what attributes an attempt's evidence to the right attempt.");
+        AssertEx.True(detail.Contains("\"sessionResumes\":", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     ///     Releasing the session is what makes a re-attempt a fresh one. Without it a node run back at <c>Pending</c>
     ///     still points at the session that just ended, and nothing downstream can tell "this attempt is still holding
     ///     its session" from "this attempt is over" — the two need opposite answers.
@@ -406,6 +436,74 @@ public sealed class DevWorkflowNodeRunTests
             "Written to the column, not held only by the change tracker.");
     }
 
+    /// <summary>
+    ///     The pointer read backwards: a Development task a workflow drives can name the run driving it, which is what
+    ///     lets the Dev Mode task page say the approval lives somewhere else. A task no workflow touched answers
+    ///     nothing, and that is the ordinary case the page must keep behaving as it always has.
+    ///     <para>
+    ///         Two runs can name one task over its life — a re-run of the same definition drives the same task — and the
+    ///         LATEST answers, because the question is where the approval lives now.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task TheRunDrivingADevelopmentTask_IsFoundBackThroughThePointerAndTheLatestOneAnswers()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var development = new DevelopmentStore(context, TimeProvider.System);
+        await SeedSelectedFolderAsync(context, fixture.DatabasePath).ConfigureAwait(false);
+        var (task, _) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(development).ConfigureAwait(false);
+
+        // Two clocks a minute apart, because "latest" is the node run created last and two rows written this close
+        // together would otherwise be stamped inside the same millisecond.
+        var earlier = new DevWorkflowStore(context, new FixedClock(DateTimeOffset.UnixEpoch.AddDays(1)));
+        var later = new DevWorkflowStore(context, new FixedClock(DateTimeOffset.UnixEpoch.AddDays(1).AddMinutes(1)));
+
+        var first = await DevWorkflowTestFixture.SeedRunAsync(earlier, developmentProjectId: task.ProjectId).ConfigureAwait(false);
+        var firstNodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(earlier,
+                                                      first.RunId,
+                                                      firstNodeRunId,
+                                                      "implement",
+                                                      first.RunVersion,
+                                                      DevWorkflowNodeType.DevTask,
+                                                      developmentProjectId: task.ProjectId)
+                                                  .ConfigureAwait(false);
+        _ = await earlier.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(first.RunId,
+                             firstNodeRunId,
+                             version,
+                             DevWorkflowNodeRunStatus.Running,
+                             DevelopmentTaskId: task.TaskId))
+                         .ConfigureAwait(false);
+
+        AssertEx.Equal(first.RunId,
+            await earlier.FindRunIdForDevelopmentTaskAsync(task.TaskId).ConfigureAwait(false),
+            "A task a DevTask node run named is driven by that node run's run.");
+        AssertEx.Null(await earlier.FindRunIdForDevelopmentTaskAsync(Guid.NewGuid()).ConfigureAwait(false),
+            "A task no workflow drives names no run, which is every task an operator created themselves.");
+
+        var second = await DevWorkflowTestFixture.SeedRunAsync(later, developmentProjectId: task.ProjectId).ConfigureAwait(false);
+        var secondNodeRunId = Guid.NewGuid();
+        var secondVersion = await DevWorkflowTestFixture.AddNodeRunAsync(later,
+                                                            second.RunId,
+                                                            secondNodeRunId,
+                                                            "implement",
+                                                            second.RunVersion,
+                                                            DevWorkflowNodeType.DevTask,
+                                                            developmentProjectId: task.ProjectId)
+                                                        .ConfigureAwait(false);
+        _ = await later.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(second.RunId,
+                           secondNodeRunId,
+                           secondVersion,
+                           DevWorkflowNodeRunStatus.Running,
+                           DevelopmentTaskId: task.TaskId))
+                       .ConfigureAwait(false);
+
+        AssertEx.Equal(second.RunId,
+            await later.FindRunIdForDevelopmentTaskAsync(task.TaskId).ConfigureAwait(false),
+            "The run that took the task over is the one holding its approval now.");
+    }
+
     /// <summary>The repository row a development project points at; both seeded projects share it.</summary>
     private static async Task SeedSelectedFolderAsync(NodeChatDbContext context, string databasePath)
     {
@@ -418,5 +516,12 @@ public sealed class DevWorkflowNodeRunTests
             CreatedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
         });
         _ = await context.SaveChangesAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>A clock that does not move, so two writes can be ordered by more than luck.</summary>
+    private sealed class FixedClock(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() =>
+            utcNow;
     }
 }

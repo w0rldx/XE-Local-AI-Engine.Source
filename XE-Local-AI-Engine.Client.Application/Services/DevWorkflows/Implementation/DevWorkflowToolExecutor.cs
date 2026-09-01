@@ -141,7 +141,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                     nodeRun,
                     nodeRuns,
                     new DevWorkflowFailure(DevWorkflowFailureClasses.Interrupted,
-                        "The host stopped while this node run was running its validation commands.",
+                        StoppedReason(graph, nodeRun, "The host stopped"),
                         Output(nodeRun, DevWorkflowFailureClasses.Interrupted, run: null),
                         DevWorkflowOutcomes.Interrupted),
                     cancellationToken)
@@ -174,7 +174,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                     nodeRuns,
                     DevWorkflowNodeRunStatus.Cancelled,
                     DevWorkflowFailureClasses.Cancelled,
-                    "The run was cancelled while this node run was running its validation commands.",
+                    StoppedReason(graph, nodeRun, "The run was cancelled"),
                     Output(nodeRun, DevWorkflowFailureClasses.Cancelled, run: null),
                     DevWorkflowOutcomes.Cancelled,
                     cancellationToken)
@@ -203,7 +203,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
 
         // Evidence first, status last — the same order the agent lane and the work-session loop use one level down. A
         // crash in that window re-derives the same answer, because the artifact write is keyed and the poll runs again.
-        await PromoteReportAsync(store, run, nodeRun, result, cancellationToken).ConfigureAwait(false);
+        await PromoteReportAsync(store, graph, run, nodeRun, result, cancellationToken).ConfigureAwait(false);
 
         if (result.Passed)
         {
@@ -216,6 +216,26 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                     terminalReason: null,
                     Output(nodeRun, failureClass: null, result),
                     outcome: null,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (string.Equals(result.FailureClass, DevWorkflowFailureClasses.Cancelled, StringComparison.Ordinal))
+        {
+            // A pass that stopped because it was ASKED to, and answered with an account of what it had already done
+            // instead of letting the token throw. It reaches the same terminal the cancelled arm above writes — being
+            // stopped is not a failure for the retry policy to route — and the only reason it comes through here is
+            // that the evidence had to come with it. The apply lane is the one that has any: a sequence interrupted
+            // between two patches has left one in the repository, and its report is written just above.
+            return await SettleAsync(store,
+                    run,
+                    nodeRun,
+                    nodeRuns,
+                    DevWorkflowNodeRunStatus.Cancelled,
+                    DevWorkflowFailureClasses.Cancelled,
+                    result.SanitizedReason ?? "The run was cancelled while this node run was working.",
+                    Output(nodeRun, DevWorkflowFailureClasses.Cancelled, result),
+                    DevWorkflowOutcomes.Cancelled,
                     cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -357,6 +377,18 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
+            if (node.ToolMode == DevWorkflowToolMode.Apply)
+            {
+                // The integration variant takes the same lane slot as a validation pass, deliberately: it goes through
+                // the same workspace machinery against the same repository, which is the resource the slot count bounds
+                // — and it is the ONE difference from the DevTask lane, which takes no slot because what it drives is a
+                // Dev Mode attempt with a bound of its own.
+                return scope.ServiceProvider.GetService<DevWorkflowApplyCommands>() is { } apply
+                    ? await apply.RunAsync(run, nodeRun, cancellationToken).ConfigureAwait(false)
+                    : Refused(DevWorkflowFailureClasses.Configuration,
+                        "This node applies approved patches, and Development Mode is switched off on this node.");
+            }
+
             if (scope.ServiceProvider.GetService<IDevWorkflowToolCommands>() is not { } commands)
             {
                 // Development Mode is switched off on this node, so there is no workspace provider, no repository
@@ -378,14 +410,37 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             // The message is NOT surfaced: an unexpected exception's text is the one string in this lane nothing has
             // sanitized, and it can carry a host path or a fragment of captured output.
             _logger.LogError(exception, "Development workflow tool node run {NodeRunId} of run {RunId} failed unexpectedly.", nodeRun.Id, run.Id);
+
+            // Said in the node's own terms. An operator reading "validation commands stopped" about the node that puts
+            // approved patches into their repository is told the wrong thing about the one node where what was and was
+            // not done matters most — and this lane runs both kinds.
             return Refused(DevWorkflowFailureClasses.Internal,
-                "This node run's validation commands stopped on an unexpected error. The engine log has the detail.");
+                node.ToolMode == DevWorkflowToolMode.Apply
+                    ? "This node run stopped on an unexpected error while applying approved patches. The engine log has the detail."
+                    : "This node run's validation commands stopped on an unexpected error. The engine log has the detail.");
         }
         finally
         {
             _ = _lane.Release();
         }
     }
+
+    /// <summary>
+    ///     Whether the row belongs to the integration variant of this lane. A row whose node the run's graph no longer
+    ///     declares reads as the ordinary kind.
+    /// </summary>
+    private static bool IsApplying(DevWorkflowGraph graph, DevWorkflowNodeRunSnapshot nodeRun) =>
+        graph.Nodes.TryGetValue(nodeRun.NodeKey, out var node) && node.ToolMode == DevWorkflowToolMode.Apply;
+
+    /// <summary>
+    ///     What a pass that was stopped from outside is told to have been doing, in the node's OWN terms. This lane runs
+    ///     two kinds of work, and "validation commands" is the wrong account of the node that puts approved patches into
+    ///     a repository — the one node where what was and was not done matters most to whoever reads the row.
+    /// </summary>
+    private static string StoppedReason(DevWorkflowGraph graph, DevWorkflowNodeRunSnapshot nodeRun, string what) =>
+        IsApplying(graph, nodeRun)
+            ? $"{what} while this node run was applying approved patches."
+            : $"{what} while this node run was running its validation commands.";
 
     private static DevWorkflowToolRun Refused(string failureClass, string sanitizedReason) =>
         new(Passed: false,
@@ -440,11 +495,17 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     }
 
     /// <summary>
-    ///     Writes the validation report into the run's own artifact record, so the evidence outlives the workspace it
+    ///     Writes the node run's report into the run's own artifact record, so the evidence outlives the workspace it
     ///     was produced in. Keyed on <c>(run, node key, attempt)</c>, so a replayed poll rewrites the same blob and the
     ///     store's query-first check returns the recorded result instead of appending a second version.
+    ///     <para>
+    ///         An apply node's report is a different document about a different act, so it is written under the ordinary
+    ///         <c>Report</c> kind and its own name: a reader that decodes a validation report would otherwise be handed
+    ///         one that is not, and render it as unreadable evidence rather than as the list of patches it is.
+    ///     </para>
     /// </summary>
     private async Task PromoteReportAsync(IDevWorkflowStore store,
+        DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         DevWorkflowToolRun result,
@@ -456,6 +517,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             return;
         }
 
+        var apply = IsApplying(graph, nodeRun);
         var artifactId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "validation-report");
         var write = await _blobs.WriteAsync(run.Id, artifactId, result.Report, cancellationToken).ConfigureAwait(false);
         var appended = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(run.Id,
@@ -463,8 +525,8 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                                           nodeRun.Id,
                                           DevWorkflowVersions.Any,
                                           DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "report"),
-                                          DevWorkflowArtifactKind.ValidationReport,
-                                          $"{nodeRun.NodeKey}-validation.json",
+                                          apply ? DevWorkflowArtifactKind.Report : DevWorkflowArtifactKind.ValidationReport,
+                                          apply ? $"{nodeRun.NodeKey}-apply.json" : $"{nodeRun.NodeKey}-validation.json",
                                           "application/json",
                                           write.ContentHash,
                                           write.ByteCount,

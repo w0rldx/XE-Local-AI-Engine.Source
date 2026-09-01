@@ -177,6 +177,18 @@
 	},
 	"pages": {
 		"development": {
+			"tasks": {
+				"label": "Task",
+				"untitled": "Task {{index}}",
+				"count": "{{count}} in this project"
+			},
+			"workflow": {
+				"body": "A development workflow created this task and is driving it. The approval that lets its patch land is a gate node in that workflow, so this page shows the evidence and the workflow makes the decision.",
+				"open": "Open the workflow run",
+				"ended": "The development workflow that created this task has ended, so it can no longer approve anything. This page is the remaining authority over its patch.",
+				"unreadable": "The status of the development workflow that created this task could not be read, so it is not known whether that workflow still owns the decision. This page stays read-only until it can be.",
+				"retry": "Check the workflow again"
+			},
 			"validation": {
 				"noReport": "No deterministic validation has run for this task yet.",
 				"loading": "Loading the validation report",
@@ -266,7 +278,8 @@
 			"templateUnavailable": "unavailable",
 			"repositoryUnavailableDescription": "The registered repository is unavailable or no longer matches this project. Development actions are blocked.",
 			"timeline": {
-				"title": "Durable event timeline"
+				"title": "Durable event timeline",
+				"projectScope": "Not tied to a task"
 			},
 			"empty": {
 				"title": "No Development projects yet",
@@ -301,6 +314,7 @@
 			"apply": {
 				"title": "Human-controlled patch apply",
 				"awaiting": "Awaiting explicit approval",
+				"workflowOwned": "The workflow decides",
 				"preview": "Preview current patch",
 				"apply": "Apply verified patch",
 				"previewLabel": "Verified patch preview",
@@ -4915,6 +4929,42 @@
 			}
 		},
 		"devWorkflows": {
+			"apply": {
+				"passed": "Every patch landed",
+				"failed": "The apply did not complete",
+				"count": "{{landed}} of {{total}} patches applied",
+				"noTasks": "This node found no completed task with a patch to apply.",
+				"stopped": "The sequence stopped before every patch was offered. After a refusal the repository is no longer in the state the remaining patches were approved against, so they were not attempted."
+			},
+			"applyOutcome": {
+				"applied": "applied",
+				"already-applied": "already applied",
+				"blocked": "blocked",
+				"refused": "refused",
+				"cancelled": "not attempted"
+			},
+			"attempts": {
+				"title": "Attempts",
+				"number": "attempt {{attempt}}",
+				"noEvidence": "no record of this attempt in the events loaded so far",
+				"interrupted": "interrupted and re-dispatched {{count}}×",
+				"session": "transcript"
+			},
+			"structural": {
+				"dependencies": "Dependencies",
+				"noDependencies": "This node has no upstream dependencies in the pinned graph.",
+				"branches": "Branches",
+				"parallelBranches": "Parallel branches",
+				"noBranches": "This node has no outgoing branches in the pinned graph.",
+				"unconditional": "always taken",
+				"taken": "taken",
+				"outstanding": "outstanding",
+				"satisfied": "satisfied",
+				"dead": "dead — this branch will not carry the join",
+				"deadAll": "dead — the join skips once nothing is pending",
+				"notMaterialized": "not created yet",
+				"template": "template — materializes per task"
+			},
 			"title": "Workflow Runs",
 			"subtitle": "Durable development workflows: each work item runs a graph of agent, tool and approval nodes that survives a restart.",
 			"empty": "No work items yet. Describe what you want built and pick a workflow template to run it.",
@@ -4997,16 +5047,22 @@
 				"finished": "finished",
 				"attempt": "attempt {{attempt}} of {{maxAttempts}}",
 				"materialized": "generated",
+				"appliesPatches": "applies patches",
+				"materializedOf": "generated · {{index}} of {{count}}",
 				"staleInputs": "Stale inputs",
 				"agentWithModel": "{{agent}} · {{model}}"
 			},
 			"events": {
 				"title": "Events",
 				"empty": "Nothing has happened in this run yet.",
+				"emptyWindow": "No events in the most recent part of this run's log. Older events, if there are any, are one step back.",
 				"meta": "#{{sequence}}",
 				"showDetail": "Show detail",
 				"hideDetail": "Hide detail",
-				"loadMore": "Load more"
+				"loadMore": "Load more",
+				"loadOlder": "Load older",
+				"jumpNewest": "Newest",
+				"jumpOldest": "Oldest"
 			},
 			"artifacts": {
 				"title": "Artifacts",
@@ -5127,22 +5183,28 @@
 				"sessionPurged": "The agent's transcript is no longer available. This node's events and artifacts are unaffected.",
 				"tool": "Validation",
 				"openReport": "Open the validation report",
-				"noReport": "No validation report yet.",
+				"report": "Report",
+				"openStoredReport": "Open the stored report",
+				"apply": "Patch apply",
+				"openApplyReport": "Open the apply report",
+				"noReport": "No report yet.",
 				"devTask": "Development task",
 				"openDevelopment": "Open Development Mode",
 				"devTaskReviewRound": "review round {{round}}",
 				"devTaskNoStage": "This task has not reported a stage yet.",
 				"devTaskEvidence": "Dev Mode shows this task's attempts, patch and validation evidence. The approval that lets a patch land is a gate node in this workflow.",
-				"objective": "Objective"
+				"objective": "Objective",
+				"cascadeRerun": "This node is running again because “{{node}}” failed and the run is re-doing the work that depended on it."
 			},
 			"validation": {
-				"loadFailed": "Could not load this node's validation report.",
-				"unreadable": "This node's validation report could not be read, so its result cannot be trusted. Open it in the artifacts tab to see what was stored.",
-				"refused": "No validation report was written, so there is nothing here that evidences the code.",
+				"loadFailed": "Could not load this node's report.",
+				"unreadable": "This node's report could not be read, so its result cannot be trusted. Open it in the artifacts tab to see what was stored.",
+				"refused": "No report was written, so there is nothing here that evidences what this node did.",
 				"priorAttempt": "The stored report is attempt {{reportAttempt}}'s, and this node is on attempt {{attempt}}. It is not the current result — open it from the artifacts tab if you want the earlier evidence.",
 				"passed": "Validation passed",
 				"failed": "Validation failed",
 				"base": "base {{commit}} · profile {{profile}}",
+				"basedOn": "Judged the implementation task's approved patch {{hash}} · task {{task}}",
 				"partial": "This report is partial: the node ran out of time before every declared command had run.",
 				"noCommands": "No validation command ran, so this report evidences nothing about the code.",
 				"command": {

@@ -39,6 +39,22 @@ export interface DevWorkflowValidationCommand {
 	readonly testOutcome: DevWorkflowTestOutcome | null;
 }
 
+/**
+ * What the commands were actually run against, when the base commit alone would not say it: the sibling implementation
+ * task whose hash-verified Dev Mode patch was overlaid onto the sandbox clone before they ran (FX-B L3).
+ *
+ * Mirrors the server record `DevWorkflowValidationBasedOn(Guid DevelopmentTaskId, string PatchHash, string Detail)`
+ * field for field — camelCase on the wire, the Guid as a string. PRESENT ONLY when a patch really was overlaid: every
+ * other state (no sibling, an unbound or unverifiable patch, a patch that would not apply) refuses the node instead of
+ * writing a report, so a present `basedOn` always carries a real hash. Absent means either an older report or an
+ * honest base validation, and the reader may not tell those apart — so it renders nothing at all rather than a claim.
+ */
+export interface DevWorkflowValidationBasedOn {
+	readonly developmentTaskId: string;
+	readonly patchHash: string;
+	readonly detail: string;
+}
+
 export interface DevWorkflowValidationReportBody {
 	readonly passed: boolean;
 	readonly nodeKey: string;
@@ -50,6 +66,8 @@ export interface DevWorkflowValidationReportBody {
 	readonly failureDetail: string | null;
 	readonly commands: readonly DevWorkflowValidationCommand[];
 	readonly completedAtUtc: number;
+	/** Additive: a report written before the overlay existed carries no such field at all. */
+	readonly basedOn?: DevWorkflowValidationBasedOn | null;
 }
 
 /**

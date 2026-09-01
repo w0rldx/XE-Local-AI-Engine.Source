@@ -13,6 +13,8 @@ import { DevelopmentPatchApplyPanel } from "@/features/development/components/De
 import { DevelopmentProjectList } from "@/features/development/components/DevelopmentProjectList";
 import { DevelopmentProjectOverview } from "@/features/development/components/DevelopmentProjectOverview";
 import { DevelopmentProjectSetup } from "@/features/development/components/DevelopmentProjectSetup";
+import { DevelopmentTaskSwitcher } from "@/features/development/components/DevelopmentTaskSwitcher";
+import { DevelopmentWorkflowTaskBanner } from "@/features/development/components/DevelopmentWorkflowTaskBanner";
 import { SandboxIsolationPanel } from "@/features/development/components/SandboxIsolationPanel";
 import { useDevelopmentPageController } from "@/features/development/hooks/useDevelopmentPageController";
 
@@ -36,6 +38,14 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 		projectsQuery,
 		selectedProjectId,
 		setSelectedProjectId,
+		tasks,
+		selectedTaskId,
+		setSelectedTaskId,
+		workflowWorkItemId,
+		retryWorkflowRun,
+		workflowOwnsApply,
+		workflowRunEnded,
+		workflowRunUnreadable,
 		reconnectFolderId,
 		setReconnectFolderId,
 		previewTaskId,
@@ -52,6 +62,7 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 		attempts,
 		artifacts,
 		events,
+		untiedEvents,
 		latestAttempt,
 		activeAttempt,
 		nextActionKey,
@@ -200,6 +211,17 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 					<Grid.Col span={{ base: 12, lg: 9 }}>
 						{detail?.project && task ? (
 							<Stack gap="lg" data-testid="development-project-detail">
+								{/* Which task, and who is driving it — both above the evidence, because both change what the
+								    controls below mean. A decomposed workflow leaves three tasks in one project, and two of
+								    them had no way to be reached from this page before. */}
+								<DevelopmentTaskSwitcher tasks={tasks} selectedTaskId={selectedTaskId} onSelect={setSelectedTaskId} />
+								<DevelopmentWorkflowTaskBanner
+									workflowRunId={task.workflowRunId}
+									workItemId={workflowWorkItemId}
+									runEnded={workflowRunEnded}
+									runUnreadable={workflowRunUnreadable}
+									onRetryStatus={retryWorkflowRun}
+								/>
 								<DevelopmentProjectOverview
 									attempt={{ active: activeAttempt !== null, cancel: cancelActive, canceling: cancelMutation.isPending }}
 									nextAction={{
@@ -258,10 +280,17 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 											run: preview,
 										}}
 										repositoryReady={repositoryReady}
+										// Y3: while the run is live, the approval that authorises a workflow-driven apply is a
+										// gate node upstream of the integration node and the workflow performs the apply — a
+										// second Apply button here would be a duplicate authority or a bypass of the graph's
+										// audit trail. Once the run has ENDED it can answer no further gate, so withholding
+										// the button would strand a validated patch rather than protect it, and the authority
+										// comes back here.
+										readOnly={workflowOwnsApply}
 									/>
 								) : null}
 
-								<DevelopmentEventTimeline events={events} onRefresh={() => projectQuery.refetch()} />
+								<DevelopmentEventTimeline events={events} untiedEvents={untiedEvents} onRefresh={() => projectQuery.refetch()} />
 							</Stack>
 						) : null}
 					</Grid.Col>

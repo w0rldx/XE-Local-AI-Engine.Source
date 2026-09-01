@@ -51,7 +51,10 @@ describe("layoutDevWorkflowGraph", () => {
 		expect(join?.rank).toBe(2);
 		expect(left?.y).not.toBe(right?.y);
 		expect(Math.abs((left?.y ?? 0) - (right?.y ?? 0))).toBe(130);
-		// The join is centred on its own rank, so a two-way fan-out closes back onto the spine.
+		// Top-aligned (R-C5): every rank starts at y 0, so the first branch and the join it closes into share the spine
+		// and the second branch hangs below it. Under the centred formula this rank straddled y 0 instead; the assertion
+		// above holds either way, and this one is the one that records which formula is in force.
+		expect(left?.y).toBe(0);
 		expect(join?.y).toBe(0);
 	});
 
@@ -77,6 +80,41 @@ describe("layoutDevWorkflowGraph", () => {
 		}
 		// And the children keep the order the server materialized them in, not the order they arrived in.
 		expect(children.map((child) => after.positions.get(child.id)?.indexInRank)).toEqual([0, 1, 2, 3, 4]);
+	});
+
+	it("leaves a pre-existing node where it was when materialized children land in ITS rank", () => {
+		// Slice C's shape, and the one the append-a-rank test above does not reach: `decompose`'s children arrive in a
+		// rank that is already occupied — here by `publish`, which has held its row since the run started. The old
+		// centred formula divided each rank by its own population, so `publish` was dragged upwards the instant it had
+		// company; ordering the clones by barycenter alone would have pushed it down the rank instead.
+		const nodes = [node("plan"), node("decompose"), node("docs"), node("publish")];
+		const edges: DevWorkflowLayoutEdge[] = [
+			{ from: "plan", to: "decompose" },
+			{ from: "plan", to: "docs" },
+			{ from: "docs", to: "publish" },
+		];
+		const before = layoutDevWorkflowGraph(nodes, edges);
+		expect(before.positions.get("publish")?.rank).toBe(2);
+
+		const children = Array.from({ length: 3 }, (_, index) =>
+			node(`implement-${index}`, {
+				nodeKey: `implement#${index}`,
+				materializedFromNodeKey: "decompose",
+				materializationIndex: index,
+			}),
+		);
+		const after = layoutDevWorkflowGraph(
+			[...nodes, ...children],
+			[...edges, ...children.map((child) => ({ from: "decompose", to: child.id }))],
+		);
+
+		// The children really did land in `publish`'s rank — otherwise this test is the append case wearing a disguise.
+		expect(children.map((child) => after.positions.get(child.id)?.rank)).toEqual([2, 2, 2]);
+		for (const existing of nodes) {
+			expect(after.positions.get(existing.id), existing.id).toEqual(before.positions.get(existing.id));
+		}
+		// And they hang below it in materialization order, as one contiguous block.
+		expect(children.map((child) => after.positions.get(child.id)?.y)).toEqual([130, 260, 390]);
 	});
 
 	it("terminates on a cycle, ranks every node once, and tags the edge that does not move forward", () => {

@@ -61,6 +61,127 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
                                                        }
                                                        """;
 
+    /// <summary>
+    ///     The Slice C template (§5.10): research and a plan a human approves, a decomposition that expands into one
+    ///     implementation-and-validation subtree per task, and an integration stage that applies nothing until a second
+    ///     human gate says so.
+    ///     <para>
+    ///         Both gates route on <c>decision eq "Approve"</c> and have no other branch, which is what makes a refusal
+    ///         end the run rather than continue past it — for the integration gate that is Y3 itself, and the parser
+    ///         enforces the same rule structurally.
+    ///     </para>
+    ///     <para>
+    ///         The implementation node declares a timeout because nothing else bounds it: Dev Mode bounds each attempt
+    ///         and each review round, but not attempts back to back. Two hours is a slice of a feature, generously.
+    ///     </para>
+    ///     <para>
+    ///         <b>Two of these edges are load-bearing for EVIDENCE rather than for routing.</b> Upstream artifacts
+    ///         resolve back through structural nodes to the nearest PRODUCING ancestors, and a producing TYPE stops that
+    ///         walk on its own path whether or not it produced anything — so the join's inbound edge from the
+    ///         unmaterialized <c>validate</c> template node contributes nothing, and <c>decompose → join</c> is what
+    ///         puts the task package on a path back from the join at all. The materializer keeps it for that reason.
+    ///     </para>
+    ///     <para>
+    ///         That edge alone does NOT carry the approved plan, and the first live run said so in its own words: the
+    ///         walk stops at <c>decompose</c>, which produced the task package, so <c>plan.md</c> is one producer
+    ///         further back and out of reach. <c>planapproval → verify</c> is the edge that carries it. It is
+    ///         conditioned on the approval like the decomposition's, so a declined plan kills both paths into the
+    ///         verification rather than leaving it half-fed, and it costs no routing: the gate has long since settled by
+    ///         the time the join lets anything through.
+    ///     </para>
+    /// </summary>
+    internal const string FeatureDevelopmentSlug = "feature-development-v1";
+
+    private const string FeatureDevelopmentName = "Feature Development v1";
+
+    private const string FeatureDevelopmentGraph = $$"""
+                                                    {
+                                                      "schemaVersion": 1,
+                                                      "nodes": [
+                                                        {
+                                                          "nodeKey": "research",
+                                                          "nodeType": "Agent",
+                                                          "label": "Research",
+                                                          "agentSeedSlug": "{{AgentDefaults.WorkSessionResearchAgentSeedSlug}}",
+                                                          "instructions": "Research what this feature touches in this repository: the code that would change, the conventions it follows, and what already exists that you should reuse. Ground every claim in something you actually read. Before you complete this session you MUST call save_artifact exactly once, with name \"research.md\", mediaType \"text/markdown\", kind \"Report\", and the whole write-up as text."
+                                                        },
+                                                        {
+                                                          "nodeKey": "plan",
+                                                          "nodeType": "Agent",
+                                                          "label": "Plan",
+                                                          "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
+                                                          "instructions": "Turn the research into a plan a person can approve: what to build, in what order, and what would show it worked. Before you complete this session you MUST call save_artifact exactly once, with name \"plan.md\", mediaType \"text/markdown\", kind \"Report\", and the whole plan as text. The approval gate shows the operator that artifact, so a plan left in findings is a plan nobody can approve."
+                                                        },
+                                                        {
+                                                          "nodeKey": "planapproval",
+                                                          "nodeType": "HumanGate",
+                                                          "label": "Approve the plan"
+                                                        },
+                                                        {
+                                                          "nodeKey": "decompose",
+                                                          "nodeType": "Agent",
+                                                          "label": "Decompose",
+                                                          "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
+                                                          "instructions": "Split the approved plan into independent implementation tasks, each one a slice a coder can finish and a build can judge on its own. Before you complete this session you MUST call save_artifact exactly once, with name \"tasks.json\", mediaType \"application/json\", kind \"Report\", and a JSON array as the text: [{\"id\": \"short-slug\", \"title\": \"what it is\", \"goal\": \"what to implement, in full — this becomes the task's requirements and it is all the coder is told\", \"dependsOn\": [\"another-id\"], \"acceptanceCriteria\": [\"how to tell it is done\"]}]. Ids must be unique, dependsOn may only name ids in this same array, and there must be no dependency cycle. Ten tasks is the ceiling. If the plan needs no implementation work, answer with an empty array rather than inventing one.",
+                                                          "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 10 }
+                                                        },
+                                                        {
+                                                          "nodeKey": "implement",
+                                                          "nodeType": "DevTask",
+                                                          "label": "Implement",
+                                                          "nodeTimeoutSeconds": 7200
+                                                        },
+                                                        {
+                                                          "nodeKey": "validate",
+                                                          "nodeType": "Tool",
+                                                          "label": "Validate",
+                                                          "retryTarget": "implement"
+                                                        },
+                                                        {
+                                                          "nodeKey": "join",
+                                                          "nodeType": "Join",
+                                                          "label": "Every slice implemented"
+                                                        },
+                                                        {
+                                                          "nodeKey": "verify",
+                                                          "nodeType": "Agent",
+                                                          "label": "Verify",
+                                                          "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
+                                                          "instructions": "Judge the implemented slices against the approved plan, independently: read what each task produced and say whether the feature is actually there, what is missing, and what you would not sign off. You are the last reader before an operator is asked to let these patches into the repository, so an honest \"not yet\" is worth more than an approval. Before you complete this session you MUST call save_artifact exactly once, with name \"verification.md\", mediaType \"text/markdown\", kind \"Report\", and your whole assessment as text."
+                                                        },
+                                                        {
+                                                          "nodeKey": "integrationapproval",
+                                                          "nodeType": "HumanGate",
+                                                          "label": "Approve integration"
+                                                        },
+                                                        {
+                                                          "nodeKey": "integrate",
+                                                          "nodeType": "Tool",
+                                                          "toolMode": "Apply",
+                                                          "label": "Apply the approved patches"
+                                                        },
+                                                        {
+                                                          "nodeKey": "fullvalidate",
+                                                          "nodeType": "Tool",
+                                                          "label": "Validate the integrated result"
+                                                        }
+                                                      ],
+                                                      "edges": [
+                                                        { "from": "research", "to": "plan" },
+                                                        { "from": "plan", "to": "planapproval" },
+                                                        { "from": "planapproval", "to": "decompose", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                        { "from": "decompose", "to": "join" },
+                                                        { "from": "implement", "to": "validate" },
+                                                        { "from": "validate", "to": "join" },
+                                                        { "from": "join", "to": "verify" },
+                                                        { "from": "planapproval", "to": "verify", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                        { "from": "verify", "to": "integrationapproval" },
+                                                        { "from": "integrationapproval", "to": "integrate", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                        { "from": "integrate", "to": "fullvalidate" }
+                                                      ]
+                                                    }
+                                                    """;
+
     private readonly ILogger<DevWorkflowDefinitionSeeder> _logger;
     private readonly DevWorkflowOptions _options;
     private readonly IServiceScopeFactory _scopeFactory;
@@ -85,12 +206,9 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
-            await SeedAsync(scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>(),
-                    ResearchPlanApprovalSlug,
-                    ResearchPlanApprovalName,
-                    ResearchPlanApprovalGraph,
-                    cancellationToken)
-                .ConfigureAwait(false);
+            var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
+            await SeedAsync(store, ResearchPlanApprovalSlug, ResearchPlanApprovalName, ResearchPlanApprovalGraph, cancellationToken).ConfigureAwait(false);
+            await SeedAsync(store, FeatureDevelopmentSlug, FeatureDevelopmentName, FeatureDevelopmentGraph, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

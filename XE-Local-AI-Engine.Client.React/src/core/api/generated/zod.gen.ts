@@ -3937,6 +3937,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGra
 	retryTarget: z.string().nullish(),
 	materialization: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowMaterialization.nullish(),
 	requiredCapabilities: z.record(z.string(), z.string()).nullish(),
+	toolMode: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowEdgeCondition = z.object({
@@ -4461,6 +4462,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskResponse
 	blockedReason: z.string().nullish(),
 	approvedSubjectHash: z.string().nullish(),
 	version: z.int().optional(),
+	workflowRunId: z.guid().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse = z.object({

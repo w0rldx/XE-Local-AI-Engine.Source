@@ -39,6 +39,13 @@ internal static class DevelopmentAttemptFailureCodes
 
     /// <summary>The provider returned no usable token accounting, so the attempt's budgets cannot be enforced.</summary>
     public const string UsageNotReported = "usage_not_reported";
+
+    /// <summary>
+    ///     A workspace policy refused the attempt's own diff — the test-write policy is the one that fires in practice.
+    ///     The code exists so the workflow lane can class it as a policy refusal rather than as a provider error, which
+    ///     is what the retry budget is spent on.
+    /// </summary>
+    public const string WorkspacePolicyRefused = "workspace_policy_refused";
 }
 
 /// <summary>
@@ -75,7 +82,23 @@ internal sealed class DevelopmentAttemptEvidenceException : InvalidOperationExce
     ///     reason alone and then prefixing the code re-introduces the overflow it was meant to prevent — and
     ///     <c>development_attempts.terminal_reason</c> is <c>HasMaxLength(1024)</c>.
     /// </summary>
-    public string TerminalReason => Clamp($"[{FailureCode}] {OperatorReason}");
+    public string TerminalReason => Compose(FailureCode, OperatorReason);
+
+    /// <summary>
+    ///     The same composition for a reason the engine authored without throwing this exception — a policy refusal
+    ///     caught and turned into a terminal reason rather than raised as one. One formatter, so the code prefix a
+    ///     reader (and the workflow lane) matches on cannot drift between the two paths.
+    /// </summary>
+    public static string Compose(string failureCode, string operatorReason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(failureCode);
+        ArgumentException.ThrowIfNullOrWhiteSpace(operatorReason);
+        return Clamp($"[{failureCode}] {operatorReason}");
+    }
+
+    /// <summary>Whether <paramref name="terminalReason" /> is one this code composed for <paramref name="failureCode" />.</summary>
+    public static bool Names(string? terminalReason, string failureCode) =>
+        terminalReason?.StartsWith($"[{failureCode}]", StringComparison.Ordinal) == true;
 
     private static string Clamp(string reason) =>
         reason.Length <= MaxTerminalReasonLength ? reason : reason[..MaxTerminalReasonLength];

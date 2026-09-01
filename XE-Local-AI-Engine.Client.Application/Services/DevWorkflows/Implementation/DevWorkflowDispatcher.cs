@@ -72,6 +72,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     private readonly CancellationTokenSource _stopping = new();
     private readonly DevWorkflowGraphCache _graphs;
     private readonly ILogger<DevWorkflowDispatcher> _logger;
+    private readonly DevWorkflowMaterializer _materializer;
     private readonly DevWorkflowOptions _options;
     private readonly DevWorkflowRetryPolicy _retries;
     private readonly IServiceScopeFactory _scopeFactory;
@@ -84,6 +85,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         DevWorkflowGraphCache graphs,
         DevWorkflowToolExecutor tools,
         DevWorkflowRetryPolicy retries,
+        DevWorkflowMaterializer materializer,
         IOptions<DevWorkflowOptions> options,
         TimeProvider timeProvider,
         ILogger<DevWorkflowDispatcher> logger)
@@ -93,6 +95,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         _graphs = graphs ?? throw new ArgumentNullException(nameof(graphs));
         _tools = tools ?? throw new ArgumentNullException(nameof(tools));
         _retries = retries ?? throw new ArgumentNullException(nameof(retries));
+        _materializer = materializer ?? throw new ArgumentNullException(nameof(materializer));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
@@ -240,6 +243,23 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         {
             written += await DrainAsync(store, lanes, run, cancellationToken).ConfigureAwait(false);
             return written;
+        }
+
+        // A decomposition that has settled grows the graph, and the tick ENDS there (§5.3): everything below judges
+        // node runs against a parsed graph, and this call has just replaced the one this tick parsed. The next tick
+        // re-parses on the bumped revision and admits what the expansion created — which is what the parse-count
+        // assertion pins, because the failure mode is silent rather than loud.
+        // The rows this tick already read, re-read ONLY if a decision moved one: the decomposition it is looking for
+        // has to be Succeeded, and a tick that settled nothing cannot have changed which rows are.
+        var materialized = await _materializer.MaterializeAsync(store,
+                graph,
+                run,
+                settledCount > 0 ? await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false) : nodeRuns,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (materialized > 0)
+        {
+            return written + materialized;
         }
 
         written += await AdmitAsync(store, lanes, run, graph, cancellationToken).ConfigureAwait(false);
@@ -604,19 +624,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             if (outputJson is not null
                 && nodeRun.NodeType == DevWorkflowNodeType.HumanGate
                 && (settled.Decision != DevWorkflowDecisionKind.Approve || graph.OutboundEdges(nodeRun.NodeKey).Count > 0)
-                && !graph.OutboundEdges(nodeRun.NodeKey).Any(edge => Matches(edge, outputJson)))
+                && !graph.OutboundEdges(nodeRun.NodeKey).Any(edge => DevWorkflowStateMachine.GateEdgeFires(edge, settled.Decision)))
             {
                 rejection ??= $"The gate '{nodeRun.NodeKey}' was answered {settled.Decision}, which none of its branches accepts.";
             }
         }
 
         return (written, rejection);
-
-        static bool Matches(DevWorkflowGraphEdge edge, string outputJson)
-        {
-            using var document = JsonDocument.Parse(outputJson);
-            return DevWorkflowCondition.Evaluate(edge.Condition, document.RootElement);
-        }
 
         static (DevWorkflowNodeRunStatus Target, string? Outcome, bool IncrementAttempt) Resolve(DevWorkflowDecisionKind decision) =>
             (DevWorkflowStateMachine.TargetFor(decision),
@@ -846,9 +860,9 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     /// <summary>
     ///     Queues an eligible node run and, for the four node types the inline lane owns, runs it in the same tick.
     ///     <para>
-    ///         Inline nodes still pass through <c>Queued</c> and <c>Running</c>: it costs two event rows and it is what
-    ///         makes the timing of a fan-out visible, which is the only reason Parallel and Join exist as node types at
-    ///         all.
+    ///         An inline node goes <c>Pending</c> → <c>Running</c> → <c>Succeeded</c>, skipping <c>Queued</c> — see the
+    ///         remark at the inline write below. It still costs two event rows, and that is what makes the timing of a
+    ///         fan-out visible, which is the only reason Parallel and Join exist as node types at all.
     ///     </para>
     ///     <para>
     ///         <b>Seam:</b> the dev-task lane attaches here. Until it does, a node run of that type is blocked for a

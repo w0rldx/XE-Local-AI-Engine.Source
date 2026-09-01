@@ -195,6 +195,7 @@ public sealed class DevWorkflowSliceATests
             new DevWorkflowGraphCache(),
             factory.Services.GetRequiredService<DevWorkflowToolExecutor>(),
             factory.Services.GetRequiredService<DevWorkflowRetryPolicy>(),
+            factory.Services.GetRequiredService<DevWorkflowMaterializer>(),
             factory.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
             factory.Services.GetRequiredService<TimeProvider>(),
             factory.Services.GetRequiredService<ILogger<DevWorkflowDispatcher>>());

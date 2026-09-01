@@ -16,10 +16,19 @@
 	outline-offset: 1px;
 }
 
-/* O5: a node the runtime created from a template, rather than one the definition named. */
+/* O5: a node the runtime created from a template, rather than one the definition named. The dashed border says that
+   about ONE card; the tint and the accent rail say it about the group. Slice C's layout stacks a materialization's
+   clones contiguously in their rank, so the rails line up into a single bar down the side of the block — which is the
+   affordance that stops five dashed cards reading as five unrelated ones.
+
+   The accent is a border-left rather than a background stripe so it survives every status class: a status only ever
+   sets `border-color`, which repaints the rail in the status's own colour and leaves the group's shape intact. */
 
 .node-materialized {
 	border-style: dashed;
+	border-left-width: 3px;
+	border-left-style: solid;
+	background: var(--mantine-color-default-hover);
 }
 
 .node-running {

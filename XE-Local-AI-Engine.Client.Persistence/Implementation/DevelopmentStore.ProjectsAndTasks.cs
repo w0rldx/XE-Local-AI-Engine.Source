@@ -77,6 +77,53 @@ public sealed partial class DevelopmentStore
             cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<DevelopmentOperationResult> CreateTaskAsync(DevelopmentCreateTaskCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ValidateTask(command.Title, command.Requirements, command.AcceptanceCriteriaJson, command.MaxReviewRounds);
+
+        return await ExecuteOperationAsync(command.ProjectId,
+            command.OperationId,
+            DevelopmentOperationPhases.Completed,
+            async () =>
+            {
+                // Checked rather than left to the foreign key: the node connection runs without PRAGMA foreign_keys, so
+                // a task named against a project that does not exist would be inserted and then be unreachable.
+                if (!await _dbContext.DevelopmentProjects.AnyAsync(entity => entity.Id == command.ProjectId, cancellationToken).ConfigureAwait(false))
+                {
+                    throw new KeyNotFoundException($"Development project '{command.ProjectId}' was not found.");
+                }
+
+                var now = Now();
+                _dbContext.DevelopmentTasks.Add(new DevelopmentTask
+                {
+                    Id = command.TaskId,
+                    ProjectId = command.ProjectId,
+                    Title = Utf8(command.Title),
+                    Requirements = Utf8(command.Requirements),
+                    AcceptanceCriteriaJson = Utf8(command.AcceptanceCriteriaJson),
+                    Status = DevelopmentTaskStatus.Planned,
+                    MaxReviewRounds = command.MaxReviewRounds,
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now,
+                    Version = 1
+                });
+                return await AddEventAsync(command.ProjectId,
+                    command.TaskId,
+                    attemptId: null,
+                    command.OperationId,
+                    DevelopmentOperationPhases.Completed,
+                    "TaskCreated",
+                    "Created",
+                    DevelopmentTaskStatus.Planned.ToString(),
+                    version: 1,
+                    artifactId: null,
+                    detailJson: null,
+                    cancellationToken).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<DevelopmentOperationResult> StartAttemptAsync(DevelopmentStartAttemptCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);

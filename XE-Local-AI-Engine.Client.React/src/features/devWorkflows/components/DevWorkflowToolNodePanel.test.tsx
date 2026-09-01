@@ -5,6 +5,7 @@ import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { DevWorkflowToolNodePanel } from "@/features/devWorkflows/components/DevWorkflowToolNodePanel";
+import type { DevWorkflowApplyReportBody } from "@/features/devWorkflows/models/DevWorkflowApplyReport";
 import type { DevWorkflowValidationReportBody } from "@/features/devWorkflows/models/DevWorkflowValidationReport";
 import { devWorkflowNodeRunDetail, devWorkflowTestIds } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { localApiPath } from "@/test/msw/Handlers";
@@ -30,7 +31,20 @@ function report(overrides: Partial<DevWorkflowValidationReportBody> = {}): DevWo
 	};
 }
 
-/** The artifact-content route, answering the body a Tool node's `<nodeKey>-validation.json` carries. */
+/** The other document a Tool node can leave behind: an apply node's `<nodeKey>-apply.json` (R-C3). */
+function applyReport(overrides: Partial<DevWorkflowApplyReportBody> = {}): DevWorkflowApplyReportBody {
+	return {
+		passed: true,
+		nodeKey: "integrate",
+		attempt: 1,
+		tasksApplied: 1,
+		tasks: [{ nodeKey: "implement#0", taskId: "t-0", title: "Slice one", outcome: "applied", detail: null }],
+		completedAtUtc: 1_700_000_000_000,
+		...overrides,
+	};
+}
+
+/** The artifact-content route, answering the body a Tool node's report artifact carries. */
 function serveContent(body: unknown): void {
 	server.use(
 		http.get(localApiPath(`development-workflows/runs/${devWorkflowTestIds.run}/artifacts/${artifactId}/content`), () =>
@@ -66,6 +80,37 @@ describe("DevWorkflowToolNodePanel", () => {
 		expect(screen.getByTestId("dev-workflow-validation-no-commands")).toBeDefined();
 		expect(screen.queryByTestId("dev-workflow-validation-tests")).toBeNull();
 		expect(screen.queryByTestId("dev-workflow-validation-tests-passed")).toBeNull();
+	});
+
+	it("says which patch a materialized child's validation judged, so the base commit is not read as the subject", async () => {
+		serveContent(
+			report({
+				passed: true,
+				basedOn: {
+					developmentTaskId: "11111111-1111-4111-8111-111111111111",
+					patchHash: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+					detail:
+						"These commands ran against the implementation task's approved patch, applied to a fresh clone of the base commit.",
+				},
+			}),
+		);
+
+		renderPanel();
+
+		const basedOn = await screen.findByTestId("dev-workflow-validation-based-on");
+		expect(basedOn.textContent).toContain("9f86d0818");
+		expect(basedOn.textContent).toContain("11111111-1111-4111-8111-111111111111");
+		// The server's own sentence, verbatim — it is what says the patch was applied to a fresh clone of the base.
+		expect(screen.getByTestId("dev-workflow-validation-based-on-detail").textContent).toContain("fresh clone");
+	});
+
+	it("claims nothing about the subject when a report carries no basedOn, because an older report has none either", async () => {
+		serveContent(report({ passed: true }));
+
+		renderPanel();
+
+		await screen.findByTestId("dev-workflow-validation-result");
+		expect(screen.queryByTestId("dev-workflow-validation-based-on")).toBeNull();
 	});
 
 	it("says a node refused before it wrote any report was refused, rather than 'no report yet'", async () => {
@@ -239,5 +284,72 @@ describe("DevWorkflowToolNodePanel", () => {
 		expect(screen.queryByTestId("dev-workflow-validation-report")).toBeNull();
 		// The earlier evidence is not destroyed, only demoted: it stays one click away.
 		expect(screen.getByTestId("dev-workflow-node-tool-report")).toBeDefined();
+	});
+	it("decodes an APPLY node's report instead of calling perfectly good evidence unreadable", async () => {
+		// Both documents are artifact kind `Report` and the discriminator is not on the wire, so the body decides. Before
+		// this, an apply report reached the validation reader, failed to parse, and rendered as "could not be read".
+		serveContent(applyReport());
+
+		renderPanel();
+
+		expect(await screen.findByTestId("dev-workflow-apply-report")).toBeDefined();
+		expect(screen.queryByTestId("dev-workflow-validation-unreadable")).toBeNull();
+		expect(screen.queryByTestId("dev-workflow-validation-report")).toBeNull();
+		// And the panel is named after what it is: this node applied patches, it did not validate anything.
+		expect(screen.getByTestId("dev-workflow-node-tool-report").textContent).toBe("Open the apply report");
+	});
+
+	it("never reads a partial apply as a whole one — the count is always N of M, and a stop is named", async () => {
+		// The applies run in SEQUENCE and stop at the first refusal: after one, the repository is not in the state the
+		// next patch was approved against. "1 applied" over that is the false green this panel exists to prevent.
+		serveContent(
+			applyReport({
+				passed: false,
+				tasksApplied: 1,
+				tasks: [
+					{ nodeKey: "implement#0", taskId: "t-0", title: "Slice one", outcome: "applied", detail: null },
+					{ nodeKey: "implement#1", taskId: "t-1", title: null, outcome: "blocked", detail: "the patch no longer applies" },
+					{ nodeKey: "implement#2", taskId: "t-2", title: "Slice three", outcome: "cancelled", detail: null },
+				],
+			}),
+		);
+
+		renderPanel();
+
+		expect((await screen.findByTestId("dev-workflow-apply-count")).textContent).toBe("1 of 3 patches applied");
+		expect(screen.getByTestId("dev-workflow-apply-result").textContent).toBe("The apply did not complete");
+		expect(screen.getByTestId("dev-workflow-apply-detail-t-1").textContent).toBe("the patch no longer applies");
+		// A task the sequence never reached is not a failed one, and the panel says which it was.
+		expect(screen.getByTestId("dev-workflow-apply-stopped")).toBeDefined();
+		// A null title falls back to the node key that produced the patch, never to an empty row.
+		expect(screen.getByTestId("dev-workflow-apply-task-t-1").textContent).toContain("implement#1");
+	});
+
+	it("says a zero-task apply found nothing, rather than showing an empty list under a green badge", async () => {
+		// Zero tasks is a PASS server-side: a decomposition may honestly answer "no work needed".
+		serveContent(applyReport({ passed: true, tasksApplied: 0, tasks: [] }));
+
+		renderPanel();
+
+		expect(await screen.findByTestId("dev-workflow-apply-no-tasks")).toBeDefined();
+		expect(screen.getByTestId("dev-workflow-apply-count").textContent).toBe("0 of 0 patches applied");
+	});
+	it("speaks neutrally when nothing says which kind of Tool node this was", async () => {
+		// A refused APPLY node writes no artifact, and the discriminator is not on the wire — so "no validation report
+		// was written" would name a document that node was never going to write and send the reader after the wrong
+		// evidence. With no readable body the panel claims only that there is no report.
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				nodeType: "Tool",
+				primaryArtifactId: null,
+				failureClass: "Policy",
+				terminalReason: "the apply was refused before any patch was offered",
+			}),
+		);
+
+		const refused = await screen.findByTestId("dev-workflow-validation-refused");
+		expect(refused.textContent).toContain("No report was written");
+		expect(refused.textContent).not.toContain("validation");
+		expect(screen.getByTestId("dev-workflow-validation-refused-reason").textContent).toContain("apply was refused");
 	});
 });

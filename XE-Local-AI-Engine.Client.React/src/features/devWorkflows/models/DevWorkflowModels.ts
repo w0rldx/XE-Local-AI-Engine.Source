@@ -173,6 +173,24 @@ export function devWorkflowNodeAwaitsHuman(status: DevWorkflowNodeStatus): boole
 	return status === "WaitingForApproval" || status === "Blocked";
 }
 
+/**
+ * A Tool node that LANDS patches rather than judging them (R-C3). The stored spelling is the parser's own canonical
+ * `"Apply"`, but it crosses the wire as a bare string and a definition authored by hand may carry any casing — so the
+ * comparison is case-insensitive, exactly as the server's own `Enum.TryParse(..., ignoreCase: true)` is. Absent means
+ * `Validate`, which is the server's default too.
+ */
+export function isDevWorkflowApplyToolMode(toolMode: string | undefined | null): boolean {
+	return (toolMode ?? "").toLowerCase() === "apply";
+}
+
+/**
+ * The node run has stopped for good on this attempt: the runtime has routed past it, so its successors carry the
+ * states that say which branch it took. A gate that has not reached one of these has nothing settled to show.
+ */
+export function isSettledDevWorkflowNodeStatus(status: DevWorkflowNodeStatus): boolean {
+	return status === "Succeeded" || status === "Failed" || status === "Skipped" || status === "Cancelled";
+}
+
 /** Only `Running` earns motion. `Queued` deliberately does not — see the O9 honesty rule in the table. */
 export function isDevWorkflowNodeInProgress(status: DevWorkflowNodeStatus): boolean {
 	return status === "Running";

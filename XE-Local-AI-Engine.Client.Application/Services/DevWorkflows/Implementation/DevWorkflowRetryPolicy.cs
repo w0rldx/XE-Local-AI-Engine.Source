@@ -162,7 +162,7 @@ internal sealed class DevWorkflowRetryPolicy
                 .ConfigureAwait(false);
         }
 
-        if (!IsRetryable(failure.FailureClass, nodeRun.Attempt))
+        if (!IsRetryable(node, failure.FailureClass, nodeRun.Attempt))
         {
             // No attempt is spent: nothing was tried again, and a row reading attempt 2 would say one was.
             return await BlockAsync(store, run, nodeRun, failure.FailureClass, failure.SanitizedReason, failure.OutputJson, cancellationToken)
@@ -178,10 +178,17 @@ internal sealed class DevWorkflowRetryPolicy
     ///     <c>Internal</c> is retryable exactly once (§7.1): an executor that threw something nobody predicted may have
     ///     hit a transient, but a second identical throw is a defect, and spending a node's whole attempt budget on it
     ///     only delays the human who has to read the log.
+    ///     <para>
+    ///         A DECOMPOSING node's <c>Configuration</c> failure is retryable once for the same reason and by §7.1's own
+    ///         named exception: the thing that wrote the unusable task package is the thing that can rewrite it, and the
+    ///         re-attempt carries the complaint into its objective. Scoped to the node rather than to the failure
+    ///         because the failure class is all a lane hands over — the cost of the wider reading is one spent attempt
+    ///         on a decomposing node that is misconfigured in some other way, and the answer after it is the same human.
+    ///     </para>
     /// </summary>
-    private static bool IsRetryable(string failureClass, int attempt) =>
-        RetryableFailureClasses.Contains(failureClass)
-        && (failureClass != DevWorkflowFailureClasses.Internal || attempt < 2);
+    private static bool IsRetryable(DevWorkflowGraphNode node, string failureClass, int attempt) =>
+        (RetryableFailureClasses.Contains(failureClass) && (failureClass != DevWorkflowFailureClasses.Internal || attempt < 2))
+        || (failureClass == DevWorkflowFailureClasses.Configuration && node.Materialization is not null && attempt < 2);
 
     /// <summary>The same node again: what §7.2 calls a same-node retry, bounded by the node's cap and the run's budget.</summary>
     private async Task<int> ReAttemptSameNodeAsync(IDevWorkflowStore store,

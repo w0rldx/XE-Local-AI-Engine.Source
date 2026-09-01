@@ -395,7 +395,7 @@ internal sealed partial class DevWorkflowStore
                     nodeRunId: null,
                     $"{seeds.Count} node run(s)",
                     operationId: null,
-                    Utf8(JsonSerializer.Serialize(new MaterializationDetail(seeds.Count, run.GraphRevision))));
+                    Utf8(JsonSerializer.Serialize(new MaterializationDetail(seeds.Count, run.GraphRevision), JsonOptions)));
             }
 
             workItem.Status = DevWorkflowWorkItemStatus.Active;

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const hooksMock = vi.hoisted(() => ({
@@ -11,6 +11,7 @@ const hooksMock = vi.hoisted(() => ({
 	useDevelopmentProfileDetection: vi.fn(),
 	useDevelopmentProjects: vi.fn(),
 	useDevelopmentProject: vi.fn(),
+	useDevelopmentTaskWorkflowRun: vi.fn(),
 	useRegisterDevelopmentRepository: vi.fn(),
 	useRegisterDevelopmentTemplate: vi.fn(),
 	useRemoveDevelopmentTemplate: vi.fn(),
@@ -45,7 +46,12 @@ vi.mock("@/features/development/components/DevelopmentLivePanel", () => ({
 	DevelopmentLivePanel: () => <div data-testid="development-live-panel" />,
 }));
 
+import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+import { useDevelopmentPageController } from "@/features/development/hooks/useDevelopmentPageController";
 import { DevelopmentPage } from "@/features/development/pages/DevelopmentPage";
+
+/** The build-time devWorkflows flag, which is a plain module constant — readonly to TypeScript, not at runtime. */
+const capabilities = nodeCapabilities as { devWorkflows: boolean };
 
 interface MutationMock {
 	readonly mutate: ReturnType<typeof vi.fn>;
@@ -57,6 +63,19 @@ interface MutationMock {
 
 function mutation(data?: Record<string, unknown>): MutationMock {
 	return { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, error: null, data };
+}
+
+/** A project holding several tasks, which is what a workflow decomposition leaves behind (Phase W dropped the index). */
+function decomposedDetail(...titles: readonly string[]) {
+	const base = detail("Planned");
+	return {
+		...base,
+		tasks: titles.map((title, index) => ({
+			task: { id: `task-${index + 1}`, projectId: "project-1", title, requirements: "…", status: "Planned" },
+			attempts: [],
+			artifacts: [],
+		})),
+	};
 }
 
 function detail(status: string, attempts: readonly Record<string, unknown>[] = [], repositoryConnectionRequired = false) {
@@ -136,8 +155,11 @@ describe("DevelopmentPage", () => {
 	beforeEach(() => {
 		installDomMocks();
 		vi.clearAllMocks();
+		capabilities.devWorkflows = true;
 		hooksMock.useDevelopmentCapability.mockReturnValue({ data: { enabled: true }, isLoading: false, error: null });
 		hooksMock.useDevelopmentProfileDetection.mockReturnValue({ data: undefined, isFetching: false, error: null });
+		// The Y3 banner's deep link only. Most tasks carry no workflow run, so the default is an unresolved lookup.
+		hooksMock.useDevelopmentTaskWorkflowRun.mockReturnValue({ data: undefined, isLoading: false, error: null });
 		hooksMock.useDevelopmentRepositories.mockReturnValue({
 			data: [{ id: "repository-1", alias: "Workspace", availability: "Available" }],
 			isLoading: false,
@@ -296,5 +318,210 @@ describe("DevelopmentPage", () => {
 		renderPage();
 
 		await waitFor(() => expect(hooksMock.useDevelopmentProject.mock.calls.at(-1)?.[0]).toBe("project-1"));
+	});
+	it("offers no task switcher for a project with one task, and one for a decomposed project", async () => {
+		hooksMock.useDevelopmentProject.mockReturnValue({ data: detail("Planned"), isLoading: false, error: null, refetch: vi.fn() });
+		renderPage();
+		await screen.findByTestId("development-project-detail");
+
+		// A picker with one entry is a question with one answer.
+		expect(screen.queryByTestId("development-task-switcher")).toBeNull();
+
+		cleanup();
+		hooksMock.useDevelopmentProject.mockReturnValue({
+			data: decomposedDetail("Operator request", "Slice one", "Slice two"),
+			isLoading: false,
+			error: null,
+			refetch: vi.fn(),
+		});
+		renderPage();
+
+		// The ordinary decomposed case is three tasks in one project, two of which had no way to be reached at all.
+		expect(await screen.findByTestId("development-task-switcher")).toBeDefined();
+		// `ListTasksAsync` orders by CreatedAtUtc, so the row it opens on is the operator's own task, not a child.
+		const switcher = screen.getByTestId("development-task-switcher");
+		expect((switcher.querySelector("input") as HTMLInputElement).value).toBe("Operator request");
+	});
+
+	/** Two tasks in one project, their events interleaved, plus a row the store bound to no task at all. */
+	function interleavedEvents() {
+		const base = decomposedDetail("Operator request", "Slice one");
+		hooksMock.useDevelopmentProject.mockReturnValue({
+			data: {
+				...base,
+				events: [
+					{ id: "e1", projectId: "project-1", taskId: "task-1", sequence: 1, eventType: "OwnPlanned" },
+					{ id: "e2", projectId: "project-1", taskId: "task-2", sequence: 2, eventType: "SiblingStarted" },
+					{ id: "e3", projectId: "project-1", taskId: "task-1", sequence: 3, eventType: "OwnAttempted" },
+					{ id: "e4", projectId: "project-1", taskId: null, sequence: 4, eventType: "BoundToNoTask" },
+				],
+			},
+			isLoading: false,
+			error: null,
+			refetch: vi.fn(),
+		});
+	}
+
+	it("shows the selected task's events only, and keeps a row tied to no task apart from them", async () => {
+		// The project feed carries EVERY task's events. Rendered whole under the selected task, it showed a SIBLING's
+		// activity as this task's evidence — and the panels around it are read as proof of what this task did.
+		interleavedEvents();
+		const rows = () =>
+			screen
+				.getAllByTestId("development-event-row")
+				.map((row) => row.textContent ?? "")
+				.join("|");
+		renderPage();
+		await screen.findByTestId("development-project-detail");
+
+		expect(rows()).toContain("OwnPlanned");
+		expect(rows()).toContain("OwnAttempted");
+		expect(rows()).not.toContain("SiblingStarted");
+		// A row the store bound to no task is not this task's either — but dropping it would lose evidence outright,
+		// so it is shown under its own scope instead.
+		expect(rows()).toContain("BoundToNoTask");
+		expect(screen.getByText("Not tied to a task")).toBeDefined();
+	});
+
+	it("switches the events with the selected task", async () => {
+		// Driven through the controller rather than the Select, because the switcher's dropdown is a portalled Mantine
+		// Combobox that does not open under jsdom. The state it sets is this one.
+		interleavedEvents();
+		const { result } = renderHook(() => useDevelopmentPageController());
+		await waitFor(() => expect(result.current.tasks.length).toBe(2));
+
+		expect(result.current.events.map((event) => event.eventType)).toEqual(["OwnPlanned", "OwnAttempted"]);
+
+		act(() => result.current.setSelectedTaskId("task-2"));
+
+		expect(result.current.events.map((event) => event.eventType)).toEqual(["SiblingStarted"]);
+		// The untied row belongs to neither, and stays where it is through the switch.
+		expect(result.current.untiedEvents.map((event) => event.eventType)).toEqual(["BoundToNoTask"]);
+	});
+
+	it("opens on the task the deep link names, not on the project's first one", async () => {
+		hooksMock.useDevelopmentProject.mockReturnValue({
+			data: decomposedDetail("Operator request", "Slice one", "Slice two"),
+			isLoading: false,
+			error: null,
+			refetch: vi.fn(),
+		});
+		const start = mutation();
+		hooksMock.useStartDevelopmentNextAction.mockReturnValue(start);
+		renderPage({ initialTaskId: "task-3" });
+
+		fireEvent.click(await screen.findByTestId("development-start-next"));
+
+		// The selection reaches the mutation, so it is the shown task and not merely a highlighted row.
+		expect(start.mutate).toHaveBeenCalledWith({
+			path: { projectId: "project-1", taskId: "task-3" },
+			body: { operationId: expect.any(String) },
+		});
+	});
+
+	/** A task a workflow created and still owns, plus whatever the run lookup answers about that run. */
+	function workflowTask(runQuery: Record<string, unknown>) {
+		const base = detail("AwaitingApply");
+		hooksMock.useDevelopmentProject.mockReturnValue({
+			data: { ...base, tasks: [{ ...base.tasks[0], task: { ...base.tasks[0]?.task, workflowRunId: "run-9" } }] },
+			isLoading: false,
+			error: null,
+			refetch: vi.fn(),
+		});
+		hooksMock.useDevelopmentTaskWorkflowRun.mockReturnValue(runQuery);
+	}
+
+	it("gives the apply button BACK when the workflow run has ended, so a validated patch is not stranded", async () => {
+		// A terminal run can answer no further gate — DecideAsync refuses anything that is not WaitingForApproval or
+		// Blocked, and the dispatcher does not tick a terminal run at all. Withholding Apply here would strand a
+		// hash-locked, already-validated patch for good rather than protect it.
+		workflowTask({
+			data: { id: "run-9", workItemId: "item-4", status: "Failed" },
+			isError: false,
+			isLoading: false,
+			error: null,
+		});
+		renderPage();
+
+		expect(await screen.findByTestId("development-apply-patch")).toBeDefined();
+		expect(screen.getByTestId("development-workflow-banner").textContent).toContain("can no longer approve");
+	});
+
+	it("keeps the patch read-only when the run status cannot be read, and offers the read again", async () => {
+		// An unreadable status is not an ended run. Ownership is enforced by the server — Dev Mode's apply refuses a
+		// task a live run drives — so an Apply button offered on a failed read buys a 409, while withholding it costs
+		// a retry. Fail CLOSED, and say so with a way out.
+		const refetch = vi.fn();
+		workflowTask({ data: undefined, isError: true, isLoading: false, error: new Error("gone"), refetch });
+		renderPage();
+
+		expect((await screen.findByTestId("development-workflow-banner")).textContent).toContain("could not be read");
+		expect(screen.queryByTestId("development-apply-patch")).toBeNull();
+		// The evidence stays readable, as it does for a live run.
+		expect(screen.getByTestId("development-preview-patch")).toBeDefined();
+
+		fireEvent.click(screen.getByTestId("development-workflow-retry"));
+		expect(refetch).toHaveBeenCalled();
+	});
+
+	it("stays read-only while the run status is still in flight, which is the safe side of that race", async () => {
+		// A live run's gate is the authority; offering a second Apply for the moment before the status lands is a bypass.
+		workflowTask({ data: undefined, isError: false, isLoading: true, error: null });
+		renderPage();
+
+		await screen.findByTestId("development-workflow-banner");
+		expect(screen.queryByTestId("development-apply-patch")).toBeNull();
+	});
+
+	it("leaves Dev Mode entirely alone when the workflows module is switched off", async () => {
+		// The dispatcher only runs when the module is on, so a run that was live when the switch flipped never reaches
+		// a terminal status. Withholding Apply then would strand its patch for good, behind a workflow UI that is off
+		// too. The server guard stands down under the same flag, so the two agree.
+		capabilities.devWorkflows = false;
+		workflowTask({
+			data: { id: "run-9", workItemId: "item-4", status: "Running" },
+			isError: false,
+			isLoading: false,
+			error: null,
+		});
+		renderPage();
+
+		expect(await screen.findByTestId("development-apply-patch")).toBeDefined();
+	});
+
+	it("trusts a terminal status over a refetch that failed after it", async () => {
+		// React Query keeps the last good `data` through a failed refetch, so this row is BOTH ended and errored. The
+		// ended answer is the true one — a terminal status never changes again — and reading it as unreadable would
+		// have the banner claim read-only while the Apply button rendered beside it.
+		workflowTask({
+			data: { id: "run-9", workItemId: "item-4", status: "Failed" },
+			isError: true,
+			isLoading: false,
+			error: new Error("refetch failed"),
+			refetch: vi.fn(),
+		});
+		renderPage();
+
+		expect((await screen.findByTestId("development-workflow-banner")).textContent).toContain("can no longer approve");
+		expect(screen.queryByTestId("development-workflow-retry")).toBeNull();
+		expect(screen.getByTestId("development-apply-patch")).toBeDefined();
+	});
+
+	it("takes the apply button away from a workflow-driven task and says where the decision lives (Y3)", async () => {
+		workflowTask({
+			data: { id: "run-9", workItemId: "item-4", status: "Running" },
+			isError: false,
+			isLoading: false,
+			error: null,
+		});
+		renderPage();
+
+		expect((await screen.findByTestId("development-workflow-banner")).textContent).toContain("gate node");
+		// A second Apply button here would be a duplicate authority or a bypass of the graph's audit trail.
+		expect(screen.queryByTestId("development-apply-patch")).toBeNull();
+		// The evidence stays: reading the patch is not deciding on it.
+		expect(screen.getByTestId("development-preview-patch")).toBeDefined();
+		// And the way back to the run is offered, keyed by the WORK ITEM the run lookup resolved.
+		expect(screen.getByTestId("development-workflow-link")).toBeDefined();
 	});
 });

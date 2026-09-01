@@ -133,6 +133,52 @@ public sealed class DevWorkflowArtifactLineageTests
     }
 
     /// <summary>
+    ///     And it must answer for an event written BEFORE the detail casing was fixed, because the log is append-only.
+    ///     <para>
+    ///         Every supersession recorded up to FX-D carries <c>{"SupersededArtifactId":…}</c>; a case-sensitive read
+    ///         of the new spelling answers null for all of them, and a replay answering null skips a blob sweep it
+    ///         still owes. The row is rewritten here to the old spelling because that is the only way to hold a
+    ///         version of the past that the writer can no longer produce.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ReplayingAnAppendWrittenBeforeTheCasingFix_StillReturnsTheSupersededArtifactId()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var nodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "plan", seed.RunVersion).ConfigureAwait(false);
+        var firstId = Guid.NewGuid();
+        var first = await AppendAsync(store, seed.RunId, firstId, nodeRunId, version, "plan", "hash-1").ConfigureAwait(false);
+
+        var secondId = Guid.NewGuid();
+        var command = new AppendDevWorkflowArtifactCommand(seed.RunId,
+            secondId,
+            nodeRunId,
+            first.Version,
+            Guid.NewGuid(),
+            DevWorkflowArtifactKind.Plan,
+            "plan",
+            "text/markdown",
+            "hash-2",
+            SizeBytes: 16,
+            $"{seed.RunId:N}/{secondId:N}");
+        _ = await store.AppendArtifactAsync(command).ConfigureAwait(false);
+
+        var recorded = context.DevWorkflowRunEvents.Single(entity => entity.EventType == DevWorkflowEventTypes.ArtifactSuperseded);
+        recorded.DetailJson = System.Text.Encoding.UTF8.GetBytes(
+            $$"""{"SupersededArtifactId":"{{firstId}}","SupersededManagedReference":"ref","Version":1}""");
+        _ = await context.SaveChangesAsync().ConfigureAwait(false);
+
+        var replayed = await store.AppendArtifactAsync(command).ConfigureAwait(false);
+
+        AssertEx.Equal(firstId, replayed.SupersededArtifactId, "a row written in the old spelling must still answer, or the replay drops a sweep.");
+    }
+
+    /// <summary>
     ///     A replayed append must answer with the SAME superseded id, not a thinner result. The caller that owns the
     ///     blob store decides what to sweep from this field, so a replay reporting null would skip a sweep it still owes.
     /// </summary>

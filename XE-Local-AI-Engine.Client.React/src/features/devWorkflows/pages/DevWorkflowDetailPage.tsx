@@ -33,6 +33,7 @@ import {
 	toDevWorkflowWorkItemStatus,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
 import {
+	type DevWorkflowEventsAnchor,
 	useDecideDevWorkflowNodeRun,
 	useDeleteDevWorkflowWorkItem,
 	useDevWorkflowArtifacts,
@@ -74,6 +75,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	// Which template the operator is considering. Local rather than a search param: it is a pre-start preview, and it
 	// stops existing the moment a run does.
 	const [definitionId, setDefinitionId] = useState<string | null>(null);
+	const [eventsAnchor, setEventsAnchor] = useState<DevWorkflowEventsAnchor>("newest");
 
 	const workItemQuery = useDevWorkflowWorkItem(workItemId);
 	// Absent `?run=` means the latest run; an explicit one renders a historical run from its OWN pinned graph snapshot.
@@ -87,7 +89,9 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 
 	const runQuery = useDevWorkflowRun(runId, poll);
 	const nodeRunQuery = useDevWorkflowNodeRun(runId, selection.node, poll);
-	const eventsQuery = useDevWorkflowRunEvents(runId, poll);
+	// The feed opens on the newest events (R-C4) and needs the run's high-water mark to compute that cursor. `?tab=`
+	// carries no anchor: which end of a log you are reading is a scroll position, not a shareable view of the run.
+	const eventsQuery = useDevWorkflowRunEvents(runId, runQuery.data?.lastSequence, { ...poll, anchor: eventsAnchor });
 	const artifactsQuery = useDevWorkflowArtifacts(runId, poll);
 	const definitionsQuery = useDevWorkflowDefinitions();
 	const lifecycle = useDevWorkflowRunLifecycle(runId, workItemId);
@@ -172,17 +176,6 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	const artifactNameById = new Map(
 		(artifactsQuery.data?.items ?? []).map((artifact) => [artifact.id ?? "", artifact.name ?? ""]),
 	);
-	// Restart evidence, derived rather than read: `sessionResumes` counts step-budget parking, not interruptions, so it
-	// answers a different question than "did this node survive an engine restart". The event log does carry the answer —
-	// one `node.interrupted` row per reconcile — and the page already holds the feed.
-	// ponytail: counted over the event pages the tab has LOADED (200 rows until the operator loads more); a node
-	// interrupted past that watermark would under-report. A dedicated count belongs on the node DTO if that ever matters.
-	const interruptedCount = selection.node
-		? events.filter(
-				(event) => event.eventType === "node.interrupted" && event.nodeRunId === selection.node,
-			).length
-		: 0;
-
 	const summaryPanel = (
 		<DevWorkflowRunSummaryPanel
 			request={workItem.request}
@@ -216,7 +209,12 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 			isDeciding={decide.isPending}
 			decideError={decide.isError ? decide.error : undefined}
 			artifactNameById={artifactNameById}
-			interruptedCount={interruptedCount}
+			// The whole loaded feed and the whole run, not a pre-filtered slice: attempt history, the cascade-rerun
+			// account and a structural node's dependencies are each a different question of the same two sources, and
+			// the panel is where they are asked. ponytail: the feed is the pages the events tab has LOADED, so evidence
+			// past that watermark is simply absent — which the attempts list says out loud rather than guessing around.
+			events={events}
+			run={run}
 			onClose={() => select({ node: undefined })}
 			onShowArtifacts={() => select({ node: undefined, tab: "artifacts" })}
 			onDecide={(submission) => {
@@ -254,6 +252,8 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 					labelByNodeRunId={labelByNodeRunId}
 					hasMore={eventsQuery.hasNextPage}
 					isLoadingMore={eventsQuery.isFetchingNextPage}
+					anchor={eventsAnchor}
+					onAnchorChange={setEventsAnchor}
 					// The promise is the caller's to ignore: a failed page read is already the query's error state.
 					onLoadMore={() => {
 						eventsQuery.fetchNextPage().catch(() => undefined);

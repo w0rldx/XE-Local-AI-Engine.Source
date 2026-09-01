@@ -25,6 +25,9 @@ internal sealed class DevelopmentTaskConfiguration : IEntityTypeConfiguration<De
         builder.Property(entity => entity.UpdatedAtUtc).HasColumnName("updated_at_utc");
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
         builder.HasOne<DevelopmentProject>().WithMany().HasForeignKey(entity => entity.ProjectId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasIndex(entity => entity.ProjectId).IsUnique().HasDatabaseName("ux_development_tasks_project_id");
+        // A project carries N tasks: workflow decomposition materializes one implementation task per child node in the
+        // project the parent run already trusts. The index stays — every project-scoped read leans on it — but it is no
+        // longer unique, and it is no longer named as if it were.
+        builder.HasIndex(entity => entity.ProjectId).HasDatabaseName("ix_development_tasks_project_id");
     }
 }

@@ -10,6 +10,17 @@ internal enum DevWorkflowJoinPolicy
     Any
 }
 
+/// <summary>
+///     What a Tool node does with the repository it names. A CONFIG field rather than a node type, because the seven
+///     types are closed (Y6) and these two are the same lane doing the same thing to the same workspace — one asks the
+///     project's command profile whether the result is good, the other asks Dev Mode's apply gate to let it out.
+/// </summary>
+internal enum DevWorkflowToolMode
+{
+    Validate,
+    Apply
+}
+
 /// <summary>The decomposition template a node expands into. All four fields are load-bearing.</summary>
 internal sealed record DevWorkflowMaterialization(string TemplateNodeKey, DevWorkflowArtifactKind ArtifactKind, string JoinNodeKey, int MaxChildren);
 
@@ -32,7 +43,8 @@ internal sealed record DevWorkflowGraphNode(
     int RetryDelaySeconds,
     int? NodeTimeoutSeconds,
     string? RetryTarget,
-    DevWorkflowMaterialization? Materialization);
+    DevWorkflowMaterialization? Materialization,
+    DevWorkflowToolMode ToolMode);
 
 internal sealed record DevWorkflowGraphEdge(string From, string To, DevWorkflowCondition? Condition)
 {
@@ -52,6 +64,13 @@ internal sealed class DevWorkflowGraph
     /// <summary>Defaults for a node that names none. Human waits and inline decisions get one try; work gets three.</summary>
     private const int DefaultWorkNodeMaxAttempts = 3;
 
+    /// <summary>
+    ///     The most children one decomposition may expand into (P2 R5). The materialization transaction rewrites the
+    ///     run's whole encrypted graph blob, so the width of a fan-out is the size of that write — bounded here, at the
+    ///     one place a definition can ask for it, rather than discovered when a run tries to commit it.
+    /// </summary>
+    private const int MaxTemplateChildren = 20;
+
     private readonly Dictionary<string, List<DevWorkflowGraphEdge>> _inbound;
     private readonly Dictionary<string, List<DevWorkflowGraphEdge>> _outbound;
 
@@ -68,6 +87,8 @@ internal sealed class DevWorkflowGraph
         }
 
         EntryNodeKeys = [.. nodes.Keys.Where(key => _inbound[key].Count == 0).OrderBy(key => key, StringComparer.Ordinal)];
+        TemplateKeys = new HashSet<string>(nodes.Values.Where(static node => node.Materialization is not null).SelectMany(node => TemplateSubtree(node.Materialization!)),
+            StringComparer.Ordinal);
     }
 
     public IReadOnlyDictionary<string, DevWorkflowGraphNode> Nodes { get; }
@@ -80,6 +101,13 @@ internal sealed class DevWorkflowGraph
     ///     set to materialize at run start.
     /// </summary>
     public IReadOnlyList<string> EntryNodeKeys { get; }
+
+    /// <summary>
+    ///     Every node of every materialization template SUBTREE — each template root plus what it reaches short of its
+    ///     join node. These are the nodes a run does NOT give a row to at start: they are clones-in-waiting, and one
+    ///     given a row would wait forever on a source the run never instantiates.
+    /// </summary>
+    public IReadOnlySet<string> TemplateKeys { get; }
 
     public IReadOnlyList<DevWorkflowGraphEdge> InboundEdges(string nodeKey) =>
         _inbound.TryGetValue(nodeKey, out var edges) ? edges : [];
@@ -103,6 +131,61 @@ internal sealed class DevWorkflowGraph
 
         _ = seen.Remove(from);
         return seen;
+    }
+
+    /// <summary>
+    ///     Every node that reaches <paramref name="to" /> by following out-edges, excluding itself — the mirror of
+    ///     <see cref="Descendants" />, over the inbound index.
+    ///     <para>
+    ///         This is what "upstream of" means on a graph with more than one branch: a node on a PARALLEL branch is
+    ///         neither an ancestor nor a descendant, and the whole point of asking is to leave it alone.
+    ///     </para>
+    /// </summary>
+    public IReadOnlySet<string> Ancestors(string to)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var pending = new Stack<string>();
+        pending.Push(to);
+        while (pending.Count > 0)
+        {
+            foreach (var edge in InboundEdges(pending.Pop()).Where(edge => seen.Add(edge.From)))
+            {
+                pending.Push(edge.From);
+            }
+        }
+
+        _ = seen.Remove(to);
+        return seen;
+    }
+
+    /// <summary>
+    ///     One template's nodes: its root and everything reachable from it WITHOUT passing through the join.
+    ///     <para>
+    ///         The join is where a template subtree hands its work back to the graph, so it belongs to the graph and not
+    ///         to the template — walking through it would swallow the whole rest of the run into the set of nodes a run
+    ///         start refuses to instantiate.
+    ///     </para>
+    /// </summary>
+    public HashSet<string> TemplateSubtree(DevWorkflowMaterialization materialization)
+    {
+        ArgumentNullException.ThrowIfNull(materialization);
+
+        var subtree = new HashSet<string>(StringComparer.Ordinal)
+        {
+            materialization.TemplateNodeKey
+        };
+        var pending = new Stack<string>();
+        pending.Push(materialization.TemplateNodeKey);
+        while (pending.Count > 0)
+        {
+            foreach (var edge in OutboundEdges(pending.Pop())
+                         .Where(edge => !string.Equals(edge.To, materialization.JoinNodeKey, StringComparison.Ordinal) && subtree.Add(edge.To)))
+            {
+                pending.Push(edge.To);
+            }
+        }
+
+        return subtree;
     }
 
     /// <summary>
@@ -186,6 +269,8 @@ internal sealed class DevWorkflowGraph
         var nodeKey = RequiredString(element, "nodeKey", "a node");
         var nodeType = RequiredEnum<DevWorkflowNodeType>(element, "nodeType", $"node '{nodeKey}'");
         var isWorkNode = nodeType is DevWorkflowNodeType.Agent or DevWorkflowNodeType.Tool or DevWorkflowNodeType.DevTask;
+        var commandIds = OptionalStringArray(element, "validationCommandIds", nodeKey);
+        var toolMode = ParseToolMode(element, nodeKey, nodeType, commandIds);
 
         return new DevWorkflowGraphNode(nodeKey,
             nodeType,
@@ -193,13 +278,40 @@ internal sealed class DevWorkflowGraph
             OptionalGuid(element, "agentDefinitionId", nodeKey),
             OptionalString(element, "agentSeedSlug"),
             OptionalString(element, "instructions"),
-            OptionalStringArray(element, "validationCommandIds", nodeKey),
+            commandIds,
             OptionalEnum(element, "joinPolicy", nodeKey, DevWorkflowJoinPolicy.All),
             OptionalPositiveInt(element, "maxAttempts", nodeKey) ?? (isWorkNode ? DefaultWorkNodeMaxAttempts : 1),
             OptionalNonNegativeInt(element, "retryDelaySeconds", nodeKey) ?? 0,
             OptionalPositiveInt(element, "nodeTimeoutSeconds", nodeKey),
             OptionalString(element, "retryTarget"),
-            ParseMaterialization(element, nodeKey));
+            ParseMaterialization(element, nodeKey),
+            toolMode);
+    }
+
+    /// <summary>
+    ///     Which of the two things a Tool node is. Refused on any other node type even when it names the default: a
+    ///     field that does nothing where it is written is a definition saying something the runtime will not do.
+    /// </summary>
+    private static DevWorkflowToolMode ParseToolMode(JsonElement element,
+        string nodeKey,
+        DevWorkflowNodeType nodeType,
+        IReadOnlyList<string> commandIds)
+    {
+        if (element.TryGetProperty("toolMode", out var declared)
+            && declared.ValueKind != JsonValueKind.Null
+            && nodeType != DevWorkflowNodeType.Tool)
+        {
+            throw new DevWorkflowValidationException($"Node '{nodeKey}' declares a 'toolMode' but is a {nodeType} node, and only a Tool node runs one.");
+        }
+
+        var toolMode = OptionalEnum(element, "toolMode", nodeKey, DevWorkflowToolMode.Validate);
+        if (toolMode == DevWorkflowToolMode.Apply && commandIds.Count > 0)
+        {
+            throw new DevWorkflowValidationException($"Node '{nodeKey}' applies approved patches and names validation commands, which it will never run. "
+                                                     + "Validating the integrated result is a Tool node of its own, after this one.");
+        }
+
+        return toolMode;
     }
 
     private static DevWorkflowMaterialization? ParseMaterialization(JsonElement element, string nodeKey)
@@ -224,6 +336,7 @@ internal sealed class DevWorkflowGraph
     private static List<DevWorkflowGraphEdge> ParseEdges(JsonElement root, Dictionary<string, DevWorkflowGraphNode> nodes)
     {
         var edges = new List<DevWorkflowGraphEdge>();
+        var pairs = new HashSet<(string From, string To)>();
         if (!root.TryGetProperty("edges", out var edgesElement) || edgesElement.ValueKind == JsonValueKind.Null)
         {
             return edges;
@@ -254,6 +367,16 @@ internal sealed class DevWorkflowGraph
                 throw new DevWorkflowValidationException($"Edge {edge} names a node the graph does not declare.");
             }
 
+            // One edge per pair of nodes. Two of them cannot mean what an author writing two would intend: the
+            // admission rule judges every inbound edge on its own, so a second edge whose condition does not fire is
+            // DEAD and skips the target — an "or" written this way routes the opposite of the way it reads. Refusing
+            // it here is also what keeps the pair usable as a key, which the materialization's edge rewrite relies on.
+            if (!pairs.Add((from, to)))
+            {
+                throw new DevWorkflowValidationException($"The workflow graph declares edge {edge} twice. A second edge between the same two nodes "
+                                                         + "cannot widen the first: each is judged on its own, and one whose condition does not fire skips the target.");
+            }
+
             edges.Add(edge);
         }
 
@@ -267,26 +390,19 @@ internal sealed class DevWorkflowGraph
     /// </summary>
     private void Validate()
     {
-        var templateKeys = Nodes.Values.Where(static node => node.Materialization is not null)
-                                .Select(static node => node.Materialization!.TemplateNodeKey)
-                                .ToHashSet(StringComparer.Ordinal);
-
         foreach (var node in Nodes.Values)
         {
             if (node.Materialization is { } materialization)
             {
                 EnsureDeclared(materialization.TemplateNodeKey, $"The materialization on node '{node.NodeKey}' names template node");
                 EnsureDeclared(materialization.JoinNodeKey, $"The materialization on node '{node.NodeKey}' names join node");
-
-                // A template is cloned once per task and every edge its children get is synthesised at materialization,
-                // so it carries none of its own. The rule exists because the alternative HANGS rather than fails: a
-                // template's declared successor would be given a node run at run start, and then wait forever on an
-                // inbound edge whose source is the one node deliberately never instantiated.
-                if (InboundEdges(materialization.TemplateNodeKey).Count > 0 || OutboundEdges(materialization.TemplateNodeKey).Count > 0)
+                if (materialization.MaxChildren > MaxTemplateChildren)
                 {
-                    throw new DevWorkflowValidationException($"Template node '{materialization.TemplateNodeKey}' declares edges of its own. A materialization "
-                                                             + "template is cloned once per task and its children's edges are generated, so the template itself must have none.");
+                    throw new DevWorkflowValidationException($"The materialization on node '{node.NodeKey}' allows {materialization.MaxChildren} children, "
+                                                             + $"more than the {MaxTemplateChildren} one decomposition may expand into.");
                 }
+
+                ValidateTemplateSubtree(node.NodeKey, materialization);
             }
 
             if (node.JoinPolicy == DevWorkflowJoinPolicy.Any && InboundEdges(node.NodeKey).Count < 2)
@@ -296,10 +412,9 @@ internal sealed class DevWorkflowGraph
             }
         }
 
-        // Deliberately exempt: a template node has no inbound edge on purpose, so that the editor can author it and this
-        // validator can check it while nothing ever instantiates it directly. C2 widens this to a template SUBTREE —
-        // its root plus descendants, cloned whole per task — at which point the edge rule above widens with it.
-        var entries = EntryNodeKeys.Where(key => !templateKeys.Contains(key)).ToList();
+        // Deliberately exempt: a template subtree has no inbound edge from outside on purpose, so that the editor can
+        // author it and this validator can check it while nothing ever instantiates it directly.
+        var entries = EntryNodeKeys.Where(key => !TemplateKeys.Contains(key)).ToList();
         if (entries.Count != 1)
         {
             throw new DevWorkflowValidationException(entries.Count == 0
@@ -308,13 +423,15 @@ internal sealed class DevWorkflowGraph
         }
 
         EnsureAcyclic();
+        EnsureAppliesAreGated();
 
-        // Templates are exempt, and by the edge rule above they are exempt alone: a template has no subtree to carry in.
+        // Template subtrees are exempt WHOLE: the edge rule above is what makes that safe, because it says the only way
+        // out of one is the join, so exempting the set cannot exempt anything the run would otherwise have to run.
         var reachable = new HashSet<string>(Descendants(entries[0]), StringComparer.Ordinal)
         {
             entries[0]
         };
-        reachable.UnionWith(templateKeys);
+        reachable.UnionWith(TemplateKeys);
 
         if (Nodes.Keys.FirstOrDefault(key => !reachable.Contains(key)) is { } orphan)
         {
@@ -328,6 +445,113 @@ internal sealed class DevWorkflowGraph
             {
                 throw new DevWorkflowValidationException($"Node '{node.NodeKey}' declares retryTarget '{node.RetryTarget}', which is not one of its ancestors. "
                                                          + "Routing a failure to a node that does not lead back here would livelock the run.");
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Y3 made structural: an apply node is reached from a human gate and from nothing else.
+    ///     <para>
+    ///         The rule the whole integration stage rests on is that no AI-authored patch reaches a real repository
+    ///         without an operator decision recorded in the run's own audit trail. A definition is the only place that
+    ///         can be checked before the fact: by the time an ungated apply runs, the approval it should have waited
+    ///         for does not exist to be missed.
+    ///     </para>
+    ///     <para>
+    ///         Stated as "every inbound edge comes from a human gate" rather than as "some gate lies on every path",
+    ///         which is weaker in the way that matters: an approval given before the patches existed — a plan gate, say
+    ///         — would satisfy the path reading while approving something else entirely. The immediate reading also
+    ///         leaves no window between the answer and the act for a node run to change what is being applied.
+    ///     </para>
+    ///     <para>
+    ///         The SOURCE being a gate is only half of it, and on its own it is not the rule at all: all three answers a
+    ///         gate takes leave it <c>Succeeded</c> — a rejection reaches the run through an out-edge that matches
+    ///         nothing, never through a node failure — so an unconditional gate-to-apply edge fires on a REJECTION and
+    ///         applies the patches the operator declined. The condition is therefore checked too, and checked by asking
+    ///         the dispatcher's own routing what it would do with each answer.
+    ///     </para>
+    /// </summary>
+    private void EnsureAppliesAreGated()
+    {
+        foreach (var apply in Nodes.Values.Where(static node => node.ToolMode == DevWorkflowToolMode.Apply).Select(static node => node.NodeKey))
+        {
+            if (TemplateKeys.Contains(apply))
+            {
+                throw new DevWorkflowValidationException($"Node '{apply}' applies approved patches and is inside a materialization template, so every child would "
+                                                         + "apply the whole fan-out again. Integration runs once, after the join.");
+            }
+
+            var inbound = InboundEdges(apply);
+            if (inbound.Count == 0 || inbound.Any(edge => Nodes[edge.From].NodeType != DevWorkflowNodeType.HumanGate))
+            {
+                throw new DevWorkflowValidationException($"Node '{apply}' applies approved patches and is reached from something other than a human gate. An apply "
+                                                         + "changes a real repository, so the decision that lets it happen has to be the step in front of it.");
+            }
+
+            EnsureCarriesOnlyTheApproval(apply, inbound);
+        }
+    }
+
+    /// <summary>
+    ///     The condition half of the rule above: an apply's inbound edges carry the approval and carry nothing else.
+    ///     <para>
+    ///         Asked through <see cref="DevWorkflowStateMachine.GateEdgeFires" />, over the set of answers
+    ///         <see cref="DevWorkflowStateMachine.GateAnswers" /> derives from the transition table — so the document
+    ///         evaluated here is the document the tick composes, the evaluation is the one the tick performs, and the
+    ///         three answers are the three the tick can route. Re-deriving any of it — reading the condition and asking
+    ///         whether it compares <c>decision</c> to <c>Approve</c> — would be a second account of routing that could
+    ///         drift from the first, and that drift would be silent and would end in an apply.
+    ///     </para>
+    /// </summary>
+    private static void EnsureCarriesOnlyTheApproval(string apply, IReadOnlyList<DevWorkflowGraphEdge> inbound)
+    {
+        foreach (var edge in inbound)
+        {
+            foreach (var decision in DevWorkflowStateMachine.GateAnswers)
+            {
+                var fires = DevWorkflowStateMachine.GateEdgeFires(edge, decision);
+                if (decision == DevWorkflowDecisionKind.Approve && !fires)
+                {
+                    throw new DevWorkflowValidationException($"Node '{apply}' applies approved patches, and the edge {edge} does not carry an approval: it is false "
+                                                             + "when the gate is answered Approve, so the one answer that may reach an apply never would.");
+                }
+
+                if (decision != DevWorkflowDecisionKind.Approve && fires)
+                {
+                    throw new DevWorkflowValidationException($"Node '{apply}' applies approved patches, and the edge {edge} also carries a {decision} answer. Every "
+                                                             + "answer succeeds the gate and routing is the edge's own job, so this edge would apply the patches the "
+                                                             + "operator declined. Condition it on the approval.");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    ///     The structural rule on a template SUBTREE: nothing outside it points into it.
+    ///     <para>
+    ///         It exists because breaking it HANGS rather than fails — a node outside the template that depended on it
+    ///         would wait, at run start and forever, on the one node deliberately never instantiated. It is also the
+    ///         whole of the rule the plan states in two halves: because the subtree is defined as everything the
+    ///         template reaches SHORT OF the join, "no edge leaves it except to the join" is true by construction, and
+    ///         the only way a live node could be swallowed into a template is by being pointed at from outside it,
+    ///         which is what this refuses.
+    ///     </para>
+    /// </summary>
+    private void ValidateTemplateSubtree(string nodeKey, DevWorkflowMaterialization materialization)
+    {
+        var subtree = TemplateSubtree(materialization);
+        foreach (var key in subtree)
+        {
+            if (Nodes[key].Materialization is not null && !string.Equals(key, nodeKey, StringComparison.Ordinal))
+            {
+                throw new DevWorkflowValidationException($"Node '{key}' decomposes work and is inside the materialization template of node '{nodeKey}'. Nested "
+                                                         + "materialization is not supported: a clone that decomposed again would expand a template already expanded.");
+            }
+
+            if (InboundEdges(key).FirstOrDefault(edge => !subtree.Contains(edge.From)) is { } inbound)
+            {
+                throw new DevWorkflowValidationException($"Edge {inbound} points into the materialization template of node '{nodeKey}' from outside it. A template "
+                                                         + "subtree is cloned once per task, so nothing outside it may depend on the copy that is never run.");
             }
         }
     }

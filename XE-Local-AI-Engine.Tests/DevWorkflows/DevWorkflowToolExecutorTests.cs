@@ -61,6 +61,58 @@ public sealed class DevWorkflowToolExecutorTests
     }
 
     /// <summary>
+    ///     The C1 gate: a fan-out wider than the lane never has more than the cap inside its commands AT ONCE.
+    ///     <para>
+    ///         Concurrency is counted where the commands run rather than read off the rows, because the rows only say
+    ///         what the dispatcher wrote. A cap that held on paper and not in fact would look identical from the rows,
+    ///         and it is the workspaces — one prepared checkout each — that the cap exists to bound.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AFanOutWiderThanTheLaneNeverRunsMoreThanItsCapAtOnce()
+    {
+        // A private host: this pins the lane's slot count and reads its concurrency, both of which are host-wide.
+        await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxParallelToolNodes", "2"));
+        string[] keys = ["lanea", "laneb", "lanec", "laned"];
+        var holds = keys.Select(harness.Tools.Hold).ToList();
+        var bothInside = harness.Tools.WaitForConcurrentAsync(count: 2);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FourParallelTools, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await bothInside.ConfigureAwait(false);
+
+        var admitted = (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).Where(nodeRun => keys.Contains(nodeRun.NodeKey, StringComparer.Ordinal)).ToList();
+        AssertEx.Equal(expected: 2, admitted.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Running), "two slots, four branches asking for them.");
+        AssertEx.Equal(expected: 2, harness.Tools.PeakConcurrent, "and both slots really were in use at the same moment, so the cap is a bound rather than an accident of timing.");
+
+        foreach (var queued in admitted.Where(static nodeRun => nodeRun.Status != DevWorkflowNodeRunStatus.Running))
+        {
+            AssertEx.Equal(DevWorkflowNodeRunStatus.Queued, queued.Status, queued.NodeKey);
+            AssertEx.Equal("awaiting-sandbox-slot", queued.QueueReason, "a row without a slot says what it waits for.");
+            AssertEx.Null(queued.FailureClass, "a full lane is queueing, not failure.");
+        }
+
+        // The refusal itself writes NOTHING: the row was queued once, and every tick after that simply asks again.
+        var announced = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(announced,
+            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count,
+            "a re-offered row that is refused a slot must not announce it, or the log fills with one entry per tick per waiting node.");
+        AssertEx.Equal(expected: 2, harness.Tools.Ran.Count, "and a node run without a slot must not have started its commands.");
+
+        foreach (var hold in holds)
+        {
+            hold.Release();
+        }
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status, "and the slots the first two gave back ran the other two.");
+        AssertEx.Equal(expected: 4, harness.Tools.Ran.Count);
+        AssertEx.Equal(expected: 2, harness.Tools.PeakConcurrent, "the queued pair waited for a slot rather than being handed one alongside the pair already holding them.");
+    }
+
+    /// <summary>
     ///     The Slice B1 shape without the sandbox: a passing tool node succeeds, keeps its report as a run artifact, and
     ///     writes the output document a conditional edge routes on.
     /// </summary>

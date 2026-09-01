@@ -223,6 +223,128 @@ internal static class DevWorkflowGraphs
                                         }
                                         """;
 
+    /// <summary>
+    ///     The §5.10 decomposition shape: the template is a SUBTREE — an implementation and the validation that judges
+    ///     it, with the fix loop between them — cloned whole once per task into the join the decomposition names. The
+    ///     implementation is an Agent rather than a DevTask so the clones can be driven end to end without a repository;
+    ///     what C2 writes for a DevTask child is its input brief, which is asserted on the row.
+    /// </summary>
+    public const string DecompositionSubtree = """
+                                               {
+                                                 "schemaVersion": 1,
+                                                 "nodes": [
+                                                   { "nodeKey": "decompose", "nodeType": "Agent", "label": "Decompose",
+                                                     "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b",
+                                                     "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                                   { "nodeKey": "implement", "nodeType": "Agent", "label": "Implement",
+                                                     "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                                   { "nodeKey": "validate", "nodeType": "Tool", "retryTarget": "implement" },
+                                                   { "nodeKey": "join", "nodeType": "Join" }
+                                                 ],
+                                                 "edges": [
+                                                   { "from": "decompose", "to": "join" },
+                                                   { "from": "implement", "to": "validate" },
+                                                   { "from": "validate", "to": "join" }
+                                                 ]
+                                               }
+                                               """;
+
+    /// <summary>
+    ///     <see cref="DecompositionSubtree" /> with the two things the seeded template puts around it that decide what a
+    ///     VERIFICATION node gets to read: an approved plan in front of the decomposition, and a verification agent
+    ///     behind the join. The seed's own evidence edges are here too — <c>decompose → join</c>, which the materializer
+    ///     preserves, and <c>planapproval → verify</c>, which is the only path from the verification back to the plan
+    ///     itself, since the walk stops at the decomposition that consumed it.
+    ///     <para>
+    ///         The template's validation node allows ONE attempt and routes no retry, so a scripted failure lands it in
+    ///         front of a human on the first answer — which is the state an operator answers <c>Skip</c> on.
+    ///     </para>
+    /// </summary>
+    public const string DecompositionWithVerification = """
+                                                        {
+                                                          "schemaVersion": 1,
+                                                          "nodes": [
+                                                            { "nodeKey": "plan", "nodeType": "Agent", "label": "Plan",
+                                                              "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                                            { "nodeKey": "planapproval", "nodeType": "HumanGate", "label": "Approve the plan" },
+                                                            { "nodeKey": "decompose", "nodeType": "Agent", "label": "Decompose",
+                                                              "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b",
+                                                              "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                                            { "nodeKey": "implement", "nodeType": "Agent", "label": "Implement",
+                                                              "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                                            { "nodeKey": "validate", "nodeType": "Tool", "label": "Validate", "maxAttempts": 1 },
+                                                            { "nodeKey": "join", "nodeType": "Join", "label": "Every slice implemented" },
+                                                            { "nodeKey": "verify", "nodeType": "Agent", "label": "Verify",
+                                                              "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" }
+                                                          ],
+                                                          "edges": [
+                                                            { "from": "plan", "to": "planapproval" },
+                                                            { "from": "planapproval", "to": "decompose", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                            { "from": "planapproval", "to": "verify", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                            { "from": "decompose", "to": "join" },
+                                                            { "from": "implement", "to": "validate" },
+                                                            { "from": "validate", "to": "join" },
+                                                            { "from": "join", "to": "verify" }
+                                                          ]
+                                                        }
+                                                        """;
+
+    /// <summary>
+    ///     <see cref="DecompositionSubtree" /> with the implementation node the seeded template will really carry: a
+    ///     <c>DevTask</c>, so each clone drives a Development task of its OWN and the isolation those task ids buy is
+    ///     observable rather than argued. <c>nodeTimeoutSeconds</c> is mandatory on a DevTask node per the C template
+    ///     rule.
+    /// </summary>
+    public const string DecompositionIntoDevTasks = """
+                                                    {
+                                                      "schemaVersion": 1,
+                                                      "nodes": [
+                                                        { "nodeKey": "decompose", "nodeType": "Agent", "label": "Decompose",
+                                                          "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b",
+                                                          "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                                        { "nodeKey": "implement", "nodeType": "DevTask", "label": "Implement", "nodeTimeoutSeconds": 900 },
+                                                        { "nodeKey": "validate", "nodeType": "Tool", "retryTarget": "implement" },
+                                                        { "nodeKey": "join", "nodeType": "Join" }
+                                                      ],
+                                                      "edges": [
+                                                        { "from": "decompose", "to": "join" },
+                                                        { "from": "implement", "to": "validate" },
+                                                        { "from": "validate", "to": "join" }
+                                                      ]
+                                                    }
+                                                    """;
+
+    /// <summary>
+    ///     <see cref="DecompositionIntoDevTasks" /> with the integration stage on the end: the fan-out joins, an
+    ///     operator is asked, and only their approval routes into the node that applies the patches. The seeded
+    ///     <c>feature-development-v1</c> shape without its research, plan and verification agents, which add ticks and
+    ///     sessions to script and nothing to what integration does.
+    /// </summary>
+    public const string DecompositionIntoDevTasksAndIntegration = """
+                                                                  {
+                                                                    "schemaVersion": 1,
+                                                                    "nodes": [
+                                                                      { "nodeKey": "decompose", "nodeType": "Agent", "label": "Decompose",
+                                                                        "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b",
+                                                                        "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                                                      { "nodeKey": "implement", "nodeType": "DevTask", "label": "Implement", "nodeTimeoutSeconds": 900 },
+                                                                      { "nodeKey": "validate", "nodeType": "Tool", "retryTarget": "implement" },
+                                                                      { "nodeKey": "join", "nodeType": "Join" },
+                                                                      { "nodeKey": "integrationapproval", "nodeType": "HumanGate", "label": "Approve integration" },
+                                                                      { "nodeKey": "integrate", "nodeType": "Tool", "toolMode": "Apply", "label": "Apply the approved patches" },
+                                                                      { "nodeKey": "fullvalidate", "nodeType": "Tool", "label": "Validate the integrated result" }
+                                                                    ],
+                                                                    "edges": [
+                                                                      { "from": "decompose", "to": "join" },
+                                                                      { "from": "implement", "to": "validate" },
+                                                                      { "from": "validate", "to": "join" },
+                                                                      { "from": "join", "to": "integrationapproval" },
+                                                                      { "from": "integrationapproval", "to": "integrate", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                                      { "from": "integrate", "to": "fullvalidate" }
+                                                                    ]
+                                                                  }
+                                                                  """;
+
     /// <summary>One tool node on its own: the smallest thing the sandbox lane can be asked to run.</summary>
     public const string SingleTool = """
                                      {
@@ -250,6 +372,56 @@ internal static class DevWorkflowGraphs
                                              ]
                                            }
                                            """;
+
+    /// <summary>
+    ///     A fan-out WIDER than the sandbox lane, so the cap is observed under real contention rather than inferred
+    ///     from a lane of one. Four tool nodes admitted by the same tick against two slots.
+    /// </summary>
+    public const string FourParallelTools = """
+                                            {
+                                              "schemaVersion": 1,
+                                              "nodes": [
+                                                { "nodeKey": "fanout", "nodeType": "Parallel" },
+                                                { "nodeKey": "lanea", "nodeType": "Tool" },
+                                                { "nodeKey": "laneb", "nodeType": "Tool" },
+                                                { "nodeKey": "lanec", "nodeType": "Tool" },
+                                                { "nodeKey": "laned", "nodeType": "Tool" },
+                                                { "nodeKey": "lanejoin", "nodeType": "Join" }
+                                              ],
+                                              "edges": [
+                                                { "from": "fanout", "to": "lanea" },
+                                                { "from": "fanout", "to": "laneb" },
+                                                { "from": "fanout", "to": "lanec" },
+                                                { "from": "fanout", "to": "laned" },
+                                                { "from": "lanea", "to": "lanejoin" },
+                                                { "from": "laneb", "to": "lanejoin" },
+                                                { "from": "lanec", "to": "lanejoin" },
+                                                { "from": "laned", "to": "lanejoin" }
+                                              ]
+                                            }
+                                            """;
+
+    /// <summary>
+    ///     Two branches into an <c>Any</c> join, one of which cannot run at all: the agent node binds no definition, so
+    ///     it stands down for a human and the operator's answer decides which terminal the dead branch carries.
+    /// </summary>
+    public const string AnyJoinOverADeadBranch = """
+                                                 {
+                                                   "schemaVersion": 1,
+                                                   "nodes": [
+                                                     { "nodeKey": "anysplit", "nodeType": "Parallel" },
+                                                     { "nodeKey": "anysurvivor", "nodeType": "Tool" },
+                                                     { "nodeKey": "anydoomed", "nodeType": "Agent" },
+                                                     { "nodeKey": "anymerge", "nodeType": "Join", "joinPolicy": "Any" }
+                                                   ],
+                                                   "edges": [
+                                                     { "from": "anysplit", "to": "anysurvivor" },
+                                                     { "from": "anysplit", "to": "anydoomed" },
+                                                     { "from": "anysurvivor", "to": "anymerge" },
+                                                     { "from": "anydoomed", "to": "anymerge" }
+                                                   ]
+                                                 }
+                                                 """;
 
     /// <summary>
     ///     A human gate beside sandbox work that is genuinely in flight — the X10 case as it actually occurs: one branch

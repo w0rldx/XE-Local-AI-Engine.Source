@@ -368,6 +368,78 @@ public sealed class DevWorkflowEndpointTests
         AssertEx.Equal(JsonValueKind.True, document.RootElement.GetProperty("graph").GetProperty("edges")[0].GetProperty("condition").GetProperty("value").ValueKind);
     }
 
+    /// <summary>
+    ///     L2: <c>toolMode</c> is what makes a Tool node the one that APPLIES approved patches, and it was not on the
+    ///     wire at all — so a copy of the seeded template answered 201 and silently came back with an ordinary
+    ///     validation node where the integration step had been. Both directions are asserted on one round trip: what
+    ///     the store was handed, and what the caller reads back. Sent in lower case on purpose: the stored value is
+    ///     canonical whatever an author writes, so nothing reading the blob later has to parse case-insensitively.
+    /// </summary>
+    [Test]
+    public async Task Definition_KeepsAnApplyNodesToolModeThroughTheRoundTrip()
+    {
+        const string ApplyGraph = """
+                                  {"schemaVersion":1,
+                                   "nodes":[{"nodeKey":"implement","nodeType":"DevTask","nodeTimeoutSeconds":900},
+                                            {"nodeKey":"approval","nodeType":"HumanGate"},
+                                            {"nodeKey":"integrate","nodeType":"Tool","toolMode":"apply","label":"Apply the approved patches"}],
+                                   "edges":[{"from":"implement","to":"approval"},
+                                            {"from":"approval","to":"integrate","condition":{"path":"decision","op":"eq","value":"Approve"}}]}
+                                  """;
+        var store = Store();
+        string? stored = null;
+        store.CreateDefinitionAsync(Arg.Any<CreateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call =>
+             {
+                 stored = call.Arg<CreateDevWorkflowDefinitionCommand>().GraphJson;
+                 return DefinitionSnapshot(stored);
+             });
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(ApplyGraph)).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
+        AssertEx.NotNull(stored);
+        AssertEx.Contains(stored!,
+            "\"toolMode\":\"Apply\"",
+            StringComparison.Ordinal,
+            "the stored graph is what a run pins, so the apply node survives into it — in the parser's own spelling, whatever casing was sent.");
+        using var document = JsonDocument.Parse(body);
+        var nodes = document.RootElement.GetProperty("graph").GetProperty("nodes");
+        AssertEx.Equal("Apply", nodes[2].GetProperty("toolMode").GetString());
+        AssertEx.Equal(JsonValueKind.Null,
+            nodes[1].GetProperty("toolMode").ValueKind,
+            "a node that declares none reads back as null — absent is Validate, exactly as the runtime's parser reads it.");
+        using var storedDocument = JsonDocument.Parse(stored!);
+        AssertEx.False(storedDocument.RootElement.GetProperty("nodes")[1].TryGetProperty("toolMode", out _),
+            "and nothing is written into the stored graph for it, so a definition authored before this field keeps its bytes.");
+    }
+
+    /// <summary>
+    ///     And the parse rules apply to an API-authored apply node exactly as they do to the seeded one: an apply the
+    ///     graph does not put a human gate in front of is refused at save time, with the parser's own sentence.
+    /// </summary>
+    [Test]
+    public async Task CreateDefinition_WithAnUngatedApplyNode_ReturnsBadRequestAndNeverReachesTheStore()
+    {
+        const string UngatedApply = """
+                                    {"schemaVersion":1,
+                                     "nodes":[{"nodeKey":"implement","nodeType":"DevTask","nodeTimeoutSeconds":900},
+                                              {"nodeKey":"integrate","nodeType":"Tool","toolMode":"Apply"}],
+                                     "edges":[{"from":"implement","to":"integrate"}]}
+                                    """;
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(UngatedApply)).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(body, "reached from something other than a human gate", StringComparison.Ordinal);
+        await store.DidNotReceive().CreateDefinitionAsync(Arg.Any<CreateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>());
+    }
+
     [Test]
     public async Task UpdateDefinition_WithoutAGraph_LeavesTheStoredOneAlone()
     {

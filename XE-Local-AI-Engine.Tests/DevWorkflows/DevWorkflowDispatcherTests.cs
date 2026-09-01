@@ -658,6 +658,34 @@ public sealed class DevWorkflowDispatcherTests
     }
 
     /// <summary>
+    ///     A run pinned to a graph that declares one edge twice fails the same way, with the sentence saying why.
+    ///     <para>
+    ///         A CONSEQUENCE of refusing duplicates at parse, and the better of the two failures available: such a
+    ///         graph used to parse, and then threw out of the materialization step on a duplicate key — where the
+    ///         tick's catch-all logs it and drops it, so every sweep re-threw and the run sat with nothing moving and
+    ///         nothing to read. A refusal a person can act on beats a silent wedge.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ARunPinnedToAGraphWithADuplicateEdgeFailsWithTheReasonRatherThanWedging()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync("""
+                                                {"schemaVersion":1,
+                                                 "nodes":[{"nodeKey":"a","nodeType":"Gate"},{"nodeKey":"b","nodeType":"Join"}],
+                                                 "edges":[{"from":"a","to":"b"},{"from":"a","to":"b"}]}
+                                                """)
+                                 .ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Failed, run.Status, "a graph nothing can route is written down as refused, not retried forever.");
+        AssertEx.Equal("Configuration", run.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(run.TerminalReason), "twice");
+    }
+
+    /// <summary>
     ///     The parsed graph is cached per run and invalidated by the run's revision, so a run that ticks many times
     ///     decrypts and parses its graph exactly once.
     /// </summary>
@@ -808,5 +836,51 @@ public sealed class DevWorkflowDispatcherTests
         AssertEx.True(events.Single(entry => entry.EventType == "node.cancelled" && entry.NodeRunId == sibling.Id).Sequence
                       < events.Last(static entry => entry.EventType == "run.cancelled").Sequence,
             "the sibling settles before the run does; the other order leaks its lane slot.");
+    }
+
+    /// <summary>
+    ///     The C1 gate: an <c>Any</c> join with one dead branch. Two things, and the first is the subtle one.
+    ///     <para>
+    ///         <c>Any</c> does NOT fire on whichever branch landed first — it waits until no inbound edge is still
+    ///         pending, because a sibling that has not settled could still satisfy one, and a join that routed on
+    ///         whichever branch happened to be quicker would make the run's path a matter of timing. A branch standing
+    ///         down for a human is not settled: <c>Blocked</c> is a wait, not an answer.
+    ///     </para>
+    ///     <para>
+    ///         Once the dead branch does settle, the surviving branch carries the join, and the run ends on what that
+    ///         branch became: abandoned is a failure the run reports, skipped is a branch the run routed around. Either
+    ///         way the dead branch KEEPS its terminal — a join is not a reason to re-run the node that will never
+    ///         arrive, and a resurrected row would be the run asking again a question it has already been answered.
+    ///     </para>
+    /// </summary>
+    [Test]
+    [Arguments(DevWorkflowDecisionKind.Abandon, DevWorkflowNodeRunStatus.Failed, DevWorkflowRunStatus.Failed)]
+    [Arguments(DevWorkflowDecisionKind.Skip, DevWorkflowNodeRunStatus.Skipped, DevWorkflowRunStatus.Completed)]
+    public async Task AnAnyJoinWaitsForItsDeadBranchToSettleAndThenCarriesTheSurvivor(DevWorkflowDecisionKind decision,
+        DevWorkflowNodeRunStatus deadStatus,
+        DevWorkflowRunStatus runStatus)
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.AnyJoinOverADeadBranch, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "anysurvivor").ConfigureAwait(false)).Status);
+        var doomed = await harness.ReadNodeRunAsync(runId, "anydoomed").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, doomed.Status, "an agent bound to nothing stands down for a human rather than settling.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending,
+            (await harness.ReadNodeRunAsync(runId, "anymerge").ConfigureAwait(false)).Status,
+            "one satisfied branch is not enough while a sibling could still satisfy its own edge.");
+
+        await harness.DecideAsync(runId, "anydoomed", decision).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var settled = await harness.ReadNodeRunAsync(runId, "anydoomed").ConfigureAwait(false);
+        AssertEx.Equal(deadStatus, settled.Status);
+        AssertEx.Equal(doomed.Attempt, settled.Attempt, "the dead branch is not re-attempted to satisfy the join.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded,
+            (await harness.ReadNodeRunAsync(runId, "anymerge").ConfigureAwait(false)).Status,
+            "and with nothing left pending, the one satisfied branch carries the join.");
+        AssertEx.Equal(runStatus, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
     }
 }

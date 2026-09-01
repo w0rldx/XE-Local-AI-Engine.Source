@@ -10,17 +10,30 @@ interface DevelopmentPatchApplyPanelProps {
 	readonly apply: { readonly loading: boolean; readonly outcome?: string | null; readonly run: () => void };
 	readonly preview: { readonly data?: DevelopmentPatchPreview; readonly loading: boolean; readonly run: () => void };
 	readonly repositoryReady: boolean;
+	/**
+	 * Y3: a workflow-driven task's approval lives one node upstream, in the graph, and the workflow performs the apply.
+	 * The evidence stays visible — that is what this page is for — but the Apply button is not offered, because a
+	 * second one here would be either a duplicate authority or a bypass of the workflow's audit trail.
+	 */
+	readonly readOnly?: boolean;
 }
 
-export function DevelopmentPatchApplyPanel({ apply, preview, repositoryReady }: DevelopmentPatchApplyPanelProps) {
+export function DevelopmentPatchApplyPanel({ apply, preview, repositoryReady, readOnly = false }: DevelopmentPatchApplyPanelProps) {
 	const { t } = useTranslation();
 	return (
 		<SectionCard
-			actions={<Badge color="green">{t("pages.development.apply.awaiting", "Awaiting explicit approval")}</Badge>}
+			actions={
+				<Badge color={readOnly ? "blue" : "green"}>
+					{readOnly
+						? t("pages.development.apply.workflowOwned", "The workflow decides")
+						: t("pages.development.apply.awaiting", "Awaiting explicit approval")}
+				</Badge>
+			}
 			data-testid="development-apply-panel"
 			title={t("pages.development.apply.title", "Human-controlled patch apply")}
 		>
 			<Group>
+				{/* Preview stays available on both paths: reading the patch is not deciding on it. */}
 				<Button
 					data-testid="development-preview-patch"
 					disabled={!repositoryReady}
@@ -30,16 +43,18 @@ export function DevelopmentPatchApplyPanel({ apply, preview, repositoryReady }: 
 				>
 					{t("pages.development.apply.preview", "Preview current patch")}
 				</Button>
-				<Button
-					color="green"
-					data-testid="development-apply-patch"
-					disabled={!repositoryReady || !preview.data}
-					leftSection={<IconCheck size={16} />}
-					loading={apply.loading}
-					onClick={apply.run}
-				>
-					{t("pages.development.apply.apply", "Apply verified patch")}
-				</Button>
+				{readOnly ? null : (
+					<Button
+						color="green"
+						data-testid="development-apply-patch"
+						disabled={!repositoryReady || !preview.data}
+						leftSection={<IconCheck size={16} />}
+						loading={apply.loading}
+						onClick={apply.run}
+					>
+						{t("pages.development.apply.apply", "Apply verified patch")}
+					</Button>
+				)}
 			</Group>
 			{preview.data ? (
 				<Stack>

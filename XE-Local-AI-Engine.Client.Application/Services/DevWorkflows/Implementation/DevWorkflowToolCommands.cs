@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
@@ -42,14 +43,20 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
     private readonly IDevelopmentRepositoryBindingService _bindings;
     private readonly IDevelopmentStore _development;
     private readonly DevelopmentOptions _developmentOptions;
+    private readonly IDevelopmentEvidenceService _evidence;
+    private readonly DevWorkflowGraphCache _graphs;
     private readonly DevWorkflowOptions _options;
     private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
     private readonly IServiceProvider _services;
     private readonly TimeProvider _timeProvider;
+    private readonly IDevWorkflowStore _workflows;
 
     public DevWorkflowToolCommands(IDevelopmentStore development,
         IDevelopmentRepositoryBindingService bindings,
         IDevelopmentSandboxRuntimeProvider sandbox,
+        IDevelopmentEvidenceService evidence,
+        IDevWorkflowStore workflows,
+        DevWorkflowGraphCache graphs,
         IOptions<DevelopmentOptions> developmentOptions,
         IOptions<DevWorkflowOptions> options,
         TimeProvider timeProvider,
@@ -60,6 +67,9 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         _development = development ?? throw new ArgumentNullException(nameof(development));
         _bindings = bindings ?? throw new ArgumentNullException(nameof(bindings));
         _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
+        _evidence = evidence ?? throw new ArgumentNullException(nameof(evidence));
+        _workflows = workflows ?? throw new ArgumentNullException(nameof(workflows));
+        _graphs = graphs ?? throw new ArgumentNullException(nameof(graphs));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _developmentOptions = developmentOptions.Value;
@@ -100,7 +110,8 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
     }
 
     /// <summary>
-    ///     One exception's message, fit to be stored on a row and rendered on a wire.
+    ///     One exception's message, fit to be stored on a row and rendered on a wire. Shared with the apply variant,
+    ///     which surfaces the same kind of sentence from the same Dev Mode exceptions.
     ///     <para>
     ///         These sentences are the ONE thing this lane surfaces that nothing has already redacted: the sandbox
     ///         interpolates an inner IOException's text into its own failure message, and that text can carry a host
@@ -113,8 +124,9 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
     ///         second exception, because the failure being reported is the one worth surfacing.
     ///     </para>
     /// </summary>
-    private static string Sanitized(Exception exception)
+    internal static string Sanitized(Exception exception)
     {
+        ArgumentNullException.ThrowIfNull(exception);
         try
         {
             return DevelopmentArtifactSanitizer.SanitizeText(exception.Message);
@@ -160,6 +172,15 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         var workspaces = ActivatorUtilities.CreateInstance<DevelopmentWorkspaceProvider>(_services, secrets);
         var snapshot = Synthesize(project, node, run, nodeRun, repository);
         var session = await workspaces.PrepareAsync(snapshot, repository, cancellationToken).ConfigureAwait(false);
+
+        // Before a single command runs: a materialized child's validation must judge THAT CHILD'S work, and the work is
+        // a staged patch in the Dev Mode attempt's own worktree rather than anything the freshly cloned base contains.
+        var overlay = await OverlayAsync(run, nodeRun, session, cancellationToken).ConfigureAwait(false);
+        if (overlay.Refusal is { } refusedOverlay)
+        {
+            return Refused(DevWorkflowFailureClasses.Policy, refusedOverlay, secrets);
+        }
+
         var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_developmentOptions), profile);
 
         // The commands share ONE deadline, the way the Dev Mode gate does: bounding each command alone lets a
@@ -216,9 +237,148 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
                 evidence.Count(static command => !command.Completed || command.ExitCode != 0),
                 tests.Count == 0 ? null : tests.Sum(static outcome => outcome.Passed),
                 tests.Count == 0 ? null : tests.Sum(static outcome => outcome.Failed),
-                Compose(verdict, profile, session, nodeRun, evidence),
+                Compose(verdict, profile, session, nodeRun, evidence, overlay.BasedOn),
                 secrets.Paths);
         }
+    }
+
+    /// <summary>
+    ///     Puts the child's OWN work into the freshly prepared workspace before anything judges it.
+    ///     <para>
+    ///         A materialized child implements through Dev Mode, which leaves its work as a STAGED patch in the
+    ///         attempt's own worktree and never touches the base branch — so a validation node that cloned
+    ///         <c>refs/heads/{baseBranch}</c> and ran the commands was judging the committed base and reporting green
+    ///         about a tree the child's change is not in. That voids the per-slice quality gate and makes the
+    ///         <c>retryTarget</c> fix loop unable to fire on a real implementation failure.
+    ///     </para>
+    ///     <para>
+    ///         <b>Security posture.</b> The bytes are the approved patch artifact's, read through the same immutable
+    ///         hash-and-byte-count verification the trusted host apply port reads them through, and bound to the task's
+    ///         own <c>ApprovedSubjectHash</c>; the apply is <c>git apply --index</c> under the hardened argument vector
+    ///         inside the SANDBOX workspace only — the operator's registered repository is never written to, no trust
+    ///         decision is re-asserted, and a patch that does not verify or does not apply REFUSES the node
+    ///         (<c>Policy</c>) rather than silently validating the base underneath it.
+    ///     </para>
+    ///     <para>
+    ///         Every anomaly on this path REFUSES rather than falling back to the base. A validation node runs only
+    ///         after its implementation succeeded, so a sibling with no approved patch, a task carrying no approved
+    ///         subject, or a group offering more than one implementation are all states this node cannot judge — and a
+    ///         green report over the base is exactly the silent lie the overlay exists to remove. The honest
+    ///         base-validation path is the one that has no sibling at all: a Tool node that is not a materialized clone.
+    ///     </para>
+    /// </summary>
+    internal async Task<DevWorkflowOverlay> OverlayAsync(DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        DevelopmentWorkspaceSession session,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        var siblings = await SiblingImplementationsAsync(run, nodeRun, cancellationToken).ConfigureAwait(false);
+        if (siblings.Count == 0)
+        {
+            return default;
+        }
+
+        if (siblings.Count > 1)
+        {
+            // No alphabetical pick: which implementation this validation judges decides what the quality gate is ABOUT,
+            // and a group offering two of them is an authoring or materialization fault a human has to look at.
+            return Refuse($"This validation follows more than one implementation in its materialization group "
+                          + $"({string.Join(", ", siblings.Select(static row => $"'{row.NodeKey}'"))}), so which work it should judge is "
+                          + "ambiguous. Nothing was applied to this workspace.");
+        }
+
+        var taskId = siblings[0].DevelopmentTaskId!.Value;
+        var task = await _development.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+        if (task.Status is not (DevelopmentTaskStatus.AwaitingApply or DevelopmentTaskStatus.Completed))
+        {
+            return Refuse($"The implementation this validation follows is {task.Status} and has produced no approved patch. This node "
+                          + "runs only after that implementation succeeded, so its state is an anomaly rather than a licence to judge "
+                          + "the base commit instead.");
+        }
+
+        try
+        {
+            var patch = await _evidence.ReadLatestAsync(taskId, DevelopmentArtifactKind.Patch, cancellationToken).ConfigureAwait(false);
+            if (task.ApprovedSubjectHash is not { } approved)
+            {
+                // A task that reached this status through the generic transition can carry no subject at all. Nothing
+                // then binds the stored patch to an approval, which is the one thing that makes it safe to apply.
+                return Refuse($"The implementation task is {task.Status} but names no approved subject, so nothing binds its stored patch "
+                              + "to an approval. Nothing was applied to this workspace.");
+            }
+
+            if (!string.Equals(approved, patch.Artifact.SubjectHash, StringComparison.OrdinalIgnoreCase))
+            {
+                return Refuse("The implementation task's stored patch is not the subject its approval names, so this node did not judge it. "
+                              + "Nothing was applied to this workspace.");
+            }
+
+            var applied = await new HostGitRunner(_developmentOptions.MaxAttemptDurationSeconds)
+                                .RunAsync(session.HostWorktreePath,
+                                    AgentHomeGit.Arguments("apply", "--index", "--whitespace=error-all", "-"),
+                                    cancellationToken,
+                                    patch.Payload,
+                                    _developmentOptions.MaxPatchBytes,
+                                    _developmentOptions.MaxCommandOutputBytes)
+                                .ConfigureAwait(false);
+            if (applied.ExitCode != 0)
+            {
+                // Deliberately without git's own stderr: it interpolates workspace paths, and this sentence reaches an
+                // operator through the row. The engine log keeps the detail.
+                return Refuse("The implementation task's approved patch did not apply to this node's freshly prepared workspace, "
+                              + "so nothing was judged. The base branch has most likely moved since that patch was produced.");
+            }
+
+            return new DevWorkflowOverlay(new DevWorkflowValidationBasedOn(taskId,
+                    patch.Artifact.ContentHash,
+                    "These commands ran against the implementation task's approved patch, applied to a fresh clone of the base commit."),
+                Refusal: null);
+        }
+        catch (DevelopmentInvalidTransitionException exception)
+        {
+            return Refuse($"The implementation task's approved patch could not be verified, so this node judged nothing: {Sanitized(exception)}");
+        }
+    }
+
+    /// <summary>A refusal: nothing was overlaid, so the node run is answered rather than judged.</summary>
+    private static DevWorkflowOverlay Refuse(string sanitizedReason) =>
+        new(BasedOn: null, sanitizedReason);
+
+    /// <summary>
+    ///     The implementations this validation node could be judging: the <c>DevTask</c> rows of the SAME materialization
+    ///     clone group — same origin node run, same 1-based index — that this node sits downstream of.
+    ///     <para>
+    ///         Derived from the graph and the rows rather than from node keys: a clone's key is the template's key with
+    ///         a suffix the decomposing agent chose, so ancestry in the rewritten graph is the only thing that says which
+    ///         implementation this validation follows. Answers the whole set rather than a first match, because a group
+    ///         holding two of them is a fault to refuse rather than something to pick alphabetically. A node run that is
+    ///         not a clone has none, and validates the base — the v1 ceiling recorded for <c>fullvalidate</c>.
+    ///     </para>
+    /// </summary>
+    private async Task<IReadOnlyList<DevWorkflowNodeRunSnapshot>> SiblingImplementationsAsync(DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(nodeRun);
+        if (nodeRun.MaterializedFromNodeRunId is not { } origin || nodeRun.MaterializationIndex is not { } index)
+        {
+            return [];
+        }
+
+        var graph = _graphs.Resolve(run);
+        var rows = await _workflows.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+        return
+        [
+            .. rows.Where(row => row.MaterializedFromNodeRunId == origin
+                                 && row.MaterializationIndex == index
+                                 && row.NodeType == DevWorkflowNodeType.DevTask
+                                 && row.DevelopmentTaskId is not null
+                                 && graph.Descendants(row.NodeKey).Contains(nodeRun.NodeKey, StringComparer.Ordinal))
+                   .OrderBy(static row => row.NodeKey, StringComparer.Ordinal)
+        ];
     }
 
     /// <summary>
@@ -235,7 +395,8 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         DevelopmentCommandProfile profile,
         DevelopmentWorkspaceSession session,
         DevWorkflowNodeRunSnapshot nodeRun,
-        IReadOnlyList<DevelopmentCommandEvidence> evidence)
+        IReadOnlyList<DevelopmentCommandEvidence> evidence,
+        DevWorkflowValidationBasedOn? basedOn)
     {
         var report = new DevWorkflowValidationReport(verdict.Passed,
             nodeRun.NodeKey,
@@ -246,7 +407,8 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
             verdict.FailureCode,
             verdict.FailureDetail,
             evidence,
-            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
+            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+            basedOn);
         var composed = JsonSerializer.SerializeToUtf8Bytes(report, JsonOptions);
         if (composed.Length <= _options.MaxArtifactBytes)
         {
@@ -378,4 +540,18 @@ internal sealed record DevWorkflowValidationReport(
     string? FailureCode,
     string? FailureDetail,
     IReadOnlyList<DevelopmentCommandEvidence> Commands,
-    long CompletedAtUtc);
+    long CompletedAtUtc,
+    DevWorkflowValidationBasedOn? BasedOn = null);
+
+/// <summary>
+///     What <see cref="DevWorkflowToolCommands.OverlayAsync" /> did: what the report should say it judged, or the
+///     sanitized sentence that refuses the node because the child's work could not be put in front of it honestly.
+/// </summary>
+internal readonly record struct DevWorkflowOverlay(DevWorkflowValidationBasedOn? BasedOn, string? Refusal);
+
+/// <summary>
+///     What the commands were run against, when the node is a materialized child's validation and the base commit alone
+///     would not say it: the sibling implementation task whose approved patch was overlaid onto the workspace first.
+///     Absent means nothing was overlaid — either this node has no sibling implementation, or the pass was refused.
+/// </summary>
+internal sealed record DevWorkflowValidationBasedOn(Guid DevelopmentTaskId, string PatchHash, string Detail);

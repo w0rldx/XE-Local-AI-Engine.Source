@@ -1,20 +1,31 @@
 import { Alert, Badge, Button, Code, Group, Loader, ScrollArea, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle, IconExternalLink } from "@tabler/icons-react";
-import { useNavigate } from "@tanstack/react-router";
+import { IconAlertTriangle } from "@tabler/icons-react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
+import { DevWorkflowAgentNodePanel } from "@/features/devWorkflows/components/DevWorkflowAgentNodePanel";
 import { DevWorkflowDevTaskNodePanel } from "@/features/devWorkflows/components/DevWorkflowDevTaskNodePanel";
 import {
 	type DevWorkflowDecisionSubmission,
 	DevWorkflowHumanGatePanel,
 } from "@/features/devWorkflows/components/DevWorkflowHumanGatePanel";
+import { DevWorkflowNodeAttempts } from "@/features/devWorkflows/components/DevWorkflowNodeAttempts";
 import { DevWorkflowNodeStatusBadge } from "@/features/devWorkflows/components/DevWorkflowStatusBadge";
+import { DevWorkflowStructuralNodePanel } from "@/features/devWorkflows/components/DevWorkflowStructuralNodePanel";
 import { DevWorkflowToolNodePanel } from "@/features/devWorkflows/components/DevWorkflowToolNodePanel";
 import {
+	devWorkflowAttemptEventTypes,
+	devWorkflowNodeAttempts,
+	devWorkflowNodeEvents,
+	devWorkflowRoutedDetail,
+} from "@/features/devWorkflows/models/DevWorkflowAttempts";
+import {
 	type DevWorkflowNodeRunDetailResponse,
+	type DevWorkflowRunEventResponse,
+	type DevWorkflowRunResponse,
+	isSettledDevWorkflowNodeStatus,
 	toDevWorkflowNodeStatus,
 	toDevWorkflowNodeType,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
@@ -27,8 +38,13 @@ export interface DevWorkflowNodePanelProps {
 	readonly decideError?: unknown;
 	/** Artifact id → name, for the gate's evidence list. Empty until the run's artifact feed lands. */
 	readonly artifactNameById?: ReadonlyMap<string, string>;
-	/** `node.interrupted` events counted for this node — the restart evidence `sessionResumes` does NOT carry. */
-	readonly interruptedCount?: number;
+	/**
+	 * The run's loaded event pages, and the run's own node-run rows. Both are the panel's only source for facts the
+	 * node-run DETAIL response does not carry: attempt history lives in the log (X2), and a structural node's
+	 * dependencies and branches live in its siblings' rows and the pinned graph's edges.
+	 */
+	readonly events?: readonly DevWorkflowRunEventResponse[];
+	readonly run?: DevWorkflowRunResponse;
 	readonly onDecide: (submission: DevWorkflowDecisionSubmission) => void;
 	readonly onShowArtifacts: () => void;
 	/** Clears `?node=`, which is what brings the artifacts/events tabs back into this zone. */
@@ -36,10 +52,13 @@ export interface DevWorkflowNodePanelProps {
 }
 
 /**
- * The right-zone pane for the selected node-run. It dispatches on node type. A Tool node renders its own validation
- * report, because that evidence is workflow-owned and lives nowhere else; the Agent and DevTask sections stay LINK-OUTS,
- * because the work-session view and the Dev Mode evidence chain already exist at their own routes and re-hosting either
- * would fork the one place each is rendered.
+ * The right-zone pane for the selected node-run. It dispatches on node type, and everything above that dispatch is the
+ * same for all seven: the header, the cascade-rerun account, the gate controls and the attempt history.
+ *
+ * Where each kind's evidence comes from is the distinction that matters. A Tool node renders its own report and an
+ * Agent node its own transcript, because both are workflow-owned and neither has another home. A DevTask node stays a
+ * LINK-OUT: the Dev Mode evidence chain exists at its own route and re-hosting it would fork the one place the
+ * hash-locked apply gate is rendered (O13).
  */
 export function DevWorkflowNodePanel({
 	nodeRun,
@@ -48,12 +67,16 @@ export function DevWorkflowNodePanel({
 	isDeciding,
 	decideError,
 	artifactNameById,
-	interruptedCount = 0,
+	events = [],
+	run,
 	onDecide,
 	onShowArtifacts,
 	onClose,
 }: DevWorkflowNodePanelProps) {
 	const { t } = useTranslation();
+	const nodeEvents = useMemo(() => devWorkflowNodeEvents(events, nodeRun?.id), [events, nodeRun?.id]);
+	const attempts = useMemo(() => devWorkflowNodeAttempts(nodeEvents, nodeRun?.attempt ?? 1), [nodeEvents, nodeRun?.attempt]);
+	const interruptedCount = attempts.reduce((total, attempt) => total + attempt.interruptedCount, 0);
 
 	if (isPending) {
 		return <Loader size="sm" data-testid="dev-workflow-node-panel-loading" />;
@@ -138,6 +161,8 @@ export function DevWorkflowNodePanel({
 					</Alert>
 				) : null}
 
+				<CascadeRerunNotice nodeRun={nodeRun} nodeEvents={nodeEvents} events={events} run={run} />
+
 				<DevWorkflowHumanGatePanel
 					nodeRun={nodeRun}
 					isSubmitting={isDeciding}
@@ -147,9 +172,22 @@ export function DevWorkflowNodePanel({
 					onShowArtifacts={onShowArtifacts}
 				/>
 
-				{nodeType === "Agent" ? <AgentSection nodeRun={nodeRun} /> : null}
+				<DevWorkflowNodeAttempts attempts={attempts} />
+
+				{nodeType === "Agent" ? <DevWorkflowAgentNodePanel nodeRun={nodeRun} /> : null}
 				{nodeType === "Tool" ? <DevWorkflowToolNodePanel nodeRun={nodeRun} onShowArtifacts={onShowArtifacts} /> : null}
 				{nodeType === "DevTask" ? <DevWorkflowDevTaskNodePanel nodeRun={nodeRun} /> : null}
+				{/* A HumanGate is a gate too, and once it has been ANSWERED the branch it sent the run down is the fact an
+				    operator opened it for — `feature-development-v1` ships only HumanGates, so without this the branch
+				    list is unreachable from the one template that matters. It appears BELOW the decision controls and
+				    only when the node has settled: while the gate is still asking, every successor is Pending and the
+				    list would name no branch at all. Same panel, same edges, same untaken-branch semantics as `Gate`. */}
+				{nodeType === "Gate" ||
+				nodeType === "Parallel" ||
+				nodeType === "Join" ||
+				(nodeType === "HumanGate" && isSettledDevWorkflowNodeStatus(status)) ? (
+					<DevWorkflowStructuralNodePanel nodeRun={nodeRun} nodeType={nodeType} run={run} />
+				) : null}
 
 				<ObjectiveSection nodeRun={nodeRun} />
 			</Stack>
@@ -157,45 +195,63 @@ export function DevWorkflowNodePanel({
 	);
 }
 
-function AgentSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDetailResponse }) {
+/**
+ * Why completed work went back to `Pending` (C45/X9). A fix loop resets a whole cascade, so a node that had succeeded
+ * is put back to run again — and without this it simply un-completes with no account of itself, which reads as the
+ * module losing work.
+ *
+ * The evidence is `node.retry.routed`, which B4 emits against the node that FAILED, naming the target the loop routed
+ * back to. This node's own log says only that it was re-scheduled, so the two are joined on sequence: the routed event
+ * immediately preceding this node's latest reset is the round that reset it. A routed event this node's own row
+ * produced is not a cascade — it is this node failing and retrying itself, which the attempts list already says.
+ */
+function CascadeRerunNotice({
+	nodeRun,
+	nodeEvents,
+	events,
+	run,
+}: {
+	readonly nodeRun: DevWorkflowNodeRunDetailResponse;
+	readonly nodeEvents: readonly DevWorkflowRunEventResponse[];
+	readonly events: readonly DevWorkflowRunEventResponse[];
+	readonly run?: DevWorkflowRunResponse;
+}) {
 	const { t } = useTranslation();
-	const navigate = useNavigate();
+	const latestReset = nodeEvents
+		.filter((event) => event.eventType === devWorkflowAttemptEventTypes.retryScheduled)
+		.at(-1);
+	if (!latestReset) {
+		return null;
+	}
+
+	// Only a routed event that names THIS node as its target explains this node's reset. Proximity alone does not: a
+	// same-node retry writes `node.retry.scheduled` with no routed event of its own, so the newest routed event
+	// anywhere in the run sits at-or-before it and would be read as the cause — under C2's N parallel subtrees that is
+	// the ordinary case. The cost is silence for a node reset as a DESCENDANT of the routed target rather than as the
+	// target itself: no banner where one would have been useful, which is the side to be wrong on.
+	const routed = events
+		.filter(
+			(event) =>
+				event.eventType === devWorkflowAttemptEventTypes.retryRouted &&
+				(event.sequence ?? 0) <= (latestReset.sequence ?? 0) &&
+				devWorkflowRoutedDetail(event.detailJson).to === nodeRun.nodeKey,
+		)
+		.toSorted((left, right) => (left.sequence ?? 0) - (right.sequence ?? 0))
+		.at(-1);
+	const failedNodeKey = devWorkflowRoutedDetail(routed?.detailJson).from;
+	if (!failedNodeKey || failedNodeKey === nodeRun.nodeKey) {
+		return null;
+	}
+
+	const failedLabel = (run?.nodes ?? []).find((node) => node.nodeKey === failedNodeKey)?.label ?? failedNodeKey;
 	return (
-		<SectionCard title={t("pages.devWorkflows.node.agent", "Agent")} gap="xs" data-testid="dev-workflow-node-agent">
-			<Text size="sm">
-				{nodeRun.agentDisplayName ?? t("pages.devWorkflows.node.agentUnbound", "No agent is bound to this node.")}
-			</Text>
-			{nodeRun.modelLabel ? (
-				<Text size="xs" c="dimmed">
-					{nodeRun.modelLabel}
-				</Text>
-			) : null}
-			{nodeRun.workSessionId ? (
-				nodeRun.workSessionAvailable === false ? (
-					// The node-run row outlives its work session on purpose (the reference is loose). Saying WHICH thing is
-					// missing matters: the node's own events and artifacts are workflow-owned and still here.
-					<Alert color="gray" variant="light" data-testid="dev-workflow-node-session-purged">
-						{t(
-							"pages.devWorkflows.node.sessionPurged",
-							"The agent's transcript is no longer available. This node's events and artifacts are unaffected.",
-						)}
-					</Alert>
-				) : nodeCapabilities.workSessions ? (
-					// A link-out, not a re-hosted panel: the session view already exists at its own route with the plan,
-					// findings and checkpoints this pane has no room for, and the session is a first-class
-					// AgentWorkSessionKind.Workflow row that route renders unchanged.
-					<Button
-						size="xs"
-						variant="subtle"
-						leftSection={<IconExternalLink size={14} />}
-						onClick={() => navigate({ to: "/work-sessions/$sessionId", params: { sessionId: nodeRun.workSessionId ?? "" } })}
-						data-testid="dev-workflow-node-session-link"
-					>
-						{t("pages.devWorkflows.node.openSession", "Open the agent's work session")}
-					</Button>
-				) : null
-			) : null}
-		</SectionCard>
+		<Alert color="blue" variant="light" data-testid="dev-workflow-node-cascade-rerun">
+			{t(
+				"pages.devWorkflows.node.cascadeRerun",
+				"This node is running again because “{{node}}” failed and the run is re-doing the work that depended on it.",
+				{ node: failedLabel },
+			)}
+		</Alert>
 	);
 }
 

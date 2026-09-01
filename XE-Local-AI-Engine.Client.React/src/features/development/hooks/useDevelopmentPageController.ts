@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+
 import type {
 	CreateDevelopmentRepositoryFromTemplateValues,
 	CreatedDevelopmentRepositoryFromTemplate,
@@ -16,6 +18,10 @@ import {
 } from "@/features/development/models/DevelopmentModels";
 import { nextActionLabel, operationId } from "@/features/development/models/DevelopmentStatusModel";
 import {
+	isTerminalDevWorkflowRunStatus,
+	toDevWorkflowRunStatus,
+} from "@/features/devWorkflows/models/DevWorkflowModels";
+import {
 	useApplyDevelopmentPatch,
 	useCancelDevelopmentAttempt,
 	useConfirmDevelopmentContainerRuntime,
@@ -25,6 +31,7 @@ import {
 	useDevelopmentProfileDetection,
 	useDevelopmentProject,
 	useDevelopmentProjects,
+	useDevelopmentTaskWorkflowRun,
 	useDevelopmentRepositories,
 	useDevelopmentTemplates,
 	usePreviewDevelopmentPatch,
@@ -55,6 +62,7 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 	const templatesQuery = useDevelopmentTemplates(developmentEnabled);
 	const projectsQuery = useDevelopmentProjects(developmentEnabled);
 	const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialProjectId ?? null);
+	const [selectedTaskId, setSelectedTaskId] = useState<string | null>(initialTaskId ?? null);
 	const [reconnectFolderId, setReconnectFolderId] = useState<string | null>(null);
 	const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
 	const [profileFolderId, setProfileFolderId] = useState<string | null>(null);
@@ -81,18 +89,55 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 	}, [projects, selectedProjectId]);
 
 	const detail = projectQuery.data;
-	// A project carries exactly one task today (the project id is uniquely indexed on the task table), so the deep
-	// link's `?task=` picks the same row the fallback does. It is honoured anyway: it costs one predicate, and it is
-	// the difference between a link that keeps working and a link that quietly opens the wrong task if that ever changes.
-	const taskDetail = detail?.tasks?.find((entry) => entry.task?.id === initialTaskId) ?? detail?.tasks?.[0];
+	// A project carries MANY tasks. Phase W dropped the unique index on the task table's project id so a workflow can
+	// decompose one request into a task per child, and the ordinary decomposed case is three of them in one project.
+	// `?task=` therefore picks a real row out of several rather than restating the only one there is, and the choice is
+	// state so the switcher can move it without a navigation.
+	//
+	// A selected id that is not among this project's tasks falls back to the first, which is also what happens when the
+	// operator changes project — so project selection needs no reset of its own. `ListTasksAsync` orders by CreatedAtUtc,
+	// which is what keeps that first row the operator's own task rather than a materialized child.
+	const tasks = useMemo(() => detail?.tasks ?? [], [detail?.tasks]);
+	const taskDetail = tasks.find((entry) => entry.task?.id === selectedTaskId) ?? tasks[0];
 	const task = taskDetail?.task;
 	const attempts = taskDetail?.attempts ?? [];
 	const artifacts = taskDetail?.artifacts ?? [];
-	const events = detail?.events ?? [];
+	// The project feed carries EVERY task's events, so a project with N workflow-created tasks would show a sibling's
+	// activity under whichever task is selected — the evidence the panels below are read as proof of. `taskId` is the
+	// honest key: it is what the store stamps on each row, and the selection is the only thing that changes here.
+	const projectEvents = useMemo(() => detail?.events ?? [], [detail?.events]);
+	const events = useMemo(
+		() => projectEvents.filter((entry) => entry.taskId === taskDetail?.task?.id),
+		[projectEvents, taskDetail?.task?.id],
+	);
+	// Rows the store bound to no task. Every event it writes today names one, so this is empty in practice — but the
+	// column is nullable and the wire says so, and a row that belongs to no task must not be attributed to the selected
+	// one NOR dropped on the floor. The timeline renders them apart, under their own scope.
+	const untiedEvents = useMemo(() => projectEvents.filter((entry) => !entry.taskId), [projectEvents]);
 	const latestAttempt = attempts.at(-1) ?? null;
 	const activeAttempt = attempts.find(isActiveAttempt) ?? null;
 	const [nextActionKey, nextActionDefault] = nextActionLabel(task?.status, latestAttempt?.status);
 	const live = useDevelopmentAttemptHub(detail?.project?.id ?? null, task?.id ?? null, activeAttempt?.id ?? null);
+	// The run that owns this task (Y3): its work item for the deep link, and its STATUS for who may apply.
+	const workflowRunQuery = useDevelopmentTaskWorkflowRun(task?.workflowRunId, nodeCapabilities.devWorkflows);
+	// A terminal run can never answer another gate — `DecideAsync` refuses anything that is not WaitingForApproval or
+	// Blocked, and the dispatcher does not tick a terminal run at all. So a workflow whose run has ENDED cannot apply
+	// its own validated patch, and if this page had also given its Apply button away that patch would be stranded for
+	// good. Authority returns here when the run can no longer take it.
+	//
+	// An UNREADABLE run is not an ended one. Ownership is enforced by the server — Dev Mode's apply refuses a task a
+	// live run drives unless the caller is that run's own lane — so a button offered on a failed status read buys
+	// nothing but a 409, while withholding it costs only a retry. Read-only is therefore the answer to both the failed
+	// read and the in-flight one, and the banner says which and offers the read again.
+	//
+	// With the capability off the query never runs, so the status is unknowable and Dev Mode behaves exactly as it did
+	// before workflows existed: its own apply gate, unchanged.
+	const workflowRunEnded =
+		workflowRunQuery.data !== undefined && isTerminalDevWorkflowRunStatus(toDevWorkflowRunStatus(workflowRunQuery.data.status));
+	// React Query keeps the last good `data` through a failed refetch, so a terminal run whose refetch fails is BOTH
+	// ended and errored — and the ended answer is the true one, since a terminal status never changes again.
+	const workflowRunUnreadable = workflowRunQuery.isError && !workflowRunEnded;
+	const workflowOwnsApply = Boolean(task?.workflowRunId) && nodeCapabilities.devWorkflows && !workflowRunEnded;
 	const projectRepository = repositories.find((repository) => repository.id === detail?.project?.selectedFolderId);
 	const repositoryConnectionRequired = detail?.project?.repositoryConnectionRequired === true;
 	const repositoryReady =
@@ -238,6 +283,14 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 		projectsQuery,
 		selectedProjectId,
 		setSelectedProjectId,
+		tasks,
+		selectedTaskId: taskDetail?.task?.id ?? null,
+		setSelectedTaskId,
+		workflowWorkItemId: workflowRunQuery.data?.workItemId ?? null,
+		workflowOwnsApply,
+		workflowRunEnded,
+		workflowRunUnreadable,
+		retryWorkflowRun: () => workflowRunQuery.refetch(),
 		reconnectFolderId,
 		setReconnectFolderId,
 		previewTaskId,
@@ -254,6 +307,7 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 		attempts,
 		artifacts,
 		events,
+		untiedEvents,
 		latestAttempt,
 		activeAttempt,
 		nextActionKey,

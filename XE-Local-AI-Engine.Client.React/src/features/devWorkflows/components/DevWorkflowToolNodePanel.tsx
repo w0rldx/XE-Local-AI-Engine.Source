@@ -6,6 +6,8 @@ import { useTranslation } from "react-i18next";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { StatTile } from "@/core/ui/components/StatTile/StatTile";
+import { DevWorkflowApplyReportPanel } from "@/features/devWorkflows/components/DevWorkflowApplyReportPanel";
+import { parseDevWorkflowApplyReport } from "@/features/devWorkflows/models/DevWorkflowApplyReport";
 import {
 	type DevWorkflowNodeRunDetailResponse,
 	decodeDevWorkflowArtifactContent,
@@ -25,8 +27,15 @@ export interface DevWorkflowToolNodePanelProps {
 }
 
 /**
- * A Tool node's deterministic-validation report, rendered from the `<nodeKey>-validation.json` artifact the executor
- * wrote before it moved the row (so the evidence exists whatever the node run then became).
+ * A Tool node's report, rendered from the artifact the executor wrote before it moved the row (so the evidence exists
+ * whatever the node run then became).
+ *
+ * A Tool node is one of two things (R-C3): a validation node, whose `<nodeKey>-validation.json` says what ran against
+ * a clean checkout, or an apply node, whose `<nodeKey>-apply.json` says which patches the hash-locked gate landed.
+ * Both are artifact kind `Report` and the discriminator is not on the wire, so the BODY decides — the two documents'
+ * evidence arrays (`commands` and `tasks`) are what tell them apart.
+ *
+ * Everything below is the validation half. Its rule is the apply panel's rule too:
  *
  * Everything here follows one rule: never let an absence read as a pass. The two ways this panel could lie are a
  * refusal shown as "0 commands, 0 tests" and a partial report shown as a complete one, so each has its own state:
@@ -53,16 +62,37 @@ export function DevWorkflowToolNodePanel({ nodeRun, onShowArtifacts }: DevWorkfl
 		() => (raw ? decodeDevWorkflowArtifactContent(raw.content ?? "", raw.isBase64 === true).text : ""),
 		[raw],
 	);
-	const report = useMemo(() => parseDevWorkflowValidationReport(text), [text]);
+	// A Tool node is either a validation node or an apply node (R-C3), and BOTH write their report under the ordinary
+	// `Report` artifact kind — so the document itself is what says which one this is. Handing an apply report to the
+	// validation reader produced "could not be read", which is a false alarm about evidence that is perfectly intact.
+	const applyReport = useMemo(() => parseDevWorkflowApplyReport(text), [text]);
+	const report = useMemo(() => (applyReport ? null : parseDevWorkflowValidationReport(text)), [applyReport, text]);
+	const isApply = applyReport !== null;
+	// With no artifact at all — or a body neither reader understands — NOTHING says which kind of Tool node this is: the
+	// discriminator lives in the graph node's config and P3 does not project it. So every string on those paths is
+	// neutral. Calling a refused APPLY node's silence "no validation report was written" names a document that node was
+	// never going to write and sends whoever reads it looking for the wrong evidence; the fix is to stop guessing, not
+	// to guess better.
 	// `primaryArtifactId` is the node's newest artifact, NOT this attempt's: a retry or an X9 fix-loop reset (which
-	// puts Succeeded rows back to Pending) leaves attempt N's report standing until attempt N+1's commands land. The
-	// report says which attempt it measured, so an older one is never painted as the current result — a stale
-	// "Validation passed" over a node that is re-validating is the one lie this panel must not tell.
+	// puts Succeeded rows back to Pending) leaves attempt N's report standing until attempt N+1's commands land. Both
+	// documents carry the attempt they were written for, so an older one is never painted as the current result — a
+	// stale "Validation passed" over a node that is re-validating is the one lie this panel must not tell.
+	const reportAttempt = applyReport?.attempt ?? report?.attempt;
 	const priorAttempt =
-		report && typeof report.attempt === "number" && report.attempt < (nodeRun.attempt ?? 1) ? report.attempt : undefined;
+		typeof reportAttempt === "number" && reportAttempt < (nodeRun.attempt ?? 1) ? reportAttempt : undefined;
 
 	return (
-		<SectionCard title={t("pages.devWorkflows.node.tool", "Validation")} gap="xs" data-testid="dev-workflow-node-tool">
+		<SectionCard
+			title={
+				isApply
+					? t("pages.devWorkflows.node.apply", "Patch apply")
+					: report !== null
+						? t("pages.devWorkflows.node.tool", "Validation")
+						: t("pages.devWorkflows.node.report", "Report")
+			}
+			gap="xs"
+			data-testid="dev-workflow-node-tool"
+		>
 			{artifactId ? null : <RefusedWithoutReport nodeRun={nodeRun} />}
 
 			{artifactId && contentQuery.isPending ? <Loader size="sm" data-testid="dev-workflow-validation-loading" /> : null}
@@ -71,17 +101,17 @@ export function DevWorkflowToolNodePanel({ nodeRun, onShowArtifacts }: DevWorkfl
 				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-validation-error">
 					{apiErrorMessage(
 						contentQuery.error,
-						t("pages.devWorkflows.validation.loadFailed", "Could not load this node's validation report."),
+						t("pages.devWorkflows.validation.loadFailed", "Could not load this node's report."),
 					)}
 				</Alert>
 			) : null}
 
 			{/* An unreadable body is not an empty panel: the document is still in the artifacts tab, verbatim. */}
-			{artifactId && contentQuery.isSuccess && report === null ? (
+			{artifactId && contentQuery.isSuccess && report === null && applyReport === null ? (
 				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-validation-unreadable">
 					{t(
 						"pages.devWorkflows.validation.unreadable",
-						"This node's validation report could not be read, so its result cannot be trusted. Open it in the artifacts tab to see what was stored.",
+						"This node's report could not be read, so its result cannot be trusted. Open it in the artifacts tab to see what was stored.",
 					)}
 				</Alert>
 			) : null}
@@ -97,10 +127,15 @@ export function DevWorkflowToolNodePanel({ nodeRun, onShowArtifacts }: DevWorkfl
 			)}
 
 			{report && priorAttempt === undefined ? <ValidationReport report={report} nodeRun={nodeRun} /> : null}
+			{applyReport && priorAttempt === undefined ? <DevWorkflowApplyReportPanel report={applyReport} /> : null}
 
 			{artifactId ? (
 				<Button size="xs" variant="subtle" onClick={onShowArtifacts} data-testid="dev-workflow-node-tool-report">
-					{t("pages.devWorkflows.node.openReport", "Open the validation report")}
+					{isApply
+						? t("pages.devWorkflows.node.openApplyReport", "Open the apply report")
+						: report !== null
+							? t("pages.devWorkflows.node.openReport", "Open the validation report")
+							: t("pages.devWorkflows.node.openStoredReport", "Open the stored report")}
 				</Button>
 			) : null}
 		</SectionCard>
@@ -122,7 +157,7 @@ function RefusedWithoutReport({ nodeRun }: { readonly nodeRun: DevWorkflowNodeRu
 	if (!nodeRun.terminalReason && !nodeRun.failureClass) {
 		return (
 			<Text size="sm" c="dimmed" data-testid="dev-workflow-validation-none">
-				{t("pages.devWorkflows.node.noReport", "No validation report yet.")}
+				{t("pages.devWorkflows.node.noReport", "No report yet.")}
 			</Text>
 		);
 	}
@@ -140,7 +175,7 @@ function RefusedWithoutReport({ nodeRun }: { readonly nodeRun: DevWorkflowNodeRu
 				<Text size="sm">
 					{t(
 						"pages.devWorkflows.validation.refused",
-						"No validation report was written, so there is nothing here that evidences the code.",
+						"No report was written, so there is nothing here that evidences what this node did.",
 					)}
 				</Text>
 				{nodeRun.terminalReason ? (
@@ -181,6 +216,31 @@ function ValidationReport({
 					})}
 				</Text>
 			</Group>
+
+			{/* Directly under the base commit, because it QUALIFIES it: these commands did not judge that commit as it
+			    stands, they judged the child's staged work on top of it. `basedOn` exists only when a patch really was
+			    overlaid — every other state refuses the node rather than reporting — so its absence is not evidence of a
+			    base validation (an older report has no such field either) and nothing is claimed on that path. */}
+			{report.basedOn ? (
+				<Stack gap={2} data-testid="dev-workflow-validation-based-on">
+					<Text size="xs">
+						{t(
+							"pages.devWorkflows.validation.basedOn",
+							"Judged the implementation task's approved patch {{hash}} · task {{task}}",
+							{
+								hash: (report.basedOn.patchHash ?? "").slice(0, 12) || "—",
+								task: report.basedOn.developmentTaskId ?? "—",
+							},
+						)}
+					</Text>
+					{/* Server prose, verbatim (§2.11): it is the sentence that says what was applied to what. */}
+					{report.basedOn.detail ? (
+						<Text size="xs" c="dimmed" data-testid="dev-workflow-validation-based-on-detail">
+							{report.basedOn.detail}
+						</Text>
+					) : null}
+				</Stack>
+			) : null}
 
 			{partial ? (
 				<Alert color="orange" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-validation-partial">

@@ -38,11 +38,14 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         var definitions = await _store.ListDefinitionsAsync(includeArchived: true, cancellationToken).ConfigureAwait(false);
         var definitionName = definitions.FirstOrDefault(definition => definition.Id == run.DefinitionId)?.Name;
 
+        // Once for the run, not once per node run: it is a parse of the same blob every summary would otherwise repeat.
+        var templates = DevWorkflowGraphContract.TemplateNodeKeys(run.GraphJson);
         var nodes = detail.NodeRuns
                           .Select(nodeRun => ToSummary(nodeRun,
                               nodesByKey.GetValueOrDefault(nodeRun.NodeKey),
                               graph,
                               byKey,
+                              templates,
                               keysByNodeRunId,
                               agentsById,
                               staleInputs.Contains(nodeRun.Id)))
@@ -142,6 +145,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         DevWorkflowGraphNode? node,
         DevWorkflowGraph graph,
         IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> byKey,
+        IReadOnlySet<string> templates,
         IReadOnlyDictionary<Guid, string> keysByNodeRunId,
         IReadOnlyDictionary<Guid, AgentDefinitionRecord> agentsById,
         bool hasStaleInputs) =>
@@ -154,7 +158,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             nodeRun.MaxAttempts,
             nodeRun.QueueReason,
             nodeRun.QueuedAtUtc,
-            WaitingOnNodeKeys(nodeRun, graph, byKey),
+            WaitingOnNodeKeys(nodeRun, graph, byKey, templates),
             nodeRun.PendingDecisionKind?.ToString(),
             nodeRun.MaterializedFromNodeRunId is not null,
             nodeRun.MaterializedFromNodeRunId is { } parent ? keysByNodeRunId.GetValueOrDefault(parent) : null,
@@ -173,10 +177,18 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
     ///     Which upstream nodes a <c>Pending</c> node run is still waiting on, computed here rather than left to the
     ///     client: re-deriving join semantics in the browser would duplicate the dispatcher's own evaluation and drift
     ///     from it. Only <c>Pending</c> carries it — <c>Blocked</c> means a human is the dependency.
+    ///     <para>
+    ///         A source that has SETTLED is never waited on, whichever way it settled — which is the same answer the
+    ///         dispatcher's edge rule gives for a branch whose condition did not fire, and is why an <c>Any</c> join
+    ///         needs no case of its own here: it too waits exactly while an inbound edge is undecided. The one edge that
+    ///         needs saying out loud is a materialization TEMPLATE's: it never gets a row, so it can never settle, and
+    ///         naming it would show every decomposing run as stuck on the one node nothing ever runs.
+    ///     </para>
     /// </summary>
     private static IReadOnlyList<string>? WaitingOnNodeKeys(DevWorkflowNodeRunSnapshot nodeRun,
         DevWorkflowGraph graph,
-        IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> byKey)
+        IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> byKey,
+        IReadOnlySet<string> templates)
     {
         if (nodeRun.Status != DevWorkflowNodeRunStatus.Pending)
         {
@@ -185,11 +197,12 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
 
         var waiting = graph.Edges.Where(edge => string.Equals(edge.To, nodeRun.NodeKey, StringComparison.Ordinal))
                            .Select(static edge => edge.From)
-                           .Where(from => byKey.GetValueOrDefault(from) is not { } source
-                                          || source.Status is not (DevWorkflowNodeRunStatus.Succeeded
-                                              or DevWorkflowNodeRunStatus.Failed
-                                              or DevWorkflowNodeRunStatus.Skipped
-                                              or DevWorkflowNodeRunStatus.Cancelled))
+                           .Where(from => !templates.Contains(from)
+                                          && (byKey.GetValueOrDefault(from) is not { } source
+                                              || source.Status is not (DevWorkflowNodeRunStatus.Succeeded
+                                                  or DevWorkflowNodeRunStatus.Failed
+                                                  or DevWorkflowNodeRunStatus.Skipped
+                                                  or DevWorkflowNodeRunStatus.Cancelled)))
                            .Distinct(StringComparer.Ordinal)
                            .OrderBy(static key => key, StringComparer.Ordinal)
                            .ToList();

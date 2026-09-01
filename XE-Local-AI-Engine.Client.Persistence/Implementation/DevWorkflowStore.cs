@@ -21,6 +21,19 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </remarks>
 internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IDevWorkflowStore
 {
+    /// <summary>
+    ///     camelCase, matching the Application layer — which has always serialized its own event details with the Web
+    ///     defaults — and every other document this product puts on a wire.
+    ///     <para>
+    ///         Not optional and not cosmetic: these payloads are READ by name. Serialized with the framework default
+    ///         the store wrote <c>{"WorkSessionId":…,"Attempt":1}</c> while the client looked for
+    ///         <c>workSessionId</c> / <c>attempt</c>, so the attempt walk and the transcript link silently saw nothing
+    ///         at all. The log is append-only, so rows written before this stay PascalCase for ever and the readers
+    ///         take either spelling.
+    ///     </para>
+    /// </summary>
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
@@ -212,7 +225,11 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
             return null;
         }
 
-        return JsonSerializer.Deserialize<ArtifactSupersessionDetail>(recorded.DetailJson)?.SupersededArtifactId;
+        // The SAME options the write uses, and the reason is the read rather than the write: the Web defaults are
+        // case-INSENSITIVE, so this binds a row written before FX-D (PascalCase) and one written after (camelCase)
+        // alike. The log is append-only — a case-sensitive read here would answer null for every artifact superseded
+        // before the casing was fixed, and a replay answering null skips a blob sweep it still owes.
+        return JsonSerializer.Deserialize<ArtifactSupersessionDetail>(recorded.DetailJson, JsonOptions)?.SupersededArtifactId;
     }
 
     private long AddEvent(DevWorkflowRun run, string eventType, Guid? nodeRunId, string? outcome, Guid? operationId, byte[]? detailJson)
@@ -350,7 +367,7 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
         Convert.ToHexStringLower(SHA256.HashData(graphJson));
 
     private static byte[]? ReasonDetail(string? sanitizedReason) =>
-        string.IsNullOrWhiteSpace(sanitizedReason) ? null : Utf8(JsonSerializer.Serialize(new ReasonDetailPayload(sanitizedReason)));
+        string.IsNullOrWhiteSpace(sanitizedReason) ? null : Utf8(JsonSerializer.Serialize(new ReasonDetailPayload(sanitizedReason), JsonOptions));
 
     private static void EnsureNotBlank(string? value, string parameterName)
     {

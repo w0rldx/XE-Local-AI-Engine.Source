@@ -641,6 +641,17 @@ public interface IDevWorkflowStore
     Task<IReadOnlyList<Guid>> ListOwnedWorkSessionIdsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     The run driving a Development task, or null for a task no workflow owns — the reverse of the pointer a
+    ///     <c>DevTask</c> node run stamps, read over that column's own index.
+    ///     <para>
+    ///         CONTRACT: the LATEST such node run answers. A task can be named by more than one node run over its life
+    ///         (a re-run of the same definition drives the same task), and the question this exists to answer — where
+    ///         does the approval for this task live NOW — has exactly one useful answer.
+    ///     </para>
+    /// </summary>
+    Task<Guid?> FindRunIdForDevelopmentTaskAsync(Guid developmentTaskId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Records an artifact, resolving its lineage by <c>(run, producing node key, name)</c>: the same node key
     ///     appending again versions the same lineage, and materialized siblings under one template get distinct ones.
     ///     Deleting the superseded version's bytes is the caller's job.
