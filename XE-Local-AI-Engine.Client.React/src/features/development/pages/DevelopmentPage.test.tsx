@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const hooksMock = vi.hoisted(() => ({
@@ -47,6 +47,7 @@ vi.mock("@/features/development/components/DevelopmentLivePanel", () => ({
 }));
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+import { useDevelopmentPageController } from "@/features/development/hooks/useDevelopmentPageController";
 import { DevelopmentPage } from "@/features/development/pages/DevelopmentPage";
 
 /** The build-time devWorkflows flag, which is a plain module constant — readonly to TypeScript, not at runtime. */
@@ -342,6 +343,62 @@ describe("DevelopmentPage", () => {
 		expect((switcher.querySelector("input") as HTMLInputElement).value).toBe("Operator request");
 	});
 
+	/** Two tasks in one project, their events interleaved, plus a row the store bound to no task at all. */
+	function interleavedEvents() {
+		const base = decomposedDetail("Operator request", "Slice one");
+		hooksMock.useDevelopmentProject.mockReturnValue({
+			data: {
+				...base,
+				events: [
+					{ id: "e1", projectId: "project-1", taskId: "task-1", sequence: 1, eventType: "OwnPlanned" },
+					{ id: "e2", projectId: "project-1", taskId: "task-2", sequence: 2, eventType: "SiblingStarted" },
+					{ id: "e3", projectId: "project-1", taskId: "task-1", sequence: 3, eventType: "OwnAttempted" },
+					{ id: "e4", projectId: "project-1", taskId: null, sequence: 4, eventType: "BoundToNoTask" },
+				],
+			},
+			isLoading: false,
+			error: null,
+			refetch: vi.fn(),
+		});
+	}
+
+	it("shows the selected task's events only, and keeps a row tied to no task apart from them", async () => {
+		// The project feed carries EVERY task's events. Rendered whole under the selected task, it showed a SIBLING's
+		// activity as this task's evidence — and the panels around it are read as proof of what this task did.
+		interleavedEvents();
+		const rows = () =>
+			screen
+				.getAllByTestId("development-event-row")
+				.map((row) => row.textContent ?? "")
+				.join("|");
+		renderPage();
+		await screen.findByTestId("development-project-detail");
+
+		expect(rows()).toContain("OwnPlanned");
+		expect(rows()).toContain("OwnAttempted");
+		expect(rows()).not.toContain("SiblingStarted");
+		// A row the store bound to no task is not this task's either — but dropping it would lose evidence outright,
+		// so it is shown under its own scope instead.
+		expect(rows()).toContain("BoundToNoTask");
+		expect(screen.getByText("Not tied to a task")).toBeDefined();
+	});
+
+	it("switches the events with the selected task", async () => {
+		// Driven through the controller rather than the Select, because the switcher's dropdown is a portalled Mantine
+		// Combobox that does not open under jsdom. The state it sets is this one.
+		interleavedEvents();
+		const { result } = renderHook(() => useDevelopmentPageController());
+		await waitFor(() => expect(result.current.tasks.length).toBe(2));
+
+		expect(result.current.events.map((event) => event.eventType)).toEqual(["OwnPlanned", "OwnAttempted"]);
+
+		act(() => result.current.setSelectedTaskId("task-2"));
+
+		expect(result.current.events.map((event) => event.eventType)).toEqual(["SiblingStarted"]);
+		// The untied row belongs to neither, and stays where it is through the switch.
+		expect(result.current.untiedEvents.map((event) => event.eventType)).toEqual(["BoundToNoTask"]);
+	});
+
 	it("opens on the task the deep link names, not on the project's first one", async () => {
 		hooksMock.useDevelopmentProject.mockReturnValue({
 			data: decomposedDetail("Operator request", "Slice one", "Slice two"),
@@ -378,7 +435,12 @@ describe("DevelopmentPage", () => {
 		// A terminal run can answer no further gate — DecideAsync refuses anything that is not WaitingForApproval or
 		// Blocked, and the dispatcher does not tick a terminal run at all. Withholding Apply here would strand a
 		// hash-locked, already-validated patch for good rather than protect it.
-		workflowTask({ data: { id: "run-9", workItemId: "item-4", status: "Failed" }, isError: false, isLoading: false, error: null });
+		workflowTask({
+			data: { id: "run-9", workItemId: "item-4", status: "Failed" },
+			isError: false,
+			isLoading: false,
+			error: null,
+		});
 		renderPage();
 
 		expect(await screen.findByTestId("development-apply-patch")).toBeDefined();
@@ -416,7 +478,12 @@ describe("DevelopmentPage", () => {
 		// a terminal status. Withholding Apply then would strand its patch for good, behind a workflow UI that is off
 		// too. The server guard stands down under the same flag, so the two agree.
 		capabilities.devWorkflows = false;
-		workflowTask({ data: { id: "run-9", workItemId: "item-4", status: "Running" }, isError: false, isLoading: false, error: null });
+		workflowTask({
+			data: { id: "run-9", workItemId: "item-4", status: "Running" },
+			isError: false,
+			isLoading: false,
+			error: null,
+		});
 		renderPage();
 
 		expect(await screen.findByTestId("development-apply-patch")).toBeDefined();

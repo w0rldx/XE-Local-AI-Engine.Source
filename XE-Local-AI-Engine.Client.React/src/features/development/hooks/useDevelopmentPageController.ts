@@ -102,7 +102,18 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 	const task = taskDetail?.task;
 	const attempts = taskDetail?.attempts ?? [];
 	const artifacts = taskDetail?.artifacts ?? [];
-	const events = detail?.events ?? [];
+	// The project feed carries EVERY task's events, so a project with N workflow-created tasks would show a sibling's
+	// activity under whichever task is selected — the evidence the panels below are read as proof of. `taskId` is the
+	// honest key: it is what the store stamps on each row, and the selection is the only thing that changes here.
+	const projectEvents = useMemo(() => detail?.events ?? [], [detail?.events]);
+	const events = useMemo(
+		() => projectEvents.filter((entry) => entry.taskId === taskDetail?.task?.id),
+		[projectEvents, taskDetail?.task?.id],
+	);
+	// Rows the store bound to no task. Every event it writes today names one, so this is empty in practice — but the
+	// column is nullable and the wire says so, and a row that belongs to no task must not be attributed to the selected
+	// one NOR dropped on the floor. The timeline renders them apart, under their own scope.
+	const untiedEvents = useMemo(() => projectEvents.filter((entry) => !entry.taskId), [projectEvents]);
 	const latestAttempt = attempts.at(-1) ?? null;
 	const activeAttempt = attempts.find(isActiveAttempt) ?? null;
 	const [nextActionKey, nextActionDefault] = nextActionLabel(task?.status, latestAttempt?.status);
@@ -296,6 +307,7 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 		attempts,
 		artifacts,
 		events,
+		untiedEvents,
 		latestAttempt,
 		activeAttempt,
 		nextActionKey,

@@ -62,6 +62,7 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 		attempts,
 		artifacts,
 		events,
+		untiedEvents,
 		latestAttempt,
 		activeAttempt,
 		nextActionKey,
@@ -289,7 +290,7 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 									/>
 								) : null}
 
-								<DevelopmentEventTimeline events={events} onRefresh={() => projectQuery.refetch()} />
+								<DevelopmentEventTimeline events={events} untiedEvents={untiedEvents} onRefresh={() => projectQuery.refetch()} />
 							</Stack>
 						) : null}
 					</Grid.Col>

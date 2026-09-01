@@ -278,7 +278,8 @@
 			"templateUnavailable": "unavailable",
 			"repositoryUnavailableDescription": "The registered repository is unavailable or no longer matches this project. Development actions are blocked.",
 			"timeline": {
-				"title": "Durable event timeline"
+				"title": "Durable event timeline",
+				"projectScope": "Not tied to a task"
 			},
 			"empty": {
 				"title": "No Development projects yet",
