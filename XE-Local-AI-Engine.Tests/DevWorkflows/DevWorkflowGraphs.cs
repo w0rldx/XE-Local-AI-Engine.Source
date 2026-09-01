@@ -250,6 +250,46 @@ internal static class DevWorkflowGraphs
                                                """;
 
     /// <summary>
+    ///     <see cref="DecompositionSubtree" /> with the two things the seeded template puts around it that decide what a
+    ///     VERIFICATION node gets to read: an approved plan in front of the decomposition, and a verification agent
+    ///     behind the join. The seed's own evidence edges are here too — <c>decompose → join</c>, which the materializer
+    ///     preserves, and <c>planapproval → verify</c>, which is the only path from the verification back to the plan
+    ///     itself, since the walk stops at the decomposition that consumed it.
+    ///     <para>
+    ///         The template's validation node allows ONE attempt and routes no retry, so a scripted failure lands it in
+    ///         front of a human on the first answer — which is the state an operator answers <c>Skip</c> on.
+    ///     </para>
+    /// </summary>
+    public const string DecompositionWithVerification = """
+                                                        {
+                                                          "schemaVersion": 1,
+                                                          "nodes": [
+                                                            { "nodeKey": "plan", "nodeType": "Agent", "label": "Plan",
+                                                              "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                                            { "nodeKey": "planapproval", "nodeType": "HumanGate", "label": "Approve the plan" },
+                                                            { "nodeKey": "decompose", "nodeType": "Agent", "label": "Decompose",
+                                                              "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b",
+                                                              "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                                            { "nodeKey": "implement", "nodeType": "Agent", "label": "Implement",
+                                                              "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                                            { "nodeKey": "validate", "nodeType": "Tool", "label": "Validate", "maxAttempts": 1 },
+                                                            { "nodeKey": "join", "nodeType": "Join", "label": "Every slice implemented" },
+                                                            { "nodeKey": "verify", "nodeType": "Agent", "label": "Verify",
+                                                              "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" }
+                                                          ],
+                                                          "edges": [
+                                                            { "from": "plan", "to": "planapproval" },
+                                                            { "from": "planapproval", "to": "decompose", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                            { "from": "planapproval", "to": "verify", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                            { "from": "decompose", "to": "join" },
+                                                            { "from": "implement", "to": "validate" },
+                                                            { "from": "validate", "to": "join" },
+                                                            { "from": "join", "to": "verify" }
+                                                          ]
+                                                        }
+                                                        """;
+
+    /// <summary>
     ///     <see cref="DecompositionSubtree" /> with the implementation node the seeded template will really carry: a
     ///     <c>DevTask</c>, so each clone drives a Development task of its OWN and the isolation those task ids buy is
     ///     observable rather than argued. <c>nodeTimeoutSeconds</c> is mandatory on a DevTask node per the C template

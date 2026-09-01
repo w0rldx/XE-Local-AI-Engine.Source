@@ -52,9 +52,16 @@ internal static class DevWorkflowUpstreamArtifacts
     ///         <b>It is the TYPE that stops the walk, not evidence of output.</b> A work node that produced nothing
     ///         still ends its path, which matters for a template subtree: in <c>feature-development-v1</c> the join's
     ///         other inbound edge comes from the unmaterialized <c>validate</c> template node, a Tool that no run ever
-    ///         instantiates — so that path stops there and contributes nothing. <c>verify</c> inherits the plan through
-    ///         the seed's direct <c>decompose → join</c> edge, which is therefore load-bearing: remove it and the
-    ///         verification node goes blind again, this time with the walk in place.
+    ///         instantiates — so that path stops there and contributes nothing.
+    ///     </para>
+    ///     <para>
+    ///         Which is why an author who wants a node to see something TWO producers back has to draw the edge: the
+    ///         rule is per-path, so a second inbound edge reaching a different nearest producer is how a consumer gets
+    ///         both. <c>feature-development-v1</c> needs exactly that. Its <c>decompose → join</c> edge — which the
+    ///         materializer preserves — puts the task package on a path back from the join, and its
+    ///         <c>planapproval → verify</c> edge is what reaches past the decomposition to <c>plan.md</c>. Without the
+    ///         second one the verification agent is handed the slices and asked to judge them against a plan it was
+    ///         never shown, which is what the first two live runs did.
     ///     </para>
     /// </summary>
     private static HashSet<string> ProducingAncestors(DevWorkflowGraph graph, string nodeKey)

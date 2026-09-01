@@ -75,11 +75,19 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
     ///         and each review round, but not attempts back to back. Two hours is a slice of a feature, generously.
     ///     </para>
     ///     <para>
-    ///         <b>The <c>decompose → join</c> edge is load-bearing for evidence, not only for routing.</b> Upstream
-    ///         artifacts resolve back through structural nodes to the nearest PRODUCING ancestors, and a producing TYPE
-    ///         stops that walk whether or not it produced anything — so the join's other inbound edge, from the
-    ///         unmaterialized <c>validate</c> template node, contributes nothing. This edge is what carries the approved
-    ///         plan to <c>verify</c>; removing it leaves the verification agent with an empty inheritance again.
+    ///         <b>Two of these edges are load-bearing for EVIDENCE rather than for routing.</b> Upstream artifacts
+    ///         resolve back through structural nodes to the nearest PRODUCING ancestors, and a producing TYPE stops that
+    ///         walk on its own path whether or not it produced anything — so the join's inbound edge from the
+    ///         unmaterialized <c>validate</c> template node contributes nothing, and <c>decompose → join</c> is what
+    ///         puts the task package on a path back from the join at all. The materializer keeps it for that reason.
+    ///     </para>
+    ///     <para>
+    ///         That edge alone does NOT carry the approved plan, and the first live run said so in its own words: the
+    ///         walk stops at <c>decompose</c>, which produced the task package, so <c>plan.md</c> is one producer
+    ///         further back and out of reach. <c>planapproval → verify</c> is the edge that carries it. It is
+    ///         conditioned on the approval like the decomposition's, so a declined plan kills both paths into the
+    ///         verification rather than leaving it half-fed, and it costs no routing: the gate has long since settled by
+    ///         the time the join lets anything through.
     ///     </para>
     /// </summary>
     internal const string FeatureDevelopmentSlug = "feature-development-v1";
@@ -166,6 +174,7 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
                                                         { "from": "implement", "to": "validate" },
                                                         { "from": "validate", "to": "join" },
                                                         { "from": "join", "to": "verify" },
+                                                        { "from": "planapproval", "to": "verify", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
                                                         { "from": "verify", "to": "integrationapproval" },
                                                         { "from": "integrationapproval", "to": "integrate", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
                                                         { "from": "integrate", "to": "fullvalidate" }

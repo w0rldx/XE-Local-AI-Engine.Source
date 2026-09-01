@@ -441,15 +441,14 @@ internal sealed class DevWorkflowMaterializer
             }
         }
 
-        // The join now waits on the children instead of on the node that decided what they are. Left in place, it would
-        // fire the moment the decomposition succeeded and let the run complete over work that had not started.
-        foreach (var edge in edges.OfType<JsonObject>()
-                                  .Where(edge => edge["from"]?.GetValue<string>() == node.NodeKey && edge["to"]?.GetValue<string>() == materialization.JoinNodeKey)
-                                  .ToList())
-        {
-            _ = edges.Remove(edge);
-        }
-
+        // The decomposition's OWN edge into the join is kept, and that is a fix rather than an oversight. It was removed
+        // here on the reading that a join left waiting on an already-Succeeded node would fire the moment the
+        // decomposition landed — which admission does not do: `All` waits while any inbound edge is Pending, and so
+        // does `Any`, so the clones' fresh edges hold the join exactly as they did before. What removing it DID do was
+        // take the decomposition off every path back from the join, and upstream artifact resolution walks those paths:
+        // the node behind the join was left inheriting the clones' validation reports and nothing else, so the run's
+        // verification agent judged the feature without the task package it was decomposed into. Live, it said so
+        // itself and returned "not yet".
         return new Expansion(clones, root.ToJsonString(JsonOptions));
 
         void Wire(string from, string to, JsonNode? condition)

@@ -28,6 +28,14 @@ public sealed class DevWorkflowMaterializationTests
                                     ]
                                     """;
 
+    /// <summary>Two slices neither of which waits for the other — the shape a fan-out actually has.</summary>
+    private const string TwoIndependentTasks = """
+                                               [
+                                                 { "id": "alpha", "title": "Add the parser", "goal": "Parse the manifest." },
+                                                 { "id": "beta", "title": "Add the writer", "goal": "Write the manifest." }
+                                               ]
+                                               """;
+
     /// <summary>
     ///     The happy path, whole: the template subtree is cloned per task, the clones are wired to each other, to the
     ///     decomposition and into the join, the join stops waiting on the node that decided what the work is, and the run
@@ -69,9 +77,10 @@ public sealed class DevWorkflowMaterializationTests
 
         var graph = DevWorkflowGraph.Parse(run.GraphJson);
         AssertEx.Equal("implement#alpha", AssertEx.NotNull(graph.Nodes["validate#alpha"].RetryTarget), "each clone's fix loop points at its OWN implementation.");
-        AssertEx.False(graph.Edges.Any(static edge => edge is { From: "decompose", To: "join" }),
-            "the join now waits on the children; left as it was it would fire the moment the decomposition succeeded.");
-        AssertEx.Equal("decompose→implement#alpha, implement#alpha→validate#alpha, implement#beta→validate#beta, implement→validate, "
+        AssertEx.True(graph.Edges.Any(static edge => edge is { From: "decompose", To: "join" }),
+            "the decomposition KEEPS its own edge into the join: the clones' fresh edges are what hold the join, and this one is the "
+            + "only path back from it that reaches the task package the children were cut from.");
+        AssertEx.Equal("decompose→implement#alpha, decompose→join, implement#alpha→validate#alpha, implement#beta→validate#beta, implement→validate, "
             + "validate#alpha→implement#beta, validate#alpha→join, validate#beta→join, validate→join",
             string.Join(", ", graph.Edges.Select(static edge => $"{edge.From}→{edge.To}").OrderBy(static edge => edge, StringComparer.Ordinal)),
             "roots hang off the decomposition, dependsOn chains one task behind another, and every leaf reaches the join — while the "
@@ -337,6 +346,55 @@ public sealed class DevWorkflowMaterializationTests
         var artifact = (await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).Single(static entry => entry.ProducingNodeKey == "decompose");
 
         AssertEx.Equal(DevWorkflowArtifactKind.TaskPackage, artifact.Kind, "the node said what it produces; nothing else could have known.");
+    }
+
+    /// <summary>
+    ///     N1: what the node behind the join gets to READ. The materializer used to delete the decomposition's own edge
+    ///     into the join, which took the decomposition off every path back from it — so the verification agent inherited
+    ///     the clones' validation reports and nothing else, and said so itself in the live run before returning "not
+    ///     yet". Kept, that edge carries the task package; the seed's <c>planapproval → verify</c> edge carries the plan
+    ///     the walk cannot reach past the decomposition that consumed it.
+    /// </summary>
+    [Test]
+    public async Task TheNodeBehindAMaterializedJoinInheritsThePlanTheTaskPackageAndEveryChildsReport()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await VerifiableDecompositionAsync(harness, TwoIndependentTasks).ConfigureAwait(false);
+
+        await DriveToCompletionAsync(harness, runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded,
+            (await harness.ReadNodeRunAsync(runId, "verify").ConfigureAwait(false)).Status,
+            "the verification ran at all: the join waited for both slices and then let it through.");
+
+        var artifacts = await harness.ReadArtifactsAsync(runId).ConfigureAwait(false);
+        var consumed = await harness.ReadConsumedArtifactIdsAsync(runId, "verify").ConfigureAwait(false);
+        var read = artifacts.Where(artifact => consumed.Contains(artifact.Id))
+                            .Select(static artifact => $"{artifact.ProducingNodeKey}/{artifact.Name}")
+                            .OrderBy(static entry => entry, StringComparer.Ordinal);
+        AssertEx.Equal("decompose/tasks.json, plan/plan.md, validate#alpha/validate#alpha-validation.json, validate#beta/validate#beta-validation.json",
+            string.Join(", ", read),
+            "the approved plan, the package it was cut into, and what each slice's validation actually judged — the three things a "
+            + "verification is asked to weigh against each other.");
+    }
+
+    /// <summary>
+    ///     Starts a run on the shape a verification sits behind and takes it to the point where an approved plan and a
+    ///     read task package are both on the run.
+    /// </summary>
+    private static async Task<Guid> VerifiableDecompositionAsync(DevWorkflowHarness harness, string package)
+    {
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionWithVerification, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "plan", "plan.md", "1. Parse it. 2. Write it.").ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "plan").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        await harness.DecideAsync(runId, "planapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "decompose", "tasks.json", package).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
+        return runId;
     }
 
     /// <summary>Starts a decomposing run and takes it to the point where its package is written and its session done.</summary>
