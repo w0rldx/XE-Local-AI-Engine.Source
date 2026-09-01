@@ -139,6 +139,27 @@ describe("toDevWorkflowCanvasGraph", () => {
 		]);
 	});
 
+	it("reads a RUN's apply node off the pinned graph, since a node-run row carries no toolMode", () => {
+		const graph = toDevWorkflowCanvasGraph(
+			devWorkflowRun({
+				graph: {
+					schemaVersion: 1,
+					nodes: [
+						{ nodeKey: "integrate", nodeType: "Tool", label: "Integrate", toolMode: "Apply" },
+						{ nodeKey: "validate", nodeType: "Tool", label: "Validate" },
+					],
+					edges: [{ from: "validate", to: "integrate" }],
+				},
+				nodes: [
+					devWorkflowNodeRunSummary({ id: "n0", nodeKey: "integrate", nodeType: "Tool" }),
+					devWorkflowNodeRunSummary({ id: "n1", nodeKey: "validate", nodeType: "Tool" }),
+				],
+			}),
+		);
+
+		expect([dataOf(graph, "n0").isApplyTool, dataOf(graph, "n1").isApplyTool]).toEqual([true, false]);
+	});
+
 	it("joins graph edges to node-runs by node key, so the drawn edge is between node-run ids", () => {
 		const graph = toDevWorkflowCanvasGraph(chainRun());
 
@@ -276,6 +297,29 @@ describe("toDevWorkflowDefinitionCanvasGraph", () => {
 		expect(graph.edges.some((edge) => edge.source === "research" && edge.target === "plan")).toBe(true);
 		// Y6's anchors are computed the same way for both sources: one Start, one End on a linear chain.
 		expect(graph.nodes.filter((node) => node.type === "anchor")).toHaveLength(2);
+	});
+
+	it("reads an Apply-mode Tool node off the definition, whatever casing the document used", () => {
+		// The seeded template's `integrate` node is the only thing on this system that can land a patch, and on a DRAFT
+		// preview nothing has run — so the graph node's `toolMode` is the only place that fact exists.
+		const graph = toDevWorkflowDefinitionCanvasGraph({
+			schemaVersion: 1,
+			nodes: [
+				{ nodeKey: "integrate", nodeType: "Tool", label: "Integrate", toolMode: "Apply" },
+				{ nodeKey: "shouty", nodeType: "Tool", label: "Shouty", toolMode: "APPLY" },
+				{ nodeKey: "validate", nodeType: "Tool", label: "Validate", toolMode: "Validate" },
+				// A node authored before `toolMode` existed stores none at all; absent is Validate, as it is server-side.
+				{ nodeKey: "legacy", nodeType: "Tool", label: "Legacy" },
+			],
+			edges: [{ from: "integrate", to: "validate" }],
+		});
+
+		expect(["integrate", "shouty", "validate", "legacy"].map((key) => dataOf(graph, key).isApplyTool)).toEqual([
+			true,
+			true,
+			false,
+			false,
+		]);
 	});
 
 	it("renders nothing rather than throwing when no definition has been picked", () => {

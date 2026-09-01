@@ -19,6 +19,7 @@ import {
 	type DevWorkflowNodeStatus,
 	type DevWorkflowNodeType,
 	type DevWorkflowRunResponse,
+	isDevWorkflowApplyToolMode,
 	toDevWorkflowNodeStatus,
 	toDevWorkflowNodeType,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
@@ -47,6 +48,12 @@ export interface DevWorkflowCanvasNodeData extends Record<string, unknown> {
 	readonly maxAttempts: number;
 	readonly agentDisplayName?: string;
 	readonly modelLabel?: string;
+	/**
+	 * A Tool node that LANDS the approved patches rather than judging a checkout (R-C3). Read off the pinned graph's
+	 * `toolMode`, which is on the definitions wire since FX-B L2 — before that an apply node was indistinguishable from
+	 * a validation node until it had already written its report.
+	 */
+	readonly isApplyTool: boolean;
 	readonly isMaterialized: boolean;
 	readonly materializedFromNodeKey?: string;
 	readonly materializationIndex?: number;
@@ -181,6 +188,12 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 		materializationChildren.set(origin, children);
 	}
 
+	// The node-run row carries no `toolMode` — it is authoring config, and P3 projects it on the GRAPH node only. The
+	// pinned graph travels with the run, so the join is the node key, the same one the edges are drawn through.
+	const applyToolKeys = new Set(
+		(run?.graph?.nodes ?? []).filter((node) => isDevWorkflowApplyToolMode(node.toolMode)).map((node) => node.nodeKey ?? ""),
+	);
+
 	const entries: DevWorkflowCanvasEntry[] = nodeRuns.map((node) => ({
 		id: node.id ?? "",
 		nodeKey: node.nodeKey ?? "",
@@ -197,6 +210,7 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 			maxAttempts: node.maxAttempts ?? 1,
 			agentDisplayName: optional(node.agentDisplayName),
 			modelLabel: optional(node.modelLabel),
+			isApplyTool: applyToolKeys.has(node.nodeKey ?? ""),
 			isMaterialized: node.isMaterialized ?? false,
 			materializedFromNodeKey: optional(node.materializedFromNodeKey),
 			materializationIndex: optional(node.materializationIndex),
@@ -235,6 +249,7 @@ export function toDevWorkflowDefinitionCanvasGraph(graph: DevWorkflowGraph | und
 			label: node.label ?? node.nodeKey ?? "",
 			attempt: 1,
 			maxAttempts: node.maxAttempts ?? 1,
+			isApplyTool: isDevWorkflowApplyToolMode(node.toolMode),
 			isMaterialized: false,
 			hasStaleInputs: false,
 		},

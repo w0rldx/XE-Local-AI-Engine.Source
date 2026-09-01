@@ -5042,6 +5042,7 @@
 				"finished": "finished",
 				"attempt": "attempt {{attempt}} of {{maxAttempts}}",
 				"materialized": "generated",
+				"appliesPatches": "applies patches",
 				"materializedOf": "generated · {{index}} of {{count}}",
 				"staleInputs": "Stale inputs",
 				"agentWithModel": "{{agent}} · {{model}}"

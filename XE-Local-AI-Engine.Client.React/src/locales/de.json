@@ -5042,6 +5042,7 @@
 				"finished": "abgeschlossen",
 				"attempt": "Versuch {{attempt}} von {{maxAttempts}}",
 				"materialized": "erzeugt",
+				"appliesPatches": "wendet Patches an",
 				"materializedOf": "erzeugt · {{index}} von {{count}}",
 				"staleInputs": "Veraltete Eingaben",
 				"agentWithModel": "{{agent}} · {{model}}"

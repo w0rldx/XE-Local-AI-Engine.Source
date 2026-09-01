@@ -13,7 +13,10 @@ import type { Edge, Node, NodeTypes } from "@xyflow/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DevWorkflowGraphView } from "@/features/devWorkflows/components/DevWorkflowGraphView";
-import { DEV_WORKFLOW_MAX_RENDERED_NODES } from "@/features/devWorkflows/models/DevWorkflowGraphModels";
+import {
+	DEV_WORKFLOW_MAX_RENDERED_NODES,
+	toDevWorkflowDefinitionCanvasGraph,
+} from "@/features/devWorkflows/models/DevWorkflowGraphModels";
 import type { DevWorkflowRunResponse } from "@/features/devWorkflows/models/DevWorkflowModels";
 import { devWorkflowNodeRunSummary, devWorkflowRun } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -220,6 +223,25 @@ describe("DevWorkflowGraphView", () => {
 				.flatMap((child) => ["implement", "validate"].map((step) => `node-${step}-${child}`))
 				.map((id) => screen.getByTestId(`dev-workflow-graph-node-materialized-${id}`).textContent),
 		).toEqual(["generated · 1 of 2", "generated · 1 of 2", "generated · 2 of 2", "generated · 2 of 2"]);
+	});
+
+	it("badges an apply node as one, because a validation node's card is otherwise identical", () => {
+		renderWithProviders(
+			<DevWorkflowGraphView
+				graph={toDevWorkflowDefinitionCanvasGraph({
+					schemaVersion: 1,
+					nodes: [
+						{ nodeKey: "integrate", nodeType: "Tool", label: "Integrate", toolMode: "Apply" },
+						{ nodeKey: "validate", nodeType: "Tool", label: "Validate" },
+					],
+					edges: [{ from: "validate", to: "integrate" }],
+				})}
+				onSelect={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByTestId("dev-workflow-graph-node-apply-integrate").textContent).toBe("applies patches");
+		expect(screen.queryByTestId("dev-workflow-graph-node-apply-validate")).toBeNull();
 	});
 
 	it("selects a node-run when its card is clicked, the same change a table row makes", () => {

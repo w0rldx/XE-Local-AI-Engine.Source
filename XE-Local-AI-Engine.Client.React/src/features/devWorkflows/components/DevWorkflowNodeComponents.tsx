@@ -106,6 +106,14 @@ export function DevWorkflowNodeCard({ id, data, selected }: NodeProps<DevWorkflo
 					<Badge size="xs" variant="light" color="gray">
 						{t(`pages.devWorkflows.nodeType.${nodeData.nodeType}`, nodeData.nodeType)}
 					</Badge>
+					{/* An apply node LANDS patches; a validation node judges a checkout. Same kind badge, opposite
+					    consequence — and on a DRAFT preview the card is the only place that difference can be seen at all,
+					    because nothing has run and there is no report to read it off. */}
+					{nodeData.isApplyTool ? (
+						<Badge size="xs" variant="light" color="grape" data-testid={`dev-workflow-graph-node-apply-${id}`}>
+							{t("pages.devWorkflows.nodes.appliesPatches", "applies patches")}
+						</Badge>
+					) : null}
 					{/* "3 of 5" names the CHILD this card belongs to, so a card says how much of a decomposition it is one
 					    card of. The index is the server's, rendered unchanged: `MaterializationIndex` is already 1-based
 					    (C2), and adding one to it made the only child of a decomposition read "2 of 2". A materialization
