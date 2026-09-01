@@ -3285,6 +3285,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph
 	requiredCapabilities?: {
 		[key: string]: string;
 	} | null;
+	toolMode?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowMaterialization = {

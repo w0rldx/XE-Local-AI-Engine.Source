@@ -3937,6 +3937,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGra
 	retryTarget: z.string().nullish(),
 	materialization: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowMaterialization.nullish(),
 	requiredCapabilities: z.record(z.string(), z.string()).nullish(),
+	toolMode: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowEdgeCondition = z.object({

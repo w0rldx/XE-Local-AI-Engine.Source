@@ -31373,6 +31373,10 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "toolMode": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
