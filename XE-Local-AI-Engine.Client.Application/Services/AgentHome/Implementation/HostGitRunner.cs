@@ -30,10 +30,16 @@ internal sealed class HostGitRunner
     ///     Runs <c>git</c> with the given hardened argument list in <paramref name="workingDirectory" /> and returns the
     ///     exit code and captured streams. A timeout, a missing executable, or a launch failure surfaces as a non-zero
     ///     exit with the failure on stderr rather than throwing past the caller.
+    ///     <para>
+    ///         <paramref name="standardInput" /> feeds a command that reads <c>-</c> — <c>git apply</c> is the one that
+    ///         does — so patch bytes are handed to git directly instead of being written to a file first, which is one
+    ///         fewer copy of them on disk.
+    ///     </para>
     /// </summary>
     public async Task<HostGitResult> RunAsync(string workingDirectory,
         IReadOnlyList<string> arguments,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ReadOnlyMemory<byte>? standardInput = null)
     {
         ArgumentNullException.ThrowIfNull(arguments);
 
@@ -42,6 +48,7 @@ internal sealed class HostGitRunner
         {
             FileName = AgentHomeGit.Executable,
 #pragma warning restore S4036
+            RedirectStandardInput = standardInput is not null,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -72,6 +79,12 @@ internal sealed class HostGitRunner
         {
             // git is not installed / not on PATH.
             return new HostGitResult(ExitCode: -1, string.Empty, exception.Message);
+        }
+
+        if (standardInput is { } input)
+        {
+            await process.StandardInput.BaseStream.WriteAsync(input, timeoutCts.Token).ConfigureAwait(false);
+            process.StandardInput.Close();
         }
 
         var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
