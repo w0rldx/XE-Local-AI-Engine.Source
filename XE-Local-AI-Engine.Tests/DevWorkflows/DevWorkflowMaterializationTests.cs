@@ -379,6 +379,58 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>
+    ///     N4: skipping one slice's validation must not settle the run's tail over a sibling that is still working.
+    ///     <para>
+    ///         A dead inbound edge already decides what an <c>All</c> join will DO — it can never fire, so it is skipped
+    ///         — but deciding it early skipped the join, and everything after it, while the second slice's
+    ///         implementation was still running. What the state machine rules is asserted in both halves here: the
+    ///         sibling is untouched and the join WAITS for it, and once it lands the join skips, because a Skipped
+    ///         inbound edge is Dead and an <c>All</c> join over a dead edge has nothing left to fire on.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task SkippingOneSlicesValidationLeavesItsSiblingAloneAndTheJoinWaitsForIt()
+    {
+        await using var harness = new DevWorkflowHarness();
+        harness.Tools.Answer("validate#alpha", FakeDevWorkflowToolCommands.Failing());
+        var runId = await VerifiableDecompositionAsync(harness, TwoIndependentTasks).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "implement#alpha").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var failed = await harness.ReadNodeRunAsync(runId, "validate#alpha").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, failed.Status, $"the scripted failure left it on {failed.Status}, with no answer to give an operator.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
+            (await harness.ReadNodeRunAsync(runId, "implement#beta").ConfigureAwait(false)).Status,
+            "the second slice is still being implemented, which is the whole point of the moment being tested.");
+
+        await harness.DecideAsync(runId, "validate#alpha", DevWorkflowDecisionKind.Skip).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
+            (await harness.ReadNodeRunAsync(runId, "implement#beta").ConfigureAwait(false)).Status,
+            "skipping one slice's validation reaches its own descendants and nothing else — the sibling was never downstream of it.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending,
+            (await harness.ReadNodeRunAsync(runId, "join").ConfigureAwait(false)).Status,
+            "and the join WAITS: it cannot fire, but settling that in front of live work skips the integration stage over a slice "
+            + "the run has not finished.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "verify").ConfigureAwait(false)).Status);
+
+        await harness.SettleAgentAsync(runId, "implement#beta").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded,
+            (await harness.ReadNodeRunAsync(runId, "validate#beta").ConfigureAwait(false)).Status,
+            "the sibling ran to its own answer.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Skipped,
+            (await harness.ReadNodeRunAsync(runId, "join").ConfigureAwait(false)).Status,
+            "and only THEN does the join answer, with the answer C1 already ruled: a Skipped source kills its out-edge, and an All "
+            + "join over a dead edge is skipped rather than satisfied by the branch that did land.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Skipped, (await harness.ReadNodeRunAsync(runId, "verify").ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
     ///     Starts a run on the shape a verification sits behind and takes it to the point where an approved plan and a
     ///     read task package are both on the run.
     /// </summary>

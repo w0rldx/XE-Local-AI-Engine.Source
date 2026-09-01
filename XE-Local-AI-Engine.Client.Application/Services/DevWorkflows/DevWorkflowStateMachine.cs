@@ -152,23 +152,22 @@ internal static class DevWorkflowStateMachine
                           .Select(edge => EdgeState(edge, nodeRunsByKey.GetValueOrDefault(edge.From)))
                           .ToList();
 
-        if (node.JoinPolicy == DevWorkflowJoinPolicy.All)
-        {
-            if (states.Contains(DevWorkflowEdgeState.Dead))
-            {
-                return DevWorkflowNodeAdmission.Skip;
-            }
-
-            return states.Contains(DevWorkflowEdgeState.Pending) ? DevWorkflowNodeAdmission.Wait : DevWorkflowNodeAdmission.Eligible;
-        }
-
-        // Any: one satisfied branch is enough, but only once no sibling could still satisfy one — otherwise the join
-        // would fire on whichever branch happened to land first.
+        // Pending outranks Dead under BOTH policies, and for the same reason: the answer is not allowed to depend on
+        // which branch happened to land first. A dead inbound edge already settles what an `All` join will DO — it can
+        // never fire, so it will be skipped — but settling it while a sibling branch is still running skips the node,
+        // and everything after it, in front of work the run has not finished. Live, one clone's validate was skipped
+        // and the integration stage went terminal with the other clone's implementation still to come.
         if (states.Contains(DevWorkflowEdgeState.Pending))
         {
             return DevWorkflowNodeAdmission.Wait;
         }
 
+        if (node.JoinPolicy == DevWorkflowJoinPolicy.All)
+        {
+            return states.Contains(DevWorkflowEdgeState.Dead) ? DevWorkflowNodeAdmission.Skip : DevWorkflowNodeAdmission.Eligible;
+        }
+
+        // Any: one satisfied branch is enough, but only once no sibling could still satisfy one.
         return states.Contains(DevWorkflowEdgeState.Satisfied) ? DevWorkflowNodeAdmission.Eligible : DevWorkflowNodeAdmission.Skip;
     }
 
