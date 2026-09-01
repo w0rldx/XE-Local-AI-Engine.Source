@@ -46,7 +46,11 @@ vi.mock("@/features/development/components/DevelopmentLivePanel", () => ({
 	DevelopmentLivePanel: () => <div data-testid="development-live-panel" />,
 }));
 
+import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { DevelopmentPage } from "@/features/development/pages/DevelopmentPage";
+
+/** The build-time devWorkflows flag, which is a plain module constant — readonly to TypeScript, not at runtime. */
+const capabilities = nodeCapabilities as { devWorkflows: boolean };
 
 interface MutationMock {
 	readonly mutate: ReturnType<typeof vi.fn>;
@@ -150,6 +154,7 @@ describe("DevelopmentPage", () => {
 	beforeEach(() => {
 		installDomMocks();
 		vi.clearAllMocks();
+		capabilities.devWorkflows = true;
 		hooksMock.useDevelopmentCapability.mockReturnValue({ data: { enabled: true }, isLoading: false, error: null });
 		hooksMock.useDevelopmentProfileDetection.mockReturnValue({ data: undefined, isFetching: false, error: null });
 		// The Y3 banner's deep link only. Most tasks carry no workflow run, so the default is an unresolved lookup.
@@ -404,6 +409,35 @@ describe("DevelopmentPage", () => {
 
 		await screen.findByTestId("development-workflow-banner");
 		expect(screen.queryByTestId("development-apply-patch")).toBeNull();
+	});
+
+	it("leaves Dev Mode entirely alone when the workflows module is switched off", async () => {
+		// The dispatcher only runs when the module is on, so a run that was live when the switch flipped never reaches
+		// a terminal status. Withholding Apply then would strand its patch for good, behind a workflow UI that is off
+		// too. The server guard stands down under the same flag, so the two agree.
+		capabilities.devWorkflows = false;
+		workflowTask({ data: { id: "run-9", workItemId: "item-4", status: "Running" }, isError: false, isLoading: false, error: null });
+		renderPage();
+
+		expect(await screen.findByTestId("development-apply-patch")).toBeDefined();
+	});
+
+	it("trusts a terminal status over a refetch that failed after it", async () => {
+		// React Query keeps the last good `data` through a failed refetch, so this row is BOTH ended and errored. The
+		// ended answer is the true one — a terminal status never changes again — and reading it as unreadable would
+		// have the banner claim read-only while the Apply button rendered beside it.
+		workflowTask({
+			data: { id: "run-9", workItemId: "item-4", status: "Failed" },
+			isError: true,
+			isLoading: false,
+			error: new Error("refetch failed"),
+			refetch: vi.fn(),
+		});
+		renderPage();
+
+		expect((await screen.findByTestId("development-workflow-banner")).textContent).toContain("can no longer approve");
+		expect(screen.queryByTestId("development-workflow-retry")).toBeNull();
+		expect(screen.getByTestId("development-apply-patch")).toBeDefined();
 	});
 
 	it("takes the apply button away from a workflow-driven task and says where the decision lives (Y3)", async () => {

@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
 using System.Text;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -273,6 +275,12 @@ public sealed class DevelopmentManagementServiceTests
 
             // No workflow drives these tasks: the substitute answers null, which is the ordinary operator-driven case.
             Substitute.For<IDevWorkflowStore>(),
+
+            // Workflows ON, so the apply-ownership guard is the one under test wherever these tests reach it.
+            Options.Create(new DevWorkflowOptions
+            {
+                Enabled = true
+            }),
             TimeProvider.System);
 
     /// <summary>Backfill is a no-op here: every project these tests build already carries a profile.</summary>

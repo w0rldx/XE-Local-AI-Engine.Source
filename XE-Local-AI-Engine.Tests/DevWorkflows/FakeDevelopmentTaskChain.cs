@@ -410,7 +410,6 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
         Guid? onBehalfOfWorkflowRunId,
         CancellationToken cancellationToken = default)
     {
-
         await using var scope = _scopes.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var task = await store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);

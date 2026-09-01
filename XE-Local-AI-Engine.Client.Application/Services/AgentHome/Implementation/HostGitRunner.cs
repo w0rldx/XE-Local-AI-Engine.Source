@@ -101,7 +101,6 @@ internal sealed class HostGitRunner
             try
             {
                 await process.StandardInput.BaseStream.WriteAsync(input, timeoutCts.Token).ConfigureAwait(false);
-                process.StandardInput.Close();
             }
             catch (IOException exception)
             {
@@ -110,6 +109,18 @@ internal sealed class HostGitRunner
                 // stderr, and callers are written to that contract. Whatever git managed to say is still worth reading,
                 // so the wait below runs either way and this only speaks up if git left nothing better to say.
                 inputFailure = exception.Message;
+            }
+
+            // Outside the catch, so a failed write still closes: a git waiting for EOF on a pipe nobody closed waits
+            // until the timeout kill, which turns a one-line diagnostic into a stalled command. Closing a pipe the
+            // write already broke throws that same failure again on the flush, and there is nothing new in it.
+            try
+            {
+                process.StandardInput.Close();
+            }
+            catch (IOException)
+            {
+                // Already reported by the write above, or nothing was written at all.
             }
         }
 

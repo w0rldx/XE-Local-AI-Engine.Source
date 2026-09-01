@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -80,6 +81,7 @@ internal sealed class DevelopmentManagementService(
     IDevelopmentProfileBackfillService profileBackfill,
     IDevelopmentTemplateStore templateStore,
     IDevWorkflowStore workflows,
+    IOptions<DevWorkflowOptions> workflowOptions,
     TimeProvider timeProvider) : IDevelopmentManagementService
 {
     private const string ReviewRoundLimitReason = "The configured maximum review rounds has been reached.";
@@ -95,6 +97,7 @@ internal sealed class DevelopmentManagementService(
     private readonly IDevelopmentStore _store = store ?? throw new ArgumentNullException(nameof(store));
     private readonly IDevelopmentAttemptExecutionSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
     private readonly IDevelopmentTemplateStore _templateStore = templateStore ?? throw new ArgumentNullException(nameof(templateStore));
+    private readonly DevWorkflowOptions _workflowOptions = (workflowOptions ?? throw new ArgumentNullException(nameof(workflowOptions))).Value;
 
     /// <summary>
     ///     Read-only, and for one question: which workflow run — if any — owns the approval for a task.
@@ -475,12 +478,20 @@ internal sealed class DevelopmentManagementService(
     ///         returns here — withholding the apply then would strand an already-validated patch for good.
     ///     </para>
     ///     <para>
-    ///         Reads only. <c>DevWorkflows:Enabled=false</c> stops the dispatcher, not the store — no run can advance,
-    ///         but the rows a run left behind are still the truth about who owns its tasks, so the answer is the same.
+    ///         With the module SWITCHED OFF this guard stands down entirely, and has to: the dispatcher only runs when
+    ///         <c>DevWorkflows:Enabled</c> is set, so a run that was live when the switch flipped never reaches a
+    ///         terminal status and never answers another gate — an unconditional refusal would strand its tasks for
+    ///         good, behind a workflow UI that is off too. Off means there is no competing gate to protect, which is
+    ///         also the rule the client has always followed for the same reason.
     ///     </para>
     /// </summary>
     private async Task EnsureApplyAuthorityAsync(Guid taskId, Guid? onBehalfOfWorkflowRunId, CancellationToken cancellationToken)
     {
+        if (!_workflowOptions.Enabled)
+        {
+            return;
+        }
+
         if (await _workflows.FindRunIdForDevelopmentTaskAsync(taskId, cancellationToken).ConfigureAwait(false) is not { } runId
             || runId == onBehalfOfWorkflowRunId)
         {

@@ -123,7 +123,9 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 	// before workflows existed: its own apply gate, unchanged.
 	const workflowRunEnded =
 		workflowRunQuery.data !== undefined && isTerminalDevWorkflowRunStatus(toDevWorkflowRunStatus(workflowRunQuery.data.status));
-	const workflowRunUnreadable = workflowRunQuery.isError;
+	// React Query keeps the last good `data` through a failed refetch, so a terminal run whose refetch fails is BOTH
+	// ended and errored — and the ended answer is the true one, since a terminal status never changes again.
+	const workflowRunUnreadable = workflowRunQuery.isError && !workflowRunEnded;
 	const workflowOwnsApply = Boolean(task?.workflowRunId) && nodeCapabilities.devWorkflows && !workflowRunEnded;
 	const projectRepository = repositories.find((repository) => repository.id === detail?.project?.selectedFolderId);
 	const repositoryConnectionRequired = detail?.project?.repositoryConnectionRequired === true;

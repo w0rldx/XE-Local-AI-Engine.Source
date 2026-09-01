@@ -577,6 +577,31 @@ public sealed class DevWorkflowDevTaskTests
         AssertEx.False(afterTheRunEnded.Contains("has not ended", StringComparison.Ordinal), $"a terminal run hands the authority back: {afterTheRunEnded}");
     }
 
+    /// <summary>
+    ///     With the module SWITCHED OFF the ownership guard stands down, and it has to.
+    ///     <para>
+    ///         The dispatcher only runs when <c>DevWorkflows:Enabled</c> is set, so a run that was live when the switch
+    ///         flipped never reaches a terminal status and never answers another gate. An unconditional guard would
+    ///         then refuse that run's tasks from Dev Mode for ever — behind a workflow UI that is off too, so there is
+    ///         no way to approve them anywhere. Off means there is no competing gate to protect.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task WithTheModuleSwitchedOff_ALiveRunsTaskIsStillTheOperatorsToApply()
+    {
+        await using var harness = new DevWorkflowHarness(("DevWorkflows:Enabled", "false"));
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        await PinTaskAsync(harness, runId, "implement", taskId).ConfigureAwait(false);
+
+        // The run really is live and really does own the task — this is the same row that is refused with the module on.
+        AssertEx.False(DevWorkflowStateMachine.IsTerminal((await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status));
+
+        var failure = await ApplyFailureAsync(harness, projectId, taskId, onBehalfOfWorkflowRunId: null).ConfigureAwait(false);
+        AssertEx.False(failure.Contains("has not ended", StringComparison.Ordinal),
+            $"a run nothing can advance cannot hold a patch hostage: {failure}");
+    }
+
     /// <summary>A task no node run ever named is nobody's but the operator's, which is nearly every task there is.</summary>
     [Test]
     public async Task ADevModeApply_OnATaskNoWorkflowDrives_IsNotRefusedByTheOwnershipGuard()
