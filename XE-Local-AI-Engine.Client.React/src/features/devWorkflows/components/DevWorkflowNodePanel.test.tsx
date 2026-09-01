@@ -299,7 +299,7 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.queryByTestId("dev-workflow-node-devtask")).toBeNull();
 	});
 
-	it("shows a Join's dependencies split into satisfied and outstanding, from the runtime's own answer", () => {
+	it("shows a Join's dependencies split into satisfied and outstanding, mirroring the state machine's edge rule", () => {
 		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Join", nodeKey: "integrate", label: "Integrate" }), {
 			run: devWorkflowRun({
 				graph: {
@@ -321,6 +321,71 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.getByTestId("dev-workflow-node-dependency-implement#0").textContent).toContain("satisfied");
 		expect(screen.getByTestId("dev-workflow-node-dependency-implement#1").textContent).toContain("outstanding");
 		expect(screen.getByTestId("dev-workflow-node-dependency-implement#0").textContent).toContain("Slice one");
+	});
+
+	it("badges a DEAD inbound branch dead rather than satisfied, which is what the join will do with it", () => {
+		// LIVE-3 P2: the verdict came off `waitingOnNodeKeys`, which the runtime sends only while the join is Pending and
+		// which drops every SETTLED source — so a Skipped branch arrived as "not waited on" and read SATISFIED. Under the
+		// C1 rule (`DevWorkflowStateMachine.EdgeState`) a source that settled any way but Succeeded makes the edge DEAD,
+		// and that dead edge is precisely why an `All` join skips. The panel said the opposite of what was about to happen.
+		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Join", nodeKey: "join", label: "Join" }), {
+			run: devWorkflowRun({
+				graph: {
+					schemaVersion: 1,
+					nodes: [{ nodeKey: "join", nodeType: "Join", label: "Join" }],
+					edges: [
+						{ from: "landed", to: "join" },
+						{ from: "skipped", to: "join" },
+						{ from: "failed", to: "join" },
+						{ from: "cancelled", to: "join" },
+						{ from: "live", to: "join" },
+					],
+				},
+				nodes: [
+					devWorkflowNodeRunSummary({ id: "n0", nodeKey: "join" }),
+					devWorkflowNodeRunSummary({ id: "n1", nodeKey: "landed", label: "Landed", status: "Succeeded" }),
+					devWorkflowNodeRunSummary({ id: "n2", nodeKey: "skipped", label: "Skipped one", status: "Skipped" }),
+					devWorkflowNodeRunSummary({ id: "n3", nodeKey: "failed", label: "Failed one", status: "Failed" }),
+					devWorkflowNodeRunSummary({ id: "n4", nodeKey: "cancelled", label: "Cancelled one", status: "Cancelled" }),
+					devWorkflowNodeRunSummary({ id: "n5", nodeKey: "live", label: "Live one", status: "Running" }),
+				],
+			}),
+		});
+
+		for (const key of ["skipped", "failed", "cancelled"]) {
+			const row = screen.getByTestId(`dev-workflow-node-dependency-${key}`).textContent ?? "";
+			// `All` is the default policy, so the wording names the consequence: the join skips.
+			expect(row).toContain("dead — the join skips once nothing is pending");
+			expect(row).not.toContain("satisfied");
+			expect(row).not.toContain("outstanding");
+		}
+		expect(screen.getByTestId("dev-workflow-node-dependency-landed").textContent).toContain("satisfied");
+		// Unsettled is a WAIT, not a verdict — the same answer `EdgeState` gives for a source that has not landed.
+		expect(screen.getByTestId("dev-workflow-node-dependency-live").textContent).toContain("outstanding");
+	});
+
+	it("does not tell an Any join it will skip: there a dead branch is ignored while a sibling landed", () => {
+		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Join", nodeKey: "join", label: "Join" }), {
+			run: devWorkflowRun({
+				graph: {
+					schemaVersion: 1,
+					nodes: [{ nodeKey: "join", nodeType: "Join", label: "Join", joinPolicy: "Any" }],
+					edges: [
+						{ from: "landed", to: "join" },
+						{ from: "skipped", to: "join" },
+					],
+				},
+				nodes: [
+					devWorkflowNodeRunSummary({ id: "n0", nodeKey: "join" }),
+					devWorkflowNodeRunSummary({ id: "n1", nodeKey: "landed", label: "Landed", status: "Succeeded" }),
+					devWorkflowNodeRunSummary({ id: "n2", nodeKey: "skipped", label: "Skipped one", status: "Skipped" }),
+				],
+			}),
+		});
+
+		const row = screen.getByTestId("dev-workflow-node-dependency-skipped").textContent ?? "";
+		expect(row).toContain("dead — this branch will not carry the join");
+		expect(row).not.toContain("skips once nothing is pending");
 	});
 
 	it("shows a Gate's branches with their stored conditions, and marks the one the run actually took", () => {
@@ -380,8 +445,8 @@ describe("DevWorkflowNodePanel", () => {
 	});
 
 	it("names a row-less TEMPLATE dependency as a template rather than calling it satisfied", () => {
-		// The runtime filters template keys out of `waitingOnNodeKeys` — nothing will ever have a row for one — so the
-		// join's dependency on `validate` rendered SATISFIED by a node that had not run and could not run.
+		// A template key never gets a row — its children get them — so a row-less template is neither satisfied nor dead
+		// nor waited on; before FX-F it rendered SATISFIED, met by a node that had not run and could not run.
 		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Join", nodeKey: "join", label: "Join" }), {
 			run: devWorkflowRun({
 				graph: {

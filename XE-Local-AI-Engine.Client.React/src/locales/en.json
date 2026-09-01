@@ -4957,6 +4957,8 @@
 				"taken": "taken",
 				"outstanding": "outstanding",
 				"satisfied": "satisfied",
+				"dead": "dead — this branch will not carry the join",
+				"deadAll": "dead — the join skips once nothing is pending",
 				"notMaterialized": "not created yet",
 				"template": "template — materializes per task"
 			},

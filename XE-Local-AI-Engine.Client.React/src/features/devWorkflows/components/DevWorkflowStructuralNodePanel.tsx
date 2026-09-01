@@ -10,6 +10,7 @@ import {
 	type DevWorkflowNodeStatus,
 	type DevWorkflowNodeType,
 	type DevWorkflowRunResponse,
+	isSettledDevWorkflowNodeStatus,
 	toDevWorkflowNodeStatus,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
 
@@ -30,8 +31,8 @@ export interface DevWorkflowStructuralNodePanelProps {
  *   `conditionExpression` on the node), and which successor the run actually entered. There is no `conditionResult`
  *   field to read (P3 §4.2 deleted it); the branch NOT taken is the one the runtime left in an untaken state, which
  *   `untakenBranchStatuses` names.
- * - **Join** — dependencies satisfied against dependencies outstanding, which is the panel form of the
- *   `waitingOnNodeKeys` the node table already renders as a sentence.
+ * - **Join** — every inbound dependency with the verdict `Admission` will read off it: satisfied, still waiting, or
+ *   DEAD. See `DependencyRow`; the verdict is the state machine's own edge rule, not a paraphrase of it.
  * - **Parallel** — the branches, each with its own status.
  *
  * Every list is drawn from the node KEY space, because that is what edges name; the status beside each entry comes
@@ -45,14 +46,17 @@ export function DevWorkflowStructuralNodePanel({ nodeRun, nodeType, run }: DevWo
 	const rowByKey = new Map<string, DevWorkflowNodeRunSummaryResponse>(
 		(run?.nodes ?? []).map((node) => [node.nodeKey ?? "", node]),
 	);
-	const summary = rowByKey.get(nodeKey);
 	const outbound = edges.filter((edge) => (edge.from ?? "") === nodeKey);
 	const inbound = edges.filter((edge) => (edge.to ?? "") === nodeKey);
-	// `waitingOnNodeKeys` is on the SUMMARY row, not the detail response — the run payload is the only place it exists.
-	const waitingOn = new Set(summary?.waitingOnNodeKeys ?? []);
-	// The runtime filters template keys OUT of `waitingOnNodeKeys` — nothing will ever have a row for one, so a join
-	// cannot be waiting on it — which made every row-less template dependency render SATISFIED. It is neither.
+	// A template key never gets a node run — its children get the rows — so it is not a dependency at all, and reading
+	// its row-less-ness as anything but "template" claimed a node that had not run and could not run had satisfied one.
 	const templates = devWorkflowTemplateNodeKeys(run?.graph);
+	// The ONE thing a dead edge's wording turns on. `All` is the parser's own default for an absent policy
+	// (`DevWorkflowGraph.cs:257`): under `All` a single dead edge is why the join SKIPS, under `Any` it is ignored for
+	// as long as a sibling is satisfied.
+	const joinSkipsOnDead =
+		((run?.graph?.nodes ?? []).find((node) => (node.nodeKey ?? "") === nodeKey)?.joinPolicy ?? "All").toLowerCase() !==
+		"any";
 
 	return (
 		<SectionCard
@@ -75,7 +79,7 @@ export function DevWorkflowStructuralNodePanel({ nodeRun, nodeType, run }: DevWo
 								key={`${edge.from}>${edge.to}`}
 								nodeKey={edge.from ?? ""}
 								row={rowByKey.get(edge.from ?? "")}
-								outstanding={waitingOn.has(edge.from ?? "")}
+								joinSkipsOnDead={joinSkipsOnDead}
 								isTemplate={templates.has(edge.from ?? "")}
 							/>
 						))
@@ -121,41 +125,58 @@ export function DevWorkflowStructuralNodePanel({ nodeRun, nodeType, run }: DevWo
 }
 
 /**
- * A dependency and whether it is still outstanding. "Outstanding" is the runtime's own answer (`waitingOnNodeKeys`),
- * not one derived from the upstream status here: a Skipped dependency can satisfy a join under one join policy and
- * not under another, and this panel does not own that rule.
+ * A dependency and the verdict `Admission` will reach on its edge. This MIRRORS `DevWorkflowStateMachine.EdgeState`,
+ * which is the function that actually decides: a source that has not settled leaves the edge Pending (WAITING); a
+ * source that settled any way other than `Succeeded` kills it (DEAD), and under an `All` join one dead edge is
+ * precisely why the join will SKIP rather than succeed (C1); a `Succeeded` source satisfies it.
  *
- * A materialization TEMPLATE is neither. It has no row and never will — its children get the rows — so the runtime
- * leaves it out of `waitingOnNodeKeys`, and reading that absence as "satisfied" told an operator a dependency had been
- * met by a node that had not run and could not run. It is named as what it is instead.
+ * It is deliberately NOT `waitingOnNodeKeys` any more. The runtime sends that list only while the join itself is
+ * Pending and drops every SETTLED source from it — so a Skipped branch arrived as "not waited on" and this row badged
+ * it SATISFIED, telling an operator the opposite of what the join was about to do with it (LIVE-3 P2).
+ *
+ * The one edge state the panel cannot see is a `Succeeded` source whose edge CONDITION did not fire: judging that
+ * needs the source's output document, and the summary row does not carry one. Join dependencies are unconditional in
+ * every shape we ship. ponytail: a conditional join edge would need `outputJson` on the summary row to read honestly.
+ *
+ * A materialization TEMPLATE is none of the three, and is named as what it is instead.
  */
 function DependencyRow({
 	nodeKey,
 	row,
-	outstanding,
+	joinSkipsOnDead,
 	isTemplate,
 }: {
 	readonly nodeKey: string;
 	readonly row?: DevWorkflowNodeRunSummaryResponse;
-	readonly outstanding: boolean;
+	/** `All` (the default) skips the join on a dead edge; `Any` carries on without it. Only the wording differs. */
+	readonly joinSkipsOnDead: boolean;
 	readonly isTemplate: boolean;
 }) {
 	const { t } = useTranslation();
+	const status = row?.status ? toDevWorkflowNodeStatus(row.status) : undefined;
+	const settled = status !== undefined && isSettledDevWorkflowNodeStatus(status);
+	const isDead = settled && status !== "Succeeded";
 	return (
 		<Group gap="xs" wrap="nowrap" data-testid={`dev-workflow-node-dependency-${nodeKey}`}>
 			<Text size="sm" style={{ flex: 1, minWidth: 0 }} lineClamp={1}>
 				{row?.label ?? nodeKey}
 			</Text>
-			{row?.status ? <DevWorkflowNodeStatusBadge status={toDevWorkflowNodeStatus(row.status)} /> : null}
+			{status ? <DevWorkflowNodeStatusBadge status={status} /> : null}
 			{isTemplate && !row ? (
 				<Badge size="xs" variant="light" color="gray">
 					{t("pages.devWorkflows.structural.template", "template — materializes per task")}
 				</Badge>
+			) : isDead ? (
+				<Badge size="xs" variant="light" color="red">
+					{joinSkipsOnDead
+						? t("pages.devWorkflows.structural.deadAll", "dead — the join skips once nothing is pending")
+						: t("pages.devWorkflows.structural.dead", "dead — this branch will not carry the join")}
+				</Badge>
 			) : (
-				<Badge size="xs" variant="light" color={outstanding ? "orange" : "teal"}>
-					{outstanding
-						? t("pages.devWorkflows.structural.outstanding", "outstanding")
-						: t("pages.devWorkflows.structural.satisfied", "satisfied")}
+				<Badge size="xs" variant="light" color={settled ? "teal" : "orange"}>
+					{settled
+						? t("pages.devWorkflows.structural.satisfied", "satisfied")
+						: t("pages.devWorkflows.structural.outstanding", "outstanding")}
 				</Badge>
 			)}
 		</Group>
