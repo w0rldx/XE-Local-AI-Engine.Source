@@ -82,6 +82,37 @@ describe("DevWorkflowToolNodePanel", () => {
 		expect(screen.queryByTestId("dev-workflow-validation-tests-passed")).toBeNull();
 	});
 
+	it("says which patch a materialized child's validation judged, so the base commit is not read as the subject", async () => {
+		serveContent(
+			report({
+				passed: true,
+				basedOn: {
+					developmentTaskId: "11111111-1111-4111-8111-111111111111",
+					patchHash: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+					detail:
+						"These commands ran against the implementation task's approved patch, applied to a fresh clone of the base commit.",
+				},
+			}),
+		);
+
+		renderPanel();
+
+		const basedOn = await screen.findByTestId("dev-workflow-validation-based-on");
+		expect(basedOn.textContent).toContain("9f86d0818");
+		expect(basedOn.textContent).toContain("11111111-1111-4111-8111-111111111111");
+		// The server's own sentence, verbatim — it is what says the patch was applied to a fresh clone of the base.
+		expect(screen.getByTestId("dev-workflow-validation-based-on-detail").textContent).toContain("fresh clone");
+	});
+
+	it("claims nothing about the subject when a report carries no basedOn, because an older report has none either", async () => {
+		serveContent(report({ passed: true }));
+
+		renderPanel();
+
+		await screen.findByTestId("dev-workflow-validation-result");
+		expect(screen.queryByTestId("dev-workflow-validation-based-on")).toBeNull();
+	});
+
 	it("says a node refused before it wrote any report was refused, rather than 'no report yet'", async () => {
 		// Nothing is stored when the pass is refused before a command runs, so the row's sanitized sentence is the only
 		// account there is — and silence here reads as "nothing wrong".

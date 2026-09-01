@@ -5198,6 +5198,7 @@
 				"passed": "Prüfung bestanden",
 				"failed": "Prüfung fehlgeschlagen",
 				"base": "Basis {{commit}} · Profil {{profile}}",
+				"basedOn": "Bewertet wurde der freigegebene Patch {{hash}} der Implementierungsaufgabe · Aufgabe {{task}}",
 				"partial": "Dieser Bericht ist unvollständig: Dem Knoten lief die Zeit davon, bevor alle deklarierten Befehle gelaufen waren.",
 				"noCommands": "Es lief kein Prüfbefehl, dieser Bericht belegt daher nichts über den Code.",
 				"command": {

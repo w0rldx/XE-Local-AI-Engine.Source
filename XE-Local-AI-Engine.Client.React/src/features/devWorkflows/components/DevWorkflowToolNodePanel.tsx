@@ -217,6 +217,31 @@ function ValidationReport({
 				</Text>
 			</Group>
 
+			{/* Directly under the base commit, because it QUALIFIES it: these commands did not judge that commit as it
+			    stands, they judged the child's staged work on top of it. `basedOn` exists only when a patch really was
+			    overlaid — every other state refuses the node rather than reporting — so its absence is not evidence of a
+			    base validation (an older report has no such field either) and nothing is claimed on that path. */}
+			{report.basedOn ? (
+				<Stack gap={2} data-testid="dev-workflow-validation-based-on">
+					<Text size="xs">
+						{t(
+							"pages.devWorkflows.validation.basedOn",
+							"Judged the implementation task's approved patch {{hash}} · task {{task}}",
+							{
+								hash: (report.basedOn.patchHash ?? "").slice(0, 12) || "—",
+								task: report.basedOn.developmentTaskId ?? "—",
+							},
+						)}
+					</Text>
+					{/* Server prose, verbatim (§2.11): it is the sentence that says what was applied to what. */}
+					{report.basedOn.detail ? (
+						<Text size="xs" c="dimmed" data-testid="dev-workflow-validation-based-on-detail">
+							{report.basedOn.detail}
+						</Text>
+					) : null}
+				</Stack>
+			) : null}
+
 			{partial ? (
 				<Alert color="orange" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-validation-partial">
 					<Stack gap={4}>
