@@ -41,6 +41,63 @@ describe("devWorkflowNodeAttempts", () => {
 		expect(attempts.find((attempt) => attempt.attempt === 1)?.workSessionId).toBeUndefined();
 	});
 
+	it("carries the counter forward from a stated attempt, so what follows an attachment is not filed under attempt 1", () => {
+		// The tail-anchored page set: the `node.retry.scheduled` events that grew the counter are not loaded, and the
+		// oldest row that IS loaded is attempt 2's attachment. Recording the session on attempt 2 while leaving the
+		// counter at 1 files the interruption and the close that follow under attempt 1 — evidence of the second
+		// attempt shown as the first's.
+		const attempts = devWorkflowNodeAttempts(
+			[
+				event(40, "worksession.attached", { detailJson: JSON.stringify({ workSessionId: "s-2", attempt: 2 }) }),
+				event(41, "node.interrupted"),
+				event(42, "node.completed", { outcome: "succeeded" }),
+			],
+			2,
+		);
+
+		expect(attempts.map((attempt) => [attempt.attempt, attempt.interruptedCount, attempt.outcome])).toEqual([
+			[1, 0, undefined],
+			[2, 1, "succeeded"],
+		]);
+	});
+
+	it("takes the attempt a retry states as the one it closes", () => {
+		// `node.retry.scheduled` carries the attempt that FAILED, so a page set opening on one states where history is
+		// just as an attachment does — and the attempt it opens is the one after that, not the one after 1.
+		const attempts = devWorkflowNodeAttempts(
+			[
+				event(50, "node.retry.scheduled", { outcome: "timeout", detailJson: JSON.stringify({ attempt: 2 }) }),
+				event(51, "node.completed", { outcome: "succeeded" }),
+			],
+			3,
+		);
+
+		expect(attempts.map((attempt) => [attempt.attempt, attempt.outcome])).toEqual([
+			[1, undefined],
+			[2, "timeout"],
+			[3, "succeeded"],
+		]);
+	});
+
+	it("never moves the counter backwards", () => {
+		// A stated number older than where the walk already is cannot rewind it: the events after it belong to the
+		// attempt the walk had reached, not to the one an out-of-order payload names.
+		const attempts = devWorkflowNodeAttempts(
+			[
+				event(1, "node.retry.scheduled", { outcome: "timeout" }),
+				event(2, "worksession.attached", { detailJson: JSON.stringify({ workSessionId: "s-old", attempt: 1 }) }),
+				event(3, "node.completed", { outcome: "succeeded" }),
+			],
+			2,
+		);
+
+		expect(attempts.map((attempt) => [attempt.attempt, attempt.outcome])).toEqual([
+			[1, "timeout"],
+			[2, "succeeded"],
+		]);
+		expect(attempts.find((attempt) => attempt.attempt === 1)?.workSessionId).toBe("s-old");
+	});
+
 	it("lists every attempt the node-run row claims, even the ones no loaded event accounts for", () => {
 		// The row is the authority on HOW MANY. A list that stopped at the loaded evidence would read as "never retried".
 		const attempts = devWorkflowNodeAttempts([], 3);

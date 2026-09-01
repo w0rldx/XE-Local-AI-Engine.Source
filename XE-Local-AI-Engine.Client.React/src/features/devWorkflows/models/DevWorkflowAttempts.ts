@@ -3,9 +3,10 @@
 // on now". The event feed can: `node.retry.scheduled` is the only reason a node moves back to `Pending`, so each one
 // closes an attempt and opens the next, and `worksession.attached` names the session each attempt ran in.
 //
-// The walk is over ASCENDING sequences and counts from 1. Where an event states its own attempt number
-// (`worksession.attached` carries one) that number wins over the counter — the log is the authority, and the counter
-// is only there for the events that carry no attempt at all.
+// The walk is over ASCENDING sequences and counts from 1. Where an event states its own attempt number — the two that
+// do are `worksession.attached` and `node.retry.scheduled` — that number wins over the counter AND moves it, because
+// the counter is only a fallback for the events carrying no attempt at all, and a page set anchored to the tail can
+// start after the retries that would have grown it. It never moves backwards.
 
 import type { DevWorkflowRunEventResponse } from "@/features/devWorkflows/models/DevWorkflowModels";
 
@@ -55,8 +56,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
 
-/** `worksession.attached` carries `{workSessionId, attempt, sessionResumes}`; anything else reads as absent. */
-function attachedDetail(detailJson: string | null | undefined): { workSessionId?: string; attempt?: number } {
+/** An event's `detailJson` as an object. Absent, empty and unparseable all read the same: nothing was stated. */
+function detailOf(detailJson: string | null | undefined): Record<string, unknown> {
 	if (typeof detailJson !== "string" || detailJson.length === 0) {
 		return {};
 	}
@@ -66,32 +67,26 @@ function attachedDetail(detailJson: string | null | undefined): { workSessionId?
 	} catch {
 		return {};
 	}
-	if (!isRecord(parsed)) {
-		return {};
-	}
-	return {
-		workSessionId: typeof parsed["workSessionId"] === "string" ? parsed["workSessionId"] : undefined,
-		attempt: typeof parsed["attempt"] === "number" ? parsed["attempt"] : undefined,
-	};
+	return isRecord(parsed) ? parsed : {};
+}
+
+/**
+ * The attempt an event states about itself, if it states one.
+ *
+ * Two of the catalog's payloads carry it: `worksession.attached` (the attempt the session was attached to) and
+ * `node.retry.scheduled` (the attempt that FAILED, which is the one that event closes). The rest carry a reason or
+ * nothing, so reading the field generically cannot pick up a number that means something else.
+ */
+function statedAttempt(detail: Record<string, unknown>): number | undefined {
+	return typeof detail["attempt"] === "number" ? detail["attempt"] : undefined;
 }
 
 /** `node.retry.routed` carries `{nodeKey, retryTarget, failureClass, reason}` — the node that FAILED, not the reset one. */
 export function devWorkflowRoutedDetail(detailJson: string | null | undefined): { nodeKey?: string; retryTarget?: string } {
-	if (typeof detailJson !== "string" || detailJson.length === 0) {
-		return {};
-	}
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(detailJson);
-	} catch {
-		return {};
-	}
-	if (!isRecord(parsed)) {
-		return {};
-	}
+	const detail = detailOf(detailJson);
 	return {
-		nodeKey: typeof parsed["nodeKey"] === "string" ? parsed["nodeKey"] : undefined,
-		retryTarget: typeof parsed["retryTarget"] === "string" ? parsed["retryTarget"] : undefined,
+		nodeKey: typeof detail["nodeKey"] === "string" ? detail["nodeKey"] : undefined,
+		retryTarget: typeof detail["retryTarget"] === "string" ? detail["retryTarget"] : undefined,
 	};
 }
 
@@ -131,12 +126,22 @@ export function devWorkflowNodeAttempts(
 	};
 
 	let counter = 1;
+	// Moves the counter TO an attempt the log states, and never back off one. Recording an event on its stated attempt
+	// while leaving the counter behind is the misattribution this exists to prevent: on a tail-anchored page set the
+	// `node.retry.scheduled` events that grew the counter may not be loaded, so an attachment (or a retry) naming
+	// attempt 3 is the log saying where history actually is — and every later event carrying no number of its own
+	// would otherwise land on attempt 1.
+	const attemptOf = (stated: number | undefined): number => {
+		counter = Math.max(counter, stated ?? counter);
+		return stated ?? counter;
+	};
+
 	for (const event of nodeEvents) {
 		const type = event.eventType ?? "";
+		const detail = detailOf(event.detailJson);
 		if (type === devWorkflowAttemptEventTypes.workSessionAttached) {
-			const detail = attachedDetail(event.detailJson);
-			const row = at(detail.attempt ?? counter);
-			row.workSessionId = detail.workSessionId;
+			const row = at(attemptOf(statedAttempt(detail)));
+			row.workSessionId = typeof detail["workSessionId"] === "string" ? detail["workSessionId"] : undefined;
 			continue;
 		}
 		if (type === devWorkflowAttemptEventTypes.interrupted) {
@@ -144,7 +149,8 @@ export function devWorkflowNodeAttempts(
 			continue;
 		}
 		if (closingEventTypes.includes(type)) {
-			const row = at(counter);
+			// `node.retry.scheduled` states the attempt it CLOSES, so the counter lands on it before opening the next.
+			const row = at(attemptOf(statedAttempt(detail)));
 			row.outcome = event.outcome ?? undefined;
 			row.closedBy = type;
 			row.occurredAtUtc = event.occurredAtUtc;
