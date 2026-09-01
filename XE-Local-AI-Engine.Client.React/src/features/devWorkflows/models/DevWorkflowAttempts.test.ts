@@ -98,6 +98,25 @@ describe("devWorkflowNodeAttempts", () => {
 		]);
 	});
 
+	it("does not skip an attempt when a stated number is behind the walk", () => {
+		// A retry naming an attempt the walk has already passed closes a row that is already accounted for. Opening
+		// "the next one" off THAT number would land past where the walk is, and the attempt in between would be
+		// listed with nothing against it while the events that belong to it went somewhere else.
+		const attempts = devWorkflowNodeAttempts(
+			[
+				event(1, "node.retry.scheduled", { outcome: "provider-error" }),
+				event(2, "node.retry.scheduled", { outcome: "stale", detailJson: JSON.stringify({ attempt: 1 }) }),
+				event(3, "node.completed", { outcome: "succeeded" }),
+			],
+			2,
+		);
+
+		expect(attempts.map((attempt) => [attempt.attempt, attempt.outcome])).toEqual([
+			[1, "stale"],
+			[2, "succeeded"],
+		]);
+	});
+
 	it("never moves the counter backwards", () => {
 		// A stated number older than where the walk already is cannot rewind it: the events after it belong to the
 		// attempt the walk had reached, not to the one an out-of-order payload names.

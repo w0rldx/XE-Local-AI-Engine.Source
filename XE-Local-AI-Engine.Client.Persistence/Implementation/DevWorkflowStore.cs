@@ -225,7 +225,11 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
             return null;
         }
 
-        return JsonSerializer.Deserialize<ArtifactSupersessionDetail>(recorded.DetailJson)?.SupersededArtifactId;
+        // The SAME options the write uses, and the reason is the read rather than the write: the Web defaults are
+        // case-INSENSITIVE, so this binds a row written before FX-D (PascalCase) and one written after (camelCase)
+        // alike. The log is append-only — a case-sensitive read here would answer null for every artifact superseded
+        // before the casing was fixed, and a replay answering null skips a blob sweep it still owes.
+        return JsonSerializer.Deserialize<ArtifactSupersessionDetail>(recorded.DetailJson, JsonOptions)?.SupersededArtifactId;
     }
 
     private long AddEvent(DevWorkflowRun run, string eventType, Guid? nodeRunId, string? outcome, Guid? operationId, byte[]? detailJson)

@@ -144,24 +144,21 @@ export function devWorkflowNodeAttempts(
 		return created;
 	};
 
+	// The counter only ever moves FORWARD, to where the log says history is. On a tail-anchored page set the
+	// `node.retry.scheduled` events that grew it may not be loaded, so an attachment (or a retry) naming attempt 3 is
+	// the log saying where history actually is — and every later event carrying no number of its own would otherwise
+	// land on attempt 1. A number BEHIND the counter moves nothing: it is a row already accounted for, and letting it
+	// push the counter on by one would skip the attempt in between.
 	let counter = 1;
-	// Moves the counter TO an attempt the log states, and never back off one. Recording an event on its stated attempt
-	// while leaving the counter behind is the misattribution this exists to prevent: on a tail-anchored page set the
-	// `node.retry.scheduled` events that grew the counter may not be loaded, so an attachment (or a retry) naming
-	// attempt 3 is the log saying where history actually is — and every later event carrying no number of its own
-	// would otherwise land on attempt 1.
-	const attemptOf = (stated: number | undefined): number => {
-		counter = Math.max(counter, stated ?? counter);
-		return stated ?? counter;
-	};
-
 	for (const event of nodeEvents) {
 		const type = event.eventType ?? "";
 		const detail = detailOf(event.detailJson);
+		// The attempt this event belongs to: its own number where it states one, else wherever the walk has reached.
+		const attempt = statedAttempt(detail) ?? counter;
 		if (type === devWorkflowAttemptEventTypes.workSessionAttached) {
-			const row = at(attemptOf(statedAttempt(detail)));
+			counter = Math.max(counter, attempt);
 			const session = field(detail, "workSessionId");
-			row.workSessionId = typeof session === "string" ? session : undefined;
+			at(attempt).workSessionId = typeof session === "string" ? session : undefined;
 			continue;
 		}
 		if (type === devWorkflowAttemptEventTypes.interrupted) {
@@ -169,14 +166,12 @@ export function devWorkflowNodeAttempts(
 			continue;
 		}
 		if (closingEventTypes.includes(type)) {
-			// `node.retry.scheduled` states the attempt it CLOSES, so the counter lands on it before opening the next.
-			const row = at(attemptOf(statedAttempt(detail)));
+			const row = at(attempt);
 			row.outcome = event.outcome ?? undefined;
 			row.closedBy = type;
 			row.occurredAtUtc = event.occurredAtUtc;
-			if (type === devWorkflowAttemptEventTypes.retryScheduled) {
-				counter += 1;
-			}
+			// A retry closes this attempt AND opens the next; the other four close it for good.
+			counter = Math.max(counter, type === devWorkflowAttemptEventTypes.retryScheduled ? attempt + 1 : attempt);
 		}
 	}
 
