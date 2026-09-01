@@ -9,8 +9,10 @@
 # host and is unaffected). Running the whole module in ONE process therefore accumulates ~11 MB per host-based test and
 # balloons to ~3.5 GB, which thrashes a memory-tight box.
 #
-# This script runs the module in fresh-process batches, ONE per test namespace, each single-threaded WITHIN the
-# process. A fresh process per namespace resets the leak between batches (bounding peak RSS) and — because namespaces
+# This script runs the module in fresh-process batches, ONE per test namespace, normally single-threaded WITHIN the
+# process. The exact local non-coverage DevWorkflows namespace is measured-safe at width 2; PAR=1 restores full
+# serialization, and grouped/coverage runs stay at width 1 by default. A fresh process per namespace resets the leak
+# between batches (bounding peak RSS) and — because namespaces
 # are the natural test-tree partition — covers every test exactly once with no source-parsing guesswork.
 # Single-threaded execution also removes the cross-test env-mutation races (XE_NODE_SQLITE_KEY set/unset) documented
 # in docs/agent-knowledge.md §1. Those races are per-process, so JOBS batch processes run concurrently (see below).
@@ -60,26 +62,29 @@
 #   Cost: ~240 MB per job (JOBS copies), made with cp -a in well under a second on a warm cache.
 #
 # Batch-level parallelism (JOBS)
-#   The per-process serialization above is deliberate, but nothing requires the *processes* to run one
+#   The normal per-process width of 1 is deliberate, but nothing requires the *processes* to run one
 #   after another: every hazard the fresh-process design defends against is process-scoped (env-var
 #   mutation, PATH stubs, meter/ActivityListener capture, the HostStartupLock) or already isolated
 #   per host (GUID-named temp SQLite/data dirs, port-0 binds). So the batches run JOBS at a time,
-#   longest-first, each still single-threaded by default. PROCESS-level parallelism is what this
+#   longest-first. Only the exact ungrouped, non-coverage DevWorkflows unit uses width 2 when PAR is unset;
+#   every other batch stays at width 1 by default. PROCESS-level parallelism is what this
 #   module responds to; in-process width is contention-bound (measured 2026-08-22, 16-core host:
 #   one process 8-wide = 11:00 wall / 10.0 GB, JOBS=4 batches = 6:02, JOBS=10 batches = 2:18 with
 #   ~670 MB per batch process). Hence the default of 10 rather than one-per-core.
-#   JOBS=1 reproduces the old strictly-sequential behavior exactly.
+#   JOBS=1 PAR=1 reproduces the old fully serialized behavior exactly.
 #
 # Usage:
 #   scripts/run-tests-memory-safe.sh                # build (Release) + run every namespace batch
 #   NO_BUILD=1 scripts/run-tests-memory-safe.sh     # skip the build (bin must be current)
-#   JOBS=1 scripts/run-tests-memory-safe.sh         # old behavior: batches strictly sequential
+#   JOBS=1 PAR=1 scripts/run-tests-memory-safe.sh   # old behavior: batches and tests fully serialized
 #   PAR=4 scripts/run-tests-memory-safe.sh          # allow N parallel tests per batch (faster, may reintroduce flakes)
 #   COVERAGE_DIR=/tmp/cov scripts/run-tests-memory-safe.sh   # also emit per-batch Cobertura + TRX
 #
 # Env knobs:
 #   JOBS            how many namespace batch PROCESSES run concurrently (default 10; 1 = sequential)
-#   PAR             max parallel tests per batch (default 1 = deterministic + lowest RSS; >1 is faster but can flake)
+#   PAR             max parallel tests per batch (default 1 = deterministic + lowest RSS; >1 is faster but can flake).
+#                   When unset, only the exact ungrouped, non-coverage DevWorkflows unit uses measured-safe width 2;
+#                   set PAR=1 to disable that exception.
 #   AVAIL_FLOOR     a batch aborts if available RAM drops below this many MB (default 800; with JOBS>1
 #                   every batch that observes the breach kills itself — safety over completeness)
 #   TEST_GROUPS     when set to N, pack the namespaces into N processes (LPT by measured weight)
@@ -121,6 +126,7 @@ if [[ -z "${XE_BUILD_LOCK_HELD:-}" && -z "${NO_BUILD_LOCK:-}" ]]; then
 fi
 PROJ="$REPO/XE-Local-AI-Engine.Tests"
 EXE="$PROJ/bin/Release/net10.0/XE-Local-AI-Engine.Tests"
+PAR_EXPLICIT="${PAR:+1}"
 PAR="${PAR:-1}"
 JOBS="${JOBS:-10}"
 AVAIL_FLOOR="${AVAIL_FLOOR:-800}"
@@ -162,6 +168,9 @@ release_slot() { [[ -n "${1:-}" ]] && rmdir "$SLOT_LOCKS/$1" 2>/dev/null; return
 
 run_ns() {
   local ns="$1" filter="$2" out; out="$(mktemp)"; local t0=$EPOCHSECONDS
+  local unit_par="$PAR"
+  [[ -z "$PAR_EXPLICIT" && -z "${COVERAGE_DIR:-}" \
+    && "$ns" == "XE_Local_AI_Engine.Tests.DevWorkflows" ]] && unit_par=2
   # Coverage/TRX is opt-in: one results directory per batch, because MTP resolves --coverage-output
   # relative to --results-directory and batches sharing one would overwrite each other's report.
   local exe="$EXE" slot=""
@@ -173,7 +182,8 @@ run_ns() {
       slot="$(acquire_slot)"; exe="$SLOT_ROOT/$slot/$(basename "$EXE")"
     fi
   fi
-  "$exe" --treenode-filter "$filter" --maximum-parallel-tests "$PAR" "${report_args[@]}" >"$out" 2>&1 &
+  TUNIT_DISABLE_HTML_REPORTER=1 "$exe" --treenode-filter "$filter" --maximum-parallel-tests "$unit_par" \
+    "${report_args[@]}" >"$out" 2>&1 &
   local pid=$! peak=0
   while kill -0 "$pid" 2>/dev/null; do
     local rss avail
@@ -394,8 +404,8 @@ for unit in "${UNITS[@]}"; do
   elif [[ "$sum" != 1 ]]; then
     # No MTP run summary: the batch enrolled nothing or died before reporting. Never green.
     FAILED+=("$ns(no-summary,exit=$rc)")
-  elif [[ "$rc" != 0 && "$p" -eq 0 ]]; then
-    # The batch process died without reporting a single test — a crash must not read as green.
+  elif [[ "$rc" != 0 ]]; then
+    # A reporter/process error after partial successes must not read as green.
     FAILED+=("$ns(exit=$rc)")
   elif [[ "$cov" != 1 ]]; then
     FAILED+=("$ns(no-coverage-report)")
