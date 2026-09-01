@@ -614,9 +614,12 @@ internal sealed class DevWorkflowDevTaskExecutor
         DevelopmentTaskSnapshot task,
         Guid taskId)
     {
-        var failureClass = attempt.Status == DevelopmentAttemptStatus.Interrupted
-            ? DevWorkflowFailureClasses.Interrupted
+        // A workspace policy refusing the attempt's diff is not the provider failing: it is the engine declining work on
+        // evidence, so it goes straight to a human instead of spending three more attempts to be refused identically.
+        var refused = DevelopmentAttemptEvidenceException.Names(attempt.TerminalReason, DevelopmentAttemptFailureCodes.WorkspacePolicyRefused)
+            ? DevWorkflowFailureClasses.Policy
             : DevWorkflowFailureClasses.ProviderError;
+        var failureClass = attempt.Status == DevelopmentAttemptStatus.Interrupted ? DevWorkflowFailureClasses.Interrupted : refused;
         return new DevWorkflowFailure(failureClass,
             attempt.TerminalReason ?? $"The development {attempt.Role} attempt this node run was driving did not succeed.",
             Output(nodeRun, task, taskId, failureClass));

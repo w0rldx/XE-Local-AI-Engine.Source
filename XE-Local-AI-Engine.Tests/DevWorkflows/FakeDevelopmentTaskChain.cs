@@ -32,11 +32,16 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
             [DevelopmentTaskStatus.InReview] = DevelopmentTaskStatus.AwaitingApply
         };
 
+    /// <summary>The test-write policy's own sentence, which is what the operator has to be told.</summary>
+    private const string PolicySentence =
+        "The attempt modified or deleted a test that existed at the base commit, which the Development test-write policy does not permit. Adding new test files is allowed.";
+
     private readonly Lock _gate = new();
     private readonly List<string> _actions = [];
     private readonly List<Guid> _offered = [];
     private readonly List<Guid> _cancelled = [];
     private readonly TaskCompletionSource _applyHeld = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int _policyRefusalsOwed;
     private readonly TaskCompletionSource _applyReleased = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly IServiceScopeFactory _scopes;
     private int? _appliesAllowed;
@@ -104,6 +109,19 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     }
 
     /// <summary>
+    ///     Makes the next <paramref name="count" /> attempts fail the way a workspace policy refusal lands: a failed
+    ///     attempt row whose terminal reason is the policy's own sentence behind its failure code, exactly as
+    ///     <c>DevelopmentCoderAttemptRunner</c> composes it.
+    /// </summary>
+    public void RefuseNextAttemptsOnPolicy(int count)
+    {
+        lock (_gate)
+        {
+            _policyRefusalsOwed = count;
+        }
+    }
+
+    /// <summary>
     ///     Makes the next <paramref name="count" /> actions start a real coder attempt and leave it RUNNING, so a test
     ///     can look at a node run while the chain is genuinely working — which is the only state a drain has anything to
     ///     ask about, and the only way two siblings can be caught working at the same moment.
@@ -127,20 +145,38 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
 
         bool fail;
         bool hold;
+        bool refused;
         lock (_gate)
         {
             _actions.Add(task.Status.ToString());
-            fail = _failuresOwed > 0;
+            refused = _policyRefusalsOwed > 0;
+            if (refused)
+            {
+                _policyRefusalsOwed--;
+            }
+
+            fail = !refused && _failuresOwed > 0;
             if (fail)
             {
                 _failuresOwed--;
             }
 
-            hold = !fail && _holdsOwed > 0;
+            hold = !fail && !refused && _holdsOwed > 0;
             if (hold)
             {
                 _holdsOwed--;
             }
+        }
+
+        if (refused)
+        {
+            return await StartAnAttemptAsync(store,
+                    projectId,
+                    task,
+                    DevelopmentAttemptStatus.Failed,
+                    cancellationToken,
+                    DevelopmentAttemptEvidenceException.Compose(DevelopmentAttemptFailureCodes.WorkspacePolicyRefused, PolicySentence))
+                .ConfigureAwait(false);
         }
 
         if (fail || hold)
@@ -171,7 +207,8 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
         Guid projectId,
         DevelopmentTaskSnapshot task,
         DevelopmentAttemptStatus? terminal,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string terminalReason = "The scripted coder attempt failed.")
     {
         var ready = task;
         if (task.Status == DevelopmentTaskStatus.Planned)
@@ -205,7 +242,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
                                    Guid.NewGuid(),
                                    landed,
                                    ExpectedAttemptVersion: 1,
-                                   "The scripted coder attempt failed."),
+                                   terminalReason),
                                cancellationToken)
                            .ConfigureAwait(false);
         }

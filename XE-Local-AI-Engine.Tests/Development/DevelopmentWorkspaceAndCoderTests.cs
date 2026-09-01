@@ -946,6 +946,53 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    ///     L5: a test-write refusal reaches the operator in the POLICY's own words. It used to be replaced by "violated
+    ///     a workspace security policy", so a workflow node spent its whole retry budget — roughly ten minutes of real
+    ///     model time, live — without ever telling anyone which rule it broke or what to change. The failure-code prefix
+    ///     rides along so the workflow lane can class it as a policy refusal rather than as a provider error.
+    /// </summary>
+    [Test]
+    public async Task CoderRunner_WhenTheTestWritePolicyRefuses_TerminalizesWithThePolicysOwnSentence()
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        Directory.CreateDirectory(Path.Combine(repository, "tests"));
+        await File.WriteAllTextAsync(Path.Combine(repository, "tests", "FeatureTests.cs"), "// the test that exists at the base commit\n").ConfigureAwait(false);
+        EnsureSuccess(await RunProcessAsync(repository, "git", "add", "tests/FeatureTests.cs").ConfigureAwait(false));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", "tests").ConfigureAwait(false));
+
+        var data = Path.Combine(_root, "policy-runner-data");
+        Directory.CreateDirectory(data);
+        var options = Options.Create(OptionsValue());
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+        var store = Substitute.For<IDevelopmentStore>();
+        store.GetExecutionSnapshotAsync(snapshot.AttemptId, Arg.Any<CancellationToken>()).Returns(snapshot);
+        store.TerminalizeAttemptAsync(Arg.Any<DevelopmentTerminalizeAttemptCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call => Operation(snapshot, artifactId: null));
+
+        using var sandbox = CreateSandbox();
+        var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var runner = new DevelopmentCoderAttemptRunner(store,
+            workspace,
+            sandbox,
+            new DevelopmentPatchEvidenceService(options),
+            Substitute.For<IDevelopmentArtifactBlobStore>(),
+            new TestDeletingCoderModel(),
+            new UnexpectedCloudContextService(),
+            options);
+
+        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository)))
+                          .ConfigureAwait(false);
+
+        _ = store.Received(1)
+                 .TerminalizeAttemptAsync(Arg.Is<DevelopmentTerminalizeAttemptCommand>(command =>
+                         command.Status == PersistenceDevelopmentAttemptStatus.Failed
+                         && command.TerminalReason != null
+                         && command.TerminalReason.Contains("test that existed at the base commit", StringComparison.Ordinal)
+                         && DevelopmentAttemptEvidenceException.Names(command.TerminalReason, DevelopmentAttemptFailureCodes.WorkspacePolicyRefused)),
+                     Arg.Any<CancellationToken>());
+    }
+
     private static DevelopmentOptions OptionsValue(int maxPatchBytes = 1024 * 1024,
         int maxFileWriteBytes = 1024 * 1024,
         int maxCommandOutputBytes = 256 * 1024) =>
@@ -1139,6 +1186,29 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(provider);
         return resolver;
+    }
+
+    /// <summary>A coder that takes the shortest path to green: it rewrites a test that existed at the base commit.</summary>
+    private sealed class TestDeletingCoderModel : IDevelopmentCoderModel
+    {
+        public async Task<DevelopmentCoderModelResult> RunAsync(string modelId,
+            string prompt,
+            IDevelopmentWorkspaceTools tools,
+            int maxOutputTokens,
+            int maxToolCalls,
+            DevelopmentAttemptLiveProgress? liveProgress = null,
+            DevelopmentCloudRoleRoute? cloudRoute = null,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(tools);
+            _ = await tools.WriteFileAsync("tests/FeatureTests.cs", "// nothing to see here\n", cancellationToken).ConfigureAwait(false);
+            return new DevelopmentCoderModelResult(new DevelopmentCoderSubmission("Made the tests pass.",
+                    ["tests/FeatureTests.cs"],
+                    [],
+                    Notes: null),
+                InputTokens: 10,
+                OutputTokens: 20);
+        }
     }
 
     private sealed class WritingCoderModel : IDevelopmentCoderModel

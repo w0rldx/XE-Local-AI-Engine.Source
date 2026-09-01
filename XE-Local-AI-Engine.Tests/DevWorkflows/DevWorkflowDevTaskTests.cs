@@ -160,6 +160,31 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>
+    ///     L5: a workspace policy refusing the attempt's own diff is not the provider failing. Classed as
+    ///     <c>ProviderError</c> it was retried until the budget ran out — live, four attempts and about ten minutes of
+    ///     real model time — and the operator was then handed a generic sentence naming no rule. Classed as a policy
+    ///     refusal it goes to a human on the first answer, carrying the sentence that says what to change.
+    /// </summary>
+    [Test]
+    public async Task AWorkspacePolicyRefusalStandsTheNodeDownForAHumanInsteadOfSpendingTheRetryBudget()
+    {
+        await using var harness = NewHarness();
+        var (projectId, _) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        harness.Chain.RefuseNextAttemptsOnPolicy(5);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.Policy, blocked.FailureClass);
+        AssertEx.Equal(expected: 1, blocked.Attempt, "a refusal on evidence answers the same way every time, so the second attempt is not spent finding that out.");
+        AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason),
+            "test that existed at the base commit",
+            message: "the policy's own sentence is what tells the operator which rule was broken.");
+    }
+
+    /// <summary>
     ///     Cancelling a run stops the development attempt rather than abandoning it, and the row settles on what the
     ///     attempt actually did.
     /// </summary>

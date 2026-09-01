@@ -358,12 +358,32 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
             "\n- summary must be non-empty.");
     }
 
+    /// <summary>The workspace policy's message, or the generic line when it cannot be shown safely.</summary>
+    private static string PolicyReason(DevelopmentWorkspaceSecurityException exception)
+    {
+        try
+        {
+            return DevelopmentArtifactSanitizer.SanitizeText(exception.Message);
+        }
+        catch (DevelopmentWorkspaceSecurityException)
+        {
+            return "The Development coder attempt violated a workspace security policy.";
+        }
+    }
+
     private static string SanitizedReason(Exception exception)
     {
         return exception switch
         {
             OperationCanceledException => "The bounded Development coder attempt was cancelled or timed out.",
-            DevelopmentWorkspaceSecurityException => "The Development coder attempt violated a workspace security policy.",
+
+            // The POLICY's own sentence, not a generic stand-in for it: "violated a workspace security policy" tells an
+            // operator nothing to change, and a workflow node that spends its whole retry budget on a test-write
+            // refusal spends it without anyone ever being told which rule it broke. Sanitized because not every
+            // workspace-security message is authored — some interpolate a path — and a message the sanitizer refuses
+            // falls back to the generic line rather than escaping.
+            DevelopmentWorkspaceSecurityException security => DevelopmentAttemptEvidenceException.Compose(DevelopmentAttemptFailureCodes.WorkspacePolicyRefused,
+                PolicyReason(security)),
 
             // Authored here, never assembled from model output or an absolute host path, which is what makes it safe
             // to surface verbatim. Everything else still falls through to the generic reason.
