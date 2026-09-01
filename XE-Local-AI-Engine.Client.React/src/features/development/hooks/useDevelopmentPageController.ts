@@ -277,9 +277,7 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 		workflowOwnsApply,
 		workflowRunEnded,
 		workflowRunUnreadable,
-		retryWorkflowRun: () => {
-			void workflowRunQuery.refetch();
-		},
+		retryWorkflowRun: () => workflowRunQuery.refetch(),
 		reconnectFolderId,
 		setReconnectFolderId,
 		previewTaskId,
