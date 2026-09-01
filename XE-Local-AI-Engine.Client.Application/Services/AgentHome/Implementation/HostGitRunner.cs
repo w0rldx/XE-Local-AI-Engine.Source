@@ -87,14 +87,31 @@ internal sealed class HostGitRunner
             return new HostGitResult(ExitCode: -1, string.Empty, exception.Message);
         }
 
-        if (standardInput is { } input)
-        {
-            await process.StandardInput.BaseStream.WriteAsync(input, timeoutCts.Token).ConfigureAwait(false);
-            process.StandardInput.Close();
-        }
-
+        // The drains start BEFORE stdin is written, and that order is load-bearing on a large patch. Both pipes are
+        // OS buffers of a few dozen kilobytes: git writing more diagnostics than fit blocks until somebody reads them,
+        // and this method blocks writing the rest of the patch until git reads THAT — two processes each waiting for
+        // the other, until the per-command timeout. `git apply` reading its whole input before complaining is what has
+        // kept it out of sight; a big enough malformed patch is not obliged to keep it there.
         var stdoutTask = ReadBoundedAsync(process.StandardOutput, maxStandardOutputBytes, timeoutCts.Token);
         var stderrTask = ReadBoundedAsync(process.StandardError, maxStandardErrorBytes, timeoutCts.Token);
+
+        string? inputFailure = null;
+        if (standardInput is { } input)
+        {
+            try
+            {
+                await process.StandardInput.BaseStream.WriteAsync(input, timeoutCts.Token).ConfigureAwait(false);
+                process.StandardInput.Close();
+            }
+            catch (IOException exception)
+            {
+                // git exited before it had read the patch, so the write hit a broken pipe. Kept as a RESULT rather than
+                // let out: every other failure this runner can have comes back as a non-zero exit with the reason on
+                // stderr, and callers are written to that contract. Whatever git managed to say is still worth reading,
+                // so the wait below runs either way and this only speaks up if git left nothing better to say.
+                inputFailure = exception.Message;
+            }
+        }
 
         try
         {
@@ -109,8 +126,15 @@ internal sealed class HostGitRunner
 
         var standardOutput = await stdoutTask.ConfigureAwait(false);
         var standardError = await stderrTask.ConfigureAwait(false);
-        return standardOutput.Truncated || standardError.Truncated
-            ? new HostGitResult(ExitCode: -1, standardOutput.Text, "git produced more output than its configured bound.")
+        if (standardOutput.Truncated || standardError.Truncated)
+        {
+            return new HostGitResult(ExitCode: -1, standardOutput.Text, "git produced more output than its configured bound.");
+        }
+
+        // A git that stopped reading and then exited zero did not see the whole input, whatever its exit code claims.
+        // One that exited non-zero has already said why, in its own words, which are better than the pipe's.
+        return process.ExitCode == 0 && inputFailure is not null
+            ? new HostGitResult(ExitCode: -1, standardOutput.Text, $"git stopped reading its input: {inputFailure}")
             : new HostGitResult(process.ExitCode, standardOutput.Text, standardError.Text);
     }
 

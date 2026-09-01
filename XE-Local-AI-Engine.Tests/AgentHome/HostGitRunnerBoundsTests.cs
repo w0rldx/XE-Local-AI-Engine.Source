@@ -55,6 +55,37 @@ public sealed class HostGitRunnerBoundsTests : IDisposable
         AssertEx.Contains(unbounded.StandardOutput, "untracked.txt");
     }
 
+    /// <summary>
+    ///     A git that exits without reading its input is answered as a failed run, not as an exception out of the
+    ///     write.
+    ///     <para>
+    ///         The input is bigger than a pipe buffer, so the write cannot complete until the reader consumes it — and
+    ///         <c>--version</c> never does. The write therefore blocks, git exits, and the write comes back as a broken
+    ///         pipe. Every failure this runner can have is a non-zero exit with a reason on stderr; this one used to be
+    ///         the exception to that, thrown straight past callers written to the contract.
+    ///     </para>
+    ///     <para>
+    ///         It is also what pins the ORDER of the drains against the stdin write. With the drains started after the
+    ///         write, this call never reaches them at all.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task RunAsync_WhenGitExitsWithoutReadingItsInput_AnswersAFailedRunInsteadOfThrowing()
+    {
+        var repository = await RepositoryAsync().ConfigureAwait(false);
+        var runner = new HostGitRunner(timeoutSeconds: 30);
+
+        // A megabyte: every pipe buffer this runs on is far smaller, so the write is still in flight when git exits.
+        var result = await runner.RunAsync(repository,
+                                      AgentHomeGit.Arguments("--version"),
+                                      CancellationToken.None,
+                                      standardInput: new byte[1024 * 1024])
+                                  .ConfigureAwait(false);
+
+        AssertEx.Equal(expected: -1, result.ExitCode, $"a git that never saw the input did not succeed at it: {result.StandardError}");
+        AssertEx.Contains(result.StandardError, "stopped reading its input");
+    }
+
     /// <summary>A repository with enough uncommitted noise for <c>status</c> to out-talk a four-character bound.</summary>
     private async Task<string> RepositoryAsync()
     {
