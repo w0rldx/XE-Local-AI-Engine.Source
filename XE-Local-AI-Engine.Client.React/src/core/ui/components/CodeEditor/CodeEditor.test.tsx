@@ -10,8 +10,10 @@ import { installJsdomEnvironmentMocks, renderWithMantine } from "@/test/MantineT
 const editorMock = vi.hoisted(() => {
 	let value = "";
 	let contentListener: (() => void) | undefined;
+	let hasFocus = false;
 	const instance = {
 		getValue: vi.fn(() => value),
+		hasTextFocus: vi.fn(() => hasFocus),
 		setValue: vi.fn((next: string) => {
 			value = next;
 			// Monaco emits onDidChangeModelContent for programmatic writes too.
@@ -38,6 +40,9 @@ const editorMock = vi.hoisted(() => {
 			value = next;
 			contentListener?.();
 		},
+		focus(next: boolean) {
+			hasFocus = next;
+		},
 	};
 });
 
@@ -52,6 +57,7 @@ vi.mock("@/core/ui/components/CodeEditor/MonacoRuntime", () => ({
 describe("CodeEditor", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		editorMock.focus(false);
 		installJsdomEnvironmentMocks();
 	});
 	afterEach(() => cleanup());
@@ -129,5 +135,37 @@ describe("CodeEditor", () => {
 		await screen.findByTestId("viewer");
 		unmount();
 		expect(editorMock.instance.dispose).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not rewind the model to a lagging `value` while the operator is typing", async () => {
+		// The controlled round trip is asynchronous: the parent re-renders one keystroke behind. Writing that echo back
+		// reset the model to the stale text and dropped everything typed since, which reads as lost and reordered input.
+		const { rerender } = renderWithMantine(<CodeEditor value="ab" data-testid="editor" onChange={vi.fn()} />);
+		await screen.findByTestId("editor");
+		editorMock.focus(true);
+
+		act(() => editorMock.type("abcd"));
+		// The parent has only caught up as far as "abc".
+		rerender(
+			<MantineProvider>
+				<CodeEditor value="abc" data-testid="editor" onChange={vi.fn()} />
+			</MantineProvider>,
+		);
+
+		expect(editorMock.instance.setValue).not.toHaveBeenCalled();
+		expect(editorMock.instance.getValue()).toBe("abcd");
+	});
+
+	it("still applies a value the parent changed while the editor is not focused", async () => {
+		const { rerender } = renderWithMantine(<CodeEditor value="ab" data-testid="editor" onChange={vi.fn()} />);
+		await screen.findByTestId("editor");
+
+		rerender(
+			<MantineProvider>
+				<CodeEditor value="replaced" data-testid="editor" onChange={vi.fn()} />
+			</MantineProvider>,
+		);
+
+		expect(editorMock.instance.setValue).toHaveBeenCalledWith("replaced");
 	});
 });

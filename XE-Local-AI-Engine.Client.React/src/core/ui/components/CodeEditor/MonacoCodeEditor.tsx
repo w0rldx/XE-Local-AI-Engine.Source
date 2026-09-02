@@ -66,9 +66,16 @@ export default function MonacoCodeEditor({
 		};
 	}, []);
 
+	// While the operator is typing, `value` is only this editor's own edits echoed back through the parent's state —
+	// and a render can lag a keystroke behind. Writing a lagging echo back rewinds the model to a stale document and
+	// takes every character typed since with it, which reads as dropped and reordered input. The parent is the
+	// authority on the document only when the editor does not have focus.
+	//
+	// ponytail: a parent that REPLACES the content while the editor is focused (a Format button, say) would be
+	// ignored. Nothing does that today; the fix then is an explicit imperative handle, not a looser guard here.
 	useEffect(() => {
 		const editor = editorRef.current;
-		if (editor && editor.getValue() !== value) {
+		if (editor && !editor.hasTextFocus() && editor.getValue() !== value) {
 			applyingPropValueRef.current = true;
 			try {
 				editor.setValue(value);

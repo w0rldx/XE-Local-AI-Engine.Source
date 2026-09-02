@@ -183,4 +183,32 @@ describe("DevWorkflowRuleSetsPanel", () => {
 
 		await waitFor(() => expect(deleted).toBe(true));
 	});
+
+	it("saves the body exactly as it was typed, character for character", async () => {
+		// The editor is controlled, so every keystroke round-trips through this dialog's state before coming back as
+		// the editor's `value`. A patch that lost or reordered part of that round trip would land here.
+		let sentBody: unknown;
+		server.use(
+			listRoute(),
+			http.post(localApiPath("development-workflows/rule-sets"), async ({ request }) => {
+				sentBody = ((await request.json()) as { body?: string }).body;
+				return HttpResponse.json(devWorkflowRuleSet());
+			}),
+		);
+		renderPanel();
+
+		fireEvent.click(await screen.findByTestId("dev-workflow-rule-set-create"));
+		fireEvent.change(await screen.findByTestId("dev-workflow-rule-set-name"), { target: { value: "House style" } });
+
+		// One character at a time, the way the editor emits them.
+		const typed = "# House style\n\nSmall diffs. No new dependencies.";
+		const editor = screen.getByTestId("dev-workflow-rule-set-body");
+		for (let index = 1; index <= typed.length; index += 1) {
+			fireEvent.change(editor, { target: { value: typed.slice(0, index) } });
+		}
+
+		fireEvent.click(screen.getByTestId("dev-workflow-rule-set-submit"));
+
+		await waitFor(() => expect(sentBody).toBe(typed));
+	});
 });

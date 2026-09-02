@@ -103,7 +103,7 @@ export function DevWorkflowsPage() {
 				}
 			/>
 
-			<Tabs value={tab} onChange={(value) => setTab(value === "ruleSets" ? "ruleSets" : "runs")} data-testid="dev-workflows-tabs">
+			<Tabs value={tab} onChange={(value) => setTab(devWorkflowsPageTabs.find((candidate) => candidate === value) ?? "runs")} data-testid="dev-workflows-tabs">
 				<Tabs.List>
 					<Tabs.Tab value="runs" data-testid="dev-workflows-tab-runs">
 						{t("pages.devWorkflows.tabs.runs", "Runs")}

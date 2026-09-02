@@ -233,4 +233,20 @@ describe("DevWorkflowsPage", () => {
 		expect(await screen.findByTestId("dev-workflow-rule-sets")).toBeDefined();
 		await waitFor(() => expect(catalogueReads).toBe(1));
 	});
+
+	it("opens the definition editor on the Templates tab", async () => {
+		// The tab-value narrowing collapsed every value it did not recognise to `runs`, so this shelf could be clicked
+		// and never opened — the whole definition editor was unreachable in the app while its own tests passed.
+		server.use(jsonRoute("get", "development-workflows/work-items", { items: [] }), definitionsRoute(), projectsRoute());
+		renderWithProviders(
+			<ConfirmProvider>
+				<DevWorkflowsPage />
+			</ConfirmProvider>,
+		);
+
+		fireEvent.click(await screen.findByTestId("dev-workflows-tab-templates"));
+
+		expect(await screen.findByTestId("dev-workflows-definition-picker")).toBeDefined();
+		expect(screen.getByTestId("dev-workflow-definition-form-empty")).toBeDefined();
+	});
 });
