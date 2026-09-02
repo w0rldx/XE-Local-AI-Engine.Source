@@ -12,22 +12,27 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import { listDevWorkflowRunEvents, type ListDevWorkflowRunEventsResponse } from "@/core/api/generated";
 import {
 	cancelDevWorkflowRunMutation,
+	createDevWorkflowRuleSetMutation,
 	createDevWorkflowWorkItemMutation,
 	decideDevWorkflowNodeRunMutation,
+	deleteDevWorkflowRuleSetMutation,
 	deleteDevWorkflowWorkItemMutation,
 	getDevWorkflowArtifactContentOptions,
 	getDevWorkflowDefinitionOptions,
 	getDevWorkflowNodeRunOptions,
+	getDevWorkflowRuleSetOptions,
 	getDevWorkflowRunOptions,
 	getDevWorkflowWorkItemOptions,
 	listDevelopmentProjectsOptions,
 	listDevWorkflowArtifactsOptions,
 	listDevWorkflowDefinitionsOptions,
+	listDevWorkflowRuleSetsOptions,
 	listDevWorkflowRunEventsQueryKey,
 	listDevWorkflowWorkItemsOptions,
 	pauseDevWorkflowRunMutation,
 	resumeDevWorkflowRunMutation,
 	startDevWorkflowRunMutation,
+	updateDevWorkflowRuleSetMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { callWithResponseValidation, withResponseValidation } from "@/core/api/ResponseValidation";
 import { readDevWorkflowConflict } from "@/features/devWorkflows/api/DevWorkflowConflict";
@@ -44,6 +49,8 @@ export const devWorkflowQueryIds = {
 	artifactContent: "getDevWorkflowArtifactContent",
 	definitions: "listDevWorkflowDefinitions",
 	definition: "getDevWorkflowDefinition",
+	ruleSets: "listDevWorkflowRuleSets",
+	ruleSet: "getDevWorkflowRuleSet",
 } as const;
 
 export type DevWorkflowQueryId = (typeof devWorkflowQueryIds)[keyof typeof devWorkflowQueryIds];
@@ -279,6 +286,61 @@ export function useDevWorkflowArtifactContent(runId: string | undefined, artifac
 		),
 		enabled: Boolean(runId) && Boolean(artifactId),
 	});
+}
+
+/**
+ * The rule-set catalogue. A global resource scoped by `{ projectIds, nodeTypes }` (Y2/M4) rather than owned by any one
+ * run, which is why it is managed from the LIST page and not from a work item. Summaries only — the body is up to
+ * 4096 characters of policy prose and is read one rule set at a time.
+ */
+export function useDevWorkflowRuleSets(options: FeedOptions = {}) {
+	return useQuery({
+		...withResponseValidation(listDevWorkflowRuleSetsOptions()),
+		enabled: options.enabled ?? true,
+	});
+}
+
+/** One rule set WITH its body, read only when the editor is actually open on it. */
+export function useDevWorkflowRuleSet(ruleSetId: string | undefined) {
+	return useQuery({
+		...withResponseValidation(getDevWorkflowRuleSetOptions({ path: { ruleSetId: ruleSetId ?? "" } })),
+		enabled: Boolean(ruleSetId),
+	});
+}
+
+/**
+ * Create / update / delete, all three refreshing the catalogue. An update also drops the single-rule-set cache entry:
+ * the editor reopens on the row it just wrote, and a stale `version` there would earn a 409 on the very next save.
+ *
+ * Nothing here touches a RUN's cache. `appliedRuleSets` is the resolution a node run persisted at materialization
+ * time, so editing a rule set must not change what a past run reports it was told — the "edited since" badge is the
+ * whole point of keeping the two apart.
+ */
+export function useDevWorkflowRuleSetMutations() {
+	const queryClient = useQueryClient();
+	const refresh = async (ruleSetId?: string): Promise<void> => {
+		await queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.ruleSets) });
+		if (ruleSetId) {
+			await queryClient.invalidateQueries({
+				queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.ruleSet, { ruleSetId }),
+			});
+		}
+	};
+
+	const create = useMutation({
+		...withResponseValidation(createDevWorkflowRuleSetMutation()),
+		onSuccess: () => refresh(),
+	});
+	const update = useMutation({
+		...withResponseValidation(updateDevWorkflowRuleSetMutation()),
+		onSuccess: (_data, variables) => refresh(variables.path?.ruleSetId),
+	});
+	const remove = useMutation({
+		...withResponseValidation(deleteDevWorkflowRuleSetMutation()),
+		onSuccess: (_data, variables) => refresh(variables.path?.ruleSetId),
+	});
+
+	return { create, update, remove };
 }
 
 export function useCreateDevWorkflowWorkItem() {

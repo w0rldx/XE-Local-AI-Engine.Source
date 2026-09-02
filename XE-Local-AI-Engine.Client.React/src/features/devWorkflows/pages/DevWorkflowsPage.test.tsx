@@ -10,6 +10,7 @@ import {
 	devWorkflowWorkItemSummary,
 } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { DevWorkflowsPage } from "@/features/devWorkflows/pages/DevWorkflowsPage";
+import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { jsonRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { setupMswServer } from "@/test/UseMswServer";
@@ -204,5 +205,32 @@ describe("DevWorkflowsPage", () => {
 		const error = await screen.findByTestId("create-dev-workflow-work-item-error");
 		expect(error.textContent).toContain("the title is too long");
 		expect(navigate).not.toHaveBeenCalled();
+	});
+
+	it("keeps the runs list as the default shelf and fetches the rule-set catalogue only when it is opened", async () => {
+		let catalogueReads = 0;
+		server.use(
+			jsonRoute("get", "development-workflows/work-items", { items: [] }),
+			definitionsRoute(),
+			projectsRoute(),
+			http.get(localApiPath("development-workflows/rule-sets"), () => {
+				catalogueReads += 1;
+				return HttpResponse.json({ items: [] });
+			}),
+		);
+		renderWithProviders(
+			<ConfirmProvider>
+				<DevWorkflowsPage />
+			</ConfirmProvider>,
+		);
+
+		// The runs view is what an operator opens this page for, so it is what they get without asking.
+		expect(await screen.findByTestId("dev-workflows-empty")).toBeDefined();
+		expect(catalogueReads).toBe(0);
+
+		fireEvent.click(screen.getByTestId("dev-workflows-tab-rule-sets"));
+
+		expect(await screen.findByTestId("dev-workflow-rule-sets")).toBeDefined();
+		await waitFor(() => expect(catalogueReads).toBe(1));
 	});
 });
