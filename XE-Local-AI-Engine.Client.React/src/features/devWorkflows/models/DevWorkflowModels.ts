@@ -263,5 +263,20 @@ export function devWorkflowArtifactLineages(
 	});
 }
 
+/**
+ * The "attempt N of M" numbers, for the three surfaces that render that sentence.
+ *
+ * The displayed maximum is clamped UP to the attempt. An operator's Retry on an exhausted node runs an attempt past
+ * the node's `maxAttempts` — X3 grants the intervention its own go — and the raw fields then read "attempt 4 of 3",
+ * a sentence that says the runtime broke its own budget rather than that a human granted one more attempt.
+ */
+export function devWorkflowAttemptCounts(
+	attempt: number | undefined | null,
+	maxAttempts: number | undefined | null,
+): { readonly attempt: number; readonly maxAttempts: number } {
+	const current = attempt ?? 1;
+	return { attempt: current, maxAttempts: Math.max(current, maxAttempts ?? 1) };
+}
+
 /** The shared decoder (P4 §2.10), kept under the feature's own name so no call site or test had to move. */
 export { decodeArtifactContent as decodeDevWorkflowArtifactContent } from "@/core/artifacts/ArtifactContent";

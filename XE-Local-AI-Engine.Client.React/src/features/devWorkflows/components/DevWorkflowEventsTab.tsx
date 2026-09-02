@@ -1,5 +1,5 @@
-import { Anchor, Badge, Button, Code, Collapse, Group, Paper, Stack, Text } from "@mantine/core";
-import { useState } from "react";
+import { Alert, Anchor, Badge, Button, Code, Collapse, Group, Paper, Stack, Text } from "@mantine/core";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
@@ -15,6 +15,11 @@ export interface DevWorkflowEventsTabProps {
 	readonly isLoadingMore: boolean;
 	/** Which end the feed is anchored on (R-C4). Decides which direction "load more" walks, and what it is called. */
 	readonly anchor: DevWorkflowEventsAnchor;
+	/**
+	 * The cursor the newest-first feed is currently opened on. It moves once per 200 sequences on a live run, and when
+	 * it does the query re-keys and the older pages the operator had loaded are gone — see `devWorkflowEventsAnchorParam`.
+	 */
+	readonly anchorParam: number;
 	readonly onAnchorChange: (anchor: DevWorkflowEventsAnchor) => void;
 	readonly onLoadMore: () => void;
 	readonly onSelectNode: (nodeRunId: string) => void;
@@ -26,12 +31,26 @@ export function DevWorkflowEventsTab({
 	hasMore,
 	isLoadingMore,
 	anchor,
+	anchorParam,
 	onAnchorChange,
 	onLoadMore,
 	onSelectNode,
 }: DevWorkflowEventsTabProps) {
 	const { t } = useTranslation();
 	const [expandedId, setExpandedId] = useState<string | undefined>(undefined);
+	// The re-anchor notice. Derived from a prop during render (React's own "adjust state when a prop changes" pattern)
+	// rather than in an effect, so the notice and the rows it explains paint together.
+	//
+	// Only a FORWARD move from an already-established anchor counts. The first move is from 0, which is the run payload
+	// simply arriving with a `lastSequence` the feed had not seen yet — nothing was loaded to lose — and a move to 0 is
+	// the operator jumping to the oldest end, which is their own act and needs no explanation.
+	const previousAnchorParam = useRef(anchorParam);
+	const [wasReanchored, setWasReanchored] = useState(false);
+	if (previousAnchorParam.current !== anchorParam) {
+		const grew = previousAnchorParam.current > 0 && anchorParam > previousAnchorParam.current;
+		previousAnchorParam.current = anchorParam;
+		setWasReanchored(grew && anchor === "newest");
+	}
 
 	// Sequences are strictly increasing but NOT contiguous — the run's counter is shared with node-runs and artifacts,
 	// so a gap between two event numbers is normal and must never be read as a lost event.
@@ -64,6 +83,14 @@ export function DevWorkflowEventsTab({
 					{t("pages.devWorkflows.events.jumpOldest", "Oldest")}
 				</Button>
 			</Group>
+			{wasReanchored ? (
+				<Alert color="blue" variant="light" data-testid="dev-workflow-events-reanchored">
+					{t(
+						"pages.devWorkflows.events.reanchored",
+						"History reloaded from the newest events; load older to see the earlier ones again.",
+					)}
+				</Alert>
+			) : null}
 			{ordered.length === 0 ? (
 				<EmptyState
 					message={
@@ -142,7 +169,10 @@ export function DevWorkflowEventsTab({
 					size="xs"
 					variant="light"
 					loading={isLoadingMore}
-					onClick={onLoadMore}
+					onClick={() => {
+						setWasReanchored(false);
+						onLoadMore();
+					}}
 					data-testid="dev-workflow-events-load-more"
 				>
 					{anchor === "newest"

@@ -5062,7 +5062,8 @@
 				"loadMore": "Mehr laden",
 				"loadOlder": "Ältere laden",
 				"jumpNewest": "Neueste",
-				"jumpOldest": "Älteste"
+				"jumpOldest": "Älteste",
+				"reanchored": "Der Verlauf wurde ab den neuesten Ereignissen neu geladen; ältere Ereignisse über „Ältere laden“ erneut abrufen."
 			},
 			"artifacts": {
 				"title": "Artefakte",
@@ -5241,6 +5242,11 @@
 				"Completed": "Abgeschlossen",
 				"Blocked": "Blockiert",
 				"Cancelled": "Abgebrochen"
+			},
+			"ruleSets": {
+				"applied": "Angewendete Regelsätze",
+				"editedSince": "seitdem bearbeitet",
+				"deletedSince": "gelöscht"
 			}
 		}
 	},

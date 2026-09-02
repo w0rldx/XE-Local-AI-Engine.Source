@@ -82,9 +82,10 @@ export type DevWorkflowEventsAnchor = "newest" | "oldest";
  * boundary all the way to `lastSequence` however far past the boundary that has moved.
  *
  * ponytail: crossing a boundary on a live run does re-anchor and discard loaded history. That is once per 200
- * sequences, and the alternative — a cursor that moves with every event — discards it on every one.
+ * sequences, and the alternative — a cursor that moves with every event — discards it on every one. Exported so the
+ * events tab can SAY so when it happens, rather than the older pages an operator had loaded silently disappearing.
  */
-function devWorkflowEventsAnchorParam(lastSequence: number | undefined, anchor: DevWorkflowEventsAnchor): number {
+export function devWorkflowEventsAnchorParam(lastSequence: number | undefined, anchor: DevWorkflowEventsAnchor): number {
 	if (anchor === "oldest" || !lastSequence || lastSequence <= devWorkflowEventsTailPageSize) {
 		return 0;
 	}

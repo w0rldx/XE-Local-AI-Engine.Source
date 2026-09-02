@@ -5062,7 +5062,8 @@
 				"loadMore": "Load more",
 				"loadOlder": "Load older",
 				"jumpNewest": "Newest",
-				"jumpOldest": "Oldest"
+				"jumpOldest": "Oldest",
+				"reanchored": "History reloaded from the newest events; load older to see the earlier ones again."
 			},
 			"artifacts": {
 				"title": "Artifacts",
@@ -5241,6 +5242,11 @@
 				"Completed": "Completed",
 				"Blocked": "Blocked",
 				"Cancelled": "Cancelled"
+			},
+			"ruleSets": {
+				"applied": "Applied rule sets",
+				"editedSince": "edited since",
+				"deletedSince": "deleted"
 			}
 		}
 	},

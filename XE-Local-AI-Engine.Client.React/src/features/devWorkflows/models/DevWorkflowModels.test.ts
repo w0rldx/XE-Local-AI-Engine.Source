@@ -12,6 +12,7 @@ import {
 	devWorkflowArtifactKinds,
 	devWorkflowArtifactLanguage,
 	devWorkflowArtifactLineages,
+	devWorkflowAttemptCounts,
 	devWorkflowDecisionKinds,
 	devWorkflowNodeAwaitsHuman,
 	devWorkflowNodeStatuses,
@@ -235,5 +236,17 @@ describe("devWorkflowArtifactLineages", () => {
 
 		expect(lineages).toHaveLength(2);
 		expect(lineages.map((lineage) => lineage.latest.name)).toEqual(["one.md", "two.md"]);
+	});
+});
+
+describe("devWorkflowAttemptCounts", () => {
+	it("clamps the maximum up to the attempt — an operator-granted retry is not the runtime overrunning its budget", () => {
+		expect(devWorkflowAttemptCounts(4, 3)).toEqual({ attempt: 4, maxAttempts: 4 });
+	});
+
+	it("leaves an ordinary attempt alone and defaults both halves to 1", () => {
+		expect(devWorkflowAttemptCounts(2, 3)).toEqual({ attempt: 2, maxAttempts: 3 });
+		expect(devWorkflowAttemptCounts(undefined, undefined)).toEqual({ attempt: 1, maxAttempts: 1 });
+		expect(devWorkflowAttemptCounts(null, null)).toEqual({ attempt: 1, maxAttempts: 1 });
 	});
 });

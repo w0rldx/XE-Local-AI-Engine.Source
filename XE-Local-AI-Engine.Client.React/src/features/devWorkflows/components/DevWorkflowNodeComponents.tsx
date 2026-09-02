@@ -23,6 +23,7 @@ import type {
 import {
 	type DevWorkflowNodeStatus,
 	type DevWorkflowNodeType,
+	devWorkflowAttemptCounts,
 	isDevWorkflowNodeInProgress,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
 
@@ -144,10 +145,11 @@ export function DevWorkflowNodeCard({ id, data, selected }: NodeProps<DevWorkflo
 				) : null}
 				{showsAttempt ? (
 					<Text size="xs" c="dimmed" data-testid={`dev-workflow-graph-node-attempt-${id}`}>
-						{t("pages.devWorkflows.nodes.attempt", "attempt {{attempt}} of {{maxAttempts}}", {
-							attempt: nodeData.attempt,
-							maxAttempts: nodeData.maxAttempts,
-						})}
+						{t(
+							"pages.devWorkflows.nodes.attempt",
+							"attempt {{attempt}} of {{maxAttempts}}",
+							devWorkflowAttemptCounts(nodeData.attempt, nodeData.maxAttempts),
+						)}
 					</Text>
 				) : null}
 				{nodeData.agentDisplayName ? (

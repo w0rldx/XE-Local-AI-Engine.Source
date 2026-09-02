@@ -611,4 +611,45 @@ describe("DevWorkflowNodePanel", () => {
 
 		expect(screen.getByTestId("dev-workflow-node-input").textContent).toBe('{"workItemRequest":"Compare the options"}');
 	});
+
+	it("names the rule sets that were baked into this node run's objective, with the revision it used", () => {
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				appliedRuleSets: [{ id: "rs-1", name: "House style", contentSha256: "abcdef1234567890", currentContentSha256: "abcdef1234567890" }],
+			}),
+		);
+
+		const row = screen.getByTestId("dev-workflow-node-rule-set-rs-1");
+		expect(row.textContent).toContain("House style");
+		expect(row.textContent).toContain("abcdef12");
+		expect(screen.queryByTestId("dev-workflow-node-rule-set-edited-rs-1")).toBeNull();
+	});
+
+	it("badges a rule set whose body moved on since the run used it, and one that has been deleted", () => {
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				appliedRuleSets: [
+					{ id: "rs-1", name: "House style", contentSha256: "aaaa", currentContentSha256: "bbbb" },
+					{ id: "rs-2", name: "Gone", contentSha256: "cccc", currentContentSha256: null },
+				],
+			}),
+		);
+
+		expect(screen.getByTestId("dev-workflow-node-rule-set-edited-rs-1")).toBeDefined();
+		expect(screen.getByTestId("dev-workflow-node-rule-set-deleted-rs-2")).toBeDefined();
+	});
+
+	it("renders no rule-set section at all when the node run applied none", () => {
+		renderPanel(devWorkflowNodeRunDetail({ appliedRuleSets: [] }));
+
+		expect(screen.queryByTestId("dev-workflow-node-rule-sets")).toBeNull();
+	});
+
+	it("clamps the attempt maximum up to the attempt, so an operator-granted retry never reads 'attempt 4 of 3'", () => {
+		renderPanel(devWorkflowNodeRunDetail({ attempt: 4, maxAttempts: 3 }));
+
+		expect(screen.getByTestId("dev-workflow-node-panel-label").closest("[data-testid='dev-workflow-node-panel']")?.textContent).toContain(
+			"attempt 4 of 4",
+		);
+	});
 });
