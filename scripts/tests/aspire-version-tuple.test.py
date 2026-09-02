@@ -9,9 +9,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CENTRAL_PACKAGES = REPO_ROOT / "Directory.Packages.props"
 APPHOST_PROJECT = REPO_ROOT / "XE-Local-AI-Engine.AppHost" / "XE-Local-AI-Engine.AppHost.csproj"
 
-ASPIRE_RELEASE_VERSION = "13.5.2"
-ASPIRE_BROWSERS_VERSION = "13.5.2-preview.1.26421.6"
-SQLITE_TOOLKIT_VERSION = "13.4.0"
+ASPIRE_RELEASE_VERSION = "13.5.3"
+ASPIRE_BROWSERS_VERSION = "13.5.3-preview.1.26425.3"
+SQLITE_TOOLKIT_VERSION = "13.5.0"
 
 
 def central_package_versions() -> dict[str, str]:
@@ -58,11 +58,15 @@ class AspireVersionTupleContractTests(unittest.TestCase):
             f"Aspire.Hosting.Browsers left the {ASPIRE_RELEASE_VERSION} servicing family",
         )
 
-    def test_community_toolkit_sqlite_remains_independent(self) -> None:
+    def test_community_toolkit_sqlite_pin_is_deliberate(self) -> None:
+        """CommunityToolkit now follows the Aspire release line (13.5.x), so only the exact pin is asserted.
+
+        This used to also assert the version differed from the Aspire release version. That guard
+        stopped meaning anything once the two started moving together, so it is gone deliberately.
+        """
         sqlite_version = self.packages["CommunityToolkit.Aspire.Hosting.Sqlite"]
 
         self.assertEqual(SQLITE_TOOLKIT_VERSION, sqlite_version)
-        self.assertNotEqual(ASPIRE_RELEASE_VERSION, sqlite_version)
 
 
 if __name__ == "__main__":

@@ -40,7 +40,7 @@ Every project below is grounded in its `.csproj` (`Sdk=` / `OutputType` / `Proje
 
 | Project | SDK / kind | Role |
 |---|---|---|
-| `XE-Local-AI-Engine.AppHost` | `Aspire.AppHost.Sdk` 13.5.2, `Exe`, `IsAspireHost` | **Dev-only orchestration.** `AppHost.cs` wires three resources: the `Client` app (`app`, https), the Vite React app (`client-react`, port 5175), and a SQLite resource (`node-sqlite`) while supplying the node key used by application-level field encryption. Hosting packages are `Aspire.Hosting.AppHost` 13.5.2, `Aspire.Hosting.JavaScript` 13.5.2, `Aspire.Hosting.Browsers` 13.5.2-preview.1.26421.6, and `CommunityToolkit.Aspire.Hosting.Sqlite` 13.4.0. Inference runs inside `Client`; the AppHost has no model-runtime resource. |
+| `XE-Local-AI-Engine.AppHost` | `Aspire.AppHost.Sdk` 13.5.3, `Exe`, `IsAspireHost` | **Dev-only orchestration.** `AppHost.cs` wires three resources: the `Client` app (`app`, https), the Vite React app (`client-react`, port 5175), and a SQLite resource (`node-sqlite`) while supplying the node key used by application-level field encryption. Hosting packages are `Aspire.Hosting.AppHost` 13.5.3, `Aspire.Hosting.JavaScript` 13.5.3, `Aspire.Hosting.Browsers` 13.5.3-preview.1.26425.3, and `CommunityToolkit.Aspire.Hosting.Sqlite` 13.5.0. Inference runs inside `Client`; the AppHost has no model-runtime resource. |
 | `XE-Local-AI-Engine.ServiceDefaults` | `Microsoft.NET.Sdk`, `IsAspireSharedProject` | Shared cross-cutting defaults: OpenTelemetry instrumentation/exporter, `Microsoft.Extensions.Http.Resilience`, service discovery. Referenced by `Client` and `Client.Application`. |
 
 ### Providers (`/Src/Providers/`)

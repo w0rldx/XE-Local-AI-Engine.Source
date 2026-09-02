@@ -36,6 +36,18 @@ updates:
           - "ModelContextProtocol"
           - "ModelContextProtocol.*"
 
+  # The shipped training runtime (ADR 0005): unsloth caps transformers/torch, so every PR from
+  # here must pass a `uv lock` sanity check before merge. See tools/training/pyproject.toml header.
+  - package-ecosystem: uv
+    directory: /tools/training
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    target-branch: develop
+    open-pull-requests-limit: 1
+
   - package-ecosystem: npm
     directory: /XE-Local-AI-Engine.Client.React
     schedule:

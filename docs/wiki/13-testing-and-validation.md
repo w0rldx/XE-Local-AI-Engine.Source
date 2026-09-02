@@ -8,7 +8,7 @@ Repository tests and scripts are evidence that controls can be exercised; their 
 that a particular deployment or release ran them, passed them, retained the output, or made that output
 available to an auditor. Operational evidence must be identified separately rather than inferred.
 
-Test stack at a glance: **TUnit 1.65.0** on **Microsoft.Testing.Platform (MTP)** for the three unit-test projects (the E2E project's `TUnit.Playwright` is still pinned **1.58.0**), **NSubstitute 6.2.0** for mocks, **Microsoft.Playwright 1.61.0 + TUnit.Playwright** for browser E2E, and **Vitest (v8 coverage)** for the React client. `global.json` sets a `10.0.100` feature-band baseline (`rollForward: latestFeature`, so it rolls forward to the highest installed 10.0 feature band and patch at or above `10.0.100` rather than pinning an exact version) and `"test": { "runner": "Microsoft.Testing.Platform" }`, so the whole repo runs under MTP, not VSTest.
+Test stack at a glance: **TUnit 1.65.68** on **Microsoft.Testing.Platform (MTP)** for the three unit-test projects (the E2E project's `TUnit.Playwright` is pinned **1.65.68**), **NSubstitute 6.2.0** for mocks, **Microsoft.Playwright 1.62.0 + TUnit.Playwright** for browser E2E, and **Vitest (v8 coverage)** for the React client. `global.json` sets a `10.0.100` feature-band baseline (`rollForward: latestFeature`, so it rolls forward to the highest installed 10.0 feature band and patch at or above `10.0.100` rather than pinning an exact version) and `"test": { "runner": "Microsoft.Testing.Platform" }`, so the whole repo runs under MTP, not VSTest.
 
 > ⚠️ MTP gotcha (repo-wide): filter by `--treenode-filter`, NOT the legacy VSTest `--filter`. The repository's TUnit/MTP runners and examples support only the tree-node form.
 

@@ -78,7 +78,9 @@ describe("BenchmarkVerifierEditor", () => {
 	it("replaces the configuration wholesale when the kind changes", () => {
 		const onChange = renderEditor("regex", '{"pattern":"^42$"}');
 
-		fireEvent.change(screen.getByTestId("verifier-kind"), { target: { value: "Exact answer" } });
+		// Click, not `change`: Mantine 9.5.2 keeps the Popover dropdown mounted with `display: none` until the
+		// control is actually opened, so an option only enters the accessibility tree once the input is clicked.
+		fireEvent.click(screen.getByTestId("verifier-kind"));
 		fireEvent.click(screen.getByRole("option", { name: "Exact answer" }));
 
 		expect(onChange).toHaveBeenCalledWith({ kind: "exact", config: '{"expected":""}' });
@@ -132,6 +134,8 @@ describe("BenchmarkVerifierEditor pythonTests", () => {
 	it("edits the exports the tests may call by bare name", () => {
 		const onChange = renderEditor("pythonTests", '{"testCode":"assert solve(2) == 4"}');
 
+		// TagsInput commits on Enter only while its own combobox is open (Mantine 9.5.2), so open it first.
+		fireEvent.click(screen.getByTestId("verifier-exports"));
 		fireEvent.change(screen.getByTestId("verifier-exports"), { target: { value: "solve" } });
 		fireEvent.keyDown(screen.getByTestId("verifier-exports"), { key: "Enter" });
 
