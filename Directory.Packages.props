@@ -42,7 +42,7 @@
     <PackageVersion Include="FastEndpoints" Version="8.3.0" />
     <PackageVersion Include="FastEndpoints.Swagger" Version="8.3.0" />
     <PackageVersion Include="BouncyCastle.Cryptography" Version="2.7.0" />
-    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.195" />
+    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.200" />
     <!-- Architecture conformance tests (layer-dependency direction). Test-project only. -->
     <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
     <!-- Newest intended prerelease; banned-API hard wall (RS0030) over BannedSymbols.txt. -->
@@ -56,9 +56,9 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.11" />
     <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.22.0" />
-    <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.10.0" />
-    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.3.3" />
-    <PackageVersion Include="Microsoft.Testing.Platform" Version="2.3.3" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.11.0" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.4.0" />
+    <PackageVersion Include="Microsoft.Testing.Platform" Version="2.4.0" />
     <PackageVersion Include="Microsoft.Playwright" Version="1.62.0" />
     <PackageVersion Include="OllamaSharp" Version="5.4.30" />
     <!-- Coupled to the Microsoft.Playwright pin above: TUnit.Playwright's nuspec sets the Microsoft.Playwright
