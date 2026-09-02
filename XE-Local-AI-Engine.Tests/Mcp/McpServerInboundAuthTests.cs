@@ -224,7 +224,7 @@ public sealed class McpServerInboundAuthTests
 
         AssertEx.Equal("cancel_agent_run|get_agent_run|list_agent_runs|list_agents|list_models|list_workspaces|run_agent|start_agent_run",
             string.Join('|', delegateNames));
-        AssertEx.Equal(23, agenticNames.Length);
+        AssertEx.Equal(25, agenticNames.Length);
         AssertEx.Equal(string.Join('|', AgenticAdminToolNames),
             string.Join('|', agenticNames.Intersect(AgenticAdminToolNames, StringComparer.Ordinal).OrderBy(static name => name, StringComparer.Ordinal)));
     }
@@ -257,7 +257,7 @@ public sealed class McpServerInboundAuthTests
         var agentic = await GenerateRealKeyAsync(factory, client, "agentic").ConfigureAwait(false);
         var agenticNames = ExtractToolNames(await SendRpcAsync(factory, agentic.Key, list).ConfigureAwait(false));
         var agenticCall = await SendRpcAsync(factory, agentic.Key, call).ConfigureAwait(false);
-        AssertEx.Equal(23, agenticNames.Length);
+        AssertEx.Equal(25, agenticNames.Length);
         AssertEx.Contains(agenticCall, "loadedProcessCount");
 
         var delegateKey = await GenerateRealKeyAsync(factory, client, "delegate").ConfigureAwait(false);

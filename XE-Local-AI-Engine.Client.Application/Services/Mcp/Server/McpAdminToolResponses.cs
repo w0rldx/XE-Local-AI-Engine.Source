@@ -15,6 +15,12 @@ public static class McpAdminToolFailureCodes
     public const string ModelPullConflict = "model_pull_conflict";
     public const string ModelPullFailed = "model_pull_failed";
     public const string ModelPullNotFound = "model_pull_not_found";
+
+    /// <summary>What a tool over a switched-off feature answers. A disabled node says so; it does not fault.</summary>
+    public const string NotAvailable = "not_available";
+
+    public const string InvalidStatus = "invalid_status";
+    public const string RunNotFound = "run_not_found";
     public const string ValidationFailed = "validation_failed";
 }
 
@@ -91,6 +97,49 @@ public sealed record McpAgentResponse(
     string? DisplayMessage = null);
 
 public sealed record McpAgentDeleteResponse(bool Deleted, string? FailureCode = null, string? DisplayMessage = null);
+
+/// <summary>
+///     One development-workflow run as an observing agent sees it: lifecycle metadata and node tallies, and nothing
+///     else. The pinned graph, artifact bytes, work-session transcripts and every host path stay on the REST surface a
+///     browser operator uses — an MCP client is being told how a run is going, not handed its contents.
+/// </summary>
+public sealed record McpWorkflowRunSummary(
+    string RunId,
+    string WorkItemId,
+    string? DefinitionName,
+    string Status,
+    int QueuedNodeCount,
+    int RunningNodeCount,
+    int CompletedNodeCount,
+    int TotalNodeCount,
+    int PendingDecisionCount);
+
+/// <summary>Bounded run listing: one row per work item's latest run, matching the one existing REST list surface.</summary>
+public sealed record McpWorkflowRunListResponse(
+    string Status,
+    IReadOnlyList<McpWorkflowRunSummary> Runs,
+    int Count,
+    int Limit,
+    string? FailureCode = null,
+    string? DisplayMessage = null);
+
+/// <summary>One node run, reduced to the five fields that answer where a run stands and how hard a node tried.</summary>
+public sealed record McpWorkflowNodeRunSummary(string NodeKey, string NodeType, string Status, int Attempt, int MaxAttempts);
+
+/// <summary>A single run's observation: the summary, why it ended if it has, and its node rows.</summary>
+public sealed record McpWorkflowRunDetail(
+    McpWorkflowRunSummary Run,
+    string? FailureClass,
+    string? TerminalReason,
+    long? StartedAtUtc,
+    long? EndedAtUtc,
+    IReadOnlyList<McpWorkflowNodeRunSummary> Nodes);
+
+public sealed record McpWorkflowRunGetResponse(
+    string Status,
+    McpWorkflowRunDetail? Run,
+    string? FailureCode = null,
+    string? DisplayMessage = null);
 
 public sealed record McpGenerationMetadataInput
 {

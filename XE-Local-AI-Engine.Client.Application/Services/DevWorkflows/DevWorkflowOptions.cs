@@ -58,4 +58,16 @@ public sealed class DevWorkflowOptions
     /// <summary>How many runs may be live at once. Runs above the cap wait; they are not refused.</summary>
     [Range(1, 64)]
     public int MaxConcurrentRuns { get; init; } = 4;
+
+    /// <summary>
+    ///     How many rows the read-only MCP run listing returns when the caller names no limit, and the ceiling it
+    ///     clamps a named one to. Bounded here for the same reason the agent-run listing is bounded: an MCP client
+    ///     truncates oversized tool output on its own and silently, so the server decides how much is enough.
+    /// </summary>
+    [Range(1, 50)]
+    public int McpDefaultListLimit { get; init; } = 20;
+
+    /// <inheritdoc cref="McpDefaultListLimit" />
+    [Range(1, 50)]
+    public int McpMaxListLimit { get; init; } = 50;
 }

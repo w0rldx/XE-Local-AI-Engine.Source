@@ -30,6 +30,8 @@ and one exact scope in every data row. An `agentic` key sees both `delegate` and
 | `create_agent` | agentic | Validate and create a saved agent. | Required `name`, `instructions`; optional definition/provenance fields. |
 | `update_agent` | agentic | Fully replace a saved agent by id or exact name. | `agent_id`, required `name`, `instructions`, plus the complete optional definition. |
 | `delete_agent` | agentic | Delete a saved agent by id or exact name. | `agent_id`. |
+| `list_workflow_runs` | agentic | List development workflow runs, one row per work item's latest run, as bounded lifecycle metadata. | Optional bounded `limit` and run `status`. Read-only. |
+| `get_workflow_run` | agentic | Get one workflow run's status, node tallies, terminal reason, and per-node rows. | `run_id`. Read-only; no graph, artifacts, transcripts, or host paths. |
 
 ## Lifecycle contract
 
@@ -63,6 +65,6 @@ path to authoring host-command tools.
 ## Trust boundary
 
 There is one singleton inbound-MCP key. Minting either scope rotates it atomically with no dual-valid
-window. An `agentic` key is operator-equivalent only for the 23 tools above; it grants no Operator
+window. An `agentic` key is operator-equivalent only for the 25 tools above; it grants no Operator
 role, JWT, browser REST access, routable listener, or general policy bypass. Do not log tool
 arguments, prompts, message content, tokens, passwords, full keys, or host paths.

@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Server;
 using NSubstitute;
@@ -17,6 +18,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Drafting;
 using XE_Local_AI_Engine.Client.Services.Mcp.Server;
@@ -26,6 +28,10 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 using ApplicationGenerationProvenance = XE_Local_AI_Engine.Client.Services.Drafting.GenerationProvenance;
+using DevWorkflowNodeRunStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowNodeRunStatus;
+using DevWorkflowNodeType = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowNodeType;
+using DevWorkflowRunStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowRunStatus;
+using DevWorkflowWorkItemStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowWorkItemStatus;
 
 public sealed class NodeAdminMcpToolsTests
 {
@@ -41,6 +47,8 @@ public sealed class NodeAdminMcpToolsTests
         "get_runtime_acquisition",
         "get_runtime_status",
         "get_status",
+        "get_workflow_run",
+        "list_workflow_runs",
         "set_default_model",
         "start_model_pull",
         "start_runtime_acquisition",
@@ -560,6 +568,11 @@ public sealed class NodeAdminMcpToolsTests
         harness.Agents.GetByKeyAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(record);
         harness.Agents.UpdateAsync(record.Id, Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record);
         harness.Agents.DeleteAsync(record.Id, Arg.Any<CancellationToken>()).Returns(true);
+        var runDetail = RunDetail();
+        harness.WorkflowStore.ListWorkItemsAsync(Arg.Any<DevWorkflowWorkItemStatus?>(), Arg.Any<CancellationToken>())
+               .Returns(Array.Empty<DevWorkflowWorkItemSnapshot>());
+        harness.WorkflowStore.ListDefinitionsAsync(true, Arg.Any<CancellationToken>()).Returns(Array.Empty<DevWorkflowDefinitionSummary>());
+        harness.WorkflowRuns.GetAsync(runDetail.Run.Id, Arg.Any<CancellationToken>()).Returns(runDetail);
 
         _ = await harness.Tools.GetStatusAsync(CancellationToken.None);
         _ = await harness.Tools.GetRuntimeStatusAsync(CancellationToken.None);
@@ -576,6 +589,8 @@ public sealed class NodeAdminMcpToolsTests
         _ = await harness.Tools.CreateAgentAsync("Agent", "Instructions", CancellationToken.None);
         _ = await harness.Tools.UpdateAgentAsync("agent", "Agent", "Instructions", CancellationToken.None);
         _ = await harness.Tools.DeleteAgentAsync("agent", CancellationToken.None);
+        _ = await harness.Tools.ListWorkflowRunsAsync(CancellationToken.None);
+        _ = await harness.Tools.GetWorkflowRunAsync(runDetail.Run.Id.ToString("D"), CancellationToken.None);
 
         var auditEntries = harness.Logger.Entries.Where(static entry => entry.EventId.Name == "McpAdminToolInvoked").ToArray();
         AssertEx.Equal(ExpectedToolNames.Length, auditEntries.Length);
@@ -744,6 +759,204 @@ public sealed class NodeAdminMcpToolsTests
         AssertEx.Equal(1, cancellationLogger.CallCount);
     }
 
+    [Test]
+    public async Task ListWorkflowRuns_ReturnsOneBoundedRowPerWorkItemsLatestRunAndFiltersByStatus()
+    {
+        var harness = new Harness();
+        var running = WorkItem("Ship it", DevWorkflowRunStatus.Running);
+        var completed = WorkItem("Shipped", DevWorkflowRunStatus.Completed);
+        var never = WorkItem("Never started", null);
+        harness.WorkflowStore.ListWorkItemsAsync(Arg.Any<DevWorkflowWorkItemStatus?>(), Arg.Any<CancellationToken>())
+               .Returns([running, completed, never]);
+
+        var all = await harness.Tools.ListWorkflowRunsAsync(CancellationToken.None);
+
+        AssertEx.Equal("ok", all.Status);
+        AssertEx.Equal(2, all.Count);
+        AssertEx.Equal(20, all.Limit);
+        AssertEx.Equal(running.LatestRunId!.Value.ToString("D"), all.Runs[0].RunId);
+        AssertEx.Equal(running.Id.ToString("D"), all.Runs[0].WorkItemId);
+        AssertEx.Equal("seeded", all.Runs[0].DefinitionName!);
+        AssertEx.Equal("Running", all.Runs[0].Status);
+        AssertEx.Equal(1, all.Runs[0].QueuedNodeCount);
+        AssertEx.Equal(2, all.Runs[0].RunningNodeCount);
+        AssertEx.Equal(3, all.Runs[0].CompletedNodeCount);
+        AssertEx.Equal(7, all.Runs[0].TotalNodeCount);
+        AssertEx.Equal(1, all.Runs[0].PendingDecisionCount);
+
+        var filtered = await harness.Tools.ListWorkflowRunsAsync(CancellationToken.None, limit: 500, status: "completed");
+
+        AssertEx.Equal("ok", filtered.Status);
+        AssertEx.Equal(1, filtered.Count);
+        AssertEx.Equal(50, filtered.Limit);
+        AssertEx.Equal(completed.LatestRunId!.Value.ToString("D"), filtered.Runs[0].RunId);
+    }
+
+    [Test]
+    public async Task ListWorkflowRuns_RejectsAnUnknownStatusStructurallyWithoutQueryingTheStore()
+    {
+        var harness = new Harness();
+
+        var response = await harness.Tools.ListWorkflowRunsAsync(CancellationToken.None, status: "nonsense");
+
+        AssertEx.Equal("invalid_status", response.Status);
+        AssertEx.Equal("invalid_status", response.FailureCode!);
+        AssertEx.Empty(response.Runs);
+        await harness.WorkflowStore.DidNotReceive().ListWorkItemsAsync(Arg.Any<DevWorkflowWorkItemStatus?>(), Arg.Any<CancellationToken>());
+        AssertSingleOutcome(harness, "rejected");
+    }
+
+    [Test]
+    public async Task GetWorkflowRun_ReturnsTheNarrowSummaryAndNodeRowsAndNothingElse()
+    {
+        var harness = new Harness();
+        var detail = RunDetail();
+        harness.WorkflowRuns.GetAsync(detail.Run.Id, Arg.Any<CancellationToken>()).Returns(detail);
+        harness.WorkflowStore.ListDefinitionsAsync(true, Arg.Any<CancellationToken>())
+               .Returns([
+                   new DevWorkflowDefinitionSummary(detail.Run.DefinitionId,
+                       "seeded",
+                       "hash",
+                       2,
+                       XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowDefinitionSource.Seeded,
+                       "slug",
+                       false,
+                       1,
+                       10,
+                       10)
+               ]);
+
+        var response = await harness.Tools.GetWorkflowRunAsync(detail.Run.Id.ToString("D"), CancellationToken.None);
+
+        AssertEx.Equal("ok", response.Status);
+        var run = AssertEx.NotNull(response.Run);
+        AssertEx.Equal(detail.Run.Id.ToString("D"), run.Run.RunId);
+        AssertEx.Equal(detail.Run.WorkItemId.ToString("D"), run.Run.WorkItemId);
+        AssertEx.Equal("seeded", run.Run.DefinitionName!);
+        AssertEx.Equal("WaitingForApproval", run.Run.Status);
+        AssertEx.Equal(0, run.Run.QueuedNodeCount);
+        AssertEx.Equal(1, run.Run.RunningNodeCount);
+        AssertEx.Equal(1, run.Run.CompletedNodeCount);
+        AssertEx.Equal(2, run.Run.TotalNodeCount);
+        AssertEx.Equal(1, run.Run.PendingDecisionCount);
+        AssertEx.Equal("gate_rejected", run.FailureClass!);
+        AssertEx.Equal("a sanitized reason", run.TerminalReason!);
+        AssertEx.Equal(11L, run.StartedAtUtc!.Value);
+        AssertEx.Equal(12L, run.EndedAtUtc!.Value);
+        AssertEx.Equal(2, run.Nodes.Count);
+        AssertEx.Equal("plan", run.Nodes[0].NodeKey);
+        AssertEx.Equal("Agent", run.Nodes[0].NodeType);
+        AssertEx.Equal("Succeeded", run.Nodes[0].Status);
+        AssertEx.Equal(1, run.Nodes[0].Attempt);
+        AssertEx.Equal(3, run.Nodes[0].MaxAttempts);
+
+        // The narrow projection is the point: nothing here can carry the pinned graph, an artifact body, a transcript
+        // or a host path, because there is no member on the wire shape that could hold one.
+        var serialized = JsonSerializer.Serialize(response);
+        AssertEx.False(serialized.Contains("graph", StringComparison.OrdinalIgnoreCase), serialized);
+        AssertEx.False(serialized.Contains("secret-input", StringComparison.Ordinal), serialized);
+    }
+
+    [Test]
+    public async Task GetWorkflowRun_AnswersAMissingOrMalformedRunIdStructurally()
+    {
+        var harness = new Harness();
+        var runId = Guid.NewGuid();
+        harness.WorkflowRuns.GetAsync(runId, Arg.Any<CancellationToken>())
+               .Returns<Task<DevWorkflowRunDetail>>(_ => throw new DevWorkflowNotFoundException("gone"));
+
+        var missing = await harness.Tools.GetWorkflowRunAsync(runId.ToString("D"), CancellationToken.None);
+        var malformed = await new Harness().Tools.GetWorkflowRunAsync("not-a-uuid", CancellationToken.None);
+
+        AssertEx.Equal("not_found", missing.Status);
+        AssertEx.Equal("run_not_found", missing.FailureCode!);
+        AssertEx.Null(missing.Run);
+        AssertEx.Equal("invalid_request", malformed.Status);
+        AssertEx.Equal("invalid_request", malformed.FailureCode!);
+    }
+
+    [Test]
+    public async Task WorkflowObserveTools_AnswerNotAvailableWhenTheFeatureIsOffRatherThanFaulting()
+    {
+        var harness = new Harness(devWorkflowsEnabled: false);
+
+        var list = await harness.Tools.ListWorkflowRunsAsync(CancellationToken.None);
+        var get = await harness.Tools.GetWorkflowRunAsync(Guid.NewGuid().ToString("D"), CancellationToken.None);
+
+        AssertEx.Equal("not_available", list.Status);
+        AssertEx.Equal("not_available", list.FailureCode!);
+        AssertEx.Empty(list.Runs);
+        AssertEx.Equal("not_available", get.Status);
+        AssertEx.Equal("not_available", get.FailureCode!);
+        AssertEx.Null(get.Run);
+        await harness.WorkflowStore.DidNotReceive().ListWorkItemsAsync(Arg.Any<DevWorkflowWorkItemStatus?>(), Arg.Any<CancellationToken>());
+        await harness.WorkflowRuns.DidNotReceive().GetAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    private static DevWorkflowWorkItemSnapshot WorkItem(string title, DevWorkflowRunStatus? latestRunStatus) =>
+        new(Guid.NewGuid(),
+            title,
+            "request",
+            DevWorkflowWorkItemStatus.Active,
+            null,
+            latestRunStatus is null ? null : Guid.NewGuid(),
+            latestRunStatus,
+            latestRunStatus is null ? null : "seeded",
+            latestRunStatus is null ? DevWorkflowNodeCounters.Empty : new DevWorkflowNodeCounters(1, 2, 3, 7, 1, null),
+            10,
+            10,
+            1);
+
+    private static DevWorkflowRunDetail RunDetail() =>
+        new(new DevWorkflowRunSnapshot(Guid.NewGuid(),
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                1,
+                "hash",
+                """{"schemaVersion":1,"nodes":[],"edges":[]}""",
+                1,
+                DevWorkflowRunStatus.WaitingForApproval,
+                4,
+                "gate_rejected",
+                "a sanitized reason",
+                11,
+                12,
+                10,
+                10,
+                1),
+            [NodeRun("plan", DevWorkflowNodeRunStatus.Succeeded), NodeRun("build", DevWorkflowNodeRunStatus.Running)],
+            1,
+            null);
+
+    private static DevWorkflowNodeRunSnapshot NodeRun(string nodeKey, DevWorkflowNodeRunStatus status) =>
+        new(Guid.NewGuid(),
+            Guid.NewGuid(),
+            nodeKey,
+            DevWorkflowNodeType.Agent,
+            1,
+            3,
+            0,
+            status,
+            null,
+            null,
+            1,
+            null,
+            false,
+            null,
+            null,
+            null,
+            """{"objective":"secret-input"}""",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            10);
+
     private static void AssertSingleOutcome(Harness harness, string outcome)
     {
         AssertEx.Equal(1, harness.Logger.Entries.Count);
@@ -781,7 +994,8 @@ public sealed class NodeAdminMcpToolsTests
         public Harness(TimeProvider? timeProvider = null,
             IAgentDefinitionService? agents = null,
             ClaimsPrincipal? principal = null,
-            ILogger<NodeAdminMcpTools>? logger = null)
+            ILogger<NodeAdminMcpTools>? logger = null,
+            bool devWorkflowsEnabled = true)
         {
             Agents = agents ?? Substitute.For<IAgentDefinitionService>();
             HttpContextAccessor.HttpContext = new DefaultHttpContext
@@ -793,12 +1007,17 @@ public sealed class NodeAdminMcpToolsTests
                 Models,
                 Settings,
                 Agents,
+                WorkflowRuns,
+                WorkflowStore,
+                Options.Create(new DevWorkflowOptions { Enabled = devWorkflowsEnabled }),
                 timeProvider ?? TimeProvider.System,
                 HttpContextAccessor,
                 logger ?? Logger);
         }
 
         public IAgentDefinitionService Agents { get; }
+        public IDevWorkflowRunService WorkflowRuns { get; } = Substitute.For<IDevWorkflowRunService>();
+        public IDevWorkflowStore WorkflowStore { get; } = Substitute.For<IDevWorkflowStore>();
         public IGgufDownloadCoordinator Download { get; } = Substitute.For<IGgufDownloadCoordinator>();
         public ILocalModelAdministrationService Models { get; } = Substitute.For<ILocalModelAdministrationService>();
         public ILlamaCppRuntimeAdministrationService Runtime { get; } = Substitute.For<ILlamaCppRuntimeAdministrationService>();
