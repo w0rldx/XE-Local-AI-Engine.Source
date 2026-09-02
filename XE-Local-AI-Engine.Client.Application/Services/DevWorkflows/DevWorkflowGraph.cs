@@ -89,6 +89,7 @@ internal sealed class DevWorkflowGraph
         EntryNodeKeys = [.. nodes.Keys.Where(key => _inbound[key].Count == 0).OrderBy(key => key, StringComparer.Ordinal)];
         TemplateKeys = new HashSet<string>(nodes.Values.Where(static node => node.Materialization is not null).SelectMany(node => TemplateSubtree(node.Materialization!)),
             StringComparer.Ordinal);
+        TerminalNodeKeys = new HashSet<string>(nodes.Keys.Where(key => _outbound[key].Count == 0), StringComparer.Ordinal);
     }
 
     public IReadOnlyDictionary<string, DevWorkflowGraphNode> Nodes { get; }
@@ -108,6 +109,18 @@ internal sealed class DevWorkflowGraph
     ///     given a row would wait forever on a source the run never instantiates.
     /// </summary>
     public IReadOnlySet<string> TemplateKeys { get; }
+
+    /// <summary>
+    ///     Nodes no edge leaves — what "the run got somewhere" means. A run is <c>Completed</c> only once one of
+    ///     these SUCCEEDED, so a tail that was skipped or abandoned cannot read as the run having done its job.
+    ///     <para>
+    ///         Read off the graph AS MATERIALIZED, which is what makes it right for a decomposing run: a clone's leaf
+    ///         edge is rewired to the join when it is created, so no clone is ever terminal and success routes through
+    ///         the join, which is where the run's shape says it belongs. A template node is never terminal for the same
+    ///         reason, and never gets a node run either, so it can neither satisfy the rule nor block it.
+    ///     </para>
+    /// </summary>
+    public IReadOnlySet<string> TerminalNodeKeys { get; }
 
     public IReadOnlyList<DevWorkflowGraphEdge> InboundEdges(string nodeKey) =>
         _inbound.TryGetValue(nodeKey, out var edges) ? edges : [];

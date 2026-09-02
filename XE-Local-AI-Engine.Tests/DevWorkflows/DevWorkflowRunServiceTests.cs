@@ -346,9 +346,15 @@ public sealed class DevWorkflowRunServiceTests
             "and the gate is left exactly where it was.");
     }
 
-    /// <summary>An intervention answers a blocked node run, and the run finishes around it.</summary>
+    /// <summary>
+    ///     An intervention answers a blocked node run, and the run settles around it.
+    ///     <para>
+    ///         RE-PINNED, ruling 1 (Slice D): <c>GateOnly</c>'s single gate IS the graph's terminal node, so skipping
+    ///         it walks away from the only thing the run had to do. That ends <c>Cancelled</c>, not <c>Completed</c>.
+    ///     </para>
+    /// </summary>
     [Test]
-    public async Task SkippingABlockedNodeRun_LetsTheRunFinish()
+    public async Task SkippingABlockedNodeRun_SettlesTheRun()
     {
         await using var harness = new DevWorkflowHarness(Host);
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
@@ -368,7 +374,7 @@ public sealed class DevWorkflowRunServiceTests
 
         AssertEx.Equal(expected: 1, detail.Detail.PendingDecisionCount, "the answer is recorded; the runtime has not acted on it yet.");
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
     }
 
     /// <summary>
@@ -491,6 +497,7 @@ public sealed class DevWorkflowRunServiceTests
             "the node run is left exactly where it was.");
 
         // And the other interventions still work, which is the whole reason the refusal comes before the record.
+        // RE-PINNED, ruling 1 (Slice D): skipping the gate settles the run Cancelled — it is this graph's only end.
         _ = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
                              nodeRunId,
                              Guid.NewGuid(),
@@ -500,7 +507,7 @@ public sealed class DevWorkflowRunServiceTests
                              "operator@localhost.test"))
                          .ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
     }
 
     /// <summary>

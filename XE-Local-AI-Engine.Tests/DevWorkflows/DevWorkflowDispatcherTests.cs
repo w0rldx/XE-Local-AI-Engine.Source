@@ -503,9 +503,11 @@ public sealed class DevWorkflowDispatcherTests
         AssertEx.Equal("first: Skipped, gate: Succeeded, second: Skipped, third: Skipped",
             string.Join(", ", nodeRuns.OrderBy(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal).Select(static nodeRun => $"{nodeRun.NodeKey}: {nodeRun.Status}")));
 
-        AssertEx.Equal(DevWorkflowRunStatus.Completed,
-            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
-            "a run whose every branch condition was false completes; that is a real outcome, and the log says which.");
+        // RE-PINNED, ruling 1 (Slice D): 'third' is the graph's only terminal node and it was skipped, so the run
+        // routed around everything it was asked to do and reached none of it. Completed would read as having done it.
+        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, run.Status, "a run whose every branch condition was false never reached an end.");
+        AssertEx.Contains(AssertEx.NotNull(run.TerminalReason), "'third' was Skipped");
     }
 
     /// <summary>
@@ -564,11 +566,17 @@ public sealed class DevWorkflowDispatcherTests
     }
 
     /// <summary>
-    ///     The intervention answers, on a node run this build cannot execute. <c>Skip</c> routes around it; the run then
-    ///     completes because a skipped node run is terminal and does not block completion.
+    ///     The intervention answers, on a node run this build cannot execute. <c>Skip</c> routes around it, and
+    ///     everything below it skips with it.
+    ///     <para>
+    ///         RE-PINNED, ruling 1 (Slice D): the run then reads <c>Cancelled</c> rather than <c>Completed</c>. A
+    ///         skipped node run is terminal and does not block completion, but neither is it an END — this run reached
+    ///         none of them, and the work item says the same. Nothing failed, so there is no class to carry either:
+    ///         the reason names the end that was abandoned, because a human decision is the whole of the account.
+    ///     </para>
     /// </summary>
     [Test]
-    public async Task AHumanSkipOnABlockedNodeRunLetsTheRunFinish()
+    public async Task AHumanSkipOnABlockedNodeRunAbandonsTheTailAndCancelsTheRun()
     {
         await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.ResearchPlanApproval).ConfigureAwait(false);
@@ -585,7 +593,17 @@ public sealed class DevWorkflowDispatcherTests
         var nodeRuns = await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false);
         AssertEx.Equal("approve: Skipped, plan: Skipped, research: Skipped",
             string.Join(", ", nodeRuns.OrderBy(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal).Select(static nodeRun => $"{nodeRun.NodeKey}: {nodeRun.Status}")));
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+
+        var skipped = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, skipped.Status);
+        AssertEx.Equal("No terminal node succeeded: 'approve' was Skipped.", AssertEx.NotNull(skipped.TerminalReason));
+        AssertEx.Null(skipped.FailureClass, "a Skip is a human decision; there is no failure to classify.");
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Cancelled, (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status);
+
+        var events = await harness.ReadEventsAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal("cancelled",
+            events.Last(static entry => entry.EventType == "run.cancelled").Outcome,
+            "the existing token, for what genuinely is a cancellation — no new event or outcome was minted for this.");
     }
 
     /// <summary>
@@ -770,6 +788,12 @@ public sealed class DevWorkflowDispatcherTests
     ///     The third row of the same table: a gate whose conditions all fail records no branch, and everything below it
     ///     skips. That is a real outcome rather than a stranding — the gate itself succeeded, and the log says which way
     ///     it did not go.
+    ///     <para>
+    ///         RE-PINNED, ruling 1 (Slice D): the run reads <c>Cancelled</c>, and this is the second shape the ruling
+    ///         names. The rejection was not stranded — the human gate's own out-edge accepted it, so X10's drain never
+    ///         fired — and it still reached no end, because the automatic gate below took neither branch. The gate
+    ///         answer is the only account of that, so the run carries <c>GateRejected</c>.
+    ///     </para>
     /// </summary>
     [Test]
     public async Task AnAutomaticGateWhoseBranchesAllRefuseRecordsNoneOfThem()
@@ -789,7 +813,11 @@ public sealed class DevWorkflowDispatcherTests
                 (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false))
                 .OrderBy(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal)
                 .Select(static nodeRun => $"{nodeRun.NodeKey}: {nodeRun.Status}")));
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+
+        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, run.Status);
+        AssertEx.Equal("GateRejected", run.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(run.TerminalReason), "after the gate 'approve' was rejected");
     }
 
     /// <summary>
