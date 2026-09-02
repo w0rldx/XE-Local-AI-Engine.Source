@@ -72,6 +72,47 @@ public sealed class UpdateDevWorkflowDefinitionRequest
     public DevWorkflowGraph? Graph { get; init; }
 }
 
+public sealed class DevWorkflowRuleSetRequest
+{
+    public Guid RuleSetId { get; init; }
+}
+
+public sealed class CreateDevWorkflowRuleSetRequest
+{
+    public string Name { get; init; } = string.Empty;
+
+    public string? Description { get; init; }
+
+    /// <summary>The markdown injected verbatim into a matching node's context.</summary>
+    public string Body { get; init; } = string.Empty;
+
+    /// <summary>Omitted means both axes empty, which applies the rule set to every node on this box.</summary>
+    public DevWorkflowRuleScope? Scope { get; init; }
+
+    public bool Enabled { get; init; } = true;
+}
+
+/// <summary>
+///     A PUT body carrying the version it was edited from, and the WHOLE document: a rule set is edited as one, so an
+///     omitted description clears it rather than meaning "leave whatever is there".
+/// </summary>
+public sealed class UpdateDevWorkflowRuleSetRequest
+{
+    public Guid RuleSetId { get; init; }
+
+    public int Version { get; init; }
+
+    public string Name { get; init; } = string.Empty;
+
+    public string? Description { get; init; }
+
+    public string Body { get; init; } = string.Empty;
+
+    public DevWorkflowRuleScope? Scope { get; init; }
+
+    public bool Enabled { get; init; } = true;
+}
+
 public sealed class ListDevWorkflowRunsRequest
 {
     public Guid? WorkItemId { get; init; }
@@ -384,6 +425,46 @@ public sealed record DevWorkflowNodeRunDetailResponse(
 /// </summary>
 public sealed record DevWorkflowAppliedRuleSetResponse(Guid Id, string Name, string ContentSha256);
 
+/// <summary>
+///     Where a rule set applies. An EMPTY axis means "matches everything"; a populated one is an exact,
+///     case-insensitive membership test — no globbing, no precedence, no expression language. Everything applicable is
+///     injected.
+///     <para>
+///         Two axes, not four. <c>languages</c> and <c>taskTypes</c> were dropped before they shipped because nothing
+///         produces either value: under "every populated axis must match" they could only ever apply to nothing, while
+///         looking on the wire as though they worked.
+///     </para>
+/// </summary>
+public sealed record DevWorkflowRuleScope(IReadOnlyList<Guid> ProjectIds, IReadOnlyList<string> NodeTypes);
+
+public sealed record DevWorkflowRuleSetResponse(
+    Guid Id,
+    string Name,
+    string? Description,
+    string Body,
+    DevWorkflowRuleScope Scope,
+    bool Enabled,
+    string ContentSha256,
+    int Version,
+    long CreatedAtUtc,
+    long UpdatedAtUtc);
+
+/// <summary>
+///     A rule set WITHOUT its body — the list draws names, scopes and hashes. <see cref="ContentSha256" /> is here
+///     because it is the half a reader compares against a node run's recorded hash to see whether the document has
+///     moved on since it applied.
+/// </summary>
+public sealed record DevWorkflowRuleSetSummaryResponse(
+    Guid Id,
+    string Name,
+    string? Description,
+    DevWorkflowRuleScope Scope,
+    bool Enabled,
+    string ContentSha256,
+    int Version,
+    long CreatedAtUtc,
+    long UpdatedAtUtc);
+
 public sealed record DevWorkflowRunEventResponse(
     Guid Id,
     long Sequence,
@@ -443,6 +524,8 @@ public sealed record DevWorkflowDecisionResultResponse(DevWorkflowDecisionRespon
 public sealed record ListDevWorkflowWorkItemsResponse(IReadOnlyList<DevWorkflowWorkItemSummaryResponse> Items);
 
 public sealed record ListDevWorkflowDefinitionsResponse(IReadOnlyList<DevWorkflowDefinitionSummaryResponse> Items);
+
+public sealed record ListDevWorkflowRuleSetsResponse(IReadOnlyList<DevWorkflowRuleSetSummaryResponse> Items);
 
 public sealed record ListDevWorkflowRunsResponse(IReadOnlyList<DevWorkflowRunSummaryResponse> Items);
 

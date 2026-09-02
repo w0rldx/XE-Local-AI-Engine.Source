@@ -123,6 +123,48 @@ internal static class DevWorkflowContractMapper
     public static DevWorkflowDefinitionSummaryResponse ToResponse(this DevWorkflowDefinitionSummary value) =>
         new(value.Id, value.Name, value.Source.ToString(), value.SeedSlug, value.Archived, value.Version, value.NodeCount, value.UpdatedAtUtc);
 
+    public static DevWorkflowRuleSetResponse ToResponse(this DevWorkflowRuleSetSnapshot value) =>
+        new(value.Id,
+            value.Name,
+            value.Description,
+            value.Body,
+            ToScope(value.ScopeJson),
+            value.Enabled,
+            value.ContentSha256,
+            value.Version,
+            value.CreatedAtUtc,
+            value.UpdatedAtUtc);
+
+    public static DevWorkflowRuleSetSummaryResponse ToResponse(this DevWorkflowRuleSetSummary value) =>
+        new(value.Id,
+            value.Name,
+            value.Description,
+            ToScope(value.ScopeJson),
+            value.Enabled,
+            value.ContentSha256,
+            value.Version,
+            value.CreatedAtUtc,
+            value.UpdatedAtUtc);
+
+    /// <summary>
+    ///     The scope as the resolver stores it. An omitted scope is BOTH axes empty, which is the document's own
+    ///     spelling of "applies everywhere" — so the column always holds a scope the resolver can read.
+    /// </summary>
+    public static string ToScopeJson(DevWorkflowRuleScope? scope) =>
+        JsonSerializer.Serialize(new DevWorkflowRuleScope(scope?.ProjectIds ?? [], scope?.NodeTypes ?? []), GraphOptions);
+
+    /// <summary>
+    ///     The stored scope as the wire shape, with an absent axis rendered as the empty list the resolver reads it as.
+    ///     A column nothing can parse throws, like every other malformed row in this mapper: the endpoints are the only
+    ///     writer and they validate, so an unreadable scope is a corrupted database rather than a case to paper over —
+    ///     and rendering it as "applies everywhere" would be the more dangerous lie.
+    /// </summary>
+    private static DevWorkflowRuleScope ToScope(string scopeJson)
+    {
+        var scope = JsonSerializer.Deserialize<DevWorkflowRuleScope>(scopeJson, GraphOptions);
+        return new DevWorkflowRuleScope(scope?.ProjectIds ?? [], scope?.NodeTypes ?? []);
+    }
+
     public static DevWorkflowRunEventResponse ToResponse(this DevWorkflowRunEventSnapshot value) =>
         new(value.Id, value.Sequence, value.EventType, value.NodeRunId, value.Outcome, value.DetailJson, value.OperationId, value.OccurredAtUtc);
 

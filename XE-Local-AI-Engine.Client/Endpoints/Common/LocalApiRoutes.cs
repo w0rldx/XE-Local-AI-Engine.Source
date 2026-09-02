@@ -910,6 +910,15 @@ public static class LocalApiRoutes
 
         public const string DefinitionById = "development-workflows/definitions/{definitionId}";
 
+        /// <summary>
+        ///     The rule-set collection. No filter: the resolver's own working set is "every enabled one", and the
+        ///     management page draws the disabled ones beside them.
+        /// </summary>
+        public const string RuleSets = "development-workflows/rule-sets";
+
+        /// <summary>DELETE here is a HARD delete, unlike a definition's: a node run recorded what applied, so nothing dangles.</summary>
+        public const string RuleSetById = "development-workflows/rule-sets/{ruleSetId}";
+
         /// <summary>The run list, filtered by <c>?workItemId=</c>, <c>?status=</c> and <c>?limit=</c>.</summary>
         public const string Runs = "development-workflows/runs";
 

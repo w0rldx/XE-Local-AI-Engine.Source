@@ -702,6 +702,32 @@ public sealed class DevWorkflowRunEndpointTests
     private static string StartBody() =>
         $$"""{"operationId":"{{OperationId}}","definitionId":"{{DefinitionId}}","inputsJson":"{\"depth\":\"quick\"}"}""";
 
+    /// <summary>
+    ///     P3.7: the node-run drill-down projects the resolution the ROW recorded, so it keeps naming the exact text
+    ///     that applied — by hash — whether or not the rule set still exists.
+    /// </summary>
+    [Test]
+    public async Task GetNodeRun_ProjectsTheRuleSetsTheRowRecorded()
+    {
+        var store = Store();
+        store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(GateNodeRun() with
+        {
+            PolicyResolutionJson = """[{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","name":"House rules","contentSha256":"content-hash"}]"""
+        });
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var applied = document.RootElement.GetProperty("appliedRuleSets");
+
+        AssertEx.Equal(expected: 1, applied.GetArrayLength(), "the recorded resolution reaches the node pane.");
+        AssertEx.Equal("House rules", applied[0].GetProperty("name").GetString());
+        AssertEx.Equal("content-hash", applied[0].GetProperty("contentSha256").GetString(), "the hash is what proves WHICH text applied.");
+    }
+
     private static IDevWorkflowRunService RunService(DevWorkflowRunDetail? detail = null)
     {
         var runs = Substitute.For<IDevWorkflowRunService>();

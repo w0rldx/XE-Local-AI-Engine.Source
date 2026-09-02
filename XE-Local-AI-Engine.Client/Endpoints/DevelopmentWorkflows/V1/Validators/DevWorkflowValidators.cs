@@ -93,6 +93,71 @@ public sealed class UpdateDevWorkflowDefinitionRequestValidator : Validator<Upda
     }
 }
 
+public sealed class CreateDevWorkflowRuleSetRequestValidator : Validator<CreateDevWorkflowRuleSetRequest>
+{
+    public CreateDevWorkflowRuleSetRequestValidator()
+    {
+        RuleFor(static request => request.Name)
+            .NotEmpty()
+            .WithMessage("A rule set needs a name.")
+            .MaximumLength(DevWorkflowRequestLimits.MaxRuleSetNameLength)
+            .WithMessage($"The name is longer than the {DevWorkflowRequestLimits.MaxRuleSetNameLength}-character limit.");
+
+        RuleFor(static request => request.Description)
+            .MaximumLength(DevWorkflowRequestLimits.MaxRuleSetDescriptionLength)
+            .WithMessage($"The description is longer than the {DevWorkflowRequestLimits.MaxRuleSetDescriptionLength}-character limit.");
+
+        RuleFor(static request => request.Body)
+            .NotEmpty()
+            .WithMessage("A rule set needs a body — the markdown that gets injected is the whole of it.")
+            .MaximumLength(DevWorkflowRequestLimits.MaxRuleSetBodyLength)
+            .WithMessage($"The body is longer than the {DevWorkflowRequestLimits.MaxRuleSetBodyLength}-character limit.");
+
+        RuleFor(static request => request.Scope).Must(HasOnlyKnownNodeTypes).WithMessage(UnknownNodeTypeMessage);
+    }
+
+    /// <summary>
+    ///     The node-type axis is a CLOSED token set. A token nothing parses could only ever match nothing, silently —
+    ///     the same trap that got <c>languages</c> and <c>taskTypes</c> dropped — so it is refused at the door.
+    /// </summary>
+    internal static bool HasOnlyKnownNodeTypes(DevWorkflowRuleScope? scope) =>
+        scope?.NodeTypes is not { } nodeTypes || nodeTypes.All(static nodeType => Enum.TryParse<DevWorkflowNodeType>(nodeType, ignoreCase: true, out _));
+
+    internal static string UnknownNodeTypeMessage { get; } = $"scope.nodeTypes must contain only {string.Join(", ", Enum.GetNames<DevWorkflowNodeType>())}.";
+}
+
+public sealed class UpdateDevWorkflowRuleSetRequestValidator : Validator<UpdateDevWorkflowRuleSetRequest>
+{
+    public UpdateDevWorkflowRuleSetRequestValidator()
+    {
+        RuleFor(static request => request.RuleSetId).NotEmpty();
+
+        // The version the edit was made against. Without it a PUT is a last-writer-wins overwrite of whatever landed
+        // in between, which is the one thing optimistic concurrency exists to refuse.
+        RuleFor(static request => request.Version).GreaterThan(0).WithMessage("A rule set update must carry the version it was edited from.");
+
+        RuleFor(static request => request.Name)
+            .NotEmpty()
+            .WithMessage("A rule set needs a name.")
+            .MaximumLength(DevWorkflowRequestLimits.MaxRuleSetNameLength)
+            .WithMessage($"The name is longer than the {DevWorkflowRequestLimits.MaxRuleSetNameLength}-character limit.");
+
+        RuleFor(static request => request.Description)
+            .MaximumLength(DevWorkflowRequestLimits.MaxRuleSetDescriptionLength)
+            .WithMessage($"The description is longer than the {DevWorkflowRequestLimits.MaxRuleSetDescriptionLength}-character limit.");
+
+        RuleFor(static request => request.Body)
+            .NotEmpty()
+            .WithMessage("A rule set needs a body — the markdown that gets injected is the whole of it.")
+            .MaximumLength(DevWorkflowRequestLimits.MaxRuleSetBodyLength)
+            .WithMessage($"The body is longer than the {DevWorkflowRequestLimits.MaxRuleSetBodyLength}-character limit.");
+
+        RuleFor(static request => request.Scope)
+            .Must(CreateDevWorkflowRuleSetRequestValidator.HasOnlyKnownNodeTypes)
+            .WithMessage(CreateDevWorkflowRuleSetRequestValidator.UnknownNodeTypeMessage);
+    }
+}
+
 public sealed class ListDevWorkflowRunsRequestValidator : Validator<ListDevWorkflowRunsRequest>
 {
     public ListDevWorkflowRunsRequestValidator()
@@ -191,6 +256,13 @@ internal static class DevWorkflowRequestLimits
 
     /// <summary>A gate payload can be a whole edited plan, so it gets the node's follow-up message ceiling.</summary>
     public const int MaxPayloadLength = 262_144;
+
+    public const int MaxRuleSetNameLength = 255;
+
+    public const int MaxRuleSetDescriptionLength = 1024;
+
+    /// <summary>A rule set is a whole markdown document, so it gets the same ceiling a gate payload has.</summary>
+    public const int MaxRuleSetBodyLength = 262_144;
 
     public const int MaxRunPageSize = 200;
     public const int MaxEventPageSize = 500;
