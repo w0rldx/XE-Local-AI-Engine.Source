@@ -3286,6 +3286,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph
 		[key: string]: string;
 	} | null;
 	toolMode?: string | null;
+	isTemplate?: boolean | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowMaterialization = {
@@ -3364,6 +3365,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppli
 	id?: string;
 	name?: string;
 	contentSha256?: string;
+	currentContentSha256?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunRequest = {
@@ -3407,6 +3409,61 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtif
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactRequest = {
 	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRuleSetsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetSummaryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetSummaryResponse = {
+	id?: string;
+	name?: string;
+	description?: string | null;
+	scope?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleScope;
+	enabled?: boolean;
+	contentSha256?: string;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleScope = {
+	projectIds?: Array<string>;
+	nodeTypes?: Array<string>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetResponse = {
+	id?: string;
+	name?: string;
+	description?: string | null;
+	body?: string;
+	scope?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleScope;
+	enabled?: boolean;
+	contentSha256?: string;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowRuleSetRequest = {
+	name: string;
+	description?: string | null;
+	body: string;
+	scope?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleScope | null;
+	enabled?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowRuleSetRequest = {
+	version?: number;
+	name: string;
+	description?: string | null;
+	body: string;
+	scope?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleScope | null;
+	enabled?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunsResponse = {
@@ -3470,6 +3527,8 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 	isMaterialized?: boolean;
 	materializedFromNodeKey?: string | null;
 	materializationIndex?: number | null;
+	materializationGroupId?: string | null;
+	materializationCount?: number | null;
 	developmentProjectId?: string | null;
 	developmentTaskId?: string | null;
 	agentDefinitionId?: string | null;
@@ -12955,6 +13014,172 @@ export type GetDevWorkflowArtifactContentResponses = {
 
 export type GetDevWorkflowArtifactContentResponse =
 	GetDevWorkflowArtifactContentResponses[keyof GetDevWorkflowArtifactContentResponses];
+
+export type ListDevWorkflowRuleSetsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development-workflows/rule-sets";
+};
+
+export type ListDevWorkflowRuleSetsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListDevWorkflowRuleSetsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRuleSetsResponse;
+};
+
+export type ListDevWorkflowRuleSetsResponse = ListDevWorkflowRuleSetsResponses[keyof ListDevWorkflowRuleSetsResponses];
+
+export type CreateDevWorkflowRuleSetData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowRuleSetRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development-workflows/rule-sets";
+};
+
+export type CreateDevWorkflowRuleSetErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateDevWorkflowRuleSetError = CreateDevWorkflowRuleSetErrors[keyof CreateDevWorkflowRuleSetErrors];
+
+export type CreateDevWorkflowRuleSetResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetResponse;
+};
+
+export type CreateDevWorkflowRuleSetResponse = CreateDevWorkflowRuleSetResponses[keyof CreateDevWorkflowRuleSetResponses];
+
+export type DeleteDevWorkflowRuleSetData = {
+	body?: never;
+	path: {
+		ruleSetId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development-workflows/rule-sets/{ruleSetId}";
+};
+
+export type DeleteDevWorkflowRuleSetErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type DeleteDevWorkflowRuleSetResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteDevWorkflowRuleSetResponse = DeleteDevWorkflowRuleSetResponses[keyof DeleteDevWorkflowRuleSetResponses];
+
+export type GetDevWorkflowRuleSetData = {
+	body?: never;
+	path: {
+		ruleSetId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development-workflows/rule-sets/{ruleSetId}";
+};
+
+export type GetDevWorkflowRuleSetErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type GetDevWorkflowRuleSetResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetResponse;
+};
+
+export type GetDevWorkflowRuleSetResponse = GetDevWorkflowRuleSetResponses[keyof GetDevWorkflowRuleSetResponses];
+
+export type UpdateDevWorkflowRuleSetData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowRuleSetRequest;
+	path: {
+		ruleSetId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development-workflows/rule-sets/{ruleSetId}";
+};
+
+export type UpdateDevWorkflowRuleSetErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type UpdateDevWorkflowRuleSetError = UpdateDevWorkflowRuleSetErrors[keyof UpdateDevWorkflowRuleSetErrors];
+
+export type UpdateDevWorkflowRuleSetResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetResponse;
+};
+
+export type UpdateDevWorkflowRuleSetResponse = UpdateDevWorkflowRuleSetResponses[keyof UpdateDevWorkflowRuleSetResponses];
 
 export type ListDevWorkflowRunsData = {
 	body?: never;

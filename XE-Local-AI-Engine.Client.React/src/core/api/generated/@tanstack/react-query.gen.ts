@@ -64,6 +64,7 @@ import {
 	createDevelopmentProject,
 	createDevelopmentRepositoryFromTemplate,
 	createDevWorkflowDefinition,
+	createDevWorkflowRuleSet,
 	createDevWorkflowWorkItem,
 	createEvaluation,
 	createGoldenConversation,
@@ -91,6 +92,7 @@ import {
 	deleteComparison,
 	deleteConversationFile,
 	deleteCustomTool,
+	deleteDevWorkflowRuleSet,
 	deleteDevWorkflowWorkItem,
 	deleteEvaluation,
 	deleteExternalProviderConnection,
@@ -166,6 +168,7 @@ import {
 	getDevWorkflowArtifactContent,
 	getDevWorkflowDefinition,
 	getDevWorkflowNodeRun,
+	getDevWorkflowRuleSet,
 	getDevWorkflowRun,
 	getDevWorkflowWorkItem,
 	getEvaluation,
@@ -248,6 +251,7 @@ import {
 	listDevelopmentTemplates,
 	listDevWorkflowArtifacts,
 	listDevWorkflowDefinitions,
+	listDevWorkflowRuleSets,
 	listDevWorkflowRunEvents,
 	listDevWorkflowRuns,
 	listDevWorkflowWorkItems,
@@ -376,6 +380,7 @@ import {
 	updateBenchmarkTaskItem,
 	updateCustomTool,
 	updateDevWorkflowDefinition,
+	updateDevWorkflowRuleSet,
 	updateDevWorkflowWorkItem,
 	updateLlamaCppRuntime,
 	updateMcpServer,
@@ -525,6 +530,9 @@ import type {
 	CreateDevWorkflowDefinitionData,
 	CreateDevWorkflowDefinitionError,
 	CreateDevWorkflowDefinitionResponse,
+	CreateDevWorkflowRuleSetData,
+	CreateDevWorkflowRuleSetError,
+	CreateDevWorkflowRuleSetResponse,
 	CreateDevWorkflowWorkItemData,
 	CreateDevWorkflowWorkItemError,
 	CreateDevWorkflowWorkItemResponse,
@@ -595,6 +603,8 @@ import type {
 	DeleteConversationFileResponse,
 	DeleteCustomToolData,
 	DeleteCustomToolResponse,
+	DeleteDevWorkflowRuleSetData,
+	DeleteDevWorkflowRuleSetResponse,
 	DeleteDevWorkflowWorkItemData,
 	DeleteDevWorkflowWorkItemError,
 	DeleteDevWorkflowWorkItemResponse,
@@ -772,6 +782,8 @@ import type {
 	GetDevWorkflowDefinitionResponse,
 	GetDevWorkflowNodeRunData,
 	GetDevWorkflowNodeRunResponse,
+	GetDevWorkflowRuleSetData,
+	GetDevWorkflowRuleSetResponse,
 	GetDevWorkflowRunData,
 	GetDevWorkflowRunResponse,
 	GetDevWorkflowWorkItemData,
@@ -950,6 +962,8 @@ import type {
 	ListDevWorkflowArtifactsResponse,
 	ListDevWorkflowDefinitionsData,
 	ListDevWorkflowDefinitionsResponse,
+	ListDevWorkflowRuleSetsData,
+	ListDevWorkflowRuleSetsResponse,
 	ListDevWorkflowRunEventsData,
 	ListDevWorkflowRunEventsError,
 	ListDevWorkflowRunEventsResponse,
@@ -1268,6 +1282,9 @@ import type {
 	UpdateDevWorkflowDefinitionData,
 	UpdateDevWorkflowDefinitionError,
 	UpdateDevWorkflowDefinitionResponse,
+	UpdateDevWorkflowRuleSetData,
+	UpdateDevWorkflowRuleSetError,
+	UpdateDevWorkflowRuleSetResponse,
 	UpdateDevWorkflowWorkItemData,
 	UpdateDevWorkflowWorkItemError,
 	UpdateDevWorkflowWorkItemResponse,
@@ -6593,6 +6610,118 @@ export const getDevWorkflowArtifactContentOptions = (options: Options<GetDevWork
 		},
 		queryKey: getDevWorkflowArtifactContentQueryKey(options),
 	});
+
+export const listDevWorkflowRuleSetsQueryKey = (options?: Options<ListDevWorkflowRuleSetsData>) =>
+	createQueryKey("listDevWorkflowRuleSets", options);
+
+export const listDevWorkflowRuleSetsOptions = (options?: Options<ListDevWorkflowRuleSetsData>) =>
+	queryOptions<
+		ListDevWorkflowRuleSetsResponse,
+		AxiosError<DefaultError>,
+		ListDevWorkflowRuleSetsResponse,
+		ReturnType<typeof listDevWorkflowRuleSetsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listDevWorkflowRuleSets({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listDevWorkflowRuleSetsQueryKey(options),
+	});
+
+export const createDevWorkflowRuleSetMutation = (
+	options?: Partial<Options<CreateDevWorkflowRuleSetData>>,
+): UseMutationOptions<
+	CreateDevWorkflowRuleSetResponse,
+	AxiosError<CreateDevWorkflowRuleSetError>,
+	Options<CreateDevWorkflowRuleSetData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		CreateDevWorkflowRuleSetResponse,
+		AxiosError<CreateDevWorkflowRuleSetError>,
+		Options<CreateDevWorkflowRuleSetData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createDevWorkflowRuleSet({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteDevWorkflowRuleSetMutation = (
+	options?: Partial<Options<DeleteDevWorkflowRuleSetData>>,
+): UseMutationOptions<DeleteDevWorkflowRuleSetResponse, AxiosError<DefaultError>, Options<DeleteDevWorkflowRuleSetData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteDevWorkflowRuleSetResponse,
+		AxiosError<DefaultError>,
+		Options<DeleteDevWorkflowRuleSetData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteDevWorkflowRuleSet({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getDevWorkflowRuleSetQueryKey = (options: Options<GetDevWorkflowRuleSetData>) =>
+	createQueryKey("getDevWorkflowRuleSet", options);
+
+export const getDevWorkflowRuleSetOptions = (options: Options<GetDevWorkflowRuleSetData>) =>
+	queryOptions<
+		GetDevWorkflowRuleSetResponse,
+		AxiosError<DefaultError>,
+		GetDevWorkflowRuleSetResponse,
+		ReturnType<typeof getDevWorkflowRuleSetQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getDevWorkflowRuleSet({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getDevWorkflowRuleSetQueryKey(options),
+	});
+
+export const updateDevWorkflowRuleSetMutation = (
+	options?: Partial<Options<UpdateDevWorkflowRuleSetData>>,
+): UseMutationOptions<
+	UpdateDevWorkflowRuleSetResponse,
+	AxiosError<UpdateDevWorkflowRuleSetError>,
+	Options<UpdateDevWorkflowRuleSetData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		UpdateDevWorkflowRuleSetResponse,
+		AxiosError<UpdateDevWorkflowRuleSetError>,
+		Options<UpdateDevWorkflowRuleSetData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateDevWorkflowRuleSet({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const listDevWorkflowRunsQueryKey = (options: Options<ListDevWorkflowRunsData>) =>
 	createQueryKey("listDevWorkflowRuns", options);
