@@ -279,7 +279,8 @@
 			"repositoryUnavailableDescription": "Das registrierte Repository ist nicht verfügbar oder passt nicht mehr zu diesem Projekt. Entwicklungsaktionen sind blockiert.",
 			"timeline": {
 				"title": "Dauerhafte Ereignis-Chronik",
-				"projectScope": "Keiner Aufgabe zugeordnet"
+				"projectScope": "Keiner Aufgabe zugeordnet",
+				"reason": "Zurückgewiesen:"
 			},
 			"empty": {
 				"title": "Noch keine Entwicklungsprojekte",

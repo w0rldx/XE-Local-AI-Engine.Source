@@ -279,7 +279,8 @@
 			"repositoryUnavailableDescription": "The registered repository is unavailable or no longer matches this project. Development actions are blocked.",
 			"timeline": {
 				"title": "Durable event timeline",
-				"projectScope": "Not tied to a task"
+				"projectScope": "Not tied to a task",
+				"reason": "Sent back:"
 			},
 			"empty": {
 				"title": "No Development projects yet",
