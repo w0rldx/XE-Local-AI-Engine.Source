@@ -705,7 +705,7 @@ public sealed class SupervisorProfilingTests
         var launcher = new FakeProcessLauncher();
         await using var supervisor = SupervisorFactory.Create(launcher);
         await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
-        AssertEx.NotNull(supervisor.GetRegisteredProcess("llama3", ModelRole.Chat)).MarkEvicting();
+        _ = AssertEx.NotNull(supervisor.GetRegisteredProcess("llama3", ModelRole.Chat)).MarkEvicting();
 
         var refusal = await AssertEx.ThrowsAsync<LlamaServerProfilingRefusedException>(() =>
             supervisor.RunExclusiveProfilingAsync("llama3",
@@ -747,6 +747,31 @@ public sealed class SupervisorProfilingTests
 
         var chat = AssertEx.NotNull(supervisor.GetRegisteredProcess("llama3", ModelRole.Chat));
         AssertEx.False(chat.IsEvicting, "The first role's claim must be released, not stranded.");
+        AssertEx.NotNull(supervisor.TryAcquireInferenceLease("llama3", ModelRole.Chat).Lease).Dispose();
+    }
+
+    [Test]
+    public async Task EvictionClaim_RolledBack_LeavesAnotherOwnersMarkStanding()
+    {
+        // The interleaving the two-phase rollback has to survive: profiling claims an earlier role, an operator eject
+        // starts on that same role and takes the mark over, and only then does a later busy role make profiling roll
+        // back. Driven at the claim primitive because the claim loop has no await for a second thread to interleave at.
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher);
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+        var chat = AssertEx.NotNull(supervisor.GetRegisteredProcess("llama3", ModelRole.Chat));
+
+        AssertEx.True(chat.TryBeginEvict(out var profilingClaim));
+        var ejectClaim = chat.MarkEvicting();
+        chat.ReleaseEvictionClaim(profilingClaim);
+
+        AssertEx.True(chat.IsEvicting, "An operator eject's mark must survive another claimant's rollback.");
+        AssertEx.True(supervisor.TryAcquireInferenceLease("llama3", ModelRole.Chat).ProcessEvicting,
+            "A lease granted here would be killed by the eject's own teardown.");
+
+        // The owning eject still clears its own mark, so a drain that timed out leaves the process leasable.
+        chat.ReleaseEvictionClaim(ejectClaim);
+        AssertEx.False(chat.IsEvicting);
         AssertEx.NotNull(supervisor.TryAcquireInferenceLease("llama3", ModelRole.Chat).Lease).Dispose();
     }
 

@@ -220,7 +220,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         // heuristic scan and here, TryBeginEvict fails and no victim is admitted this round — the caller surfaces the
         // cap error rather than tree-killing a process under an active lease. An EXITED victim holds no real lease,
         // so it is torn down regardless.
-        if (!victim.Handle.HasExited && !victim.TryBeginEvict())
+        if (!victim.Handle.HasExited && !victim.TryBeginEvict(out _))
         {
             return false;
         }

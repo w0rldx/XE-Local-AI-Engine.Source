@@ -133,6 +133,9 @@ public sealed class BenchmarkComparisonExecutor(
             // No launch admission, and a retry around the rejection: a comparison is dequeued by the same single
             // consumer that just ran the previous one, so it routinely arrives while that llama-server is still
             // handing its VRAM back. Wait and re-decide rather than terminalizing a comparison over a transient.
+            // ONE budget for the whole phase — see BenchmarkWaitBudget: the capacity wait and the exclusive-spawn
+            // wait after it share this allowance rather than each taking a full one.
+            var waitBudget = new BenchmarkWaitBudget(admissionRetry);
             var decision = await BenchmarkCapacityAdmission.AdmitAsync(capacity,
                                                                new CapacityRequest(runtime.Model.ModelName,
                                                                    ModelRole.Chat,
@@ -144,7 +147,7 @@ public sealed class BenchmarkComparisonExecutor(
                                                                    runtime.RequestedContextTokens,
                                                                    runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
                                                                    CapacityRejectedMessage),
-                                                               admissionRetry,
+                                                               waitBudget,
                                                                logger,
                                                                token)
                                                            .ConfigureAwait(false);
@@ -167,21 +170,29 @@ public sealed class BenchmarkComparisonExecutor(
 
             var judged = comparison;
             var judgedPolicyHash = policyHash;
-            _ = await supervisor.RunExclusiveBenchmarkAsync(runtime.Model.ModelName,
-                                    ModelRole.Chat,
-                                    runtime.Runtime.ToResolvedLaunchArguments(),
-                                    runtime.Runtime.LaunchPolicy,
-                                    async (profiling, profilingToken) =>
-                                    {
-                                        // Durable BEFORE a token is generated: the receipt, the environment facts and
-                                        // the execution key the fit will insist every fitted comparison shares.
-                                        await CheckpointAsync(work, judged, judgedPolicyHash, profiling.LaunchReceipt, environment).ConfigureAwait(false);
-                                        using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
-                                        await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
-                                        using var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty, generationAdmissionPolicy: admission);
-                                        await runner.RunAsync(context, profilingToken).ConfigureAwait(false);
-                                        return true;
-                                    },
+            // A refused pre-spawn eviction is transient — the model is serving a request that ends on its own — so the
+            // spawn waits and retries rather than terminalizing this comparison. See BenchmarkExclusiveSpawn.
+            _ = await BenchmarkExclusiveSpawn.RunAsync(spawnToken =>
+                                    supervisor.RunExclusiveBenchmarkAsync(runtime.Model.ModelName,
+                                        ModelRole.Chat,
+                                        runtime.Runtime.ToResolvedLaunchArguments(),
+                                        runtime.Runtime.LaunchPolicy,
+                                        async (profiling, profilingToken) =>
+                                        {
+                                            // Durable BEFORE a token is generated: the receipt, the environment facts and
+                                            // the execution key the fit will insist every fitted comparison shares.
+                                            await CheckpointAsync(work, judged, judgedPolicyHash, profiling.LaunchReceipt, environment).ConfigureAwait(false);
+                                            using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
+                                            await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
+                                            using var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty, generationAdmissionPolicy: admission);
+                                            await runner.RunAsync(context, profilingToken).ConfigureAwait(false);
+                                            return true;
+                                        },
+                                        spawnToken),
+                                    waitBudget,
+                                    work.RunId,
+                                    "comparison",
+                                    logger,
                                     token)
                                 .ConfigureAwait(false);
             token.ThrowIfCancellationRequested();

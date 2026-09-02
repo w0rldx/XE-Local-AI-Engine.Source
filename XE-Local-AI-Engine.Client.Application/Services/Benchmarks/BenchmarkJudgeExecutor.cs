@@ -164,6 +164,9 @@ public sealed class BenchmarkJudgeExecutor(
             // A rejection is transient by nature — it means something holds the bytes RIGHT NOW — and the judge is
             // dequeued by the SAME FIFO consumer that just ran the primary, so it routinely arrives while the primary's
             // llama-server is still handing its VRAM back. Wait and re-decide instead of terminalizing the attempt.
+            // ONE budget for the whole phase — see BenchmarkWaitBudget: the capacity wait and the exclusive-spawn
+            // wait after it share this allowance rather than each taking a full one.
+            var waitBudget = new BenchmarkWaitBudget(admissionRetry);
             var decision = await BenchmarkCapacityAdmission.AdmitAsync(capacity,
                                                                new CapacityRequest(runtime.Model.ModelName,
                                                                    ModelRole.Chat,
@@ -175,7 +178,7 @@ public sealed class BenchmarkJudgeExecutor(
                                                                    runtime.RequestedContextTokens,
                                                                    runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
                                                                    CapacityRejectedMessage),
-                                                               admissionRetry,
+                                                               waitBudget,
                                                                logger,
                                                                token)
                                                            .ConfigureAwait(false);
@@ -202,23 +205,31 @@ public sealed class BenchmarkJudgeExecutor(
 
             var judgingAttempt = attempt;
             var judgingPolicyHash = policyHash;
-            _ = await supervisor.RunExclusiveBenchmarkAsync(runtime.Model.ModelName,
-                                    ModelRole.Chat,
-                                    runtime.Runtime.ToResolvedLaunchArguments(),
-                                    runtime.Runtime.LaunchPolicy,
-                                    async (profiling, profilingToken) =>
-                                    {
-                                        // Durable BEFORE any token is generated — including on an attempt an operator
-                                        // cancellation has already terminalized (the successor-version clause).
-                                        await CheckpointAsync(work, judgingAttempt, judgingPolicyHash, profiling.LaunchReceipt, environment).ConfigureAwait(false);
-                                        using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
-                                        await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
-                                        using var context = InvocationExecutionContext.CreatePlain(package,
-                                            Guid.Empty,
-                                            generationAdmissionPolicy: admission);
-                                        await runner.RunAsync(context, profilingToken).ConfigureAwait(false);
-                                        return true;
-                                    },
+            // A refused pre-spawn eviction is transient — the model is serving a request that ends on its own — so the
+            // spawn waits and retries rather than terminalizing this attempt. See BenchmarkExclusiveSpawn.
+            _ = await BenchmarkExclusiveSpawn.RunAsync(spawnToken =>
+                                    supervisor.RunExclusiveBenchmarkAsync(runtime.Model.ModelName,
+                                        ModelRole.Chat,
+                                        runtime.Runtime.ToResolvedLaunchArguments(),
+                                        runtime.Runtime.LaunchPolicy,
+                                        async (profiling, profilingToken) =>
+                                        {
+                                            // Durable BEFORE any token is generated — including on an attempt an operator
+                                            // cancellation has already terminalized (the successor-version clause).
+                                            await CheckpointAsync(work, judgingAttempt, judgingPolicyHash, profiling.LaunchReceipt, environment).ConfigureAwait(false);
+                                            using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
+                                            await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
+                                            using var context = InvocationExecutionContext.CreatePlain(package,
+                                                Guid.Empty,
+                                                generationAdmissionPolicy: admission);
+                                            await runner.RunAsync(context, profilingToken).ConfigureAwait(false);
+                                            return true;
+                                        },
+                                        spawnToken),
+                                    waitBudget,
+                                    work.RunId,
+                                    "judge",
+                                    logger,
                                     token)
                                 .ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
