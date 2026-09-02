@@ -33,6 +33,7 @@ import traceback
 from trainlib import (
     CANCELLED_EXIT_CODE,
     CONTRACT_VERSION,
+    assert_safe_chat_template_names,
     collect_tools,
     delimiter_before,
     has_tool_calls,
@@ -238,6 +239,11 @@ def main():
             load_in_4bit=True,
             local_files_only=True,
         )
+
+        # Before anything is written: the base checkpoint is a user-supplied Hugging Face repo, and its chat
+        # template names reach save_pretrained as filenames. Checked at load time so the run fails here rather
+        # than after an hour of training.
+        assert_safe_chat_template_names(tokenizer, config["basePath"])
 
         instruction_part, response_part = derive_delimiters(tokenizer)
 

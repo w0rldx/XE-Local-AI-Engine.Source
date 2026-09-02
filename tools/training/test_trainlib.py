@@ -5,8 +5,17 @@ exactly the packages the trainer needs and nothing else.
 """
 
 import json
+import os
+import tempfile
 
-from trainlib import collect_tools, delimiter_before, filter_samples, has_tool_calls, to_messages
+from trainlib import (
+    assert_safe_chat_template_names,
+    collect_tools,
+    delimiter_before,
+    filter_samples,
+    has_tool_calls,
+    to_messages,
+)
 
 SAMPLE = {
     "schemaVersion": 2,
@@ -102,6 +111,51 @@ def test_delimiters_are_read_back_from_each_family_template():
     assert delimiter_before(gemma, "A", ("assistant", "model")) == "<start_of_turn>model\n"
     # A template with no recognisable turn marker must report absence rather than guess.
     assert delimiter_before("plain text", "U", ("user",)) is None
+
+
+class _Tokenizer:
+    """The only part of a tokenizer this guard reads. Importing transformers here would need the 7 GB runtime venv."""
+
+    def __init__(self, chat_template=None):
+        if chat_template is not None:
+            self.chat_template = chat_template
+
+
+def _is_rejected(tokenizer, source_dir=None):
+    try:
+        assert_safe_chat_template_names(tokenizer, source_dir)
+    except ValueError:
+        return True
+    return False
+
+
+def test_ordinary_chat_templates_are_accepted():
+    # A plain string template has no names to write out at all, and a tokenizer may carry no template.
+    assert not _is_rejected(_Tokenizer("{{ messages }}"))
+    assert not _is_rejected(_Tokenizer())
+    assert not _is_rejected(_Tokenizer({"default": "a", "tool_use": "b", "rag.v2": "c"}))
+
+
+def test_path_traversing_chat_template_names_are_rejected():
+    for name in ("../../evil", "sub/evil", "sub\\evil", "/etc/cron.d/evil", ".", "..", "", "ev\x00il"):
+        assert _is_rejected(_Tokenizer({"default": "a", name: "attacker content"})), name
+
+
+def test_unsafe_additional_chat_template_files_are_rejected():
+    with tempfile.TemporaryDirectory() as source_dir:
+        templates = os.path.join(source_dir, "additional_chat_templates")
+        os.mkdir(templates)
+        with open(os.path.join(templates, "tool_use.jinja"), "w", encoding="utf-8") as handle:
+            handle.write("a")
+
+        assert not _is_rejected(_Tokenizer(), source_dir)
+
+        # Loaded as a template named after its stem, so a stem that is not a plain filename is the same escape.
+        # A literal backslash is the traversal a POSIX filesystem will actually accept in a filename.
+        with open(os.path.join(templates, "..\\..\\evil.jinja"), "w", encoding="utf-8") as handle:
+            handle.write("attacker content")
+
+        assert _is_rejected(_Tokenizer(), source_dir)
 
 
 def main():

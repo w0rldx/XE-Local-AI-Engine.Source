@@ -9,10 +9,15 @@ Run the checks with ``python3 tools/training/test_trainlib.py``.
 """
 
 import json
+import os
 from typing import Any
 
 CONTRACT_VERSION = 1
 CANCELLED_EXIT_CODE = 3
+
+# Where transformers keeps the named templates that are not the default one, both on disk and under a save
+# directory. The stem of each file there becomes a chat_template dict key.
+ADDITIONAL_CHAT_TEMPLATES_DIRECTORY = "additional_chat_templates"
 
 
 def load_samples(dataset_path, holdout_sequences):
@@ -124,6 +129,50 @@ def delimiter_before(rendered, marker, role_words):
         return None
     start = prefix.rfind("<", 0, role_at)
     return prefix[start if start >= 0 else role_at :]
+
+
+def assert_safe_chat_template_names(tokenizer, source_dir=None):
+    """Rejects chat-template names that ``save_pretrained`` would write outside its own save directory.
+
+    Mirrors the upstream fix for CVE-2026-9856 (transformers PR #46191, released in 5.10.0), which this repo cannot
+    take: unsloth caps transformers at 5.5.0, so the pin in tools/training/pyproject.toml cannot move. Both
+    ``PreTrainedTokenizerBase.save_pretrained`` and ``ProcessorMixin.save_pretrained`` use each ``chat_template``
+    dict key verbatim as a ``<key>.jinja`` filename, and the keys come from the base repo's own
+    tokenizer_config.json, so a user-supplied Hub checkpoint carrying a key like ``../../evil`` writes attacker
+    content anywhere the trainer can reach. Upstream rejects a name whose resolved path leaves the template
+    directory; requiring a plain filename is the same rule, stricter and with no filesystem lookup. Delete this
+    once the pin can reach transformers >= 5.10.0.
+    """
+    template = getattr(tokenizer, "chat_template", None)
+    if isinstance(template, dict):
+        for name in template:
+            _reject_unsafe_template_name(name, "the checkpoint's chat_template")
+
+    if not source_dir:
+        return
+    # The file-based variant of the same input: each file here is loaded as a template named after its stem.
+    directory = os.path.join(source_dir, ADDITIONAL_CHAT_TEMPLATES_DIRECTORY)
+    if os.path.isdir(directory):
+        for entry in sorted(os.listdir(directory)):
+            _reject_unsafe_template_name(os.path.splitext(entry)[0], directory)
+
+
+def _reject_unsafe_template_name(name, source):
+    safe = (
+        isinstance(name, str)
+        and name not in {"", ".", ".."}
+        and not any(character in name for character in ("/", "\\", "\x00"))
+        and not os.path.isabs(name)
+        and os.path.basename(name) == name
+    )
+    if safe:
+        return
+    # The name is attacker-controlled: repr() escapes control characters, and the length is capped so a huge key
+    # cannot flood the host's log through the error protocol line.
+    raise ValueError(
+        f"Refusing to save a checkpoint: chat template name {str(name)[:60]!r} from {source} is not a plain "
+        "filename and could write outside the run directory (CVE-2026-9856)."
+    )
 
 
 def _parse_json(raw):
