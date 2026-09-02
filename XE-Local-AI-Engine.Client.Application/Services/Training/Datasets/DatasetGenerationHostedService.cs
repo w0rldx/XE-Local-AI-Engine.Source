@@ -48,22 +48,29 @@ public sealed class DatasetGenerationHostedService(
                 if (work is not null)
                 {
                     await using var executionScope = _scopeFactory.CreateAsyncScope();
-                    try
-                    {
-                        await executionScope.ServiceProvider.GetRequiredService<IDatasetGenerationExecutor>()
-                                            .ExecuteAsync(work, stoppingToken)
-                                            .ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                    {
-                        return;
-                    }
-                    catch (Exception exception)
-                    {
-                        // The executor owns durable terminalization. Reaching this guard means its own failure handling
-                        // failed; keep the single consumer alive so later durable work is not starved.
-                        _logger.LogError(exception, "The dataset generation queue failed while executing dataset {DatasetId}.", work.DatasetId);
-                    }
+                    await executionScope.ServiceProvider.GetRequiredService<IDatasetGenerationExecutor>()
+                                        .ExecuteAsync(work, stoppingToken)
+                                        .ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception exception)
+            {
+                if (work is null)
+                {
+                    // The CLAIM failed. An exception escaping here would end ExecuteAsync and, under the default
+                    // BackgroundServiceExceptionBehavior.StopHost, take the whole node down over a transient database
+                    // failure. work stays null, so the poll wait below is already the backoff.
+                    _logger.LogError(exception, "The dataset generation queue failed while claiming work; retrying after the poll interval.");
+                }
+                else
+                {
+                    // The executor owns durable terminalization. Reaching this guard means its own failure handling
+                    // failed; keep the single consumer alive so later durable work is not starved.
+                    _logger.LogError(exception, "The dataset generation queue failed while executing dataset {DatasetId}.", work.DatasetId);
                 }
             }
             finally

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.HealthChecks;
 
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -79,6 +80,64 @@ public sealed class NodeSqliteHealthCheckTests
         }
     }
 
+    /// <summary>
+    ///     A failed write probe must ROLL BACK the transaction its <c>BEGIN IMMEDIATE</c> opened. Microsoft.Data.Sqlite
+    ///     pools native handles, so "closing" the connection returns a handle SQLite still considers mid-transaction to
+    ///     the pool, and the NEXT consumer to draw it fails with "cannot start a transaction within a transaction" —
+    ///     the error a queue poller's claim hit live. Pooling is left on here (production shape) and the probe's DDL is
+    ///     made to fail by pre-creating its scratch table, which is deterministic and needs no file-mode games.
+    /// </summary>
+    [Test]
+    public async Task WriteProbeFailure_DoesNotLeaveAnOpenTransactionOnThePooledHandle()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var dbPath = Path.Combine(dir, "node.db");
+            var connectionString = $"Data Source={dbPath}";
+            var options = BuildOptions(dbPath, pooling: true);
+            await CreateSchemaAsync(options).ConfigureAwait(false);
+
+            // Collides with the probe's own DDL, so BEGIN IMMEDIATE succeeds and the write inside it fails.
+            await using (var seed = new SqliteConnection(connectionString))
+            {
+                await seed.OpenAsync();
+                await using var create = seed.CreateCommand();
+                create.CommandText = "CREATE TABLE _xe_write_probe (probe INTEGER);";
+                _ = await create.ExecuteNonQueryAsync();
+            }
+
+            using (var keyHolder = new NullNodeSqliteKeyHolder())
+            {
+                await using var dbContext = new NodeChatDbContext(options, keyHolder);
+                var result = await new NodeSqliteHealthCheck(dbContext).CheckHealthAsync(new HealthCheckContext());
+                AssertEx.Equal("unwritable", (string)result.Data["reason"]);
+            }
+
+            // Throws SqliteException("cannot start a transaction within a transaction") when the failed probe returned
+            // a mid-transaction handle to the pool.
+            await using (var next = new SqliteConnection(connectionString))
+            {
+                await next.OpenAsync();
+                await using (var begin = next.CreateCommand())
+                {
+                    begin.CommandText = "BEGIN IMMEDIATE;";
+                    _ = await begin.ExecuteNonQueryAsync();
+                }
+
+                await using var rollback = next.CreateCommand();
+                rollback.CommandText = "ROLLBACK;";
+                _ = await rollback.ExecuteNonQueryAsync();
+            }
+
+            SqliteConnection.ClearAllPools();
+        }
+        finally
+        {
+            DeleteTempDir(dir);
+        }
+    }
+
     [Test]
     public async Task ExistingDatabaseMissingSchema_IsUnhealthyWithSchemaReason()
     {
@@ -127,12 +186,12 @@ public sealed class NodeSqliteHealthCheckTests
             "the readiness description must not leak the database file path.");
     }
 
-    private static DbContextOptions<NodeChatDbContext> BuildOptions(string dbPath)
+    private static DbContextOptions<NodeChatDbContext> BuildOptions(string dbPath, bool pooling = false)
     {
         return new DbContextOptionsBuilder<NodeChatDbContext>()
-               // Pooling disabled so each probe opens a fresh file handle (the read-only test depends on the current file
-               // mode rather than a reused pooled connection).
-               .UseSqlite($"Data Source={dbPath};Pooling=False")
+               // Pooling defaults OFF so each probe opens a fresh file handle (the read-only test depends on the current
+               // file mode rather than a reused pooled connection); the pooled-handle test opts back in.
+               .UseSqlite(pooling ? $"Data Source={dbPath}" : $"Data Source={dbPath};Pooling=False")
                // Mirror the production NodeChatDbContext registration: building distinct options per test would otherwise
                // push EF's internal service-provider cache over its cap once the whole module runs, and EF throws for that
                // event by default (full-suite-only failure).
