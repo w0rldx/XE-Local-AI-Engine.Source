@@ -145,8 +145,13 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             if (installed.Variant != variant)
             {
-                await DiscardManagedSourceRecordAsync(ct).ConfigureAwait(false);
-                throw new LlamaRuntimeException(ManagedSourceBuildUnavailableMessage);
+                // A variant disagreement is evidence about the CALLER's selection, never about the build: the selector
+                // reads a per-process cached signal that is empty until the startup seed runs, so an early spawn can ask
+                // for Vulkan while a perfectly valid CUDA source build is recorded. Discarding the record here is what
+                // let the very next acquisition write a prebuilt record over the operator's source build (and the next
+                // start's reconcile then delete the tree). Fail loudly and leave the record alone; removing a source
+                // build stays an explicit operator action.
+                throw new LlamaRuntimeException(ManagedSourceBuildVariantMismatchMessage);
             }
 
             var managed = await TryServeManagedSourceBinaryAsync(installed, ct).ConfigureAwait(false);

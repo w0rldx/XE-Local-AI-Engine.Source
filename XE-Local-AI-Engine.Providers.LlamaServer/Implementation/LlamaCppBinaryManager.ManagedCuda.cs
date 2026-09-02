@@ -30,6 +30,13 @@ public sealed partial class LlamaCppBinaryManager
     private const string ManagedSourceBuildUnavailableMessage =
         "The recorded source-built llama.cpp runtime is unavailable or failed validation.";
 
+    /// <summary>
+    ///     Surfaced when a request asks for a different acceleration variant than the recorded source build provides. The
+    ///     record is left intact — only an explicit operator removal replaces a source build.
+    /// </summary>
+    private const string ManagedSourceBuildVariantMismatchMessage =
+        "The installed source-built llama.cpp runtime was built for a different backend; remove it before running a prebuilt runtime.";
+
     /// <summary>The built-server file name inside a managed source-build bin directory.</summary>
     private const string ManagedCudaServerFileName = "llama-server";
 

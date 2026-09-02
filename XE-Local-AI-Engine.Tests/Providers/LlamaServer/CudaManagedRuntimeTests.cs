@@ -131,8 +131,15 @@ public sealed class CudaManagedRuntimeTests
         AssertEx.False(signal.IsAvailable);
     }
 
+    /// <summary>
+    ///     An AUTOMATIC acquisition must never destroy a record that names a source build. The variant here disagrees
+    ///     only because the selector's cached signal was empty (it is seeded by a startup hosted service), which is a
+    ///     statement about the caller, not about the build. The record previously being discarded here is what let the
+    ///     following prebuilt acquisition overwrite the operator's managed CUDA record — and the next start's reconcile
+    ///     then deleted the build tree it no longer recognized.
+    /// </summary>
     [Test]
-    public async Task EnsureBinary_SourceRecordVariantMismatch_DiscardsAndNeverServesCachedPrebuilt()
+    public async Task EnsureBinary_SourceRecordVariantMismatch_KeepsRecordAndNeverServesCachedPrebuilt()
     {
         if (OperatingSystem.IsWindows())
         {
@@ -163,10 +170,50 @@ public sealed class CudaManagedRuntimeTests
             manager.EnsureBinaryAsync(GpuVariant.Vulkan, CancellationToken.None));
 
         AssertEx.True(exception.Message.Contains("source-built", StringComparison.Ordinal));
+
+        // The record still names the source build, so the cached prebuilt was never recorded over it and the next
+        // reconcile still recognizes the tree.
+        var after = await store.ReadAsync(CancellationToken.None);
+        AssertEx.NotNull(after);
+        AssertEx.Equal(binDir, after!.SourceBuildPath);
+        AssertEx.Equal(GpuVariant.Cuda, after.Variant);
+        AssertEx.Equal(GpuVariant.Cuda, signal.ActiveVariant);
+        AssertEx.Equal(before, signal.Version);
+    }
+
+    /// <summary>
+    ///     The counterpart to the guard above: an EXPLICIT operator removal still replaces the record and deletes the
+    ///     tree it names, so refusing automatic destruction never wedges the operator.
+    /// </summary>
+    [Test]
+    public async Task RemoveSourceBuild_ExplicitOperatorAction_ClearsRecordAndDeletesTree()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var dir = new TempDir();
+        var activeTree = Path.Combine(dir.Path, "llama.cpp", "source-build", "active");
+        var binDir = Path.Combine(activeTree, "build", "bin");
+        Directory.CreateDirectory(binDir);
+        var serverPath = WriteExecutableStub(binDir, GpuStub);
+        var sha = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(serverPath, CancellationToken.None)));
+        using var store = new InstalledRuntimeStore(dir.Path);
+        await store.WriteAsync(SourceBuildState(binDir, sha), CancellationToken.None);
+        var signal = new CudaManagedBuildSignal();
+        signal.MarkAvailable();
+
+        using var handler = new ThrowingHandler();
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, catalog: null, store, overrideOptions: null, signal);
+
+        await manager.RemoveSourceBuildAsync(CancellationToken.None);
+
+        AssertEx.False(Directory.Exists(activeTree));
         AssertEx.Null(await store.ReadAsync(CancellationToken.None));
         AssertEx.Null(signal.ActiveVariant);
-        AssertEx.True(signal.Version > before);
-        _ = binDir;
     }
 
     [Test]
