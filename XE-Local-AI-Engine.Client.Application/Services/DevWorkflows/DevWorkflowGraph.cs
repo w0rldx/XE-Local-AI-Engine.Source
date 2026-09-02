@@ -493,6 +493,18 @@ internal sealed class DevWorkflowGraph
                 throw new DevWorkflowValidationException($"Node '{node.NodeKey}' declares retryTarget '{node.RetryTarget}', which is not one of its ancestors. "
                                                          + "Routing a failure to a node that does not lead back here would livelock the run.");
             }
+
+            // A template node is never instantiated under its own key — the seeding skips it and the materializer gives
+            // each clone a key of its own, rewriting a retryTarget only for the clones INSIDE the subtree. So a node
+            // outside one naming a template key names a node run no run ever has, and the route would block on
+            // Configuration rather than re-attempt anything: a fix loop that reads correctly and cannot fire. The
+            // clone-internal case is the one this is for, and it stays legal because both keys are rewritten together.
+            if (TemplateKeys.Contains(node.RetryTarget!) && !TemplateKeys.Contains(node.NodeKey))
+            {
+                throw new DevWorkflowValidationException($"Node '{node.NodeKey}' declares retryTarget '{node.RetryTarget}', which is a materialization template node. "
+                                                         + $"'{node.RetryTarget}' is cloned once per task and never runs under that key, so no run would have a node "
+                                                         + $"run to route to. Name a node outside the template subtree, or move '{node.NodeKey}' into it.");
+            }
         }
     }
 

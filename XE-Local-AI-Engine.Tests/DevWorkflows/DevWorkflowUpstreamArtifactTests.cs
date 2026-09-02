@@ -122,6 +122,31 @@ public sealed class DevWorkflowUpstreamArtifactTests
     }
 
     /// <summary>
+    ///     A Tool node records what it consumed too. Its commands run against a prepared workspace and a Dev Mode patch
+    ///     — neither of which the store can see — so nothing but this record says the report it wrote was written about
+    ///     the work the step before it produced, and a later version of that work would flag nothing.
+    /// </summary>
+    [Test]
+    public async Task AToolNodeRecordsTheUpstreamArtifactsItsCommandsJudge()
+    {
+        // Its own host: the scripted sandbox is a container singleton keyed by node key, so a shared one would let
+        // another test's script answer this node run.
+        await using var harness = new DevWorkflowHarness();
+        harness.Tools.Answer("check", FakeDevWorkflowToolCommands.Passing());
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.ToolAfterAProducer, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "specify", "specification.md", "Add Subtract").ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "specify").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var specification = (await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).Single(static artifact => artifact.Name == "specification.md");
+        var consumed = await harness.ReadConsumedArtifactIdsAsync(runId, "check").ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, consumed.Count, "the sandbox lane consumed the step before it, and the record is what makes that decidable.");
+        AssertEx.Contains(consumed, specification.Id);
+    }
+
+    /// <summary>
     ///     The walk stops at the first producer on each path. Research is upstream of the decomposition too, but the
     ///     plan is what the plan node made OF it — handing over both would hand the consumer the superseded input
     ///     beside the output and let it work from either.

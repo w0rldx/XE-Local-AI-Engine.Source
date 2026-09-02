@@ -356,6 +356,46 @@ public sealed class DevWorkflowGraphTests
         AssertEx.Equal("implement", graph.Nodes["test"].RetryTarget);
     }
 
+    /// <summary>
+    ///     The bug this rule exists for: a node OUTSIDE a materialization subtree naming the template node reads as a
+    ///     perfectly ordinary fix loop and can never fire. Run seeding skips template keys and the materializer renames
+    ///     each clone, so at runtime the route finds no node run under that key and blocks the run on Configuration —
+    ///     silently turning every failure of that node into a dead end instead of a re-attempt.
+    /// </summary>
+    [Test]
+    public void Parse_WithARetryTargetNamingATemplateNodeFromOutsideTheSubtree_IsRejected()
+    {
+        const string OutsideTheSubtree = """
+                                         {
+                                           "nodes": [{ "nodeKey": "decompose", "nodeType": "Agent",
+                                                       "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                                     { "nodeKey": "implement", "nodeType": "DevTask" },
+                                                     { "nodeKey": "validate", "nodeType": "Tool" },
+                                                     { "nodeKey": "join", "nodeType": "Join" },
+                                                     { "nodeKey": "fullvalidate", "nodeType": "Tool", "retryTarget": "implement" }],
+                                           "edges": [{ "from": "decompose", "to": "join" }, { "from": "implement", "to": "validate" },
+                                                     { "from": "validate", "to": "join" }, { "from": "join", "to": "fullvalidate" }]
+                                         }
+                                         """;
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(OutsideTheSubtree)).Message,
+            "is a materialization template node");
+    }
+
+    /// <summary>
+    ///     And the clone-internal loop stays legal, which is the whole reason the rule is about WHERE the declaring node
+    ///     sits rather than about template keys as such: the materializer rewrites both keys together, so
+    ///     <c>validate#alpha</c> routes to <c>implement#alpha</c> and the row is there.
+    /// </summary>
+    [Test]
+    public void Parse_WithARetryTargetNamingATemplateNodeFromInsideTheSubtree_IsAccepted()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.ShippedTailFixLoop);
+
+        AssertEx.Equal("implement", graph.Nodes["validate"].RetryTarget, "the per-slice loop lives inside the subtree and is rewritten with it.");
+        AssertEx.Equal("verify", graph.Nodes["fullvalidate"].RetryTarget, "and the one outside it names a node every run seeds.");
+    }
+
     [Test]
     public void Parse_WithAnUnknownRetryTarget_IsRejected()
     {
