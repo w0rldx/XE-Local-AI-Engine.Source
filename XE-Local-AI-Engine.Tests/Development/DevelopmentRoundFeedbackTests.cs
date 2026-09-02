@@ -100,6 +100,94 @@ public sealed class DevelopmentRoundFeedbackTests
         AssertEx.False(reason.Contains("PRIVATE KEY", StringComparison.Ordinal), "the refused material must not travel with the refusal.");
     }
 
+    /// <summary>
+    ///     A DevTask node run's rule sets reach the coder the workflow routed the round to. The workflow already
+    ///     bounded and rendered the sections; what is asserted here is that the prompt carries them at all, which it
+    ///     did not while policy injection named the agent lane alone.
+    /// </summary>
+    [Test]
+    public void TheCoderPromptCarriesThePolicyTheWorkflowResolvedForTheTask()
+    {
+        var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null, WorkflowPolicy),
+            Session(),
+            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null));
+
+        AssertEx.Contains(prompt, "Policy (rule sets applied by the workflow):");
+        AssertEx.Contains(prompt, "## Policy: House rules");
+        AssertEx.Contains(prompt, "Never touch production without an approved plan.");
+
+        // Still the whole brief: the policy is added to what the round is told, never in place of it.
+        AssertEx.Contains(prompt, "It has to do the thing.");
+    }
+
+    [Test]
+    public void WithNoWorkflowPolicy_TheCoderPromptSaysNothingAboutOne()
+    {
+        var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null),
+            Session(),
+            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null));
+
+        AssertEx.False(prompt.Contains("Policy (rule sets applied by the workflow)", StringComparison.Ordinal),
+            "an ordinary Dev Mode task has no workflow governing it, and an empty heading would read as one that said nothing.");
+    }
+
+    /// <summary>
+    ///     The reviewer is governed by the same rule sets as the coder it judges. A reviewer held to a different
+    ///     standard than the round it reviews would reject correct work for a rule nobody was given, or pass work that
+    ///     broke one.
+    /// </summary>
+    [Test]
+    public void TheReviewerPromptCarriesTheSamePolicyTheCoderWasGiven()
+    {
+        var prompt = DevelopmentReviewerAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null, WorkflowPolicy), Task(), Validation());
+
+        AssertEx.Contains(prompt, "Policy (rule sets applied by the workflow):");
+        AssertEx.Contains(prompt, "Never touch production without an approved plan.");
+        AssertEx.Contains(prompt, "It has to do the thing.", message: "still the whole brief the coder was judged against.");
+    }
+
+    [Test]
+    public void WithNoWorkflowPolicy_TheReviewerPromptSaysNothingAboutOne()
+    {
+        var prompt = DevelopmentReviewerAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null), Task(), Validation());
+
+        AssertEx.False(prompt.Contains("Policy (rule sets applied by the workflow)", StringComparison.Ordinal),
+            "a review of an ordinary Dev Mode task has no workflow policy to hold it to.");
+    }
+
+    /// <summary>What a workflow renders onto the task: a heading the audit names and the body it snapshotted.</summary>
+    private const string WorkflowPolicy = "## Policy: House rules\nNever touch production without an approved plan.";
+
+    private static DevelopmentTaskSnapshot Task() =>
+        new(Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Add the feature",
+            "It has to do the thing.",
+            "[\"it does the thing\"]",
+            DevelopmentTaskStatus.InReview,
+            CurrentReviewRound: 1,
+            MaxReviewRounds: 3,
+            BlockedReason: null,
+            BlockedAtUtc: null,
+            ApprovedSubjectHash: null,
+            CreatedAtUtc: 0,
+            UpdatedAtUtc: 0,
+            Version: 1);
+
+    private static DevelopmentValidationReport Validation() =>
+        new(Passed: true,
+            "0123456789abcdef0123456789abcdef01234567",
+            "subject-hash",
+            "manifest-hash",
+            "result-hash",
+            "1",
+            DevelopmentCommandProfileCatalog.GenericGit,
+            "digest",
+            FailureCode: null,
+            FailureDetail: null,
+            Commands: [],
+            CompletedAtUtc: 0);
+
     private static DevelopmentWorkspaceSession Session() =>
         new(Guid.NewGuid(),
             Guid.NewGuid(),
@@ -124,7 +212,7 @@ public sealed class DevelopmentRoundFeedbackTests
                 ManifestVersion = 1
             });
 
-    private static DevelopmentExecutionSnapshot Snapshot(string? previousRoundFeedback) =>
+    private static DevelopmentExecutionSnapshot Snapshot(string? previousRoundFeedback, string? workflowPolicyText = null) =>
         new(Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
@@ -149,5 +237,6 @@ public sealed class DevelopmentRoundFeedbackTests
             "local",
             AttemptVersion: 1,
             CommandProfileJson: null,
-            previousRoundFeedback);
+            previousRoundFeedback,
+            workflowPolicyText);
 }

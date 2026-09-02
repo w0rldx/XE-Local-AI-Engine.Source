@@ -88,6 +88,42 @@ public sealed partial class DevelopmentStore
             cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<DevelopmentOperationResult> RecordWorkflowPolicyAsync(Guid taskId,
+        Guid operationId,
+        string policyText,
+        IReadOnlyList<DevelopmentWorkflowRuleSetReference> ruleSets,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(policyText);
+        ArgumentNullException.ThrowIfNull(ruleSets);
+        if (ruleSets.Count == 0)
+        {
+            throw new ArgumentException("A workflow-policy event must name at least one rule set.", nameof(ruleSets));
+        }
+
+        var projectId = await ProjectIdForTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+
+        // Keyed on the caller's own deterministic operation id, which is what makes it idempotent: a workflow re-binds
+        // its node run to the same task after a crash, and the same policy recorded twice would read as two separate
+        // injections and be replayed to the coder as the later one.
+        return await ExecuteOperationAsync(projectId,
+            operationId,
+            WorkflowPolicyOperationPhase,
+            async () => await AddEventAsync(projectId,
+                    taskId,
+                    attemptId: null,
+                    operationId,
+                    WorkflowPolicyOperationPhase,
+                    "WorkflowPolicyApplied",
+                    "Applied",
+                    ruleSets.Count.ToString(CultureInfo.InvariantCulture),
+                    version: 1,
+                    artifactId: null,
+                    JsonSerializer.SerializeToUtf8Bytes(new WorkflowPolicyDetail(policyText, ruleSets), JsonOptions),
+                    cancellationToken).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<int> ReconcileRunningAttemptsAsync(string sanitizedReason, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sanitizedReason);

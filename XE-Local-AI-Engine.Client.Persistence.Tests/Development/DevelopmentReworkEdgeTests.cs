@@ -20,6 +20,8 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
 {
     private const string Reason = "The validate node rejected this implementation: 3 of 15 tests failed.";
 
+    private const string Policy = "## Policy: House rules\nNever touch production without an approved plan.";
+
     private readonly DevelopmentTestFixture _fixture = new();
 
     public void Dispose() =>
@@ -133,6 +135,55 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
 
         AssertEx.Null((await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).BlockedReason,
             "the round that acts on the complaint is where it stops being the current one.");
+    }
+
+    /// <summary>
+    ///     The other event-derived channel into a round's brief: the rule-set text a Development workflow resolved for
+    ///     the node run driving this task. Written once per operation id and read back off the task's own log, so a
+    ///     re-bound node run replaying the same injection cannot append a second one for the snapshot to prefer.
+    /// </summary>
+    [Test]
+    public async Task AWorkflowsPolicyIsRecordedOncePerOperationAndBecomesTheRoundsPolicyText()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var operationId = Guid.NewGuid();
+        var ruleSets = new[] { new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash") };
+
+        var first = await store.RecordWorkflowPolicyAsync(seed.TaskId, operationId, Policy, ruleSets).ConfigureAwait(false);
+        var replayed = await store.RecordWorkflowPolicyAsync(seed.TaskId, operationId, "Something else entirely.", ruleSets).ConfigureAwait(false);
+
+        AssertEx.Equal(first.Sequence, replayed.Sequence, "the same operation id answers with what it already did rather than injecting a second policy.");
+        AssertEx.Equal(expected: 1,
+            await dbContext.DevelopmentEvents.AsNoTracking().CountAsync(entity => entity.TaskId == seed.TaskId && entity.EventType == "WorkflowPolicyApplied")
+                           .ConfigureAwait(false),
+            "one row, whatever the replay was handed.");
+
+        // The round the policy governs: a coder attempt only starts once the task is back where one runs.
+        var reworking = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), DevelopmentTaskStatus.ChangesRequested, version))
+                                   .ConfigureAwait(false);
+        var inProgress = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                        Guid.NewGuid(),
+                                        DevelopmentTaskStatus.InProgress,
+                                        reworking.Version))
+                                    .ConfigureAwait(false);
+
+        var attemptId = Guid.NewGuid();
+        _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
+                           attemptId,
+                           Guid.NewGuid(),
+                           DevelopmentAttemptRole.Coder,
+                           "local-model",
+                           "local",
+                           inProgress.Version))
+                       .ConfigureAwait(false);
+
+        AssertEx.Equal(Policy,
+            (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).WorkflowPolicyText,
+            "the round's own execution snapshot is where the coder and reviewer prompts read the workflow's policy from.");
     }
 
     /// <summary>

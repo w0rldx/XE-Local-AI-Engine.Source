@@ -277,18 +277,30 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
         }
     }
 
-    private static string BuildPrompt(DevelopmentExecutionSnapshot snapshot,
+    /// <summary>Internal so the composition can be pinned directly; nothing outside this class calls it.</summary>
+    internal static string BuildPrompt(DevelopmentExecutionSnapshot snapshot,
         DevelopmentTaskSnapshot task,
         DevelopmentValidationReport validation) =>
         string.Concat("Task: ", snapshot.Title,
             "\nRequirements:\n", snapshot.Requirements,
             "\nAcceptance criteria:\n", snapshot.AcceptanceCriteriaJson,
+            Policy(snapshot.WorkflowPolicyText),
             "\nReview round: ", task.CurrentReviewRound, " of ", task.MaxReviewRounds,
             "\nValidated subject: ", validation.SubjectHash,
             "\nValidation profile: ", validation.CommandProfileVersion,
             "\nValidation passed: ", validation.Passed,
             DescribeTestResults(validation),
             "\nUse only the read-only tools. Never modify the worktree or claim task completion.");
+
+    /// <summary>
+    ///     The rule sets a Development workflow resolved for the node run driving this task, when one does. Rendered and
+    ///     bounded by the workflow before it ever reached the task, so this only decides whether there is a section at
+    ///     all: an empty heading governs nothing and would read as a policy that said nothing.
+    /// </summary>
+    private static string Policy(string? workflowPolicy) =>
+        string.IsNullOrWhiteSpace(workflowPolicy)
+            ? string.Empty
+            : string.Concat("\nPolicy (rule sets applied by the workflow):\n", workflowPolicy);
 
     /// <summary>
     ///     Puts the gate's structured test counts in front of the reviewer. "Validation passed" alone does not let a

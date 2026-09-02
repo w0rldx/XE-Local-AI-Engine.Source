@@ -75,7 +75,8 @@ public sealed partial class DevelopmentStore
             // keeps attempts that predate the column behaving exactly as before, and lets a project whose profile was
             // backfilled after the attempt started still resolve one.
             snapshot.Attempt.CommandProfileJson ?? snapshot.Project.CommandProfileJson,
-            await PreviousRoundFeedbackAsync(snapshot.Task.Id, cancellationToken).ConfigureAwait(false));
+            await PreviousRoundFeedbackAsync(snapshot.Task.Id, cancellationToken).ConfigureAwait(false),
+            await WorkflowPolicyTextAsync(snapshot.Task.Id, cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
@@ -147,6 +148,48 @@ public sealed partial class DevelopmentStore
 
     /// <summary>The one shape every reason-carrying event detail in this store is written in.</summary>
     private sealed record ReasonDetail(string? Reason);
+
+    /// <summary>
+    ///     The rule-set text a workflow injected onto this task, or nothing when no workflow drives it.
+    ///     <para>
+    ///         One row, off the task's own append-only log, exactly as <see cref="PreviousRoundFeedbackAsync" /> reads
+    ///         its sentence — so it costs no migration and no column, and a task nothing injected policy onto answers
+    ///         null rather than empty. LATEST wins: a node run re-bound to the same task records again, and the newer
+    ///         resolution is the one that governs the round about to run.
+    ///     </para>
+    ///     <para>
+    ///         ponytail: NO STATUS BOUND, unlike <see cref="PreviousRoundFeedbackAsync" />, whose event only counts
+    ///         while it left the task where a coder round runs. The snapshot therefore outlives the run that applied
+    ///         it: a later manual round on the operator's own task still reads it. Bounding it would need Dev Mode to
+    ///         know which node run is live, which is the workflow's knowledge and not the task's.
+    ///     </para>
+    /// </summary>
+    private async Task<string?> WorkflowPolicyTextAsync(Guid taskId, CancellationToken cancellationToken)
+    {
+        var latest = await _dbContext.DevelopmentEvents.AsNoTracking()
+                                     .Where(entity => entity.TaskId == taskId && entity.EventType == "WorkflowPolicyApplied" && entity.DetailJson != null)
+                                     .OrderByDescending(entity => entity.Sequence)
+                                     .FirstOrDefaultAsync(cancellationToken)
+                                     .ConfigureAwait(false);
+        if (latest?.DetailJson is not { Length: > 0 } detail)
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<WorkflowPolicyDetail>(detail, JsonOptions)?.PolicyText;
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            // A row this build cannot read is a row with no policy in it. The attempt still runs, ungoverned but
+            // honest about it — failing a coder round over an unreadable audit row would be the worse answer.
+            return null;
+        }
+    }
+
+    /// <summary>The shape a workflow's policy event carries: the rendered text, and which rule sets composed it.</summary>
+    private sealed record WorkflowPolicyDetail(string? PolicyText, IReadOnlyList<DevelopmentWorkflowRuleSetReference>? RuleSets);
 
     public async Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default)
     {

@@ -14,10 +14,11 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     </para>
 ///     <para>
 ///         Resolution is RECORDED on every node-run type, agent or not, so <c>appliedRuleSets</c> on a node-run is an
-///         honest answer whichever node is asked. Only an Agent node's objective INJECTS the bodies today
-///         (<c>DevWorkflowAgentExecutor.ComposeObjectiveAsync</c>): a DevTask node's prompt is Dev Mode's to compose
-///         and a Tool node runs a command profile with no prose channel at all. Both still record, and injecting there
-///         is additive whenever those lanes grow a place to put it.
+///         honest answer whichever node is asked. Two lanes INJECT the bodies: an Agent node's objective
+///         (<c>DevWorkflowAgentExecutor.ComposeObjectiveAsync</c>) and a DevTask node's Dev Mode prompts, which reach
+///         the coder and the reviewer through an event on the task (<c>DevWorkflowDevTaskExecutor</c>). A Tool node runs
+///         a command profile with no prose channel at all and a HumanGate asks a person; both still record, and
+///         injecting there is additive whenever those lanes grow a place to put it.
 ///     </para>
 /// </summary>
 public static class DevWorkflowRulePolicyResolver
@@ -64,12 +65,13 @@ public static class DevWorkflowRulePolicyResolver
     }
 
     /// <summary>
-    ///     Whether a node type renders policy text into what it dispatches — today, the agent lane's objective and
-    ///     nothing else. A DevTask node's prompt is Dev Mode's to compose and a Tool node runs a command profile with
-    ///     no prose channel at all, so neither has anywhere to put a body. Both still RECORD which rule sets applied.
+    ///     Whether a node type renders policy text into what it dispatches — the agent lane's objective and the DevTask
+    ///     lane's coder and reviewer prompts. A Tool node runs a command profile with no prose channel at all, so it has
+    ///     nowhere to put a body, and a HumanGate asks a person rather than a model. Both still RECORD which rule sets
+    ///     applied.
     /// </summary>
     public static bool InjectsPolicyText(DevWorkflowNodeType nodeType) =>
-        nodeType == DevWorkflowNodeType.Agent;
+        nodeType is DevWorkflowNodeType.Agent or DevWorkflowNodeType.DevTask;
 
     /// <summary>
     ///     Reads a recorded resolution back. A column that will not parse answers empty rather than throwing: the

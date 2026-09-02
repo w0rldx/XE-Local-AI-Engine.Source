@@ -87,6 +87,9 @@ public sealed class DevWorkflowDevTaskTests
                                           "completedAtUtc":0}
                                          """;
 
+    /// <summary>The rule set a workflow injects, so an assertion can name the text rather than a hash.</summary>
+    private const string HouseRules = "Never touch production without an approved plan.";
+
     /// <summary>One implementation node with one re-attempt in hand.</summary>
     private const string SingleDevTask = """
                                          {
@@ -780,6 +783,57 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>The workflow host with the development chain scripted, and its own development project to drive.</summary>
+    /// <summary>
+    ///     The policy event is written ONCE per task, at the tick that binds it — and a re-run of that bind tick
+    ///     records nothing further.
+    ///     <para>
+    ///         Two guards have to hold together and each would pass alone. The executor writes only while the node run
+    ///         names no task, and the store is idempotent on the operation id the executor DERIVES from the run and the
+    ///         node key. The second is what a crash between creating the task and writing the pointer meets — the
+    ///         re-dispatch resolves the same task with the pointer still null — so this replays that exact write and
+    ///         asserts the log did not grow and the round still reads the FIRST text.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ThePolicyAWorkflowInjects_IsRecordedOncePerTaskEvenWhenTheBindTickIsReRun()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        _ = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":["DevTask"]}""").ConfigureAwait(false);
+
+        // Held, so a real attempt row exists for the execution snapshot to be read off.
+        harness.Chain.HoldNextAttempt();
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(taskId,
+            (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).DevelopmentTaskId,
+            "the node run bound the project's task, which is the tick the policy is recorded on.");
+
+        await using var scope = harness.Services.CreateAsyncScope();
+        var development = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+
+        // The re-dispatch a crash between the task create and the pointer write leaves behind: the SAME run, node key
+        // and phase, so the executor derives the same operation id and the store answers with what it already wrote.
+        // The attempt is 0 because a node's task belongs to it for the whole run, not to one attempt.
+        _ = await development.RecordWorkflowPolicyAsync(taskId,
+                                 DevWorkflowOperationId.For(runId, "implement", attempt: 0, "devtask-policy"),
+                                 "Deploy straight to production on Fridays.",
+                                 [new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash")])
+                             .ConfigureAwait(false);
+
+        var events = await development.ListEventsAsync(projectId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1,
+            events.Count(entry => entry.EventType == "WorkflowPolicyApplied"),
+            "one injection per binding: a re-run of the bind tick re-derives the same operation id rather than appending.");
+
+        var attempt = (await development.ListAttemptsAsync(taskId).ConfigureAwait(false)).Single();
+        var policy = AssertEx.NotNull((await development.GetExecutionSnapshotAsync(attempt.Id).ConfigureAwait(false)).WorkflowPolicyText);
+        AssertEx.Contains(policy, HouseRules, message: "and the round still reads the text the first write recorded.");
+        AssertEx.False(policy.Contains("Deploy straight to production on Fridays.", StringComparison.Ordinal),
+            "a replayed write must not be able to hand the coder a policy the node run never resolved.");
+    }
+
     private static DevWorkflowHarness NewHarness(TimeProvider? clock = null) =>
         DevWorkflowHarness.WithAScriptedChain(clock);
 

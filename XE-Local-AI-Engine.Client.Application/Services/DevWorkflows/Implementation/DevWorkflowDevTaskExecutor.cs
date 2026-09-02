@@ -55,6 +55,17 @@ internal sealed class DevWorkflowDevTaskExecutor
     /// </summary>
     private const int MaxChangeRequestReason = 4096;
 
+    /// <summary>
+    ///     How much rule-set text a DevTask node run may put in front of Dev Mode's coder and reviewer, in characters.
+    ///     <para>
+    ///         The same 4096 as <see cref="MaxChangeRequestReason" /> and as a rule set's own body cap, and for the same
+    ///         reason: the prompt these sections land in already carries the task's title, requirements and acceptance
+    ///         criteria uncapped, so policy gets a bounded share of it rather than the room it would like. Past this the
+    ///         sections are truncated visibly, never silently dropped.
+    ///     </para>
+    /// </summary>
+    private const int MaxPolicyCharacters = 4096;
+
     /// <summary>How much of one failing command's captured output the change request quotes, from the END of it.</summary>
     private const int MaxQuotedCommandOutput = 800;
 
@@ -151,6 +162,16 @@ internal sealed class DevWorkflowDevTaskExecutor
             }
 
             taskId = resolved;
+
+            // The rule sets this node run RECORDED, put where Dev Mode's own prompts read them: once, at the moment
+            // the node run binds a task, and never again once it names one. A run re-binding the same task after a
+            // crash meets the store's idempotency on the same deterministic operation id rather than injecting twice.
+            // INSIDE the try, because a task deleted between the resolve and this write is the same decided fact the
+            // catch below stands the node down for.
+            if (nodeRun.DevelopmentTaskId is null)
+            {
+                await RecordPolicyAsync(development, run, nodeRun, taskId, cancellationToken).ConfigureAwait(false);
+            }
         }
         catch (Exception exception) when (exception is ArgumentException or KeyNotFoundException)
         {
@@ -257,6 +278,42 @@ internal sealed class DevWorkflowDevTaskExecutor
                                        cancellationToken)
                                    .ConfigureAwait(false);
         return created.TaskId;
+    }
+
+    /// <summary>
+    ///     Puts the node run's recorded rule-set text on the task it drives, as the one channel Dev Mode's coder and
+    ///     reviewer prompts read policy through — the same event-derived route <c>PreviousRoundFeedback</c> travels, so
+    ///     it costs no column and no migration.
+    ///     <para>
+    ///         Nothing applied writes nothing: an empty event would claim a resolution the node run does not have. So
+    ///         does a resolution whose bodies are all missing or all too long to fit — the render is what decides, and
+    ///         it logs each section it dropped.
+    ///     </para>
+    /// </summary>
+    private async Task RecordPolicyAsync(IDevelopmentStore development,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        Guid taskId,
+        CancellationToken cancellationToken)
+    {
+        var applied = DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson);
+        if (applied.Count == 0)
+        {
+            return;
+        }
+
+        var policyText = DevWorkflowPolicyText.Render(applied, MaxPolicyCharacters, occupied: 0, nodeRun.Id, _logger).Trim();
+        if (policyText.Length == 0)
+        {
+            return;
+        }
+
+        _ = await development.RecordWorkflowPolicyAsync(taskId,
+                                 DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, ChildTaskAttempt, "devtask-policy"),
+                                 policyText,
+                                 [.. applied.Select(entry => new DevelopmentWorkflowRuleSetReference(entry.Id, entry.Name, entry.ContentSha256))],
+                                 cancellationToken)
+                             .ConfigureAwait(false);
     }
 
     /// <summary>A brief's field, or nothing — a present-but-blank string is an absent one, not a value to pass on.</summary>
