@@ -74,7 +74,7 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner, IDevWo
     public Task DeleteRuleSetAsync(Guid ruleSetId, CancellationToken cancellationToken = default) =>
         _inner.DeleteRuleSetAsync(ruleSetId, cancellationToken);
 
-    public Task<IReadOnlyList<DevWorkflowRuleSetSummary>> ListEnabledRuleSetsAsync(CancellationToken cancellationToken = default) =>
+    public Task<IReadOnlyList<DevWorkflowRuleSetSnapshot>> ListEnabledRuleSetsAsync(CancellationToken cancellationToken = default) =>
         _inner.ListEnabledRuleSetsAsync(cancellationToken);
 
     /// <summary>Nothing is subscribed to a run that does not exist yet, so a start publishes nothing.</summary>

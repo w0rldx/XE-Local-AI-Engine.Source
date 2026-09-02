@@ -618,7 +618,9 @@ public interface IDevWorkflowStore
     Task DeleteRuleSetAsync(Guid ruleSetId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     The resolver's read, at run start and at each materialization.
+    ///     The resolver's read, at run start and at each materialization. Bodies included: the resolver SNAPSHOTS the
+    ///     text it matched onto the node run, so what a node was given can never be re-derived from a document that has
+    ///     since moved on.
     ///     <para>
     ///         ponytail: a full scan of the enabled rows with no cache. The scope is a JSON document with no column to
     ///         index on, the working set is a handful of rows on a single-operator node, and the call happens once per
@@ -626,7 +628,7 @@ public interface IDevWorkflowStore
     ///         rule count ever reaches the hundreds.
     ///     </para>
     /// </summary>
-    Task<IReadOnlyList<DevWorkflowRuleSetSummary>> ListEnabledRuleSetsAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<DevWorkflowRuleSetSnapshot>> ListEnabledRuleSetsAsync(CancellationToken cancellationToken = default);
 
     Task<DevWorkflowRunSnapshot> StartRunAsync(StartDevWorkflowRunCommand command, CancellationToken cancellationToken = default);
 

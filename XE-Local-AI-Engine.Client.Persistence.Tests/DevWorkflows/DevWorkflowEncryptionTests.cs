@@ -22,6 +22,7 @@ public sealed class DevWorkflowEncryptionTests
         var payload = "PAYLOAD-" + Guid.NewGuid().ToString("N");
         var eventDetail = "EVENTDETAIL-" + Guid.NewGuid().ToString("N");
         var ruleBody = "RULEBODY-" + Guid.NewGuid().ToString("N");
+        var snapshotBody = "SNAPSHOTBODY-" + Guid.NewGuid().ToString("N");
         var instructions = graph[(graph.IndexOf("INSTRUCTIONS-", StringComparison.Ordinal))..].Split('"')[0];
 
         await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
@@ -49,7 +50,7 @@ public sealed class DevWorkflowEncryptionTests
                                                       "approval",
                                                       DevWorkflowNodeType.HumanGate,
                                                       InputJson: $$"""{"workItemRequest":"{{input}}"}""",
-                                                      PolicyResolutionJson: $$"""[{"name":"{{policy}}"}]""")
+                                                      PolicyResolutionJson: $$"""[{"name":"{{policy}}","body":"{{snapshotBody}}"}]""")
                                               ]))
                                           .ConfigureAwait(false);
             var transitioned = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
@@ -90,7 +91,12 @@ public sealed class DevWorkflowEncryptionTests
                      policy,
                      payload,
                      eventDetail,
-                     ruleBody
+                     ruleBody,
+
+                     // The resolver snapshots the rule-set TEXT onto the node run, so the policy column now carries a
+                     // second copy of a document whose own column is encrypted. It has to be encrypted here too, or
+                     // the snapshot would be the plaintext leak the rule-set table was built to avoid.
+                     snapshotBody
                  })
         {
             AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(secret)), $"The database file must not carry '{secret[..12]}…' as plaintext.");

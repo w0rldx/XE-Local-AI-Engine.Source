@@ -31,7 +31,7 @@ internal static class DevWorkflowRunSeeds
         DevWorkflowWorkItemSnapshot workItem,
         string? inputsJson,
         int maxNodeRunsPerRun,
-        IReadOnlyList<DevWorkflowRuleSetSummary> enabledRuleSets)
+        IReadOnlyList<DevWorkflowRuleSetSnapshot> enabledRuleSets)
     {
         ArgumentNullException.ThrowIfNull(graph);
         ArgumentNullException.ThrowIfNull(workItem);

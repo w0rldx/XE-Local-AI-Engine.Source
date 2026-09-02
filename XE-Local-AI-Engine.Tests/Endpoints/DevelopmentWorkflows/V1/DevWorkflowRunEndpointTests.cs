@@ -34,7 +34,8 @@ public sealed class DevWorkflowRunEndpointTests
     private static readonly Guid RuleSetId = Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
 
     /// <summary>What a node run recorded at materialization: the id, the name and the hash of the text that applied.</summary>
-    private const string RecordedPolicy = """[{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","name":"House rules","contentSha256":"content-hash"}]""";
+    private const string RecordedPolicy =
+        """[{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","name":"House rules","contentSha256":"content-hash","body":"Never touch production."}]""";
 
     /// <summary>The seeded Slice-A shape: one agent into one TERMINAL gate — no out-edge takes a rejection.</summary>
     private const string SampleGraph = """
@@ -877,6 +878,32 @@ public sealed class DevWorkflowRunEndpointTests
         AssertEx.Equal("content-hash", applied.GetProperty("contentSha256").GetString(), "the recorded hash is the audit and never moves.");
         AssertEx.Equal("content-hash-v2", applied.GetProperty("currentContentSha256").GetString(), "and the current one is what says the document has been edited since.");
         AssertEx.Equal("House rules", applied.GetProperty("name").GetString(), "the NAME stays the recorded one: renaming a rule set must not rewrite what the audit says applied.");
+    }
+
+    /// <summary>
+    ///     The snapshotted TEXT stays off the wire. The node run carries it so the objective can be composed from what
+    ///     applied, but a node-run response is an audit view: it names the document and its hashes, and a reader who
+    ///     wants the text asks the rule set for it.
+    /// </summary>
+    [Test]
+    public async Task GetNodeRun_DoesNotPutTheSnapshottedRuleSetTextOnTheWire()
+    {
+        var store = Store();
+        store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(GateNodeRun() with
+        {
+            PolicyResolutionJson = RecordedPolicy
+        });
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.False(body.Contains("Never touch production.", StringComparison.Ordinal), "the recorded policy TEXT must not be echoed by the node-run response.");
+        using var document = JsonDocument.Parse(body);
+        var applied = document.RootElement.GetProperty("appliedRuleSets")[0];
+        AssertEx.False(applied.TryGetProperty("body", out _), "and the wire shape carries no body member at all.");
+        AssertEx.Equal("content-hash", applied.GetProperty("contentSha256").GetString(), "the hashes are what the audit view is for.");
     }
 
     /// <summary>A deleted rule set reads as a null current hash — the recorded half is untouched, which is the point of recording it.</summary>

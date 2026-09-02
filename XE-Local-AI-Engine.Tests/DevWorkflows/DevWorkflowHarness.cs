@@ -346,6 +346,19 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
                           .ConfigureAwait(false);
     }
 
+    /// <summary>Rewrites a rule set the way the PUT endpoint does — whole document, at the version it was read from.</summary>
+    public async Task<DevWorkflowRuleSetSnapshot> UpdateRuleSetAsync(Guid ruleSetId, int expectedVersion, string name, string body, string? scopeJson = null)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
+                          .UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand(ruleSetId,
+                              expectedVersion,
+                              name,
+                              body,
+                              scopeJson ?? """{"projectIds":[],"nodeTypes":[]}"""))
+                          .ConfigureAwait(false);
+    }
+
     public async Task DeleteRuleSetAsync(Guid ruleSetId)
     {
         await using var scope = Services.CreateAsyncScope();

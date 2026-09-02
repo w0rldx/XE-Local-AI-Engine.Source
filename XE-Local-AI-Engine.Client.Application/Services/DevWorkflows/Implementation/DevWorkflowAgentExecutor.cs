@@ -445,8 +445,9 @@ internal sealed class DevWorkflowAgentExecutor
         // against the same budget everything else does: policy that pushed the objective over the limit would crowd out
         // the request it is supposed to govern.
         //
-        // Best-effort by design. A rule set deleted since materialization is SKIPPED rather than failing the dispatch —
-        // the node-run's recorded {id, name, contentSha256} is the audit, and it survives the document either way.
+        // Read straight from what the node run RECORDED — id, name, hash and the text itself — and never from the rule
+        // set as it stands now. Editing or deleting a rule set mid-run is allowed, so a dispatch-time read would hand
+        // the agent a document the audit does not name, or nothing at all.
         // Rendered BEFORE the policy phase though it is appended after it, because it is uncapped: instructions and the
         // operator's request are what a node cannot do without, so policy gets the room they leave rather than the room
         // it would like. Without this the bounded phase would fill the budget and the unbounded one would then push
@@ -466,32 +467,18 @@ internal sealed class DevWorkflowAgentExecutor
         for (var index = 0; index < applied.Count; index++)
         {
             var entry = applied[index];
-            DevWorkflowRuleSetSnapshot document;
-            try
+
+            // Rows written before the body was snapshotted alongside the hash. None exist today, and the reader stays
+            // honest about them rather than re-reading the rule set and injecting whatever it says NOW — which is the
+            // exact divergence the snapshot exists to close.
+            if (entry.Body is not { Length: > 0 })
             {
-                document = await store.GetRuleSetAsync(entry.Id, cancellationToken).ConfigureAwait(false);
-            }
-            catch (DevWorkflowNotFoundException)
-            {
-                _logger.LogWarning("Development workflow rule set {RuleSetId}, recorded as applied by node run {NodeRunId}, no longer exists; "
-                                   + "its text is not in the objective. The recorded content hash {RecordedHash} still names what applied.",
-                    entry.Id,
+                _logger.LogWarning("Development workflow node run {NodeRunId} recorded rule set {RuleSetId} without its text, so nothing was injected for it. "
+                                   + "The recorded content hash {RecordedHash} still names what applied.",
                     nodeRun.Id,
+                    entry.Id,
                     entry.ContentSha256);
                 continue;
-            }
-
-            // Editing a rule set mid-run is allowed, so the body injected here can be NEWER than the text the row
-            // recorded. The objective gets the current document — it is the policy in force — but the divergence is
-            // said out loud, because the node run's own audit will keep naming the older hash for ever.
-            if (!string.Equals(document.ContentSha256, entry.ContentSha256, StringComparison.Ordinal))
-            {
-                _logger.LogWarning("Development workflow rule set {RuleSetId} was edited after node run {NodeRunId} recorded it: the objective carries the "
-                                   + "current text {CurrentHash} while the audit names {RecordedHash}.",
-                    entry.Id,
-                    nodeRun.Id,
-                    document.ContentSha256,
-                    entry.ContentSha256);
             }
 
             // The name is the one RECORDED at materialization, not the one the row carries now: it is what the audit
@@ -512,7 +499,7 @@ internal sealed class DevWorkflowAgentExecutor
                 continue;
             }
 
-            var body = document.Body;
+            var body = entry.Body;
             if (body.Length > budget)
             {
                 // Truncated rather than dropped, and VISIBLY: an agent handed the first half of a policy has to be able

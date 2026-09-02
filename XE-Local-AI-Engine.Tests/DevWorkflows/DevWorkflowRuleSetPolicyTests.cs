@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using System.Security.Cryptography;
+using System.Text;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
@@ -104,32 +106,6 @@ public sealed class DevWorkflowRuleSetPolicyTests
     }
 
     /// <summary>
-    ///     P3.7's gate: the node-run keeps the ids it recorded after the rule set is deleted. DELETE is a hard delete and
-    ///     does not 409 on a live run, so the recorded {id, name, contentSha256} is the ONLY thing that keeps the audit
-    ///     truthful — and the objective composer skips the missing document rather than failing the dispatch.
-    /// </summary>
-    [Test]
-    public async Task ARecordedResolution_SurvivesDeletingTheRuleSetAndTheObjectiveSkipsTheMissingDocument()
-    {
-        await using var harness = new DevWorkflowHarness();
-        var ruleSet = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":[]}""").ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(SingleAgent, developmentProjectId: ProjectId).ConfigureAwait(false);
-
-        await harness.DeleteRuleSetAsync(ruleSet.Id).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-
-        var nodeRun = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
-        var recorded = DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson);
-
-        AssertEx.Equal(expected: 1, recorded.Count, "the resolution was recorded at materialization and the delete cannot reach back into it.");
-        AssertEx.Equal(ruleSet.ContentSha256, recorded[0].ContentSha256);
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
-            nodeRun.Status,
-            "a deleted rule set is skipped best-effort: the node still dispatched rather than failing over a document that is gone.");
-        AssertEx.False(harness.Agent.Objectives.Single().Contains("## Policy:", StringComparison.Ordinal), "there was no body left to inject.");
-    }
-
-    /// <summary>
     ///     A materialized clone resolves for ITSELF, against its own node type — so a rule set scoped to Tool nodes
     ///     reaches the cloned validation node and not the cloned implementation beside it. Without this the children a
     ///     run grows would be the one part of it no policy ever governed.
@@ -175,6 +151,57 @@ public sealed class DevWorkflowRuleSetPolicyTests
     }
 
     /// <summary>
+    ///     The node run is given the text it RECORDED, not the text the rule set holds now. An edit landing between
+    ///     materialization and dispatch must not hand the agent one document while the audit permanently names another:
+    ///     the hash on the row has to describe what the agent actually read.
+    /// </summary>
+    [Test]
+    public async Task ARuleSetEditedAfterMaterialization_StillInjectsTheTextTheNodeRunRecorded()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var original = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":[]}""").ConfigureAwait(false);
+
+        // The run is STARTED — which is what writes the resolution — and only then is the rule set rewritten.
+        var runId = await harness.StartRunAsync(SingleAgent, developmentProjectId: ProjectId).ConfigureAwait(false);
+        _ = await harness.UpdateRuleSetAsync(original.Id, original.Version, "House rules", "Deploy straight to production on Fridays.").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var recorded = DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson);
+        var objective = harness.Agent.Objectives.Single();
+
+        AssertEx.Contains(objective, HouseRules, message: "the agent reads the text that applied when the node run was materialized.");
+        AssertEx.False(objective.Contains("Deploy straight to production on Fridays.", StringComparison.Ordinal),
+            "an edit that landed after materialization must not reach an objective the audit describes with the OLD hash.");
+        AssertEx.Equal(original.ContentSha256, recorded[0].ContentSha256, "the recorded hash is unchanged by the edit.");
+        AssertEx.Equal(original.ContentSha256,
+            Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(AssertEx.NotNull(recorded[0].Body)))),
+            "and it is the hash OF the injected text: the audit and the objective cannot tell different stories.");
+    }
+
+    /// <summary>The same guarantee against a delete: the recorded text is still injected, because the row carries it.</summary>
+    [Test]
+    public async Task ARuleSetDeletedAfterMaterialization_StillInjectsTheTextTheNodeRunRecorded()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var ruleSet = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":[]}""").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent, developmentProjectId: ProjectId).ConfigureAwait(false);
+
+        await harness.DeleteRuleSetAsync(ruleSet.Id).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var recorded = DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson);
+
+        AssertEx.Equal(expected: 1, recorded.Count, "P3.7: the node run keeps the ids it recorded, whatever became of the documents.");
+        AssertEx.Equal(ruleSet.ContentSha256, recorded[0].ContentSha256, "the resolution was recorded at materialization and the delete cannot reach back into it.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, nodeRun.Status, "and the node dispatched rather than failing over a rule set that is gone.");
+        AssertEx.Contains(harness.Agent.Objectives.Single(),
+            HouseRules,
+            message: "and the policy still governs the node: a deleted document is exactly the case a snapshot exists for.");
+    }
+
+    /// <summary>
     ///     Policy text is TRUNCATED, visibly, rather than dropped. Two long rule sets split the room left the way the
     ///     upstream artifacts do, so a long first policy cannot crowd out the one after it, and each says in the
     ///     objective that it was cut — an agent handed half a policy has to be able to tell that the rest exists.
@@ -202,12 +229,27 @@ public sealed class DevWorkflowRuleSetPolicyTests
             "both cut policies say so in the objective — a truncation an agent cannot see is one it will treat as the whole rule.");
     }
 
-    private static DevWorkflowRuleSetSummary Summary(string name, string scopeJson) =>
+    /// <summary>
+    ///     An entry with no snapshotted text injects NOTHING. No such row exists today; the reader stays honest about
+    ///     the shape rather than falling back to re-reading the rule set, which is the divergence the snapshot closes.
+    /// </summary>
+    [Test]
+    public void ARecordedEntryWithNoBody_ReadsBackWithANullBodyRatherThanFailing()
+    {
+        var recorded = DevWorkflowRulePolicyResolver.Read("""[{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","name":"House rules","contentSha256":"content-hash"}]""");
+
+        AssertEx.Equal(expected: 1, recorded.Count);
+        AssertEx.Null(recorded[0].Body, "a row written before the body was snapshotted reads as having none, not as having empty text.");
+        AssertEx.Equal("content-hash", recorded[0].ContentSha256, "and the audit half of it is untouched.");
+    }
+
+    private static DevWorkflowRuleSetSnapshot Summary(string name, string scopeJson) =>
         new(Guid.NewGuid(),
             name,
             Description: null,
             scopeJson,
             Enabled: true,
+            Body: $"the text of {name}",
             ContentSha256: $"hash-of-{name}",
             Version: 1,
             CreatedAtUtc: 1,

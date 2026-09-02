@@ -107,12 +107,25 @@ internal sealed partial class DevWorkflowStore
         }
     }
 
-    public async Task<IReadOnlyList<DevWorkflowRuleSetSummary>> ListEnabledRuleSetsAsync(CancellationToken cancellationToken = default) =>
-        await SummariesAsync(_dbContext.DevWorkflowRuleSets.AsNoTracking().Where(entity => entity.Enabled), cancellationToken).ConfigureAwait(false);
+    /// <summary>
+    ///     Bodies INCLUDED, unlike the list feed: the resolver snapshots the text of every rule set it matches onto the
+    ///     node run, so it needs the document and not merely its hash. Ordered by name, which is also the order every
+    ///     matching set is injected in.
+    /// </summary>
+    public async Task<IReadOnlyList<DevWorkflowRuleSetSnapshot>> ListEnabledRuleSetsAsync(CancellationToken cancellationToken = default)
+    {
+        var ruleSets = await _dbContext.DevWorkflowRuleSets.AsNoTracking()
+                                       .Where(entity => entity.Enabled)
+                                       .OrderBy(entity => entity.Name)
+                                       .ThenBy(entity => entity.Id)
+                                       .ToListAsync(cancellationToken)
+                                       .ConfigureAwait(false);
+        return [.. ruleSets.Select(RuleSetSnapshot)];
+    }
 
     /// <summary>
-    ///     Projected server-side without <c>body</c>, so no rule-set blob is decrypted to draw the list or to resolve a
-    ///     scope. Ordered by name, which is also the order every matching set is injected in.
+    ///     Projected server-side without <c>body</c>, so no rule-set blob is decrypted to draw the list. Ordered by
+    ///     name, which is also the order every matching set is injected in.
     /// </summary>
     private static async Task<IReadOnlyList<DevWorkflowRuleSetSummary>> SummariesAsync(IQueryable<DevWorkflowRuleSet> query, CancellationToken cancellationToken) =>
         await query.OrderBy(entity => entity.Name)
