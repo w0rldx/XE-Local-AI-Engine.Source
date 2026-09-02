@@ -101,6 +101,35 @@ public sealed class TrainedModelSmokeGateTests
         AssertEx.Contains(result.Reason ?? string.Empty, "exited while loading", StringComparison.Ordinal);
     }
 
+    [Test]
+    public async Task Smoke_HoldsTheGpuLoadTicketForTheWholeLaunch()
+    {
+        // The smoke launch is an ordinary short GPU load, so it has to serialize against every other one: the
+        // ticket must be held while the process is up, and handed back once, or the next load waits on nothing.
+        var harness = Harness.Create(toolCall: ("get_weather", "Paris, France"));
+
+        var result = await harness.Gate.RunAsync(MergedArtifact, CancellationToken.None);
+
+        AssertEx.Equal(TrainingArtifactSmokeState.Passed, result.State);
+        AssertEx.Equal(1, harness.TicketsHeldDuringLaunch);
+        AssertEx.Equal(1, harness.Admission.Acquired);
+        AssertEx.Equal(0, harness.Admission.ActiveTickets);
+    }
+
+    [Test]
+    public async Task Smoke_WhenTheRuntimeCannotLoadTheFile_StillReleasesTheGpuLoadTicket()
+    {
+        // A failed load is the path that leaks: the verdict is a result rather than a throw, so nothing downstream
+        // would ever notice the gate staying shut.
+        var harness = Harness.Create(toolCall: null, launchFailure: new LlamaRuntimeException("The model runtime exited while loading the model."));
+
+        var result = await harness.Gate.RunAsync(MergedArtifact, CancellationToken.None);
+
+        AssertEx.Equal(TrainingArtifactSmokeState.Failed, result.State);
+        AssertEx.Equal(1, harness.Admission.Acquired);
+        AssertEx.Equal(0, harness.Admission.ActiveTickets);
+    }
+
     private sealed class Harness
     {
         private Harness()
@@ -111,12 +140,22 @@ public sealed class TrainedModelSmokeGateTests
 
         public TransientLlamaServerRequest? Request { get; private set; }
 
+        public TrackingGpuModelLoadAdmission Admission { get; } = new();
+
+        /// <summary>Tickets outstanding at the moment the launcher was entered: the window the gate has to cover.</summary>
+        public int TicketsHeldDuringLaunch { get; private set; }
+
         public static Harness Create((string Name, string? Argument)? toolCall,
             string? chatTemplate = "{% for m in messages %}{{ m }}{% endfor %}",
             Exception? launchFailure = null)
         {
             var harness = new Harness();
-            var launcher = new ScriptedTransientLauncher(request => harness.Request = request, launchFailure);
+            var launcher = new ScriptedTransientLauncher(request =>
+                {
+                    harness.Request = request;
+                    harness.TicketsHeldDuringLaunch = harness.Admission.ActiveTickets;
+                },
+                launchFailure);
 
             var chatClientFactory = Substitute.For<IInferenceChatClientFactory>();
             _ = chatClientFactory.CreateChatClient(Arg.Any<Uri>(), Arg.Any<string>()).Returns(_ => new ScriptedChatClient(toolCall));
@@ -127,7 +166,7 @@ public sealed class TrainedModelSmokeGateTests
             harness.Gate = new TrainedModelSmokeGate(launcher,
                 chatClientFactory,
                 httpClientFactory,
-                new NoOpGpuModelLoadAdmission(),
+                harness.Admission,
                 NullLogger<TrainedModelSmokeGate>.Instance);
             return harness;
         }
@@ -199,6 +238,39 @@ public sealed class TrainedModelSmokeGateTests
 
         public void Dispose()
         {
+        }
+    }
+
+    /// <summary>Counts acquisitions and outstanding tickets, so a leaked ticket is visible after the call returns.</summary>
+    private sealed class TrackingGpuModelLoadAdmission : IGpuModelLoadAdmission
+    {
+        private int _acquired;
+
+        private int _activeTickets;
+
+        public int Acquired => Volatile.Read(ref _acquired);
+
+        public int ActiveTickets => Volatile.Read(ref _activeTickets);
+
+        public Task<IDisposable> AcquireAsync(CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            _ = Interlocked.Increment(ref _acquired);
+            _ = Interlocked.Increment(ref _activeTickets);
+            return Task.FromResult<IDisposable>(new Ticket(this));
+        }
+
+        private sealed class Ticket(TrackingGpuModelLoadAdmission owner) : IDisposable
+        {
+            private int _disposed;
+
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
+                {
+                    _ = Interlocked.Decrement(ref owner._activeTickets);
+                }
+            }
         }
     }
 }
