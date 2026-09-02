@@ -1013,11 +1013,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // Resolve the launch args (frozen-profile replay or explore-mode auto-fit, or operator-supplied profiling args)
         // for this (model, role, backend) BEFORE taking the admission gate, so a slow profile read never stalls
         // admission for other keys.
-        // The admitted arguments were resolved for the variant the admission was granted against, which the override
-        // above can have moved off: reuse them only while they still describe this backend, and re-resolve otherwise.
-        var resolved = admission is { } admitted && admitted.Variant == variant
-            ? admitted.ResolvedArguments
-            : await resolveArgs(variant, ct).ConfigureAwait(false);
+        // The ticket describes the variant it was granted against, which the override above can have moved off. Once it
+        // has, NOTHING the ticket carries applies to this spawn: its arguments were resolved for another backend, and
+        // its allocation was sized for one — a CPU admission carries no GPU bytes, so spending it on a GPU load would
+        // put that load outside VRAM capacity accounting and let concurrent spawns oversubscribe the device. Drop it
+        // and take the unadmitted path, which resolves both against the variant actually being launched.
+        var admitted = admission?.Variant == variant ? admission : null;
+        var resolved = admitted?.ResolvedArguments ?? await resolveArgs(variant, ct).ConfigureAwait(false);
 
         // Per-model developer/advanced override: extra llama-server flags the operator typed. Resolved here (alongside
         // the profile args, BEFORE the admission gate) so a slow store read never stalls admission for other keys, and
@@ -1056,7 +1058,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 variant,
                 resolved,
                 applyLaunchPolicy,
-                admission?.Allocation,
+                admitted?.Allocation,
                 ct)
             .ConfigureAwait(false);
         var planCandidates = planSet.Candidates;

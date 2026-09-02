@@ -196,9 +196,9 @@ public sealed class SupervisorSpawnArgsTests
     }
 
     /// <summary>
-    ///     The admitted arguments belong to the variant the ticket was granted against. A recorded source build can move
-    ///     the spawn off that variant after the identity check has already passed, and replaying Vulkan-resolved
-    ///     arguments onto a CUDA build would launch it against a backend nobody resolved for.
+    ///     The ticket belongs to the variant it was granted against. A recorded source build can move the spawn off that
+    ///     variant after the identity check has passed, and then nothing the ticket carries fits: its arguments were
+    ///     resolved for another backend, and its allocation was sized for one.
     /// </summary>
     [Test]
     public async Task EnsureRunning_AdmittedVariantOutrankedByServedBuild_ReResolvesArgs()
@@ -231,6 +231,62 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.True(launcher.Launches.TryDequeue(out var spec));
         AssertEx.Equal("8", spec!.Arguments[IndexOf(spec.Arguments, "--n-gpu-layers") + 1]);
         AssertEx.False(spec.Arguments.Contains("--fit"), "The admitted Explore args were resolved for a variant this spawn is no longer on.");
+        consumer!.Dispose();
+    }
+
+    /// <summary>
+    ///     A CPU admission carries no GPU bytes and a CPU-sized context. Spending it on a served GPU build would put
+    ///     that load outside VRAM capacity accounting, so the allocation is re-resolved for the variant being launched.
+    /// </summary>
+    [Test]
+    public async Task EnsureRunning_AdmittedCpuAllocationOutrankedByServedBuild_ReResolvesAllocation()
+    {
+        var launcher = new FakeProcessLauncher();
+        var cpuAllocation = new ProcessContextAllocation(4096,
+            ModelTrainContextTokens: 131072,
+            ProcessContextAllocationSource.HardwareTier,
+            ProcessPlacementMode.Cpu,
+            ResourceFootprint.Zero,
+            "llama3:0",
+            CacheKey: "cpu-cache");
+        var gpuAllocation = cpuAllocation with
+        {
+            ProcessContextTokens = 32768,
+            Placement = ProcessPlacementMode.GpuResident,
+            CacheKey = "gpu-cache"
+        };
+        var allocationResolver = Substitute.For<IProcessContextAllocationResolver>();
+        allocationResolver.ResolveAsync(Arg.Any<string>(),
+                              Arg.Any<ModelRole>(),
+                              Arg.Any<GpuVariant>(),
+                              Arg.Any<ResolvedLaunchArguments>(),
+                              Arg.Any<CancellationToken>())
+                          .Returns(_ => Task.FromResult<ProcessContextAllocation?>(gpuAllocation));
+
+        // Admitted as a CPU launch; the serve hands back the recorded CUDA build instead. Reusing the CPU allocation
+        // would go through TryGetEffectiveCommittedAllocation, which this resolver never satisfies.
+        var launchAdmissions = new ProcessLaunchAdmissionRegistry();
+        var admission = new ProcessLaunchAdmission("llama3",
+            ModelRole.Chat,
+            GpuVariant.Cpu,
+            ResolvedLaunchArguments.Explore(),
+            cpuAllocation);
+        AssertEx.True(launchAdmissions.TryAcquire(admission, out var consumer));
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cpu),
+            allocationResolver: allocationResolver,
+            launchAdmissions: launchAdmissions,
+            binaryManager: new FakeBinaryManager(GpuVariant.Cuda));
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.Equal("32768", spec!.Arguments[IndexOf(spec.Arguments, "-c") + 1]);
+        await allocationResolver.Received(1).ResolveAsync(Arg.Any<string>(),
+            Arg.Any<ModelRole>(),
+            GpuVariant.Cuda,
+            Arg.Any<ResolvedLaunchArguments>(),
+            Arg.Any<CancellationToken>());
         consumer!.Dispose();
     }
 
