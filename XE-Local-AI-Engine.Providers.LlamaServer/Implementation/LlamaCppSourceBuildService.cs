@@ -656,7 +656,9 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         // active and .backup trees because the record "did not match" them.
         if (!Directory.Exists(active) && !Directory.Exists(backup))
         {
-            await ClearSourceRecordAsync(sourceRecord, ct).ConfigureAwait(false);
+            // Only a record that NAMES the active tree is self-healed away by its absence. A record pointing elsewhere
+            // (a relocated data directory, the legacy source-cuda layout) describes a tree this method never looked at.
+            await ClearSourceRecordAsync(recordTargetsActive, ct).ConfigureAwait(false);
         }
         else if (!recordTargetsActive)
         {

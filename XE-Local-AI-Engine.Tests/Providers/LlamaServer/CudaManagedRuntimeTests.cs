@@ -132,14 +132,15 @@ public sealed class CudaManagedRuntimeTests
     }
 
     /// <summary>
-    ///     An AUTOMATIC acquisition must never destroy a record that names a source build. The variant here disagrees
-    ///     only because the selector's cached signal was empty (it is seeded by a startup hosted service), which is a
-    ///     statement about the caller, not about the build. The record previously being discarded here is what let the
-    ///     following prebuilt acquisition overwrite the operator's managed CUDA record — and the next start's reconcile
-    ///     then deleted the build tree it no longer recognized.
+    ///     The persisted record — not the selector — is authoritative. An empty cached signal (a spawn that beats the
+    ///     startup seed, or a build another checkout adopted after this process started) makes the selector ask for
+    ///     Vulkan on a Linux NVIDIA box, and the requested variant then disagrees with the recorded CUDA build. Serving
+    ///     the recorded build and seeding the signal from it keeps the chat working and makes every later selection
+    ///     agree; the record previously being DISCARDED here is what let the next acquisition write a prebuilt over the
+    ///     operator's source build, after which the next start's reconcile deleted the tree.
     /// </summary>
     [Test]
-    public async Task EnsureBinary_SourceRecordVariantMismatch_KeepsRecordAndNeverServesCachedPrebuilt()
+    public async Task EnsureBinary_SourceRecordVariantMismatch_ServesRecordedBuildAndSeedsSignal()
     {
         if (OperatingSystem.IsWindows())
         {
@@ -147,38 +148,56 @@ public sealed class CudaManagedRuntimeTests
         }
 
         using var dir = new TempDir();
-        var (binDir, _, sha) = SeedSourceBuild(dir.Path, GpuStub);
+        var (binDir, serverPath, sha) = SeedSourceBuild(dir.Path, GpuStub);
         using var store = new InstalledRuntimeStore(dir.Path);
         await store.WriteAsync(SourceBuildState(binDir, sha), CancellationToken.None);
 
-        // Pre-place a cached Vulkan binary for the recorded tag so the Vulkan ensure resolves from cache (no download),
-        // reaching RecordResolvedRuntimeAsync — which must NOT overwrite the source-build record.
+        // Pre-place a cached Vulkan binary for the recorded tag: if the source record were dropped, the Vulkan ensure
+        // would resolve from this cache and record the prebuilt over it without any download to notice.
         var vulkanBin = Path.Combine(dir.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "vulkan", "build", "bin");
         Directory.CreateDirectory(vulkanBin);
         WriteExecutableStub(vulkanBin, GpuStub);
 
+        // The signal a startup seed has not reached yet — exactly what makes the selector pick Vulkan.
         var signal = new CudaManagedBuildSignal();
-        signal.MarkAvailable();
-        var before = signal.Version;
 
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, catalog: null, store, overrideOptions: null, signal);
 
-        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
-            manager.EnsureBinaryAsync(GpuVariant.Vulkan, CancellationToken.None));
+        var binary = await manager.EnsureBinaryAsync(GpuVariant.Vulkan, CancellationToken.None);
 
-        AssertEx.True(exception.Message.Contains("source-built", StringComparison.Ordinal));
+        AssertEx.Equal(serverPath, binary.ServerExecutablePath);
+        AssertEx.Equal(GpuVariant.Cuda, binary.Variant);
+        AssertEx.Equal(GpuVariant.Cuda, signal.ActiveVariant);
 
-        // The record still names the source build, so the cached prebuilt was never recorded over it and the next
-        // reconcile still recognizes the tree.
         var after = await store.ReadAsync(CancellationToken.None);
         AssertEx.NotNull(after);
         AssertEx.Equal(binDir, after!.SourceBuildPath);
         AssertEx.Equal(GpuVariant.Cuda, after.Variant);
-        AssertEx.Equal(GpuVariant.Cuda, signal.ActiveVariant);
-        AssertEx.Equal(before, signal.Version);
+    }
+
+    /// <summary>
+    ///     installed-runtime.json sits under the user-level cache root that every checkout shares, so the read and the
+    ///     write inside <c>RecordResolvedRuntimeAsync</c> must be one cross-process critical section: the semaphore
+    ///     guarding it only orders one process. Two stores on one directory stand in for two nodes.
+    /// </summary>
+    [Test]
+    public async Task Store_Acquire_ExcludesASecondStoreOnTheSameDirectory()
+    {
+        using var dir = new TempDir();
+        using var first = new InstalledRuntimeStore(dir.Path);
+        using var second = new InstalledRuntimeStore(dir.Path);
+
+        var held = await first.AcquireAsync(CancellationToken.None);
+        var contender = second.AcquireAsync(CancellationToken.None);
+
+        await Task.Delay(200, CancellationToken.None);
+        AssertEx.False(contender.IsCompleted, "A second node must wait for the record lock rather than interleave.");
+
+        held.Dispose();
+        (await contender).Dispose();
     }
 
     /// <summary>
