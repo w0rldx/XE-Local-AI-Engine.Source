@@ -305,11 +305,30 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                        : $"- {entry.CommandId}: no readable test result ({entry.Outcome.ParseFailureCode})"));
     }
 
-    private static string SanitizedReason(Exception exception) =>
+    /// <summary>The workspace policy's message, or the generic line when it cannot be shown safely.</summary>
+    private static string PolicyReason(DevelopmentWorkspaceSecurityException exception)
+    {
+        try
+        {
+            return DevelopmentArtifactSanitizer.SanitizeText(exception.Message);
+        }
+        catch (DevelopmentWorkspaceSecurityException)
+        {
+            return "The Development reviewer attempt violated a workspace security policy.";
+        }
+    }
+
+    /// <summary>Internal so the policy line can be pinned directly; nothing outside this class calls it.</summary>
+    internal static string SanitizedReason(Exception exception) =>
         exception switch
         {
             OperationCanceledException => "The bounded Development reviewer attempt was cancelled or timed out.",
-            DevelopmentWorkspaceSecurityException => "The Development reviewer attempt violated a workspace security policy.",
+
+            // The mirror of DevelopmentCoderAttemptRunner.SanitizedReason: the POLICY's own sentence, behind the same
+            // failure code, so a reviewer refusal names the rule it broke instead of the category it belongs to — and
+            // so a workflow node reads it as a Policy stand-down rather than spending its retry budget on it.
+            DevelopmentWorkspaceSecurityException security => DevelopmentAttemptEvidenceException.Compose(DevelopmentAttemptFailureCodes.WorkspacePolicyRefused,
+                PolicyReason(security)),
 
             // See DevelopmentCoderAttemptRunner.SanitizedReason: this message is engine-authored, so it is safe to
             // surface verbatim rather than replacing a diagnosed failure with a generic one.

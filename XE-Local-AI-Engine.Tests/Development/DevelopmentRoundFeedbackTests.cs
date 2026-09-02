@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
 /// <summary>
-///     What a REWORK round is told.
+///     What a REWORK round is told, and what a refused reviewer attempt says.
 ///     <para>
 ///         A coder attempt was composed from the task's title, requirements and acceptance criteria and nothing else —
 ///         so a round asked for BECAUSE the previous one was wrong was handed the identical brief and re-implemented
@@ -41,6 +41,32 @@ public sealed class DevelopmentRoundFeedbackTests
 
         AssertEx.False(prompt.Contains("Feedback from the previous round", StringComparison.Ordinal),
             "a first round has nothing to be told, and an empty heading would read as one.");
+    }
+
+    /// <summary>
+    ///     The mirror of the coder path's fix: a reviewer attempt refused by a workspace policy carries the POLICY's own
+    ///     sentence behind the shared failure code, instead of the generic "violated a workspace security policy" line
+    ///     that told an operator nothing to change and that a workflow node could not read as a Policy stand-down.
+    /// </summary>
+    [Test]
+    public void AReviewerRefusedByAWorkspacePolicySaysWhichPolicyRefusedIt()
+    {
+        var reason = DevelopmentReviewerAttemptRunner.SanitizedReason(new DevelopmentWorkspaceSecurityException("The repository trust acknowledgement has expired."));
+
+        AssertEx.Contains(reason, "trust acknowledgement has expired");
+        AssertEx.True(DevelopmentAttemptEvidenceException.Names(reason, DevelopmentAttemptFailureCodes.WorkspacePolicyRefused),
+            "a workflow node reads the code, not the sentence, to know a retry cannot change the answer.");
+    }
+
+    /// <summary>A policy message the sanitizer refuses is not surfaced — the generic reviewer line is what is left.</summary>
+    [Test]
+    public void AReviewerPolicyMessageTheSanitizerRefusesFallsBackToTheGenericLine()
+    {
+        var reason = DevelopmentReviewerAttemptRunner.SanitizedReason(new DevelopmentWorkspaceSecurityException(
+            "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAvV5s\n-----END RSA PRIVATE KEY-----"));
+
+        AssertEx.Contains(reason, "The Development reviewer attempt violated a workspace security policy.");
+        AssertEx.False(reason.Contains("PRIVATE KEY", StringComparison.Ordinal), "the refused material must not travel with the refusal.");
     }
 
     private static DevelopmentWorkspaceSession Session() =>
