@@ -177,17 +177,20 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             nodeRun.MaterializedFromNodeRunId is not null,
             nodeRun.MaterializedFromNodeRunId is { } parent ? keysByNodeRunId.GetValueOrDefault(parent) : null,
             nodeRun.MaterializationIndex,
-            nodeRun.MaterializedFromNodeRunId,
-            nodeRun.MaterializedFromNodeRunId is { } group && materializationCounts.TryGetValue(group, out var count) ? count : null,
-            nodeRun.DevelopmentProjectId,
-            nodeRun.DevelopmentTaskId,
-            nodeRun.AgentDefinitionId,
-            AgentDisplayName(nodeRun, node, agentsById),
-            ModelLabel(nodeRun, node, agentsById),
-            hasStaleInputs,
-            nodeRun.StartedAtUtc,
-            nodeRun.EndedAtUtc,
-            nodeRun.Sequence);
+
+            // Named from here on: the record carries five consecutive Guid? slots, so a positional call would compile
+            // silently misaligned if a future field is spliced in ahead of them.
+            MaterializationGroupId: nodeRun.MaterializedFromNodeRunId,
+            MaterializationCount: nodeRun.MaterializedFromNodeRunId is { } group && materializationCounts.TryGetValue(group, out var count) ? count : null,
+            DevelopmentProjectId: nodeRun.DevelopmentProjectId,
+            DevelopmentTaskId: nodeRun.DevelopmentTaskId,
+            AgentDefinitionId: nodeRun.AgentDefinitionId,
+            AgentDisplayName: AgentDisplayName(nodeRun, node, agentsById),
+            ModelLabel: ModelLabel(nodeRun, node, agentsById),
+            HasStaleInputs: hasStaleInputs,
+            StartedAtUtc: nodeRun.StartedAtUtc,
+            CompletedAtUtc: nodeRun.EndedAtUtc,
+            Sequence: nodeRun.Sequence);
 
     /// <summary>
     ///     Which upstream nodes a <c>Pending</c> node run is still waiting on, computed here rather than left to the
