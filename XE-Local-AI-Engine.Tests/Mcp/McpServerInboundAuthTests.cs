@@ -26,8 +26,9 @@ public sealed class McpServerInboundAuthTests
     private static readonly string[] AgenticAdminToolNames =
     [
         "cancel_model_pull", "create_agent", "delete_agent", "delete_model", "get_agent", "get_model_pull",
-        "get_node_settings", "get_runtime_acquisition", "get_runtime_status", "get_status", "set_default_model",
-        "start_model_pull", "start_runtime_acquisition", "update_agent", "update_node_settings"
+        "get_node_settings", "get_runtime_acquisition", "get_runtime_status", "get_status", "get_workflow_run",
+        "list_workflow_runs", "set_default_model", "start_model_pull", "start_runtime_acquisition", "update_agent",
+        "update_node_settings"
     ];
 
     private const string McpEndpointRoute = "/api/local/v1/mcp/server";
@@ -244,6 +245,15 @@ public sealed class McpServerInboundAuthTests
         var agenticBody = await SendRpcAsync(agenticFactory, ValidKey, call).ConfigureAwait(false);
         AssertEx.Contains(agenticBody, "loadedProcessCount");
         AssertEx.False(agenticBody.Contains("forbidden", StringComparison.OrdinalIgnoreCase));
+
+        // And the same for the observe tools: read-only is not delegate-visible, because what a workflow run is doing
+        // is exactly the kind of thing an outside delegate key has no business polling.
+        const string observeCall = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"list_workflow_runs\",\"arguments\":{}}}";
+        var delegateObserveBody = await SendRpcAsync(delegateFactory, ValidKey, observeCall).ConfigureAwait(false);
+        AssertEx.True(delegateObserveBody.Contains("forbidden", StringComparison.OrdinalIgnoreCase)
+                      || delegateObserveBody.Contains("-32600", StringComparison.Ordinal)
+                      || delegateObserveBody.Contains("InvalidRequest", StringComparison.OrdinalIgnoreCase),
+            $"A delegate call to a workflow observe tool must be a protocol authorization failure; body: {delegateObserveBody}");
     }
 
     [Test]

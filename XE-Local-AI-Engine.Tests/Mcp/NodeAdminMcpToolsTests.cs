@@ -868,11 +868,20 @@ public sealed class NodeAdminMcpToolsTests
         var missing = await harness.Tools.GetWorkflowRunAsync(runId.ToString("D"), CancellationToken.None);
         var malformed = await new Harness().Tools.GetWorkflowRunAsync("not-a-uuid", CancellationToken.None);
 
+        // The canonical form only, and never the all-zero id: the braced and unhyphenated spellings would each name the
+        // same run under a second identity, and Guid.Empty is what an uninitialized caller sends rather than a run.
+        var braced = await new Harness().Tools.GetWorkflowRunAsync(runId.ToString("B"), CancellationToken.None);
+        var unhyphenated = await new Harness().Tools.GetWorkflowRunAsync(runId.ToString("N"), CancellationToken.None);
+        var empty = await new Harness().Tools.GetWorkflowRunAsync(Guid.Empty.ToString("D"), CancellationToken.None);
+
         AssertEx.Equal("not_found", missing.Status);
         AssertEx.Equal("run_not_found", missing.FailureCode!);
         AssertEx.Null(missing.Run);
         AssertEx.Equal("invalid_request", malformed.Status);
         AssertEx.Equal("invalid_request", malformed.FailureCode!);
+        AssertEx.Equal("invalid_request", braced.FailureCode!);
+        AssertEx.Equal("invalid_request", unhyphenated.FailureCode!);
+        AssertEx.Equal("invalid_request", empty.FailureCode!);
     }
 
     [Test]

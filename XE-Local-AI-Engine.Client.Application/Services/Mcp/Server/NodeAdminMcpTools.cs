@@ -511,6 +511,9 @@ public sealed class NodeAdminMcpTools(
 
                 // The work-item list IS the run list on this surface: a work item carries its latest run's status and
                 // node counters, so filtering it needs no second query and says the same thing the operator's page does.
+                // ponytail: the store filters by WORK-ITEM status and this tool filters by RUN status, which are
+                // different enums, so the status filter and the limit are applied in memory over the whole list. Ceiling
+                // is the number of work items on the node; push it down only if a store-side run-status list appears.
                 var workItems = await _devWorkflowStore.ListWorkItemsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
                 var runs = workItems.Where(item => item.LatestRunId is not null && item.LatestRunStatus is not null)
                                     .Where(item => parsedStatus is null || item.LatestRunStatus == parsedStatus)
@@ -546,7 +549,7 @@ public sealed class NodeAdminMcpTools(
                         DevWorkflowsDisabledMessage);
                 }
 
-                if (!Guid.TryParse(run_id, out var runId))
+                if (!Guid.TryParseExact(run_id, "D", out var runId) || runId == Guid.Empty)
                 {
                     return new McpWorkflowRunGetResponse(McpAdminToolFailureCodes.InvalidRequest,
                         null,

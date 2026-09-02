@@ -444,7 +444,7 @@ public sealed class DevWorkflowEndpointTests
     {
         const string DecompositionGraph = """
                                           {"schemaVersion":1,
-                                           "nodes":[{"nodeKey":"decompose","nodeType":"Agent","label":"Decompose",
+                                           "nodes":[{"nodeKey":"decompose","nodeType":"Agent","label":"Decompose","isTemplate":true,
                                                      "materialization":{"templateNodeKey":"implement","artifactKind":"TaskPackage","joinNodeKey":"join","maxChildren":4}},
                                                     {"nodeKey":"implement","nodeType":"DevTask"},
                                                     {"nodeKey":"join","nodeType":"Join"}],
@@ -463,18 +463,19 @@ public sealed class DevWorkflowEndpointTests
         using var response = await SendAsync(factory,
                                      "PUT",
                                      Definition,
-                                     $$"""{"version":4,"name":"renamed","graph":{{DecompositionGraph}},"isTemplate":true}""")
+                                     $$"""{"version":4,"name":"renamed","graph":{{DecompositionGraph}}}""")
                                  .ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.NotNull(stored);
         AssertEx.False(stored!.Contains("isTemplate", StringComparison.OrdinalIgnoreCase),
-            $"the stored graph is what a run pins, and it must carry no derived field: {stored}");
+            $"the stored graph is what a run pins, and it must carry no derived field — not even the one an author SENT: {stored}");
 
         using var document = JsonDocument.Parse(body);
         var nodes = document.RootElement.GetProperty("graph").GetProperty("nodes").EnumerateArray().ToArray();
-        AssertEx.False(nodes.Single(static node => node.GetProperty("nodeKey").GetString() == "decompose").GetProperty("isTemplate").GetBoolean());
+        AssertEx.False(nodes.Single(static node => node.GetProperty("nodeKey").GetString() == "decompose").GetProperty("isTemplate").GetBoolean(),
+            "and the response answers from the parser, not from what the author claimed on the way in.");
         AssertEx.True(nodes.Single(static node => node.GetProperty("nodeKey").GetString() == "implement").GetProperty("isTemplate").GetBoolean(),
             "the template subtree is what the runtime gives no node run to, and the client must not walk the graph again to find it.");
         AssertEx.False(nodes.Single(static node => node.GetProperty("nodeKey").GetString() == "join").GetProperty("isTemplate").GetBoolean());
