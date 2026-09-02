@@ -33,8 +33,8 @@ The AI stack changes quickly. Re-check upstream docs before changing these seams
 
 | Area | Current repository usage | Upstream reference |
 | --- | --- | --- |
-| Microsoft.Extensions.AI 10.8.3 | Provider-neutral `IChatClient` and `IEmbeddingGenerator<string, Embedding<float>>` abstractions. The repository composes `IChatClient` decorators for tool invocation and observability. | <https://learn.microsoft.com/en-us/dotnet/ai/microsoft-extensions-ai> and the official [10.8.3 package artifact](https://api.nuget.org/v3-flatcontainer/microsoft.extensions.ai/10.8.3/microsoft.extensions.ai.nuspec) |
-| Microsoft Agent Framework 1.17.0 | `AIAgent` / `ChatClientAgent` integration, handoff workflows, tool invocation, approval, and workflow-event streaming. Framework types remain behind this repository's orchestration-session boundary. | <https://learn.microsoft.com/en-us/agent-framework/> and the official [1.17.0 package artifact](https://api.nuget.org/v3-flatcontainer/microsoft.agents.ai/1.17.0/microsoft.agents.ai.nuspec) |
+| Microsoft.Extensions.AI 10.9.0 | Provider-neutral `IChatClient` and `IEmbeddingGenerator<string, Embedding<float>>` abstractions. The repository composes `IChatClient` decorators for tool invocation and observability. | <https://learn.microsoft.com/en-us/dotnet/ai/microsoft-extensions-ai> and the official [10.9.0 package artifact](https://api.nuget.org/v3-flatcontainer/microsoft.extensions.ai/10.9.0/microsoft.extensions.ai.nuspec) |
+| Microsoft Agent Framework 1.19.0 | `AIAgent` / `ChatClientAgent` integration, handoff workflows, tool invocation, approval, and workflow-event streaming. Framework types remain behind this repository's orchestration-session boundary. | <https://learn.microsoft.com/en-us/agent-framework/> and the official [1.19.0 package artifact](https://api.nuget.org/v3-flatcontainer/microsoft.agents.ai/1.19.0/microsoft.agents.ai.nuspec) |
 | llama.cpp `llama-server` b10201 | Primary local runtime, supervised as a host child process. The provider uses its `/v1/chat/completions` and `/v1/embeddings` OpenAI-compatible endpoints; compatibility is endpoint/feature-specific, not a guarantee for arbitrary OpenAI clients. | The pinned [b10201 server README](https://github.com/ggml-org/llama.cpp/blob/8f4646a63ee29f2e0ab971b0290b141938769762/tools/server/README.md) and [release](https://github.com/ggml-org/llama.cpp/releases/tag/b10201) |
 | HuggingFace | GGUF model discovery + download (`XE-Local-AI-Engine.Providers.HuggingFace`). | <https://huggingface.co/docs/hub/gguf> |
 | Ollama | Optional/legacy local provider (present but de-orchestrated from Aspire dev): inventory, pull/delete/warm/unload, chat, embeddings via OllamaSharp. | <https://docs.ollama.com/api> and <https://docs.ollama.com/capabilities/embeddings> |
@@ -49,7 +49,7 @@ The AI stack changes quickly. Re-check upstream docs before changing these seams
 5. Treat Ollama model names, context-length metadata, and embedding dimensions as provider observations, not hard-coded invariants.
 6. Treat cloud-provider credentials (Codex OAuth tokens) and the HuggingFace token as local secrets. They may configure a chat client or download path but must not be logged, returned to the browser, or included in transcripts.
 7. Preserve cancellation-token flow through chat, embedding, tool, MCP, and sandbox operations.
-8. Treat current online snippets as version-sensitive. At the repository's MAF 1.17.0 / MEAI 10.8.3 pins, verify approval and workflow types against the resolved package artifacts before copying framework examples.
+8. Treat current online snippets as version-sensitive. At the repository's MAF 1.19.0 / MEAI 10.9.0 pins, verify approval and workflow types against the resolved package artifacts before copying framework examples.
 
 ## Validation after AI changes
 
