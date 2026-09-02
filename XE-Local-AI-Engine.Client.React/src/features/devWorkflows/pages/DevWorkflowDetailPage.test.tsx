@@ -101,6 +101,20 @@ describe("DevWorkflowDetailPage", () => {
 		expect(screen.getByTestId("dev-workflow-run-toolbar")).toBeDefined();
 	});
 
+	// TWO_PANE_BREAKPOINT answers "do two panes fit at all", not "does 320 + 380 plus this page's chrome fit", so
+	// just above it the unfloored centre track was squeezed under its own tab header and clipped it. The floor is the
+	// fix; the horizontal scroller is what keeps the overflow it can now produce visible, because FullHeightPage
+	// deliberately clips the X axis.
+	it("floors the centre column and scrolls sideways rather than clipping it", async () => {
+		server.use(...baseRoutes());
+		renderPage();
+
+		const grid = await screen.findByTestId("dev-workflow-detail-grid");
+
+		expect(grid.style.gridTemplateColumns).toBe("320px minmax(240px, 1fr) minmax(380px, 420px)");
+		expect(grid.style.overflowX).toBe("auto");
+	});
+
 	it("shows the artifacts and events tabs when no node is selected", async () => {
 		server.use(...baseRoutes());
 		renderPage();

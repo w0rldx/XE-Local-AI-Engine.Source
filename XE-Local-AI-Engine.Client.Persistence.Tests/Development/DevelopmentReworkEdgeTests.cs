@@ -102,6 +102,40 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     }
 
     /// <summary>
+    ///     The rework sentence is kept ON the task, not only in the event log, so the page that shows a task has
+    ///     something to show. The column is named for the stand-down case that came first; it now also carries "why
+    ///     changes were asked for", and the next round's hop clears it the same way it always cleared a stand-down.
+    /// </summary>
+    [Test]
+    public async Task TheReworkReasonIsKeptOnTheTaskUntilTheNextRoundStarts()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+
+        var moved = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                            Guid.NewGuid(),
+                            DevelopmentTaskStatus.ChangesRequested,
+                            version,
+                            Reason))
+                        .ConfigureAwait(false);
+
+        var reworked = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        AssertEx.Equal(Reason, reworked.BlockedReason, "a task asked for rework carries why it was asked, not only an event row saying so.");
+        AssertEx.Null(reworked.BlockedAtUtc, "asking for rework is not a stand-down, so nothing times one.");
+
+        _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                           Guid.NewGuid(),
+                           DevelopmentTaskStatus.InProgress,
+                           moved.Version))
+                       .ConfigureAwait(false);
+
+        AssertEx.Null((await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).BlockedReason,
+            "the round that acts on the complaint is where it stops being the current one.");
+    }
+
+    /// <summary>
     ///     The hop that starts the new round is the hop that invalidates the old evidence, and it happens BEFORE any
     ///     attempt can read it: the interim <c>ChangesRequested</c> window leaves the reports alone, and
     ///     <c>ChangesRequested → InProgress</c> — which <c>StartNextActionAsync</c> makes before it starts a coder

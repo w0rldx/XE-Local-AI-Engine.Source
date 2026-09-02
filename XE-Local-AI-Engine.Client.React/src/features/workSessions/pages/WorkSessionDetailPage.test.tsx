@@ -145,7 +145,12 @@ describe("WorkSessionDetailPage", () => {
 		routes();
 		renderDetail(<WorkSessionDetailPage sessionId={sessionId} />);
 
-		await screen.findByTestId("work-session-detail-grid");
+		const grid = await screen.findByTestId("work-session-detail-grid");
+		// The centre track carries a floor, like the dev-workflow run page it shares this template with: without one
+		// a viewport just above 1024 squeezed it under its own chrome, and FullHeightPage clips the X axis, so the
+		// grid needs its own horizontal scroller for the overflow the floor makes honest.
+		expect(grid.style.gridTemplateColumns).toBe("320px minmax(240px, 1fr) minmax(380px, 420px)");
+		expect(grid.style.overflowX).toBe("auto");
 		expect(screen.getByTestId("work-session-plan-panel")).toBeDefined();
 		expect(screen.getByTestId("work-session-conversation-pane")).toBeDefined();
 		expect(screen.getByTestId("work-session-side-panel")).toBeDefined();
