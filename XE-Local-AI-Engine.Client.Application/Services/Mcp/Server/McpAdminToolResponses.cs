@@ -103,7 +103,7 @@ public sealed record McpAgentDeleteResponse(bool Deleted, string? FailureCode = 
 ///     else. The pinned graph, artifact bytes, work-session transcripts and every host path stay on the REST surface a
 ///     browser operator uses — an MCP client is being told how a run is going, not handed its contents.
 /// </summary>
-public sealed record McpWorkflowRunSummary(
+public record McpWorkflowRunSummary(
     string RunId,
     string WorkItemId,
     string? DefinitionName,
@@ -126,14 +126,34 @@ public sealed record McpWorkflowRunListResponse(
 /// <summary>One node run, reduced to the five fields that answer where a run stands and how hard a node tried.</summary>
 public sealed record McpWorkflowNodeRunSummary(string NodeKey, string NodeType, string Status, int Attempt, int MaxAttempts);
 
-/// <summary>A single run's observation: the summary, why it ended if it has, and its node rows.</summary>
+/// <summary>
+///     A single run's observation: the list row's own fields, why it ended if it has, and its node rows — FLAT, so a
+///     caller reads <c>run.status</c> rather than <c>run.run.status</c>. It extends the summary rather than embedding
+///     one, which is what keeps the field set a caller sees here identical to the one the listing returns.
+/// </summary>
 public sealed record McpWorkflowRunDetail(
-    McpWorkflowRunSummary Run,
+    string RunId,
+    string WorkItemId,
+    string? DefinitionName,
+    string Status,
+    int QueuedNodeCount,
+    int RunningNodeCount,
+    int CompletedNodeCount,
+    int TotalNodeCount,
+    int PendingDecisionCount,
     string? FailureClass,
     string? TerminalReason,
     long? StartedAtUtc,
     long? EndedAtUtc,
-    IReadOnlyList<McpWorkflowNodeRunSummary> Nodes);
+    IReadOnlyList<McpWorkflowNodeRunSummary> Nodes) : McpWorkflowRunSummary(RunId,
+    WorkItemId,
+    DefinitionName,
+    Status,
+    QueuedNodeCount,
+    RunningNodeCount,
+    CompletedNodeCount,
+    TotalNodeCount,
+    PendingDecisionCount);
 
 public sealed record McpWorkflowRunGetResponse(
     string Status,

@@ -830,15 +830,15 @@ public sealed class NodeAdminMcpToolsTests
 
         AssertEx.Equal("ok", response.Status);
         var run = AssertEx.NotNull(response.Run);
-        AssertEx.Equal(detail.Run.Id.ToString("D"), run.Run.RunId);
-        AssertEx.Equal(detail.Run.WorkItemId.ToString("D"), run.Run.WorkItemId);
-        AssertEx.Equal("seeded", run.Run.DefinitionName!);
-        AssertEx.Equal("WaitingForApproval", run.Run.Status);
-        AssertEx.Equal(0, run.Run.QueuedNodeCount);
-        AssertEx.Equal(1, run.Run.RunningNodeCount);
-        AssertEx.Equal(1, run.Run.CompletedNodeCount);
-        AssertEx.Equal(2, run.Run.TotalNodeCount);
-        AssertEx.Equal(1, run.Run.PendingDecisionCount);
+        AssertEx.Equal(detail.Run.Id.ToString("D"), run.RunId);
+        AssertEx.Equal(detail.Run.WorkItemId.ToString("D"), run.WorkItemId);
+        AssertEx.Equal("seeded", run.DefinitionName!);
+        AssertEx.Equal("WaitingForApproval", run.Status);
+        AssertEx.Equal(0, run.QueuedNodeCount);
+        AssertEx.Equal(1, run.RunningNodeCount);
+        AssertEx.Equal(1, run.CompletedNodeCount);
+        AssertEx.Equal(2, run.TotalNodeCount);
+        AssertEx.Equal(1, run.PendingDecisionCount);
         AssertEx.Equal("gate_rejected", run.FailureClass!);
         AssertEx.Equal("a sanitized reason", run.TerminalReason!);
         AssertEx.Equal(11L, run.StartedAtUtc!.Value);
@@ -855,6 +855,14 @@ public sealed class NodeAdminMcpToolsTests
         var serialized = JsonSerializer.Serialize(response);
         AssertEx.False(serialized.Contains("graph", StringComparison.OrdinalIgnoreCase), serialized);
         AssertEx.False(serialized.Contains("secret-input", StringComparison.Ordinal), serialized);
+
+        // FLAT on the wire too: the summary's fields sit on the run envelope itself, so a client reads run.status and
+        // never run.run.status.
+        using var document = JsonDocument.Parse(serialized);
+        var wireRun = document.RootElement.GetProperty("Run");
+        AssertEx.Equal("WaitingForApproval", wireRun.GetProperty("Status").GetString()!);
+        AssertEx.Equal("gate_rejected", wireRun.GetProperty("FailureClass").GetString()!);
+        AssertEx.False(wireRun.TryGetProperty("Run", out _), $"the summary must not be nested under a second run key: {serialized}");
     }
 
     [Test]

@@ -571,17 +571,16 @@ public sealed class NodeAdminMcpTools(
                 // detail endpoint uses to label a run.
                 var definitions = await _devWorkflowStore.ListDefinitionsAsync(includeArchived: true, cancellationToken).ConfigureAwait(false);
                 var run = detail.Run;
-                var summary = new McpWorkflowRunSummary(run.Id.ToString("D"),
-                    run.WorkItemId.ToString("D"),
-                    definitions.FirstOrDefault(definition => definition.Id == run.DefinitionId)?.Name,
-                    run.Status.ToString(),
-                    detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Queued),
-                    detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Running),
-                    detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Succeeded),
-                    detail.NodeRuns.Count,
-                    detail.PendingDecisionCount);
                 return new McpWorkflowRunGetResponse("ok",
-                    new McpWorkflowRunDetail(summary,
+                    new McpWorkflowRunDetail(run.Id.ToString("D"),
+                        run.WorkItemId.ToString("D"),
+                        definitions.FirstOrDefault(definition => definition.Id == run.DefinitionId)?.Name,
+                        run.Status.ToString(),
+                        detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Queued),
+                        detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Running),
+                        detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Succeeded),
+                        detail.NodeRuns.Count,
+                        detail.PendingDecisionCount,
                         run.FailureClass,
                         run.TerminalReason,
                         run.StartedAtUtc,
