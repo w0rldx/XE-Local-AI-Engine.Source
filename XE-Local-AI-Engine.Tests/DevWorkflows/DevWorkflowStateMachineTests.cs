@@ -232,13 +232,15 @@ public sealed class DevWorkflowStateMachineTests
     ///     which is why this one carries <c>GateRejected</c> where an operator Skip carries nothing.
     /// </summary>
     [Test]
-    public void Recompute_WhenARejectionRoutesIntoASkippedTail_IsCancelledAsGateRejected()
+    [Arguments(DevWorkflowDecisionKind.Reject)]
+    [Arguments(DevWorkflowDecisionKind.RequestChanges)]
+    public void Recompute_WhenARefusalRoutesIntoASkippedTail_IsCancelledAsGateRejected(DevWorkflowDecisionKind decision)
     {
         var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.GateOnADecision);
         var outcome = DevWorkflowStateMachine.Recompute(DevWorkflowRunStatus.WaitingForApproval,
             graph,
             [
-                NodeRun("approve", DevWorkflowNodeRunStatus.Succeeded, DevWorkflowStateMachine.GateOutputJson(DevWorkflowDecisionKind.Reject), DevWorkflowNodeType.HumanGate),
+                NodeRun("approve", DevWorkflowNodeRunStatus.Succeeded, DevWorkflowStateMachine.GateOutputJson(decision), DevWorkflowNodeType.HumanGate),
                 NodeRun("choose", DevWorkflowNodeRunStatus.Succeeded),
                 NodeRun("ship", DevWorkflowNodeRunStatus.Skipped),
                 NodeRun("revise", DevWorkflowNodeRunStatus.Skipped)
@@ -246,8 +248,29 @@ public sealed class DevWorkflowStateMachineTests
 
         AssertEx.Equal(DevWorkflowRunStatus.Cancelled, outcome.Status);
         AssertEx.Equal("GateRejected", AssertEx.NotNull(outcome.FailureClass));
-        AssertEx.Equal("No terminal node succeeded: 'ship' was Skipped, 'revise' was Skipped, after the gate 'approve' was rejected.",
+
+        // The answer's own word, so a reader is never sent looking for a decision row that says something else.
+        AssertEx.Equal($"No terminal node succeeded: 'ship' was Skipped, 'revise' was Skipped, after the gate 'approve' answered {decision}.",
             AssertEx.NotNull(outcome.TerminalReason));
+    }
+
+    /// <summary>
+    ///     A node key is not charset-restricted, so an astral character can straddle the column's bound. Half a
+    ///     surrogate pair is a broken string wherever it lands — both parities are pinned, because which side of the
+    ///     cut the pair falls on depends on how long the rest of the sentence happens to be.
+    /// </summary>
+    [Test]
+    [Arguments("")]
+    [Arguments("x")]
+    public void Recompute_WithAReasonPastTheColumnsBound_CutsBetweenRunesRatherThanInsideOne(string prefix)
+    {
+        var nodeKey = prefix + string.Concat(Enumerable.Repeat("\U0001F600", 400));
+        var graph = DevWorkflowGraph.Parse($$"""{ "schemaVersion": 1, "nodes": [{ "nodeKey": {{System.Text.Json.JsonSerializer.Serialize(nodeKey)}}, "nodeType": "Agent" }], "edges": [] }""");
+
+        var reason = AssertEx.NotNull(DevWorkflowStateMachine.Recompute(DevWorkflowRunStatus.Running, graph, [NodeRun(nodeKey, DevWorkflowNodeRunStatus.Skipped)]).TerminalReason);
+
+        AssertEx.True(reason.Length <= 512, $"the run's terminal_reason column holds 512, and this is {reason.Length}.");
+        AssertEx.False(char.IsHighSurrogate(reason[^1]), "a cut inside a surrogate pair writes an unpaired half into the column.");
     }
 
     /// <summary>

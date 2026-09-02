@@ -817,7 +817,7 @@ public sealed class DevWorkflowDispatcherTests
         var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
         AssertEx.Equal(DevWorkflowRunStatus.Cancelled, run.Status);
         AssertEx.Equal("GateRejected", run.FailureClass);
-        AssertEx.Contains(AssertEx.NotNull(run.TerminalReason), "after the gate 'approve' was rejected");
+        AssertEx.Contains(AssertEx.NotNull(run.TerminalReason), "after the gate 'approve' answered Reject");
     }
 
     /// <summary>

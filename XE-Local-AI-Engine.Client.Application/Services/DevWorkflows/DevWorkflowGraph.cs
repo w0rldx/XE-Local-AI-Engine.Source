@@ -115,9 +115,10 @@ internal sealed class DevWorkflowGraph
     ///     these SUCCEEDED, so a tail that was skipped or abandoned cannot read as the run having done its job.
     ///     <para>
     ///         Read off the graph AS MATERIALIZED, which is what makes it right for a decomposing run: a clone's leaf
-    ///         edge is rewired to the join when it is created, so no clone is ever terminal and success routes through
-    ///         the join, which is where the run's shape says it belongs. A template node is never terminal for the same
-    ///         reason, and never gets a node run either, so it can neither satisfy the rule nor block it.
+    ///         edge is wired to the join when it is created, so success routes through the join rather than through
+    ///         any one clone. Whether a <see cref="TemplateKeys" /> node lands in this set is moot rather than ruled
+    ///         out — a template never gets a node run, and the completion predicate reads node-run ROWS, so a template
+    ///         key can neither satisfy it nor block it however the definition happens to wire it.
     ///     </para>
     /// </summary>
     public IReadOnlySet<string> TerminalNodeKeys { get; }

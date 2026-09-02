@@ -56,8 +56,12 @@ internal static class DevWorkflowStateMachine
     /// <summary>How many terminal nodes a reason names one by one before it starts counting them instead.</summary>
     private const int MaxNamedNodes = 3;
 
-    /// <summary>The one output document a rejected human gate carries. Serialized once; nothing about it varies.</summary>
-    private static readonly string RejectedGateOutput = GateOutputJson(DevWorkflowDecisionKind.Reject);
+    /// <summary>The two answers a human gate refuses with, by the output document each one stores. Nothing varies.</summary>
+    private static readonly Dictionary<string, DevWorkflowDecisionKind> GateRefusals = new(StringComparer.Ordinal)
+    {
+        [GateOutputJson(DevWorkflowDecisionKind.Reject)] = DevWorkflowDecisionKind.Reject,
+        [GateOutputJson(DevWorkflowDecisionKind.RequestChanges)] = DevWorkflowDecisionKind.RequestChanges
+    };
 
     /// <summary>
     ///     The output document a human gate produces for one answer — the document its out-edge conditions are then
@@ -248,6 +252,14 @@ internal static class DevWorkflowStateMachine
     /// <summary>
     ///     What a run whose every node run is terminal amounts to, asked of the graph. Skipped and Cancelled node runs
     ///     do not block an end — they simply are not one, and this is where that distinction is made.
+    ///     <para>
+    ///         <c>GateRejected</c> here means only this: a human gate somewhere in this run was refused, and the run
+    ///         reached no end. It is NOT a causal proof, and must not be read as one — a rejection can route into a
+    ///         branch that runs perfectly well, and a false condition further down can be what actually killed the
+    ///         tail. The class narrows where a reader should look; the reason names what was actually not reached, and
+    ///         the event log is what says in which order. Proving the cause would mean walking the dead edges back to
+    ///         their first refusal, which is a graph search this rule does not need to pick the right thing to show.
+    ///     </para>
     /// </summary>
     private static DevWorkflowRunOutcome Terminalize(DevWorkflowGraph graph, IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns)
     {
@@ -262,14 +274,14 @@ internal static class DevWorkflowStateMachine
             return new DevWorkflowRunOutcome(DevWorkflowRunStatus.Completed);
         }
 
-        // GateRejected only when a gate actually was rejected. The other way here is an operator Skip abandoning the
+        // GateRejected only when a gate was refused at all. The other way here is an operator Skip abandoning the
         // tail, which is a human decision rather than a failure and has no honest class in the vocabulary — the reason
         // carries the whole answer there, and inventing a class for it would put a token in the durable log that means
         // "a person chose this".
-        var rejected = nodeRuns.FirstOrDefault(WasRejected);
+        var refused = nodeRuns.FirstOrDefault(static nodeRun => Refusal(nodeRun) is not null);
         return new DevWorkflowRunOutcome(DevWorkflowRunStatus.Cancelled,
-            rejected is null ? null : DevWorkflowFailureClasses.GateRejected,
-            Reason(ends, rejected));
+            refused is null ? null : DevWorkflowFailureClasses.GateRejected,
+            Reason(ends, refused));
     }
 
     /// <summary>
@@ -282,7 +294,7 @@ internal static class DevWorkflowStateMachine
     ///         whole sentence is cut to the column's own <see cref="MaxTerminalReason" />.
     ///     </para>
     /// </summary>
-    private static string Reason(IReadOnlyList<DevWorkflowNodeRunSnapshot> ends, DevWorkflowNodeRunSnapshot? rejected)
+    private static string Reason(IReadOnlyList<DevWorkflowNodeRunSnapshot> ends, DevWorkflowNodeRunSnapshot? refused)
     {
         var listed = string.Join(", ", ends.Take(MaxNamedNodes).Select(static end => $"'{end.NodeKey}' was {end.Status}"));
         if (ends.Count > MaxNamedNodes)
@@ -291,23 +303,37 @@ internal static class DevWorkflowStateMachine
         }
 
         var named = ends.Count == 0 ? "this run reached none of the graph's ends" : listed;
-        var cause = rejected is null ? string.Empty : $", after the gate '{rejected.NodeKey}' was rejected";
+
+        // The answer itself, not a paraphrase: Reject and RequestChanges dead-end a run identically, and a reader who
+        // is shown "was rejected" for a RequestChanges goes looking for a decision row that says no such thing.
+        var cause = refused is null ? string.Empty : $", after the gate '{refused.NodeKey}' answered {Refusal(refused)}";
         var reason = $"No terminal node succeeded: {named}{cause}.";
-        return reason.Length <= MaxTerminalReason ? reason : reason[..MaxTerminalReason];
+        if (reason.Length <= MaxTerminalReason)
+        {
+            return reason;
+        }
+
+        // Back off one when the bound falls between a surrogate pair. A node key is not charset-restricted, so an
+        // astral character can straddle the cut, and half of one is a broken string in the column and on the wire.
+        var cut = char.IsHighSurrogate(reason[MaxTerminalReason - 1]) ? MaxTerminalReason - 1 : MaxTerminalReason;
+        return reason[..cut];
     }
 
     /// <summary>
-    ///     Whether one node run is a human gate a person REJECTED, read off the gate's own output document.
+    ///     Which answer a human gate was REFUSED with, or <see langword="null" /> when this node run is not a refused
+    ///     gate. <c>Reject</c> and <c>RequestChanges</c> both count: each is a person declining to let the run
+    ///     through, and each leaves the same shape behind when nothing downstream of it reaches an end.
     ///     <para>
-    ///         Compared against <see cref="GateOutputJson" /> because the dispatcher writes a gate's output FROM that
+    ///         Matched against <see cref="GateOutputJson" /> because the dispatcher writes a gate's output FROM that
     ///         method and nothing else writes it at all — so this is the cheapest honest source, and it cannot drift
     ///         from what a gate actually stores the way a second spelling of the shape would.
     ///     </para>
     /// </summary>
-    private static bool WasRejected(DevWorkflowNodeRunSnapshot nodeRun) =>
-        nodeRun.NodeType == DevWorkflowNodeType.HumanGate
-        && nodeRun.Status == DevWorkflowNodeRunStatus.Succeeded
-        && string.Equals(nodeRun.OutputJson, RejectedGateOutput, StringComparison.Ordinal);
+    private static DevWorkflowDecisionKind? Refusal(DevWorkflowNodeRunSnapshot nodeRun) =>
+        nodeRun is { NodeType: DevWorkflowNodeType.HumanGate, Status: DevWorkflowNodeRunStatus.Succeeded }
+        && GateRefusals.TryGetValue(nodeRun.OutputJson ?? string.Empty, out var decision)
+            ? decision
+            : null;
 
     /// <summary>
     ///     Where a run's status and its node runs leave the work item. Written inside the same transaction as the run
