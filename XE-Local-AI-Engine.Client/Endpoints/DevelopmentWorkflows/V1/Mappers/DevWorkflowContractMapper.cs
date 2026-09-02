@@ -33,14 +33,20 @@ internal static class DevWorkflowContractMapper
     public static DevWorkflowGraph ToWireGraph(string graphJson)
     {
         var graph = JsonSerializer.Deserialize<DevWorkflowGraph>(graphJson, GraphOptions) ?? DevWorkflowGraph.Empty;
+
+        // Asked of the runtime's parser, not walked again here: a second implementation of "which nodes are template
+        // clones-in-waiting" is the one thing this class exists to prevent, and the parser answers empty for a graph it
+        // cannot route rather than throwing on the read path.
+        var templates = DevWorkflowGraphContract.TemplateNodeKeys(graphJson);
         return graph with
         {
             SchemaVersion = graph.SchemaVersion == 0 ? 1 : graph.SchemaVersion,
             Nodes =
             [
-                .. (graph.Nodes ?? []).Select(static node => node with
+                .. (graph.Nodes ?? []).Select(node => node with
                 {
-                    Label = string.IsNullOrWhiteSpace(node.Label) ? node.NodeKey : node.Label
+                    Label = string.IsNullOrWhiteSpace(node.Label) ? node.NodeKey : node.Label,
+                    IsTemplate = templates.Contains(node.NodeKey)
                 })
             ],
             Edges = graph.Edges ?? []
@@ -48,9 +54,11 @@ internal static class DevWorkflowContractMapper
     }
 
     /// <summary>
-    ///     The wire graph as the document that gets stored. Only one field is touched on the way in: <c>toolMode</c> is
+    ///     The wire graph as the document that gets stored. Two fields are touched on the way in: <c>toolMode</c> is
     ///     written in the parser's own spelling, so a definition saved as <c>"apply"</c> stores <c>"Apply"</c> and every
-    ///     reader of the blob — including a future one that does not parse case-insensitively — sees one form.
+    ///     reader of the blob — including a future one that does not parse case-insensitively — sees one form; and
+    ///     <c>isTemplate</c> is dropped, because it is DERIVED on the way out and a stored copy of it would be a second
+    ///     answer able to disagree with the parser's.
     /// </summary>
     public static string ToGraphJson(DevWorkflowGraph graph)
     {
@@ -61,7 +69,8 @@ internal static class DevWorkflowContractMapper
             [
                 .. (graph.Nodes ?? []).Select(static node => node with
                 {
-                    ToolMode = DevWorkflowGraphContract.CanonicalToolMode(node.ToolMode)
+                    ToolMode = DevWorkflowGraphContract.CanonicalToolMode(node.ToolMode),
+                    IsTemplate = null
                 })
             ]
         }, GraphOptions);

@@ -434,6 +434,52 @@ public sealed class DevWorkflowEndpointTests
     ///     And the parse rules apply to an API-authored apply node exactly as they do to the seeded one: an apply the
     ///     graph does not put a human gate in front of is refused at save time, with the parser's own sentence.
     /// </summary>
+    /// <summary>
+    ///     <c>isTemplate</c> is DERIVED, so it rides the response and never the blob: a definition read back, edited and
+    ///     PUT must store exactly the bytes it arrived with, and a persisted copy would be a second answer able to
+    ///     disagree with the parser the dispatcher admits by. Both halves of the round trip are asserted.
+    /// </summary>
+    [Test]
+    public async Task Definition_ReportsIsTemplateOnTheWireAndNeverWritesItIntoTheStoredGraph()
+    {
+        const string DecompositionGraph = """
+                                          {"schemaVersion":1,
+                                           "nodes":[{"nodeKey":"decompose","nodeType":"Agent","label":"Decompose",
+                                                     "materialization":{"templateNodeKey":"implement","artifactKind":"TaskPackage","joinNodeKey":"join","maxChildren":4}},
+                                                    {"nodeKey":"implement","nodeType":"DevTask"},
+                                                    {"nodeKey":"join","nodeType":"Join"}],
+                                           "edges":[{"from":"decompose","to":"join"},{"from":"implement","to":"join"}]}
+                                          """;
+        var store = Store();
+        string? stored = null;
+        store.UpdateDefinitionAsync(Arg.Any<UpdateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call =>
+             {
+                 stored = call.Arg<UpdateDevWorkflowDefinitionCommand>().GraphJson;
+                 return DefinitionSnapshot(stored);
+             });
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory,
+                                     "PUT",
+                                     Definition,
+                                     $$"""{"version":4,"name":"renamed","graph":{{DecompositionGraph}},"isTemplate":true}""")
+                                 .ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.NotNull(stored);
+        AssertEx.False(stored!.Contains("isTemplate", StringComparison.OrdinalIgnoreCase),
+            $"the stored graph is what a run pins, and it must carry no derived field: {stored}");
+
+        using var document = JsonDocument.Parse(body);
+        var nodes = document.RootElement.GetProperty("graph").GetProperty("nodes").EnumerateArray().ToArray();
+        AssertEx.False(nodes.Single(static node => node.GetProperty("nodeKey").GetString() == "decompose").GetProperty("isTemplate").GetBoolean());
+        AssertEx.True(nodes.Single(static node => node.GetProperty("nodeKey").GetString() == "implement").GetProperty("isTemplate").GetBoolean(),
+            "the template subtree is what the runtime gives no node run to, and the client must not walk the graph again to find it.");
+        AssertEx.False(nodes.Single(static node => node.GetProperty("nodeKey").GetString() == "join").GetProperty("isTemplate").GetBoolean());
+    }
+
     [Test]
     public async Task CreateDefinition_WithAnUngatedApplyNode_ReturnsBadRequestAndNeverReachesTheStore()
     {

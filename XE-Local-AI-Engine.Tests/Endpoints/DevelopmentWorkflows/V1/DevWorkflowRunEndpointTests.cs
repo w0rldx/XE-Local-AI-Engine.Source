@@ -274,6 +274,85 @@ public sealed class DevWorkflowRunEndpointTests
     }
 
     /// <summary>
+    ///     The fan-out's identity and size are the SERVER's answer: the group is the decompose node run that produced
+    ///     it, and the count is taken over the run's whole node-run list. A client counting the rows it drew is wrong by
+    ///     construction past the render cap, which is the bug this replaces.
+    /// </summary>
+    [Test]
+    public async Task GetRun_NamesAMaterializationGroupAndCountsItOverTheWholeRun()
+    {
+        const string DecompositionGraph = """
+                                          {"schemaVersion":1,
+                                           "nodes":[{"nodeKey":"decompose","nodeType":"Agent","label":"Decompose",
+                                                     "materialization":{"templateNodeKey":"implement","artifactKind":"TaskPackage","joinNodeKey":"join","maxChildren":4}},
+                                                    {"nodeKey":"implement","nodeType":"DevTask"},
+                                                    {"nodeKey":"join","nodeType":"Join"}],
+                                           "edges":[{"from":"decompose","to":"join"},{"from":"implement","to":"join"}]}
+                                          """;
+
+        var decompose = GateNodeRun() with
+        {
+            NodeKey = "decompose",
+            NodeType = DevWorkflowNodeType.Agent,
+            Status = DevWorkflowNodeRunStatus.Succeeded,
+            PendingDecisionKind = null
+        };
+        var firstClone = GateNodeRun() with
+        {
+            Id = Guid.NewGuid(),
+            NodeKey = "implement#1",
+            NodeType = DevWorkflowNodeType.DevTask,
+            Status = DevWorkflowNodeRunStatus.Running,
+            PendingDecisionKind = null,
+            MaterializedFromNodeRunId = decompose.Id,
+            MaterializationIndex = 0
+        };
+        var secondClone = firstClone with
+        {
+            Id = Guid.NewGuid(),
+            NodeKey = "implement#2",
+            MaterializationIndex = 1
+        };
+        var join = GateNodeRun() with
+        {
+            Id = ResearchNodeRunId,
+            NodeKey = "join",
+            NodeType = DevWorkflowNodeType.Join,
+            Status = DevWorkflowNodeRunStatus.Pending,
+            PendingDecisionKind = null
+        };
+        var runs = RunService(new DevWorkflowRunDetail(RunSnapshot() with
+            {
+                GraphJson = DecompositionGraph
+            },
+            [decompose, firstClone, secondClone, join],
+            PendingDecisionCount: 0,
+            BlockingGateNodeRunId: null));
+        await using var factory = EnabledFactory(Store(), runs);
+
+        using var response = await SendAsync(factory, "GET", Run).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        using var document = JsonDocument.Parse(body);
+        var nodes = document.RootElement.GetProperty("nodes").EnumerateArray().ToArray();
+        var clones = nodes.Where(static node => node.GetProperty("isMaterialized").GetBoolean()).ToArray();
+
+        AssertEx.Equal(2, clones.Length);
+        AssertEx.True(clones.All(clone => clone.GetProperty("materializationGroupId").GetGuid() == decompose.Id),
+            "one decompose node run materializes once, so its id names the group for the life of the run.");
+        AssertEx.True(clones.All(static clone => clone.GetProperty("materializationCount").GetInt32() == 2));
+        AssertEx.Equal(JsonValueKind.Null,
+            nodes.Single(static node => node.GetProperty("nodeKey").GetString() == "join").GetProperty("materializationGroupId").ValueKind,
+            "a node that was never cloned belongs to no group and carries no count.");
+        AssertEx.True(document.RootElement.GetProperty("graph")
+                              .GetProperty("nodes")
+                              .EnumerateArray()
+                              .Single(static node => node.GetProperty("nodeKey").GetString() == "implement")
+                              .GetProperty("isTemplate")
+                              .GetBoolean());
+    }
+
+    /// <summary>
     ///     The same for a graph with TWO decompositions, each with a template of its own. Both joins are asked, because
     ///     the answer has to come from a walk per materialization: one join's template must not be mistaken for the
     ///     other's, and neither may be reported as something a node run is waiting for.

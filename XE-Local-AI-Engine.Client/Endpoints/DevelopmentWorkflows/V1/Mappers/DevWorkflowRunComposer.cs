@@ -35,8 +35,17 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         var definitions = await _store.ListDefinitionsAsync(includeArchived: true, cancellationToken).ConfigureAwait(false);
         var definitionName = definitions.FirstOrDefault(definition => definition.Id == run.DefinitionId)?.Name;
 
-        // Once for the run, not once per node run: it is a parse of the same blob every summary would otherwise repeat.
-        var templates = DevWorkflowGraphContract.TemplateNodeKeys(run.GraphJson);
+        // Read off the wire graph, which already carries the parser's answer per node: one parse for the run, not one
+        // per node run, and not a second walk that could disagree with the one the dispatcher admits by.
+        var templates = graph.Nodes.Where(static node => node.IsTemplate == true)
+                             .Select(static node => node.NodeKey)
+                             .ToHashSet(StringComparer.Ordinal);
+
+        // Counted over the run's WHOLE node-run list, once: a client counting the rows it drew is wrong by
+        // construction for a fan-out wider than its page.
+        var materializationCounts = detail.NodeRuns.Where(static nodeRun => nodeRun.MaterializedFromNodeRunId is not null)
+                                          .GroupBy(static nodeRun => nodeRun.MaterializedFromNodeRunId!.Value)
+                                          .ToDictionary(static group => group.Key, static group => group.Count());
         var nodes = detail.NodeRuns
                           .Select(nodeRun => ToSummary(nodeRun,
                               nodesByKey.GetValueOrDefault(nodeRun.NodeKey),
@@ -44,6 +53,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
                               byKey,
                               templates,
                               keysByNodeRunId,
+                              materializationCounts,
                               agentsById,
                               staleInputs.Contains(nodeRun.Id)))
                           .ToList();
@@ -150,6 +160,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> byKey,
         IReadOnlySet<string> templates,
         IReadOnlyDictionary<Guid, string> keysByNodeRunId,
+        IReadOnlyDictionary<Guid, int> materializationCounts,
         IReadOnlyDictionary<Guid, AgentDefinitionRecord> agentsById,
         bool hasStaleInputs) =>
         new(nodeRun.Id,
@@ -166,6 +177,8 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             nodeRun.MaterializedFromNodeRunId is not null,
             nodeRun.MaterializedFromNodeRunId is { } parent ? keysByNodeRunId.GetValueOrDefault(parent) : null,
             nodeRun.MaterializationIndex,
+            nodeRun.MaterializedFromNodeRunId,
+            nodeRun.MaterializedFromNodeRunId is { } group && materializationCounts.TryGetValue(group, out var count) ? count : null,
             nodeRun.DevelopmentProjectId,
             nodeRun.DevelopmentTaskId,
             nodeRun.AgentDefinitionId,

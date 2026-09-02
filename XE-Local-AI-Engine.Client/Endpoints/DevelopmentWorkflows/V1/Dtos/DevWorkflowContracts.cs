@@ -237,7 +237,14 @@ public sealed record DevWorkflowGraphNode(
     string? RetryTarget,
     DevWorkflowMaterialization? Materialization,
     IReadOnlyDictionary<string, string>? RequiredCapabilities,
-    string? ToolMode);
+    string? ToolMode,
+
+    /// <summary>
+    ///     Whether this node belongs to a materialization template subtree — a clone-in-waiting the run gives no node
+    ///     run to. DERIVED on the way out from the runtime's own parser, never authored and never stored: the save path
+    ///     nulls it, so a graph that round-trips through a definition PUT keeps exactly the bytes it arrived with.
+    /// </summary>
+    bool? IsTemplate = null);
 
 public sealed record DevWorkflowMaterialization(string TemplateNodeKey, string ArtifactKind, string JoinNodeKey, int MaxChildren);
 
@@ -368,6 +375,19 @@ public sealed record DevWorkflowNodeRunSummaryResponse(
     bool IsMaterialized,
     string? MaterializedFromNodeKey,
     int? MaterializationIndex,
+
+    /// <summary>
+    ///     The node run this clone was materialized FROM, which is the group identifier: one decompose node run
+    ///     materializes once, so its id names that fan-out for the life of the run.
+    /// </summary>
+    Guid? MaterializationGroupId,
+
+    /// <summary>
+    ///     How many siblings the group holds, counted server-side over the run's WHOLE node-run list. Counted here
+    ///     rather than in the browser because a client can only count the rows it has drawn, which is wrong by
+    ///     construction for a fan-out wider than the page it rendered.
+    /// </summary>
+    int? MaterializationCount,
     Guid? DevelopmentProjectId,
     Guid? DevelopmentTaskId,
     Guid? AgentDefinitionId,
