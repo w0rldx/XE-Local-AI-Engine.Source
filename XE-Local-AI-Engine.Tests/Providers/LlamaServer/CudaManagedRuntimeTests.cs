@@ -131,8 +131,16 @@ public sealed class CudaManagedRuntimeTests
         AssertEx.False(signal.IsAvailable);
     }
 
+    /// <summary>
+    ///     The persisted record — not the selector — is authoritative. An empty cached signal (a spawn that beats the
+    ///     startup seed, or a build another checkout adopted after this process started) makes the selector ask for
+    ///     Vulkan on a Linux NVIDIA box, and the requested variant then disagrees with the recorded CUDA build. Serving
+    ///     the recorded build and seeding the signal from it keeps the chat working and makes every later selection
+    ///     agree; the record previously being DISCARDED here is what let the next acquisition write a prebuilt over the
+    ///     operator's source build, after which the next start's reconcile deleted the tree.
+    /// </summary>
     [Test]
-    public async Task EnsureBinary_SourceRecordVariantMismatch_DiscardsAndNeverServesCachedPrebuilt()
+    public async Task EnsureBinary_SourceRecordVariantMismatch_ServesRecordedBuildAndSeedsSignal()
     {
         if (OperatingSystem.IsWindows())
         {
@@ -140,33 +148,91 @@ public sealed class CudaManagedRuntimeTests
         }
 
         using var dir = new TempDir();
-        var (binDir, _, sha) = SeedSourceBuild(dir.Path, GpuStub);
+        var (binDir, serverPath, sha) = SeedSourceBuild(dir.Path, GpuStub);
         using var store = new InstalledRuntimeStore(dir.Path);
         await store.WriteAsync(SourceBuildState(binDir, sha), CancellationToken.None);
 
-        // Pre-place a cached Vulkan binary for the recorded tag so the Vulkan ensure resolves from cache (no download),
-        // reaching RecordResolvedRuntimeAsync — which must NOT overwrite the source-build record.
+        // Pre-place a cached Vulkan binary for the recorded tag: if the source record were dropped, the Vulkan ensure
+        // would resolve from this cache and record the prebuilt over it without any download to notice.
         var vulkanBin = Path.Combine(dir.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "vulkan", "build", "bin");
         Directory.CreateDirectory(vulkanBin);
         WriteExecutableStub(vulkanBin, GpuStub);
 
+        // The signal a startup seed has not reached yet — exactly what makes the selector pick Vulkan.
         var signal = new CudaManagedBuildSignal();
-        signal.MarkAvailable();
-        var before = signal.Version;
 
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, catalog: null, store, overrideOptions: null, signal);
 
-        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
-            manager.EnsureBinaryAsync(GpuVariant.Vulkan, CancellationToken.None));
+        var binary = await manager.EnsureBinaryAsync(GpuVariant.Vulkan, CancellationToken.None);
 
-        AssertEx.True(exception.Message.Contains("source-built", StringComparison.Ordinal));
+        AssertEx.Equal(serverPath, binary.ServerExecutablePath);
+        AssertEx.Equal(GpuVariant.Cuda, binary.Variant);
+        AssertEx.Equal(GpuVariant.Cuda, signal.ActiveVariant);
+
+        var after = await store.ReadAsync(CancellationToken.None);
+        AssertEx.NotNull(after);
+        AssertEx.Equal(binDir, after!.SourceBuildPath);
+        AssertEx.Equal(GpuVariant.Cuda, after.Variant);
+    }
+
+    /// <summary>
+    ///     installed-runtime.json sits under the user-level cache root that every checkout shares, so the read and the
+    ///     write inside <c>RecordResolvedRuntimeAsync</c> must be one cross-process critical section: the semaphore
+    ///     guarding it only orders one process. Two stores on one directory stand in for two nodes.
+    /// </summary>
+    [Test]
+    public async Task Store_Acquire_ExcludesASecondStoreOnTheSameDirectory()
+    {
+        using var dir = new TempDir();
+        using var first = new InstalledRuntimeStore(dir.Path);
+        using var second = new InstalledRuntimeStore(dir.Path);
+
+        var held = await first.AcquireAsync(CancellationToken.None);
+        var contender = second.AcquireAsync(CancellationToken.None);
+
+        await Task.Delay(200, CancellationToken.None);
+        AssertEx.False(contender.IsCompleted, "A second node must wait for the record lock rather than interleave.");
+
+        held.Dispose();
+        (await contender).Dispose();
+    }
+
+    /// <summary>
+    ///     The counterpart to the guard above: an EXPLICIT operator removal still replaces the record and deletes the
+    ///     tree it names, so refusing automatic destruction never wedges the operator.
+    /// </summary>
+    [Test]
+    public async Task RemoveSourceBuild_ExplicitOperatorAction_ClearsRecordAndDeletesTree()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var dir = new TempDir();
+        var activeTree = Path.Combine(dir.Path, "llama.cpp", "source-build", "active");
+        var binDir = Path.Combine(activeTree, "build", "bin");
+        Directory.CreateDirectory(binDir);
+        var serverPath = WriteExecutableStub(binDir, GpuStub);
+        var sha = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(serverPath, CancellationToken.None)));
+        using var store = new InstalledRuntimeStore(dir.Path);
+        await store.WriteAsync(SourceBuildState(binDir, sha), CancellationToken.None);
+        var signal = new CudaManagedBuildSignal();
+        signal.MarkAvailable();
+
+        using var handler = new ThrowingHandler();
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, catalog: null, store, overrideOptions: null, signal);
+
+        await manager.RemoveSourceBuildAsync(CancellationToken.None);
+
+        AssertEx.False(Directory.Exists(activeTree));
         AssertEx.Null(await store.ReadAsync(CancellationToken.None));
         AssertEx.Null(signal.ActiveVariant);
-        AssertEx.True(signal.Version > before);
-        _ = binDir;
     }
 
     [Test]

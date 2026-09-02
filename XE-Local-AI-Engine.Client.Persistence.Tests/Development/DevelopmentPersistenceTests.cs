@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Development;
 
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -45,6 +46,45 @@ public sealed class DevelopmentPersistenceTests : IDisposable
         AssertEx.True(indexNames.Contains("ux_development_attempts_one_active_per_task"));
         AssertEx.True(indexNames.Contains("ux_development_events_project_sequence"));
         AssertEx.True(indexNames.Contains("ux_development_events_operation_phase"));
+    }
+
+    /// <summary>
+    ///     Every document this store writes is camelCase, like the rest of the product's wire, and it reads its own
+    ///     operation ledger back with the same options — which is what lets the write be re-cased at all: the
+    ///     append-only rows an earlier build left in PascalCase still deserialize, because Web options read
+    ///     case-insensitively.
+    /// </summary>
+    [Test]
+    public async Task EventDetailsAndTheOperationLedgerAreWrittenInCamelCase()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var seed = DevelopmentTestFixture.CreateSeed();
+        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
+
+        var operationId = Guid.NewGuid();
+        var blocked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                              operationId,
+                              DevelopmentTaskStatus.Blocked,
+                              ExpectedTaskVersion: 1,
+                              "The repository is not connected."))
+                          .ConfigureAwait(false);
+
+        var written = await dbContext.DevelopmentEvents.AsNoTracking()
+                                     .Where(entity => entity.OperationId == operationId)
+                                     .SingleAsync()
+                                     .ConfigureAwait(false);
+        AssertEx.Equal("""{"reason":"The repository is not connected."}""", Encoding.UTF8.GetString(written.DetailJson!));
+        var ledger = Encoding.UTF8.GetString(written.ResultMetadataJson!);
+        AssertEx.True(ledger.Contains("\"projectId\":", StringComparison.Ordinal) && ledger.Contains("\"status\":\"Blocked\"", StringComparison.Ordinal),
+            $"the ledger is written in the same casing the replay read expects: {ledger}");
+
+        // And the replay read still finds it, which is the half a re-casing can silently break.
+        var replay = AssertEx.NotNull(await store.FindOperationAsync(seed.ProjectId, operationId, DevelopmentOperationPhases.Completed).ConfigureAwait(false));
+        AssertEx.Equal(blocked.Version, replay.Version);
+        AssertEx.Equal(nameof(DevelopmentTaskStatus.Blocked), replay.Status);
     }
 
     /// <summary>

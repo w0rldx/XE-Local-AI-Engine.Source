@@ -37,7 +37,7 @@ public sealed class DevWorkflowPurgeCoverageTests
             }
         }
 
-        AssertEx.Equal(expected: 8, inspected, "All eight dev_workflow_* tables must be discovered, or this assertion passes vacuously.");
+        AssertEx.Equal(expected: 9, inspected, "All nine dev_workflow_* tables must be discovered, or this assertion passes vacuously.");
         AssertEx.Empty(offenders,
             $"A dev_workflow_* table keyed by conversation_id/message_id would be deleted by the conversation footprint purge, "
             + $"destroying the workflow audit the design keeps separate on purpose: {string.Join(", ", offenders)}.");
@@ -62,9 +62,10 @@ public sealed class DevWorkflowPurgeCoverageTests
                 continue;
             }
 
-            // The root the purge deletes last, and the one table that is deliberately NOT work-item-scoped: a
-            // definition outlives every run that pinned it, which is why deleting a work item leaves it standing.
-            if (tableName is "dev_workflow_work_items" or "dev_workflow_definitions")
+            // The root the purge deletes last, and the two tables that are deliberately NOT work-item-scoped: a
+            // definition and a rule set each outlive every run that used them, which is why deleting a work item
+            // leaves them standing.
+            if (tableName is "dev_workflow_work_items" or "dev_workflow_definitions" or "dev_workflow_rule_sets")
             {
                 continue;
             }
@@ -95,6 +96,7 @@ public sealed class DevWorkflowPurgeCoverageTests
             var store = DevWorkflowTestFixture.StoreFor(context);
             var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
             workItemId = seed.WorkItemId;
+            _ = await DevWorkflowTestFixture.CreateRuleSetAsync(store).ConfigureAwait(false);
 
             var producerId = Guid.NewGuid();
             var consumerId = Guid.NewGuid();
@@ -153,6 +155,8 @@ public sealed class DevWorkflowPurgeCoverageTests
 
         AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("dev_workflow_definitions").ConfigureAwait(false),
             "A definition is not work-item-scoped and survives by design.");
+        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("dev_workflow_rule_sets").ConfigureAwait(false),
+            "Neither is a rule set: deleting a work item must not take the policy documents every other run still resolves against.");
     }
 
     /// <summary>Deleting one run takes its subtree and leaves its work item — the per-run half of the same ordered delete.</summary>

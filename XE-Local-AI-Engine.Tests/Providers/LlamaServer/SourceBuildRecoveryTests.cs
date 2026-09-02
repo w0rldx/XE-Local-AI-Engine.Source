@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Security.Cryptography;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -213,8 +214,13 @@ public sealed class SourceBuildRecoveryTests
         AssertEx.True(File.Exists(server));
     }
 
+    /// <summary>
+    ///     A record naming a DIFFERENT directory says nothing about the active tree, so reconciliation must leave the
+    ///     tree (and the record) alone. Deleting it treated "the record does not describe this tree" as "this tree is
+    ///     garbage".
+    /// </summary>
     [Test]
-    public async Task Recover_ActiveTreeWithUnboundRecordedPath_DiscardsTreeAndVersionsSignal()
+    public async Task Recover_ActiveTreeWithUnboundRecordedPath_LeavesTreeAndRecordIntact()
     {
         if (!OperatingSystem.IsLinux())
         {
@@ -225,21 +231,115 @@ public sealed class SourceBuildRecoveryTests
         using var store = new InstalledRuntimeStore(temp.Path);
         var active = Path.Combine(temp.Path, "llama.cpp", "source-build", "active");
         var state = await SeedTreeAndStateAsync(active, GpuVariant.Cpu, store, manifestVariant: GpuVariant.Cpu);
+        var unbound = Path.Combine(temp.Path, "unbound", "build", "bin");
         await store.WriteAsync(state with
         {
-            SourceBuildPath = Path.Combine(temp.Path, "unbound", "build", "bin")
+            SourceBuildPath = unbound
         }, CancellationToken.None);
+        var logger = new RecordingLogger<LlamaCppSourceBuildService>();
         var signal = new CudaManagedBuildSignal();
-        signal.SetActive(GpuVariant.Cpu);
-        var before = signal.Version;
+        using var service = CreateService(temp.Path, store, signal, logger);
+
+        await service.RecoverAsync(CancellationToken.None);
+
+        AssertEx.True(Directory.Exists(active));
+        AssertEx.Equal(unbound, (await store.ReadAsync(CancellationToken.None))!.SourceBuildPath);
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, unbound));
+    }
+
+    /// <summary>
+    ///     The 2026-09-02 data loss: <c>installed-runtime.json</c> is user-level and shared by every checkout, so a node
+    ///     on a fresh database recorded an auto-acquired Vulkan prebuilt over the operator's managed CUDA record. The
+    ///     next start read that prebuilt record — which carries no source-build path at all — as authority to delete the
+    ///     source build. A record that names no source build is not authority over one.
+    /// </summary>
+    [Test]
+    public async Task Recover_ActiveTreeWithPrebuiltRecord_LeavesTreeAndRecordIntact()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var sourceRoot = Path.Combine(temp.Path, "llama.cpp", "source-build");
+        var active = Path.Combine(sourceRoot, "active");
+        var backup = Path.Combine(sourceRoot, ".backup");
+        await SeedTreeAndStateAsync(active, GpuVariant.Cuda, store, manifestVariant: GpuVariant.Cuda);
+        await SeedTreeAndStateAsync(backup, GpuVariant.Cuda, store, manifestVariant: GpuVariant.Cuda);
+        var prebuilt = new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag,
+            "llama-" + LlamaCppReleasePins.PinnedTag + "-bin-ubuntu-vulkan-x64.tar.gz",
+            new string('a', 64),
+            GpuVariant.Vulkan,
+            DateTimeOffset.UtcNow);
+        await store.WriteAsync(prebuilt, CancellationToken.None);
+        var logger = new RecordingLogger<LlamaCppSourceBuildService>();
+        var signal = new CudaManagedBuildSignal();
+        using var service = CreateService(temp.Path, store, signal, logger);
+
+        await service.RecoverAsync(CancellationToken.None);
+
+        AssertEx.True(Directory.Exists(active), "A prebuilt record must never delete a managed source build.");
+        AssertEx.True(Directory.Exists(backup), "A prebuilt record must never delete the source-build backup either.");
+        AssertEx.Null((await store.ReadAsync(CancellationToken.None))!.SourceBuildPath);
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, active));
+    }
+
+    /// <summary>
+    ///     Absence of the active tree self-heals only a record that NAMES it. A record pointing at a relocated data
+    ///     directory describes a tree this reconcile never looked at, so erasing it loses a working source build.
+    /// </summary>
+    [Test]
+    public async Task Recover_NoTreesWithRecordNamingAnotherPath_KeepsRecord()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var elsewhere = Path.Combine(temp.Path, "relocated", "source-build", "active", "build", "bin");
+        var server = WriteServer(elsewhere, GpuVariant.Cuda);
+        var sha = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(server)));
+        await store.WriteAsync(new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag, "source", sha, GpuVariant.Cuda,
+            DateTimeOffset.UtcNow, elsewhere, LlamaCppSourceBuildRequestValidation.OfficialRepository,
+            LlamaCppReleasePins.PinnedSourceCommitSha, LlamaCppSourceRevisionMode.EnginePinned), CancellationToken.None);
+        var signal = new CudaManagedBuildSignal();
         using var service = CreateService(temp.Path, store, signal);
 
         await service.RecoverAsync(CancellationToken.None);
 
-        AssertEx.False(Directory.Exists(active));
-        AssertEx.Null(await store.ReadAsync(CancellationToken.None));
-        AssertEx.Null(signal.ActiveVariant);
-        AssertEx.True(signal.Version > before);
+        AssertEx.Equal(elsewhere, (await store.ReadAsync(CancellationToken.None))!.SourceBuildPath);
+        AssertEx.True(File.Exists(server));
+    }
+
+    [Test]
+    public async Task Recover_BackupOnlyWithPrebuiltRecord_LeavesBackupInPlace()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var backup = Path.Combine(temp.Path, "llama.cpp", "source-build", ".backup");
+        await SeedTreeAndStateAsync(backup, GpuVariant.Cuda, store, manifestVariant: GpuVariant.Cuda);
+        await store.WriteAsync(new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag,
+            "llama-" + LlamaCppReleasePins.PinnedTag + "-bin-ubuntu-vulkan-x64.tar.gz",
+            new string('a', 64),
+            GpuVariant.Vulkan,
+            DateTimeOffset.UtcNow), CancellationToken.None);
+        var logger = new RecordingLogger<LlamaCppSourceBuildService>();
+        var signal = new CudaManagedBuildSignal();
+        using var service = CreateService(temp.Path, store, signal, logger);
+
+        await service.RecoverAsync(CancellationToken.None);
+
+        AssertEx.True(Directory.Exists(backup), "A prebuilt record must not delete the parked previous runtime either.");
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, "(none)"));
     }
 
     [Test]
@@ -368,9 +468,12 @@ public sealed class SourceBuildRecoveryTests
         return path;
     }
 
-    private static LlamaCppSourceBuildService CreateService(string root, IInstalledRuntimeStore store, IActiveSourceBuildSignal signal) =>
+    private static LlamaCppSourceBuildService CreateService(string root,
+        IInstalledRuntimeStore store,
+        IActiveSourceBuildSignal signal,
+        ILogger<LlamaCppSourceBuildService>? logger = null) =>
         new(new ReadyProbe(), new NoopManager(), store, signal, new LeaseSupervisor(), new LlamaCppSourceBuildActivity(),
-            new NullLlamaCppSourceBuildEventPublisher(), NullLogger<LlamaCppSourceBuildService>.Instance, root);
+            new NullLlamaCppSourceBuildEventPublisher(), logger ?? NullLogger<LlamaCppSourceBuildService>.Instance, root);
 
     private sealed class ReadyProbe : ILlamaCppSourceBuildPrerequisiteProbe
     {
@@ -424,6 +527,9 @@ public sealed class SourceBuildRecoveryTests
 
     private sealed class ThrowingStore : IInstalledRuntimeStore
     {
+        public Task<IDisposable> AcquireAsync(CancellationToken ct) =>
+            throw new NotSupportedException();
+
         public Task<InstalledRuntimeState?> ReadAsync(CancellationToken ct) =>
             throw new IOException("read failed");
 

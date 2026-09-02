@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 
-using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -17,8 +16,6 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 /// </summary>
 public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefinitionStore agents, IAgentWorkSessionStore sessions)
 {
-    private static readonly JsonSerializerOptions PolicyOptions = new(JsonSerializerDefaults.Web);
-
     private readonly IAgentDefinitionStore _agents = agents ?? throw new ArgumentNullException(nameof(agents));
     private readonly IAgentWorkSessionStore _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
     private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -38,8 +35,21 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         var definitions = await _store.ListDefinitionsAsync(includeArchived: true, cancellationToken).ConfigureAwait(false);
         var definitionName = definitions.FirstOrDefault(definition => definition.Id == run.DefinitionId)?.Name;
 
-        // Once for the run, not once per node run: it is a parse of the same blob every summary would otherwise repeat.
-        var templates = DevWorkflowGraphContract.TemplateNodeKeys(run.GraphJson);
+        // Read off the wire graph, which already carries the parser's answer per node: one parse for the run, not one
+        // per node run, and not a second walk that could disagree with the one the dispatcher admits by.
+        var templates = graph.Nodes.Where(static node => node.IsTemplate == true)
+                             .Select(static node => node.NodeKey)
+                             .ToHashSet(StringComparer.Ordinal);
+
+        // How many CHILDREN the decomposition produced, counted over the run's WHOLE node-run list, once: a client
+        // counting the rows it drew is wrong by construction for a fan-out wider than its page. Distinct INDEXES, not
+        // rows — a template subtree of more than one node clones every one of them per child, so counting rows would
+        // read a two-child fan-out of a two-node template as "1 of 4" against a MaterializationIndex that only ever
+        // counts children.
+        var materializationCounts = detail.NodeRuns.Where(static nodeRun => nodeRun.MaterializedFromNodeRunId is not null)
+                                          .GroupBy(static nodeRun => nodeRun.MaterializedFromNodeRunId!.Value)
+                                          .ToDictionary(static group => group.Key,
+                                              static group => group.Select(static nodeRun => nodeRun.MaterializationIndex).Distinct().Count());
         var nodes = detail.NodeRuns
                           .Select(nodeRun => ToSummary(nodeRun,
                               nodesByKey.GetValueOrDefault(nodeRun.NodeKey),
@@ -47,6 +57,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
                               byKey,
                               templates,
                               keysByNodeRunId,
+                              materializationCounts,
                               agentsById,
                               staleInputs.Contains(nodeRun.Id)))
                           .ToList();
@@ -91,6 +102,12 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         var consumed = await _store.ListConsumedArtifactIdsAsync(nodeRunId, cancellationToken).ConfigureAwait(false);
         var decisions = await _store.ListDecisionsAsync(runId, cancellationToken).ConfigureAwait(false);
 
+        // One list, and only when this node actually recorded a resolution: rule sets are a handful of bodyless rows,
+        // so listing them beats a lookup per recorded id, and a node with no policy pays nothing at all.
+        var ruleSets = nodeRun.PolicyResolutionJson is null
+            ? []
+            : await _store.ListRuleSetsAsync(cancellationToken).ConfigureAwait(false);
+
         // Read from the other family on the loose session id, never stored here: a purged session leaves the node run
         // intact and the drill-down renders "transcript no longer available" instead of a broken link.
         Guid? conversationId = null;
@@ -112,7 +129,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             nodeRun.QueuedAtUtc,
             nodeRun.AgentDefinitionId,
             AgentDisplayName(nodeRun, node, agentsById),
-            ModelLabel(nodeRun, node, agentsById),
+            ModelLabel(nodeRun, agentsById),
             nodeRun.WorkSessionId,
             conversationId,
             nodeRun.WorkSessionAvailable,
@@ -126,7 +143,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             nodeRun.OutputJson,
             [.. produced.Select(static artifact => artifact.Id)],
             consumed,
-            AppliedRuleSets(nodeRun.PolicyResolutionJson),
+            AppliedRuleSets(nodeRun.PolicyResolutionJson, ruleSets),
             nodeRun.PendingDecisionKind?.ToString(),
             DevWorkflowGraphContract.AllowedDecisions(nodeRun.Status),
 
@@ -147,6 +164,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> byKey,
         IReadOnlySet<string> templates,
         IReadOnlyDictionary<Guid, string> keysByNodeRunId,
+        IReadOnlyDictionary<Guid, int> materializationCounts,
         IReadOnlyDictionary<Guid, AgentDefinitionRecord> agentsById,
         bool hasStaleInputs) =>
         new(nodeRun.Id,
@@ -163,15 +181,20 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             nodeRun.MaterializedFromNodeRunId is not null,
             nodeRun.MaterializedFromNodeRunId is { } parent ? keysByNodeRunId.GetValueOrDefault(parent) : null,
             nodeRun.MaterializationIndex,
-            nodeRun.DevelopmentProjectId,
-            nodeRun.DevelopmentTaskId,
-            nodeRun.AgentDefinitionId,
-            AgentDisplayName(nodeRun, node, agentsById),
-            ModelLabel(nodeRun, node, agentsById),
-            hasStaleInputs,
-            nodeRun.StartedAtUtc,
-            nodeRun.EndedAtUtc,
-            nodeRun.Sequence);
+
+            // Named from here on: the record carries five consecutive Guid? slots, so a positional call would compile
+            // silently misaligned if a future field is spliced in ahead of them.
+            MaterializationGroupId: nodeRun.MaterializedFromNodeRunId,
+            MaterializationCount: nodeRun.MaterializedFromNodeRunId is { } group && materializationCounts.TryGetValue(group, out var count) ? count : null,
+            DevelopmentProjectId: nodeRun.DevelopmentProjectId,
+            DevelopmentTaskId: nodeRun.DevelopmentTaskId,
+            AgentDefinitionId: nodeRun.AgentDefinitionId,
+            AgentDisplayName: AgentDisplayName(nodeRun, node, agentsById),
+            ModelLabel: ModelLabel(nodeRun, agentsById),
+            HasStaleInputs: hasStaleInputs,
+            StartedAtUtc: nodeRun.StartedAtUtc,
+            CompletedAtUtc: nodeRun.EndedAtUtc,
+            Sequence: nodeRun.Sequence);
 
     /// <summary>
     ///     Which upstream nodes a <c>Pending</c> node run is still waiting on, computed here rather than left to the
@@ -218,12 +241,14 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         IReadOnlyDictionary<Guid, AgentDefinitionRecord> agentsById) =>
         nodeRun.AgentDefinitionId is { } id && agentsById.TryGetValue(id, out var agent) ? agent.Name : node?.AgentSeedSlug;
 
-    /// <summary>The node's own override wins: it is what the run will actually use.</summary>
-    private static string? ModelLabel(DevWorkflowNodeRunSnapshot nodeRun,
-        DevWorkflowGraphNode? node,
-        IReadOnlyDictionary<Guid, AgentDefinitionRecord> agentsById) =>
-        node?.ModelProfile
-        ?? (nodeRun.AgentDefinitionId is { } id && agentsById.TryGetValue(id, out var agent) ? agent.ModelProfile : null);
+    /// <summary>
+    ///     The BOUND AGENT's model, which is the only one a run actually uses. The graph node's authored
+    ///     <c>modelProfile</c> is deliberately not consulted: the runtime's parser does not read it, so nothing
+    ///     dispatches on it, and naming it here made the pane confidently label a node with a model it would never
+    ///     load. The wire field stays so an authored graph still round-trips unchanged.
+    /// </summary>
+    private static string? ModelLabel(DevWorkflowNodeRunSnapshot nodeRun, IReadOnlyDictionary<Guid, AgentDefinitionRecord> agentsById) =>
+        nodeRun.AgentDefinitionId is { } id && agentsById.TryGetValue(id, out var agent) ? agent.ModelProfile : null;
 
     /// <summary>
     ///     One read for every id-bound node run, and none at all when there are none — which is every graph that binds
@@ -244,9 +269,11 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
     }
 
     /// <summary>
-    ///     Which node runs consumed an artifact that has since been superseded. Nothing marks staleness before Slice D,
-    ///     so the common answer is "none" and costs one artifact read — the per-node read only happens once a stale
-    ///     row actually exists.
+    ///     Which node runs consumed an artifact that has since been superseded. Staleness IS written today, by the two
+    ///     callers that supersede an artifact — an agent-node promotion and a Tool node's report, both through
+    ///     <c>MarkDependentsStaleAsync</c> — so this answers a real question rather than a reserved one. It is still
+    ///     "none" for most runs, and costs one artifact read to say so: the per-node read only happens once a stale row
+    ///     actually exists.
     /// </summary>
     private async Task<IReadOnlySet<Guid>> ResolveStaleInputsAsync(Guid runId,
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
@@ -277,14 +304,21 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
     /// <summary>
     ///     Which rule text applied, read from the record written at materialization — never re-resolved. Re-resolving
     ///     would answer "what would apply now", a different and misleading question in an audit view.
+    ///     <para>
+    ///         The CURRENT hash of each named rule set rides alongside it, so a reader can tell an unchanged document
+    ///         from one edited since the node ran, and both from one deleted — which reads as a null current hash.
+    ///     </para>
+    ///     <para>
+    ///         Parsed through the runtime's own tolerant reader: an unreadable column is a hand-edited row, and it must
+    ///         cost this node its rule-set list rather than costing the whole drill-down a 500.
+    ///     </para>
     /// </summary>
-    private static IReadOnlyList<DevWorkflowAppliedRuleSetResponse> AppliedRuleSets(string? policyResolutionJson)
-    {
-        if (string.IsNullOrWhiteSpace(policyResolutionJson))
-        {
-            return [];
-        }
-
-        return JsonSerializer.Deserialize<IReadOnlyList<DevWorkflowAppliedRuleSetResponse>>(policyResolutionJson, PolicyOptions) ?? [];
-    }
+    private static IReadOnlyList<DevWorkflowAppliedRuleSetResponse> AppliedRuleSets(string? policyResolutionJson, IReadOnlyList<DevWorkflowRuleSetSummary> current) =>
+    [
+        .. DevWorkflowRulePolicyResolver.Read(policyResolutionJson)
+                                        .Select(applied => new DevWorkflowAppliedRuleSetResponse(applied.Id,
+                                            applied.Name,
+                                            applied.ContentSha256,
+                                            current.FirstOrDefault(ruleSet => ruleSet.Id == applied.Id)?.ContentSha256))
+    ];
 }

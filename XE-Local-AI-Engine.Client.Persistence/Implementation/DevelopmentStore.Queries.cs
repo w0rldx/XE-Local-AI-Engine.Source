@@ -1,28 +1,34 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 public sealed partial class DevelopmentStore
 {
     public async Task<IReadOnlyList<DevelopmentEventSnapshot>> ListEventsAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
-        return await _dbContext.DevelopmentEvents.AsNoTracking()
-                               .Where(entity => entity.ProjectId == projectId)
-                               .OrderBy(entity => entity.Sequence)
-                               .Select(entity => new DevelopmentEventSnapshot(entity.Id,
-                                   entity.ProjectId,
-                                   entity.TaskId,
-                                   entity.AttemptId,
-                                   entity.Sequence,
-                                   entity.EventType,
-                                   entity.OccurredAtUtc,
-                                   entity.OperationId,
-                                   entity.OperationPhase,
-                                   entity.Outcome))
-                               .ToListAsync(cancellationToken)
-                               .ConfigureAwait(false);
+        // Materialized rather than projected, because the reason lives in an ENCRYPTED column: the decryption
+        // interceptor runs on materialization, and a projection straight to the bytes would hand back ciphertext.
+        var events = await _dbContext.DevelopmentEvents.AsNoTracking()
+                                     .Where(entity => entity.ProjectId == projectId)
+                                     .OrderBy(entity => entity.Sequence)
+                                     .ToListAsync(cancellationToken)
+                                     .ConfigureAwait(false);
+        return events.Select(static entity => new DevelopmentEventSnapshot(entity.Id,
+                         entity.ProjectId,
+                         entity.TaskId,
+                         entity.AttemptId,
+                         entity.Sequence,
+                         entity.EventType,
+                         entity.OccurredAtUtc,
+                         entity.OperationId,
+                         entity.OperationPhase,
+                         entity.Outcome,
+                         ReasonOf(entity.DetailJson)))
+                     .ToArray();
     }
 
     public async Task<DevelopmentExecutionSnapshot> GetExecutionSnapshotAsync(Guid attemptId, CancellationToken cancellationToken = default)
@@ -68,8 +74,79 @@ public sealed partial class DevelopmentStore
             // The attempt's own immutable snapshot wins. Falling back to the project only when the attempt has none
             // keeps attempts that predate the column behaving exactly as before, and lets a project whose profile was
             // backfilled after the attempt started still resolve one.
-            snapshot.Attempt.CommandProfileJson ?? snapshot.Project.CommandProfileJson);
+            snapshot.Attempt.CommandProfileJson ?? snapshot.Project.CommandProfileJson,
+            await PreviousRoundFeedbackAsync(snapshot.Task.Id, cancellationToken).ConfigureAwait(false));
     }
+
+    /// <summary>
+    ///     The reason the last request for changes on this task gave, so the next coder round is told what was wrong
+    ///     with the last one instead of being asked for the same work again.
+    ///     <para>
+    ///         One row, off the task's own append-only log: the LATEST event that carries a reason, whichever of the
+    ///         three writes it — the reviewer's <c>ReviewFinalized</c>, the deterministic gate's
+    ///         <c>ValidationFinalized</c>, or a workflow's own <c>TaskTransitioned</c>. Latest rather than
+    ///         reviewer-first, because a validation failure AFTER a reviewer's round is the newer fact, and answering
+    ///         with the reviewer's sentence would replay round N-1's complaint over a round the gate has since judged.
+    ///     </para>
+    ///     <para>
+    ///         The recorded status is what qualifies it: only an event that left the task where a coder round runs is
+    ///         feedback for one. A block, an apply, and a validation that PASSED all carry reasons and none of them are.
+    ///     </para>
+    /// </summary>
+    private async Task<string?> PreviousRoundFeedbackAsync(Guid taskId, CancellationToken cancellationToken)
+    {
+        var latest = await _dbContext.DevelopmentEvents.AsNoTracking()
+                                     .Where(entity => entity.TaskId == taskId
+                                                      && entity.DetailJson != null
+                                                      && (entity.EventType == "TaskTransitioned"
+                                                          || entity.EventType == "ReviewFinalized"
+                                                          || entity.EventType == "ValidationFinalized"))
+                                     .OrderByDescending(entity => entity.Sequence)
+                                     .FirstOrDefaultAsync(cancellationToken)
+                                     .ConfigureAwait(false);
+        if (latest is not { DetailJson: { } detail, ResultMetadataJson: { } metadata })
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<DevelopmentOperationResult>(metadata, JsonOptions)
+                is { Status: nameof(DevelopmentTaskStatus.ChangesRequested) or nameof(DevelopmentTaskStatus.InProgress) }
+                ? ReasonOf(detail)
+                : null;
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            // A row this build cannot read is a row with no feedback in it. The attempt still runs.
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     The sentence an event detail carries, or nothing. Read with the store's own options, which are
+    ///     case-insensitive — so the PascalCase rows written before the store re-cased its documents still answer.
+    /// </summary>
+    private static string? ReasonOf(byte[]? detailJson)
+    {
+        if (detailJson is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<ReasonDetail>(detailJson, JsonOptions)?.Reason;
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            // A detail shape this build cannot read is one with no reason in it. The event still lists.
+            return null;
+        }
+    }
+
+    /// <summary>The one shape every reason-carrying event detail in this store is written in.</summary>
+    private sealed record ReasonDetail(string? Reason);
 
     public async Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default)
     {

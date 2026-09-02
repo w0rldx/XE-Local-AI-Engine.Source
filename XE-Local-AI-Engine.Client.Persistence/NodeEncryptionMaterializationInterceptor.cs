@@ -425,6 +425,9 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     definitionGraph.Id,
                     "dev_workflow_definition_graph_json");
                 break;
+            case DevWorkflowRuleSet ruleSet:
+                ruleSet.Body = NodePayloadProtector.Decrypt(ruleSet.Body, context.NodeEncryptionKey.Span, Guid.Empty, ruleSet.Id, "dev_workflow_rule_set_body");
+                break;
             case DevWorkflowRun workflowRun:
                 // The owning work item sits in the conversation slot, so a run row re-parented onto another work item
                 // fails the tag check here rather than reading back as that work item's executed graph.

@@ -12,8 +12,12 @@ import type {
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse as DevWorkflowDecisionResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionSummaryResponse as DevWorkflowDefinitionSummaryResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph as DevWorkflowGraph,
+	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphEdge as DevWorkflowGraphEdge,
+	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphNode as DevWorkflowGraphNode,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunDetailResponse as DevWorkflowNodeRunDetailResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse as DevWorkflowNodeRunSummaryResponse,
+	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetResponse as DevWorkflowRuleSetResponse,
+	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetSummaryResponse as DevWorkflowRuleSetSummaryResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventResponse as DevWorkflowRunEventResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse as DevWorkflowRunResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse as DevWorkflowRunSummaryResponse,
@@ -26,8 +30,12 @@ export type {
 	DevWorkflowDecisionResponse,
 	DevWorkflowDefinitionSummaryResponse,
 	DevWorkflowGraph,
+	DevWorkflowGraphEdge,
+	DevWorkflowGraphNode,
 	DevWorkflowNodeRunDetailResponse,
 	DevWorkflowNodeRunSummaryResponse,
+	DevWorkflowRuleSetResponse,
+	DevWorkflowRuleSetSummaryResponse,
 	DevWorkflowRunEventResponse,
 	DevWorkflowRunResponse,
 	DevWorkflowRunSummaryResponse,
@@ -221,6 +229,61 @@ export function devWorkflowArtifactLanguage(kind: DevWorkflowArtifactKind | unde
 		return "plaintext";
 	}
 	return "markdown";
+}
+
+/** One artifact identity across its versions (X6/Y15: the lineage is `(RunId, ProducingNodeKey, Name)`). */
+export interface DevWorkflowArtifactLineage {
+	readonly lineageId: string;
+	/** Every version of this lineage, NEWEST first — the order the version picker offers them in. */
+	readonly versions: readonly DevWorkflowArtifactResponse[];
+	/** The row the server marked `isLatest` (Y17/C39), or the highest version when no row claims it. */
+	readonly latest: DevWorkflowArtifactResponse;
+}
+
+/**
+ * The run's artifact feed grouped into lineages, in first-appearance order.
+ *
+ * Grouping is by the SERVER's `lineageId` and nothing else: `name + kind` would silently merge a renamed artifact
+ * with an unrelated one, which is the whole reason X6 put the field on the wire. `isLatest` is likewise READ rather
+ * than derived (Y17/C39) — the query already computes it, and a second client-side reduce would be a second answer
+ * to one question. The `version` sort is only the order the picker lists them in.
+ *
+ * A row with no lineage id becomes its own lineage rather than joining a shared empty-string bucket: collapsing
+ * unrelated documents into one row would hand the operator a version picker that switches between different files.
+ */
+export function devWorkflowArtifactLineages(
+	artifacts: readonly DevWorkflowArtifactResponse[],
+): readonly DevWorkflowArtifactLineage[] {
+	const byLineage = new Map<string, DevWorkflowArtifactResponse[]>();
+	for (const artifact of artifacts) {
+		const key = artifact.lineageId || `artifact:${artifact.id ?? ""}`;
+		const rows = byLineage.get(key);
+		if (rows) {
+			rows.push(artifact);
+		} else {
+			byLineage.set(key, [artifact]);
+		}
+	}
+	return [...byLineage.entries()].flatMap(([lineageId, rows]) => {
+		const versions = rows.toSorted((left, right) => (right.version ?? 1) - (left.version ?? 1));
+		const latest = versions.find((row) => row.isLatest === true) ?? versions[0];
+		return latest ? [{ lineageId, versions, latest }] : [];
+	});
+}
+
+/**
+ * The "attempt N of M" numbers, for the three surfaces that render that sentence.
+ *
+ * The displayed maximum is clamped UP to the attempt. An operator's Retry on an exhausted node runs an attempt past
+ * the node's `maxAttempts` — X3 grants the intervention its own go — and the raw fields then read "attempt 4 of 3",
+ * a sentence that says the runtime broke its own budget rather than that a human granted one more attempt.
+ */
+export function devWorkflowAttemptCounts(
+	attempt: number | undefined | null,
+	maxAttempts: number | undefined | null,
+): { readonly attempt: number; readonly maxAttempts: number } {
+	const current = attempt ?? 1;
+	return { attempt: current, maxAttempts: Math.max(current, maxAttempts ?? 1) };
 }
 
 /** The shared decoder (P4 §2.10), kept under the feature's own name so no call site or test had to move. */

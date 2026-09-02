@@ -263,7 +263,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         }
 
         written += await AdmitAsync(store, lanes, run, graph, cancellationToken).ConfigureAwait(false);
-        written += await RecomputeRunStatusAsync(store, run, cancellationToken).ConfigureAwait(false);
+        written += await RecomputeRunStatusAsync(store, run, graph, cancellationToken).ConfigureAwait(false);
         return written;
     }
 
@@ -1043,32 +1043,43 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         return 1;
     }
 
-    private async Task<int> RecomputeRunStatusAsync(IDevWorkflowStore store, DevWorkflowRunSnapshot run, CancellationToken cancellationToken)
+    /// <summary>
+    ///     Ends the tick by asking what the run now is, of the rows AND of the graph they belong to — the same parsed
+    ///     graph this tick already resolved, so the rule that decides whether an end was reached costs no extra read.
+    /// </summary>
+    private async Task<int> RecomputeRunStatusAsync(IDevWorkflowStore store,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowGraph graph,
+        CancellationToken cancellationToken)
     {
         var current = await store.GetRunAsync(run.Id, cancellationToken).ConfigureAwait(false);
         var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
-        var target = DevWorkflowStateMachine.Recompute(current.Status, nodeRuns);
-        if (target == current.Status)
+        var outcome = DevWorkflowStateMachine.Recompute(current.Status, graph, nodeRuns);
+        if (outcome.Status == current.Status)
         {
             return 0;
         }
 
-        DevWorkflowStateMachine.EnsureLegal(current.Status, target);
+        DevWorkflowStateMachine.EnsureLegal(current.Status, outcome.Status);
         _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(run.Id,
 
                                // The version this decision was made against. Any would let a status move overwrite a
                                // lifecycle command that landed between the read and this write — a cancel silently
                                // becoming a Running again — and the run service is the second writer that makes it real.
                                current.Version,
-                               target,
+                               outcome.Status,
 
-                               // No run-level failure class: the failing node run already carries the one that explains it,
-                               // and a second, coarser copy on the run would only ever be a worse answer to the same question.
-                               WorkItemStatus: DevWorkflowStateMachine.WorkItemStatusFor(target, nodeRuns)),
+                               // Both are null for Completed and Failed: a failing node run already carries the class that
+                               // explains it, and a second, coarser copy on the run would only ever be a worse answer to
+                               // the same question. A run that reached no end is the one case with no such node run —
+                               // nothing failed — so there the outcome carries the whole account itself.
+                               FailureClass: outcome.FailureClass,
+                               SanitizedReason: outcome.TerminalReason,
+                               WorkItemStatus: DevWorkflowStateMachine.WorkItemStatusFor(outcome.Status, nodeRuns)),
                            cancellationToken)
                        .ConfigureAwait(false);
 
-        if (DevWorkflowStateMachine.IsTerminal(target))
+        if (DevWorkflowStateMachine.IsTerminal(outcome.Status))
         {
             Forget(run.Id);
         }

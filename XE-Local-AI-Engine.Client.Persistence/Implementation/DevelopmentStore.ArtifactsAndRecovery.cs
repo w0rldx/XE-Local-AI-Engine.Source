@@ -82,7 +82,7 @@ public sealed partial class DevelopmentStore
                     repositoryRelativePaths.Count.ToString(CultureInfo.InvariantCulture),
                     version: 1,
                     artifactId: null,
-                    JsonSerializer.SerializeToUtf8Bytes(repositoryRelativePaths),
+                    JsonSerializer.SerializeToUtf8Bytes(repositoryRelativePaths, JsonOptions),
                     cancellationToken).ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);
@@ -205,7 +205,7 @@ public sealed partial class DevelopmentStore
                     throw new DevelopmentInvalidTransitionException("Only the exact independently approved subject can start host apply.");
                 }
 
-                var detail = Utf8(JsonSerializer.Serialize(subject));
+                var detail = Utf8(JsonSerializer.Serialize(subject, JsonOptions));
                 return await AddEventAsync(subject.ProjectId,
                     subject.TaskId,
                     attemptId: null,
@@ -295,10 +295,7 @@ public sealed partial class DevelopmentStore
                     task.Status.ToString(),
                     task.Version,
                     artifactId: null,
-                    Utf8(JsonSerializer.Serialize(new
-                    {
-                        reason = sanitizedReason
-                    })),
+                    Utf8(JsonSerializer.Serialize(new { reason = sanitizedReason }, JsonOptions)),
                     cancellationToken).ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);

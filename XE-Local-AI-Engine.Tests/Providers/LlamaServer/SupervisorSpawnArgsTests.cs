@@ -195,6 +195,101 @@ public sealed class SupervisorSpawnArgsTests
         consumer!.Dispose();
     }
 
+    /// <summary>
+    ///     The ticket belongs to the variant it was granted against. A recorded source build can move the spawn off that
+    ///     variant after the identity check has passed, and then nothing the ticket carries fits: its arguments were
+    ///     resolved for another backend, and its allocation was sized for one.
+    /// </summary>
+    [Test]
+    public async Task EnsureRunning_AdmittedVariantOutrankedByServedBuild_ReResolvesArgs()
+    {
+        var launcher = new FakeProcessLauncher();
+        var allocation = new ProcessContextAllocation(16384,
+            ModelTrainContextTokens: 131072,
+            ProcessContextAllocationSource.HardwareTier,
+            ProcessPlacementMode.GpuResident,
+            ResourceFootprint.Zero,
+            "llama3:0",
+            CacheKey: "cache");
+        var launchAdmissions = new ProcessLaunchAdmissionRegistry();
+
+        // Admitted as Vulkan with Explore args; the serve hands back the recorded CUDA build instead.
+        var admission = new ProcessLaunchAdmission("llama3",
+            ModelRole.Chat,
+            GpuVariant.Vulkan,
+            ResolvedLaunchArguments.Explore(),
+            allocation);
+        AssertEx.True(launchAdmissions.TryAcquire(admission, out var consumer));
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(GpuVariant.Vulkan),
+            profileResolver: new FakeInferenceProfileResolver(ResolvedLaunchArguments.Replay(ctxSize: 4096, nGpuLayers: 8)),
+            launchAdmissions: launchAdmissions,
+            binaryManager: new FakeBinaryManager(GpuVariant.Cuda));
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.Equal("8", spec!.Arguments[IndexOf(spec.Arguments, "--n-gpu-layers") + 1]);
+        AssertEx.False(spec.Arguments.Contains("--fit"), "The admitted Explore args were resolved for a variant this spawn is no longer on.");
+        consumer!.Dispose();
+    }
+
+    /// <summary>
+    ///     A CPU admission carries no GPU bytes and a CPU-sized context. Spending it on a served GPU build would put
+    ///     that load outside VRAM capacity accounting, so the allocation is re-resolved for the variant being launched.
+    /// </summary>
+    [Test]
+    public async Task EnsureRunning_AdmittedCpuAllocationOutrankedByServedBuild_ReResolvesAllocation()
+    {
+        var launcher = new FakeProcessLauncher();
+        var cpuAllocation = new ProcessContextAllocation(4096,
+            ModelTrainContextTokens: 131072,
+            ProcessContextAllocationSource.HardwareTier,
+            ProcessPlacementMode.Cpu,
+            ResourceFootprint.Zero,
+            "llama3:0",
+            CacheKey: "cpu-cache");
+        var gpuAllocation = cpuAllocation with
+        {
+            ProcessContextTokens = 32768,
+            Placement = ProcessPlacementMode.GpuResident,
+            CacheKey = "gpu-cache"
+        };
+        var allocationResolver = Substitute.For<IProcessContextAllocationResolver>();
+        allocationResolver.ResolveAsync(Arg.Any<string>(),
+                              Arg.Any<ModelRole>(),
+                              Arg.Any<GpuVariant>(),
+                              Arg.Any<ResolvedLaunchArguments>(),
+                              Arg.Any<CancellationToken>())
+                          .Returns(_ => Task.FromResult<ProcessContextAllocation?>(gpuAllocation));
+
+        // Admitted as a CPU launch; the serve hands back the recorded CUDA build instead. Reusing the CPU allocation
+        // would go through TryGetEffectiveCommittedAllocation, which this resolver never satisfies.
+        var launchAdmissions = new ProcessLaunchAdmissionRegistry();
+        var admission = new ProcessLaunchAdmission("llama3",
+            ModelRole.Chat,
+            GpuVariant.Cpu,
+            ResolvedLaunchArguments.Explore(),
+            cpuAllocation);
+        AssertEx.True(launchAdmissions.TryAcquire(admission, out var consumer));
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cpu),
+            allocationResolver: allocationResolver,
+            launchAdmissions: launchAdmissions,
+            binaryManager: new FakeBinaryManager(GpuVariant.Cuda));
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.Equal("32768", spec!.Arguments[IndexOf(spec.Arguments, "-c") + 1]);
+        await allocationResolver.Received(1).ResolveAsync(Arg.Any<string>(),
+            Arg.Any<ModelRole>(),
+            GpuVariant.Cuda,
+            Arg.Any<ResolvedLaunchArguments>(),
+            Arg.Any<CancellationToken>());
+        consumer!.Dispose();
+    }
+
     [Test]
     [Arguments(GpuVariant.Vulkan, "llama3:0")]
     [Arguments(GpuVariant.Cuda, "different-content")]
@@ -255,6 +350,30 @@ public sealed class SupervisorSpawnArgsTests
         // The CPU thread policy.
         AssertEx.Equal("6", spec.Arguments[IndexOf(spec.Arguments, "-t") + 1]);
         AssertEx.Equal("8", spec.Arguments[IndexOf(spec.Arguments, "-tb") + 1]);
+    }
+
+    /// <summary>
+    ///     Placement must follow the binary actually launched, not the selector. A recorded managed source build is
+    ///     authoritative and is served even when the requested variant disagrees — which happens whenever the cached
+    ///     signal has not been seeded yet (a spawn beating startup, or a build another checkout adopted). Every GPU
+    ///     argument is gated on <c>variant != Cpu</c> in <see cref="LlamaServerLaunchProjection" />, so keying the spawn
+    ///     off the selector runs a CUDA build with no offload at all on the Cpu row below.
+    /// </summary>
+    [Test]
+    [Arguments(GpuVariant.Cpu)]
+    [Arguments(GpuVariant.Vulkan)]
+    public async Task EnsureRunning_ServedBuildOutranksSelectedVariant_EmitsGpuPlacement(GpuVariant selected)
+    {
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(selected),
+            binaryManager: new FakeBinaryManager(GpuVariant.Cuda));
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.True(spec!.Arguments.Contains("--fit"), "A served GPU build must hand placement to auto-fit.");
+        AssertEx.False(spec.Arguments.Contains("-t"), "A served GPU build must not take the CPU thread policy.");
     }
 
     [Test]

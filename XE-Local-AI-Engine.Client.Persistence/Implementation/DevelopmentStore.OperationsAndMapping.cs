@@ -92,7 +92,7 @@ public sealed partial class DevelopmentStore
                                                .ConfigureAwait(false);
         return developmentEvent?.ResultMetadataJson is not { } payload
             ? null
-            : JsonSerializer.Deserialize<DevelopmentOperationResult>(payload);
+            : JsonSerializer.Deserialize<DevelopmentOperationResult>(payload, JsonOptions);
     }
 
     private async Task<DevelopmentOperationResult> AddEventAsync(Guid projectId,
@@ -134,7 +134,7 @@ public sealed partial class DevelopmentStore
             OperationId = operationId,
             OperationPhase = operationPhase,
             Outcome = outcome,
-            ResultMetadataJson = JsonSerializer.SerializeToUtf8Bytes(result)
+            ResultMetadataJson = JsonSerializer.SerializeToUtf8Bytes(result, JsonOptions)
         });
         return result;
     }

@@ -37,6 +37,11 @@ internal sealed class TransientLlamaServerLauncher(
 
         var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
         var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
+
+        // The serve can hand back a build of a different variant than was asked for (a recorded source build outranks a
+        // request made against a signal that is not seeded yet), and the spec below gates every GPU argument on the
+        // variant. Follow the binary being launched, as the supervisor does.
+        variant = binary.Variant;
         var modelId = Path.GetFileName(request.ModelFilePath);
 
         // The key's model name is a LABEL here, not a registry lookup: BuildLaunchSpec only ever puts it on the spec

@@ -441,14 +441,96 @@ internal sealed class DevWorkflowAgentExecutor
         var objective = new StringBuilder();
         _ = objective.AppendLine(node.Instructions is { Length: > 0 } instructions ? instructions : $"Carry out the '{node.Label}' step of this development workflow.");
 
+        // The scoped rule sets, between the node's own instructions and what was asked, per §5.6.1a. Their text counts
+        // against the same budget everything else does: policy that pushed the objective over the limit would crowd out
+        // the request it is supposed to govern.
+        //
+        // Read straight from what the node run RECORDED — id, name, hash and the text itself — and never from the rule
+        // set as it stands now. Editing or deleting a rule set mid-run is allowed, so a dispatch-time read would hand
+        // the agent a document the audit does not name, or nothing at all.
+        // Rendered BEFORE the policy phase though it is appended after it, because it is uncapped: instructions and the
+        // operator's request are what a node cannot do without, so policy gets the room they leave rather than the room
+        // it would like. Without this the bounded phase would fill the budget and the unbounded one would then push
+        // straight past it.
+        var inputSection = new StringBuilder();
         if (ReadInput(nodeRun.InputJson) is { Count: > 0 } input)
         {
-            _ = objective.AppendLine().AppendLine("## What was asked");
+            _ = inputSection.AppendLine().AppendLine("## What was asked");
             foreach (var (name, value) in input)
             {
-                _ = objective.AppendLine(CultureInfo.InvariantCulture, $"- {name}: {value}");
+                _ = inputSection.AppendLine(CultureInfo.InvariantCulture, $"- {name}: {value}");
             }
         }
+
+        var policyCeiling = MaxObjectiveCharacters - inputSection.Length;
+        var applied = DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson);
+        for (var index = 0; index < applied.Count; index++)
+        {
+            var entry = applied[index];
+
+            // Rows written before the body was snapshotted alongside the hash. None exist today, and the reader stays
+            // honest about them rather than re-reading the rule set and injecting whatever it says NOW — which is the
+            // exact divergence the snapshot exists to close.
+            if (entry.Body is not { Length: > 0 })
+            {
+                _logger.LogWarning("Development workflow node run {NodeRunId} recorded rule set {RuleSetId} without its text, so nothing was injected for it. "
+                                   + "The recorded content hash {RecordedHash} still names what applied.",
+                    nodeRun.Id,
+                    entry.Id,
+                    entry.ContentSha256);
+                continue;
+            }
+
+            // The name is the one RECORDED at materialization, not the one the row carries now: it is what the audit
+            // says applied, and rendering a since-renamed heading would put a second story in the objective.
+            var header = string.Create(CultureInfo.InvariantCulture, $"{Environment.NewLine}## Policy: {entry.Name}{Environment.NewLine}");
+
+            // The same fair share the upstream artifacts get: everything still to be written splits the room left
+            // equally, so a long first policy cannot crowd out the ones after it and a short one hands its slack on.
+            var share = (policyCeiling - objective.Length) / (applied.Count - index);
+            var budget = share - header.Length - TruncationMarkerReserve;
+            if (budget <= 0)
+            {
+                _logger.LogWarning("Development workflow rule set {RuleSetId} was dropped from node run {NodeRunId}'s objective: the {Limit}-character "
+                                   + "budget was already spent by the node's instructions and the request before its section could be written.",
+                    entry.Id,
+                    nodeRun.Id,
+                    MaxObjectiveCharacters);
+                continue;
+            }
+
+            var body = entry.Body;
+            if (body.Length > budget)
+            {
+                // Truncated rather than dropped, and VISIBLY: an agent handed the first half of a policy has to be able
+                // to tell that the rest exists, or it will act as though the rules it was given were all of them.
+                var cut = CutAt(body, budget);
+                _logger.LogWarning("Development workflow rule set {RuleSetId} was truncated in node run {NodeRunId}'s objective: {Kept} of {Total} characters.",
+                    entry.Id,
+                    nodeRun.Id,
+                    cut,
+                    body.Length);
+                body = string.Create(CultureInfo.InvariantCulture, $"{body[..cut]}{Environment.NewLine}[policy text truncated: {cut} of {body.Length} characters]");
+            }
+
+            // Enforced HERE, on the FINISHED block, exactly as the artifact phase does it: nothing reaches the
+            // objective except through this check, so no marker or rounding can push it past the limit.
+            var policy = header + body + Environment.NewLine;
+            if (objective.Length + policy.Length <= policyCeiling)
+            {
+                _ = objective.Append(policy);
+            }
+            else
+            {
+                _logger.LogWarning("Development workflow rule set {RuleSetId} was dropped from node run {NodeRunId}'s objective: its section did not fit the "
+                                   + "{Limit}-character budget.",
+                    entry.Id,
+                    nodeRun.Id,
+                    MaxObjectiveCharacters);
+            }
+        }
+
+        _ = objective.Append(inputSection);
 
         var upstream = await DevWorkflowUpstreamArtifacts.RecordAsync(store, graph, run, nodeRun, cancellationToken).ConfigureAwait(false);
         var section = $"{Environment.NewLine}## What the steps before you produced{Environment.NewLine}";
@@ -537,13 +619,21 @@ internal sealed class DevWorkflowAgentExecutor
             return content;
         }
 
-        // Never cut BETWEEN a surrogate pair. The budget counts UTF-16 code units, and an astral character — an emoji,
-        // most CJK extensions — is two of them: keeping only the high half leaves an unpaired surrogate that becomes
-        // U+FFFD the moment the objective is persisted as UTF-8, so the agent would be handed a corrupted character
-        // rather than one fewer.
-        var cut = char.IsHighSurrogate(content[budget - 1]) ? budget - 1 : budget;
+        var cut = CutAt(content, budget);
         return $"{content[..cut]}{Environment.NewLine}(Truncated: the first {cut} of {content.Length} characters.)";
     }
+
+    /// <summary>
+    ///     Where to cut <paramref name="text" /> to fit <paramref name="budget" /> UTF-16 code units.
+    ///     <para>
+    ///         Never BETWEEN a surrogate pair. The budget counts code units and an astral character — an emoji, most
+    ///         CJK extensions — is two of them: keeping only the high half leaves an unpaired surrogate that becomes
+    ///         U+FFFD the moment the objective is persisted as UTF-8, so the agent would be handed a corrupted
+    ///         character rather than one fewer.
+    ///     </para>
+    /// </summary>
+    private static int CutAt(string text, int budget) =>
+        char.IsHighSurrogate(text[budget - 1]) ? budget - 1 : budget;
 
     /// <summary>
     ///     The node run's input document as flat name/value lines. Nested and array values are rendered as their raw

@@ -59,12 +59,12 @@ export interface DevWorkflowCanvasNodeData extends Record<string, unknown> {
 	readonly materializationIndex?: number;
 	/**
 	 * How many CHILDREN this materialization produced — the denominator beside `materializationIndex`, which is the
-	 * SERVER's index of the child this card belongs to and is already 1-based (C2). Counted here rather than read off a
-	 * DTO: the runtime has no group-size column, and the answer a card needs is "how many of these am I looking at".
+	 * SERVER's index of the child this card belongs to and is already 1-based (C2). Read off the node-run row (Slice D):
+	 * the runtime computes it per materialization GROUP, which is the number this card is asking for and the number a
+	 * client count could not reach — a template subtree is cloned whole, so counting rows made every denominator N·k,
+	 * and counting distinct indices still could not tell two decompositions of the same template apart.
 	 *
-	 * Counted as DISTINCT indices, not as rows: C2 clones a template SUBTREE whole, so one child of a two-node template
-	 * owns two rows, and counting rows told a decomposition of one that it was "2 of 2". Absent on a definition render,
-	 * where nothing has been materialized.
+	 * Absent on a definition render, where nothing has been materialized.
 	 */
 	readonly materializationCount?: number;
 	readonly hasStaleInputs: boolean;
@@ -113,53 +113,12 @@ export function devWorkflowGraphStructuralKey(run: DevWorkflowRunResponse | unde
 	return `${nodeIds.join(",")}|${edgePairs.join(",")}`;
 }
 
-/**
- * The node keys of every materialization TEMPLATE subtree — the nodes a run deliberately gives no node-run row to until
- * their children are materialized (C2).
- *
- * Mirrors `DevWorkflowGraph.TemplateSubtree` exactly: each declared `materialization.templateNodeKey` plus everything
- * reachable from it WITHOUT passing through that materialization's `joinNodeKey`, because the join is where a template
- * hands its work back to the graph and walking through it would swallow the rest of the run. Derived rather than read
- * off a flag because there is none on the wire — but the whole graph IS, so this is the same walk over the same
- * document rather than a heuristic about which keys happen to have no row.
- *
- * Each materialization gets its own visited set, like the server's, so two templates that overlap still declare their
- * own subtrees in full.
- */
-export function devWorkflowTemplateNodeKeys(graph: DevWorkflowGraph | undefined): ReadonlySet<string> {
-	const edges = graph?.edges ?? [];
-	const templates = new Set<string>();
-	for (const node of graph?.nodes ?? []) {
-		const root = node.materialization?.templateNodeKey;
-		if (!root) {
-			continue;
-		}
-		const join = node.materialization?.joinNodeKey;
-		const subtree = new Set<string>([root]);
-		const pending = [root];
-		while (pending.length > 0) {
-			const from = pending.pop();
-			for (const edge of edges) {
-				const to = edge.to ?? "";
-				if (edge.from !== from || to.length === 0 || to === join || subtree.has(to)) {
-					continue;
-				}
-				subtree.add(to);
-				pending.push(to);
-			}
-		}
-		for (const key of subtree) {
-			templates.add(key);
-		}
-	}
-	return templates;
-}
-
 /** One card's worth of input, from either data source: a node-run row or a definition's graph node. */
 interface DevWorkflowCanvasEntry {
 	readonly id: string;
 	readonly nodeKey: string;
-	readonly materializedFromNodeKey?: string;
+	/** The materialization this clone belongs to: the server's group id, or the template key when it sent none. */
+	readonly materializationGroupKey?: string;
 	readonly materializationIndex?: number;
 	readonly data: DevWorkflowCanvasNodeData;
 }
@@ -172,22 +131,6 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 		return { nodes: [], edges: [], structuralKey, nodeRunCount: nodeRuns.length, isOverCap: true };
 	}
 
-	// One pass for the group sizes, so a card can say "2 of 5" without every card counting the whole node list. The size
-	// is how many CHILDREN the decomposition produced — distinct `materializationIndex` values — and NOT how many rows
-	// carry the origin: a template subtree is cloned whole, so k rows per child made every denominator N·k.
-	const materializationChildren = new Map<string, Set<number>>();
-	for (const node of nodeRuns) {
-		const origin = node.materializedFromNodeKey;
-		if (!origin) {
-			continue;
-		}
-		const children = materializationChildren.get(origin) ?? new Set<number>();
-		if (typeof node.materializationIndex === "number") {
-			children.add(node.materializationIndex);
-		}
-		materializationChildren.set(origin, children);
-	}
-
 	// The node-run row carries no `toolMode` — it is authoring config, and P3 projects it on the GRAPH node only. The
 	// pinned graph travels with the run, so the join is the node key, the same one the edges are drawn through.
 	const applyToolKeys = new Set(
@@ -197,7 +140,7 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 	const entries: DevWorkflowCanvasEntry[] = nodeRuns.map((node) => ({
 		id: node.id ?? "",
 		nodeKey: node.nodeKey ?? "",
-		materializedFromNodeKey: optional(node.materializedFromNodeKey),
+		materializationGroupKey: optional(node.materializationGroupId ?? node.materializedFromNodeKey),
 		materializationIndex: optional(node.materializationIndex),
 		data: {
 			nodeType: toDevWorkflowNodeType(node.nodeType),
@@ -214,9 +157,7 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 			isMaterialized: node.isMaterialized ?? false,
 			materializedFromNodeKey: optional(node.materializedFromNodeKey),
 			materializationIndex: optional(node.materializationIndex),
-			materializationCount: node.materializedFromNodeKey
-				? materializationChildren.get(node.materializedFromNodeKey)?.size
-				: undefined,
+			materializationCount: optional(node.materializationCount),
 			hasStaleInputs: node.hasStaleInputs ?? false,
 			waitingOnNodeKeys: optional(node.waitingOnNodeKeys),
 			developmentProjectId: optional(node.developmentProjectId),
@@ -293,7 +234,7 @@ function buildCanvasGraph(
 		...entries.map((node) => ({
 			id: node.id,
 			nodeKey: node.nodeKey,
-			materializedFromNodeKey: node.materializedFromNodeKey,
+			materializationGroupKey: node.materializationGroupKey,
 			materializationIndex: node.materializationIndex,
 		})),
 		...anchors.map((entry) => ({ id: anchorId(entry.anchor, entry.nodeRunId), nodeKey: entry.nodeKey })),

@@ -33,14 +33,20 @@ internal static class DevWorkflowContractMapper
     public static DevWorkflowGraph ToWireGraph(string graphJson)
     {
         var graph = JsonSerializer.Deserialize<DevWorkflowGraph>(graphJson, GraphOptions) ?? DevWorkflowGraph.Empty;
+
+        // Asked of the runtime's parser, not walked again here: a second implementation of "which nodes are template
+        // clones-in-waiting" is the one thing this class exists to prevent, and the parser answers empty for a graph it
+        // cannot route rather than throwing on the read path.
+        var templates = DevWorkflowGraphContract.TemplateNodeKeys(graphJson);
         return graph with
         {
             SchemaVersion = graph.SchemaVersion == 0 ? 1 : graph.SchemaVersion,
             Nodes =
             [
-                .. (graph.Nodes ?? []).Select(static node => node with
+                .. (graph.Nodes ?? []).Select(node => node with
                 {
-                    Label = string.IsNullOrWhiteSpace(node.Label) ? node.NodeKey : node.Label
+                    Label = string.IsNullOrWhiteSpace(node.Label) ? node.NodeKey : node.Label,
+                    IsTemplate = templates.Contains(node.NodeKey)
                 })
             ],
             Edges = graph.Edges ?? []
@@ -48,9 +54,11 @@ internal static class DevWorkflowContractMapper
     }
 
     /// <summary>
-    ///     The wire graph as the document that gets stored. Only one field is touched on the way in: <c>toolMode</c> is
+    ///     The wire graph as the document that gets stored. Two fields are touched on the way in: <c>toolMode</c> is
     ///     written in the parser's own spelling, so a definition saved as <c>"apply"</c> stores <c>"Apply"</c> and every
-    ///     reader of the blob — including a future one that does not parse case-insensitively — sees one form.
+    ///     reader of the blob — including a future one that does not parse case-insensitively — sees one form; and
+    ///     <c>isTemplate</c> is dropped, because it is DERIVED on the way out and a stored copy of it would be a second
+    ///     answer able to disagree with the parser's.
     /// </summary>
     public static string ToGraphJson(DevWorkflowGraph graph)
     {
@@ -61,7 +69,8 @@ internal static class DevWorkflowContractMapper
             [
                 .. (graph.Nodes ?? []).Select(static node => node with
                 {
-                    ToolMode = DevWorkflowGraphContract.CanonicalToolMode(node.ToolMode)
+                    ToolMode = DevWorkflowGraphContract.CanonicalToolMode(node.ToolMode),
+                    IsTemplate = null
                 })
             ]
         }, GraphOptions);
@@ -122,6 +131,45 @@ internal static class DevWorkflowContractMapper
 
     public static DevWorkflowDefinitionSummaryResponse ToResponse(this DevWorkflowDefinitionSummary value) =>
         new(value.Id, value.Name, value.Source.ToString(), value.SeedSlug, value.Archived, value.Version, value.NodeCount, value.UpdatedAtUtc);
+
+    public static DevWorkflowRuleSetResponse ToResponse(this DevWorkflowRuleSetSnapshot value) =>
+        new(value.Id,
+            value.Name,
+            value.Description,
+            value.Body,
+            ToScope(value.ScopeJson),
+            value.Enabled,
+            value.ContentSha256,
+            value.Version,
+            value.CreatedAtUtc,
+            value.UpdatedAtUtc);
+
+    public static DevWorkflowRuleSetSummaryResponse ToResponse(this DevWorkflowRuleSetSummary value) =>
+        new(value.Id,
+            value.Name,
+            value.Description,
+            ToScope(value.ScopeJson),
+            value.Enabled,
+            value.ContentSha256,
+            value.Version,
+            value.CreatedAtUtc,
+            value.UpdatedAtUtc);
+
+    /// <summary>
+    ///     The scope as the resolver stores it. An omitted scope is BOTH axes empty, which is the document's own
+    ///     spelling of "applies everywhere" — so the column always holds a scope the resolver can read.
+    /// </summary>
+    public static string ToScopeJson(DevWorkflowRuleScope? scope) =>
+        JsonSerializer.Serialize(new DevWorkflowRuleScope(scope?.ProjectIds ?? [], scope?.NodeTypes ?? []), GraphOptions);
+
+    /// <summary>
+    ///     The stored scope as the wire shape, read through the runtime's own parser so the page renders exactly the
+    ///     axes the resolver matches on. A column nothing can parse renders as empty axes rather than failing the read:
+    ///     the resolver already treats that row as applying to NOTHING, and a management page that cannot load it is a
+    ///     page nobody can use to fix it.
+    /// </summary>
+    private static DevWorkflowRuleScope ToScope(string scopeJson) =>
+        DevWorkflowRulePolicyResolver.ReadScope(scopeJson) is { } scope ? new DevWorkflowRuleScope(scope.ProjectIds, scope.NodeTypes) : new DevWorkflowRuleScope([], []);
 
     public static DevWorkflowRunEventResponse ToResponse(this DevWorkflowRunEventSnapshot value) =>
         new(value.Id, value.Sequence, value.EventType, value.NodeRunId, value.Outcome, value.DetailJson, value.OperationId, value.OccurredAtUtc);

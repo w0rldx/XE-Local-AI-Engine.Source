@@ -193,6 +193,9 @@ public sealed partial class LlamaCppBinaryManager
 
             if (_installedRuntimeStore is not null)
             {
+                // Same cross-process lock RecordResolvedRuntimeAsync holds across its read-then-write. Without it this
+                // write can land inside that window in another node and be overwritten by its prebuilt record.
+                using var recordLock = await _installedRuntimeStore.AcquireAsync(ct).ConfigureAwait(false);
                 await _installedRuntimeStore.WriteAsync(state, ct).ConfigureAwait(false);
             }
 

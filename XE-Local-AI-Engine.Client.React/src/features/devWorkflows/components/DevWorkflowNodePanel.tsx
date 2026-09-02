@@ -25,6 +25,7 @@ import {
 	type DevWorkflowNodeRunDetailResponse,
 	type DevWorkflowRunEventResponse,
 	type DevWorkflowRunResponse,
+	devWorkflowAttemptCounts,
 	isSettledDevWorkflowNodeStatus,
 	toDevWorkflowNodeStatus,
 	toDevWorkflowNodeType,
@@ -111,10 +112,11 @@ export function DevWorkflowNodePanel({
 							{t(`pages.devWorkflows.nodeType.${nodeType}`, nodeType)}
 						</Badge>
 						<Text size="xs" c="dimmed">
-							{t("pages.devWorkflows.nodes.attempt", "attempt {{attempt}} of {{maxAttempts}}", {
-								attempt: nodeRun.attempt ?? 1,
-								maxAttempts: nodeRun.maxAttempts ?? 1,
-							})}
+							{t(
+								"pages.devWorkflows.nodes.attempt",
+								"attempt {{attempt}} of {{maxAttempts}}",
+								devWorkflowAttemptCounts(nodeRun.attempt, nodeRun.maxAttempts),
+							)}
 						</Text>
 						{/* Two different facts, deliberately side by side. A node that survived an engine restart is the whole
 						    point of this module, and `sessionResumes` is NOT that number — it counts the session being
@@ -189,6 +191,8 @@ export function DevWorkflowNodePanel({
 					<DevWorkflowStructuralNodePanel nodeRun={nodeRun} nodeType={nodeType} run={run} />
 				) : null}
 
+				<AppliedRuleSetsSection nodeRun={nodeRun} />
+
 				<ObjectiveSection nodeRun={nodeRun} />
 			</Stack>
 		</ScrollArea>
@@ -252,6 +256,50 @@ function CascadeRerunNotice({
 				{ node: failedLabel },
 			)}
 		</Alert>
+	);
+}
+
+/**
+ * The policy that was baked into this node run's objective (D/Y2), read off the persisted resolution rather than
+ * re-resolved: a rule set edited or deleted after materialization must not change what this run was told to do.
+ *
+ * That is exactly what the two hashes say. `contentSha256` is the body the run used; `currentContentSha256` is the
+ * body the rule set has NOW — different means the stored rule has moved on since, `null` means it is gone. The short
+ * hash is shown rather than the body itself: the body is up to 4096 characters of policy prose and belongs on the
+ * rule-set page, while the question here is only "which rules, in which revision".
+ */
+function AppliedRuleSetsSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDetailResponse }) {
+	const { t } = useTranslation();
+	const ruleSets = nodeRun.appliedRuleSets ?? [];
+	if (ruleSets.length === 0) {
+		return null;
+	}
+	return (
+		<SectionCard
+			title={t("pages.devWorkflows.ruleSets.applied", "Applied rule sets")}
+			gap="xs"
+			data-testid="dev-workflow-node-rule-sets"
+		>
+			{ruleSets.map((ruleSet) => (
+				<Group key={ruleSet.id} gap="xs" wrap="nowrap" data-testid={`dev-workflow-node-rule-set-${ruleSet.id}`}>
+					<Text size="sm" style={{ flex: 1, minWidth: 0 }} lineClamp={1}>
+						{ruleSet.name}
+					</Text>
+					<Code>{(ruleSet.contentSha256 ?? "").slice(0, 8)}</Code>
+					{/* `null` is the server saying the rule set has been deleted since. An ABSENT field is not that — it is
+					    a payload that never carried the comparison — so it earns no badge rather than a wrong one. */}
+					{ruleSet.currentContentSha256 === null ? (
+						<Badge size="xs" variant="light" color="gray" data-testid={`dev-workflow-node-rule-set-deleted-${ruleSet.id}`}>
+							{t("pages.devWorkflows.ruleSets.deletedSince", "deleted")}
+						</Badge>
+					) : ruleSet.currentContentSha256 && ruleSet.currentContentSha256 !== ruleSet.contentSha256 ? (
+						<Badge size="xs" variant="light" color="orange" data-testid={`dev-workflow-node-rule-set-edited-${ruleSet.id}`}>
+							{t("pages.devWorkflows.ruleSets.editedSince", "edited since")}
+						</Badge>
+					) : null}
+				</Group>
+			))}
+		</SectionCard>
 	);
 }
 

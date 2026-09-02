@@ -162,7 +162,15 @@ public sealed record DevelopmentEventSnapshot(
     long OccurredAtUtc,
     Guid? OperationId,
     string? OperationPhase,
-    string? Outcome);
+    string? Outcome,
+
+    /// <summary>
+    ///     The sentence the event was written with, when it carries one — why a task was blocked, why validation
+    ///     failed, why a workflow's fix loop sent an approved task back. The only member of the detail document that
+    ///     leaves this store: it is authored or sanitized and bounded at every write site, which the rest of the
+    ///     document is not.
+    /// </summary>
+    string? Reason = null);
 
 public sealed record DevelopmentExecutionSnapshot(
     Guid ProjectId,
@@ -188,7 +196,14 @@ public sealed record DevelopmentExecutionSnapshot(
     string ModelId,
     string Provider,
     long AttemptVersion,
-    string? CommandProfileJson);
+    string? CommandProfileJson,
+
+    /// <summary>
+    ///     What the last request for changes on this task said, or nothing when it has never been asked for rework.
+    ///     Resolved from the task's own event log rather than from a column, so it costs no migration and reads the same
+    ///     sentence a reviewer wrote and a workflow's fix loop wrote.
+    /// </summary>
+    string? PreviousRoundFeedback = null);
 
 public sealed record DevelopmentProjectSnapshot(
     Guid Id,

@@ -311,9 +311,20 @@ public sealed partial class DevelopmentStore
                 task.BlockedReason = command.TargetStatus == DevelopmentTaskStatus.Blocked ? command.Reason : null;
                 task.BlockedAtUtc = command.TargetStatus == DevelopmentTaskStatus.Blocked ? now : null;
                 task.ApprovedSubjectHash = command.ApprovedSubjectHash ?? task.ApprovedSubjectHash;
-                if (command.TargetStatus == DevelopmentTaskStatus.InProgress)
+
+                // A task asked for rework is not an approved one, so it stops carrying the approved subject the moment
+                // it is asked rather than when the next coder attempt starts. Defence in depth: the apply port already
+                // refuses anything that is not AwaitingApply before it reads this (DevelopmentApplyService), so the
+                // stale hash is inert either way — it is simply state that has stopped being true.
+                if (command.TargetStatus is DevelopmentTaskStatus.InProgress or DevelopmentTaskStatus.ChangesRequested)
                 {
                     task.ApprovedSubjectHash = null;
+                }
+
+                // The evidence invalidation stays on InProgress alone: it is the hop the NEXT coder attempt makes, so
+                // the stale validation and review reports are marked before anything can read them as current.
+                if (command.TargetStatus == DevelopmentTaskStatus.InProgress)
+                {
                     await _dbContext.DevelopmentArtifacts
                                     .Where(entity => entity.TaskId == task.Id
                                                      && entity.IsValid
@@ -345,10 +356,7 @@ public sealed partial class DevelopmentStore
                     artifactId: null,
                     detailJson: command.Reason is null
                         ? null
-                        : Utf8(JsonSerializer.Serialize(new
-                        {
-                            reason = command.Reason
-                        })),
+                        : Utf8(JsonSerializer.Serialize(new { reason = command.Reason }, JsonOptions)),
                     cancellationToken).ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);

@@ -383,6 +383,41 @@ describe("DevelopmentPage", () => {
 		expect(screen.getByText("Not tied to a task")).toBeDefined();
 	});
 
+	it("says WHY a task was sent back, keeping the sentence's own line breaks and rendering it as plain text", async () => {
+		// The feed showed THAT a task went back to ChangesRequested and never why, which is the one thing an operator
+		// opens it for. The reason is model-written prose the server sanitized and capped, so it is rendered verbatim.
+		const base = decomposedDetail("Operator request", "Slice one");
+		hooksMock.useDevelopmentProject.mockReturnValue({
+			data: {
+				...base,
+				events: [
+					{
+						id: "e1",
+						projectId: "project-1",
+						taskId: "task-1",
+						sequence: 1,
+						eventType: "TaskTransitioned",
+						outcome: "ChangesRequested",
+						reason: "- build: two tests fail\n- style: <br> is not a component",
+					},
+					{ id: "e2", projectId: "project-1", taskId: "task-1", sequence: 2, eventType: "OwnPlanned" },
+				],
+			},
+			isLoading: false,
+			error: null,
+			refetch: vi.fn(),
+		});
+		renderPage();
+		await screen.findByTestId("development-project-detail");
+
+		const reason = screen.getByTestId("development-event-reason-e1");
+		expect(reason.textContent).toBe("Sent back: - build: two tests fail\n- style: <br> is not a component");
+		// Plain text, so the markup in the sentence is content rather than a tag the page rendered.
+		expect(reason.querySelector("br")).toBeNull();
+		// An event with no reason gains no empty line.
+		expect(screen.queryByTestId("development-event-reason-e2")).toBeNull();
+	});
+
 	it("switches the events with the selected task", async () => {
 		// Driven through the controller rather than the Select, because the switcher's dropdown is a portalled Mantine
 		// Combobox that does not open under jsdom. The state it sets is this one.

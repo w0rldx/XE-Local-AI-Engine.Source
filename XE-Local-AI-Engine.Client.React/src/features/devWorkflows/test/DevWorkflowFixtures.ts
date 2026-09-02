@@ -9,6 +9,8 @@ import type {
 	DevWorkflowArtifactResponse as ArtifactResponse,
 	DevWorkflowNodeRunDetailResponse as NodeRunDetailResponse,
 	DevWorkflowNodeRunSummaryResponse as NodeRunSummaryResponse,
+	DevWorkflowRuleSetResponse as RuleSetResponse,
+	DevWorkflowRuleSetSummaryResponse as RuleSetSummaryResponse,
 	DevWorkflowRunEventResponse as RunEventResponse,
 	DevWorkflowRunResponse as RunResponse,
 	DevWorkflowRunSummaryResponse as RunSummaryResponse,
@@ -22,6 +24,7 @@ export const devWorkflowTestIds = {
 	definition: "33333333-3333-4333-8333-333333333333",
 	nodeRun: "44444444-4444-4444-8444-444444444444",
 	artifact: "55555555-5555-4555-8555-555555555555",
+	ruleSet: "99999999-9999-4999-8999-999999999999",
 } as const;
 
 export function devWorkflowWorkItemSummary(overrides: Partial<WorkItemSummaryResponse> = {}): WorkItemSummaryResponse {
@@ -95,6 +98,8 @@ export function devWorkflowNodeRunSummary(overrides: Partial<NodeRunSummaryRespo
 		isMaterialized: false,
 		materializedFromNodeKey: null,
 		materializationIndex: null,
+		materializationGroupId: null,
+		materializationCount: null,
 		developmentProjectId: null,
 		developmentTaskId: null,
 		agentDefinitionId: null,
@@ -191,6 +196,30 @@ export function devWorkflowArtifact(overrides: Partial<ArtifactResponse> = {}): 
 		staleReason: null,
 		isLatest: true,
 		createdAtUtc: 1_700_000_050_000,
+		...overrides,
+	};
+}
+
+/** The catalogue row: everything but the body, which only the single-rule-set read carries. */
+export function devWorkflowRuleSetSummary(overrides: Partial<RuleSetSummaryResponse> = {}): RuleSetSummaryResponse {
+	return {
+		id: devWorkflowTestIds.ruleSet,
+		name: "House style",
+		description: "How this repository wants its patches written.",
+		scope: { projectIds: [], nodeTypes: [] },
+		enabled: true,
+		contentSha256: "a".repeat(64),
+		version: 1,
+		createdAtUtc: 1_700_000_000_000,
+		updatedAtUtc: 1_700_000_100_000,
+		...overrides,
+	};
+}
+
+export function devWorkflowRuleSet(overrides: Partial<RuleSetResponse> = {}): RuleSetResponse {
+	return {
+		...devWorkflowRuleSetSummary(),
+		body: "# House style\n\nSmall diffs. No new dependencies.",
 		...overrides,
 	};
 }

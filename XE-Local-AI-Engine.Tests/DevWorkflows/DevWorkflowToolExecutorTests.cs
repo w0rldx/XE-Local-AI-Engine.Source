@@ -33,6 +33,37 @@ public sealed class DevWorkflowToolExecutorTests
                                                  """;
 
     /// <summary>
+    ///     A cancelling drain asks a held pass to stop ONCE. The registry keeps the entry until a poll sees the pass
+    ///     land, so the drain reaches the ask on every tick until then — and a yes is counted as a written transition,
+    ///     which makes the dispatcher re-signal itself and tick again immediately. Answering yes each time therefore
+    ///     spun the drain for the whole length of the build, which is what made cancel tests race under load.
+    /// </summary>
+    [Test]
+    public async Task ACancellingDrainAsksAHeldPassToStopOnceRatherThanEveryTick()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var held = harness.Tools.Hold("validate");
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await held.Started.ConfigureAwait(false);
+        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Id;
+
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling).ConfigureAwait(false);
+        AssertEx.True(await harness.AdvanceAsync(runId).ConfigureAwait(false) > 0, "the first drain tick asks the pass to stop, and that is a transition.");
+
+        // What the NEXT tick's drain finds. Race-free by construction: the entry is removed only by a poll, and this
+        // test owns every tick — so this is the same question the drain asks, asked without one.
+        AssertEx.False(await harness.ToolLane.StopAsync(nodeRunId).ConfigureAwait(false),
+            "a pass that has already been asked has nothing left to ask of it, so the drain writes nothing and the dispatcher stops re-signalling.");
+
+        held.Release();
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status, "and the run still settles once the pass lands.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Cancelled, (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
     ///     The lane hands out no more slots than it has, and the node run that missed one says WHY it is waiting rather
     ///     than sitting in an unexplained queue.
     /// </summary>

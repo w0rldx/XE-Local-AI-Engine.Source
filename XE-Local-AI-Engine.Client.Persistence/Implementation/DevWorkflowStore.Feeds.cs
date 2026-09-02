@@ -44,6 +44,32 @@ internal sealed partial class DevWorkflowStore
                         .FirstOrDefaultAsync(cancellationToken)
                         .ConfigureAwait(false);
 
+    /// <summary>
+    ///     The batch form, and the same "latest wins" rule: one query returns every (task, run) pointer for the ids
+    ///     asked about, and the pick is made over the ordered rows in memory — the projection is two columns per node
+    ///     run, so what comes back is small even for a project with a long attempt history.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<Guid, Guid>> FindRunIdsForDevelopmentTasksAsync(IReadOnlyList<Guid> developmentTaskIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(developmentTaskIds);
+        if (developmentTaskIds.Count == 0)
+        {
+            return new Dictionary<Guid, Guid>();
+        }
+
+        var rows = await _dbContext.DevWorkflowNodeRuns.AsNoTracking()
+                                   .Where(entity => entity.DevelopmentTaskId != null && developmentTaskIds.Contains(entity.DevelopmentTaskId.Value))
+                                   .OrderByDescending(entity => entity.CreatedAtUtc)
+                                   .ThenByDescending(entity => entity.Id)
+                                   .Select(entity => new DevelopmentTaskRunRow(entity.DevelopmentTaskId!.Value, entity.RunId))
+                                   .ToListAsync(cancellationToken)
+                                   .ConfigureAwait(false);
+
+        return rows.GroupBy(static row => row.DevelopmentTaskId)
+                   .ToDictionary(static group => group.Key, static group => group.First().RunId);
+    }
+
     public async Task<DevWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid nodeRunId, CancellationToken cancellationToken = default)
     {
         var nodeRun = await _dbContext.DevWorkflowNodeRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == nodeRunId, cancellationToken).ConfigureAwait(false)
@@ -244,4 +270,6 @@ internal sealed partial class DevWorkflowStore
             decision.OperationId,
             decision.Sequence,
             decision.DecidedAtUtc);
+
+    private sealed record DevelopmentTaskRunRow(Guid DevelopmentTaskId, Guid RunId);
 }

@@ -1,5 +1,5 @@
-import { Anchor, Badge, Button, Code, Collapse, Group, Paper, Stack, Text } from "@mantine/core";
-import { useState } from "react";
+import { Alert, Anchor, Badge, Button, Code, Collapse, Group, Paper, Stack, Text } from "@mantine/core";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
@@ -15,6 +15,11 @@ export interface DevWorkflowEventsTabProps {
 	readonly isLoadingMore: boolean;
 	/** Which end the feed is anchored on (R-C4). Decides which direction "load more" walks, and what it is called. */
 	readonly anchor: DevWorkflowEventsAnchor;
+	/**
+	 * The cursor the newest-first feed is currently opened on. It moves once per 200 sequences on a live run, and when
+	 * it does the query re-keys and the older pages the operator had loaded are gone — see `devWorkflowEventsAnchorParam`.
+	 */
+	readonly anchorParam: number;
 	readonly onAnchorChange: (anchor: DevWorkflowEventsAnchor) => void;
 	readonly onLoadMore: () => void;
 	readonly onSelectNode: (nodeRunId: string) => void;
@@ -26,12 +31,46 @@ export function DevWorkflowEventsTab({
 	hasMore,
 	isLoadingMore,
 	anchor,
+	anchorParam,
 	onAnchorChange,
 	onLoadMore,
 	onSelectNode,
 }: DevWorkflowEventsTabProps) {
 	const { t } = useTranslation();
 	const [expandedId, setExpandedId] = useState<string | undefined>(undefined);
+	// The re-anchor notice. Derived from a prop during render (React's own "adjust state when a prop changes" pattern)
+	// rather than in an effect, so the notice and the rows it explains paint together.
+	//
+	// Only a FORWARD move from an already-established anchor counts. The first move is from 0, which is the run payload
+	// simply arriving with a `lastSequence` the feed had not seen yet, and a move to 0 is the operator jumping to the
+	// oldest end, which is their own act and needs no explanation.
+	//
+	// And only when the operator had actually PAGED BACK. The anchored page is refetched either way, so a re-anchor
+	// with nothing older loaded discards no history — announcing it would train the operator to ignore the notice for
+	// the case where a log they had walked through really did vanish.
+	const previousAnchorParam = useRef(anchorParam);
+	const olderPagesLoaded = useRef(0);
+	const [wasReanchored, setWasReanchored] = useState(false);
+	if (previousAnchorParam.current !== anchorParam) {
+		const grew = previousAnchorParam.current > 0 && anchorParam > previousAnchorParam.current;
+		previousAnchorParam.current = anchorParam;
+		setWasReanchored(grew && anchor === "newest" && olderPagesLoaded.current > 0);
+		olderPagesLoaded.current = 0;
+	}
+
+	/**
+	 * Both anchor buttons and "load older" clear the notice; only the latter says older pages are loaded again.
+	 *
+	 * The state is dispatched only when the notice is actually up. A no-op `false` from a click is eagerly bailed out
+	 * of but stays QUEUED, and React then replays it after the render-phase update above — which put the notice back
+	 * down in the same commit that raised it.
+	 */
+	const resetNotice = (loadedOlder: boolean): void => {
+		olderPagesLoaded.current = loadedOlder ? olderPagesLoaded.current + 1 : 0;
+		if (wasReanchored) {
+			setWasReanchored(false);
+		}
+	};
 
 	// Sequences are strictly increasing but NOT contiguous — the run's counter is shared with node-runs and artifacts,
 	// so a gap between two event numbers is normal and must never be read as a lost event.
@@ -50,7 +89,10 @@ export function DevWorkflowEventsTab({
 				<Button
 					size="compact-xs"
 					variant={anchor === "newest" ? "light" : "subtle"}
-					onClick={() => onAnchorChange("newest")}
+					onClick={() => {
+						resetNotice(false);
+						onAnchorChange("newest");
+					}}
 					data-testid="dev-workflow-events-jump-newest"
 				>
 					{t("pages.devWorkflows.events.jumpNewest", "Newest")}
@@ -58,12 +100,23 @@ export function DevWorkflowEventsTab({
 				<Button
 					size="compact-xs"
 					variant={anchor === "oldest" ? "light" : "subtle"}
-					onClick={() => onAnchorChange("oldest")}
+					onClick={() => {
+						resetNotice(false);
+						onAnchorChange("oldest");
+					}}
 					data-testid="dev-workflow-events-jump-oldest"
 				>
 					{t("pages.devWorkflows.events.jumpOldest", "Oldest")}
 				</Button>
 			</Group>
+			{wasReanchored ? (
+				<Alert color="blue" variant="light" data-testid="dev-workflow-events-reanchored">
+					{t(
+						"pages.devWorkflows.events.reanchored",
+						"History reloaded from the newest events; load older to see the earlier ones again.",
+					)}
+				</Alert>
+			) : null}
 			{ordered.length === 0 ? (
 				<EmptyState
 					message={
@@ -142,7 +195,10 @@ export function DevWorkflowEventsTab({
 					size="xs"
 					variant="light"
 					loading={isLoadingMore}
-					onClick={onLoadMore}
+					onClick={() => {
+						resetNotice(true);
+						onLoadMore();
+					}}
 					data-testid="dev-workflow-events-load-more"
 				>
 					{anchor === "newest"

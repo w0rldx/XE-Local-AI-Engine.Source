@@ -184,13 +184,17 @@ public sealed class DevWorkflowStateMachineTests
     {
         AssertEx.Equal(DevWorkflowRunStatus.Completed, Recompute(DevWorkflowRunStatus.Running, DevWorkflowNodeRunStatus.Succeeded));
 
-        AssertEx.Equal(DevWorkflowRunStatus.Completed,
+        // RE-PINNED, ruling 1 (Slice D): over the helper's chain the LAST row is the graph's terminal node, so this is
+        // a run whose end was cancelled after its first node succeeded — an abandoned tail, not a completion.
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled,
             Recompute(DevWorkflowRunStatus.Running, DevWorkflowNodeRunStatus.Succeeded, DevWorkflowNodeRunStatus.Skipped, DevWorkflowNodeRunStatus.Cancelled),
-            "skipped and cancelled node runs are terminal and do not block completion.");
+            "skipped and cancelled node runs do not block completion, but neither do they reach an end.");
 
-        AssertEx.Equal(DevWorkflowRunStatus.Completed,
+        // RE-PINNED, ruling 1 (Slice D): every branch condition being false is still a real outcome, and it is not
+        // success — no terminal node succeeded, so the run reads Cancelled rather than Completed.
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled,
             Recompute(DevWorkflowRunStatus.Running, DevWorkflowNodeRunStatus.Skipped, DevWorkflowNodeRunStatus.Skipped),
-            "a run whose every branch condition was false is a real outcome, and the event log says which.");
+            "a run that skipped its way to the end never got there.");
 
         AssertEx.Equal(DevWorkflowRunStatus.Failed,
             Recompute(DevWorkflowRunStatus.Running, DevWorkflowNodeRunStatus.Succeeded, DevWorkflowNodeRunStatus.Failed));
@@ -198,6 +202,131 @@ public sealed class DevWorkflowStateMachineTests
         AssertEx.Equal(DevWorkflowRunStatus.Running,
             Recompute(DevWorkflowRunStatus.Running, DevWorkflowNodeRunStatus.Failed, DevWorkflowNodeRunStatus.Running),
             "a failure with a live sibling does not end the run — the sibling still has to settle.");
+    }
+
+    /// <summary>
+    ///     Ruling 1 (Slice D): a run whose every node run is terminal with no terminal-node success and nothing failed
+    ///     ends <c>Cancelled</c>, and says which ends it never reached. The reason is the whole point — an abandoned
+    ///     tail has no failing node run to read a cause off, because nothing failed.
+    /// </summary>
+    [Test]
+    public void Recompute_WithEveryNodeSkipped_IsCancelledAndNamesTheEndItNeverReached()
+    {
+        var outcome = DevWorkflowStateMachine.Recompute(DevWorkflowRunStatus.Running,
+            Chain(3),
+            [
+                NodeRun("node-0", DevWorkflowNodeRunStatus.Skipped),
+                NodeRun("node-1", DevWorkflowNodeRunStatus.Skipped),
+                NodeRun("node-2", DevWorkflowNodeRunStatus.Skipped)
+            ]);
+
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, outcome.Status);
+        AssertEx.Equal("No terminal node succeeded: 'node-2' was Skipped.", AssertEx.NotNull(outcome.TerminalReason));
+        AssertEx.Null(outcome.FailureClass, "an operator Skip is a human decision, not a failure with a class.");
+    }
+
+    /// <summary>
+    ///     The other shape ruling 1 names, and the one X10's drain does NOT cover: the rejection HAD an out-edge that
+    ///     accepted it, took it, and the automatic gate below then matched none of its own branches — so everything
+    ///     past it skipped and no end was reached. Nothing failed, so the gate's own answer is the only account of it,
+    ///     which is why this one carries <c>GateRejected</c> where an operator Skip carries nothing.
+    /// </summary>
+    [Test]
+    [Arguments(DevWorkflowDecisionKind.Reject)]
+    [Arguments(DevWorkflowDecisionKind.RequestChanges)]
+    public void Recompute_WhenARefusalRoutesIntoASkippedTail_IsCancelledAsGateRejected(DevWorkflowDecisionKind decision)
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.GateOnADecision);
+        var outcome = DevWorkflowStateMachine.Recompute(DevWorkflowRunStatus.WaitingForApproval,
+            graph,
+            [
+                NodeRun("approve", DevWorkflowNodeRunStatus.Succeeded, DevWorkflowStateMachine.GateOutputJson(decision), DevWorkflowNodeType.HumanGate),
+                NodeRun("choose", DevWorkflowNodeRunStatus.Succeeded),
+                NodeRun("ship", DevWorkflowNodeRunStatus.Skipped),
+                NodeRun("revise", DevWorkflowNodeRunStatus.Skipped)
+            ]);
+
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, outcome.Status);
+        AssertEx.Equal("GateRejected", AssertEx.NotNull(outcome.FailureClass));
+
+        // The answer's own word, so a reader is never sent looking for a decision row that says something else.
+        AssertEx.Equal($"No terminal node succeeded: 'ship' was Skipped, 'revise' was Skipped, after the gate 'approve' answered {decision}.",
+            AssertEx.NotNull(outcome.TerminalReason));
+    }
+
+    /// <summary>
+    ///     A node key is not charset-restricted, so an astral character can straddle the column's bound. Half a
+    ///     surrogate pair is a broken string wherever it lands — both parities are pinned, because which side of the
+    ///     cut the pair falls on depends on how long the rest of the sentence happens to be.
+    /// </summary>
+    [Test]
+    [Arguments("")]
+    [Arguments("x")]
+    public void Recompute_WithAReasonPastTheColumnsBound_CutsBetweenRunesRatherThanInsideOne(string prefix)
+    {
+        var nodeKey = prefix + string.Concat(Enumerable.Repeat("\U0001F600", 400));
+        var graph = DevWorkflowGraph.Parse($$"""{ "schemaVersion": 1, "nodes": [{ "nodeKey": {{System.Text.Json.JsonSerializer.Serialize(nodeKey)}}, "nodeType": "Agent" }], "edges": [] }""");
+
+        var reason = AssertEx.NotNull(DevWorkflowStateMachine.Recompute(DevWorkflowRunStatus.Running, graph, [NodeRun(nodeKey, DevWorkflowNodeRunStatus.Skipped)]).TerminalReason);
+
+        AssertEx.True(reason.Length <= 512, $"the run's terminal_reason column holds 512, and this is {reason.Length}.");
+        AssertEx.False(char.IsHighSurrogate(reason[^1]), "a cut inside a surrogate pair writes an unpaired half into the column.");
+    }
+
+    /// <summary>
+    ///     The C1 semantic, unchanged by ruling 1 and the reason the rule is about TERMINAL nodes rather than about
+    ///     skips: the dead branch skipped, the survivor carried the <c>Any</c> join, and the join is the graph's end.
+    /// </summary>
+    [Test]
+    public void Recompute_WhenASurvivingBranchCarriesAnAnyJoinToTheEnd_IsCompleted()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.AnyJoinOverADeadBranch);
+        var outcome = DevWorkflowStateMachine.Recompute(DevWorkflowRunStatus.Running,
+            graph,
+            [
+                NodeRun("anysplit", DevWorkflowNodeRunStatus.Succeeded),
+                NodeRun("anysurvivor", DevWorkflowNodeRunStatus.Succeeded),
+                NodeRun("anydoomed", DevWorkflowNodeRunStatus.Skipped),
+                NodeRun("anymerge", DevWorkflowNodeRunStatus.Succeeded)
+            ]);
+
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, outcome.Status);
+        AssertEx.Null(outcome.TerminalReason, "a run that reached its end has nothing to explain.");
+    }
+
+    /// <summary>
+    ///     A skipped branch is not an end that failed to arrive, so long as SOME end did: the approve branch shipped,
+    ///     the revise branch was skipped, and the join both feed reads Completed exactly as it did before ruling 1.
+    /// </summary>
+    [Test]
+    public void Recompute_WithATerminalNodeSucceededBesideSkippedSiblings_IsCompleted()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.ApprovalBranches);
+        var outcome = DevWorkflowStateMachine.Recompute(DevWorkflowRunStatus.Running,
+            graph,
+            [
+                NodeRun("approve", DevWorkflowNodeRunStatus.Succeeded, DevWorkflowStateMachine.GateOutputJson(DevWorkflowDecisionKind.Approve), DevWorkflowNodeType.HumanGate),
+                NodeRun("ship", DevWorkflowNodeRunStatus.Succeeded),
+                NodeRun("revise", DevWorkflowNodeRunStatus.Skipped),
+                NodeRun("done", DevWorkflowNodeRunStatus.Succeeded)
+            ]);
+
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, outcome.Status);
+    }
+
+    /// <summary>
+    ///     <c>Failed</c> precedence is unchanged by ruling 1, and deliberately outranks the new answer: a run with a
+    ///     failed node has a cause worth reporting, and calling that "cancelled" would bury it.
+    /// </summary>
+    [Test]
+    public void Recompute_WithAFailedNodeAndNoTerminalSuccess_IsStillFailed()
+    {
+        var outcome = DevWorkflowStateMachine.Recompute(DevWorkflowRunStatus.Running,
+            Chain(2),
+            [NodeRun("node-0", DevWorkflowNodeRunStatus.Failed), NodeRun("node-1", DevWorkflowNodeRunStatus.Skipped)]);
+
+        AssertEx.Equal(DevWorkflowRunStatus.Failed, outcome.Status);
+        AssertEx.Null(outcome.FailureClass, "the failing node run already carries the class that explains it.");
     }
 
     [Test]
@@ -217,7 +346,7 @@ public sealed class DevWorkflowStateMachineTests
         }
 
         AssertEx.Equal(DevWorkflowRunStatus.Pending,
-            DevWorkflowStateMachine.Recompute(DevWorkflowRunStatus.Pending, []),
+            DevWorkflowStateMachine.Recompute(DevWorkflowRunStatus.Pending, Chain(1), []).Status,
             "a run with no node runs has not been materialized yet; it is not complete.");
     }
 
@@ -247,7 +376,9 @@ public sealed class DevWorkflowStateMachineTests
             NodeRun("stuck", DevWorkflowNodeRunStatus.Blocked)
         ];
 
-        AssertEx.Equal(DevWorkflowRunStatus.Running, DevWorkflowStateMachine.Recompute(DevWorkflowRunStatus.Running, mixed), "the sibling is still the dispatcher's work.");
+        AssertEx.Equal(DevWorkflowRunStatus.Running,
+            DevWorkflowStateMachine.Recompute(DevWorkflowRunStatus.Running, Chain(2), mixed).Status,
+            "the sibling is still the dispatcher's work.");
         AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked, DevWorkflowStateMachine.WorkItemStatusFor(DevWorkflowRunStatus.Running, mixed));
 
         // And a terminal run still maps from its own status: a completed run is done whatever its rows once said.
@@ -255,18 +386,34 @@ public sealed class DevWorkflowStateMachineTests
     }
 
     /// <summary>
-    ///     The one edge that must never exist. A terminal written without draining strands the run's live node runs
-    ///     under a run nothing advances again, and their executors' slots leak for the process lifetime.
+    ///     Which statuses may write <c>Cancelled</c> at all. A terminal written over LIVE node runs strands them under
+    ///     a run nothing advances again, and their executors' slots leak for the process lifetime — so a run with work
+    ///     still in flight reaches the terminal only through the drain.
+    ///     <para>
+    ///         RE-PINNED, ruling 1 (Slice D): <c>Running</c> and <c>WaitingForApproval</c> gained the direct edge,
+    ///         because the recomputation that writes it is reachable only once every node run is already terminal.
+    ///         There is nothing left to strand there, and draining would cost a whole tick to settle what is known.
+    ///     </para>
     /// </summary>
     [Test]
-    public void IsLegal_ForARun_ReachesCancelledOnlyThroughCancelling()
+    public void IsLegal_ForARun_ReachesCancelledOnlyFromAQuiescentRunOrTheDrain()
     {
-        foreach (var from in Enum.GetValues<DevWorkflowRunStatus>().Where(static status => status != DevWorkflowRunStatus.Cancelling))
+        DevWorkflowRunStatus[] allowed =
+        [
+            DevWorkflowRunStatus.Cancelling,
+            DevWorkflowRunStatus.Running,
+            DevWorkflowRunStatus.WaitingForApproval
+        ];
+
+        foreach (var from in Enum.GetValues<DevWorkflowRunStatus>().Where(status => !allowed.Contains(status)))
         {
             AssertEx.False(DevWorkflowStateMachine.IsLegal(from, DevWorkflowRunStatus.Cancelled), $"{from} → Cancelled must go through Cancelling.");
         }
 
-        AssertEx.True(DevWorkflowStateMachine.IsLegal(DevWorkflowRunStatus.Cancelling, DevWorkflowRunStatus.Cancelled));
+        foreach (var from in allowed)
+        {
+            AssertEx.True(DevWorkflowStateMachine.IsLegal(from, DevWorkflowRunStatus.Cancelled), $"{from} → Cancelled");
+        }
     }
 
     [Test]
@@ -371,17 +518,32 @@ public sealed class DevWorkflowStateMachineTests
             "Node run 'plan' is Pending");
     }
 
+    /// <summary>
+    ///     One recomputation over a chain <c>node-0 -> node-1 -> ...</c> as long as the statuses named, so the LAST of
+    ///     them is the graph's one terminal node. Ruling 1 (Slice D) reads completion off a terminal node, so a graph
+    ///     is no longer optional here: a helper that invented anonymous rows with no edges cannot ask the question.
+    /// </summary>
     private static DevWorkflowRunStatus Recompute(DevWorkflowRunStatus current, params DevWorkflowNodeRunStatus[] nodeRuns) =>
-        DevWorkflowStateMachine.Recompute(current, [.. nodeRuns.Select((status, index) => NodeRun($"node-{index}", status))]);
+        DevWorkflowStateMachine.Recompute(current, Chain(nodeRuns.Length), [.. nodeRuns.Select((status, index) => NodeRun($"node-{index}", status))]).Status;
+
+    private static DevWorkflowGraph Chain(int length)
+    {
+        var nodes = string.Join(", ", Enumerable.Range(0, length).Select(static index => $$"""{ "nodeKey": "node-{{index}}", "nodeType": "Agent" }"""));
+        var edges = string.Join(", ", Enumerable.Range(1, Math.Max(length - 1, 0)).Select(static index => $$"""{ "from": "node-{{index - 1}}", "to": "node-{{index}}" }"""));
+        return DevWorkflowGraph.Parse($$"""{ "schemaVersion": 1, "nodes": [{{nodes}}], "edges": [{{edges}}] }""");
+    }
 
     private static Dictionary<string, DevWorkflowNodeRunSnapshot> ByKey(params DevWorkflowNodeRunSnapshot[] nodeRuns) =>
         nodeRuns.ToDictionary(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal);
 
-    private static DevWorkflowNodeRunSnapshot NodeRun(string nodeKey, DevWorkflowNodeRunStatus status, string? outputJson = null) =>
+    private static DevWorkflowNodeRunSnapshot NodeRun(string nodeKey,
+        DevWorkflowNodeRunStatus status,
+        string? outputJson = null,
+        DevWorkflowNodeType nodeType = DevWorkflowNodeType.Agent) =>
         new(Guid.NewGuid(),
             Guid.NewGuid(),
             nodeKey,
-            DevWorkflowNodeType.Agent,
+            nodeType,
             Attempt: 1,
             MaxAttempts: 3,
             SessionResumes: 0,

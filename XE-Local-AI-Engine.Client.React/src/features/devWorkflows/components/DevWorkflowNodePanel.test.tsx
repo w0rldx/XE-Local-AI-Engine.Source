@@ -504,8 +504,8 @@ describe("DevWorkflowNodePanel", () => {
 							label: "Decompose",
 							materialization: { templateNodeKey: "implement", artifactKind: "TaskPackage", joinNodeKey: "join" },
 						},
-						{ nodeKey: "implement", nodeType: "DevTask", label: "Implement" },
-						{ nodeKey: "validate", nodeType: "Tool", label: "Validate" },
+						{ nodeKey: "implement", nodeType: "DevTask", label: "Implement", isTemplate: true },
+						{ nodeKey: "validate", nodeType: "Tool", label: "Validate", isTemplate: true },
 						{ nodeKey: "plan", nodeType: "Agent", label: "Plan" },
 						{ nodeKey: "join", nodeType: "Join", label: "Join" },
 					],
@@ -522,7 +522,7 @@ describe("DevWorkflowNodePanel", () => {
 			}),
 		});
 
-		// `validate` is reached from the template root without passing the join, so it is part of the template subtree.
+		// `validate` is inside the template subtree, which the SERVER declares on the pinned graph as `isTemplate`.
 		expect(screen.getByTestId("dev-workflow-node-dependency-validate").textContent).toContain("template");
 		expect(screen.getByTestId("dev-workflow-node-dependency-validate").textContent).not.toContain("satisfied");
 		// A real dependency the runtime IS waiting on is unaffected.
@@ -610,5 +610,46 @@ describe("DevWorkflowNodePanel", () => {
 		renderPanel(devWorkflowNodeRunDetail({ inputJson: '{"workItemRequest":"Compare the options"}' }));
 
 		expect(screen.getByTestId("dev-workflow-node-input").textContent).toBe('{"workItemRequest":"Compare the options"}');
+	});
+
+	it("names the rule sets that were baked into this node run's objective, with the revision it used", () => {
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				appliedRuleSets: [{ id: "rs-1", name: "House style", contentSha256: "abcdef1234567890", currentContentSha256: "abcdef1234567890" }],
+			}),
+		);
+
+		const row = screen.getByTestId("dev-workflow-node-rule-set-rs-1");
+		expect(row.textContent).toContain("House style");
+		expect(row.textContent).toContain("abcdef12");
+		expect(screen.queryByTestId("dev-workflow-node-rule-set-edited-rs-1")).toBeNull();
+	});
+
+	it("badges a rule set whose body moved on since the run used it, and one that has been deleted", () => {
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				appliedRuleSets: [
+					{ id: "rs-1", name: "House style", contentSha256: "aaaa", currentContentSha256: "bbbb" },
+					{ id: "rs-2", name: "Gone", contentSha256: "cccc", currentContentSha256: null },
+				],
+			}),
+		);
+
+		expect(screen.getByTestId("dev-workflow-node-rule-set-edited-rs-1")).toBeDefined();
+		expect(screen.getByTestId("dev-workflow-node-rule-set-deleted-rs-2")).toBeDefined();
+	});
+
+	it("renders no rule-set section at all when the node run applied none", () => {
+		renderPanel(devWorkflowNodeRunDetail({ appliedRuleSets: [] }));
+
+		expect(screen.queryByTestId("dev-workflow-node-rule-sets")).toBeNull();
+	});
+
+	it("clamps the attempt maximum up to the attempt, so an operator-granted retry never reads 'attempt 4 of 3'", () => {
+		renderPanel(devWorkflowNodeRunDetail({ attempt: 4, maxAttempts: 3 }));
+
+		expect(screen.getByTestId("dev-workflow-node-panel-label").closest("[data-testid='dev-workflow-node-panel']")?.textContent).toContain(
+			"attempt 4 of 4",
+		);
 	});
 });

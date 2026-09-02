@@ -326,14 +326,93 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
         }
     }
 
+    /// <summary>
+    ///     A recorded source build outranks the requested variant, so the serve can hand back a GPU build under a Cpu
+    ///     selection (the selector reads Cpu whenever the GPU probe times out or finds no vendor). The evaluation must
+    ///     then take the VRAM admission ticket and spawn as the GPU build it actually is — keying either off the
+    ///     selector loads a CUDA build onto the device without ever entering the gate.
+    /// </summary>
+    [Test]
+    public async Task Evaluation_WhenServedBuildIsGpu_TakesLoadTicketAndSpawnsAsGpu()
+    {
+        var modelPath = await CreateModelFileAsync("candidate");
+        try
+        {
+            var admission = new CountingLoadAdmission();
+            var (harness, supervisor, launcher) = CreateHarness(GpuVariant.Cpu,
+                loadAdmission: admission,
+                servedVariant: GpuVariant.Cuda);
+            await using (supervisor)
+            {
+                await harness.RunAsync(Request(modelPath),
+                    static (_, _) => Task.CompletedTask,
+                    static (_, _) => Task.FromResult(true), CancellationToken.None);
+
+                AssertEx.Equal(expected: 1, admission.Acquisitions);
+                AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+                AssertEx.True(spec!.Arguments.Contains("--metrics"), "A served GPU build must spawn in GPU mode.");
+                AssertEx.False(spec.Arguments.Contains("-t"), "A served GPU build must not take the CPU thread policy.");
+            }
+        }
+        finally
+        {
+            File.Delete(modelPath);
+        }
+    }
+
+    /// <summary>The same rule on the smoke-load path, which composes its own spec off the variant.</summary>
+    [Test]
+    public async Task TransientRun_WhenServedBuildIsGpu_SpawnsAsGpu()
+    {
+        var modelPath = await CreateModelFileAsync("smoke");
+        try
+        {
+            var launcher = new FakeProcessLauncher();
+            var transient = new TransientLlamaServerLauncher(new FakeBinaryManager(GpuVariant.Cuda),
+                new FakeVariantSelector(GpuVariant.Cpu),
+                launcher,
+                new FakeHealthProbe(),
+                NullLogger<TransientLlamaServerLauncher>.Instance);
+
+            await transient.RunAsync(new TransientLlamaServerRequest(modelPath, AdapterFilePath: null, ContextTokens: 2048, TimeSpan.FromSeconds(5)),
+                static (_, _) => Task.FromResult(true), CancellationToken.None);
+
+            AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+            AssertEx.True(spec!.Arguments.Contains("--metrics"), "A served GPU build must spawn in GPU mode.");
+        }
+        finally
+        {
+            File.Delete(modelPath);
+        }
+    }
+
+    private sealed class CountingLoadAdmission : IGpuModelLoadAdmission
+    {
+        public int Acquisitions { get; private set; }
+
+        public Task<IDisposable> AcquireAsync(CancellationToken ct)
+        {
+            Acquisitions++;
+            return Task.FromResult<IDisposable>(new Ticket());
+        }
+
+        private sealed class Ticket : IDisposable
+        {
+            public void Dispose()
+            {
+            }
+        }
+    }
+
     private static (ITransientLlamaServerEvaluationHarness Harness, LlamaServerProcessSupervisor Supervisor, FakeProcessLauncher Launcher) CreateHarness(GpuVariant variant = GpuVariant.Cpu,
         FakeProcessLauncher? launcher = null,
         FakeHealthProbe? healthProbe = null,
-        IGpuModelLoadAdmission? loadAdmission = null)
+        IGpuModelLoadAdmission? loadAdmission = null,
+        GpuVariant? servedVariant = null)
     {
         launcher ??= new FakeProcessLauncher();
         var variantSelector = new FakeVariantSelector(variant);
-        var binaryManager = new FakeBinaryManager();
+        var binaryManager = new FakeBinaryManager(servedVariant);
         healthProbe ??= new FakeHealthProbe();
         var manifestProbe = new FakeLlamaServerCapabilityManifestProbe();
         var launchPolicy = new LlamaServerLaunchPolicy(new LlamaServerLaunchPolicyOptions(), new FakeLaunchFallbackStore());

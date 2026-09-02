@@ -70,6 +70,10 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         var graph = DevWorkflowGraph.Parse(definition.GraphJson);
         EnsureRepositoryBound(graph, workItem);
 
+        // Read once for the whole run: every seed's policy resolution is decided from this one list, so two nodes of the
+        // same run can never disagree about which rule sets were live when it started.
+        var enabledRuleSets = await _store.ListEnabledRuleSetsAsync(cancellationToken).ConfigureAwait(false);
+
         // ONE call. The seeds carry the caller's inputs, which have no other home, so a run row that committed without
         // them would be a durable workflow quietly running a different request from the one that was asked.
         var run = await _store.StartRunAsync(new StartDevWorkflowRunCommand(operationId,
@@ -78,7 +82,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
                                       definition.Version,
                                       definition.GraphHash,
                                       definition.GraphJson,
-                                      DevWorkflowRunSeeds.Compose(graph, workItem, inputsJson, _options.MaxNodeRunsPerRun)),
+                                      DevWorkflowRunSeeds.Compose(graph, workItem, inputsJson, _options.MaxNodeRunsPerRun, enabledRuleSets)),
                                   cancellationToken)
                               .ConfigureAwait(false);
 

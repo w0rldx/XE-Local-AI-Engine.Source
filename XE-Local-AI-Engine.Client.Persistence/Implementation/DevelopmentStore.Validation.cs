@@ -110,10 +110,7 @@ public sealed partial class DevelopmentStore
                     task.Status.ToString(),
                     task.Version,
                     artifactId: null,
-                    detailJson: Utf8(JsonSerializer.Serialize(new
-                    {
-                        reason = command.SanitizedReason
-                    })),
+                    detailJson: Utf8(JsonSerializer.Serialize(new { reason = command.SanitizedReason }, JsonOptions)),
                     cancellationToken).ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);
@@ -197,10 +194,7 @@ public sealed partial class DevelopmentStore
                     artifact.Id,
                     detailJson: command.SanitizedReason is null
                         ? null
-                        : Utf8(JsonSerializer.Serialize(new
-                        {
-                            reason = command.SanitizedReason
-                        })),
+                        : Utf8(JsonSerializer.Serialize(new { reason = command.SanitizedReason }, JsonOptions)),
                     cancellationToken).ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);
@@ -273,10 +267,7 @@ public sealed partial class DevelopmentStore
                     artifact.Id,
                     detailJson: command.SanitizedReason is null
                         ? null
-                        : Utf8(JsonSerializer.Serialize(new
-                        {
-                            reason = command.SanitizedReason
-                        })),
+                        : Utf8(JsonSerializer.Serialize(new { reason = command.SanitizedReason }, JsonOptions)),
                     cancellationToken).ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);

@@ -257,16 +257,29 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     }
 
     /// <summary>
-    ///     Asks a node run's commands to stop. Answers whether there was anything to ask.
+    ///     Asks a node run's commands to stop. Answers whether there was anything to ask — a pass that has ALREADY been
+    ///     asked has nothing left to ask of it, so the answer is no.
     ///     <para>
     ///         The row is deliberately NOT settled here: a build asked to stop is still winding down, and only the next
     ///         tick's poll knows whether it landed cancelled or finished inside the window. Settling it here would also
     ///         hold the advance gate — and with it every other run — for as long as the stop took.
     ///     </para>
+    ///     <para>
+    ///         Which is exactly why the already-asked case has to answer no. The entry lives until a poll SEES the pass
+    ///         land, so a cancelling drain reaches this every tick until then; the caller counts a yes as a written
+    ///         transition, and the dispatcher re-signals itself after any productive tick — so answering yes each time
+    ///         spun the drain for as long as the commands took, and a build's worth of ticks landed on whatever else
+    ///         shared the thread pool.
+    ///     </para>
     /// </summary>
     public async Task<bool> StopAsync(Guid nodeRunId)
     {
-        if (!_inflight.TryGetValue(nodeRunId, out var flight))
+        // ponytail: the run now waits up to one sweep (DevWorkflowOptions.SweepSeconds, 5s) to notice a stopped pass
+        // landed, where the spin noticed immediately. Signalling from the pass's own continuation would mean injecting
+        // the dispatcher here, and the dispatcher already takes THIS type in its constructor — the agent lane carries
+        // the same ceiling for the same reason. Break the cycle (a settable signal, or a lane-completion channel) if
+        // five seconds of cancel latency ever measures.
+        if (!_inflight.TryGetValue(nodeRunId, out var flight) || flight.Cancellation.IsCancellationRequested)
         {
             return false;
         }

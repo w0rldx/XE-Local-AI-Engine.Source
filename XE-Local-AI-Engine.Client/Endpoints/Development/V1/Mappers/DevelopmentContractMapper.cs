@@ -103,7 +103,8 @@ internal static class DevelopmentContractMapper
             value.OccurredAtUtc,
             value.OperationId,
             value.OperationPhase,
-            value.Outcome);
+            value.Outcome,
+            value.Reason);
 
     public static DevelopmentTaskDetailResponse ToResponse(this DevelopmentTaskAggregate value) =>
         new(value.Task.ToResponse(value.WorkflowRunId),

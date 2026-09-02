@@ -12,22 +12,30 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import { listDevWorkflowRunEvents, type ListDevWorkflowRunEventsResponse } from "@/core/api/generated";
 import {
 	cancelDevWorkflowRunMutation,
+	createDevWorkflowRuleSetMutation,
 	createDevWorkflowWorkItemMutation,
 	decideDevWorkflowNodeRunMutation,
+	deleteDevWorkflowRuleSetMutation,
 	deleteDevWorkflowWorkItemMutation,
 	getDevWorkflowArtifactContentOptions,
 	getDevWorkflowDefinitionOptions,
 	getDevWorkflowNodeRunOptions,
+	getDevWorkflowRuleSetOptions,
 	getDevWorkflowRunOptions,
 	getDevWorkflowWorkItemOptions,
+	archiveDevWorkflowDefinitionMutation,
+	listAgentDefinitionsOptions,
 	listDevelopmentProjectsOptions,
 	listDevWorkflowArtifactsOptions,
 	listDevWorkflowDefinitionsOptions,
+	listDevWorkflowRuleSetsOptions,
 	listDevWorkflowRunEventsQueryKey,
 	listDevWorkflowWorkItemsOptions,
 	pauseDevWorkflowRunMutation,
 	resumeDevWorkflowRunMutation,
 	startDevWorkflowRunMutation,
+	updateDevWorkflowDefinitionMutation,
+	updateDevWorkflowRuleSetMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { callWithResponseValidation, withResponseValidation } from "@/core/api/ResponseValidation";
 import { readDevWorkflowConflict } from "@/features/devWorkflows/api/DevWorkflowConflict";
@@ -44,6 +52,8 @@ export const devWorkflowQueryIds = {
 	artifactContent: "getDevWorkflowArtifactContent",
 	definitions: "listDevWorkflowDefinitions",
 	definition: "getDevWorkflowDefinition",
+	ruleSets: "listDevWorkflowRuleSets",
+	ruleSet: "getDevWorkflowRuleSet",
 } as const;
 
 export type DevWorkflowQueryId = (typeof devWorkflowQueryIds)[keyof typeof devWorkflowQueryIds];
@@ -82,9 +92,10 @@ export type DevWorkflowEventsAnchor = "newest" | "oldest";
  * boundary all the way to `lastSequence` however far past the boundary that has moved.
  *
  * ponytail: crossing a boundary on a live run does re-anchor and discard loaded history. That is once per 200
- * sequences, and the alternative — a cursor that moves with every event — discards it on every one.
+ * sequences, and the alternative — a cursor that moves with every event — discards it on every one. Exported so the
+ * events tab can SAY so when it happens, rather than the older pages an operator had loaded silently disappearing.
  */
-function devWorkflowEventsAnchorParam(lastSequence: number | undefined, anchor: DevWorkflowEventsAnchor): number {
+export function devWorkflowEventsAnchorParam(lastSequence: number | undefined, anchor: DevWorkflowEventsAnchor): number {
 	if (anchor === "oldest" || !lastSequence || lastSequence <= devWorkflowEventsTailPageSize) {
 		return 0;
 	}
@@ -278,6 +289,105 @@ export function useDevWorkflowArtifactContent(runId: string | undefined, artifac
 		),
 		enabled: Boolean(runId) && Boolean(artifactId),
 	});
+}
+
+/**
+ * Agent definitions, for the definition editor's per-node agent binding. Read straight off the generated client the
+ * way the Dev Mode project list already is, rather than through `features/agents`' own hook: this needs the ids and
+ * names and nothing else, and reaching into another feature for a two-field projection is architecture debt the
+ * dependency baseline would have to carry forever.
+ */
+export function useDevWorkflowAgentOptions(options: FeedOptions = {}) {
+	return useQuery({
+		...withResponseValidation(listAgentDefinitionsOptions()),
+		enabled: options.enabled ?? true,
+		select: (data) => (data.items ?? []).map((agent) => ({ id: agent.id, label: agent.name })),
+	});
+}
+
+/**
+ * Edit a definition, or archive it. Both invalidate the picker's list and the edited definition itself.
+ *
+ * The update carries the `Version` the edit was made from (X5: an int on the row, no version-history table), so a
+ * second editor's save is refused with a 409 rather than silently overwriting the first. Delete is an ARCHIVE (Y14) —
+ * a template a past run pinned a snapshot of must not stop existing, so the row is flagged and hidden from the picker.
+ */
+export function useDevWorkflowDefinitionMutations() {
+	const queryClient = useQueryClient();
+	const refresh = async (definitionId?: string): Promise<void> => {
+		await queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.definitions) });
+		if (definitionId) {
+			await queryClient.invalidateQueries({
+				queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.definition, { definitionId }),
+			});
+		}
+	};
+
+	const update = useMutation({
+		...withResponseValidation(updateDevWorkflowDefinitionMutation()),
+		onSuccess: (_data, variables) => refresh(variables.path?.definitionId),
+	});
+	const archive = useMutation({
+		...withResponseValidation(archiveDevWorkflowDefinitionMutation()),
+		onSuccess: (_data, variables) => refresh(variables.path?.definitionId),
+	});
+
+	return { update, archive };
+}
+
+/**
+ * The rule-set catalogue. A global resource scoped by `{ projectIds, nodeTypes }` (Y2/M4) rather than owned by any one
+ * run, which is why it is managed from the LIST page and not from a work item. Summaries only — the body is up to
+ * 4096 characters of policy prose and is read one rule set at a time.
+ */
+export function useDevWorkflowRuleSets(options: FeedOptions = {}) {
+	return useQuery({
+		...withResponseValidation(listDevWorkflowRuleSetsOptions()),
+		enabled: options.enabled ?? true,
+	});
+}
+
+/** One rule set WITH its body, read only when the editor is actually open on it. */
+export function useDevWorkflowRuleSet(ruleSetId: string | undefined) {
+	return useQuery({
+		...withResponseValidation(getDevWorkflowRuleSetOptions({ path: { ruleSetId: ruleSetId ?? "" } })),
+		enabled: Boolean(ruleSetId),
+	});
+}
+
+/**
+ * Create / update / delete, all three refreshing the catalogue. An update also drops the single-rule-set cache entry:
+ * the editor reopens on the row it just wrote, and a stale `version` there would earn a 409 on the very next save.
+ *
+ * Nothing here touches a RUN's cache. `appliedRuleSets` is the resolution a node run persisted at materialization
+ * time, so editing a rule set must not change what a past run reports it was told — the "edited since" badge is the
+ * whole point of keeping the two apart.
+ */
+export function useDevWorkflowRuleSetMutations() {
+	const queryClient = useQueryClient();
+	const refresh = async (ruleSetId?: string): Promise<void> => {
+		await queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.ruleSets) });
+		if (ruleSetId) {
+			await queryClient.invalidateQueries({
+				queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.ruleSet, { ruleSetId }),
+			});
+		}
+	};
+
+	const create = useMutation({
+		...withResponseValidation(createDevWorkflowRuleSetMutation()),
+		onSuccess: () => refresh(),
+	});
+	const update = useMutation({
+		...withResponseValidation(updateDevWorkflowRuleSetMutation()),
+		onSuccess: (_data, variables) => refresh(variables.path?.ruleSetId),
+	});
+	const remove = useMutation({
+		...withResponseValidation(deleteDevWorkflowRuleSetMutation()),
+		onSuccess: (_data, variables) => refresh(variables.path?.ruleSetId),
+	});
+
+	return { create, update, remove };
 }
 
 export function useCreateDevWorkflowWorkItem() {

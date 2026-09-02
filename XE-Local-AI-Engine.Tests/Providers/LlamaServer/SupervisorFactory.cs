@@ -29,9 +29,10 @@ internal static class SupervisorFactory
         ILlamaServerExtraLaunchArgumentsResolver? extraArgumentsResolver = null,
         ILlamaServerCapabilityManifestProbe? capabilityManifestProbe = null,
         ILlamaServerLoadTelemetry? loadTelemetry = null,
-        TaskScheduler? detachedSpawnScheduler = null)
+        TaskScheduler? detachedSpawnScheduler = null,
+        ILlamaCppBinaryManager? binaryManager = null)
     {
-        return new LlamaServerProcessSupervisor(new FakeBinaryManager(),
+        return new LlamaServerProcessSupervisor(binaryManager ?? new FakeBinaryManager(),
             variantSelector ?? new FakeVariantSelector(),
             modelStore ?? new FakeModelStore(),
             launcher ?? new FakeProcessLauncher(),

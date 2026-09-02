@@ -72,6 +72,47 @@ public sealed class UpdateDevWorkflowDefinitionRequest
     public DevWorkflowGraph? Graph { get; init; }
 }
 
+public sealed class DevWorkflowRuleSetRequest
+{
+    public Guid RuleSetId { get; init; }
+}
+
+public sealed class CreateDevWorkflowRuleSetRequest
+{
+    public string Name { get; init; } = string.Empty;
+
+    public string? Description { get; init; }
+
+    /// <summary>The markdown injected verbatim into a matching node's context.</summary>
+    public string Body { get; init; } = string.Empty;
+
+    /// <summary>Omitted means both axes empty, which applies the rule set to every node on this box.</summary>
+    public DevWorkflowRuleScope? Scope { get; init; }
+
+    public bool Enabled { get; init; } = true;
+}
+
+/// <summary>
+///     A PUT body carrying the version it was edited from, and the WHOLE document: a rule set is edited as one, so an
+///     omitted description clears it rather than meaning "leave whatever is there".
+/// </summary>
+public sealed class UpdateDevWorkflowRuleSetRequest
+{
+    public Guid RuleSetId { get; init; }
+
+    public int Version { get; init; }
+
+    public string Name { get; init; } = string.Empty;
+
+    public string? Description { get; init; }
+
+    public string Body { get; init; } = string.Empty;
+
+    public DevWorkflowRuleScope? Scope { get; init; }
+
+    public bool Enabled { get; init; } = true;
+}
+
 public sealed class ListDevWorkflowRunsRequest
 {
     public Guid? WorkItemId { get; init; }
@@ -196,7 +237,14 @@ public sealed record DevWorkflowGraphNode(
     string? RetryTarget,
     DevWorkflowMaterialization? Materialization,
     IReadOnlyDictionary<string, string>? RequiredCapabilities,
-    string? ToolMode);
+    string? ToolMode,
+
+    /// <summary>
+    ///     Whether this node belongs to a materialization template subtree — a clone-in-waiting the run gives no node
+    ///     run to. DERIVED on the way out from the runtime's own parser, never authored and never stored: the save path
+    ///     nulls it, so a graph that round-trips through a definition PUT keeps exactly the bytes it arrived with.
+    /// </summary>
+    bool? IsTemplate = null);
 
 public sealed record DevWorkflowMaterialization(string TemplateNodeKey, string ArtifactKind, string JoinNodeKey, int MaxChildren);
 
@@ -327,6 +375,19 @@ public sealed record DevWorkflowNodeRunSummaryResponse(
     bool IsMaterialized,
     string? MaterializedFromNodeKey,
     int? MaterializationIndex,
+
+    /// <summary>
+    ///     The node run this clone was materialized FROM, which is the group identifier: one decompose node run
+    ///     materializes once, so its id names that fan-out for the life of the run.
+    /// </summary>
+    Guid? MaterializationGroupId,
+
+    /// <summary>
+    ///     How many siblings the group holds, counted server-side over the run's WHOLE node-run list. Counted here
+    ///     rather than in the browser because a client can only count the rows it has drawn, which is wrong by
+    ///     construction for a fan-out wider than the page it rendered.
+    /// </summary>
+    int? MaterializationCount,
     Guid? DevelopmentProjectId,
     Guid? DevelopmentTaskId,
     Guid? AgentDefinitionId,
@@ -381,8 +442,54 @@ public sealed record DevWorkflowNodeRunDetailResponse(
 /// <summary>
 ///     Which rule text actually applied, by content hash. Names the document without copying its body, so the audit
 ///     stays truthful — and verifiable — after the rule set is edited or deleted.
+///     <para>
+///         <see cref="ContentSha256" /> is what the node run RECORDED and never changes.
+///         <see cref="CurrentContentSha256" /> is what the rule set holds now, or null when it has since been deleted —
+///         so a reader can say "edited since this ran" or "deleted" instead of having to assume the document still says
+///         what it said. Comparing the two is the whole reason the hash is recorded.
+///     </para>
 /// </summary>
-public sealed record DevWorkflowAppliedRuleSetResponse(Guid Id, string Name, string ContentSha256);
+public sealed record DevWorkflowAppliedRuleSetResponse(Guid Id, string Name, string ContentSha256, string? CurrentContentSha256);
+
+/// <summary>
+///     Where a rule set applies. An EMPTY axis means "matches everything"; a populated one is an exact,
+///     case-insensitive membership test — no globbing, no precedence, no expression language. Everything applicable is
+///     injected.
+///     <para>
+///         Two axes, not four. <c>languages</c> and <c>taskTypes</c> were dropped before they shipped because nothing
+///         produces either value: under "every populated axis must match" they could only ever apply to nothing, while
+///         looking on the wire as though they worked.
+///     </para>
+/// </summary>
+public sealed record DevWorkflowRuleScope(IReadOnlyList<Guid> ProjectIds, IReadOnlyList<string> NodeTypes);
+
+public sealed record DevWorkflowRuleSetResponse(
+    Guid Id,
+    string Name,
+    string? Description,
+    string Body,
+    DevWorkflowRuleScope Scope,
+    bool Enabled,
+    string ContentSha256,
+    int Version,
+    long CreatedAtUtc,
+    long UpdatedAtUtc);
+
+/// <summary>
+///     A rule set WITHOUT its body — the list draws names, scopes and hashes. <see cref="ContentSha256" /> is here
+///     because it is the half a reader compares against a node run's recorded hash to see whether the document has
+///     moved on since it applied.
+/// </summary>
+public sealed record DevWorkflowRuleSetSummaryResponse(
+    Guid Id,
+    string Name,
+    string? Description,
+    DevWorkflowRuleScope Scope,
+    bool Enabled,
+    string ContentSha256,
+    int Version,
+    long CreatedAtUtc,
+    long UpdatedAtUtc);
 
 public sealed record DevWorkflowRunEventResponse(
     Guid Id,
@@ -443,6 +550,8 @@ public sealed record DevWorkflowDecisionResultResponse(DevWorkflowDecisionRespon
 public sealed record ListDevWorkflowWorkItemsResponse(IReadOnlyList<DevWorkflowWorkItemSummaryResponse> Items);
 
 public sealed record ListDevWorkflowDefinitionsResponse(IReadOnlyList<DevWorkflowDefinitionSummaryResponse> Items);
+
+public sealed record ListDevWorkflowRuleSetsResponse(IReadOnlyList<DevWorkflowRuleSetSummaryResponse> Items);
 
 public sealed record ListDevWorkflowRunsResponse(IReadOnlyList<DevWorkflowRunSummaryResponse> Items);
 

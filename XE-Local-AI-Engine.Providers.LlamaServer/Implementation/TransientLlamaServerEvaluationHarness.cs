@@ -47,6 +47,11 @@ internal sealed class TransientLlamaServerEvaluationHarness(
         {
             var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
             var binary = await _binaryManager.EnsureBinaryAsync(variant, mutationLease, ct).ConfigureAwait(false);
+
+            // Follow the served build, as the supervisor and the transient launcher do: it decides the launch spec's GPU
+            // arguments AND whether this evaluation takes a VRAM admission ticket. A GPU build spawned under a Cpu
+            // selection would otherwise load onto the device without ever entering the gate.
+            variant = binary.Variant;
             var manifest = await _capabilityManifestProbe.GetManifestAsync(binary, ct).ConfigureAwait(false);
             if (!manifest.ProbeSucceeded)
             {

@@ -31,6 +31,11 @@ public sealed class DevWorkflowRunEndpointTests
     private static readonly Guid SessionId = Guid.Parse("77777777-7777-7777-7777-777777777777");
     private static readonly Guid ConversationId = Guid.Parse("88888888-8888-8888-8888-888888888888");
     private static readonly Guid OperationId = Guid.Parse("99999999-9999-9999-9999-999999999999");
+    private static readonly Guid RuleSetId = Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+
+    /// <summary>What a node run recorded at materialization: the id, the name and the hash of the text that applied.</summary>
+    private const string RecordedPolicy =
+        """[{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","name":"House rules","contentSha256":"content-hash","body":"Never touch production."}]""";
 
     /// <summary>The seeded Slice-A shape: one agent into one TERMINAL gate — no out-edge takes a rejection.</summary>
     private const string SampleGraph = """
@@ -174,7 +179,10 @@ public sealed class DevWorkflowRunEndpointTests
 
         var research = root.GetProperty("nodes").EnumerateArray().Single(node => node.GetProperty("nodeKey").GetString() == "research");
         AssertEx.Equal("researcher", research.GetProperty("agentDisplayName").GetString(), "a slug-bound node names its slug: there is no agent id on the row.");
-        AssertEx.Equal("qwen", research.GetProperty("modelLabel").GetString());
+        AssertEx.Equal(JsonValueKind.Null,
+            research.GetProperty("modelLabel").ValueKind,
+            "the node authors modelProfile 'qwen', but the runtime's parser never reads it and this node is bound by slug, so there is no agent to take a "
+            + "model from either. Naming the authored value would label the node with a model the run will not load.");
     }
 
     /// <summary>
@@ -267,6 +275,114 @@ public sealed class DevWorkflowRunEndpointTests
                               .GetProperty("waitingOnNodeKeys");
 
         AssertEx.Equal(JsonValueKind.Null, waiting.ValueKind, $"the join is waiting on {waiting}, and the decomposition it really depends on has already succeeded.");
+    }
+
+    /// <summary>
+    ///     The fan-out's identity and size are the SERVER's answer: the group is the decompose node run that produced
+    ///     it, and the count is taken over the run's whole node-run list. A client counting the rows it drew is wrong by
+    ///     construction past the render cap, which is the bug this replaces.
+    ///     <para>
+    ///         The template here is a TWO-node subtree cloned twice, which is the shape that catches the counting
+    ///         mistake: four clone ROWS, two CHILDREN, and a <c>materializationIndex</c> that only ever counts children.
+    ///         The badge reads "1 of 2", so the count has to be distinct indexes and not rows.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task GetRun_NamesAMaterializationGroupAndCountsItsChildrenRatherThanItsCloneRows()
+    {
+        const string DecompositionGraph = """
+                                          {"schemaVersion":1,
+                                           "nodes":[{"nodeKey":"decompose","nodeType":"Agent","label":"Decompose",
+                                                     "materialization":{"templateNodeKey":"implement","artifactKind":"TaskPackage","joinNodeKey":"join","maxChildren":4}},
+                                                    {"nodeKey":"implement","nodeType":"DevTask"},
+                                                    {"nodeKey":"review","nodeType":"Agent"},
+                                                    {"nodeKey":"join","nodeType":"Join"}],
+                                           "edges":[{"from":"decompose","to":"join"},{"from":"implement","to":"review"},{"from":"review","to":"join"}]}
+                                          """;
+
+        var decompose = GateNodeRun() with
+        {
+            NodeKey = "decompose",
+            NodeType = DevWorkflowNodeType.Agent,
+            Status = DevWorkflowNodeRunStatus.Succeeded,
+            PendingDecisionKind = null
+        };
+
+        // Two children of a two-node template: every node of the subtree is cloned per child, so the group holds FOUR
+        // rows carrying only TWO distinct indexes.
+        var firstChildImplement = GateNodeRun() with
+        {
+            Id = Guid.NewGuid(),
+            NodeKey = "implement#1",
+            NodeType = DevWorkflowNodeType.DevTask,
+            Status = DevWorkflowNodeRunStatus.Running,
+            PendingDecisionKind = null,
+            MaterializedFromNodeRunId = decompose.Id,
+            MaterializationIndex = 0
+        };
+        var firstChildReview = firstChildImplement with
+        {
+            Id = Guid.NewGuid(),
+            NodeKey = "review#1",
+            NodeType = DevWorkflowNodeType.Agent
+        };
+        var secondChildImplement = firstChildImplement with
+        {
+            Id = Guid.NewGuid(),
+            NodeKey = "implement#2",
+            MaterializationIndex = 1
+        };
+        var secondChildReview = firstChildReview with
+        {
+            Id = Guid.NewGuid(),
+            NodeKey = "review#2",
+            MaterializationIndex = 1
+        };
+        var join = GateNodeRun() with
+        {
+            Id = ResearchNodeRunId,
+            NodeKey = "join",
+            NodeType = DevWorkflowNodeType.Join,
+            Status = DevWorkflowNodeRunStatus.Pending,
+            PendingDecisionKind = null
+        };
+        var runs = RunService(new DevWorkflowRunDetail(RunSnapshot() with
+            {
+                GraphJson = DecompositionGraph
+            },
+            [decompose, firstChildImplement, firstChildReview, secondChildImplement, secondChildReview, join],
+            PendingDecisionCount: 0,
+            BlockingGateNodeRunId: null));
+        await using var factory = EnabledFactory(Store(), runs);
+
+        using var response = await SendAsync(factory, "GET", Run).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        using var document = JsonDocument.Parse(body);
+        var nodes = document.RootElement.GetProperty("nodes").EnumerateArray().ToArray();
+        var clones = nodes.Where(static node => node.GetProperty("isMaterialized").GetBoolean()).ToArray();
+
+        AssertEx.Equal(4, clones.Length);
+        AssertEx.True(clones.All(clone => clone.GetProperty("materializationGroupId").GetGuid() == decompose.Id),
+            "one decompose node run materializes once, so its id names the group for the life of the run.");
+        AssertEx.True(clones.All(static clone => clone.GetProperty("materializationCount").GetInt32() == 2),
+            "two children, whatever the template's node count — the badge reads 1 of 2 against the child ordinal, never 1 of 4.");
+        AssertEx.Equal(JsonValueKind.Null,
+            nodes.Single(static node => node.GetProperty("nodeKey").GetString() == "join").GetProperty("materializationGroupId").ValueKind,
+            "a node that was never cloned belongs to no group and carries no count.");
+        AssertEx.True(document.RootElement.GetProperty("graph")
+                              .GetProperty("nodes")
+                              .EnumerateArray()
+                              .Single(static node => node.GetProperty("nodeKey").GetString() == "implement")
+                              .GetProperty("isTemplate")
+                              .GetBoolean());
+        AssertEx.True(document.RootElement.GetProperty("graph")
+                              .GetProperty("nodes")
+                              .EnumerateArray()
+                              .Single(static node => node.GetProperty("nodeKey").GetString() == "review")
+                              .GetProperty("isTemplate")
+                              .GetBoolean(),
+            "the whole subtree short of the join is template, which is what makes this the two-node case.");
     }
 
     /// <summary>
@@ -701,6 +817,143 @@ public sealed class DevWorkflowRunEndpointTests
 
     private static string StartBody() =>
         $$"""{"operationId":"{{OperationId}}","definitionId":"{{DefinitionId}}","inputsJson":"{\"depth\":\"quick\"}"}""";
+
+    /// <summary>
+    ///     P3.7: the node-run drill-down projects the resolution the ROW recorded, so it keeps naming the exact text
+    ///     that applied — by hash — whether or not the rule set still exists.
+    /// </summary>
+    [Test]
+    public async Task GetNodeRun_ProjectsTheRuleSetsTheRowRecorded()
+    {
+        var store = Store();
+        store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(GateNodeRun() with
+        {
+            PolicyResolutionJson = RecordedPolicy
+        });
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var applied = document.RootElement.GetProperty("appliedRuleSets");
+
+        AssertEx.Equal(expected: 1, applied.GetArrayLength(), "the recorded resolution reaches the node pane.");
+        AssertEx.Equal("House rules", applied[0].GetProperty("name").GetString());
+        AssertEx.Equal("content-hash", applied[0].GetProperty("contentSha256").GetString(), "the hash is what proves WHICH text applied.");
+    }
+
+    /// <summary>
+    ///     Editing a rule set mid-run is allowed, so the pane has to be able to SAY the document moved on: the recorded
+    ///     hash never changes, the current one comes from the row as it stands now, and a reader compares them. Without
+    ///     the second half, "which rules applied" silently reads as "which rules exist".
+    /// </summary>
+    [Test]
+    public async Task GetNodeRun_WhenTheRuleSetWasEditedSinceItApplied_ReportsBothHashes()
+    {
+        var store = Store();
+        store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(GateNodeRun() with
+        {
+            PolicyResolutionJson = RecordedPolicy
+        });
+        store.ListRuleSetsAsync(Arg.Any<CancellationToken>())
+             .Returns([
+                 new DevWorkflowRuleSetSummary(RuleSetId,
+                     "House rules, renamed",
+                     Description: null,
+                     """{"projectIds":[],"nodeTypes":[]}""",
+                     Enabled: true,
+                     "content-hash-v2",
+                     Version: 2,
+                     CreatedAtUtc: 1,
+                     UpdatedAtUtc: 3)
+             ]);
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var applied = document.RootElement.GetProperty("appliedRuleSets")[0];
+
+        AssertEx.Equal("content-hash", applied.GetProperty("contentSha256").GetString(), "the recorded hash is the audit and never moves.");
+        AssertEx.Equal("content-hash-v2", applied.GetProperty("currentContentSha256").GetString(), "and the current one is what says the document has been edited since.");
+        AssertEx.Equal("House rules", applied.GetProperty("name").GetString(), "the NAME stays the recorded one: renaming a rule set must not rewrite what the audit says applied.");
+    }
+
+    /// <summary>
+    ///     The snapshotted TEXT stays off the wire. The node run carries it so the objective can be composed from what
+    ///     applied, but a node-run response is an audit view: it names the document and its hashes, and a reader who
+    ///     wants the text asks the rule set for it.
+    /// </summary>
+    [Test]
+    public async Task GetNodeRun_DoesNotPutTheSnapshottedRuleSetTextOnTheWire()
+    {
+        var store = Store();
+        store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(GateNodeRun() with
+        {
+            PolicyResolutionJson = RecordedPolicy
+        });
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.False(body.Contains("Never touch production.", StringComparison.Ordinal), "the recorded policy TEXT must not be echoed by the node-run response.");
+        using var document = JsonDocument.Parse(body);
+        var applied = document.RootElement.GetProperty("appliedRuleSets")[0];
+        AssertEx.False(applied.TryGetProperty("body", out _), "and the wire shape carries no body member at all.");
+        AssertEx.Equal("content-hash", applied.GetProperty("contentSha256").GetString(), "the hashes are what the audit view is for.");
+    }
+
+    /// <summary>A deleted rule set reads as a null current hash — the recorded half is untouched, which is the point of recording it.</summary>
+    [Test]
+    public async Task GetNodeRun_WhenTheRuleSetWasDeleted_ReportsNoCurrentHashAndKeepsTheRecordedOne()
+    {
+        var store = Store();
+        store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(GateNodeRun() with
+        {
+            PolicyResolutionJson = RecordedPolicy
+        });
+        store.ListRuleSetsAsync(Arg.Any<CancellationToken>()).Returns([]);
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var applied = document.RootElement.GetProperty("appliedRuleSets")[0];
+
+        AssertEx.Equal("content-hash", applied.GetProperty("contentSha256").GetString());
+        AssertEx.Equal(JsonValueKind.Null, applied.GetProperty("currentContentSha256").ValueKind, "a deleted rule set has no current text, and null says so.");
+    }
+
+    /// <summary>
+    ///     A recorded resolution nothing can parse costs this node its rule-set list, not the whole drill-down. It can
+    ///     only come from a hand-edited row, and answering 500 would make one bad row hide every other thing the pane
+    ///     is there to show.
+    /// </summary>
+    [Test]
+    public async Task GetNodeRun_WithAnUnreadableRecordedResolution_AnswersAnEmptyListRatherThanFailing()
+    {
+        var store = Store();
+        store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(GateNodeRun() with
+        {
+            PolicyResolutionJson = "not json at all"
+        });
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 0, document.RootElement.GetProperty("appliedRuleSets").GetArrayLength());
+    }
 
     private static IDevWorkflowRunService RunService(DevWorkflowRunDetail? detail = null)
     {

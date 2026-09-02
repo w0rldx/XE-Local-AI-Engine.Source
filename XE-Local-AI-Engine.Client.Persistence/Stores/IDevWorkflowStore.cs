@@ -99,6 +99,37 @@ public sealed record DevWorkflowDefinitionSnapshot(
     long CreatedAtUtc,
     long UpdatedAtUtc);
 
+/// <summary>
+///     One rule set in full, body included. <see cref="ContentSha256" /> is computed store-side alongside the body, so
+///     the hash and the text can never describe different documents.
+/// </summary>
+public sealed record DevWorkflowRuleSetSnapshot(
+    Guid Id,
+    string Name,
+    string? Description,
+    string ScopeJson,
+    bool Enabled,
+    string Body,
+    string ContentSha256,
+    int Version,
+    long CreatedAtUtc,
+    long UpdatedAtUtc);
+
+/// <summary>
+///     A rule set WITHOUT its body — everything the list page draws and everything the resolver matches on. The body is
+///     the one encrypted column here, so a feed that never asks for it never decrypts one.
+/// </summary>
+public sealed record DevWorkflowRuleSetSummary(
+    Guid Id,
+    string Name,
+    string? Description,
+    string ScopeJson,
+    bool Enabled,
+    string ContentSha256,
+    int Version,
+    long CreatedAtUtc,
+    long UpdatedAtUtc);
+
 /// <summary>The canonical node-run field set. <see cref="WorkSessionAvailable" /> is read from the other family, never stored.</summary>
 public sealed record DevWorkflowNodeRunSnapshot(
     Guid Id,
@@ -278,6 +309,27 @@ public sealed record UpdateDevWorkflowDefinitionCommand(
     string? Name = null,
     string? GraphJson = null,
     int? NodeCount = null);
+
+public sealed record CreateDevWorkflowRuleSetCommand(
+    Guid RuleSetId,
+    string Name,
+    string Body,
+    string ScopeJson,
+    string? Description = null,
+    bool Enabled = true);
+
+/// <summary>
+///     A whole replacement, not a patch: the rule set is a document an operator edits as one, and a partial update
+///     would have to invent a spelling for "clear the description" that a PUT body already has.
+/// </summary>
+public sealed record UpdateDevWorkflowRuleSetCommand(
+    Guid RuleSetId,
+    int ExpectedVersion,
+    string Name,
+    string Body,
+    string ScopeJson,
+    string? Description = null,
+    bool Enabled = true);
 
 /// <summary>
 ///     Starts a run. <see cref="NodeRuns" /> is the run's whole initial node set, created in the SAME transaction as the
@@ -550,6 +602,34 @@ public interface IDevWorkflowStore
     /// <summary>Delete is an archive: runs that reference the definition, in flight or historical, are unaffected.</summary>
     Task<DevWorkflowDefinitionSnapshot> ArchiveDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default);
 
+    Task<DevWorkflowRuleSetSnapshot> CreateRuleSetAsync(CreateDevWorkflowRuleSetCommand command, CancellationToken cancellationToken = default);
+
+    Task<DevWorkflowRuleSetSnapshot> UpdateRuleSetAsync(UpdateDevWorkflowRuleSetCommand command, CancellationToken cancellationToken = default);
+
+    /// <summary>Never loads <c>body</c>: the list draws names and scopes, and the body is the encrypted column.</summary>
+    Task<IReadOnlyList<DevWorkflowRuleSetSummary>> ListRuleSetsAsync(CancellationToken cancellationToken = default);
+
+    Task<DevWorkflowRuleSetSnapshot> GetRuleSetAsync(Guid ruleSetId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     A HARD delete: a rule set is not referenced by a foreign key, and every node-run that applied one recorded
+    ///     its <c>{id, name, contentSha256}</c> at materialization, so the audit survives the document.
+    /// </summary>
+    Task DeleteRuleSetAsync(Guid ruleSetId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The resolver's read, at run start and at each materialization. Bodies included: the resolver SNAPSHOTS the
+    ///     text it matched onto the node run, so what a node was given can never be re-derived from a document that has
+    ///     since moved on.
+    ///     <para>
+    ///         ponytail: a full scan of the enabled rows with no cache. The scope is a JSON document with no column to
+    ///         index on, the working set is a handful of rows on a single-operator node, and the call happens once per
+    ///         run start and once per expansion — not per node run. Add a projected per-axis index table only if the
+    ///         rule count ever reaches the hundreds.
+    ///     </para>
+    /// </summary>
+    Task<IReadOnlyList<DevWorkflowRuleSetSnapshot>> ListEnabledRuleSetsAsync(CancellationToken cancellationToken = default);
+
     Task<DevWorkflowRunSnapshot> StartRunAsync(StartDevWorkflowRunCommand command, CancellationToken cancellationToken = default);
 
     Task<DevWorkflowRunSnapshot> GetRunAsync(Guid runId, CancellationToken cancellationToken = default);
@@ -650,6 +730,16 @@ public interface IDevWorkflowStore
     ///     </para>
     /// </summary>
     Task<Guid?> FindRunIdForDevelopmentTaskAsync(Guid developmentTaskId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The same question for a whole task list, in ONE query. The project page asks it once per task otherwise,
+    ///     which is a round trip per row on the one read that always has every row.
+    ///     <para>
+    ///         Same CONTRACT as the single-task read: the latest node run naming a task answers for it, and a task no
+    ///         workflow owns is simply absent from the dictionary.
+    ///     </para>
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, Guid>> FindRunIdsForDevelopmentTasksAsync(IReadOnlyList<Guid> developmentTaskIds, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Records an artifact, resolving its lineage by <c>(run, producing node key, name)</c>: the same node key

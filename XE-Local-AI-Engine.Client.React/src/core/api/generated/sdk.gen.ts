@@ -171,6 +171,9 @@ import type {
 	CreateDevWorkflowDefinitionData,
 	CreateDevWorkflowDefinitionErrors,
 	CreateDevWorkflowDefinitionResponses,
+	CreateDevWorkflowRuleSetData,
+	CreateDevWorkflowRuleSetErrors,
+	CreateDevWorkflowRuleSetResponses,
 	CreateDevWorkflowWorkItemData,
 	CreateDevWorkflowWorkItemErrors,
 	CreateDevWorkflowWorkItemResponses,
@@ -252,6 +255,9 @@ import type {
 	DeleteCustomToolData,
 	DeleteCustomToolErrors,
 	DeleteCustomToolResponses,
+	DeleteDevWorkflowRuleSetData,
+	DeleteDevWorkflowRuleSetErrors,
+	DeleteDevWorkflowRuleSetResponses,
 	DeleteDevWorkflowWorkItemData,
 	DeleteDevWorkflowWorkItemErrors,
 	DeleteDevWorkflowWorkItemResponses,
@@ -477,6 +483,9 @@ import type {
 	GetDevWorkflowNodeRunData,
 	GetDevWorkflowNodeRunErrors,
 	GetDevWorkflowNodeRunResponses,
+	GetDevWorkflowRuleSetData,
+	GetDevWorkflowRuleSetErrors,
+	GetDevWorkflowRuleSetResponses,
 	GetDevWorkflowRunData,
 	GetDevWorkflowRunErrors,
 	GetDevWorkflowRunResponses,
@@ -723,6 +732,9 @@ import type {
 	ListDevWorkflowDefinitionsData,
 	ListDevWorkflowDefinitionsErrors,
 	ListDevWorkflowDefinitionsResponses,
+	ListDevWorkflowRuleSetsData,
+	ListDevWorkflowRuleSetsErrors,
+	ListDevWorkflowRuleSetsResponses,
 	ListDevWorkflowRunEventsData,
 	ListDevWorkflowRunEventsErrors,
 	ListDevWorkflowRunEventsResponses,
@@ -1102,6 +1114,9 @@ import type {
 	UpdateDevWorkflowDefinitionData,
 	UpdateDevWorkflowDefinitionErrors,
 	UpdateDevWorkflowDefinitionResponses,
+	UpdateDevWorkflowRuleSetData,
+	UpdateDevWorkflowRuleSetErrors,
+	UpdateDevWorkflowRuleSetResponses,
 	UpdateDevWorkflowWorkItemData,
 	UpdateDevWorkflowWorkItemErrors,
 	UpdateDevWorkflowWorkItemResponses,
@@ -1262,6 +1277,8 @@ import {
 	zCreateDevelopmentRepositoryFromTemplateResponse,
 	zCreateDevWorkflowDefinitionBody,
 	zCreateDevWorkflowDefinitionResponse,
+	zCreateDevWorkflowRuleSetBody,
+	zCreateDevWorkflowRuleSetResponse,
 	zCreateDevWorkflowWorkItemBody,
 	zCreateDevWorkflowWorkItemResponse,
 	zCreateEvaluationBody,
@@ -1324,6 +1341,8 @@ import {
 	zDeleteConversationFileResponse,
 	zDeleteCustomToolPath,
 	zDeleteCustomToolResponse,
+	zDeleteDevWorkflowRuleSetPath,
+	zDeleteDevWorkflowRuleSetResponse,
 	zDeleteDevWorkflowWorkItemPath,
 	zDeleteDevWorkflowWorkItemResponse,
 	zDeleteEvaluationBody,
@@ -1469,6 +1488,8 @@ import {
 	zGetDevWorkflowDefinitionResponse,
 	zGetDevWorkflowNodeRunPath,
 	zGetDevWorkflowNodeRunResponse,
+	zGetDevWorkflowRuleSetPath,
+	zGetDevWorkflowRuleSetResponse,
 	zGetDevWorkflowRunPath,
 	zGetDevWorkflowRunResponse,
 	zGetDevWorkflowWorkItemPath,
@@ -1608,6 +1629,7 @@ import {
 	zListDevWorkflowArtifactsResponse,
 	zListDevWorkflowDefinitionsQuery,
 	zListDevWorkflowDefinitionsResponse,
+	zListDevWorkflowRuleSetsResponse,
 	zListDevWorkflowRunEventsPath,
 	zListDevWorkflowRunEventsQuery,
 	zListDevWorkflowRunEventsResponse,
@@ -1869,6 +1891,9 @@ import {
 	zUpdateDevWorkflowDefinitionBody,
 	zUpdateDevWorkflowDefinitionPath,
 	zUpdateDevWorkflowDefinitionResponse,
+	zUpdateDevWorkflowRuleSetBody,
+	zUpdateDevWorkflowRuleSetPath,
+	zUpdateDevWorkflowRuleSetResponse,
 	zUpdateDevWorkflowWorkItemBody,
 	zUpdateDevWorkflowWorkItemPath,
 	zUpdateDevWorkflowWorkItemResponse,
@@ -9722,6 +9747,163 @@ export const getDevWorkflowArtifactContent = <ThrowOnError extends boolean = fal
 		],
 		url: "/api/local/v1/development-workflows/runs/{runId}/artifacts/{artifactId}/content",
 		...options,
+	});
+
+export const listDevWorkflowRuleSets = <ThrowOnError extends boolean = false>(
+	options?: Options<ListDevWorkflowRuleSetsData, ThrowOnError>,
+): RequestResult<ListDevWorkflowRuleSetsResponses, ListDevWorkflowRuleSetsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListDevWorkflowRuleSetsResponses, ListDevWorkflowRuleSetsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListDevWorkflowRuleSetsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/development-workflows/rule-sets",
+		...options,
+	});
+
+export const createDevWorkflowRuleSet = <ThrowOnError extends boolean = false>(
+	options: Options<CreateDevWorkflowRuleSetData, ThrowOnError>,
+): RequestResult<CreateDevWorkflowRuleSetResponses, CreateDevWorkflowRuleSetErrors, ThrowOnError> =>
+	(options.client ?? client).post<CreateDevWorkflowRuleSetResponses, CreateDevWorkflowRuleSetErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateDevWorkflowRuleSetBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateDevWorkflowRuleSetResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/development-workflows/rule-sets",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteDevWorkflowRuleSet = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteDevWorkflowRuleSetData, ThrowOnError>,
+): RequestResult<DeleteDevWorkflowRuleSetResponses, DeleteDevWorkflowRuleSetErrors, ThrowOnError> =>
+	(options.client ?? client).delete<DeleteDevWorkflowRuleSetResponses, DeleteDevWorkflowRuleSetErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteDevWorkflowRuleSetPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteDevWorkflowRuleSetResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/development-workflows/rule-sets/{ruleSetId}",
+		...options,
+	});
+
+export const getDevWorkflowRuleSet = <ThrowOnError extends boolean = false>(
+	options: Options<GetDevWorkflowRuleSetData, ThrowOnError>,
+): RequestResult<GetDevWorkflowRuleSetResponses, GetDevWorkflowRuleSetErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetDevWorkflowRuleSetResponses, GetDevWorkflowRuleSetErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetDevWorkflowRuleSetPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetDevWorkflowRuleSetResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/development-workflows/rule-sets/{ruleSetId}",
+		...options,
+	});
+
+export const updateDevWorkflowRuleSet = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateDevWorkflowRuleSetData, ThrowOnError>,
+): RequestResult<UpdateDevWorkflowRuleSetResponses, UpdateDevWorkflowRuleSetErrors, ThrowOnError> =>
+	(options.client ?? client).put<UpdateDevWorkflowRuleSetResponses, UpdateDevWorkflowRuleSetErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUpdateDevWorkflowRuleSetBody,
+					path: zUpdateDevWorkflowRuleSetPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUpdateDevWorkflowRuleSetResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/development-workflows/rule-sets/{ruleSetId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const listDevWorkflowRuns = <ThrowOnError extends boolean = false>(

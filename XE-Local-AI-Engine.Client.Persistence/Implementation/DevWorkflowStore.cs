@@ -362,9 +362,12 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
     private static bool IsTerminal(DevWorkflowNodeRunStatus status) =>
         status is DevWorkflowNodeRunStatus.Succeeded or DevWorkflowNodeRunStatus.Failed or DevWorkflowNodeRunStatus.Skipped or DevWorkflowNodeRunStatus.Cancelled;
 
-    /// <summary>SHA-256 of the graph bytes, computed here so the hash and the blob can never describe different graphs.</summary>
-    private static string HashGraph(byte[] graphJson) =>
-        Convert.ToHexStringLower(SHA256.HashData(graphJson));
+    /// <summary>
+    ///     SHA-256 of a payload's bytes, lowercase hex, computed here — beside the blob it describes — so a hash and the
+    ///     text it names can never drift apart. Used for a definition's graph and a rule set's body alike.
+    /// </summary>
+    private static string HashPayload(byte[] payload) =>
+        Convert.ToHexStringLower(SHA256.HashData(payload));
 
     private static byte[]? ReasonDetail(string? sanitizedReason) =>
         string.IsNullOrWhiteSpace(sanitizedReason) ? null : Utf8(JsonSerializer.Serialize(new ReasonDetailPayload(sanitizedReason), JsonOptions));

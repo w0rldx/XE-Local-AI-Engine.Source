@@ -3938,6 +3938,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGra
 	materialization: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowMaterialization.nullish(),
 	requiredCapabilities: z.record(z.string(), z.string()).nullish(),
 	toolMode: z.string().nullish(),
+	isTemplate: z.boolean().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowEdgeCondition = z.object({
@@ -3996,6 +3997,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowApp
 	id: z.guid().optional(),
 	name: z.string().optional(),
 	contentSha256: z.string().optional(),
+	currentContentSha256: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunDetailResponse = z.object({
@@ -4092,6 +4094,67 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArt
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleScope = z.object({
+	projectIds: z.array(z.guid()).optional(),
+	nodeTypes: z.array(z.string()).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetSummaryResponse = z.object({
+	id: z.guid().optional(),
+	name: z.string().optional(),
+	description: z.string().nullish(),
+	scope: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleScope.optional(),
+	enabled: z.boolean().optional(),
+	contentSha256: z.string().optional(),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	createdAtUtc: z.int().optional(),
+	updatedAtUtc: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRuleSetsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetSummaryResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetResponse = z.object({
+	id: z.guid().optional(),
+	name: z.string().optional(),
+	description: z.string().nullish(),
+	body: z.string().optional(),
+	scope: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleScope.optional(),
+	enabled: z.boolean().optional(),
+	contentSha256: z.string().optional(),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	createdAtUtc: z.int().optional(),
+	updatedAtUtc: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowRuleSetRequest = z.object({
+	name: z.string().min(0).max(255),
+	description: z.string().min(0).max(1024).nullish(),
+	body: z.string().min(0).max(4096),
+	scope: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleScope.nullish(),
+	enabled: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowRuleSetRequest = z.object({
+	version: z.int().gt(0).max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }).optional(),
+	name: z.string().min(0).max(255),
+	description: z.string().min(0).max(1024).nullish(),
+	body: z.string().min(0).max(4096),
+	scope: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleScope.nullish(),
+	enabled: z.boolean().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse = z.object({
 	id: z.guid().optional(),
 	workItemId: z.guid().optional(),
@@ -4157,6 +4220,12 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNod
 	isMaterialized: z.boolean().optional(),
 	materializedFromNodeKey: z.string().nullish(),
 	materializationIndex: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	materializationGroupId: z.guid().nullish(),
+	materializationCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
@@ -4515,6 +4584,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventRespons
 	operationId: z.guid().nullish(),
 	operationPhase: z.string().nullish(),
 	outcome: z.string().nullish(),
+	reason: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse = z.object({
@@ -8728,6 +8798,48 @@ export const zGetDevWorkflowArtifactContentPath = z.object({
  */
 export const zGetDevWorkflowArtifactContentResponse =
 	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactContentResponse;
+
+/**
+ * Success
+ */
+export const zListDevWorkflowRuleSetsResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRuleSetsResponse;
+
+export const zCreateDevWorkflowRuleSetBody = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowRuleSetRequest;
+
+/**
+ * Success
+ */
+export const zCreateDevWorkflowRuleSetResponse = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetResponse;
+
+export const zDeleteDevWorkflowRuleSetPath = z.object({
+	ruleSetId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteDevWorkflowRuleSetResponse = z.void();
+
+export const zGetDevWorkflowRuleSetPath = z.object({
+	ruleSetId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetDevWorkflowRuleSetResponse = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetResponse;
+
+export const zUpdateDevWorkflowRuleSetBody = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowRuleSetRequest;
+
+export const zUpdateDevWorkflowRuleSetPath = z.object({
+	ruleSetId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zUpdateDevWorkflowRuleSetResponse = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetResponse;
 
 export const zListDevWorkflowRunsQuery = z.object({
 	workItemId: z.guid().nullish(),

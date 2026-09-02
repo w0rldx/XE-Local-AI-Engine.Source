@@ -21,6 +21,9 @@ internal sealed class DevWorkflowTestFixture : IDisposable
 {
     public const string SampleGraph = """{"schemaVersion":1,"nodes":[{"nodeKey":"research","nodeType":"Agent"}],"edges":[]}""";
 
+    /// <summary>Both axes empty, which the resolver reads as "matches everything".</summary>
+    public const string MatchAllScope = """{"projectIds":[],"nodeTypes":[]}""";
+
     private readonly NullNodeSqliteKeyHolder _keyHolder = new();
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-dev-workflows-" + Guid.NewGuid().ToString("N"));
 
@@ -78,6 +81,14 @@ internal sealed class DevWorkflowTestFixture : IDisposable
                              .ConfigureAwait(false);
         return new DevWorkflowSeed(workItem.Id, definition.Id, run.Id, run.Version);
     }
+
+    /// <summary>A rule set scoped to everything, which is what most tests want one for.</summary>
+    public static Task<DevWorkflowRuleSetSnapshot> CreateRuleSetAsync(DevWorkflowStore store,
+        string name = "House rules",
+        string body = "Always write the test first.",
+        string scopeJson = MatchAllScope,
+        bool enabled = true) =>
+        store.CreateRuleSetAsync(new CreateDevWorkflowRuleSetCommand(Guid.NewGuid(), name, body, scopeJson, Enabled: enabled));
 
     /// <summary>Adds one node run to a seeded run and answers the run's post-commit version.</summary>
     public static async Task<long> AddNodeRunAsync(DevWorkflowStore store,

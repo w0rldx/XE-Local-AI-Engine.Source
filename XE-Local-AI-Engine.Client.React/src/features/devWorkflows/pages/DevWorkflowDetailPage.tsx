@@ -34,6 +34,7 @@ import {
 } from "@/features/devWorkflows/models/DevWorkflowModels";
 import {
 	type DevWorkflowEventsAnchor,
+	devWorkflowEventsAnchorParam,
 	useDecideDevWorkflowNodeRun,
 	useDeleteDevWorkflowWorkItem,
 	useDevWorkflowArtifacts,
@@ -92,6 +93,9 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	// The feed opens on the newest events (R-C4) and needs the run's high-water mark to compute that cursor. `?tab=`
 	// carries no anchor: which end of a log you are reading is a scroll position, not a shareable view of the run.
 	const eventsQuery = useDevWorkflowRunEvents(runId, runQuery.data?.lastSequence, { ...poll, anchor: eventsAnchor });
+	// The same cursor the feed opened on. Passed down so the tab can say when a live run crossed a page boundary and
+	// took the older pages with it, instead of them disappearing without a word.
+	const eventsAnchorParam = devWorkflowEventsAnchorParam(runQuery.data?.lastSequence, eventsAnchor);
 	const artifactsQuery = useDevWorkflowArtifacts(runId, poll);
 	const definitionsQuery = useDevWorkflowDefinitions();
 	const lifecycle = useDevWorkflowRunLifecycle(runId, workItemId);
@@ -253,6 +257,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 					hasMore={eventsQuery.hasNextPage}
 					isLoadingMore={eventsQuery.isFetchingNextPage}
 					anchor={eventsAnchor}
+					anchorParam={eventsAnchorParam}
 					onAnchorChange={setEventsAnchor}
 					// The promise is the caller's to ignore: a failed page read is already the query's error state.
 					onLoadMore={() => {

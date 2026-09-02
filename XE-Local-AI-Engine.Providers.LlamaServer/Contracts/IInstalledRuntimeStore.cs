@@ -40,6 +40,15 @@ public sealed record InstalledRuntimeState(
 /// </remarks>
 public interface IInstalledRuntimeStore
 {
+    /// <summary>
+    ///     Takes the cross-process lock guarding the record, releasing it on dispose. <see cref="ReadAsync" /> and
+    ///     <see cref="WriteAsync" /> are each atomic on their own and do NOT take it; a caller that READS the record and
+    ///     then writes based on what it read holds it across both. The record lives under the shared user-level cache
+    ///     root, so two nodes on one machine otherwise interleave and one lands a prebuilt record over the other's
+    ///     source build. Throws <see cref="IOException" /> when the lock stays held past a bounded wait.
+    /// </summary>
+    Task<IDisposable> AcquireAsync(CancellationToken ct);
+
     /// <summary>Reads the installed-runtime state, or <see langword="null" /> when absent/corrupt (first run).</summary>
     Task<InstalledRuntimeState?> ReadAsync(CancellationToken ct);
 

@@ -444,6 +444,10 @@ public sealed class DevWorkflowNodeRunTests
     ///         Two runs can name one task over its life — a re-run of the same definition drives the same task — and the
     ///         LATEST answers, because the question is where the approval lives now.
     ///     </para>
+    ///     <para>
+    ///         The batch form the project page reads with is asserted alongside it, on the same rows: it exists to
+    ///         replace a per-task loop, so it has to give the per-task answer.
+    ///     </para>
     /// </summary>
     [Test]
     public async Task TheRunDrivingADevelopmentTask_IsFoundBackThroughThePointerAndTheLatestOneAnswers()
@@ -482,6 +486,11 @@ public sealed class DevWorkflowNodeRunTests
         AssertEx.Null(await earlier.FindRunIdForDevelopmentTaskAsync(Guid.NewGuid()).ConfigureAwait(false),
             "A task no workflow drives names no run, which is every task an operator created themselves.");
 
+        var missing = Guid.NewGuid();
+        var batched = await earlier.FindRunIdsForDevelopmentTasksAsync([task.TaskId, missing]).ConfigureAwait(false);
+        AssertEx.Equal(first.RunId, batched[task.TaskId], "The batch read answers exactly what the single-task read does.");
+        AssertEx.False(batched.ContainsKey(missing), "A task no workflow drives is absent from the dictionary rather than mapped to an empty id.");
+
         var second = await DevWorkflowTestFixture.SeedRunAsync(later, developmentProjectId: task.ProjectId).ConfigureAwait(false);
         var secondNodeRunId = Guid.NewGuid();
         var secondVersion = await DevWorkflowTestFixture.AddNodeRunAsync(later,
@@ -502,6 +511,9 @@ public sealed class DevWorkflowNodeRunTests
         AssertEx.Equal(second.RunId,
             await later.FindRunIdForDevelopmentTaskAsync(task.TaskId).ConfigureAwait(false),
             "The run that took the task over is the one holding its approval now.");
+        AssertEx.Equal(second.RunId,
+            (await later.FindRunIdsForDevelopmentTasksAsync([task.TaskId]).ConfigureAwait(false))[task.TaskId],
+            "And the batch read follows the same latest-wins rule, which is the whole point of sharing the contract.");
     }
 
     /// <summary>The repository row a development project points at; both seeded projects share it.</summary>

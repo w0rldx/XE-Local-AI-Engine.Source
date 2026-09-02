@@ -48,17 +48,36 @@ internal sealed class DevWorkflowDevTaskExecutor
         DevelopmentAttemptStatus.Running
     ];
 
+    /// <summary>
+    ///     How much of the routed node's validation report a change request may carry. Generous enough for the failing
+    ///     commands and a readable tail of each, small enough that a task's rework reason stays a sentence a human and a
+    ///     model can both take in — and small enough that it cannot become the whole prompt.
+    /// </summary>
+    private const int MaxChangeRequestReason = 4096;
+
+    /// <summary>How much of one failing command's captured output the change request quotes, from the END of it.</summary>
+    private const int MaxQuotedCommandOutput = 800;
+
+    /// <summary>
+    ///     The last resort: a sentence with nothing interpolated into it, for when even the routed counts cannot be
+    ///     stated safely. It is still true, which is the only bar a reason has to clear.
+    /// </summary>
+    private const string GenericChangeRequest = "A downstream check rejected this implementation and asked for it to be done again.";
+
+    private readonly IDevWorkflowArtifactBlobStore _blobs;
     private readonly ILogger<DevWorkflowDevTaskExecutor> _logger;
     private readonly DevWorkflowRetryPolicy _retries;
     private readonly IServiceProvider _services;
     private readonly TimeProvider _timeProvider;
 
     public DevWorkflowDevTaskExecutor(IServiceProvider services,
+        IDevWorkflowArtifactBlobStore blobs,
         DevWorkflowRetryPolicy retries,
         TimeProvider timeProvider,
         ILogger<DevWorkflowDevTaskExecutor> logger)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
+        _blobs = blobs ?? throw new ArgumentNullException(nameof(blobs));
         _retries = retries ?? throw new ArgumentNullException(nameof(retries));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -422,19 +441,29 @@ internal sealed class DevWorkflowDevTaskExecutor
     {
         var task = await development.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
         var attempts = await development.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false);
+        var rework = task.Status == DevelopmentTaskStatus.AwaitingApply
+            ? await UnconsumedPriorFailureAsync(development, run, nodeRun, projectId, cancellationToken).ConfigureAwait(false)
+            : null;
 
         switch (task.Status)
         {
+            case DevelopmentTaskStatus.AwaitingApply when rework is { } failingNodeKey:
+
+                // The fix loop landed on an already-approved task. Settling it Succeeded here is what made a routed
+                // re-attempt a no-op: the loop would route, re-succeed in the same tick, and spend the target's whole
+                // attempt budget in seconds without ever asking for a different patch. So the node asks Dev Mode for
+                // rework instead, with the routed node's own validation report as the review evidence.
+                return await RequestChangesAsync(store, graph, run, nodeRun, nodeRuns, development, task, failingNodeKey, cancellationToken).ConfigureAwait(false);
+
             case DevelopmentTaskStatus.AwaitingApply or DevelopmentTaskStatus.Completed:
 
                 // The node's job is DONE at AwaitingApply: an independent reviewer approved the exact subject, and
                 // applying it is a later act behind a gate this run records. A task somebody has already applied is the
                 // same answer arriving later.
                 //
-                // A re-attempt of this node against a task that is ALREADY there succeeds immediately, and that is the
-                // honest answer rather than a shortcut: the development state machine has no path from AwaitingApply
-                // back to InProgress, so nothing here could ask the chain for another round even if it wanted one, and
-                // the claim the node is making — this task is implemented and waiting to be applied — is still true.
+                // A re-attempt with no routed failure behind it succeeds immediately, and that is the honest answer
+                // rather than a shortcut: nothing has said this implementation is wrong, and the claim the node is
+                // making — this task is implemented and waiting to be applied — is still true.
                 return await SettleAsync(store,
                         run,
                         nodeRun,
@@ -624,6 +653,276 @@ internal sealed class DevWorkflowDevTaskExecutor
                 .ConfigureAwait(false);
         }
     }
+
+    /// <summary>
+    ///     Asks Dev Mode for a new coder round on a task the workflow has just been told is wrong, and answers 1
+    ///     because a stage boundary is progress. The node run is NOT settled: it stays Running on the same attempt and
+    ///     the next poll finds the task at <c>ChangesRequested</c>, where the ordinary next-action path starts the new
+    ///     coder attempt with no special casing at all.
+    ///     <para>
+    ///         One ask per attempt, and the ledger is what enforces it: the transition is written under an operation id
+    ///         keyed on <c>(run, node key, attempt)</c>, which <see cref="UnconsumedPriorFailureAsync" /> reads before
+    ///         the branch is taken. That matters because the routed failure stays on the input for the life of the
+    ///         attempt, so the SECOND round's arrival back at <c>AwaitingApply</c> would otherwise ask again forever.
+    ///     </para>
+    /// </summary>
+    private async Task<int> RequestChangesAsync(IDevWorkflowStore store,
+        DevWorkflowGraph graph,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
+        IDevelopmentStore development,
+        DevelopmentTaskSnapshot task,
+        string failingNodeKey,
+        CancellationToken cancellationToken)
+    {
+        // A workflow-driven change request does NOT consume a review round. Rounds are spent ENTERING review — both
+        // TransitionTaskAsync and FinalizeValidationAsync bump CurrentReviewRound only on the InReview hop, and refuse
+        // it past the maximum — and this transition never enters review, so charging it one would take a round away
+        // from work that has not been reviewed yet. What it must not do is ask for a round that cannot finish: a task
+        // that has spent them all would run a whole coder attempt, reach validation, and be blocked at the review hop
+        // for a reason nobody can act on. So the node stands down here instead, while the reason is still legible.
+        if (task.CurrentReviewRound >= task.MaxReviewRounds)
+        {
+            return await _retries.SettleFailureAsync(store,
+                    graph,
+                    run,
+                    nodeRun,
+                    nodeRuns,
+                    new DevWorkflowFailure(DevWorkflowFailureClasses.BudgetExhausted,
+                        string.Create(CultureInfo.InvariantCulture,
+                            $"Node run '{failingNodeKey}' asked this task to be implemented again, and it has already used all {task.MaxReviewRounds} of its review rounds."),
+                        Output(nodeRun, task, task.Id, DevWorkflowFailureClasses.BudgetExhausted)),
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        var reason = await DescribePriorFailureAsync(store, run, nodeRun, failingNodeKey, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            _ = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(task.Id,
+                                     DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "devtask-request-changes"),
+                                     DevelopmentTaskStatus.ChangesRequested,
+                                     task.Version,
+                                     reason),
+                                 cancellationToken)
+                             .ConfigureAwait(false);
+            return 1;
+        }
+        catch (Exception exception) when (exception is DevelopmentConcurrencyException or DevelopmentInvalidTransitionException)
+        {
+            // Something else moved the task between this tick's read and its ask — an operator in the Development
+            // views, or a sibling tick. Nothing is owed; the next tick reads what it became.
+            return 0;
+        }
+    }
+
+    /// <summary>
+    ///     The routed failure this node-run attempt has not answered yet, or nothing.
+    ///     <para>
+    ///         The routed failure stays on <c>InputJson</c> for the life of the attempt — nothing clears it — so
+    ///         whether this attempt has already asked for rework cannot be read off the input. It is read off the
+    ///         LEDGER: the change request is written under an operation keyed on <c>(run, node key, attempt)</c>, so
+    ///         that operation existing IS the record that this attempt has spent its one ask. Without this the second
+    ///         round's arrival back at <c>AwaitingApply</c> would ask again, be answered by the memoized operation,
+    ///         move nothing, and leave the node run Running for as long as the dispatcher keeps polling it.
+    ///     </para>
+    /// </summary>
+    private static async Task<string?> UnconsumedPriorFailureAsync(IDevelopmentStore development,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        if (PriorFailureNode(nodeRun.InputJson) is not { } failingNodeKey)
+        {
+            return null;
+        }
+
+        return await development.FindOperationAsync(projectId,
+                       DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "devtask-request-changes"),
+                       DevelopmentOperationPhases.Completed,
+                       cancellationToken)
+                   .ConfigureAwait(false) is null
+            ? failingNodeKey
+            : null;
+    }
+
+    /// <summary>
+    ///     The node key of the routed failure this dispatch is carrying, or nothing when there is none.
+    ///     <para>
+    ///         Best-effort by design, like <see cref="Brief" />: an input this cannot read is an input with no routed
+    ///         failure in it, which falls through to the branch that was there before rather than throwing on a
+    ///         document nobody promised the shape of.
+    ///     </para>
+    /// </summary>
+    private static string? PriorFailureNode(string? inputJson)
+    {
+        if (string.IsNullOrWhiteSpace(inputJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(inputJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.TryGetProperty("priorFailureNode", out var node)
+                   && node.ValueKind == JsonValueKind.String
+                   && !string.IsNullOrWhiteSpace(node.GetString())
+                ? node.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     Why the workflow is asking for another round, in the words of the node that refused this one: which commands
+    ///     failed and the tail of what they printed, read off that node's latest validation report.
+    ///     <para>
+    ///         The report is the evidence, not the routed <c>priorFailure</c> summary — that carries only counts, and a
+    ///         coder told "1 of 4 commands failed" has been told nothing it can act on. When the report cannot be read,
+    ///         or carries material the sanitizer refuses, the counts are what is left and they are still true.
+    ///     </para>
+    /// </summary>
+    private async Task<string> DescribePriorFailureAsync(IDevWorkflowStore store,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        string failingNodeKey,
+        CancellationToken cancellationToken)
+    {
+        // The counts go through the same bound and the same sanitizer as the report does: the node key interpolated
+        // into them comes from a stored graph definition, which is authored text like any other.
+        var counts = Bounded(DescribeCounts(nodeRun.InputJson, failingNodeKey), GenericChangeRequest);
+        try
+        {
+            return await ReadValidationReportAsync(store, run, failingNodeKey, cancellationToken).ConfigureAwait(false) is { } report
+                ? Bounded(Describe(report, failingNodeKey, counts), counts)
+                : counts;
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException or IOException or UnauthorizedAccessException)
+        {
+            // A report whose shape this build cannot read, or whose bytes the filesystem would not hand over — the blob
+            // store answers a MISSING or tampered blob with a status, but a disk or permission fault still throws, and
+            // letting it escape would fail the tick and re-throw on every sweep after it. The counts are authored here
+            // from numbers, so they are always the safe answer.
+            _logger.LogDebug(exception, "Development workflow node run {NodeRunId} could not quote node '{NodeKey}' validation report.", nodeRun.Id, failingNodeKey);
+            return counts;
+        }
+    }
+
+    /// <summary>
+    ///     One reason, sanitized and bounded, or <paramref name="fallback" /> when the sanitizer refuses it. Every
+    ///     string that reaches a task's rework reason goes through here: the report quotes model-adjacent command
+    ///     output, and the counts quote a node key an operator wrote.
+    /// </summary>
+    private static string Bounded(string text, string fallback)
+    {
+        try
+        {
+            var sanitized = DevelopmentArtifactSanitizer.SanitizeText(text);
+            return sanitized.Length <= MaxChangeRequestReason ? sanitized : sanitized[..MaxChangeRequestReason];
+        }
+        catch (DevelopmentWorkspaceSecurityException)
+        {
+            return fallback;
+        }
+    }
+
+    /// <summary>The failing node's latest validation report, or nothing when there is none this build can read.</summary>
+    private async Task<DevWorkflowValidationReport?> ReadValidationReportAsync(IDevWorkflowStore store,
+        DevWorkflowRunSnapshot run,
+        string failingNodeKey,
+        CancellationToken cancellationToken)
+    {
+        if ((await store.ListArtifactsAsync(run.Id, cancellationToken: cancellationToken).ConfigureAwait(false))
+            .Where(artifact => artifact is { IsValid: true, Kind: DevWorkflowArtifactKind.ValidationReport }
+                               && string.Equals(artifact.ProducingNodeKey, failingNodeKey, StringComparison.Ordinal))
+            .MaxBy(static artifact => artifact.Sequence) is not { } latest)
+        {
+            return null;
+        }
+
+        var read = await _blobs.ReadAsync(run.Id, latest.Id, latest.ContentSha256, latest.SizeBytes, cancellationToken).ConfigureAwait(false);
+        return read.Status == DevWorkflowArtifactReadStatus.Found
+            ? JsonSerializer.Deserialize<DevWorkflowValidationReport>(read.Content.Span, JsonOptions)
+            : null;
+    }
+
+    /// <summary>The report as a rework brief: the gate's own verdict, then each failing command and the tail it left.</summary>
+    private static string Describe(DevWorkflowValidationReport report, string failingNodeKey, string counts)
+    {
+        var lines = new List<string>
+        {
+            report.FailureDetail is { Length: > 0 } detail
+                ? $"Node '{failingNodeKey}' rejected this implementation: {detail}"
+                : $"Node '{failingNodeKey}' rejected this implementation. {counts}"
+        };
+
+        foreach (var command in (report.Commands ?? []).Where(static command => command.ExitCode != 0 || command.TestOutcome is { Failed: > 0 }))
+        {
+            lines.Add(command.TestOutcome is { Parsed: true } outcome
+                ? string.Create(CultureInfo.InvariantCulture, $"- {command.CommandId} exited {command.ExitCode}, {outcome.Failed} of {outcome.Executed} tests failed:")
+                : string.Create(CultureInfo.InvariantCulture, $"- {command.CommandId} exited {command.ExitCode}:"));
+            if (Tail(string.IsNullOrWhiteSpace(command.StandardError) ? command.StandardOutput : command.StandardError) is { Length: > 0 } tail)
+            {
+                lines.Add(tail);
+            }
+        }
+
+        return string.Join('\n', lines);
+    }
+
+    /// <summary>The END of a command's output: a failure states itself last, and the head is the run-up to it.</summary>
+    private static string Tail(string? output)
+    {
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return string.Empty;
+        }
+
+        return output.Length <= MaxQuotedCommandOutput ? output.Trim() : string.Concat("…", output[^MaxQuotedCommandOutput..].Trim());
+    }
+
+    /// <summary>
+    ///     What the ROUTED payload says, which is only counts — the fallback when the report itself cannot be quoted.
+    ///     Authored from numbers this engine wrote, so there is nothing in it to sanitize.
+    /// </summary>
+    private static string DescribeCounts(string? inputJson, string failingNodeKey)
+    {
+        var generic = $"Node '{failingNodeKey}' rejected this implementation and asked for it to be done again.";
+        if (string.IsNullOrWhiteSpace(inputJson))
+        {
+            return generic;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(inputJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("priorFailure", out var failure)
+                || failure.ValueKind != JsonValueKind.Object)
+            {
+                return generic;
+            }
+
+            var commandsFailed = Number(failure, "commandsFailed");
+            var commandsRun = Number(failure, "commandsRun");
+            var testsFailed = Number(failure, "testsFailed");
+            return string.Create(CultureInfo.InvariantCulture,
+                $"{generic} {commandsFailed} of {commandsRun} commands failed, {testsFailed} tests failed.");
+        }
+        catch (JsonException)
+        {
+            return generic;
+        }
+    }
+
+    private static int Number(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) ? number : 0;
 
     /// <summary>What a landed attempt failed with, in the terms the retry decision is made on.</summary>
     private static DevWorkflowFailure Failure(DevelopmentAttemptSnapshot attempt,

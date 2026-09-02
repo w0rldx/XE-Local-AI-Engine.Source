@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { devWorkflowGraphRules } from "@/features/devWorkflows/models/DevWorkflowDefinitionValidation";
 import en from "@/locales/en.json";
 import { nonEnglishLocales } from "@/test/Locales";
 
@@ -113,6 +114,9 @@ describe("dev-workflow enum label maps are complete in every locale", () => {
 				"unknown",
 			],
 		},
+		// Every rule the definition editor's save gate can report. The rule NAME is the key suffix, so a rule that ships
+		// without a message renders as its own identifier in front of an operator trying to fix a graph.
+		{ section: "definition.issues", members: devWorkflowGraphRules },
 	] as const;
 
 	it.each(vocabularies)("$section has a label for every member in en.json", ({ section, members }) => {

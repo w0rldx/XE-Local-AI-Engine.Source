@@ -31,6 +31,13 @@ internal enum DevWorkflowNodeAdmission
 }
 
 /// <summary>
+///     What recomputing a run's status concluded, and — when the answer is <c>Cancelled</c> — why. A status alone
+///     cannot carry that: a run whose tail was abandoned has no failing node run to read the reason off, because
+///     nothing failed. Passed straight into the run transition, which is the only writer of both columns.
+/// </summary>
+internal readonly record struct DevWorkflowRunOutcome(DevWorkflowRunStatus Status, string? FailureClass = null, string? TerminalReason = null);
+
+/// <summary>
 ///     The run and node-run state machines, as pure functions over persisted rows and the parsed graph.
 ///     <para>
 ///         The store deliberately does not judge transitions — it provides the rejection channel and enforces only what
@@ -42,6 +49,19 @@ internal static class DevWorkflowStateMachine
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>The schema's own bound on the RUN's <c>terminal_reason</c> (<c>DevWorkflowRunConfiguration</c>).</summary>
+    private const int MaxTerminalReason = 512;
+
+    /// <summary>How many terminal nodes a reason names one by one before it starts counting them instead.</summary>
+    private const int MaxNamedNodes = 3;
+
+    /// <summary>The two answers a human gate refuses with, by the output document each one stores. Nothing varies.</summary>
+    private static readonly Dictionary<string, DevWorkflowDecisionKind> GateRefusals = new(StringComparer.Ordinal)
+    {
+        [GateOutputJson(DevWorkflowDecisionKind.Reject)] = DevWorkflowDecisionKind.Reject,
+        [GateOutputJson(DevWorkflowDecisionKind.RequestChanges)] = DevWorkflowDecisionKind.RequestChanges
+    };
 
     /// <summary>
     ///     The output document a human gate produces for one answer — the document its out-edge conditions are then
@@ -173,17 +193,37 @@ internal static class DevWorkflowStateMachine
     }
 
     /// <summary>
-    ///     The status a run should hold given its node runs, recomputed from scratch at the end of every tick rather than
-    ///     accumulated. It is denormalized on purpose so a reader can answer "what is this run doing" without a join.
+    ///     The status a run should hold given its node runs and its CURRENT pinned graph, recomputed from scratch at the
+    ///     end of every tick rather than accumulated. It is denormalized on purpose so a reader can answer "what is this
+    ///     run doing" without a join.
     ///     <para>
     ///         The <c>-ing</c> statuses are not decided here: they are intents a command wrote, and only the drain that
     ///         settles them may clear them. Terminal runs are likewise left alone.
     ///     </para>
+    ///     <para>
+    ///         Graph-aware on purpose. <c>Completed</c> means at least one TERMINAL node — one no edge leaves,
+    ///         <see cref="DevWorkflowGraph.TerminalNodeKeys" /> — succeeded, so a run whose tail an operator skipped, or
+    ///         whose gate rejection routed down a branch that skipped the remainder, reads <c>Cancelled</c> with a
+    ///         reason naming the ends it never reached rather than <c>Completed</c> like a run that did its job.
+    ///         <c>Failed</c> outranks both, unchanged: a node that failed is the answer to why the run stopped.
+    ///     </para>
     /// </summary>
-    public static DevWorkflowRunStatus Recompute(DevWorkflowRunStatus current, IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns)
+    public static DevWorkflowRunOutcome Recompute(DevWorkflowRunStatus current,
+        DevWorkflowGraph graph,
+        IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns)
     {
+        ArgumentNullException.ThrowIfNull(graph);
         ArgumentNullException.ThrowIfNull(nodeRuns);
 
+        return Settled(current, nodeRuns) is { } settled ? new DevWorkflowRunOutcome(settled) : Terminalize(graph, nodeRuns);
+    }
+
+    /// <summary>
+    ///     Everything a run's status can be decided from the ROWS alone — or <see langword="null" />, meaning every node
+    ///     run is terminal and only the graph can say what that amounts to.
+    /// </summary>
+    private static DevWorkflowRunStatus? Settled(DevWorkflowRunStatus current, IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns)
+    {
         if (IsTerminal(current) || current is DevWorkflowRunStatus.Pausing or DevWorkflowRunStatus.Cancelling or DevWorkflowRunStatus.Paused)
         {
             return current;
@@ -206,17 +246,94 @@ internal static class DevWorkflowStateMachine
         }
 
         // A run with no node runs at all has not been materialized yet; it is still Pending, not complete.
-        if (nodeRuns.Count == 0)
+        return nodeRuns.Count == 0 ? current : null;
+    }
+
+    /// <summary>
+    ///     What a run whose every node run is terminal amounts to, asked of the graph. Skipped and Cancelled node runs
+    ///     do not block an end — they simply are not one, and this is where that distinction is made.
+    ///     <para>
+    ///         <c>GateRejected</c> here means only this: a human gate somewhere in this run was refused, and the run
+    ///         reached no end. It is NOT a causal proof, and must not be read as one — a rejection can route into a
+    ///         branch that runs perfectly well, and a false condition further down can be what actually killed the
+    ///         tail. The class narrows where a reader should look; the reason names what was actually not reached, and
+    ///         the event log is what says in which order. Proving the cause would mean walking the dead edges back to
+    ///         their first refusal, which is a graph search this rule does not need to pick the right thing to show.
+    ///     </para>
+    /// </summary>
+    private static DevWorkflowRunOutcome Terminalize(DevWorkflowGraph graph, IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns)
+    {
+        if (nodeRuns.Any(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Failed))
         {
-            return current;
+            return new DevWorkflowRunOutcome(DevWorkflowRunStatus.Failed);
         }
 
-        // Skipped and Cancelled node runs are terminal and do not block completion. A run whose every node was skipped
-        // completes: every branch condition was false, which is a real outcome, and the event log says which.
-        return nodeRuns.Any(nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Failed)
-            ? DevWorkflowRunStatus.Failed
-            : DevWorkflowRunStatus.Completed;
+        var ends = nodeRuns.Where(nodeRun => graph.TerminalNodeKeys.Contains(nodeRun.NodeKey)).ToList();
+        if (ends.Any(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Succeeded))
+        {
+            return new DevWorkflowRunOutcome(DevWorkflowRunStatus.Completed);
+        }
+
+        // GateRejected only when a gate was refused at all. The other way here is an operator Skip abandoning the
+        // tail, which is a human decision rather than a failure and has no honest class in the vocabulary — the reason
+        // carries the whole answer there, and inventing a class for it would put a token in the durable log that means
+        // "a person chose this".
+        var refused = nodeRuns.FirstOrDefault(static nodeRun => Refusal(nodeRun) is not null);
+        return new DevWorkflowRunOutcome(DevWorkflowRunStatus.Cancelled,
+            refused is null ? null : DevWorkflowFailureClasses.GateRejected,
+            Reason(ends, refused));
     }
+
+    /// <summary>
+    ///     Why a run that reached no end stopped, naming the ends it did not reach and what became of them.
+    ///     <para>
+    ///         Sanitized by construction rather than by a pass: every word of it is either fixed text or a node key
+    ///         from the run's own definition graph, and a materialization CLONE — the one node key a model has a hand
+    ///         in — is never terminal, because its leaf edge is rewired to the join when it is created. Bounded the
+    ///         same way: at most <see cref="MaxNamedNodes" /> keys are named before the rest are counted, and the
+    ///         whole sentence is cut to the column's own <see cref="MaxTerminalReason" />.
+    ///     </para>
+    /// </summary>
+    private static string Reason(IReadOnlyList<DevWorkflowNodeRunSnapshot> ends, DevWorkflowNodeRunSnapshot? refused)
+    {
+        var listed = string.Join(", ", ends.Take(MaxNamedNodes).Select(static end => $"'{end.NodeKey}' was {end.Status}"));
+        if (ends.Count > MaxNamedNodes)
+        {
+            listed += $", and {ends.Count - MaxNamedNodes} more";
+        }
+
+        var named = ends.Count == 0 ? "this run reached none of the graph's ends" : listed;
+
+        // The answer itself, not a paraphrase: Reject and RequestChanges dead-end a run identically, and a reader who
+        // is shown "was rejected" for a RequestChanges goes looking for a decision row that says no such thing.
+        var cause = refused is null ? string.Empty : $", after the gate '{refused.NodeKey}' answered {Refusal(refused)}";
+        var reason = $"No terminal node succeeded: {named}{cause}.";
+        if (reason.Length <= MaxTerminalReason)
+        {
+            return reason;
+        }
+
+        // Back off one when the bound falls between a surrogate pair. A node key is not charset-restricted, so an
+        // astral character can straddle the cut, and half of one is a broken string in the column and on the wire.
+        var cut = char.IsHighSurrogate(reason[MaxTerminalReason - 1]) ? MaxTerminalReason - 1 : MaxTerminalReason;
+        return reason[..cut];
+    }
+
+    /// <summary>
+    ///     Which answer a human gate was REFUSED with, or <see langword="null" /> when this node run is not a refused
+    ///     gate. <c>Reject</c> and <c>RequestChanges</c> both count: each is a person declining to let the run
+    ///     through, and each leaves the same shape behind when nothing downstream of it reaches an end.
+    ///     <para>
+    ///         Matched against <see cref="GateOutputJson" /> because the dispatcher writes a gate's output FROM that
+    ///         method and nothing else writes it at all — so this is the cheapest honest source, and it cannot drift
+    ///         from what a gate actually stores the way a second spelling of the shape would.
+    ///     </para>
+    /// </summary>
+    private static DevWorkflowDecisionKind? Refusal(DevWorkflowNodeRunSnapshot nodeRun) =>
+        nodeRun is { NodeType: DevWorkflowNodeType.HumanGate, Status: DevWorkflowNodeRunStatus.Succeeded }
+        && GateRefusals.TryGetValue(nodeRun.OutputJson ?? string.Empty, out var decision)
+            ? decision
+            : null;
 
     /// <summary>
     ///     Where a run's status and its node runs leave the work item. Written inside the same transaction as the run
@@ -309,14 +426,33 @@ internal static class DevWorkflowStateMachine
                 Status = target
             }
             : nodeRun).ToList();
-        return WorkItemStatusFor(Recompute(runStatus, projected), projected);
+
+        // Deliberately NOT graph-aware, and it does not need to be. This exists for the case the end-of-tick
+        // recomputation cannot carry — a node blocking under a run whose status does not move — and every TERMINAL
+        // answer it gives is provisional: the same tick's Recompute asks the graph and writes the work item again
+        // from that answer, so the only thing a graph would buy here is a parameter two of the five callers have
+        // no way to supply, for a value nobody reads by the time they look.
+        var projectedRun = Settled(runStatus, projected)
+                           ?? (projected.Any(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Failed)
+                               ? DevWorkflowRunStatus.Failed
+                               : DevWorkflowRunStatus.Completed);
+        return WorkItemStatusFor(projectedRun, projected);
     }
 
     /// <summary>
     ///     The run transition table. Every terminal is reached through a drain (<c>Pausing</c>/<c>Cancelling</c>) or
-    ///     through the "nothing is live any more" recomputation — there is deliberately no direct edge from a
-    ///     non-terminal status to <c>Cancelled</c>, because writing one would strand the run's live node runs under a
-    ///     terminal run that is never advanced again, leaking the slots their executors hold.
+    ///     through the "nothing is live any more" recomputation, and the invariant behind that is about LIVE work: a
+    ///     terminal written over a run with a live node run strands it under a run no tick advances again, leaking the
+    ///     slots its executor holds.
+    ///     <para>
+    ///         <c>Running → Cancelled</c> and <c>WaitingForApproval → Cancelled</c> are that recomputation's own edges
+    ///         and nothing else's. They are safe under exactly the same invariant rather than in spite of it: the only
+    ///         caller that can produce that target is <c>RecomputeRunStatusAsync</c>, and <see cref="Recompute" />
+    ///         reaches its terminalization branch ONLY once every node run is already terminal. There is nothing left
+    ///         to strand, and nothing to drain either — routing through <c>Cancelling</c> would cost a whole extra tick
+    ///         to settle something already knowable. The X10 gate-reject path keeps its drain, because there a live
+    ///         sibling genuinely may still be mid-build.
+    ///     </para>
     /// </summary>
     public static bool IsLegal(DevWorkflowRunStatus from, DevWorkflowRunStatus to) =>
         from switch
@@ -326,11 +462,13 @@ internal static class DevWorkflowStateMachine
                 or DevWorkflowRunStatus.Pausing
                 or DevWorkflowRunStatus.Cancelling
                 or DevWorkflowRunStatus.Completed
+                or DevWorkflowRunStatus.Cancelled
                 or DevWorkflowRunStatus.Failed,
             DevWorkflowRunStatus.WaitingForApproval => to is DevWorkflowRunStatus.Running
                 or DevWorkflowRunStatus.Pausing
                 or DevWorkflowRunStatus.Cancelling
                 or DevWorkflowRunStatus.Completed
+                or DevWorkflowRunStatus.Cancelled
                 or DevWorkflowRunStatus.Failed,
             DevWorkflowRunStatus.Pausing => to is DevWorkflowRunStatus.Paused or DevWorkflowRunStatus.Cancelling,
             DevWorkflowRunStatus.Paused => to is DevWorkflowRunStatus.Running or DevWorkflowRunStatus.Cancelling,

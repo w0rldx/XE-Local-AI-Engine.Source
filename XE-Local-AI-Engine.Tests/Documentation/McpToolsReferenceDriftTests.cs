@@ -19,9 +19,9 @@ public sealed partial class McpToolsReferenceDriftTests
             "references",
             "mcp-tools.md"));
 
-        AssertEx.Equal(23, registered.Count, "Expected the exact 8 shared plus 15 admin inbound MCP tools.");
+        AssertEx.Equal(25, registered.Count, "Expected the exact 8 shared plus 17 admin inbound MCP tools.");
         AssertEx.Equal(8, registered.Count(static tool => tool.Value == "delegate"));
-        AssertEx.Equal(15, registered.Count(static tool => tool.Value == "agentic"));
+        AssertEx.Equal(17, registered.Count(static tool => tool.Value == "agentic"));
         AssertEx.NotEmpty(documented, "The MCP reference contained no parsed tool rows; refusing a vacuous drift pass.");
 
         var missingFromDocumentation = registered.Keys.Except(documented.Keys, StringComparer.Ordinal).Order().ToArray();

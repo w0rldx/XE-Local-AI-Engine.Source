@@ -42,6 +42,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     /// <summary>Slack added to the catalog-reported size before aborting an oversized stream (still capped at the ceiling).</summary>
     private const long DownloadSizeSlackBytes = 1L * 1024 * 1024;
 
+    /// <summary>Refusal for a prebuilt install while a source build owns the record — checked before AND after the download.</summary>
+    private const string SourceBuildInstalledMessage =
+        "Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.";
+
     private readonly IRuntimeAcquisitionStatusRegistry? _acquisitionStatus;
     private readonly string _activeTag;
     private readonly Architecture _arch;
@@ -143,10 +147,16 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         // silent CPU serve). Reuses the already-read `installed`, so no extra store I/O.
         if (installed?.SourceBuildPath is { Length: > 0 })
         {
+            // A variant disagreement is evidence about the CALLER's selection, never about the build. The selector reads
+            // a per-process cached signal that is empty until the startup seed runs and that no other process can set,
+            // so a spawn beating startup — or one running while a second checkout adopts a build — asks for Vulkan while
+            // a valid CUDA source build is recorded. The record is authoritative here (see this method's contract), so
+            // seed the signal from it and serve the recorded build: every later selection then agrees. Discarding the
+            // record instead is what let the next acquisition write a prebuilt over the operator's source build, and the
+            // following start's reconcile then deleted the tree.
             if (installed.Variant != variant)
             {
-                await DiscardManagedSourceRecordAsync(ct).ConfigureAwait(false);
-                throw new LlamaRuntimeException(ManagedSourceBuildUnavailableMessage);
+                _managedCudaSignal?.SetActive(installed.Variant);
             }
 
             var managed = await TryServeManagedSourceBinaryAsync(installed, ct).ConfigureAwait(false);
@@ -270,6 +280,11 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         await _sourceMutationGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            // The gate above only orders THIS process. installed-runtime.json is under the shared user-level cache root,
+            // so the read below and the write at the end of this method are one cross-process critical section too:
+            // without it a second node adopting a source build between them lands under this prebuilt write.
+            using var recordLock = await _installedRuntimeStore.AcquireAsync(ct).ConfigureAwait(false);
+
             var current = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
             if (current?.SourceBuildPath is { Length: > 0 })
             {
@@ -334,7 +349,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             if (_installedRuntimeStore is not null
                 && (await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false))?.SourceBuildPath is { Length: > 0 })
             {
-                throw new LlamaRuntimeException("Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.");
+                throw new LlamaRuntimeException(SourceBuildInstalledMessage);
             }
 
             return await InstallTagCoreAsync(tag, assetName, digestSha256, expectedSize, variant, ct).ConfigureAwait(false);
@@ -426,6 +441,17 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
             if (_installedRuntimeStore is not null)
             {
+                // The guard at the top of InstallTagAsync ran BEFORE a download that takes minutes, so re-check it here
+                // under the record lock, immediately before the write. The lock is deliberately not held across the
+                // download — that would block every other node for the whole transfer — so this is the window where
+                // another node's adopt lands. The binary stays on disk under its own versioned directory; only the
+                // record is refused, and the operator is told why rather than silently getting a prebuilt record.
+                using var recordLock = await _installedRuntimeStore.AcquireAsync(ct).ConfigureAwait(false);
+                if ((await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false))?.SourceBuildPath is { Length: > 0 })
+                {
+                    throw new LlamaRuntimeException(SourceBuildInstalledMessage);
+                }
+
                 var state = new InstalledRuntimeState(tag, assetName, expectedDigest, variant, DateTimeOffset.UtcNow);
                 await _installedRuntimeStore.WriteAsync(state, ct).ConfigureAwait(false);
             }

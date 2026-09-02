@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
@@ -15,6 +16,13 @@ public sealed partial class DevelopmentStore(NodeChatDbContext dbContext, TimePr
     /// </summary>
     private const string WorkspaceSecretsOperationPhase = "WorkspaceSecretsDetected";
 
+    /// <summary>
+    ///     camelCase, matching every other document this product puts on a wire, and read back with the same options so
+    ///     the rows an earlier build wrote in PascalCase still deserialize — <c>JsonSerializerDefaults.Web</c> reads
+    ///     case-insensitively, which is what makes re-casing the writes safe on an append-only log.
+    /// </summary>
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     private static readonly IReadOnlyDictionary<DevelopmentTaskStatus, HashSet<DevelopmentTaskStatus>> LegalTaskTransitions =
         new Dictionary<DevelopmentTaskStatus, HashSet<DevelopmentTaskStatus>>
         {
@@ -24,7 +32,14 @@ public sealed partial class DevelopmentStore(NodeChatDbContext dbContext, TimePr
             [DevelopmentTaskStatus.Validation] = [DevelopmentTaskStatus.InProgress, DevelopmentTaskStatus.InReview, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
             [DevelopmentTaskStatus.InReview] = [DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.AwaitingApply, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
             [DevelopmentTaskStatus.ChangesRequested] = [DevelopmentTaskStatus.InProgress, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
-            [DevelopmentTaskStatus.AwaitingApply] = [DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled]
+
+            // ChangesRequested is reachable from AwaitingApply because a workflow's fix loop can route a downstream
+            // validation failure back at an implementation node whose task is already approved: without this edge the
+            // re-attempt has nowhere to go, re-succeeds in the same tick, and the loop burns its budget in seconds
+            // without ever asking for a different patch. Completed is deliberately still absent — apply completion is
+            // the explicit apply port's, not a generic transition's.
+            [DevelopmentTaskStatus.AwaitingApply] =
+                [DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled]
         };
 
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));

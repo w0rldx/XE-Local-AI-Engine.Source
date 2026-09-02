@@ -53,14 +53,27 @@ export function DevelopmentEventTimeline({
 }
 
 function EventRow({ event }: { readonly event: DevelopmentEvent }) {
+	const { t } = useTranslation();
 	return (
-		<Group justify="space-between" wrap="nowrap" data-testid="development-event-row">
-			<Text size="sm">
-				<Code>#{event.sequence}</Code> {event.eventType}
-			</Text>
-			<Text c="dimmed" size="xs">
-				{event.outcome ?? event.operationPhase ?? ""}
-			</Text>
-		</Group>
+		<Stack gap={2} data-testid="development-event-row">
+			<Group justify="space-between" wrap="nowrap">
+				<Text size="sm">
+					<Code>#{event.sequence}</Code> {event.eventType}
+				</Text>
+				<Text c="dimmed" size="xs">
+					{event.outcome ?? event.operationPhase ?? ""}
+				</Text>
+			</Group>
+			{/* Why a task was sent back, in the words of whatever sent it — a workflow's validation report or a
+			    reviewer. Rendered as PLAIN TEXT with its own line breaks kept: it is model-written prose the server
+			    sanitized and capped, and parsing it as markdown would hand a generated document a say in the layout of
+			    the page an operator reads to find out what went wrong. */}
+			{event.reason ? (
+				<Text c="dimmed" size="xs" style={{ whiteSpace: "pre-wrap" }} data-testid={`development-event-reason-${event.id}`}>
+					{/* The label is translated; the sentence is data and is never interpolated into a phrase. */}
+					{t("pages.development.timeline.reason", "Sent back:")} {event.reason}
+				</Text>
+			) : null}
+		</Stack>
 	);
 }

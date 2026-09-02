@@ -15,6 +15,11 @@ public sealed class InstalledRuntimeStore : IInstalledRuntimeStore, IDisposable
 {
     private const string StateFileName = "installed-runtime.json";
 
+    /// <summary>Attempts <see cref="AcquireAsync" /> makes, 25 ms apart — just under ten seconds of waiting on another node.</summary>
+    private const int LockAttempts = 400;
+
+    private static readonly TimeSpan LockPollInterval = TimeSpan.FromMilliseconds(25);
+
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true
@@ -33,6 +38,32 @@ public sealed class InstalledRuntimeStore : IInstalledRuntimeStore, IDisposable
     public void Dispose()
     {
         _lock.Dispose();
+    }
+
+    /// <inheritdoc />
+    public async Task<IDisposable> AcquireAsync(CancellationToken ct)
+    {
+        var lockPath = _statePath + ".lock";
+        Directory.CreateDirectory(Path.GetDirectoryName(_statePath)!);
+
+        // FileShare.None is a real OS lock on every platform we ship (flock on Unix, a share mode on Windows), and it is
+        // released with the handle — including when a process dies — so a leftover lock FILE never wedges anyone. The
+        // lock is held only across a read-then-write, which is microseconds, so the wait is a formality; exhausting it
+        // means another node is stuck mid-update and overwriting its record blind is the worse outcome.
+        for (var attempt = 1; attempt < LockAttempts; attempt++)
+        {
+            try
+            {
+                return new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (IOException)
+            {
+                await Task.Delay(LockPollInterval, ct).ConfigureAwait(false);
+            }
+        }
+
+        // Budget spent: the last attempt surfaces its own IOException rather than a synthesized one.
+        return new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
     }
 
     /// <inheritdoc />
