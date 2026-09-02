@@ -232,7 +232,7 @@ internal sealed partial class DevWorkflowStore
             Id = command.DefinitionId,
             Name = command.Name,
             GraphJson = graph,
-            GraphHash = HashGraph(graph),
+            GraphHash = HashPayload(graph),
             NodeCount = command.NodeCount,
             Source = command.Source,
             SeedSlug = command.SeedSlug,
@@ -286,7 +286,7 @@ internal sealed partial class DevWorkflowStore
             // never to decrypt a blob and still tell the truth about it.
             var graph = Utf8(command.GraphJson);
             definition.GraphJson = graph;
-            definition.GraphHash = HashGraph(graph);
+            definition.GraphHash = HashPayload(graph);
             definition.NodeCount = command.NodeCount ?? definition.NodeCount;
         }
         else if (command.NodeCount is { } nodeCount)

@@ -681,6 +681,13 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptRequiredProperty(entry, entry.Property(entity => entity.GraphJson), Guid.Empty, entry.Entity.Id, "dev_workflow_definition_graph_json", trackedProperties);
         }
 
+        // A rule set is node-scoped like the definition, so the empty conversation id plus its own id — and its own AAD
+        // column name, so a rule body can never be read back as a definition's graph.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<DevWorkflowRuleSet>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Body), Guid.Empty, entry.Entity.Id, "dev_workflow_rule_set_body", trackedProperties);
+        }
+
         foreach (var entry in nodeContext.ChangeTracker.Entries<DevWorkflowRun>())
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.GraphJson), entry.Entity.WorkItemId, entry.Entity.Id, "dev_workflow_run_graph_json", trackedProperties);

@@ -168,6 +168,8 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<DevWorkflowDefinition> DevWorkflowDefinitions => Set<DevWorkflowDefinition>();
 
+    internal DbSet<DevWorkflowRuleSet> DevWorkflowRuleSets => Set<DevWorkflowRuleSet>();
+
     internal DbSet<DevWorkflowRun> DevWorkflowRuns => Set<DevWorkflowRun>();
 
     internal DbSet<DevWorkflowNodeRun> DevWorkflowNodeRuns => Set<DevWorkflowNodeRun>();
@@ -454,6 +456,7 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new AgentWorkSessionEventConfiguration());
         modelBuilder.ApplyConfiguration(new DevWorkflowWorkItemConfiguration());
         modelBuilder.ApplyConfiguration(new DevWorkflowDefinitionConfiguration());
+        modelBuilder.ApplyConfiguration(new DevWorkflowRuleSetConfiguration());
         modelBuilder.ApplyConfiguration(new DevWorkflowRunConfiguration());
         modelBuilder.ApplyConfiguration(new DevWorkflowNodeRunConfiguration());
         modelBuilder.ApplyConfiguration(new DevWorkflowRunEventConfiguration());

@@ -21,6 +21,7 @@ public sealed class DevWorkflowEncryptionTests
         var policy = "POLICY-" + Guid.NewGuid().ToString("N");
         var payload = "PAYLOAD-" + Guid.NewGuid().ToString("N");
         var eventDetail = "EVENTDETAIL-" + Guid.NewGuid().ToString("N");
+        var ruleBody = "RULEBODY-" + Guid.NewGuid().ToString("N");
         var instructions = graph[(graph.IndexOf("INSTRUCTIONS-", StringComparison.Ordinal))..].Split('"')[0];
 
         await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
@@ -72,6 +73,10 @@ public sealed class DevWorkflowEncryptionTests
                                DevWorkflowEventTypes.PolicyResolved,
                                DetailJson: $$"""{"note":"{{eventDetail}}"}"""))
                            .ConfigureAwait(false);
+
+            // The rule-set body is the ninth encrypted column, and its plaintext NAME is the second positive control:
+            // the list page sorts on the name, so that one is meant to be readable in the file.
+            _ = await DevWorkflowTestFixture.CreateRuleSetAsync(store, "Plain rule set", ruleBody).ConfigureAwait(false);
         }
 
         var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(fixture.DatabasePath).ConfigureAwait(false);
@@ -84,7 +89,8 @@ public sealed class DevWorkflowEncryptionTests
                      input,
                      policy,
                      payload,
-                     eventDetail
+                     eventDetail,
+                     ruleBody
                  })
         {
             AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(secret)), $"The database file must not carry '{secret[..12]}…' as plaintext.");
@@ -92,6 +98,7 @@ public sealed class DevWorkflowEncryptionTests
 
         // The title is deliberately plaintext — the list page sorts and filters on it.
         AssertEx.True(ContainsSubsequence(fileBytes, "Plain title"u8.ToArray()), "The work-item title is an indexed plaintext column.");
+        AssertEx.True(ContainsSubsequence(fileBytes, "Plain rule set"u8.ToArray()), "A rule set's name is a plaintext column too — the list page sorts on it.");
     }
 
     /// <summary>T-5: re-parenting a node run onto another run, or a run onto another work item, fails the tag check.</summary>
@@ -255,6 +262,43 @@ public sealed class DevWorkflowEncryptionTests
             var store = DevWorkflowTestFixture.StoreFor(readContext);
             _ = AssertEx.Throws<CryptographicException>(() => store.ListDecisionsAsync(runId).GetAwaiter().GetResult(),
                 "A comment presented as a decision payload must fail authenticated decryption.");
+        }
+    }
+
+
+    /// <summary>
+    ///     T-5, rule-set half. A rule set has no owner column to re-parent — <c>Guid.Empty</c> is fixed in the
+    ///     conversation slot — so the reachable attack is the ROW identity: give one rule set's body another rule set's
+    ///     id and it must fail the tag check rather than read back as that rule set's text. Without it, a database
+    ///     writer could swap the document a node's objective is composed from without forging a ciphertext.
+    /// </summary>
+    [Test]
+    public async Task PresentingARuleSetBodyUnderAnotherRuleSetsId_FailsAuthenticatedDecryption()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        Guid victimId;
+        Guid attackerId;
+
+        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        {
+            var store = DevWorkflowTestFixture.StoreFor(context);
+            victimId = (await DevWorkflowTestFixture.CreateRuleSetAsync(store, "Victim", "Never touch production.").ConfigureAwait(false)).Id;
+            attackerId = (await DevWorkflowTestFixture.CreateRuleSetAsync(store, "Attacker", "Anything goes.").ConfigureAwait(false)).Id;
+        }
+
+        await fixture.RawExecuteAsync("UPDATE dev_workflow_rule_sets SET body = (SELECT body FROM dev_workflow_rule_sets WHERE id = $victim) WHERE id = $attacker;",
+                         command =>
+                         {
+                             command.Parameters.AddWithValue("$victim", victimId);
+                             command.Parameters.AddWithValue("$attacker", attackerId);
+                         })
+                     .ConfigureAwait(false);
+
+        await using (var readContext = fixture.CreateContext())
+        {
+            var store = DevWorkflowTestFixture.StoreFor(readContext);
+            _ = AssertEx.Throws<CryptographicException>(() => store.GetRuleSetAsync(attackerId).GetAwaiter().GetResult(),
+                "A rule-set body presented under another rule set's id must fail authenticated decryption.");
         }
     }
 

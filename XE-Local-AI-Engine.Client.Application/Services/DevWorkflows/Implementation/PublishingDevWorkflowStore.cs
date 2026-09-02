@@ -57,6 +57,26 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner, IDevWo
     public Task<DevWorkflowDefinitionSnapshot> ArchiveDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
         _inner.ArchiveDefinitionAsync(definitionId, cancellationToken);
 
+    // Rule sets are forwarded unwrapped, like the definitions above them: no run's pane renders one, and the runtime
+    // consumes a rule set only at the NEXT materialization — whose own node-run write publishes a Run-kind ping.
+    public Task<DevWorkflowRuleSetSnapshot> CreateRuleSetAsync(CreateDevWorkflowRuleSetCommand command, CancellationToken cancellationToken = default) =>
+        _inner.CreateRuleSetAsync(command, cancellationToken);
+
+    public Task<DevWorkflowRuleSetSnapshot> UpdateRuleSetAsync(UpdateDevWorkflowRuleSetCommand command, CancellationToken cancellationToken = default) =>
+        _inner.UpdateRuleSetAsync(command, cancellationToken);
+
+    public Task<IReadOnlyList<DevWorkflowRuleSetSummary>> ListRuleSetsAsync(CancellationToken cancellationToken = default) =>
+        _inner.ListRuleSetsAsync(cancellationToken);
+
+    public Task<DevWorkflowRuleSetSnapshot> GetRuleSetAsync(Guid ruleSetId, CancellationToken cancellationToken = default) =>
+        _inner.GetRuleSetAsync(ruleSetId, cancellationToken);
+
+    public Task DeleteRuleSetAsync(Guid ruleSetId, CancellationToken cancellationToken = default) =>
+        _inner.DeleteRuleSetAsync(ruleSetId, cancellationToken);
+
+    public Task<IReadOnlyList<DevWorkflowRuleSetSummary>> ListEnabledRuleSetsAsync(CancellationToken cancellationToken = default) =>
+        _inner.ListEnabledRuleSetsAsync(cancellationToken);
+
     /// <summary>Nothing is subscribed to a run that does not exist yet, so a start publishes nothing.</summary>
     public Task<DevWorkflowRunSnapshot> StartRunAsync(StartDevWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
         _inner.StartRunAsync(command, cancellationToken);
