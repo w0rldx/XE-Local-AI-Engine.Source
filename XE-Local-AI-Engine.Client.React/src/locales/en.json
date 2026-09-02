@@ -5072,7 +5072,11 @@
 				"invalid": "Unreadable",
 				"invalidBody": "This artifact's stored content could not be read and cannot be shown.",
 				"binary": "This artifact is binary and has no text preview.",
-				"loadFailed": "Could not load this artifact."
+				"loadFailed": "Could not load this artifact.",
+				"version": "v{{version}}",
+				"versionCurrent": "v{{version}} (current)",
+				"versionLabel": "Version",
+				"staleBecause": "stale because {{name}} v{{version}}"
 			},
 			"nodeStatus": {
 				"Pending": "Pending",

@@ -223,5 +223,45 @@ export function devWorkflowArtifactLanguage(kind: DevWorkflowArtifactKind | unde
 	return "markdown";
 }
 
+/** One artifact identity across its versions (X6/Y15: the lineage is `(RunId, ProducingNodeKey, Name)`). */
+export interface DevWorkflowArtifactLineage {
+	readonly lineageId: string;
+	/** Every version of this lineage, NEWEST first — the order the version picker offers them in. */
+	readonly versions: readonly DevWorkflowArtifactResponse[];
+	/** The row the server marked `isLatest` (Y17/C39), or the highest version when no row claims it. */
+	readonly latest: DevWorkflowArtifactResponse;
+}
+
+/**
+ * The run's artifact feed grouped into lineages, in first-appearance order.
+ *
+ * Grouping is by the SERVER's `lineageId` and nothing else: `name + kind` would silently merge a renamed artifact
+ * with an unrelated one, which is the whole reason X6 put the field on the wire. `isLatest` is likewise READ rather
+ * than derived (Y17/C39) — the query already computes it, and a second client-side reduce would be a second answer
+ * to one question. The `version` sort is only the order the picker lists them in.
+ *
+ * A row with no lineage id becomes its own lineage rather than joining a shared empty-string bucket: collapsing
+ * unrelated documents into one row would hand the operator a version picker that switches between different files.
+ */
+export function devWorkflowArtifactLineages(
+	artifacts: readonly DevWorkflowArtifactResponse[],
+): readonly DevWorkflowArtifactLineage[] {
+	const byLineage = new Map<string, DevWorkflowArtifactResponse[]>();
+	for (const artifact of artifacts) {
+		const key = artifact.lineageId || `artifact:${artifact.id ?? ""}`;
+		const rows = byLineage.get(key);
+		if (rows) {
+			rows.push(artifact);
+		} else {
+			byLineage.set(key, [artifact]);
+		}
+	}
+	return [...byLineage.entries()].flatMap(([lineageId, rows]) => {
+		const versions = rows.toSorted((left, right) => (right.version ?? 1) - (left.version ?? 1));
+		const latest = versions.find((row) => row.isLatest === true) ?? versions[0];
+		return latest ? [{ lineageId, versions, latest }] : [];
+	});
+}
+
 /** The shared decoder (P4 §2.10), kept under the feature's own name so no call site or test had to move. */
 export { decodeArtifactContent as decodeDevWorkflowArtifactContent } from "@/core/artifacts/ArtifactContent";

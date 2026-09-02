@@ -11,6 +11,7 @@ import {
 	decodeDevWorkflowArtifactContent,
 	devWorkflowArtifactKinds,
 	devWorkflowArtifactLanguage,
+	devWorkflowArtifactLineages,
 	devWorkflowDecisionKinds,
 	devWorkflowNodeAwaitsHuman,
 	devWorkflowNodeStatuses,
@@ -26,6 +27,7 @@ import {
 	toDevWorkflowRunStatus,
 	toDevWorkflowWorkItemStatus,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
+import { devWorkflowArtifact } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 
 describe("dev-workflow wire unions", () => {
 	it("carries X4's nine node-run statuses verbatim", () => {
@@ -179,5 +181,59 @@ describe("dev-workflow artifact rendering", () => {
 		expect(decodeDevWorkflowArtifactContent(btoa("hello"), true)).toEqual({ text: "hello", isBinary: false });
 		// 0xFF is not valid UTF-8; the fatal TextDecoder is what turns it into an honest "binary" answer.
 		expect(decodeDevWorkflowArtifactContent(btoa("ÿþ"), true).isBinary).toBe(true);
+	});
+});
+
+describe("devWorkflowArtifactLineages", () => {
+	const artifact = (id: string, lineageId: string, version: number, isLatest: boolean) =>
+		devWorkflowArtifact({ id, lineageId, version, isLatest });
+
+	it("collapses every version of one lineage into a single group, newest version first", () => {
+		const lineages = devWorkflowArtifactLineages([
+			artifact("a1", "lineage-a", 1, false),
+			artifact("a3", "lineage-a", 3, true),
+			artifact("a2", "lineage-a", 2, false),
+		]);
+
+		expect(lineages).toHaveLength(1);
+		expect(lineages[0]?.versions.map((row) => row.id)).toEqual(["a3", "a2", "a1"]);
+	});
+
+	it("reads `isLatest` off the wire rather than deriving it from the highest version (Y17/C39)", () => {
+		// A deliberately inconsistent feed: the server marked v2 latest. Deriving would have answered v3.
+		const lineages = devWorkflowArtifactLineages([
+			artifact("a3", "lineage-a", 3, false),
+			artifact("a2", "lineage-a", 2, true),
+		]);
+
+		expect(lineages[0]?.latest.id).toBe("a2");
+	});
+
+	it("falls back to the highest version when no row claims to be the latest", () => {
+		const lineages = devWorkflowArtifactLineages([
+			artifact("a1", "lineage-a", 1, false),
+			artifact("a2", "lineage-a", 2, false),
+		]);
+
+		expect(lineages[0]?.latest.id).toBe("a2");
+	});
+
+	it("keeps lineages in first-appearance order and never merges two of them", () => {
+		const lineages = devWorkflowArtifactLineages([
+			artifact("b1", "lineage-b", 1, true),
+			artifact("a1", "lineage-a", 1, true),
+		]);
+
+		expect(lineages.map((lineage) => lineage.lineageId)).toEqual(["lineage-b", "lineage-a"]);
+	});
+
+	it("gives a row with no lineage id a lineage of its own rather than merging unrelated documents", () => {
+		const lineages = devWorkflowArtifactLineages([
+			devWorkflowArtifact({ id: "x", lineageId: undefined, name: "one.md" }),
+			devWorkflowArtifact({ id: "y", lineageId: undefined, name: "two.md" }),
+		]);
+
+		expect(lineages).toHaveLength(2);
+		expect(lineages.map((lineage) => lineage.latest.name)).toEqual(["one.md", "two.md"]);
 	});
 });

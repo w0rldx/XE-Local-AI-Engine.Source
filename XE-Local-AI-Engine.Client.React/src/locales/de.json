@@ -5072,7 +5072,11 @@
 				"invalid": "Nicht lesbar",
 				"invalidBody": "Der gespeicherte Inhalt dieses Artefakts konnte nicht gelesen werden und lässt sich nicht anzeigen.",
 				"binary": "Dieses Artefakt ist binär und hat keine Textvorschau.",
-				"loadFailed": "Dieses Artefakt konnte nicht geladen werden."
+				"loadFailed": "Dieses Artefakt konnte nicht geladen werden.",
+				"version": "v{{version}}",
+				"versionCurrent": "v{{version}} (aktuell)",
+				"versionLabel": "Version",
+				"staleBecause": "veraltet wegen {{name}} v{{version}}"
 			},
 			"nodeStatus": {
 				"Pending": "Ausstehend",
