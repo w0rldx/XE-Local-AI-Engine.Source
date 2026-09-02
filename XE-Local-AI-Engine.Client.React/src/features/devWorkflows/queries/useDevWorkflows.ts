@@ -31,7 +31,6 @@ import {
 	listDevWorkflowRuleSetsOptions,
 	listDevWorkflowRunEventsQueryKey,
 	listDevWorkflowWorkItemsOptions,
-	listLocalModelsOptions,
 	pauseDevWorkflowRunMutation,
 	resumeDevWorkflowRunMutation,
 	startDevWorkflowRunMutation,
@@ -303,21 +302,6 @@ export function useDevWorkflowAgentOptions(options: FeedOptions = {}) {
 		...withResponseValidation(listAgentDefinitionsOptions()),
 		enabled: options.enabled ?? true,
 		select: (data) => (data.items ?? []).map((agent) => ({ id: agent.id, label: agent.name })),
-	});
-}
-
-/**
- * Chat models on this node, for a node's `modelProfile` override. Same filter the chat picker applies (`kind` is
- * `Chat`), because a graph node that names a non-chat model is a run that fails at dispatch.
- */
-export function useDevWorkflowModelOptions(options: FeedOptions = {}) {
-	return useQuery({
-		...withResponseValidation(listLocalModelsOptions()),
-		enabled: options.enabled ?? true,
-		select: (data) =>
-			(data.items ?? [])
-				.filter((model) => model.kind === "Chat")
-				.map((model) => ({ id: model.modelName ?? "", label: model.displayLabel ?? model.modelName ?? "" })),
 	});
 }
 

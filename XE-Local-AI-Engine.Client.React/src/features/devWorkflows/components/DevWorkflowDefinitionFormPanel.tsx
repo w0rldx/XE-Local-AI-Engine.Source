@@ -34,11 +34,7 @@ import {
 	useDevWorkflowAgentOptions,
 	useDevWorkflowDefinition,
 	useDevWorkflowDefinitionMutations,
-	useDevWorkflowModelOptions,
 } from "@/features/devWorkflows/queries/useDevWorkflows";
-
-/** The agent surface's own set ("none" plus graded efforts); an unset effort means the provider default. */
-const reasoningEfforts = ["none", "low", "medium", "high"] as const;
 
 /** `DevWorkflowGraph.cs`'s own default is `All` for an absent policy, so those are the only two members. */
 const joinPolicies = ["All", "Any"] as const;
@@ -85,6 +81,10 @@ export interface DevWorkflowDefinitionFormPanelProps {
  * DTO is a field-for-field mirror of the stored document, so a definition read back and saved keeps every field it
  * arrived with, and a form that dropped one would quietly delete authoring the runtime depends on.
  *
+ * `modelProfile` and `reasoningEffort` are round-tripped the same way and get no control either: `ParseNode` does not
+ * read them and the agent executor never sees them, so a picker there would let an operator set a model the run then
+ * ignores. Per-node model and effort dispatch is the v2 seam that would earn those two controls back.
+ *
  * There is no "new definition" here. The seeder skips slugs that already exist, so an edited template survives a
  * restart, and creating a graph from an empty form is a job for a canvas that D does not ship.
  */
@@ -94,7 +94,6 @@ export function DevWorkflowDefinitionFormPanel({ definitionId }: DevWorkflowDefi
 	const definitionQuery = useDevWorkflowDefinition(definitionId);
 	const { update, archive } = useDevWorkflowDefinitionMutations();
 	const agentOptions = useDevWorkflowAgentOptions();
-	const modelOptions = useDevWorkflowModelOptions();
 
 	const [name, setName] = useState("");
 	// Rows carry a client id for the whole editing session. The node KEY is a field being edited and an array index
@@ -322,7 +321,6 @@ export function DevWorkflowDefinitionFormPanel({ definitionId }: DevWorkflowDefi
 							nodeCount={nodeRows.length}
 							nodeKeyOptions={nodeKeyOptions}
 							agentOptions={agentOptions.data ?? []}
-							modelOptions={modelOptions.data ?? []}
 							onPatch={(patch) => patchNode(row.id, patch)}
 							onMove={(offset) => moveNode(row.id, offset)}
 							onRemove={() => setNodeRows((current) => current.filter((candidate) => candidate.id !== row.id))}
@@ -393,7 +391,6 @@ function NodeCard({
 	nodeCount,
 	nodeKeyOptions,
 	agentOptions,
-	modelOptions,
 	onPatch,
 	onMove,
 	onRemove,
@@ -403,7 +400,6 @@ function NodeCard({
 	readonly nodeCount: number;
 	readonly nodeKeyOptions: readonly string[];
 	readonly agentOptions: readonly NodeOption[];
-	readonly modelOptions: readonly NodeOption[];
 	readonly onPatch: (patch: Partial<DevWorkflowGraphNode>) => void;
 	readonly onMove: (offset: number) => void;
 	readonly onRemove: () => void;
@@ -482,25 +478,6 @@ function NodeCard({
 						searchable={true}
 						onChange={(value) => onPatch({ agentDefinitionId: value })}
 						data-testid={`dev-workflow-definition-node-agent-${index}`}
-					/>
-					<Select
-						label={t("pages.devWorkflows.definition.modelProfile", "Model")}
-						placeholder={t("pages.devWorkflows.definition.modelPlaceholder", "Node default")}
-						data={modelOptions.map((model) => ({ value: model.id, label: model.label }))}
-						value={node.modelProfile ?? null}
-						clearable={true}
-						searchable={true}
-						onChange={(value) => onPatch({ modelProfile: value })}
-						data-testid={`dev-workflow-definition-node-model-${index}`}
-					/>
-					<Select
-						label={t("pages.devWorkflows.definition.reasoningEffort", "Reasoning effort")}
-						placeholder={t("pages.devWorkflows.definition.reasoningPlaceholder", "Provider default")}
-						data={reasoningEfforts.map((effort) => ({ value: effort, label: effort }))}
-						value={node.reasoningEffort ?? null}
-						clearable={true}
-						onChange={(value) => onPatch({ reasoningEffort: value })}
-						data-testid={`dev-workflow-definition-node-effort-${index}`}
 					/>
 				</Group>
 
