@@ -167,7 +167,7 @@ internal sealed class DevWorkflowAgentExecutor
                 .ConfigureAwait(false);
         }
 
-        if (!await TryDriveAsync(session, cancellationToken).ConfigureAwait(false))
+        if (!await TryDriveAsync(session, node, cancellationToken).ConfigureAwait(false))
         {
             // Lost the admission race between the capacity read and the start. The row stays Queued with its reason and
             // keeps the session it already owns, so the next tick starts that one rather than creating a second.
@@ -265,7 +265,7 @@ internal sealed class DevWorkflowAgentExecutor
                 // resuming it here would undo the operator's command with the run still reading Pausing.
                 return run.Status is DevWorkflowRunStatus.Pausing or DevWorkflowRunStatus.Cancelling
                     ? 0
-                    : await ResumeAsync(store, run, nodeRun, session, cancellationToken).ConfigureAwait(false);
+                    : await ResumeAsync(store, run, graph.Nodes.GetValueOrDefault(nodeRun.NodeKey), nodeRun, session, cancellationToken).ConfigureAwait(false);
 
             default:
                 // Running, or parked on a question it asked. Still working; nothing to write.
@@ -315,7 +315,7 @@ internal sealed class DevWorkflowAgentExecutor
 
         var agentDefinitionId = await ResolveAgentAsync(node, cancellationToken).ConfigureAwait(false);
         var objective = await ComposeObjectiveAsync(store, graph, run, node, nodeRun, cancellationToken).ConfigureAwait(false);
-        var created = await _sessions.CreateAsync(node.Label, objective, agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var created = await _sessions.CreateAsync(node.Label, objective, agentDefinitionId, RuntimeOf(node), cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -375,15 +375,22 @@ internal sealed class DevWorkflowAgentExecutor
     /// <summary>
     ///     Starts or resumes the session, whichever its status calls for. Answers <see langword="false" /> when the node
     ///     refused the admission — which is a queue, not a failure.
+    ///     <para>
+    ///         The graph node's model and effort travel on EVERY drive, not only the create: the work-session layer
+    ///         holds them for the run it is driving rather than storing them, so a resume after a restart is what puts
+    ///         them back. The run's pinned graph is the durable copy, which is also why a definition edited mid-run
+    ///         cannot change what a running node dispatches on.
+    ///     </para>
     /// </summary>
-    private async Task<bool> TryDriveAsync(WorkSessionDetail session, CancellationToken cancellationToken)
+    private async Task<bool> TryDriveAsync(WorkSessionDetail session, DevWorkflowGraphNode? node, CancellationToken cancellationToken)
     {
         try
         {
+            var runtime = RuntimeOf(node);
             _ = session.Status switch
             {
-                AgentWorkSessionStatus.Draft => await _sessions.StartAsync(session.Id, cancellationToken).ConfigureAwait(false),
-                AgentWorkSessionStatus.Paused or AgentWorkSessionStatus.Interrupted => await _sessions.ResumeAsync(session.Id, cancellationToken).ConfigureAwait(false),
+                AgentWorkSessionStatus.Draft => await _sessions.StartAsync(session.Id, runtime, cancellationToken).ConfigureAwait(false),
+                AgentWorkSessionStatus.Paused or AgentWorkSessionStatus.Interrupted => await _sessions.ResumeAsync(session.Id, runtime, cancellationToken).ConfigureAwait(false),
 
                 // Already being driven — the crash window between the start and the node run's own Running write.
                 _ => session
@@ -396,6 +403,16 @@ internal sealed class DevWorkflowAgentExecutor
             return false;
         }
     }
+
+    /// <summary>
+    ///     What the node authored for its session to run on, or null when it authored neither and the bound agent's own
+    ///     configuration is the whole answer. A node run whose key is not in the run's graph — nothing produces one, but
+    ///     the lookup is a dictionary miss away — reads as "no override" rather than failing a resume over a label.
+    /// </summary>
+    private static WorkSessionRuntimeOverride? RuntimeOf(DevWorkflowGraphNode? node) =>
+        node is { } present && (present.ModelProfile is not null || present.ReasoningEffort is not null)
+            ? new WorkSessionRuntimeOverride(present.ModelProfile, present.ReasoningEffort)
+            : null;
 
     private async Task<Guid> ResolveAgentAsync(DevWorkflowGraphNode node, CancellationToken cancellationToken)
     {
@@ -633,6 +650,7 @@ internal sealed class DevWorkflowAgentExecutor
     /// </summary>
     private async Task<int> ResumeAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
+        DevWorkflowGraphNode? node,
         DevWorkflowNodeRunSnapshot nodeRun,
         WorkSessionDetail session,
         CancellationToken cancellationToken)
@@ -648,7 +666,7 @@ internal sealed class DevWorkflowAgentExecutor
                 .ConfigureAwait(false);
         }
 
-        if (!_sessions.HasCapacity || !await TryDriveAsync(session, cancellationToken).ConfigureAwait(false))
+        if (!_sessions.HasCapacity || !await TryDriveAsync(session, node, cancellationToken).ConfigureAwait(false))
         {
             // The slot is held by another session. The row stays Running — it has not stopped working, it is waiting for
             // its own continuation — and the next tick asks again.

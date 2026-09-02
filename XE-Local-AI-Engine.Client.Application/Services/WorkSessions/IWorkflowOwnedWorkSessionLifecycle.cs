@@ -29,8 +29,17 @@ internal interface IWorkflowOwnedWorkSessionLifecycle
     /// </summary>
     bool HasCapacity { get; }
 
-    /// <summary>Creates a session of the workflow kind, with the conversation and the agent checks the ordinary create does.</summary>
-    Task<WorkSessionDetail> CreateAsync(string title, string objective, Guid agentDefinitionId, CancellationToken cancellationToken = default);
+    /// <summary>
+    ///     Creates a session of the workflow kind, with the conversation and the agent checks the ordinary create does.
+    ///     <paramref name="runtime" /> pins what THIS session runs on over the bound agent's own pins, and is checked by
+    ///     the same tool gate — so a node naming a model this node cannot run refuses here, exactly as a stale pin on
+    ///     the agent definition would.
+    /// </summary>
+    Task<WorkSessionDetail> CreateAsync(string title,
+        string objective,
+        Guid agentDefinitionId,
+        WorkSessionRuntimeOverride? runtime = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     What the session is doing, which is the whole of the node-run's poll. Deliberately NOT ownership-checked: a
@@ -39,11 +48,17 @@ internal interface IWorkflowOwnedWorkSessionLifecycle
     /// </summary>
     Task<WorkSessionDetail> GetAsync(Guid sessionId, CancellationToken cancellationToken = default);
 
-    Task<WorkSessionDetail> StartAsync(Guid sessionId, CancellationToken cancellationToken = default);
+    /// <summary>
+    ///     Starts the session's step loop. <paramref name="runtime" /> is re-supplied on every entry rather than stored:
+    ///     the owning run's graph snapshot is the durable copy, so a restart that leaves a session <c>Interrupted</c>
+    ///     gets the node's authored model and effort back from the run that resumes it.
+    /// </summary>
+    Task<WorkSessionDetail> StartAsync(Guid sessionId, WorkSessionRuntimeOverride? runtime = null, CancellationToken cancellationToken = default);
 
     Task<WorkSessionDetail> PauseAsync(Guid sessionId, CancellationToken cancellationToken = default);
 
-    Task<WorkSessionDetail> ResumeAsync(Guid sessionId, CancellationToken cancellationToken = default);
+    /// <inheritdoc cref="StartAsync" />
+    Task<WorkSessionDetail> ResumeAsync(Guid sessionId, WorkSessionRuntimeOverride? runtime = null, CancellationToken cancellationToken = default);
 
     Task<WorkSessionDetail> CancelAsync(Guid sessionId, CancellationToken cancellationToken = default);
 

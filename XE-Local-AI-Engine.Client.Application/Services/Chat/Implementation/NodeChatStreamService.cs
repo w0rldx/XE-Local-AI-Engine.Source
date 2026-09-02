@@ -570,8 +570,8 @@ public sealed class NodeChatStreamService(
     // Mints the assistant row this turn streams into. It is stamped with the model that will actually run (the agent pin
     // when honored, the user's explicit dropdown pick when it suppressed the pin, else the local-default) — never the
     // raw request model — so the attribution shown in the UI matches the run from the first pending frame. The effort is
-    // stamped with the same precedence as the runtime package: an agent's pinned effort wins over the request's
-    // selection, and it survives reload off the metadata blob.
+    // stamped with the same precedence as the runtime package (EffectiveReasoningEffort: an agent's pinned effort wins
+    // over the request's selection, unless the caller's is a pin too), and it survives reload off the metadata blob.
     private Task<NodeChatPersistedMessageDto> PersistAssistantPlaceholderAsync(NodeChatStreamRequest request,
         ChatTurnResolution resolution,
         Guid assistantMessageId,
@@ -585,9 +585,19 @@ public sealed class NodeChatStreamService(
                 resolution.EffectiveModel,
                 AgentDefinitionId: resolution.Resolved?.AgentDefinitionId,
                 AgentName: resolution.Resolved?.AgentName,
-                ReasoningEffort: resolution.Resolved?.ReasoningEffort ?? request.ReasoningEffort),
+                ReasoningEffort: EffectiveReasoningEffort(request, resolution.Resolved?.ReasoningEffort)),
             cancellationToken);
     }
+
+    /// <summary>
+    ///     The effort this turn runs at. A bound agent's pinned effort wins over the one the send carried, because the
+    ///     pin is configuration and the send's is the composer's selection — unless the caller says its own is a pin
+    ///     too, which is what a development-workflow node's authored effort is.
+    /// </summary>
+    private static string? EffectiveReasoningEffort(NodeChatStreamRequest request, string? resolvedEffort) =>
+        request.ReasoningEffortOverridesAgentPin
+            ? request.ReasoningEffort ?? resolvedEffort
+            : resolvedEffort ?? request.ReasoningEffort;
 
     /// <summary>
     ///     Resolves whether this turn offers tools and, if so, which ones travel in the runtime package. Tools are
@@ -825,7 +835,7 @@ public sealed class NodeChatStreamService(
             {
                 InvocationTimeoutSeconds = invocationTimeoutSeconds
             },
-            ReasoningEffort: resolved?.ReasoningEffort ?? request.ReasoningEffort,
+            ReasoningEffort: EffectiveReasoningEffort(request, resolved?.ReasoningEffort),
             OrchestrationSpec: resolution.Orchestration?.Spec,
             SupportsThinking: resolution.SupportsThinking,
             SamplingOptions: request.SamplingOptions,

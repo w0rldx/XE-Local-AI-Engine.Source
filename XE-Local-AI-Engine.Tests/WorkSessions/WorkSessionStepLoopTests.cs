@@ -560,6 +560,66 @@ public sealed class WorkSessionStepLoopTests
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     FU-5: the pins the caller admitted the session with are what every one of its turns is sent with, and the
+    ///     effort travels flagged as a pin — without that flag a bound agent's own pinned effort would win over it.
+    /// </summary>
+    [Test]
+    public async Task Loop_WhenTheCallerPinnedAModelAndEffort_SendsThemOnEveryStep()
+    {
+        var sessionId = Guid.NewGuid();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                new RecordingWorkSessionEventPublisher())
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted]));
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>()
+                             .TryStart(sessionId, new WorkSessionRuntimeOverride("qwen3-30b", "high")));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Completed).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 2, fake.Requests.Count);
+        foreach (var request in fake.Requests)
+        {
+            AssertEx.Equal("qwen3-30b", request.Model);
+            AssertEx.Equal("high", request.ReasoningEffort);
+            AssertEx.True(request.ReasoningEffortOverridesAgentPin, "the caller's effort is a pin, so it must beat the bound agent's own.");
+        }
+    }
+
+    [Test]
+    public async Task Loop_WithNoPin_SendsTheTurnExactlyAsItDoesToday()
+    {
+        var sessionId = Guid.NewGuid();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                new RecordingWorkSessionEventPublisher())
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Completed).ConfigureAwait(false);
+
+        AssertEx.Null(fake.Requests[0].Model, "an unpinned session resolves its model the way every other send does.");
+        AssertEx.Null(fake.Requests[0].ReasoningEffort);
+        AssertEx.False(fake.Requests[0].ReasoningEffortOverridesAgentPin);
+    }
+
     private static FakeNodeChatStreamService ResolveStream(TestServerWebAppFactory factory, ref FakeNodeChatStreamService? stream)
     {
         // Resolving the singleton is what runs the factory delegate that assigns the field.

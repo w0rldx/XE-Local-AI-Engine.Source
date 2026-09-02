@@ -90,7 +90,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
             throw new WorkSessionValidationException("Development work sessions are not supported yet.");
         }
 
-        _ = await ResolveToolCapableAgentAsync(model.AgentDefinitionId, cancellationToken).ConfigureAwait(false);
+        _ = await ResolveToolCapableAgentAsync(model.AgentDefinitionId, model.Runtime?.ModelProfile, cancellationToken).ConfigureAwait(false);
 
         var conversation = await _persistence.CreateConversationAsync(new NodeChatCreateConversationRequest(title,
                                                      UserId: null,
@@ -137,7 +137,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
         if (model.AgentDefinitionId is { } agentDefinitionId && agentDefinitionId != session.AgentDefinitionId)
         {
-            var effectiveModel = await ResolveToolCapableAgentAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+            var effectiveModel = await ResolveToolCapableAgentAsync(agentDefinitionId, pinnedModelOverride: null, cancellationToken).ConfigureAwait(false);
             await EnsureNoCloudEgressAsync(session, effectiveModel, cancellationToken).ConfigureAwait(false);
         }
 
@@ -150,10 +150,10 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         DeleteAsync(sessionId, workflowOwned: false, cancellationToken);
 
     public Task<WorkSessionDetail> StartAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
-        BeginAsync(sessionId, [AgentWorkSessionStatus.Draft], workflowOwned: false, cancellationToken);
+        BeginAsync(sessionId, [AgentWorkSessionStatus.Draft], workflowOwned: false, runtime: null, cancellationToken);
 
     public Task<WorkSessionDetail> ResumeAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
-        BeginAsync(sessionId, [AgentWorkSessionStatus.Paused, AgentWorkSessionStatus.Interrupted], workflowOwned: false, cancellationToken);
+        BeginAsync(sessionId, [AgentWorkSessionStatus.Paused, AgentWorkSessionStatus.Interrupted], workflowOwned: false, runtime: null, cancellationToken);
 
     public Task<WorkSessionDetail> PauseAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
         StopAsync(sessionId, WorkSessionStopReason.Pause, AgentWorkSessionStatus.Paused, "The operator paused the work session.", workflowOwned: false, cancellationToken);
@@ -166,14 +166,15 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
     Task<WorkSessionDetail> IWorkflowOwnedWorkSessionLifecycle.CreateAsync(string title,
         string objective,
         Guid agentDefinitionId,
+        WorkSessionRuntimeOverride? runtime,
         CancellationToken cancellationToken) =>
-        CreateAsync(new CreateWorkSessionRequestModel(title, objective, AgentWorkSessionKind.Workflow, agentDefinitionId), cancellationToken);
+        CreateAsync(new CreateWorkSessionRequestModel(title, objective, AgentWorkSessionKind.Workflow, agentDefinitionId, runtime), cancellationToken);
 
-    Task<WorkSessionDetail> IWorkflowOwnedWorkSessionLifecycle.StartAsync(Guid sessionId, CancellationToken cancellationToken) =>
-        BeginAsync(sessionId, [AgentWorkSessionStatus.Draft], workflowOwned: true, cancellationToken);
+    Task<WorkSessionDetail> IWorkflowOwnedWorkSessionLifecycle.StartAsync(Guid sessionId, WorkSessionRuntimeOverride? runtime, CancellationToken cancellationToken) =>
+        BeginAsync(sessionId, [AgentWorkSessionStatus.Draft], workflowOwned: true, runtime, cancellationToken);
 
-    Task<WorkSessionDetail> IWorkflowOwnedWorkSessionLifecycle.ResumeAsync(Guid sessionId, CancellationToken cancellationToken) =>
-        BeginAsync(sessionId, [AgentWorkSessionStatus.Paused, AgentWorkSessionStatus.Interrupted], workflowOwned: true, cancellationToken);
+    Task<WorkSessionDetail> IWorkflowOwnedWorkSessionLifecycle.ResumeAsync(Guid sessionId, WorkSessionRuntimeOverride? runtime, CancellationToken cancellationToken) =>
+        BeginAsync(sessionId, [AgentWorkSessionStatus.Paused, AgentWorkSessionStatus.Interrupted], workflowOwned: true, runtime, cancellationToken);
 
     Task<WorkSessionDetail> IWorkflowOwnedWorkSessionLifecycle.PauseAsync(Guid sessionId, CancellationToken cancellationToken) =>
         StopAsync(sessionId, WorkSessionStopReason.Pause, AgentWorkSessionStatus.Paused, "The workflow run paused the work session.", workflowOwned: true, cancellationToken);
@@ -242,6 +243,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
                 _ = await BeginAsync(sessionId,
                         [AgentWorkSessionStatus.Paused, AgentWorkSessionStatus.Interrupted],
                         workflowOwned: false,
+                        runtime: null,
                         cancellationToken)
                     .ConfigureAwait(false);
             }
@@ -369,6 +371,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
     private async Task<WorkSessionDetail> BeginAsync(Guid sessionId,
         AgentWorkSessionStatus[] allowedFrom,
         bool workflowOwned,
+        WorkSessionRuntimeOverride? runtime,
         CancellationToken cancellationToken)
     {
         EnsureEnabled();
@@ -389,7 +392,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
         var running = await _store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running), cancellationToken)
                                   .ConfigureAwait(false);
-        if (_supervisor.TryStart(sessionId))
+        if (_supervisor.TryStart(sessionId, runtime))
         {
             return ToDetail(running);
         }
@@ -440,9 +443,9 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
     ///         function … not found".
     ///     </para>
     /// </summary>
-    private async Task<string?> ResolveToolCapableAgentAsync(Guid agentDefinitionId, CancellationToken cancellationToken)
+    private async Task<string?> ResolveToolCapableAgentAsync(Guid agentDefinitionId, string? pinnedModelOverride, CancellationToken cancellationToken)
     {
-        var verdict = await _toolGate.InspectAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var verdict = await _toolGate.InspectAsync(agentDefinitionId, pinnedModelOverride, cancellationToken).ConfigureAwait(false);
         if (!verdict.AgentExists)
         {
             throw new WorkSessionValidationException("That agent could not be found. It may have been deleted.");
@@ -456,12 +459,12 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         if (verdict.SupportsTools is false)
         {
             throw new WorkSessionValidationException(
-                $"'{verdict.AgentName}' runs on a model that cannot call tools, so it could never record a task or a finding. Pick an agent on a tool-capable model.");
+                $"{verdict.Subject}, which cannot call tools, so it could never record a task or a finding. Use a tool-capable model.");
         }
 
         if (!verdict.IsAllowListed)
         {
-            throw new WorkSessionValidationException(WorkSessionToolGate.AllowListRefusal(verdict.AgentName, verdict.EffectiveModel));
+            throw new WorkSessionValidationException(WorkSessionToolGate.AllowListRefusal(verdict));
         }
 
         return verdict.EffectiveModel;

@@ -102,7 +102,14 @@ public sealed record NodeChatStreamRequest(
     // hits for the user's latest message and inlines them as ONE fenced untrusted context region, and records their
     // provenance as the turn's sources. Ignored in agent mode (the agent uses the search_knowledge_base tool instead).
     // Trailing optional so the SignalR hub forwards the record unchanged.
-    bool UseKnowledgeBase = false);
+    bool UseKnowledgeBase = false,
+    // Whether ReasoningEffort above is a PIN rather than a preference. A bound agent's own pinned effort normally wins
+    // over the one that arrives with a send — the composer's selection is what the operator would like, the pin is what
+    // the agent is configured to do. A work session driven by a development-workflow node is the other way round: the
+    // node's authored effort IS that session's pin and there is no composer behind it. False everywhere else, so every
+    // ordinary send keeps the precedence it has today. Trailing optional so the SignalR hub forwards the record
+    // unchanged.
+    bool ReasoningEffortOverridesAgentPin = false);
 
 public sealed record ChatStreamEvent(
     string Type,

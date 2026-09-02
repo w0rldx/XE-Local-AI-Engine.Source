@@ -806,8 +806,12 @@ internal sealed class DriftingWorkSessions(FakeDevWorkflowAgentSession agent, IS
 
     public bool HasCapacity => Agent.HasCapacity;
 
-    public Task<WorkSessionDetail> CreateAsync(string title, string objective, Guid agentDefinitionId, CancellationToken cancellationToken = default) =>
-        Agent.CreateAsync(title, objective, agentDefinitionId, cancellationToken);
+    public Task<WorkSessionDetail> CreateAsync(string title,
+        string objective,
+        Guid agentDefinitionId,
+        WorkSessionRuntimeOverride? runtime = null,
+        CancellationToken cancellationToken = default) =>
+        Agent.CreateAsync(title, objective, agentDefinitionId, runtime, cancellationToken);
 
     public async Task<WorkSessionDetail> GetAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
@@ -829,14 +833,14 @@ internal sealed class DriftingWorkSessions(FakeDevWorkflowAgentSession agent, IS
         return detail;
     }
 
-    public Task<WorkSessionDetail> StartAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
-        Agent.StartAsync(sessionId, cancellationToken);
+    public Task<WorkSessionDetail> StartAsync(Guid sessionId, WorkSessionRuntimeOverride? runtime = null, CancellationToken cancellationToken = default) =>
+        Agent.StartAsync(sessionId, runtime, cancellationToken);
 
     public Task<WorkSessionDetail> PauseAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
         Agent.PauseAsync(sessionId, cancellationToken);
 
-    public Task<WorkSessionDetail> ResumeAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
-        Agent.ResumeAsync(sessionId, cancellationToken);
+    public Task<WorkSessionDetail> ResumeAsync(Guid sessionId, WorkSessionRuntimeOverride? runtime = null, CancellationToken cancellationToken = default) =>
+        Agent.ResumeAsync(sessionId, runtime, cancellationToken);
 
     public Task<WorkSessionDetail> CancelAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
         Agent.CancelAsync(sessionId, cancellationToken);

@@ -129,7 +129,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             nodeRun.QueuedAtUtc,
             nodeRun.AgentDefinitionId,
             AgentDisplayName(nodeRun, node, agentsById),
-            ModelLabel(nodeRun, agentsById),
+            ModelLabel(nodeRun, node, agentsById),
             nodeRun.WorkSessionId,
             conversationId,
             nodeRun.WorkSessionAvailable,
@@ -190,7 +190,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             DevelopmentTaskId: nodeRun.DevelopmentTaskId,
             AgentDefinitionId: nodeRun.AgentDefinitionId,
             AgentDisplayName: AgentDisplayName(nodeRun, node, agentsById),
-            ModelLabel: ModelLabel(nodeRun, agentsById),
+            ModelLabel: ModelLabel(nodeRun, node, agentsById),
             HasStaleInputs: hasStaleInputs,
             StartedAtUtc: nodeRun.StartedAtUtc,
             CompletedAtUtc: nodeRun.EndedAtUtc,
@@ -242,13 +242,35 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         nodeRun.AgentDefinitionId is { } id && agentsById.TryGetValue(id, out var agent) ? agent.Name : node?.AgentSeedSlug;
 
     /// <summary>
-    ///     The BOUND AGENT's model, which is the only one a run actually uses. The graph node's authored
-    ///     <c>modelProfile</c> is deliberately not consulted: the runtime's parser does not read it, so nothing
-    ///     dispatches on it, and naming it here made the pane confidently label a node with a model it would never
-    ///     load. The wire field stays so an authored graph still round-trips unchanged.
+    ///     The model this node run's session actually runs on: the node's own <c>modelProfile</c> when it authored one,
+    ///     because that is the pin the work session is created and resumed with, and the bound agent's otherwise. Null
+    ///     when neither pins anything — the session then takes the node's default chat model, which is a live setting
+    ///     this pane has no business naming as if the run had chosen it.
+    ///     <para>
+    ///         The authored pin counts only on an AGENT node run, which is the one lane that dispatches on it. A Tool or
+    ///         DevTask node carrying the field runs on neither — Dev Mode's coder resolves its own — so naming it there
+    ///         would be the same false label this method was cut back to stop giving.
+    ///     </para>
+    ///     <para>
+    ///         Only the PINNED half is stable: the node comes from the run's own graph snapshot, so an edit to the
+    ///         definition cannot change it. The fallback is the agent definition as it stands NOW, so a node that
+    ///         pinned nothing re-labels when its agent is repointed — which is the same live read every other agent
+    ///         field on this response makes.
+    ///     </para>
+    ///     <para>
+    ///         Trimmed, because the parser trims before it pins: labelling <c>" qwen "</c> for a session dispatched on
+    ///         <c>"qwen"</c> would make the pane disagree with the run over whitespace.
+    ///     </para>
     /// </summary>
-    private static string? ModelLabel(DevWorkflowNodeRunSnapshot nodeRun, IReadOnlyDictionary<Guid, AgentDefinitionRecord> agentsById) =>
-        nodeRun.AgentDefinitionId is { } id && agentsById.TryGetValue(id, out var agent) ? agent.ModelProfile : null;
+    private static string? ModelLabel(DevWorkflowNodeRunSnapshot nodeRun,
+        DevWorkflowGraphNode? node,
+        IReadOnlyDictionary<Guid, AgentDefinitionRecord> agentsById) =>
+        PinnedModel(nodeRun, node)
+        ?? (nodeRun.AgentDefinitionId is { } id && agentsById.TryGetValue(id, out var agent) ? agent.ModelProfile : null);
+
+    /// <summary>The node's own pin as the RUNTIME will read it — trimmed, blank treated as absent — and only where a node run dispatches on one.</summary>
+    private static string? PinnedModel(DevWorkflowNodeRunSnapshot nodeRun, DevWorkflowGraphNode? node) =>
+        nodeRun.NodeType == DevWorkflowNodeType.Agent && node?.ModelProfile?.Trim() is { Length: > 0 } pinned ? pinned : null;
 
     /// <summary>
     ///     One read for every id-bound node run, and none at all when there are none — which is every graph that binds

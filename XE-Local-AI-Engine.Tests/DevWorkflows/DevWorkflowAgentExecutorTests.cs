@@ -28,6 +28,17 @@ public sealed class DevWorkflowAgentExecutorTests
                                        }
                                        """;
 
+    /// <summary>The same one node, pinned to a model and an effort the bound agent definition does not name.</summary>
+    private const string SingleAgentPinned = """
+                                             {
+                                               "schemaVersion": 1,
+                                               "nodes": [{ "nodeKey": "research", "nodeType": "Agent", "label": "Research",
+                                                           "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b",
+                                                           "modelProfile": "qwen3-30b", "reasoningEffort": "high" }],
+                                               "edges": []
+                                             }
+                                             """;
+
     /// <summary>An agent handing its work to a gate — the shape the whole slice ships, minus the middle step.</summary>
     private const string AgentThenGate = """
                                          {
@@ -168,6 +179,40 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Equal("run.created, node.materialized, run.started, node.queued, worksession.attached, node.started, node.completed, run.completed",
             await harness.ReadEventTrailAsync(runId).ConfigureAwait(false),
             "the queue hop and the session it was handed are both part of the audit.");
+    }
+
+    /// <summary>
+    ///     FU-5: a node's authored model and effort reach the session, on the create AND on the start that follows it.
+    ///     <para>
+    ///         Both, because neither alone would run the node on them: the create is what the tool gate judges, and the
+    ///         start is what the step loop reads. A node that pins nothing hands null, which is what leaves the bound
+    ///         agent's own configuration in charge.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AnAgentNodeWithAModelAndEffort_PinsThemOnItsSessionForEveryDrive()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleAgentPinned).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal("create=qwen3-30b/high, start=qwen3-30b/high",
+            string.Join(", ", harness.Agent.Runtimes.Select(entry => $"{entry.Verb}={entry.Runtime?.ModelProfile}/{entry.Runtime?.ReasoningEffort}")),
+            "the node's pins travel on the create the tool gate judges and on the start the step loop reads.");
+    }
+
+    [Test]
+    public async Task AnAgentNodeWithNeitherPin_LeavesTheSessionOnTheBoundAgentsOwn()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal("create=, start=",
+            string.Join(", ", harness.Agent.Runtimes.Select(entry => $"{entry.Verb}={entry.Runtime?.ModelProfile}")),
+            "no override at all, rather than one naming whatever the agent already runs on.");
     }
 
     /// <summary>

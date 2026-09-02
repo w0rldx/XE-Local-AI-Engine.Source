@@ -149,11 +149,32 @@ public sealed record WorkSessionStepConsumptionDetail(
 public sealed record WorkSessionArtifactContent(WorkSessionArtifactDto Artifact, string Content, bool IsBase64);
 
 /// <summary>
+///     What ONE session runs on when its caller pins it rather than the bound agent definition: the model name and the
+///     reasoning effort, either of which may be null to leave that half to the agent.
+///     <para>
+///         This is a pin, not a preference. A development-workflow node authoring <c>modelProfile</c> means that node's
+///         session runs on that model — so it is applied exactly the way an agent definition's own pin is, tool gate
+///         included, and a name this node cannot load fails the session the same way a stale pin on the definition
+///         does. Nothing is persisted on the session row: the run's graph snapshot is where a workflow node's authoring
+///         lives, and it re-supplies this on every start and resume.
+///     </para>
+/// </summary>
+public sealed record WorkSessionRuntimeOverride(string? ModelProfile, string? ReasoningEffort)
+{
+    /// <summary>Nothing pinned, which is the shape every caller but the workflow runtime has.</summary>
+    public bool IsEmpty => string.IsNullOrWhiteSpace(ModelProfile) && string.IsNullOrWhiteSpace(ReasoningEffort);
+}
+
+/// <summary>
 ///     Create input. Named <c>…RequestModel</c> so it cannot collide with the store layer's
 ///     <c>CreateWorkSessionCommand</c>, which carries the ids and the concurrency token this one has no business
 ///     knowing about.
 /// </summary>
-public sealed record CreateWorkSessionRequestModel(string Title, string Objective, AgentWorkSessionKind Kind, Guid AgentDefinitionId);
+public sealed record CreateWorkSessionRequestModel(string Title,
+    string Objective,
+    AgentWorkSessionKind Kind,
+    Guid AgentDefinitionId,
+    WorkSessionRuntimeOverride? Runtime = null);
 
 /// <summary>Update input. A null member leaves the stored value alone.</summary>
 public sealed record UpdateWorkSessionRequestModel(string? Title, string? Objective, Guid? AgentDefinitionId);

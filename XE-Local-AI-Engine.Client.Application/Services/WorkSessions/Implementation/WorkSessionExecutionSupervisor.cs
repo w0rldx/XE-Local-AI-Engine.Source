@@ -106,7 +106,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     /// </summary>
     public bool HasCapacity => _options.Enabled && !_shutdown.IsCancellationRequested && _admission.CurrentCount > 0;
 
-    public bool TryStart(Guid sessionId)
+    public bool TryStart(Guid sessionId, WorkSessionRuntimeOverride? runtime = null)
     {
         if (!_options.Enabled || _shutdown.IsCancellationRequested || !_admission.Wait(millisecondsTimeout: 0, CancellationToken.None))
         {
@@ -118,7 +118,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         try
         {
             cancellation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
-            var run = new SessionRun(cancellation);
+            var run = new SessionRun(cancellation, runtime);
             if (!_runs.TryAdd(sessionId, run))
             {
                 return false;
@@ -325,7 +325,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         try
         {
             toolGate = await turnScope.ServiceProvider.GetRequiredService<WorkSessionToolGate>()
-                                      .InspectAllowListAsync(state.Session.AgentDefinitionId, CancellationToken.None)
+                                      .InspectAllowListAsync(state.Session.AgentDefinitionId, run.Runtime?.ModelProfile, CancellationToken.None)
                                       .ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException or KeyNotFoundException)
@@ -343,7 +343,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
 
         if (toolGate is { AgentExists: true, EffectiveModel: not null, IsAllowListed: false } refused)
         {
-            var refusal = WorkSessionToolGate.AllowListRefusal(refused.AgentName, refused.EffectiveModel);
+            var refusal = WorkSessionToolGate.AllowListRefusal(refused);
             _logger.LogWarning("Work session {SessionId} step {Step} was not sent: {Reason}", sessionId, step, refusal);
 
             // PAUSED, not Failed, and that is what makes the refusal's own advice actionable: Resume accepts only
@@ -405,7 +405,13 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             MessageId: correlation.MessageId,
             RequestId: correlation.RequestId,
             UseLocalTools: true,
-            AgentDefinitionId: state.Session.AgentDefinitionId);
+            AgentDefinitionId: state.Session.AgentDefinitionId,
+            // The caller's pins for this session, or nulls that leave every turn resolving exactly as it does today. A
+            // model here suppresses the bound agent's own pin the same way the chat dropdown's pick does; the effort
+            // needs the flag beside it, because a caller-supplied effort otherwise LOSES to the agent's.
+            Model: run.Runtime?.ModelProfile,
+            ReasoningEffort: run.Runtime?.ReasoningEffort,
+            ReasoningEffortOverridesAgentPin: run.Runtime?.ReasoningEffort is { Length: > 0 });
 
         // Tighten the tool-result ceiling for this step, seeded BEFORE the enumeration starts so the value flows into
         // the invocation's async context (the send path calls the runner inline, not through a detached Task). The
@@ -815,12 +821,19 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         Settled
     }
 
-    private sealed class SessionRun(CancellationTokenSource cancellation)
+    private sealed class SessionRun(CancellationTokenSource cancellation, WorkSessionRuntimeOverride? runtime)
     {
         private NodeChatMessageCorrelation? _correlation;
         private int _stopReason = -1;
 
         public CancellationTokenSource Cancellation { get; } = cancellation;
+
+        /// <summary>
+        ///     What this run was told to run on instead of the bound agent's own pins, or null for the agent's. Held for
+        ///     the life of the run rather than stored on the session: the caller re-supplies it every time it starts or
+        ///     resumes the session, which is what makes a restart cost nothing.
+        /// </summary>
+        public WorkSessionRuntimeOverride? Runtime { get; } = runtime is { IsEmpty: false } ? runtime : null;
 
         public Task? Completion { get; set; }
 

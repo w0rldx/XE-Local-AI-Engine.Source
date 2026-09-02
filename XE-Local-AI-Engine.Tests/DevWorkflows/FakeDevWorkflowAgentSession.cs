@@ -28,6 +28,7 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
     private readonly List<Guid> _created = [];
     private readonly List<string> _objectives = [];
     private readonly List<(string Verb, Guid SessionId)> _calls = [];
+    private readonly List<(string Verb, WorkSessionRuntimeOverride? Runtime)> _runtimes = [];
     private readonly IServiceScopeFactory _scopes;
 
     public FakeDevWorkflowAgentSession(IServiceScopeFactory scopes) =>
@@ -48,6 +49,12 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
     /// <summary>Every objective it was handed, so a test can assert what the agent was actually asked.</summary>
     public IReadOnlyList<string> Objectives => Snapshot(_objectives);
 
+    /// <summary>
+    ///     Every runtime pin it was handed, keyed by the verb that carried it: <c>create</c> once, then <c>start</c> or
+    ///     <c>resume</c> per drive. A null entry is a node that pinned nothing.
+    /// </summary>
+    public IReadOnlyList<(string Verb, WorkSessionRuntimeOverride? Runtime)> Runtimes => Snapshot(_runtimes);
+
     /// <summary>Every lifecycle call, in order, as <c>verb</c> against the session it named.</summary>
     public IReadOnlyList<(string Verb, Guid SessionId)> Calls => Snapshot(_calls);
 
@@ -60,6 +67,14 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
         }
     }
 
+    private void RecordRuntime(string verb, WorkSessionRuntimeOverride? runtime)
+    {
+        lock (_gate)
+        {
+            _runtimes.Add((verb, runtime));
+        }
+    }
+
     private void Record(string verb, Guid sessionId)
     {
         lock (_gate)
@@ -68,7 +83,11 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
         }
     }
 
-    public async Task<WorkSessionDetail> CreateAsync(string title, string objective, Guid agentDefinitionId, CancellationToken cancellationToken = default)
+    public async Task<WorkSessionDetail> CreateAsync(string title,
+        string objective,
+        Guid agentDefinitionId,
+        WorkSessionRuntimeOverride? runtime = null,
+        CancellationToken cancellationToken = default)
     {
         if (RefuseCreateWith is { } refusal)
         {
@@ -78,6 +97,7 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
         lock (_gate)
         {
             _objectives.Add(objective);
+            _runtimes.Add(("create", runtime));
         }
 
         await using var scope = _scopes.CreateAsyncScope();
@@ -107,11 +127,17 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
     public Task<WorkSessionDetail> GetAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
         ReadAsync(sessionId, cancellationToken);
 
-    public Task<WorkSessionDetail> StartAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
-        MoveAsync("start", sessionId, AgentWorkSessionStatus.Running, cancellationToken);
+    public Task<WorkSessionDetail> StartAsync(Guid sessionId, WorkSessionRuntimeOverride? runtime = null, CancellationToken cancellationToken = default)
+    {
+        RecordRuntime("start", runtime);
+        return MoveAsync("start", sessionId, AgentWorkSessionStatus.Running, cancellationToken);
+    }
 
-    public Task<WorkSessionDetail> ResumeAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
-        MoveAsync("resume", sessionId, AgentWorkSessionStatus.Running, cancellationToken);
+    public Task<WorkSessionDetail> ResumeAsync(Guid sessionId, WorkSessionRuntimeOverride? runtime = null, CancellationToken cancellationToken = default)
+    {
+        RecordRuntime("resume", runtime);
+        return MoveAsync("resume", sessionId, AgentWorkSessionStatus.Running, cancellationToken);
+    }
 
     public Task<WorkSessionDetail> PauseAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
         MoveAsync("pause", sessionId, AgentWorkSessionStatus.Paused, cancellationToken);

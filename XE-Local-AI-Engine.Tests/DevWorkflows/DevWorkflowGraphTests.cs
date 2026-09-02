@@ -49,6 +49,45 @@ public sealed class DevWorkflowGraphTests
         AssertEx.Equal("approve", string.Join(", ", graph.Nodes.Keys.Where(key => graph.OutboundEdges(key).Count == 0)));
     }
 
+    /// <summary>
+    ///     The two dispatch pins. The model name is taken as written — it is matched against this node's catalog when
+    ///     the session is created, exactly as an agent definition's own pin is — while the effort is checked here,
+    ///     because its vocabulary is closed and cannot go stale between authoring and a run.
+    /// </summary>
+    [Test]
+    public void Parse_ReadsThePerNodeModelAndReasoningEffort()
+    {
+        var graph = DevWorkflowGraph.Parse(
+            """{"schemaVersion":1,"nodes":[{"nodeKey":"only","nodeType":"Agent","modelProfile":" qwen3-30b ","reasoningEffort":"High"}],"edges":[]}""");
+
+        AssertEx.Equal("qwen3-30b", graph.Nodes["only"].ModelProfile);
+        AssertEx.Equal("High", graph.Nodes["only"].ReasoningEffort, "the effort travels to the provider as written; only its membership is checked.");
+    }
+
+    [Test]
+    public void Parse_WithNeitherPin_LeavesBothToTheBoundAgent()
+    {
+        var research = DevWorkflowGraph.Parse(DevWorkflowGraphs.ResearchPlanApproval).Nodes["research"];
+
+        AssertEx.Null(research.ModelProfile);
+        AssertEx.Null(research.ReasoningEffort);
+    }
+
+    /// <summary>
+    ///     A cleared picker sends <c>""</c> and older stored documents already hold one, so a blank reads as "not
+    ///     pinned" rather than as a graph the dispatcher refuses to route.
+    /// </summary>
+    [Test]
+    public void Parse_WithABlankPin_ReadsItAsUnpinnedRatherThanRefusingTheGraph()
+    {
+        var only = DevWorkflowGraph.Parse(
+                                       """{"schemaVersion":1,"nodes":[{"nodeKey":"only","nodeType":"Agent","modelProfile":"","reasoningEffort":"  "}],"edges":[]}""")
+                                   .Nodes["only"];
+
+        AssertEx.Null(only.ModelProfile);
+        AssertEx.Null(only.ReasoningEffort);
+    }
+
     [Test]
     public void Parse_ReadsTheLabelFromTheNodeKeyWhenNoneIsGiven()
     {
@@ -229,6 +268,8 @@ public sealed class DevWorkflowGraphTests
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","joinPolicy":"Maybe"}],"edges":[]}""", "unknown 'joinPolicy'")]
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","agentDefinitionId":"not-a-guid"}],"edges":[]}""", "not a GUID")]
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Tool","validationCommandIds":"build"}],"edges":[]}""", "array of strings")]
+    [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","reasoningEffort":"exhaustive"}],"edges":[]}""", "unknown 'reasoningEffort'")]
+    [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","reasoningEffort":"xhigh"}],"edges":[]}""", "unknown 'reasoningEffort'")]
     public void Parse_RejectsAGraphItCannotRoute(string json, string expectedMessage) =>
         AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message, expectedMessage);
 
