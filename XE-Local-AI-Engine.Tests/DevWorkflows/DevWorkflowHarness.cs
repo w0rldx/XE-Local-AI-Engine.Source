@@ -479,6 +479,14 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
             }
         }
 
+        // Still writing is a bug UNLESS the sandbox lane is holding a pass: those ticks are real work about a row whose
+        // answer has not arrived yet, and waiting for it is AdvanceThroughToolLaneAsync's job — its own maxPasses cap
+        // is the hang guard for that case. Throwing here instead made every caller race the lane under load.
+        if ((await ReadNodeRunsAsync(runId).ConfigureAwait(false)).Any(nodeRun => ToolLane.IsInFlight(nodeRun.Id)))
+        {
+            return maxTicks;
+        }
+
         throw new AssertionException($"Run {runId} was still writing transitions after {maxTicks} ticks.");
     }
 
