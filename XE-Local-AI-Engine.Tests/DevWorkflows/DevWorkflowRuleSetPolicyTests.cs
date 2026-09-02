@@ -143,6 +143,7 @@ public sealed class DevWorkflowRuleSetPolicyTests
         var clonedAgent = await harness.ReadNodeRunAsync(runId, "implement#alpha").ConfigureAwait(false);
 
         var onTheTool = DevWorkflowRulePolicyResolver.Read(clonedTool.PolicyResolutionJson);
+        AssertEx.True(onTheTool.All(entry => entry.Body is null), "a Tool node run records which rule sets applied without carrying text nothing will inject.");
         AssertEx.Equal("Project sandbox rules, Sandbox rules",
             string.Join(", ", onTheTool.Select(entry => entry.Name)),
             "the cloned Tool node resolved against its OWN node type and against the project it inherited from its producer — and NOT against another project's rule set.");
@@ -227,6 +228,27 @@ public sealed class DevWorkflowRuleSetPolicyTests
         AssertEx.Equal(expected: 2,
             objective.Split("[policy text truncated:", StringSplitOptions.None).Length - 1,
             "both cut policies say so in the objective — a truncation an agent cannot see is one it will treat as the whole rule.");
+    }
+
+    /// <summary>
+    ///     Only the node types that INJECT policy text carry a copy of it. Every node type still records WHICH rule
+    ///     sets applied — a Tool or DevTask row that snapshotted bodies would be storing, encrypting and decrypting a
+    ///     document nothing ever reads, on every node-run list.
+    /// </summary>
+    [Test]
+    [Arguments(DevWorkflowNodeType.Agent, true)]
+    [Arguments(DevWorkflowNodeType.Tool, false)]
+    [Arguments(DevWorkflowNodeType.DevTask, false)]
+    [Arguments(DevWorkflowNodeType.HumanGate, false)]
+    public void Compose_SnapshotsTheBodyOnlyForNodeTypesThatInjectIt(DevWorkflowNodeType nodeType, bool expectsBody)
+    {
+        var ruleSet = Summary("House rules", """{"projectIds":[],"nodeTypes":[]}""");
+
+        var recorded = DevWorkflowRulePolicyResolver.Read(DevWorkflowRulePolicyResolver.Compose([ruleSet], ProjectId, nodeType));
+
+        AssertEx.Equal(expected: 1, recorded.Count, "every node type records WHICH rule sets applied, whatever it does with the text.");
+        AssertEx.Equal(ruleSet.ContentSha256, recorded[0].ContentSha256, "and names the exact text by hash, which is the audit.");
+        AssertEx.Equal(expectsBody, recorded[0].Body is not null, $"a {nodeType} node run must {(expectsBody ? "carry" : "not carry")} the snapshotted text.");
     }
 
     /// <summary>

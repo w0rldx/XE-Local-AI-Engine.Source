@@ -42,21 +42,34 @@ public static class DevWorkflowRulePolicyResolver
     ///     What a node-run's <c>policy_resolution_json</c> is written with, or null when nothing applied — which is the
     ///     honest answer for "no rule set matched" and keeps an untouched column from claiming an empty resolution.
     ///     <para>
-    ///         The BODY is snapshotted here, beside the hash that names it. Re-reading the rule set at dispatch instead
-    ///         would let an edit landing between materialization and dispatch hand the agent one text while the audit
-    ///         permanently claimed another, and a delete leave nothing to inject at all. The column is already
-    ///         encrypted, and a handful of ≤4096-character documents per node run is the accepted cost of the two
-    ///         never being able to disagree.
+    ///         The BODY is snapshotted for the node types that INJECT it, and only those. Re-reading the rule set at
+    ///         dispatch would let an edit landing between materialization and dispatch hand the agent one text while
+    ///         the audit permanently claimed another, and a delete leave nothing to inject at all. On every other node
+    ///         type the text would be a copy nothing reads, decrypted into each node-run snapshot on every list — so
+    ///         those rows record the id, the name and the hash, which is all their audit ever needed.
     ///     </para>
     /// </summary>
     public static string? Compose(IReadOnlyList<DevWorkflowRuleSetSnapshot> enabledRuleSets, Guid? developmentProjectId, DevWorkflowNodeType nodeType)
     {
         var matched = Resolve(enabledRuleSets, developmentProjectId, nodeType);
+        var snapshotBodies = InjectsPolicyText(nodeType);
         return matched.Count == 0
             ? null
-            : JsonSerializer.Serialize(matched.Select(ruleSet => new DevWorkflowAppliedRuleSet(ruleSet.Id, ruleSet.Name, ruleSet.ContentSha256, ruleSet.Body)).ToList(),
+            : JsonSerializer.Serialize(matched.Select(ruleSet => new DevWorkflowAppliedRuleSet(ruleSet.Id,
+                                                  ruleSet.Name,
+                                                  ruleSet.ContentSha256,
+                                                  snapshotBodies ? ruleSet.Body : null))
+                                              .ToList(),
                 JsonOptions);
     }
+
+    /// <summary>
+    ///     Whether a node type renders policy text into what it dispatches — today, the agent lane's objective and
+    ///     nothing else. A DevTask node's prompt is Dev Mode's to compose and a Tool node runs a command profile with
+    ///     no prose channel at all, so neither has anywhere to put a body. Both still RECORD which rule sets applied.
+    /// </summary>
+    public static bool InjectsPolicyText(DevWorkflowNodeType nodeType) =>
+        nodeType == DevWorkflowNodeType.Agent;
 
     /// <summary>
     ///     Reads a recorded resolution back. A column that will not parse answers empty rather than throwing: the

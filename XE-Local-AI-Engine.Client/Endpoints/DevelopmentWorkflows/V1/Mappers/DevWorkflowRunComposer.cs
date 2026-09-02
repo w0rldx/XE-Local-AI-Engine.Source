@@ -129,7 +129,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             nodeRun.QueuedAtUtc,
             nodeRun.AgentDefinitionId,
             AgentDisplayName(nodeRun, node, agentsById),
-            ModelLabel(nodeRun, node, agentsById),
+            ModelLabel(nodeRun, agentsById),
             nodeRun.WorkSessionId,
             conversationId,
             nodeRun.WorkSessionAvailable,
@@ -190,7 +190,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             DevelopmentTaskId: nodeRun.DevelopmentTaskId,
             AgentDefinitionId: nodeRun.AgentDefinitionId,
             AgentDisplayName: AgentDisplayName(nodeRun, node, agentsById),
-            ModelLabel: ModelLabel(nodeRun, node, agentsById),
+            ModelLabel: ModelLabel(nodeRun, agentsById),
             HasStaleInputs: hasStaleInputs,
             StartedAtUtc: nodeRun.StartedAtUtc,
             CompletedAtUtc: nodeRun.EndedAtUtc,
@@ -241,12 +241,14 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         IReadOnlyDictionary<Guid, AgentDefinitionRecord> agentsById) =>
         nodeRun.AgentDefinitionId is { } id && agentsById.TryGetValue(id, out var agent) ? agent.Name : node?.AgentSeedSlug;
 
-    /// <summary>The node's own override wins: it is what the run will actually use.</summary>
-    private static string? ModelLabel(DevWorkflowNodeRunSnapshot nodeRun,
-        DevWorkflowGraphNode? node,
-        IReadOnlyDictionary<Guid, AgentDefinitionRecord> agentsById) =>
-        node?.ModelProfile
-        ?? (nodeRun.AgentDefinitionId is { } id && agentsById.TryGetValue(id, out var agent) ? agent.ModelProfile : null);
+    /// <summary>
+    ///     The BOUND AGENT's model, which is the only one a run actually uses. The graph node's authored
+    ///     <c>modelProfile</c> is deliberately not consulted: the runtime's parser does not read it, so nothing
+    ///     dispatches on it, and naming it here made the pane confidently label a node with a model it would never
+    ///     load. The wire field stays so an authored graph still round-trips unchanged.
+    /// </summary>
+    private static string? ModelLabel(DevWorkflowNodeRunSnapshot nodeRun, IReadOnlyDictionary<Guid, AgentDefinitionRecord> agentsById) =>
+        nodeRun.AgentDefinitionId is { } id && agentsById.TryGetValue(id, out var agent) ? agent.ModelProfile : null;
 
     /// <summary>
     ///     One read for every id-bound node run, and none at all when there are none — which is every graph that binds
