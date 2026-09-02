@@ -3821,6 +3821,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse 
 	operationId?: string | null;
 	operationPhase?: string | null;
 	outcome?: string | null;
+	reason?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentProjectRequest = {

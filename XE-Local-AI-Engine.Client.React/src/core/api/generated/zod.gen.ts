@@ -4584,6 +4584,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventRespons
 	operationId: z.guid().nullish(),
 	operationPhase: z.string().nullish(),
 	outcome: z.string().nullish(),
+	reason: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse = z.object({
