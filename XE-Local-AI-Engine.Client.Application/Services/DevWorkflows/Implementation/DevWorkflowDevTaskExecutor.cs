@@ -58,6 +58,12 @@ internal sealed class DevWorkflowDevTaskExecutor
     /// <summary>How much of one failing command's captured output the change request quotes, from the END of it.</summary>
     private const int MaxQuotedCommandOutput = 800;
 
+    /// <summary>
+    ///     The last resort: a sentence with nothing interpolated into it, for when even the routed counts cannot be
+    ///     stated safely. It is still true, which is the only bar a reason has to clear.
+    /// </summary>
+    private const string GenericChangeRequest = "A downstream check rejected this implementation and asked for it to be done again.";
+
     private readonly IDevWorkflowArtifactBlobStore _blobs;
     private readonly ILogger<DevWorkflowDevTaskExecutor> _logger;
     private readonly DevWorkflowRetryPolicy _retries;
@@ -788,23 +794,41 @@ internal sealed class DevWorkflowDevTaskExecutor
         string failingNodeKey,
         CancellationToken cancellationToken)
     {
-        var counts = DescribeCounts(nodeRun.InputJson, failingNodeKey);
+        // The counts go through the same bound and the same sanitizer as the report does: the node key interpolated
+        // into them comes from a stored graph definition, which is authored text like any other.
+        var counts = Bounded(DescribeCounts(nodeRun.InputJson, failingNodeKey), GenericChangeRequest);
         try
         {
-            if (await ReadValidationReportAsync(store, run, failingNodeKey, cancellationToken).ConfigureAwait(false) is not { } report)
-            {
-                return counts;
-            }
-
-            var sanitized = DevelopmentArtifactSanitizer.SanitizeText(Describe(report, failingNodeKey, counts));
-            return sanitized.Length <= MaxChangeRequestReason ? sanitized : sanitized[..MaxChangeRequestReason];
+            return await ReadValidationReportAsync(store, run, failingNodeKey, cancellationToken).ConfigureAwait(false) is { } report
+                ? Bounded(Describe(report, failingNodeKey, counts), counts)
+                : counts;
         }
-        catch (Exception exception) when (exception is DevelopmentWorkspaceSecurityException or JsonException or NotSupportedException)
+        catch (Exception exception) when (exception is JsonException or NotSupportedException or IOException or UnauthorizedAccessException)
         {
-            // A report whose text the sanitizer refuses, or whose shape this build cannot read. The counts are authored
-            // here from numbers, so they are always safe to state.
+            // A report whose shape this build cannot read, or whose bytes the filesystem would not hand over — the blob
+            // store answers a MISSING or tampered blob with a status, but a disk or permission fault still throws, and
+            // letting it escape would fail the tick and re-throw on every sweep after it. The counts are authored here
+            // from numbers, so they are always the safe answer.
             _logger.LogDebug(exception, "Development workflow node run {NodeRunId} could not quote node '{NodeKey}' validation report.", nodeRun.Id, failingNodeKey);
             return counts;
+        }
+    }
+
+    /// <summary>
+    ///     One reason, sanitized and bounded, or <paramref name="fallback" /> when the sanitizer refuses it. Every
+    ///     string that reaches a task's rework reason goes through here: the report quotes model-adjacent command
+    ///     output, and the counts quote a node key an operator wrote.
+    /// </summary>
+    private static string Bounded(string text, string fallback)
+    {
+        try
+        {
+            var sanitized = DevelopmentArtifactSanitizer.SanitizeText(text);
+            return sanitized.Length <= MaxChangeRequestReason ? sanitized : sanitized[..MaxChangeRequestReason];
+        }
+        catch (DevelopmentWorkspaceSecurityException)
+        {
+            return fallback;
         }
     }
 

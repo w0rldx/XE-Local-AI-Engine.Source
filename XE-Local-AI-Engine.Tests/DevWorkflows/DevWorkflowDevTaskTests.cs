@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
@@ -457,6 +459,35 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>
+    ///     A disk or permission fault reading the routed node's report is not a reason to stop asking for the round.
+    ///     The blob store answers a missing or tampered blob with a status, but it still throws on an I/O fault — and
+    ///     letting that escape would fail the tick and re-throw on every sweep after it, so the routed counts are what
+    ///     the change request carries instead.
+    /// </summary>
+    [Test]
+    public async Task WithTheReportUnreadable_TheChangeRequestFallsBackToWhatTheRouteItselfCarried()
+    {
+        await using var harness = DevWorkflowHarness.WithAScriptedChain(clock: null,
+            services =>
+            {
+                services.RemoveAll<IDevWorkflowArtifactBlobStore>();
+                services.AddSingleton<IDevWorkflowArtifactBlobStore, UnreadableArtifactBlobStore>();
+            });
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        await DriveToAwaitingApplyAsync(harness, projectId, taskId).ConfigureAwait(false);
+        harness.Chain.HoldNextAttempt();
+        harness.Tools.Answer("validate", FakeDevWorkflowToolCommands.Failing());
+        var runId = await harness.StartRunAsync(DevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var feedback = AssertEx.NotNull((await ReadCoderSnapshotAsync(harness, taskId).ConfigureAwait(false)).PreviousRoundFeedback,
+            "an unreadable report costs the detail, not the round.");
+        AssertEx.Contains(feedback, "1 of 4 commands failed, 3 tests failed");
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
     ///     A task that has spent every review round is stood down where the reason is still legible, instead of being
     ///     driven through a whole coder attempt whose only possible end is Dev Mode blocking it at the review hop. The
     ///     change request itself charges no round — rounds are spent ENTERING review, and this transition never does.
@@ -848,6 +879,36 @@ public sealed class DevWorkflowDevTaskTests
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var attempts = await store.ListAttemptsAsync(taskId).ConfigureAwait(false);
         return await store.GetExecutionSnapshotAsync(attempts[^1].Id).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Takes the bytes and then refuses to hand them back the way a disk fault does — a status the read contract
+    ///     has no code for, which is the case the executor has to survive rather than re-throw every sweep.
+    /// </summary>
+    private sealed class UnreadableArtifactBlobStore : IDevWorkflowArtifactBlobStore
+    {
+        public Task<DevWorkflowArtifactBlobWriteResult> WriteAsync(Guid runId,
+            Guid artifactId,
+            ReadOnlyMemory<byte> content,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new DevWorkflowArtifactBlobWriteResult($"{runId:N}/{artifactId:N}",
+                Convert.ToHexString(SHA256.HashData(content.Span)),
+                content.Length));
+
+        public Task<DevWorkflowArtifactBlobReadResult> ReadAsync(Guid runId,
+            Guid artifactId,
+            string expectedHash,
+            long expectedByteCount,
+            CancellationToken cancellationToken = default) =>
+            throw new IOException("The managed artifact blob could not be read.");
+
+        public void Delete(Guid runId, Guid artifactId)
+        {
+        }
+
+        public void DeleteRun(Guid runId)
+        {
+        }
     }
 
     /// <summary>Lands the held attempt the way its runner would have, so the drain has nothing left to wait for.</summary>

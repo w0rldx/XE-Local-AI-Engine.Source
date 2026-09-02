@@ -44,6 +44,37 @@ public sealed class DevelopmentRoundFeedbackTests
     }
 
     /// <summary>
+    ///     An ordinary Dev Mode rework round is told what the reviewer actually found, not that it found something.
+    ///     The fixed sentence alone left the same hole the workflow's routed change requests had.
+    /// </summary>
+    [Test]
+    public void AReviewersChangeRequestCarriesItsFindingsIntoTheNextRoundsPrompt()
+    {
+        var reason = DevelopmentReviewerAttemptRunner.ChangeRequestReason(new DevelopmentReviewerSubmission(DevelopmentReviewDisposition.ChangesRequested,
+            "The patch does not cover the failing case.",
+            [
+                new DevelopmentReviewFinding("correctness", "ParseBound returns the low bound when the range is inverted."),
+                new DevelopmentReviewFinding("tests", "No test covers an inverted range.")
+            ]));
+
+        var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(reason),
+            Session(),
+            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null));
+
+        AssertEx.Contains(prompt, "Feedback from the previous round:");
+        AssertEx.Contains(prompt, "ParseBound returns the low bound when the range is inverted.");
+        AssertEx.Contains(prompt, "No test covers an inverted range.");
+    }
+
+    /// <summary>A reviewer that found nothing to name still has the fixed sentence, which is all it can honestly say.</summary>
+    [Test]
+    public void WithNoFindings_AReviewersChangeRequestFallsBackToTheFixedSentence()
+    {
+        AssertEx.Equal("The independent reviewer requested changes.",
+            DevelopmentReviewerAttemptRunner.ChangeRequestReason(new DevelopmentReviewerSubmission(DevelopmentReviewDisposition.ChangesRequested, "Summary", [])));
+    }
+
+    /// <summary>
     ///     The mirror of the coder path's fix: a reviewer attempt refused by a workspace policy carries the POLICY's own
     ///     sentence behind the shared failure code, instead of the generic "violated a workspace security policy" line
     ///     that told an operator nothing to change and that a workflow node could not read as a Policy stand-down.

@@ -147,6 +147,87 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
             "the previous round's validation report describes an implementation that is being replaced.");
     }
 
+    /// <summary>
+    ///     The LATEST rework reason is what the next round is told, whichever stage wrote it. A reviewer asks for
+    ///     changes, the round it asked for fails the deterministic gate — and the gate's complaint is the newer fact,
+    ///     so replaying the reviewer's sentence would hand the coder round N-1's objection to a patch round N has
+    ///     already superseded.
+    /// </summary>
+    [Test]
+    public async Task AValidationFailureAfterAReviewersReworkIsWhatTheNextRoundIsTold()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var seed = DevelopmentTestFixture.CreateSeed();
+        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
+
+        async Task<long> VersionAsync() =>
+            (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Version;
+
+        async Task MoveAsync(DevelopmentTaskStatus target, string? reason = null) =>
+            _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                        Guid.NewGuid(),
+                        target,
+                        await VersionAsync().ConfigureAwait(false),
+                        reason))
+                    .ConfigureAwait(false);
+
+        // Round one reaches review, and the reviewer asks for changes.
+        await MoveAsync(DevelopmentTaskStatus.Ready).ConfigureAwait(false);
+        await MoveAsync(DevelopmentTaskStatus.InProgress).ConfigureAwait(false);
+        await MoveAsync(DevelopmentTaskStatus.Validation).ConfigureAwait(false);
+        await MoveAsync(DevelopmentTaskStatus.InReview).ConfigureAwait(false);
+        await MoveAsync(DevelopmentTaskStatus.ChangesRequested, "The reviewer wants the inverted range covered.").ConfigureAwait(false);
+
+        // Round two produces a patch the deterministic gate then rejects.
+        await MoveAsync(DevelopmentTaskStatus.InProgress).ConfigureAwait(false);
+        var attemptId = Guid.NewGuid();
+        var attempt = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
+                              attemptId,
+                              Guid.NewGuid(),
+                              DevelopmentAttemptRole.Coder,
+                              "local-model",
+                              "local",
+                              await VersionAsync().ConfigureAwait(false)))
+                          .ConfigureAwait(false);
+        _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attemptId,
+                           Guid.NewGuid(),
+                           DevelopmentAttemptStatus.Succeeded,
+                           attempt.Version))
+                       .ConfigureAwait(false);
+        await MoveAsync(DevelopmentTaskStatus.Validation).ConfigureAwait(false);
+        _ = await store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand(new DevelopmentAttachArtifactCommand(Guid.NewGuid(),
+                               seed.ProjectId,
+                               seed.TaskId,
+                               attemptId,
+                               Guid.NewGuid(),
+                               DevelopmentArtifactKind.ValidationReport,
+                               SchemaVersion: 1,
+                               "content-hash",
+                               ByteCount: 2,
+                               ContentJson: Encoding.UTF8.GetBytes("{}")),
+                           Guid.NewGuid(),
+                           await VersionAsync().ConfigureAwait(false),
+                           DevelopmentTaskStatus.InProgress,
+                           "The release test command reported 3 failing tests."))
+                       .ConfigureAwait(false);
+
+        var next = Guid.NewGuid();
+        _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
+                           next,
+                           Guid.NewGuid(),
+                           DevelopmentAttemptRole.Coder,
+                           "local-model",
+                           "local",
+                           await VersionAsync().ConfigureAwait(false)))
+                       .ConfigureAwait(false);
+
+        AssertEx.Equal("The release test command reported 3 failing tests.",
+            (await store.GetExecutionSnapshotAsync(next).ConfigureAwait(false)).PreviousRoundFeedback,
+            "the gate's complaint is newer than the reviewer's, so it is the one the round has to act on.");
+    }
+
     private static async Task<string?> ApprovedSubjectHashAsync(NodeChatDbContext dbContext, Guid taskId) =>
         await dbContext.DevelopmentTasks.AsNoTracking()
                        .Where(entity => entity.Id == taskId)

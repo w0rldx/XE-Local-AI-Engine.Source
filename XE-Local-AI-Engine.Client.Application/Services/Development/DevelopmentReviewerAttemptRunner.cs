@@ -18,6 +18,14 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
 {
     internal const string ProfileVersion = "development-review-v1";
 
+    /// <summary>
+    ///     What the reviewer's own line to the next round may weigh, matching the bound the workflow's routed change
+    ///     requests carry. A rework brief is a sentence to act on, not a second copy of the review report.
+    /// </summary>
+    private const int MaxChangeRequestReason = 4096;
+
+    private const string GenericChangeRequest = "The independent reviewer requested changes.";
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IDevelopmentEvidenceService _evidence;
@@ -148,7 +156,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                                     target,
                                     target == DevelopmentTaskStatus.AwaitingApply ? evidence.Current.SubjectHash : null,
                                     submission.Disposition == DevelopmentReviewDisposition.ChangesRequested
-                                        ? "The independent reviewer requested changes."
+                                        ? ChangeRequestReason(submission)
                                         : null,
                                     model.InputTokens,
                                     model.OutputTokens),
@@ -315,6 +323,40 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
         catch (DevelopmentWorkspaceSecurityException)
         {
             return "The Development reviewer attempt violated a workspace security policy.";
+        }
+    }
+
+    /// <summary>
+    ///     Why the reviewer asked for another round, in its own words. The fixed sentence alone told the next coder
+    ///     round nothing it could act on, which is the same hole the workflow's routed change requests had: the round
+    ///     was handed the identical brief and re-implemented blind.
+    ///     <para>
+    ///         The findings are already sanitized against this attempt's protected roots by the time they get here
+    ///         (<see cref="DevelopmentArtifactSanitizer.Sanitize(DevelopmentReviewerSubmission, string[])" />). The
+    ///         second pass is over the JOINED text and is belt-and-braces only — it must never cost a review that
+    ///         otherwise succeeded, so a refusal falls back to the fixed sentence rather than escaping.
+    ///     </para>
+    /// </summary>
+    internal static string ChangeRequestReason(DevelopmentReviewerSubmission submission)
+    {
+        ArgumentNullException.ThrowIfNull(submission);
+        var findings = submission.Findings
+                                 .Where(static finding => !string.IsNullOrWhiteSpace(finding.Summary))
+                                 .Select(static finding => $"- {finding.Category}: {finding.Summary}")
+                                 .ToArray();
+        if (findings.Length == 0)
+        {
+            return GenericChangeRequest;
+        }
+
+        try
+        {
+            var composed = DevelopmentArtifactSanitizer.SanitizeText(string.Join('\n', [GenericChangeRequest, .. findings]));
+            return composed.Length <= MaxChangeRequestReason ? composed : composed[..MaxChangeRequestReason];
+        }
+        catch (DevelopmentWorkspaceSecurityException)
+        {
+            return GenericChangeRequest;
         }
     }
 

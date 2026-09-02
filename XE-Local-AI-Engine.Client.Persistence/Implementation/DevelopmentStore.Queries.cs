@@ -78,10 +78,15 @@ public sealed partial class DevelopmentStore
     ///     The reason the last request for changes on this task gave, so the next coder round is told what was wrong
     ///     with the last one instead of being asked for the same work again.
     ///     <para>
-    ///         One row, off the task's own append-only log: the most recent event that CARRIES a reason and could have
-    ///         moved the task, which is either the reviewer's <c>ReviewFinalized</c> or a workflow's own
-    ///         <c>TaskTransitioned</c>. Its recorded status is then what decides — an event that carries a reason but
-    ///         did not ask for rework (a block, a validation recovery) is not feedback and answers nothing.
+    ///         One row, off the task's own append-only log: the LATEST event that carries a reason, whichever of the
+    ///         three writes it — the reviewer's <c>ReviewFinalized</c>, the deterministic gate's
+    ///         <c>ValidationFinalized</c>, or a workflow's own <c>TaskTransitioned</c>. Latest rather than
+    ///         reviewer-first, because a validation failure AFTER a reviewer's round is the newer fact, and answering
+    ///         with the reviewer's sentence would replay round N-1's complaint over a round the gate has since judged.
+    ///     </para>
+    ///     <para>
+    ///         The recorded status is what qualifies it: only an event that left the task where a coder round runs is
+    ///         feedback for one. A block, an apply, and a validation that PASSED all carry reasons and none of them are.
     ///     </para>
     /// </summary>
     private async Task<string?> PreviousRoundFeedbackAsync(Guid taskId, CancellationToken cancellationToken)
@@ -89,7 +94,9 @@ public sealed partial class DevelopmentStore
         var latest = await _dbContext.DevelopmentEvents.AsNoTracking()
                                      .Where(entity => entity.TaskId == taskId
                                                       && entity.DetailJson != null
-                                                      && (entity.EventType == "TaskTransitioned" || entity.EventType == "ReviewFinalized"))
+                                                      && (entity.EventType == "TaskTransitioned"
+                                                          || entity.EventType == "ReviewFinalized"
+                                                          || entity.EventType == "ValidationFinalized"))
                                      .OrderByDescending(entity => entity.Sequence)
                                      .FirstOrDefaultAsync(cancellationToken)
                                      .ConfigureAwait(false);
@@ -100,7 +107,8 @@ public sealed partial class DevelopmentStore
 
         try
         {
-            return JsonSerializer.Deserialize<DevelopmentOperationResult>(metadata, JsonOptions) is { Status: nameof(DevelopmentTaskStatus.ChangesRequested) }
+            return JsonSerializer.Deserialize<DevelopmentOperationResult>(metadata, JsonOptions)
+                is { Status: nameof(DevelopmentTaskStatus.ChangesRequested) or nameof(DevelopmentTaskStatus.InProgress) }
                 ? JsonSerializer.Deserialize<ReasonDetail>(detail, JsonOptions)?.Reason
                 : null;
         }

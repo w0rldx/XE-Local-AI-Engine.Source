@@ -129,7 +129,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     ///     A host of this test's own with the development chain scripted, and a clock of its own when one is given. The
     ///     chain is a container singleton whose history every test using it reads, so it is always a private host.
     /// </summary>
-    public static DevWorkflowHarness WithAScriptedChain(TimeProvider? clock = null) =>
+    public static DevWorkflowHarness WithAScriptedChain(TimeProvider? clock = null, Action<IServiceCollection>? configureServices = null) =>
         new(services =>
         {
             services.RemoveAll<IDevelopmentManagementService>();
@@ -138,6 +138,8 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
             {
                 services.AddSingleton(clock);
             }
+
+            configureServices?.Invoke(services);
         });
 
     /// <summary>The class's shared host, with this test's own runs on it. See <see cref="DevWorkflowHostFixture" />.</summary>
