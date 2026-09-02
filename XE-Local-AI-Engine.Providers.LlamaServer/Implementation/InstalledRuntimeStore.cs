@@ -15,7 +15,7 @@ public sealed class InstalledRuntimeStore : IInstalledRuntimeStore, IDisposable
 {
     private const string StateFileName = "installed-runtime.json";
 
-    /// <summary>Poll budget for <see cref="AcquireAsync" /> — 400 * 25 ms, so ten seconds of waiting on another node.</summary>
+    /// <summary>Attempts <see cref="AcquireAsync" /> makes, 25 ms apart — just under ten seconds of waiting on another node.</summary>
     private const int LockAttempts = 400;
 
     private static readonly TimeSpan LockPollInterval = TimeSpan.FromMilliseconds(25);

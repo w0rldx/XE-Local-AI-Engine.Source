@@ -42,6 +42,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     /// <summary>Slack added to the catalog-reported size before aborting an oversized stream (still capped at the ceiling).</summary>
     private const long DownloadSizeSlackBytes = 1L * 1024 * 1024;
 
+    /// <summary>Refusal for a prebuilt install while a source build owns the record — checked before AND after the download.</summary>
+    private const string SourceBuildInstalledMessage =
+        "Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.";
+
     private readonly IRuntimeAcquisitionStatusRegistry? _acquisitionStatus;
     private readonly string _activeTag;
     private readonly Architecture _arch;
@@ -345,7 +349,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             if (_installedRuntimeStore is not null
                 && (await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false))?.SourceBuildPath is { Length: > 0 })
             {
-                throw new LlamaRuntimeException("Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.");
+                throw new LlamaRuntimeException(SourceBuildInstalledMessage);
             }
 
             return await InstallTagCoreAsync(tag, assetName, digestSha256, expectedSize, variant, ct).ConfigureAwait(false);
@@ -437,6 +441,17 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
             if (_installedRuntimeStore is not null)
             {
+                // The guard at the top of InstallTagAsync ran BEFORE a download that takes minutes, so re-check it here
+                // under the record lock, immediately before the write. The lock is deliberately not held across the
+                // download — that would block every other node for the whole transfer — so this is the window where
+                // another node's adopt lands. The binary stays on disk under its own versioned directory; only the
+                // record is refused, and the operator is told why rather than silently getting a prebuilt record.
+                using var recordLock = await _installedRuntimeStore.AcquireAsync(ct).ConfigureAwait(false);
+                if ((await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false))?.SourceBuildPath is { Length: > 0 })
+                {
+                    throw new LlamaRuntimeException(SourceBuildInstalledMessage);
+                }
+
                 var state = new InstalledRuntimeState(tag, assetName, expectedDigest, variant, DateTimeOffset.UtcNow);
                 await _installedRuntimeStore.WriteAsync(state, ct).ConfigureAwait(false);
             }

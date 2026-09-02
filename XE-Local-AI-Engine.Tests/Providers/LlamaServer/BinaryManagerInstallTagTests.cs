@@ -93,6 +93,46 @@ public sealed class BinaryManagerInstallTagTests
         AssertEx.Equal(sourceBin, installed.SourceBuildPath);
     }
 
+    /// <summary>
+    ///     The entry guard runs before a download that takes minutes, and the record is shared by every checkout on the
+    ///     machine — so another node can adopt a source build while this install is still transferring. The lock is not
+    ///     held across the download (that would stall every other node for the whole transfer), so the guard is
+    ///     re-checked under it immediately before the write.
+    /// </summary>
+    [Test]
+    public async Task InstallTag_WhenSourceRecordAppearsDuringDownload_RefusesTheWrite()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var cache = new TempDir();
+        var archive = BuildExecutableTarGz();
+        using var handler = new GatedHandler(archive);
+        using var http = new HttpClient(handler, disposeHandler: false);
+        using var store = new InstalledRuntimeStore(cache.Path);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
+
+        var install = manager.InstallTagAsync(Tag, AssetName, Sha256Hex(archive), archive.Length, GpuVariant.Cpu, CancellationToken.None);
+        await handler.Entered.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Another node adopts a source build mid-download. It writes through its own store, so this manager's
+        // in-process mutation gate never sees it — only the record lock orders the two.
+        var source = new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag,
+            "source",
+            new string('a', 64),
+            GpuVariant.Cpu,
+            DateTimeOffset.UtcNow,
+            Path.Combine(cache.Path, "llama.cpp", "source-build", "active", "build", "bin"));
+        await store.WriteAsync(source, CancellationToken.None);
+        handler.Release();
+
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => install);
+        AssertEx.Equal(source, await store.ReadAsync(CancellationToken.None));
+    }
+
     [Test]
     public async Task InstallTag_WhenDigestMatches_AtomicallyInstallsAndWritesState()
     {
