@@ -7,9 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 
-// Mock the generated TanStack options/mutation factories so the hooks run against owned queryFn/mutationFn (no
-// network). The hooks still compose the real withResponseValidation bridge + the real toPlaybookAction mapper +
-// the real toPromoteError 409 translation, so this exercises the full read/mutation paths end-to-end.
+// Mock generated query/mutation factories to isolate the hook while retaining validation and mapping.
 const { listOptionsMock, mutationFns } = vi.hoisted(() => ({
 	listOptionsMock: vi.fn(),
 	mutationFns: {
@@ -72,7 +70,6 @@ const generatedAction = {
 	evalResult: null,
 };
 
-// Captures the queryKey of every invalidateQueries call so a test can assert which caches a mutation touched.
 const invalidatedKeys: unknown[] = [];
 
 function makeWrapper() {

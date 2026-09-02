@@ -410,7 +410,6 @@ public sealed class HandoffWorkflowSpikeTests
         var accepted = await run.TrySendMessageAsync(new TurnToken(true));
         Console.WriteLine($"[handoff][C approveFirst={approveFirst}] TurnToken accepted={accepted}");
 
-        // --- Step 1: drain until approval RequestInfoEvent appears ---
         RequestInfoEvent? approvalEvent = null;
         using (var ph1Cts = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
         {
@@ -435,7 +434,6 @@ public sealed class HandoffWorkflowSpikeTests
         AssertEx.Equal(expected: 0, lookupExecuted, "C: lookup tool must NOT execute before approval");
         AssertEx.True(approvalEvent is not null, "C: workflow must pause with RequestInfoEvent for approval-required own tool");
 
-        // --- Step 2: send approval/rejection, drain until handoff completes or tool-not-executed confirmed ---
         var approvalResponse = BuildApprovalResponse(approvalEvent!.Request, approveFirst);
         await run.SendResponseAsync(approvalResponse);
         Console.WriteLine($"[handoff][C approveFirst={approveFirst}] ph2 approval sent (approve={approveFirst})");

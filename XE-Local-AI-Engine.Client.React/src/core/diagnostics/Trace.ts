@@ -56,7 +56,7 @@ export function extractTraceId(headerValue: string | null | undefined): string |
 	return undefined;
 }
 
-// --- config → traceId pairing (composes with RC2's `retriedRequests` WeakSet) ---
+// Request-config identity preserves trace IDs independently from retry tracking.
 
 const configTraceIds = new WeakMap<object, string>();
 

@@ -46,7 +46,6 @@ BeforeAll {
         throw "package-tester-win.ps1 does not parse:`n$($parseErrors -join "`n")"
     }
 
-    # --- extraction helpers -------------------------------------------------------------------
     function Get-ScriptFunctionText {
         param([Parameter(Mandatory)][string]$Name)
 
@@ -95,7 +94,6 @@ BeforeAll {
         return $match[0]
     }
 
-    # --- subjects under test, lifted verbatim from the script ---------------------------------
     $script:VulnerabilityPipeline = Get-ScriptAssignmentText -VariableText '$vulnerablePackages'
     $script:SemVerPattern = Get-ScriptStringLiteralMatching -Anchor '^[0-9]+\.[0-9]+\.[0-9]+'
     $script:ClientIdPattern = Get-ScriptStringLiteralMatching -Anchor '^Iv[0-9A-Za-z.]'

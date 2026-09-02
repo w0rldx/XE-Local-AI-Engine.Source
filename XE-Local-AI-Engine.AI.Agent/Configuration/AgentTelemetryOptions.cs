@@ -12,7 +12,6 @@ namespace XE_Local_AI_Engine.AI.Agent.Configuration;
 /// </summary>
 public sealed class AgentTelemetryOptions
 {
-    /// <summary>The configuration section these options bind from.</summary>
     public const string Section = "Agent:Telemetry";
 
     /// <summary>

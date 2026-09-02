@@ -42,10 +42,6 @@ public sealed class InferenceProfileEndpointTests
         return $"{ApiPrefix}/model-fit/profiles/freeze";
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Operator gate — a route without a bearer token is rejected.
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task ExploreProfile_WhenNoBearerToken_ReturnsUnauthorized()
     {
@@ -65,10 +61,6 @@ public sealed class InferenceProfileEndpointTests
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Explore validation — an unknown role 400s before the service is invoked.
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task ExploreProfile_WhenRoleUnknown_ReturnsBadRequest()
@@ -95,10 +87,6 @@ public sealed class InferenceProfileEndpointTests
                      .ExploreAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>());
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Benchmark guard — an empty body-carried profile id 400s.
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task BenchmarkProfile_WhenProfileIdEmpty_ReturnsBadRequest()
     {
@@ -121,10 +109,6 @@ public sealed class InferenceProfileEndpointTests
         await service.DidNotReceiveWithAnyArgs()
                      .BenchmarkAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Domain failure — freeze without a justifying benchmark maps to a 400 with an error body.
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task FreezeProfile_WhenDomainFailure_ReturnsBadRequest()
@@ -151,10 +135,6 @@ public sealed class InferenceProfileEndpointTests
         var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
         AssertEx.True(payload.Length > 0, "A domain-failure freeze must return a non-empty error body.");
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // List projection — surfaces profiles but NEVER the local-only machine key.
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task ListProfiles_WhenAuthorized_ReturnsProfiles_OmitsMachineKey()

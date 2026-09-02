@@ -36,13 +36,11 @@ public sealed class GgufImportEndpointContractTests
         AssertEx.Equal("model-fit/gguf/downloads/operations/{operationId:guid}", LocalApiRoutes.ModelFit.DownloadOperationStatus);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
     // All six import routes declare the Operator policy in Configure() — source-text scan, same mechanism as
     // AppUpdateContractTests.PublicAppUpdateEndpoints_AreOperatorGated. A reflection-based Policies() check isn't
     // available (FastEndpoints resolves policies into route metadata at endpoint registration, not as a queryable
     // attribute), so this locks the literal Configure() call instead — it fails the moment someone deletes or
     // conditions the line.
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task AllSixImportRoutes_AreOperatorGated()

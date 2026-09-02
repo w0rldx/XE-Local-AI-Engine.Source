@@ -11,7 +11,6 @@ public sealed record SandboxCommandResult
     /// <summary>Echo of the request's execution id.</summary>
     public required string ExecutionId { get; init; }
 
-    /// <summary>The command's exit code.</summary>
     public required int ExitCode { get; init; }
 
     /// <summary>Captured standard output.</summary>

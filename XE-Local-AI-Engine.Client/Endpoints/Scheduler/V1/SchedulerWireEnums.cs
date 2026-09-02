@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Scheduler.V1;
 
-// ---------------------------------------------------------------------------
-// Scheduler wire enums
-// ---------------------------------------------------------------------------
 // These are the transport-layer parallels of the persistence enums in
 // XE_Local_AI_Engine.Client.Persistence.Entities. They exist so the scheduler
 // wire contract is isolated from a persistence-side rename: the DTOs reference

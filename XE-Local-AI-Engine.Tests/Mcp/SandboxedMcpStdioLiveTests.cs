@@ -192,8 +192,6 @@ public sealed class SandboxedMcpStdioLiveTests
             "disposing the MCP connection must empty the transient scope, not only close the streams");
     }
 
-    // ---- helpers ----
-
     private static int LoadedEngineScopeCount()
     {
         var isolation = new HostSandboxContainmentProbe().Containment.FilesystemIsolation;

@@ -163,7 +163,6 @@ export const nodeRoutePaths = {
 	binding: "/node-binding",
 	nodeSettings: "/node-settings",
 	cloudSettings: "/cloud-settings",
-	// External OpenAI-compatible provider connections page — gated on nodeCapabilities.externalProviders
 	externalProviders: "/external-providers",
 	models: "/models",
 	invocations: "/invocations",
@@ -179,25 +178,15 @@ export const nodeRoutePaths = {
 	// Node-wide user-authored slash commands. This belongs to Automation but is not an agent capability: only the
 	// human composer resolves commands, and every authenticated node exposes the management surface.
 	commands: "/commands",
-	// agent definition management page (agent-management) — gated on nodeCapabilities.agentManagement
 	agents: "/agents",
-	// node skill library page (agent-skills) — gated on nodeCapabilities.agentManagement (an agent-mode feature)
 	skills: "/skills",
-	// node custom-tool library page (user-authored HTTP/host-command tools) — gated on nodeCapabilities.agentManagement
 	customTools: "/custom-tools",
-	// MCP server management page (dynamic tool-catalog) — gated on nodeCapabilities.mcpServers
 	mcp: "/mcp",
-	// Quartz scheduler management page — gated on nodeCapabilities.scheduler
 	scheduler: "/scheduler",
-	// local model advisor page (recommendations + hardware profile + GGUF browse/download) — gated on nodeCapabilities.modelFit
 	modelRecommendations: "/model-recommendations",
-	// loaded-models live overview + eject page — gated on nodeCapabilities.loadedModels
 	loadedModels: "/loaded-models",
-	// Open Canvas (Preview) workflow builder page — gated on nodeCapabilities.preview
 	preview: "/preview",
-	// Knowledge-base management page (document ingestion + semantic search) — gated on nodeCapabilities.knowledgeBase
 	knowledgeBase: "/knowledge-base",
-	// Local image-generation page (text-to-image) — gated on nodeCapabilities.images
 	images: "/images",
 	// Dedicated Development Mode project/task workflow — gated on nodeCapabilities.development.
 	development: "/development",

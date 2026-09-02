@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
-/// <summary>
-///     Represents null node sqlite key holder.
-/// </summary>
 public sealed class NullNodeSqliteKeyHolder : INodeSqliteKeyHolder
 {
     private static readonly byte[] ZeroKey = new byte[32];

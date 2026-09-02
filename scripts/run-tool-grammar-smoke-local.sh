@@ -96,14 +96,12 @@ usage() { sed -n '2,/^set -uo/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//; $d';
 
 trap 'echo; log "Interrupted."; exit 130' INT
 
-# ---------------------------------------------------------------------------
 # Step ledger — the anti-vacuous-pass mechanism, same shape as run-gpu-smoke-local.sh.
 #
 # Every step declares itself expected BEFORE it runs and records a verdict when it finishes. The
 # final gate asserts that every expected step recorded PASS and that at least one step ran. A step
 # that dies, is skipped, or silently returns early therefore FAILS the run instead of leaving a
 # green summary behind — the same rule run-e2e-local.sh applies to a zero-test run.
-# ---------------------------------------------------------------------------
 LEDGER_EXPECTED=()
 LEDGER_PASSED=()
 LEDGER_FAILED=()
@@ -167,9 +165,6 @@ if [[ -z "${XE_BUILD_LOCK_HELD:-}" && -z "${NO_BUILD_LOCK:-}" ]]; then
   exec "${PROJECT_ROOT}/scripts/with-build-lock.sh" -- "${BASH_SOURCE[0]}" "$@"
 fi
 
-# ---------------------------------------------------------------------------
-# Options
-# ---------------------------------------------------------------------------
 SERVER_PATH="${XE_LLAMACPP_SERVER_PATH:-}"
 MODEL_PATH=""
 DATA_ROOT="${XDG_DATA_HOME:-${HOME}/.local/share}/XE-Local-AI-Engine"
@@ -189,9 +184,7 @@ done
 command -v dotnet  >/dev/null 2>&1 || prereq_fail "dotnet is required to build and run the test."
 command -v python3 >/dev/null 2>&1 || prereq_fail "python3 is required to read the evidence JSON."
 
-# ---------------------------------------------------------------------------
 # Step 1 — prerequisites: a llama-server binary and a chat GGUF.
-# ---------------------------------------------------------------------------
 ledger_expect "1-prerequisites"
 
 discover_server() {
@@ -275,10 +268,8 @@ rm -f "${EVIDENCE_PATH}"
 OUT_FILE="$(mktemp -t xe-tool-grammar-smoke-out-XXXXXX.log)"
 trap 'rm -f "${OUT_FILE}"' EXIT
 
-# ---------------------------------------------------------------------------
 # Step 2 — Release build. Debug skips analyzer execution, so a green Debug build is not
 # verification (docs/agent-knowledge.md §1).
-# ---------------------------------------------------------------------------
 ledger_expect "2-build"
 log "=== Building XE-Local-AI-Engine.Tests (Release) ==="
 if dotnet build "${PROJECT_ROOT}/XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj" --configuration Release; then
@@ -289,9 +280,7 @@ else
   exit 1
 fi
 
-# ---------------------------------------------------------------------------
 # Step 3 — run the gated test and prove it EXECUTED.
-# ---------------------------------------------------------------------------
 ledger_expect "3-test-ran"
 ledger_expect "4-sanitized-offer-accepted"
 ledger_expect "5-unsanitized-offer-rejected"
@@ -336,10 +325,8 @@ else
   ledger_pass "3-test-ran"
 fi
 
-# ---------------------------------------------------------------------------
 # Steps 4 and 5 — read the verdicts the test recorded. The test writes this file only after both
 # assertions pass, so these steps report what was judged rather than re-deciding it.
-# ---------------------------------------------------------------------------
 if [[ -s "${EVIDENCE_PATH}" ]]; then
   log "=== Evidence ==="
   python3 -m json.tool "${EVIDENCE_PATH}" || warn "the evidence file is not valid JSON."

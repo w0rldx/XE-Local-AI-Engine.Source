@@ -11,11 +11,8 @@ import {
 	toInferenceProfileStatus,
 } from "@/features/model-fit/models/InferenceProfileModels";
 
-// Maps the generated (OpenAPI) inference-profile response types to the stricter domain view-models. The generated
-// types are the single source of truth for the wire shape; their fields are all optional, so each mapper coalesces
-// to a required value with a safe default. The wire DTO additionally carries tuned launch flags (nGpuLayers,
-// tensorSplit, overrideTensor, kvType*, flashAttn) — these are DELIBERATELY NOT mapped: the operator surface shows
-// outcomes (status / tok-s / VRAM), never raw flags. There is no machine key on the wire, and none here.
+// Maps optional generated wire fields into required domain values; validation remains at the API boundary.
+// Launch-tuning flags stay unmapped: the operator UI exposes outcomes, not raw launch configuration.
 
 function toInferenceProfileView(dto: XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto): InferenceProfileView {
 	return {

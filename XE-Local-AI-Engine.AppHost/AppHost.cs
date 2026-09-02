@@ -14,9 +14,6 @@ if (builder.Environment.IsDevelopment())
     nodeSqlite = nodeSqlite.WithSqliteWeb();
 }
 
-// Inference and AgentHome use host-process providers, so the AppHost needs no sandbox sidecar,
-// remote runtime client, socket authentication, or startup gate.
-
 var app = builder.AddProject<XE_Local_AI_Engine_Client>("app", "https")
                  .WithExternalHttpEndpoints()
                  .WithUrlForEndpoint("https", url => url.DisplayText = "XE Local AI Engine (https)")

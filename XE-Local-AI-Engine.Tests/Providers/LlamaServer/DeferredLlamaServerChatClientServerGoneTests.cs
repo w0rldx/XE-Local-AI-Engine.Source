@@ -85,7 +85,6 @@ public sealed class DeferredLlamaServerChatClientServerGoneTests
         await Assert.That(DeferredLlamaServerChatClient.IsServerGone(aggregate)).IsTrue();
     }
 
-    // ---- Lease refused while an eject is draining → typed operator-ejected failure, request never started ----------
     // Running the request leaseless instead would slip under the eject drain (which sees zero leases), be killed
     // mid-flight by the teardown, and — because IsServerGone matches the kill — self-heal-RESPAWN the just-ejected
     // model, so the eject would never stick.

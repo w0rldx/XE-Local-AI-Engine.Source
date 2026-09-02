@@ -9,7 +9,6 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 /// </summary>
 public sealed class ProviderResilienceOptions
 {
-    /// <summary>The configuration section these options bind from.</summary>
     public const string SectionName = "Agent:ProviderResilience";
 
     /// <summary>

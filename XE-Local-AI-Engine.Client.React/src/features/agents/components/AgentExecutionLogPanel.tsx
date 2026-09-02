@@ -12,7 +12,6 @@ import { useAgentExecutionLogs } from "@/features/agents/queries/useAgentExecuti
 interface AgentExecutionLogPanelProps {
 	agentDefinitionId: string;
 	agentName: string;
-	// FE-static capability gate (folded under agentManagement). When false the panel renders nothing.
 	enabled: boolean;
 }
 

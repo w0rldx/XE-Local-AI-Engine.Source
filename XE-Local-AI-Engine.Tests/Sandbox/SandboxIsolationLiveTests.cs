@@ -328,8 +328,6 @@ public sealed class SandboxIsolationLiveTests
         }
     }
 
-    // ---- helpers ----
-
     private static int LoadedEngineScopeCount()
     {
         return LoadedEngineScopeUnits().Count;

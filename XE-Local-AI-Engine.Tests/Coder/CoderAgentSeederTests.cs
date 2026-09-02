@@ -23,7 +23,6 @@ public sealed class CoderAgentSeederTests
         var scopeFactory = factory.Services.GetRequiredService<IServiceScopeFactory>();
         var seeder = new CoderAgentSeeder(scopeFactory, NullLogger<CoderAgentSeeder>.Instance);
 
-        // First boot seeds the Coder agent; the second boot must NOT duplicate it.
         await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
         await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
 

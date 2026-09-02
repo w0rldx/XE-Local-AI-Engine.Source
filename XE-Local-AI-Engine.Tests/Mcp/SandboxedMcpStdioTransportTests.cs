@@ -201,8 +201,7 @@ public sealed class SandboxedMcpStdioTransportTests
         }
     }
 
-    // ---- the sensitive-host-root denylist (threat model AB3) ----
-
+    // Sensitive-host-root denylist (threat model AB3).
     [Test]
     [Arguments("")]
     [Arguments(".ssh")]

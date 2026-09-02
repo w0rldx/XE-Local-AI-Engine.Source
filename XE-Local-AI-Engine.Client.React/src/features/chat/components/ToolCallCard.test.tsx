@@ -345,7 +345,6 @@ describe("ToolCallCard", () => {
 	});
 
 	it("starts minimized and keeps an operator-expanded state across a remount (keyed by tool id)", () => {
-		// Default is collapsed.
 		const first = renderWithProviders(<ToolCallCard part={toolPart({ id: "persist-1", name: "persist_tool" })} />);
 		const details = screen.getByTestId("chat-tool-call-disclosure-persist_tool") as HTMLDetailsElement;
 		expect(details.open).toBe(false);

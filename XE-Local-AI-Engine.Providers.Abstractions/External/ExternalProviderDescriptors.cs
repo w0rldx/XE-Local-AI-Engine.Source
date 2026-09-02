@@ -53,13 +53,10 @@ public sealed record ExternalProviderModelDescriptor
     /// </summary>
     public int? ContextLength { get; init; }
 
-    /// <summary>Whether the model may be offered tools.</summary>
     public bool SupportsTools { get; init; }
 
-    /// <summary>Whether the model accepts image input.</summary>
     public bool SupportsVision { get; init; }
 
-    /// <summary>Whether the model produces a reasoning channel.</summary>
     public bool SupportsReasoning { get; init; }
 
     /// <summary>

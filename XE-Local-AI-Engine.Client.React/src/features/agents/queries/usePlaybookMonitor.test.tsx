@@ -3,9 +3,7 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock the generated TanStack options factory so the hook runs against an owned queryFn (no network). The hook
-// still composes the real withResponseValidation bridge + the real toPlaybookMonitor select mapper, so this
-// exercises the full read path end-to-end (incl. the ranker narrowing + facetToolName null defaults).
+// Mock generated query/mutation factories to isolate the hook while retaining validation and mapping.
 const { optionsMock } = vi.hoisted(() => ({ optionsMock: vi.fn() }));
 
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({

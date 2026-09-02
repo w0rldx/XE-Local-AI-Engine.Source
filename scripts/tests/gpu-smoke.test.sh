@@ -48,9 +48,7 @@ check_contains() {
 # A tab-separated driver record block, written the way the driver emits it.
 records() { printf '%b' "$*"; }
 
-# ---------------------------------------------------------------------------
 # Layer 1 — assertion functions, sourced without running anything.
-# ---------------------------------------------------------------------------
 # Deliberately NOT followed by the linter: run-gpu-smoke-local.sh ends in a top-level `exit`, and
 # following it here makes shellcheck believe every line below is unreachable (it cannot evaluate
 # the XE_GPU_SMOKE_LIB_ONLY guard that returns first). The script is linted as its own target.
@@ -408,9 +406,7 @@ if [[ ! "${build_line}" =~ ^[0-9]+$ || ! "${snapshot_line}" =~ ^[0-9]+$ || ! "${
   FAILED=$((FAILED + 1))
 fi
 
-# ---------------------------------------------------------------------------
 # Layer 2 — end-to-end preflight gates, with fakes on PATH.
-# ---------------------------------------------------------------------------
 echo "== preflight gates (end to end) =="
 
 mkdir -p "${TEMP_ROOT}/bin"
@@ -528,7 +524,6 @@ if [[ "${out}" == *"=== Summary ==="* ]]; then
   FAILED=$((FAILED + 1))
 fi
 
-# ---------------------------------------------------------------------------
 echo
 if [[ "${FAILED}" -ne 0 ]]; then
   echo "gpu-smoke.test.sh: ${FAILED} of ${CHECKS} checks FAILED" >&2

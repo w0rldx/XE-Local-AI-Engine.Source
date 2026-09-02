@@ -11,10 +11,8 @@ import type {
 	GgufRepositoryFile,
 } from "@/features/models/models/GgufModels";
 
-// Maps the generated (OpenAPI) GGUF browse/inspect response types to the stricter domain view-models the Model
-// Management GGUF section depends on. The generated types are the single source of truth for the wire shape; their
-// fields are all optional (`x?: T`), so each mapper coalesces every field to a required value with a safe default.
-// The DTOs carry only sanitized fields (no download URL / token); redaction is the backend's.
+// Maps optional generated wire fields into required domain values; validation remains at the API boundary.
+// Only API-projected sanitized fields are exposed.
 
 export function toGgufRepository(dto: XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse): GgufRepository {
 	return {

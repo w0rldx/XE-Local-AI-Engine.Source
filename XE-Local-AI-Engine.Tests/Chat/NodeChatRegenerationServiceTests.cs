@@ -46,7 +46,6 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration.sqlite").ConfigureAwait(false);
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        // Seed a completed turn: user question + a completed assistant answer (the "original" to regenerate).
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
         await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11)).ConfigureAwait(false);
         var originalId = Guid.NewGuid();
@@ -863,7 +862,6 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-tool-lifecycle.sqlite").ConfigureAwait(false);
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        // Seed a completed turn: user question + a completed assistant answer (the "original" to regenerate).
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
         await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is the weather?", CreatedAtUtc: 11)).ConfigureAwait(false);
         var originalId = Guid.NewGuid();
@@ -1123,7 +1121,6 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-variant-context.sqlite").ConfigureAwait(false);
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        // Seed: user question + completed original assistant answer.
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
         var userMessageId = Guid.NewGuid();
         await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, userMessageId, "what is 2+2?", CreatedAtUtc: 11)).ConfigureAwait(false);
@@ -1509,7 +1506,6 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-reasoning.sqlite").ConfigureAwait(false);
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        // Seed a completed turn: user question + a completed assistant answer (the "original" to regenerate).
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
         await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11)).ConfigureAwait(false);
         var originalId = Guid.NewGuid();

@@ -18,7 +18,6 @@ using System.ClientModel.Primitives;
 /// </remarks>
 internal sealed class UnauthenticatedPipelinePolicy : AuthenticationPolicy
 {
-    /// <summary>The single shared instance; the policy is stateless.</summary>
     public static UnauthenticatedPipelinePolicy Instance { get; } = new();
 
     private UnauthenticatedPipelinePolicy()

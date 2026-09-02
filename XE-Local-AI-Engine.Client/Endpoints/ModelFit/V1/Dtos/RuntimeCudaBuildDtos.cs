@@ -1,9 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 
-// ---------------------------------------------------------------------------
-// llama.cpp binary version DTOs (binary manager — read-only resolve + ensure)
-// ---------------------------------------------------------------------------
-
 /// <summary>
 ///     Response for <c>POST model-fit/llamacpp/version</c> (ensure-binary) and <c>POST model-fit/llamacpp/update</c>.
 ///     Surfaces the resolved, hash-verified llama.cpp prebuilt binary: its release tag (<see cref="Version" />), the
@@ -38,10 +34,6 @@ public sealed class EnsureLlamaCppBinaryRequest
     /// <summary>Acceleration variant to ensure — <c>cpu|cuda|vulkan</c>.</summary>
     public required string Variant { get; init; }
 }
-
-// ---------------------------------------------------------------------------
-// llama.cpp dynamic-runtime status / update DTOs (runtime updater)
-// ---------------------------------------------------------------------------
 
 /// <summary>
 ///     The installed llama.cpp runtime descriptor inside <see cref="LlamaCppRuntimeStatusResponse" />. Present only when
@@ -162,10 +154,6 @@ public sealed class LlamaCppUpdateBlockedResponse
     public required string Message { get; init; }
 }
 
-// ---------------------------------------------------------------------------
-// First-run runtime-acquisition DTO (IRuntimeAcquisitionStatusRegistry — hydrate)
-// ---------------------------------------------------------------------------
-
 /// <summary>
 ///     Response for <c>GET model-fit/llamacpp/acquisition</c>: the current first-run llama.cpp runtime acquisition
 ///     snapshot. Its fields mirror the <c>RuntimeAcquisitionStatusHubEvent</c> push payload 1:1 <b>on purpose</b> — the
@@ -209,10 +197,6 @@ public sealed class RuntimeAcquisitionStatusResponse
     /// <summary>Operator-safe reason the runtime could not be acquired; non-null only when <see cref="Phase" /> is <c>Failed</c>.</summary>
     public string? SanitizedError { get; init; }
 }
-
-// ---------------------------------------------------------------------------
-// In-app CUDA build DTOs (ICudaBuildPrerequisiteProbe + ICudaBuildService)
-// ---------------------------------------------------------------------------
 
 /// <summary>One prerequisite checklist row for <c>GET model-fit/llamacpp/cuda-build/prerequisites</c>.</summary>
 public sealed class CudaBuildPrerequisiteItemResponse

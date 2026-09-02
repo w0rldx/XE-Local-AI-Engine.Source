@@ -1264,7 +1264,6 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     {
         await using var provider = await BuildProviderAsync("backfill-cancel-cleanup.sqlite").ConfigureAwait(false);
 
-        // Arrange the durable marker as if a run had just set it before reclaiming.
         await SetReclamationMarkerRawAsync(provider).ConfigureAwait(false);
 
         using var backfill = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(),
@@ -1952,13 +1951,11 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.Equal(chosenA, persisted[groupA]);
         AssertEx.Equal(chosenB, persisted[groupB]);
 
-        // Read back via the dedicated getter.
         var read = AssertEx.NotNull(await service.GetSelectedPathAsync(conversation.ConversationId).ConfigureAwait(false));
         AssertEx.Equal(expected: 2, read.Count);
         AssertEx.Equal(chosenA, read[groupA]);
         AssertEx.Equal(chosenB, read[groupB]);
 
-        // Read back via the conversation DTO (GetConversationAsync surfaces the parsed map).
         var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
         var loadedPath = AssertEx.NotNull(loaded.SelectedPath);
         AssertEx.Equal(chosenA, loadedPath[groupA]);

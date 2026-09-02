@@ -443,7 +443,6 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         AssertEx.Equal(KnowledgeDocumentStatus.Indexed.ToString(), await ReadStatusAsync(databasePath, indexedId).ConfigureAwait(false));
     }
 
-    // ── service factories ────────────────────────────────────────────────────────────────────────────
 
     private static KnowledgeIngestionService CreateIngestionService(NodeChatDbContext context)
     {
@@ -564,7 +563,6 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         return resolver;
     }
 
-    // ── seed + read helpers ──────────────────────────────────────────────────────────────────────────
 
     private async Task MigrateAsync(string databasePath)
     {

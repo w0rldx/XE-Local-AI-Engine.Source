@@ -103,7 +103,6 @@ internal sealed record AgentHomeRunResult
     /// </summary>
     public bool TimedOut { get; init; }
 
-    /// <summary>The command's exit code.</summary>
     public required int ExitCode { get; init; }
 
     /// <summary>The worker-local path to the run's log directory.</summary>

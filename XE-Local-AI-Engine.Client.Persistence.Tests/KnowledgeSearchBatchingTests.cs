@@ -174,7 +174,6 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         AssertEx.True(!orderedChunkIds.Contains(chunkB), "The lower-ranked content duplicate (differing only in whitespace/case) must be dropped.");
     }
 
-    // ── service factory ──────────────────────────────────────────────────────────────────────────────
 
     private static KnowledgeSearchService CreateSearchService(NodeChatDbContext context,
         IReadOnlyList<FtsSearchHit> ftsHits,
@@ -224,7 +223,6 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         return resolver;
     }
 
-    // ── seed helpers ─────────────────────────────────────────────────────────────────────────────────
 
     private async Task MigrateAsync(string databasePath)
     {

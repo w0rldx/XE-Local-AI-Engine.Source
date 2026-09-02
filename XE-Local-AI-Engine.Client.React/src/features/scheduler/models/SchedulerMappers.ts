@@ -18,12 +18,8 @@ import {
 	type SchedulerMisfirePolicy,
 } from "@/features/scheduler/models/SchedulerModels";
 
-// Maps the generated (OpenAPI) scheduler response types to the stricter domain view-models the components depend
-// on. The generated types are the single source of truth for the wire shape; their fields are all optional
-// (`x?: T`), so each mapper coalesces every field to a required value with a sensible default. The generated
-// enums are string unions with the SAME values as the domain unions, so an enum maps through unchanged when
-// present and falls back to a safe default when omitted. Redaction is unchanged — the backend already drops the
-// sensitive fields, so only hasParameters / summary / errorMessage ever surface here.
+// Maps optional generated wire fields into required domain values; validation remains at the API boundary.
+// Only API-projected sanitized fields are exposed; generated and domain enum values stay aligned.
 
 // Defaults mirror the backend's omit-on-default behavior (timeZoneId → UTC, misfirePolicy → Smart) and keep the
 // domain types total even when the server omits an optional field.

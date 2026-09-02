@@ -14,7 +14,6 @@ import { renderWithProviders } from "@/test/RenderWithProviders";
 const primaryStatuses: BenchmarkPrimaryStatus[] = ["Queued", "Running", "CancelRequested", "Succeeded", "Failed", "Cancelled"];
 const judgeStates: BenchmarkJudgeState[] = ["none", "queued", "running", "succeeded", "failed", "cancelled"];
 
-/** The single rendered badge element. */
 function badge(container: HTMLElement): HTMLElement {
 	const element = container.querySelector("[aria-label]");
 	expect(element).not.toBeNull();

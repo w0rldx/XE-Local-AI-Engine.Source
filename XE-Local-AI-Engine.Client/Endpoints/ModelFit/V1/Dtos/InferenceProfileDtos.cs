@@ -1,9 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 
-// ---------------------------------------------------------------------------
-// Inference Optimizer profile DTOs (IInferenceProfileService — operator surface)
-// ---------------------------------------------------------------------------
-
 /// <summary>
 ///     A node-local inference profile projected for transport (shared by the list, explore, freeze and invalidate
 ///     responses). It carries only the launch-arg facts and lifecycle metadata; the local-only machine key is

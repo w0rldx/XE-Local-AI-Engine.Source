@@ -46,7 +46,6 @@ internal sealed class DevWorkflowTestFixture : IDisposable
     public NodeChatDbContext CreateContext(IInterceptor extraInterceptor) =>
         AgentDefinitionTestContextFactory.Create(DatabasePath, _keyHolder, extraInterceptor);
 
-    /// <summary>Creates the schema and returns the context that created it.</summary>
     public async Task<NodeChatDbContext> CreateSchemaAsync()
     {
         var context = CreateContext();

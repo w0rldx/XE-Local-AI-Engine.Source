@@ -228,7 +228,6 @@ internal sealed class RetrievalEvalFixture : IDisposable
         _searchContexts.Clear();
     }
 
-    // ── raw-SQL row seed (mirrors the existing KB test seeding: a Pending knowledge_documents row + an in-memory blob) ──
 
     private static async Task InsertPendingDocumentRowAsync(NodeChatDbContext context, DbConnection connection, Guid documentId, int sizeBytes, CancellationToken cancellationToken)
     {
@@ -273,7 +272,6 @@ internal sealed class RetrievalEvalFixture : IDisposable
         _ = command.Parameters.Add(parameter);
     }
 
-    // ── collaborators local to the fixture ──
 
     /// <summary>In-memory blob source: the ingestion service reads the raw document bytes from here by id.</summary>
     private sealed class InMemoryBlobStore : IKnowledgeDocumentBlobStore

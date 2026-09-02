@@ -791,8 +791,6 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         return Task.CompletedTask;
     }
 
-    // ---- containment helpers (launch marker, group kill, jail disk watchdog) ----
-
     /// <summary>
     ///     Registers the orphan-reaper marker for a command that is ABOUT to be launched into a transient scope,
     ///     claiming the unit name before <c>systemd-run</c> can create it. Returns the marker id, or
@@ -1190,8 +1188,6 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             // Nothing to release: the watchdog did not start.
         }
     }
-
-    // ---- jail working-directory helper ----
 
     private static string ResolveWorkingDirectory(JailState state, string? requestedWorkingDirectory)
     {

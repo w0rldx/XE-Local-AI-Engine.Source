@@ -531,7 +531,6 @@ dotnet_diagnostic.MA0011.severity = none
 generated_code = true
 dotnet_analyzer_diagnostic.severity = none
 
-# ---------------------------------------------------------------------------
 # Endpoint DTO folders: files are organized into a Dtos/ subfolder for
 # navigability, but their namespace is deliberately kept flat (the parent
 # Endpoints/{Area}/V1 namespace). Reason: FastEndpoints/NSwag derives OpenAPI

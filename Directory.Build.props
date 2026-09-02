@@ -1,4 +1,3 @@
-<!-- See https://aka.ms/dotnet/msbuild/customize for more details on customizing your build -->
 <Project>
   <Import Project="eng/ReleaseVersion.props" />
   <PropertyGroup>

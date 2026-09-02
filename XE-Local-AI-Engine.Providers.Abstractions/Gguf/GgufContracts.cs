@@ -53,19 +53,14 @@ public sealed record GgufModelRegistryEntry
     /// <summary>Registry key — repo + quant identity, e.g. <c>bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M</c>.</summary>
     public required string ModelName { get; init; }
 
-    /// <summary>Source Hugging Face repository id.</summary>
     public required string RepoId { get; init; }
 
-    /// <summary>The downloaded <c>.gguf</c> filename.</summary>
     public required string FileName { get; init; }
 
-    /// <summary>Parsed quant label.</summary>
     public required string Quant { get; init; }
 
-    /// <summary>Absolute path to the verified local file.</summary>
     public required string LocalPath { get; init; }
 
-    /// <summary>File size in bytes.</summary>
     public required long SizeBytes { get; init; }
 
     /// <summary>Verified sha256 (hash-pin) when the LFS OID was exposed; otherwise <see langword="null" />.</summary>
@@ -74,10 +69,8 @@ public sealed record GgufModelRegistryEntry
     /// <summary>Resolved HF commit SHA the file was pulled at (revision-pin).</summary>
     public required string SourceRevision { get; init; }
 
-    /// <summary>When the file completed downloading and verification.</summary>
     public required DateTimeOffset DownloadedAtUtc { get; init; }
 
-    /// <summary>Role hint for the chat/embedding process split.</summary>
     public GgufRole Role { get; init; } = GgufRole.Unknown;
 
     /// <summary>
@@ -162,10 +155,8 @@ public enum GgufSearchSort
     /// <summary>Most downloaded first (lifetime cumulative downloads).</summary>
     Downloads = 0,
 
-    /// <summary>Most liked first.</summary>
     Likes = 1,
 
-    /// <summary>Most recently updated first.</summary>
     LastModified = 2,
 
     /// <summary>
@@ -182,7 +173,6 @@ public sealed record GgufSearchQuery
     /// <summary>Free-text search term; when <see langword="null" /> the trending GGUF repos are returned.</summary>
     public string? SearchText { get; init; }
 
-    /// <summary>Maximum repos to return.</summary>
     public int Limit { get; init; } = 30;
 
     /// <summary>Result ordering. Defaults to <see cref="GgufSearchSort.Trending" /> (freshness-aware) rather than lifetime downloads.</summary>

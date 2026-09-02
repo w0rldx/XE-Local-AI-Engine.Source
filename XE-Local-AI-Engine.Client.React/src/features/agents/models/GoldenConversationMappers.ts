@@ -11,14 +11,8 @@ import type {
 	GoldenHarvestResult,
 } from "@/features/agents/models/GoldenConversationModels";
 
-// Maps the generated (OpenAPI) golden-conversation responses to the stricter domain view-models the panel depends
-// on. The generated types are the single source of truth for the wire shape; their fields are all optional (`x?: T`),
-// so each mapper coalesces every field to a required value with a safe default. Boundary validation and ApiError
-// convergence are owned by the generated zod validator (`validator: true`) + the withResponseValidation bridge at
-// the hook — these mappers only project the already-validated wire shape into the immutable domain shape (they no
-// longer re-validate, replacing the feature's former hand-zod safeParse). Free text is encrypted at rest on the
-// node; the wire shape is the decrypted camelCase view. Redaction is the backend's: the mappers surface only what
-// the response carries (harvested-but-disabled cases are the pending-review set; INERT until approved server-side).
+// Maps optional generated wire fields into required domain values; validation remains at the API boundary.
+// Free text arrives decrypted from node encryption; harvested cases remain inert until server approval.
 
 // `source` is the provenance discriminator. The generated type widens it to `string`; anything that is not the
 // known "harvested" literal degrades to "manual" so the domain union stays total (matching the former `.catch`).

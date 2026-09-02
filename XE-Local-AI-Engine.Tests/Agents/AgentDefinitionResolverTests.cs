@@ -422,8 +422,6 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.Equal("Calculate", resolved.AllowedTools[0].Name);
     }
 
-    // ---- Knowledge-tool locality gates on the EFFECTIVE (post-pin) model, not the turn's active model ----
-
     private const string KnowledgeSearchToolName = "search_knowledge_base";
     private const string CloudPinnedModel = "azure-foundry-deploy";
 
@@ -694,8 +692,6 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.False(resolved.AllowedTools.Any(tool => tool.Name == CapabilityGatedToolName),
             "An honored non-tool-capable pin must gate out the capability-gated tool.");
     }
-
-    // ---- ask_user: available on every interactive turn, NOT gated on AllowedToolNames ----
 
     [Test]
     public async Task ResolveAsync_WhenBoundAgentAllowsNoTools_StillResolvesAskUser()

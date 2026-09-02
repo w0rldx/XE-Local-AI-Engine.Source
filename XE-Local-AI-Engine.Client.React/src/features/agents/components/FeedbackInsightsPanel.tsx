@@ -12,11 +12,9 @@ interface FeedbackInsightsPanelProps {
 	// also guards internally so it can never render its surface when the capability is off.
 	agentDefinitionId: string;
 	agentName: string;
-	// FE-static capability gate (folded under agentManagement). When false the panel renders nothing.
 	enabled: boolean;
 }
 
-// Render a fraction (0..1) as a whole-percent string for display.
 function toPercent(fraction: number): string {
 	return `${Math.round(fraction * 100)}%`;
 }

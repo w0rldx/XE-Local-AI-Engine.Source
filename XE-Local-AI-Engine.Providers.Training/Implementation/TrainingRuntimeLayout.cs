@@ -53,7 +53,6 @@ internal static class TrainingRuntimeLayout
         return Path.Combine(cacheRoot, StateFileName);
     }
 
-    /// <summary>The interpreter inside an adopted venv.</summary>
     public static string InterpreterPath(string venvDirectory)
     {
         return Path.Combine(venvDirectory, ".venv", "bin", "python");

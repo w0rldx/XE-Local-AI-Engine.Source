@@ -10,7 +10,7 @@ import { ApiError } from "@/core/api/errors/ApiError";
 import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
 import type { ExternalProviderConnectionDto } from "@/features/external-providers/models/ExternalProviderFormState";
 
-// Mock the generated TanStack data layer so tests never hit the network.
+// Mock generated query/mutation factories to isolate the hook while retaining validation and mapping.
 const { generatedMock, confirmMock } = vi.hoisted(() => ({
 	generatedMock: {
 		listOptions: vi.fn(),

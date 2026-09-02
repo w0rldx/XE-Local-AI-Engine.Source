@@ -13,9 +13,6 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 /// </summary>
 internal static class ImageMapper
 {
-    // -----------------------------------------------------------------------
-    // Create request → coordinator input
-    // -----------------------------------------------------------------------
 
     public static CreateImageJobInput ToInput(this CreateImageJobRequest request)
     {
@@ -38,10 +35,6 @@ internal static class ImageMapper
             CfgScale = request.CfgScale
         };
     }
-
-    // -----------------------------------------------------------------------
-    // Job view → response
-    // -----------------------------------------------------------------------
 
     public static ImageJobResponse ToResponse(this ImageJobView view)
     {
@@ -69,10 +62,6 @@ internal static class ImageMapper
             CancellationRequestedAtUtc = view.CancellationRequestedAtUtc
         };
     }
-
-    // -----------------------------------------------------------------------
-    // Installed model entry → response
-    // -----------------------------------------------------------------------
 
     public static ImageModelResponse ToResponse(this ImageModelRegistryEntry entry)
     {

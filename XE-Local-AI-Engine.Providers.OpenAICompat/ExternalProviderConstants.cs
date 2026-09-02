@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Providers.OpenAICompat;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
-/// <summary>Shared constants for the external OpenAI-compatible provider.</summary>
 public static class ExternalProviderConstants
 {
     /// <summary>

@@ -7,13 +7,10 @@ namespace XE_Local_AI_Engine.Providers.Capabilities.Contracts;
 /// </summary>
 internal interface IHardwareProbeEnvironment
 {
-    /// <summary><see langword="true" /> on Windows (<see cref="System.OperatingSystem.IsWindows" />).</summary>
     bool IsWindows { get; }
 
-    /// <summary><see langword="true" /> on Linux (<see cref="System.OperatingSystem.IsLinux" />).</summary>
     bool IsLinux { get; }
 
-    /// <summary>Logical CPU core count.</summary>
     int ProcessorCount { get; }
 
     /// <summary>Raw contents of <c>/proc/meminfo</c> (Linux), or <see langword="null" /> when unavailable.</summary>

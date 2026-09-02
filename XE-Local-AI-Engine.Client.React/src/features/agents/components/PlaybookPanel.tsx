@@ -51,7 +51,6 @@ interface PlaybookPanelProps {
 	// also guards internally so it can never render its surface when the capability is off.
 	agentDefinitionId: string;
 	agentName: string;
-	// FE-static capability gate (folded under agentManagement). When false the panel renders nothing.
 	enabled: boolean;
 }
 

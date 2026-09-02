@@ -55,7 +55,6 @@ export type BreadcrumbCategory = "navigation" | "network" | "console" | "error" 
 
 interface BreadcrumbBase {
 	readonly id: string;
-	/** epoch ms */
 	readonly timestamp: number;
 	readonly category: BreadcrumbCategory;
 }

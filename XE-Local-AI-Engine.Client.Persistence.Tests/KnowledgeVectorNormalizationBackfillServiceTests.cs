@@ -164,7 +164,6 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
         AssertEx.True(secondState.IsComplete, "A run that finds the marker already set must still latch the state.");
     }
 
-    // ---- helpers ----
 
     private ServiceProvider BuildProvider(string databasePath)
     {

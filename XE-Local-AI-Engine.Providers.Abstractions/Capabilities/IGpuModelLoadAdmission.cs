@@ -49,7 +49,6 @@ public sealed class NoOpGpuModelLoadAdmission : IGpuModelLoadAdmission
     {
         public void Dispose()
         {
-            // Nothing to release — the no-op floor never serialized.
         }
     }
 }

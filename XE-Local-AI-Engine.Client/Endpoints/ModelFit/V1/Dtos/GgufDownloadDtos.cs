@@ -1,9 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 
-// ---------------------------------------------------------------------------
-// GGUF browse request/response DTOs (Hugging Face discovery passthrough)
-// ---------------------------------------------------------------------------
-
 /// <summary>
 ///     Query-string request for <c>GET model-fit/gguf/browse</c>. <see cref="Query" /> is a free-text repo search term
 ///     (null returns the trending GGUF repos); <see cref="Limit" /> bounds the result count; <see cref="Sort" /> is one of
@@ -108,10 +104,6 @@ public sealed class InspectGgufRepositoryResponse
     public required IReadOnlyList<GgufRepositoryFileResponse> Files { get; init; }
 }
 
-// ---------------------------------------------------------------------------
-// Download request/response DTOs (GGUF store + cancel registry)
-// ---------------------------------------------------------------------------
-
 /// <summary>
 ///     Body for <c>POST model-fit/download</c>. Selects a GGUF file in a repo to download. <see cref="FileName" /> picks
 ///     the exact <c>.gguf</c> when supplied; otherwise <see cref="Quant" /> (defaulting to the store's configured default)
@@ -160,10 +152,6 @@ public sealed class CancelGgufDownloadResponse
 
     public required bool Cancelled { get; init; }
 }
-
-// ---------------------------------------------------------------------------
-// Download-status / progress-polling DTOs (IGgufDownloadCoordinator)
-// ---------------------------------------------------------------------------
 
 /// <summary>
 ///     Snapshot of one tracked GGUF download returned by <c>GET model-fit/gguf/downloads</c> and

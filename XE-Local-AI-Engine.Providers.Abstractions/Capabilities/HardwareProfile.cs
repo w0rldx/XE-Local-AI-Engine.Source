@@ -12,7 +12,6 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 /// </remarks>
 public sealed record HardwareProfile
 {
-    /// <summary>Total physical RAM in bytes.</summary>
     public required long TotalRamBytes { get; init; }
 
     /// <summary>RAM available for allocation in bytes (free + reclaimable), used as the CPU-mode fit budget.</summary>
@@ -37,7 +36,6 @@ public sealed record HardwareProfile
     /// </summary>
     public required bool VramKnown { get; init; }
 
-    /// <summary>Detected GPU vendor (NVIDIA/AMD/Intel/None/Unknown).</summary>
     public required GpuVendor GpuVendor { get; init; }
 
     /// <summary>

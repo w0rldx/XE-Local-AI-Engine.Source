@@ -1,9 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 
-// ---------------------------------------------------------------------------
-// Running-models / eject DTOs (llama-server supervisor passthrough)
-// ---------------------------------------------------------------------------
-
 /// <summary>One running llama-server process derived from the supervisor health snapshot. Diagnostics are sanitized.</summary>
 public sealed class RunningModelResponse
 {

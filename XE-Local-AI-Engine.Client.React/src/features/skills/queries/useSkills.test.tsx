@@ -41,7 +41,6 @@ import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 const listKey = fakeListKey();
 
-// Captures the queryKey of every invalidateQueries call so a test can assert which caches a mutation touched.
 const invalidatedKeys: unknown[] = [];
 
 function makeWrapper() {

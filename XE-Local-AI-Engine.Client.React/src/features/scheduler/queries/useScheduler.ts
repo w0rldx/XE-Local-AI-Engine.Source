@@ -26,10 +26,7 @@ import type { ScheduledJobRun, ScheduledJobRunFilters } from "@/features/schedul
 // variant of an endpoint refetches. The SignalR hub (useSchedulerHub) layers live invalidation on top of these for
 // server-pushed changes — TanStack Query stays the authoritative source.
 
-// The generated query keys are single-element arrays `[{ _id: "<operationId>", ... }]`. Invalidating with just the
-// `_id` partial object matches every cached variant of that endpoint (TanStack partial-object matching). The
-// operationIds equal the generated SDK fn names. Centralized here (and reused by useSchedulerHub) so the literal
-// `_id` key — which trips biome's naming-convention rule — is constructed in exactly one place.
+// Generated keys are object arrays; TanStack partial matching on `_id` invalidates every endpoint variant.
 export const schedulerQueryIds = {
 	listJobs: "listScheduledJobs",
 	listRuns: "listScheduledJobRuns",

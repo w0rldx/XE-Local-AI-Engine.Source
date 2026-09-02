@@ -1,9 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 
-// ---------------------------------------------------------------------------
-// Latest recommendations request/response DTOs
-// ---------------------------------------------------------------------------
-
 /// <summary>
 ///     Query-string request for <c>GET model-fit/recommendations/latest</c>. <see cref="UseCase" /> is optional and is
 ///     the only cache-lookup key — the approved-image and provider-name params are gone (the advisor is the single
@@ -136,10 +132,6 @@ public sealed class GetLatestRecommendationsResponse
     public required IReadOnlyList<ModelFitRecommendationResponse> Recommendations { get; init; }
 }
 
-// ---------------------------------------------------------------------------
-// Refresh request/response DTOs
-// ---------------------------------------------------------------------------
-
 /// <summary>
 ///     Body for <c>POST model-fit/recommendations/refresh</c>. Carries the id of an existing scheduled job to fire —
 ///     never an image reference, command line or template id (the approved-image + provider-name params are gone). The
@@ -178,10 +170,6 @@ public sealed class RefreshRecommendationsResponse
 {
     public required Guid ScheduledJobId { get; init; }
 }
-
-// ---------------------------------------------------------------------------
-// Hardware-profile response DTO (hardware profiler passthrough)
-// ---------------------------------------------------------------------------
 
 /// <summary>
 ///     Sanitized projection of the node hardware profile (<c>GET model-fit/hardware-profile</c>). Carries only the

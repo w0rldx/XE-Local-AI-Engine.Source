@@ -7,9 +7,6 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
-/// <summary>
-///     Represents node encryption save changes interceptor.
-/// </summary>
 public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesInterceptor
 {
     private readonly ConcurrentDictionary<DbContext, List<TrackedEncryptedProperty>> _pendingRestores = [];

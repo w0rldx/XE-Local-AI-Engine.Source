@@ -19,9 +19,6 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 internal static class ModelFitMapper
 {
-    // -----------------------------------------------------------------------
-    // Latest recommendations view → response
-    // -----------------------------------------------------------------------
 
     public static GetLatestRecommendationsResponse ToResponse(this ModelFitLatestRecommendationsView view)
     {
@@ -95,10 +92,7 @@ internal static class ModelFitMapper
         };
     }
 
-    // -----------------------------------------------------------------------
-    // Hardware profile → response (sanitized: aggregates only, no identifiers)
-    // -----------------------------------------------------------------------
-
+    // Sanitized aggregate projection; no hardware identifiers.
     public static HardwareProfileResponse ToResponse(this HardwareProfile profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
@@ -149,10 +143,6 @@ internal static class ModelFitMapper
         };
     }
 
-    // -----------------------------------------------------------------------
-    // GGUF repo summary → response
-    // -----------------------------------------------------------------------
-
     public static GgufRepositoryResponse ToResponse(this GgufRepoSummary summary)
     {
         ArgumentNullException.ThrowIfNull(summary);
@@ -169,10 +159,6 @@ internal static class ModelFitMapper
             IsTrustedPublisher = summary.IsTrustedPublisher
         };
     }
-
-    // -----------------------------------------------------------------------
-    // GGUF repo inspection (per-file quants) → response
-    // -----------------------------------------------------------------------
 
     public static InspectGgufRepositoryResponse ToResponse(this GgufRepoDetail detail, IReadOnlyList<GgufVariantAnnotation> annotations)
     {
@@ -215,10 +201,6 @@ internal static class ModelFitMapper
         };
     }
 
-    // -----------------------------------------------------------------------
-    // Running process health → response
-    // -----------------------------------------------------------------------
-
     public static RunningModelResponse ToResponse(this LlamaServerProcessHealth health)
     {
         ArgumentNullException.ThrowIfNull(health);
@@ -231,10 +213,6 @@ internal static class ModelFitMapper
             Detail = health.Detail
         };
     }
-
-    // -----------------------------------------------------------------------
-    // llama.cpp binary → response
-    // -----------------------------------------------------------------------
 
     /// <summary>
     ///     Projects a resolved <see cref="LlamaBinary" /> to its wire DTO. <paramref name="recommendedTag" /> is the
@@ -408,10 +386,6 @@ internal static class ModelFitMapper
         };
     }
 
-    // -----------------------------------------------------------------------
-    // First-run runtime acquisition → hydrate response
-    // -----------------------------------------------------------------------
-
     /// <summary>
     ///     Projects the registry's current acquisition snapshot to its wire DTO. This is a field-for-field copy rather
     ///     than a projection: the hydrate response and the hub push must stay the same shape so the client reconciles both
@@ -434,10 +408,6 @@ internal static class ModelFitMapper
             SanitizedError = statusEvent.SanitizedError
         };
     }
-
-    // -----------------------------------------------------------------------
-    // In-app CUDA build → responses
-    // -----------------------------------------------------------------------
 
     /// <summary>Projects the prerequisite report to its wire DTO.</summary>
     public static CudaBuildPrerequisitesResponse ToResponse(this CudaBuildPrerequisiteReport report)
@@ -474,10 +444,6 @@ internal static class ModelFitMapper
             Tag = status.Tag
         };
     }
-
-    // -----------------------------------------------------------------------
-    // Inference Optimizer profile view → response (sanitized: machine key already omitted by the view)
-    // -----------------------------------------------------------------------
 
     /// <summary>
     ///     Projects an application-layer <see cref="InferenceProfileView" /> to its wire DTO. The view already omits the
@@ -556,10 +522,6 @@ internal static class ModelFitMapper
         };
     }
 
-    // -----------------------------------------------------------------------
-    // Wire-string → enum parsing (case-insensitive; null/unknown handled by the caller)
-    // -----------------------------------------------------------------------
-
     /// <summary>Parses a wire role string (<c>chat|embedding|reranker</c>) into <see cref="ModelRole" />; null/empty defaults to chat. Unknown → null.</summary>
     public static ModelRole? TryParseRole(string? role)
     {
@@ -585,10 +547,7 @@ internal static class ModelFitMapper
         };
     }
 
-    // -----------------------------------------------------------------------
-    // Lowercase wire-enum projections (kept in one place; matches the lowercase wire-enum convention)
-    // -----------------------------------------------------------------------
-
+    // Wire enum tokens are lowercase.
     private static string ToWireString(this GpuVendor vendor)
     {
         return vendor switch

@@ -33,7 +33,6 @@ internal sealed class WorkSessionTestFixture : IDisposable
     public NodeChatDbContext CreateContext() =>
         AgentDefinitionTestContextFactory.Create(DatabasePath, _keyHolder);
 
-    /// <summary>Creates the schema and returns the context that created it.</summary>
     public async Task<NodeChatDbContext> CreateSchemaAsync()
     {
         var context = CreateContext();
@@ -44,7 +43,6 @@ internal sealed class WorkSessionTestFixture : IDisposable
     public static AgentWorkSessionStore StoreFor(NodeChatDbContext context) =>
         new(context, TimeProvider.System);
 
-    /// <summary>Creates a session and returns the store snapshot plus the store that made it.</summary>
     public static Task<AgentWorkSessionSnapshot> SeedAsync(AgentWorkSessionStore store,
         Guid sessionId,
         string title = "Seeded session",

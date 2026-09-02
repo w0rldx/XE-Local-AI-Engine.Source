@@ -13,12 +13,7 @@ function toOptionalText(value: string): string | null {
 	return trimmed.length > 0 ? trimmed : null;
 }
 
-// Maps the generated (OpenAPI) skill response types to the stricter domain view-models the components depend on,
-// and projects the domain form values back onto the generated request bodies. The generated types are the single
-// source of truth for the wire shape; their fields are all optional (`x?: T`), so each response mapper coalesces
-// every field to a required value with a safe default. Boundary validation + ApiError convergence are owned by the
-// generated zod validator + the callWithResponseValidation bridge at the hook — these mappers only project the
-// already-validated wire shape into the immutable domain shape.
+// Maps optional generated wire fields into required domain values; validation remains at the API boundary.
 
 export function toSkill(dto: XeLocalAiEngineClientEndpointsSkillsV1SkillResponse): Skill {
 	return {

@@ -410,8 +410,6 @@ public sealed class ScheduledJobManagementService(
             or ScheduledRunStatus.Skipped;
     }
 
-    // ── realtime ─────────────────────────────────────────────────────────────────────────────────────────────────
-
     private async Task SafePublishDefinitionAsync(Guid scheduledJobId, string action)
     {
         // Notifications are best-effort and never the source of truth — a publish failure must not fault a successful
@@ -430,8 +428,6 @@ public sealed class ScheduledJobManagementService(
                 scheduledJobId);
         }
     }
-
-    // ── validation ───────────────────────────────────────────────────────────────────────────────────────────────
 
     private ScheduledJobTemplateDescriptor Validate(ScheduledJobManagementInput input)
     {
@@ -533,8 +529,6 @@ public sealed class ScheduledJobManagementService(
             throw new ScheduledJobValidationException($"Time zone '{timeZoneId}' could not be resolved.", exception);
         }
     }
-
-    // ── Quartz reconciliation ────────────────────────────────────────────────────────────────────────────────────
 
     private async Task ReconcileScheduleAsync(ScheduledJobDefinitionRecord record,
         ScheduledJobTemplateDescriptor descriptor,

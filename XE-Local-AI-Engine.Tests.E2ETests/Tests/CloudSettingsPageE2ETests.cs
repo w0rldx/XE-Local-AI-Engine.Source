@@ -91,14 +91,11 @@ public sealed class CloudSettingsPageE2ETests : XEPooledE2ETestBase
     [Category("Page")]
     public async Task CloudSettings_FormFields_Reflect_Typed_Values()
     {
-        // Full multi-field fill + save→badge-flip readback deferred to wave-2.1 —
-        // Mantine form re-render after the first field fill detaches the sibling input
-        // (FillAsync hangs on the deployment input); needs a stable fill strategy or
-        // app-level test hook.
+        // Mantine re-rendering detaches sibling inputs and async setValues clears typed values, so this test covers
+        // interaction readiness rather than value readback.
 
         await NavigateAndWaitForFormAsync();
 
-        // Assert all three inputs are visible and enabled — proves the form is interactive.
         var endpointInput = Page.Locator(EndpointInputSelector);
         var deploymentInput = Page.Locator(DeploymentInputSelector);
         // Use CSS attribute selector — GetByLabel is unreliable with Mantine's dynamic IDs.
@@ -112,26 +109,17 @@ public sealed class CloudSettingsPageE2ETests : XEPooledE2ETestBase
 
         await Expect(apiKeyInput).ToBeVisibleAsync();
         await Expect(apiKeyInput).ToBeEnabledAsync();
-
-        // Value fill→readback deferred to wave-2.1: getCloudSettings settling fires the Mantine
-        // form's setValues() which wipes typed input before the assertion (timing-dependent). The
-        // visible+enabled assertions above prove the form rendered and the inputs are interactive.
     }
 
     [Test]
     [Category("Page")]
     public async Task CloudSettings_Save_Writes_Credentials_And_Shows_Configured_Badge()
     {
-        // Full multi-field fill + save→badge-flip readback deferred to wave-2.1 —
-        // Mantine form re-render after the first field fill detaches the sibling input
-        // (FillAsync hangs on the deployment input); needs a stable fill strategy or
-        // app-level test hook.
+        // Mantine re-rendering detaches sibling inputs, so this test limits itself to deterministic validation gating.
 
         await NavigateAndWaitForFormAsync();
 
-        // Assert the Save button is visible. On an empty form validateCloudSettingsForm
-        // returns errors for all three fields → hasErrors=true → disabled={hasErrors||isActionPending}
-        // → the button is disabled. This is a deterministic validation-gating signal.
+        // An empty form deterministically disables Save through validateCloudSettingsForm.
         var saveButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
         {
             Name = "Save cloud settings"

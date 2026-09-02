@@ -21,9 +21,6 @@ public sealed class ModelFitStoreTests : IDisposable
         }
     }
 
-    // -------------------------------------------------------------------------
-    // ModelFitSnapshotStore — create / mark terminal / latest-successful
-    // -------------------------------------------------------------------------
 
     [Test]
     public async Task Snapshot_CreateRunning_ThenMarkSucceeded_SetsLatestSuccessful()
@@ -69,14 +66,12 @@ public sealed class ModelFitStoreTests : IDisposable
         var second = await store.CreateRunningAsync(CreateRecommendInput("coding"));
         _ = await store.MarkTerminalAsync(second.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, rawJson: null, stderrExcerpt: null, diagnosticsJson: null, completedAtUtc: 2_000);
 
-        // The new success demotes the prior one for the same key.
         var firstReread = await store.GetRawByIdAsync(first.Id);
         AssertEx.NotNull(firstReread);
 
         var latest = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", modelName: null));
         AssertEx.Equal(second.Id, latest.Id);
 
-        // Exactly one row is latest for the key.
         var rawLatestCount = await CountLatestSuccessfulAsync(databasePath, ModelFitOperation.Recommend, "coding", "ollama", modelName: null);
         AssertEx.Equal(expected: 1, rawLatestCount);
     }
@@ -99,7 +94,6 @@ public sealed class ModelFitStoreTests : IDisposable
         var reasoning = await store.CreateRunningAsync(CreateRecommendInput("reasoning"));
         _ = await store.MarkTerminalAsync(reasoning.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, rawJson: null, stderrExcerpt: null, diagnosticsJson: null, completedAtUtc: 2_000);
 
-        // Each key keeps its own latest.
         var latestCoding = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", modelName: null));
         var latestReasoning = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "reasoning", "ollama", modelName: null));
 
@@ -193,9 +187,6 @@ public sealed class ModelFitStoreTests : IDisposable
         // The summary record has no raw/stderr/diagnostics members at all — the sanitized boundary is in the type shape.
     }
 
-    // -------------------------------------------------------------------------
-    // ModelFitSnapshot encrypted columns — decrypt + ciphertext-at-rest
-    // -------------------------------------------------------------------------
 
     [Test]
     public async Task Snapshot_RawColumns_DecryptOnOperatorRead()
@@ -252,9 +243,6 @@ public sealed class ModelFitStoreTests : IDisposable
             "raw_json column should be encrypted at rest, not plaintext.");
     }
 
-    // -------------------------------------------------------------------------
-    // ModelFitRecommendationStore — replace round-trip
-    // -------------------------------------------------------------------------
 
     [Test]
     public async Task Recommendation_ReplaceForSnapshot_RoundTripsOrderedByRank()
@@ -317,9 +305,6 @@ public sealed class ModelFitStoreTests : IDisposable
         AssertEx.Equal("new-model", rows[0].ModelName);
     }
 
-    // -------------------------------------------------------------------------
-    // ModelFitBenchmarkStore — replace round-trip + encryption
-    // -------------------------------------------------------------------------
 
     [Test]
     public async Task Benchmark_ReplaceForSnapshot_RoundTripsAndDecryptsRaw()
@@ -390,9 +375,6 @@ public sealed class ModelFitStoreTests : IDisposable
             "benchmark raw_json column should be encrypted at rest, not plaintext.");
     }
 
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
 
     private static ModelFitSnapshotInput CreateRecommendInput(string useCase)
     {

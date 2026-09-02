@@ -1,9 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Images.V1;
 
-// ---------------------------------------------------------------------------
-// Image-job request/response DTOs (IImageJobCoordinator)
-// ---------------------------------------------------------------------------
-
 /// <summary>
 ///     Body for <c>POST images/jobs</c>. Carries the text-to-image generation parameters; the coordinator persists the
 ///     prompt / negative-prompt encrypted at rest and never logs them. Enum-like values are absent — <see cref="Sampler" />
@@ -27,13 +23,10 @@ public sealed class CreateImageJobRequest
     /// </summary>
     public string? Seed { get; init; }
 
-    /// <summary>Output width in pixels.</summary>
     public int Width { get; init; } = 512;
 
-    /// <summary>Output height in pixels.</summary>
     public int Height { get; init; } = 512;
 
-    /// <summary>Number of diffusion steps.</summary>
     public int Steps { get; init; } = 20;
 
     /// <summary>Sampling method name; <see langword="null" /> uses the runtime default.</summary>
@@ -46,7 +39,6 @@ public sealed class CreateImageJobRequest
 /// <summary>Route-only request for <c>GET images/jobs/{jobId}</c> and <c>POST images/jobs/{jobId}/cancel</c>.</summary>
 public sealed class ImageJobRouteRequest
 {
-    /// <summary>Route-bound job id.</summary>
     public Guid JobId { get; init; }
 }
 
@@ -104,10 +96,6 @@ public sealed class ListImageJobsResponse
 {
     public required IReadOnlyList<ImageJobResponse> Items { get; init; }
 }
-
-// ---------------------------------------------------------------------------
-// Installed image-model DTOs (IImageModelRegistry)
-// ---------------------------------------------------------------------------
 
 /// <summary>
 ///     One present weight file of an installed model's file-set: its role and source file name plus size. The absolute
@@ -169,10 +157,6 @@ public sealed class ListImageModelsResponse
 {
     public required IReadOnlyList<ImageModelResponse> Items { get; init; }
 }
-
-// ---------------------------------------------------------------------------
-// Image-model download DTOs (IImageModelStore.EnsureModelAsync — fire-and-forget)
-// ---------------------------------------------------------------------------
 
 /// <summary>
 ///     One requested weight file inside a model's file-set for <c>POST images/models/downloads</c>: which
@@ -310,10 +294,6 @@ public sealed class DeleteImageModelRequest
     /// <summary>The installed model to remove, from the route.</summary>
     public required string ModelName { get; init; }
 }
-
-// ---------------------------------------------------------------------------
-// Model-discovery DTOs (curated catalog + Hugging Face browse/inspect)
-// ---------------------------------------------------------------------------
 
 /// <summary>One weight file of a catalog entry's file-set, in the exact shape the download endpoint accepts.</summary>
 public sealed class ImageModelCatalogPartResponse

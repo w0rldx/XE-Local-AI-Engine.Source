@@ -13,22 +13,16 @@ using Microsoft.Extensions.AI;
 /// </remarks>
 public sealed class InvocationAgentContext : IAsyncDisposable
 {
-    /// <summary>The agent instance created for this invocation.</summary>
     public required AIAgent Agent { get; init; }
 
-    /// <summary>Optional framework session; null for stateless single-turn invocations.</summary>
     public AgentSession? Session { get; init; }
 
-    /// <summary>System and conversation messages used to seed the run.</summary>
     public required IReadOnlyList<ChatMessage> SeedMessages { get; init; }
 
-    /// <summary>Provider/framework run options such as model id and reasoning settings.</summary>
     public AgentRunOptions? RunOptions { get; set; }
 
-    /// <summary>Small metadata bag for runner diagnostics, such as resolved model id and tool enablement.</summary>
     public IDictionary<string, object?> Items { get; } = new Dictionary<string, object?>(StringComparer.Ordinal);
 
-    /// <summary>Disposes the underlying session when the framework created one.</summary>
     public async ValueTask DisposeAsync()
     {
         if (Session is IAsyncDisposable asyncDisposable)

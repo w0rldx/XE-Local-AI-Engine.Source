@@ -1,24 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Common;
 
-/// <summary>
-///     Route constants for the node-local HTTP and hub API surface.
-/// </summary>
 public static class LocalApiRoutes
 {
     public const string Prefix = "api/local/v1";
 
-    /// <summary>
-    ///     Diagnostic and framework-probe endpoints.
-    /// </summary>
     public static class ApiFoundation
     {
         public const string ValidationProblemProbe = "diagnostics/validation-probe";
         public const string UnhandledExceptionProbe = "diagnostics/exception-probe";
     }
 
-    /// <summary>
-    ///     Node-operator authentication endpoints.
-    /// </summary>
     public static class Auth
     {
         public const string Status = "auth/status";
@@ -30,9 +21,6 @@ public static class LocalApiRoutes
         public const string Me = "auth/me";
     }
 
-    /// <summary>
-    ///     Local chat conversation and streaming routes.
-    /// </summary>
     public static class LocalChat
     {
         public const string Hub = "/api/local/v1/chat/hub";
@@ -74,9 +62,6 @@ public static class LocalApiRoutes
         public const string ResolveUserQuestion = "chat/questions/resolve";
     }
 
-    /// <summary>
-    ///     Worker-node binding routes.
-    /// </summary>
     public static class NodeBinding
     {
         public const string Start = "binding/start";
@@ -84,9 +69,6 @@ public static class LocalApiRoutes
         public const string Cancel = "binding/cancel";
     }
 
-    /// <summary>
-    ///     Central-platform connection control routes.
-    /// </summary>
     public static class Connection
     {
         public const string Status = "connection";
@@ -96,17 +78,11 @@ public static class LocalApiRoutes
         public const string DisableAutoConnect = "connection/auto-connect/disable";
     }
 
-    /// <summary>
-    ///     Node settings routes.
-    /// </summary>
     public static class NodeSettings
     {
         public const string Settings = "node-settings";
     }
 
-    /// <summary>
-    ///     Cloud-provider settings routes.
-    /// </summary>
     public static class CloudSettings
     {
         public const string Settings = "cloud-settings";
@@ -165,9 +141,6 @@ public static class LocalApiRoutes
         public const string Logout = "cloud/codex/logout";
     }
 
-    /// <summary>
-    ///     Local model management routes.
-    /// </summary>
     public static class LocalModels
     {
         public const string Models = "models";
@@ -191,17 +164,11 @@ public static class LocalApiRoutes
         public const string ModelLaunchArguments = "models/{modelName}/launch-args";
     }
 
-    /// <summary>
-    ///     Invocation monitor routes.
-    /// </summary>
     public static class Invocations
     {
         public const string Monitor = "invocations";
     }
 
-    /// <summary>
-    ///     Agent definition, playbook, evaluation, and monitoring routes.
-    /// </summary>
     public static class Agents
     {
         public const string Definitions = "agents";
@@ -260,9 +227,6 @@ public static class LocalApiRoutes
         public const string UsageSummary = "agents/usage-summary";
     }
 
-    /// <summary>
-    ///     Operator-managed benchmark projects, durable runs, scoring, cancellation, and eligibility catalogs.
-    /// </summary>
     public static class Benchmarks
     {
         public const string Projects = "benchmarks/projects";
@@ -374,9 +338,6 @@ public static class LocalApiRoutes
         public const string ExecutableProbe = "custom-tools/executable-probe";
     }
 
-    /// <summary>
-    ///     Scheduler management, run history, cancellation, and hub routes.
-    /// </summary>
     public static class Scheduler
     {
         // Flat template catalog. Kept separate from job-id routes so templates cannot be parsed as ids.
@@ -706,9 +667,6 @@ public static class LocalApiRoutes
         public const string Hub = "/api/local/v1/knowledge-base/hub";
     }
 
-    /// <summary>
-    ///     MCP server registration and tool-catalog routes.
-    /// </summary>
     public static class Mcp
     {
         public const string Servers = "mcp/servers";
@@ -720,7 +678,7 @@ public static class LocalApiRoutes
         // collides with the {mcpServerId} route param under the servers surface.
         public const string ToolCatalog = "tool-catalog";
 
-        // ---- INBOUND: this node acting AS an MCP server. Everything above is OUTBOUND (this node as MCP client). ----
+        // Inbound MCP server routes; preceding routes are outbound MCP client routes.
 
         /// <summary>
         ///     Operator-gated management of the single inbound bearer credential (GET reveal / POST generate /

@@ -7,7 +7,6 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 /// </summary>
 public sealed class StableDiffusionRuntimeOptions
 {
-    /// <summary>Configuration section name.</summary>
     public const string SectionName = "StableDiffusionRuntime";
 
     /// <summary>Loopback host the daemon binds to. Always local — image generation never leaves the node.</summary>

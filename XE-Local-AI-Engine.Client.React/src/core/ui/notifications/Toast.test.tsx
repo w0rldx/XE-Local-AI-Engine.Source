@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // Mock Mantine at the call boundary so the open-or-update lifecycle is asserted without a real DOM/provider.
 const notificationsMock = vi.hoisted(() => ({ show: vi.fn(), update: vi.fn() }));
 vi.mock("@mantine/notifications", () => ({ notifications: notificationsMock }));
-// i18next is not initialized in unit tests; resolve to the inline default the way the app's react-i18next mocks do.
+// No test i18n instance; resolve inline defaults.
 vi.mock("i18next", () => ({ t: (key: string, fallback?: string) => fallback ?? key }));
 
 import { toast } from "@/core/ui/notifications/Toast";

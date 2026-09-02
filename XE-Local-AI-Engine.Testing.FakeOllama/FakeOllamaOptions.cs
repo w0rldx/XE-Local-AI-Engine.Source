@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Testing.FakeOllama;
 
 using OllamaSharp.Models.Chat;
 
-/// <summary>
-///     Configuration options for fake ollama behavior.
-/// </summary>
 public sealed record FakeOllamaOptions
 {
     public IReadOnlyList<string> Models { get; init; } = ["chat", "embeddings"];

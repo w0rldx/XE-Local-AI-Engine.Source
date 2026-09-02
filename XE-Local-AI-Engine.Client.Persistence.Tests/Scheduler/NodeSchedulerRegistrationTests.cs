@@ -36,9 +36,6 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         _keyHolder.Dispose();
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Enabled=false → no Quartz services registered
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public void AddNodeScheduler_WhenDisabled_DoesNotRegisterISchedulerFactory()
@@ -71,10 +68,8 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
             "ISchedulerDispatchExecutor must not be registered when disabled.");
     }
 
-    // ──────────────────────────────────────────────────────────────────────
     // Enabled=true → ISchedulerFactory resolves; scheduler starts without
     // schema-validation error (PerformSchemaValidation=true in production config)
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task AddNodeScheduler_WhenEnabled_ISchedulerFactoryResolvesAndSchedulerStartsClean()
@@ -116,10 +111,8 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         AssertEx.NotNull(executor, "ISchedulerDispatchExecutor must resolve as scoped.");
     }
 
-    // ──────────────────────────────────────────────────────────────────────
     // Durable survive-restart: schedule a job+trigger, dispose, recreate from
     // the same sqlite file, assert job and trigger persisted.
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task AddNodeScheduler_JobAndTrigger_SurviveSchedulerRestart()
@@ -130,7 +123,6 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         var jobKey = new JobKey("persist-test", SchedulerJobKeys.Group);
         var jobId = Guid.NewGuid();
 
-        // ── First scheduler instance: schedule job + trigger, then shut down ──
         await using (var provider1 = BuildEnabledProvider(dbPath))
         {
             var factory1 = provider1.GetRequiredService<ISchedulerFactory>();
@@ -154,7 +146,6 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
             await sched1.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
         }
 
-        // ── Second scheduler instance: open same DB, assert persistence ──
         await using (var provider2 = BuildEnabledProvider(dbPath))
         {
             var factory2 = provider2.GetRequiredService<ISchedulerFactory>();
@@ -174,9 +165,6 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         }
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ──────────────────────────────────────────────────────────────────────
 
     private static ServiceProvider BuildEnabledProvider(string dbPath)
     {

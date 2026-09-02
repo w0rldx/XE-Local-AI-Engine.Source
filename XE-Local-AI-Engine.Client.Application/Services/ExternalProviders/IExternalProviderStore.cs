@@ -168,7 +168,6 @@ public sealed record ExternalProviderModelSaveRequest
     /// <summary>The backing model id on the remote server.</summary>
     public required string WireId { get; init; }
 
-    /// <summary>Optional friendly label.</summary>
     public string? DisplayName { get; init; }
 
     /// <summary>The declared context window in tokens.</summary>

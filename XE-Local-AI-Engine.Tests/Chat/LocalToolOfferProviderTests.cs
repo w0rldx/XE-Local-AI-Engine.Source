@@ -427,8 +427,6 @@ public sealed class LocalToolOfferProviderTests
             "with no MCP snapshot the catalog is built-ins only");
     }
 
-    // ---- Knowledge-tool provider-locality gate ----
-
     private const string KnowledgeSearchToolName = "search_knowledge_base";
     private const string CoderReadFileToolName = "read_file";
 
@@ -513,8 +511,6 @@ public sealed class LocalToolOfferProviderTests
         AssertEx.False(offered.Any(tool => tool.Name == KnowledgeSearchToolName),
             "the profile-intersection pool applies the same knowledge-tool locality gate");
     }
-
-    // ---- ask_user: capability-gated, locality-ungated ----
 
     [Test]
     public void GetOfferedTools_OffersAskUserToACapableModel_LocalOrCloud_AndWithholdsItFromANonCapableOne()

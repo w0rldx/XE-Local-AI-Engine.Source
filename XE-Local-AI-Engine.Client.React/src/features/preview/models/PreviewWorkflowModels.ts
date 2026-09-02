@@ -115,7 +115,6 @@ export const cancelAllPreviewRunsResponseSchema = z.object({
 
 export type CancelAllPreviewRunsResponse = z.infer<typeof cancelAllPreviewRunsResponseSchema>;
 
-// --- SignalR run-update event payloads ---
 // EVERY event carries `runId` (Guid on the wire → string here) — that is the cross-run contamination
 // guard (a single hub connection may drive several runs). Payloads are untrusted wire data, so every
 // field is narrowed defensively. The wire shape mirrors PreviewWorkflowNodeHubEvent /

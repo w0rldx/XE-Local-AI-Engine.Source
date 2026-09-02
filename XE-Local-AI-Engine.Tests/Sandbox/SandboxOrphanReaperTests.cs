@@ -302,8 +302,6 @@ public sealed class SandboxOrphanReaperTests : IDisposable
         AssertEx.Empty(scopeKiller.Killed, "an unmeasurable age must not authorise an irreversible signal");
     }
 
-    // ---- helpers ----
-
     private static SandboxProcessMarker Marker(int? pgid, int ownerProcessId, string? scopeUnitName)
     {
         return new SandboxProcessMarker

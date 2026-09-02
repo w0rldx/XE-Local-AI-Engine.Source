@@ -468,10 +468,8 @@ public sealed class BenchmarkJudgeExecutorTests
                  .MarkJudgeLaunchReadyAsync(AttemptId, 2, 2, Arg.Any<BenchmarkLaunchReceiptCommand>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
-    // ------------------------------------------------------------------------------------------------------------
     // Verifiable criteria. The run's stored transcript is a thinking model's: reasoning parts around the single
     // visible answer part "answer" (see Run below), so every fixture here verifies against exactly that text.
-    // ------------------------------------------------------------------------------------------------------------
 
     [Test]
     public async Task Execute_WhenEveryCriterionIsVerifiable_SpawnsNothingAndJoinsTheCohortOnTheSentinel()

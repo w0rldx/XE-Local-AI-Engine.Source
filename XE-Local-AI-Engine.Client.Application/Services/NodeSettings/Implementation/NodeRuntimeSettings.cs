@@ -186,8 +186,6 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     public async Task<string?> GetRerankerModelNameAsync(CancellationToken cancellationToken = default) =>
         ResolveRerankerModelName(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
-    // --- Synchronous twins (composition/startup path only; see INodeRuntimeSettings) ---
-
     public string GetDefaultModelName() =>
         ResolveDefaultModelName(LoadStored());
 
@@ -238,8 +236,6 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     public string? GetRerankerModelName() =>
         ResolveRerankerModelName(LoadStored());
-
-    // --- Pure resolvers shared by the async getters and their synchronous twins (single source of precedence) ---
 
     private string ResolveDefaultModelName(StoredNodeSettings stored) =>
         string.IsNullOrWhiteSpace(stored.DefaultModelName) ? _defaultModelSeed : stored.DefaultModelName;

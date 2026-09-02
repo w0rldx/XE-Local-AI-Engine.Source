@@ -21,10 +21,7 @@ import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 // ApiError (never a raw ZodError). Mutations adapt the domain variables to the generated `{ body }` envelope and
 // invalidate the caches they affect.
 
-// The generated query keys are single-element arrays `[{ _id: "<operationId>", ... }]`. Invalidating with just the
-// `_id` partial object matches every cached variant of that endpoint (TanStack partial-object matching). The
-// operationIds equal the generated SDK fn names. Centralized here so the literal `_id` key — which trips biome's
-// naming-convention rule — is constructed in exactly one place.
+// Generated keys are object arrays; TanStack partial matching on `_id` invalidates every endpoint variant.
 const ggufQueryIds = {
 	browse: "browseGgufRepositories",
 	inspect: "inspectGgufRepository",

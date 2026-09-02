@@ -253,7 +253,7 @@ internal sealed class SdServerJobClient
         };
     }
 
-    // ── sd-server /sdcpp/v1 wire DTOs (snake_case, frozen field-level) ────────────────────────────────────────────
+    // Frozen snake_case DTOs for the sd-server /sdcpp/v1 wire contract.
 
     private sealed record ImgGenRequestBody
     {

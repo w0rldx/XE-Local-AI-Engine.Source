@@ -98,9 +98,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# ---------------------------------------------------------------------------
 # Preflight — every failure names the exact fix.
-# ---------------------------------------------------------------------------
 log "=== Preflight ==="
 
 [[ -f "${E2E_PROJECT}" ]] \
@@ -143,9 +141,7 @@ fi
 # shellcheck disable=SC2016  # $PSVersionTable is a PowerShell variable — it must NOT expand in bash.
 log "pwsh       $(pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()')"
 
-# ---------------------------------------------------------------------------
 # Build — -p:RunE2ETests=true is mandatory on BOTH build and test.
-# ---------------------------------------------------------------------------
 log "=== Building E2E test app (${CONFIGURATION}, RunE2ETests=true) ==="
 dotnet build "${E2E_PROJECT}" -p:RunE2ETests=true --configuration "${CONFIGURATION}" \
   || fail "E2E project build failed. Fix the compile errors above before running the suite."
@@ -159,9 +155,6 @@ PLAYWRIGHT_PS1="${TFM_DIR}/playwright.ps1"
   || fail "playwright.ps1 missing at ${PLAYWRIGHT_PS1}. It is emitted by the Microsoft.Playwright package —
        a missing file means the build did not restore Microsoft.Playwright, or RunE2ETests=true was not applied."
 
-# ---------------------------------------------------------------------------
-# Browsers
-# ---------------------------------------------------------------------------
 if [[ "${SKIP_BROWSER_INSTALL}" == "true" ]]; then
   log "=== Skipping Playwright browser install (--skip-browser-install) ==="
   if ! compgen -G "${HOME}/.cache/ms-playwright/chromium-*" >/dev/null; then
@@ -187,9 +180,6 @@ else
   fi
 fi
 
-# ---------------------------------------------------------------------------
-# Run
-# ---------------------------------------------------------------------------
 TEST_ARGS=("${E2E_PROJECT}" --configuration "${CONFIGURATION}" --no-build -p:RunE2ETests=true)
 if [[ "${LIST_ONLY}" == "true" ]]; then
   # Discovery must go through the NATIVE MTP test-host exe. `dotnet test ... -- --list-tests`
@@ -228,11 +218,9 @@ fi
 TZ="Europe/Berlin" dotnet test "${TEST_ARGS[@]}" 2>&1 | tee "${OUT_FILE}"
 STATUS="${PIPESTATUS[0]}"
 
-# ---------------------------------------------------------------------------
 # Contamination check runs FIRST. A run whose assemblies were rewritten underneath it can fail in
 # any shape at all — including a vacuous zero-test summary — so it must be diagnosed as
 # contamination rather than routed into the failure explanations below, which would all be wrong.
-# ---------------------------------------------------------------------------
 if [[ -n "${GUARD_STATE}" ]]; then
   if ! "${PROJECT_ROOT}/scripts/assembly-guard.sh" verify "${GUARD_STATE}"; then
     log "The suite's own exit status was ${STATUS}; ignore it and re-run."
@@ -240,11 +228,9 @@ if [[ -n "${GUARD_STATE}" ]]; then
   fi
 fi
 
-# ---------------------------------------------------------------------------
 # Vacuous-run guard — mirrors _assert_tests_ran in .opencode/scripts/project-validate.sh.
 # Without RunE2ETests=true the project is a library, `dotnet test` finds nothing, and exit 0
 # would otherwise read as a green E2E run.
-# ---------------------------------------------------------------------------
 if grep -qiE 'total:[[:space:]]*0([^0-9]|$)|zero tests ran' "${OUT_FILE}"; then
   fail "runner discovered ZERO tests — -p:RunE2ETests=true did not take effect. This is not a pass."
 fi

@@ -34,7 +34,6 @@ export function useSnapshots() {
 	return useQuery({ queryKey: SNAPSHOTS_QUERY_KEY, queryFn: listSnapshots });
 }
 
-/** Delete a snapshot by id. */
 export function useDeleteSnapshot() {
 	const queryClient = useQueryClient();
 	return useMutation({
@@ -43,7 +42,6 @@ export function useDeleteSnapshot() {
 	});
 }
 
-/** Remove every snapshot. */
 export function useClearSnapshots() {
 	const queryClient = useQueryClient();
 	return useMutation({

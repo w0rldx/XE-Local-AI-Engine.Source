@@ -52,7 +52,6 @@ describe("ChatSamplingOptionsDialog", () => {
 
 		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
 
-		// Spot-check a selection of field testids
 		expect(screen.getByTestId("chat-sampling-field-temperature")).toBeDefined();
 		expect(screen.getByTestId("chat-sampling-field-topP")).toBeDefined();
 		expect(screen.getByTestId("chat-sampling-field-topK")).toBeDefined();

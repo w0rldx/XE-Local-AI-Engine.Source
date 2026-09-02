@@ -2,13 +2,11 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Knowledge.V1;
 
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
-// ---------------------------------------------------------------------------
 // Request DTOs
 //
 // These mirror the established endpoint-DTO style in this project (sealed class + required/init, e.g.
 // SchedulerEndpointDtos / ConversationUploadEndpointDtos) rather than positional records: the multipart upload binding
 // and the route/query binding are proven against this shape, and keeping the whole file consistent avoids mixing styles.
-// ---------------------------------------------------------------------------
 
 /// <summary>
 ///     Route binding for the multipart knowledge-document upload. The file rides the multipart form; the typed
@@ -81,10 +79,6 @@ public sealed class ImportKnowledgeRepositoryResponse
 
     public required bool QueueCapacityReached { get; init; }
 }
-
-// ---------------------------------------------------------------------------
-// Response DTOs
-// ---------------------------------------------------------------------------
 
 /// <summary>
 ///     Result of a multipart upload. <see cref="Deduplicated" /> is true when an identical file (same content hash)
@@ -266,7 +260,6 @@ public sealed class DownloadRecommendedRerankerResponse
     /// <summary>Canonical <c>{repoId}:{quant}</c> model name to track the download by and to select as the reranker.</summary>
     public required string ModelName { get; init; }
 
-    /// <summary>Recommended Hugging Face repository id.</summary>
     public required string RepoId { get; init; }
 
     /// <summary>Pinned quant of the recommended reranker.</summary>
@@ -291,7 +284,6 @@ public sealed class DownloadRecommendedEmbeddingResponse
     /// <summary>The embedding model that will actually be used — the recommended one, or an already-installed equivalent.</summary>
     public required string ModelName { get; init; }
 
-    /// <summary>Recommended Hugging Face repository id.</summary>
     public required string RepoId { get; init; }
 
     /// <summary>Pinned quant of the recommended embedding model.</summary>

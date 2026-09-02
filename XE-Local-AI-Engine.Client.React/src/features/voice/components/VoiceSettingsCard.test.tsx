@@ -6,9 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock the generated TanStack factories so the card → useVoiceNodeSettings → real withResponseValidation bridge runs
-// against owned queryFn/mutationFn (no network). The real hook still composes the mutation onSuccess invalidation, so
-// this exercises the full read → toggle → save → invalidate path.
+// Mock generated query/mutation factories to isolate the hook while retaining validation and mapping.
 const { getNodeSettingsOptionsMock, saveMutationFn, toastError, nodeSettingsQueryKey } = vi.hoisted(() => ({
 	getNodeSettingsOptionsMock: vi.fn(),
 	saveMutationFn: vi.fn(),

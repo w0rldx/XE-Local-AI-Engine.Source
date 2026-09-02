@@ -5,7 +5,6 @@ interface EmptyStateProps {
 	message: ReactNode;
 	/** Optional decoration above the message; by convention a dimmed Tabler icon. */
 	icon?: ReactNode;
-	/** Optional call-to-action rendered under the message. */
 	action?: ReactNode;
 	/** Message text size; matches the surrounding content's scale (e.g. "sm" under a compact table). */
 	size?: MantineSize;

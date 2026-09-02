@@ -34,9 +34,7 @@ import {
 // surfaces as an ApiError. Job state lives ONLY in TanStack Query (never mirrored into a store); the
 // SignalR hub (useImageJobHub) drives cache invalidation on each coarse status push.
 
-// The generated query keys are single-element arrays `[{ _id: "<operationId>", ... }]`. Invalidating with just the
-// `_id` partial object matches every cached variant of that endpoint. Centralized here so the literal `_id` key —
-// which trips biome's naming-convention rule — is constructed in exactly one place.
+// Generated keys are object arrays; TanStack partial matching on `_id` invalidates every endpoint variant.
 const imageQueryIds = {
 	jobs: "listImageJobs",
 	models: "listImageModels",

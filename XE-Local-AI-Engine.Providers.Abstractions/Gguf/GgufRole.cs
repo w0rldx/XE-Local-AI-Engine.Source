@@ -10,10 +10,8 @@ public enum GgufRole
     /// <summary>Role not yet classified.</summary>
     Unknown = 0,
 
-    /// <summary>Chat / text-generation model.</summary>
     Chat = 1,
 
-    /// <summary>Embedding model.</summary>
     Embedding = 2,
 
     /// <summary>

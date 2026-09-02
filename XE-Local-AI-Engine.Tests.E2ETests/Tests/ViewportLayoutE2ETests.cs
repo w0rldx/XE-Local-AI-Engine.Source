@@ -45,9 +45,6 @@ public sealed class ViewportLayoutE2ETests : XEPooledE2ETestBase
     private const int MobileViewportWidth = 375;
     private const int MobileViewportHeight = 667;
 
-    // -----------------------------------------------------------------------------------------
-    // Wide-viewport full-width tests
-    // -----------------------------------------------------------------------------------------
 
     /// <summary>
     ///     At a wide desktop viewport, the Models page body must not overflow horizontally.
@@ -142,9 +139,6 @@ public sealed class ViewportLayoutE2ETests : XEPooledE2ETestBase
         await Assert.That(scrollWidth).IsLessThanOrEqualTo(innerWidth);
     }
 
-    // -----------------------------------------------------------------------------------------
-    // Mobile-viewport tests
-    // -----------------------------------------------------------------------------------------
 
     /// <summary>
     ///     At a mobile viewport (375×667) the Models page must render its heading and must not

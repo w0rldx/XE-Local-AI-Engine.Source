@@ -63,7 +63,6 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
     private string? _sanitizedError;
     private DateTimeOffset? _startedAtUtc;
 
-    /// <summary>Creates the runtime service against the machine-global cache root and the shipped scripts.</summary>
     public TrainingRuntimeService(ITrainingRuntimePrerequisiteProbe prerequisiteProbe,
         ITrainingRuntimeEventPublisher publisher,
         HttpClient httpClient,
@@ -78,7 +77,6 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
     {
     }
 
-    /// <summary>Test seam: pins the cache root, the scripts directory, and the subprocess runner.</summary>
     internal TrainingRuntimeService(ITrainingRuntimePrerequisiteProbe prerequisiteProbe,
         ITrainingRuntimeEventPublisher publisher,
         UvBinaryAcquirer acquirer,

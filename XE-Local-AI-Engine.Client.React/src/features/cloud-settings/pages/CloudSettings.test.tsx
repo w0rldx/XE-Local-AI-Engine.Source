@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GetCloudSettingsResponse } from "@/core/api/generated";
 
-// Mock the generated TanStack data layer so tests never hit the network.
+// Mock generated query/mutation factories to isolate the hook while retaining validation and mapping.
 const { generatedMock } = vi.hoisted(() => ({
 	generatedMock: {
 		getCloudSettingsOptions: vi.fn(),
@@ -131,7 +131,6 @@ describe("CloudSettings — Azure Foundry connection form (generated hey-api dat
 		// segmented control's "API key" option label does not also match.
 		expect(screen.getByLabelText("API key", { selector: 'input[type="password"]' })).toBeTruthy();
 
-		// Switch to managed identity via the segmented control label.
 		fireEvent.click(screen.getByText("Managed identity"));
 
 		// The key field disappears and its hint is shown instead.

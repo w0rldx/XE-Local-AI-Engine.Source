@@ -4,15 +4,10 @@ using System.Diagnostics;
 using OpenTelemetry;
 
 /// <summary>
-///     Downgrades a gen_ai span's status from <see cref="ActivityStatusCode.Error" /> to
-///     <see cref="ActivityStatusCode.Unset" /> when the span failed only because the operation was cancelled — a user
-///     pressing Stop, not a service fault. MEAI's <c>OpenTelemetryChatClient</c> (source
-///     <c>Microsoft.Extensions.AI</c>) records an <see cref="OperationCanceledException" /> /
-///     <c>TaskCanceledException</c> as an Error-status span with the full cancellation stack; left as-is, every user
-///     Stop pollutes error dashboards and alerting. This runs on <see cref="OnEnd" /> (before export, where the
-///     already-stopped Activity's status can still be mutated) and touches ONLY gen_ai spans that indicate cancellation
-///     — a genuinely failed span (any other exception type) is left untouched. The <c>error.type</c> tag is deliberately
-///     kept as the cancellation marker per the GenAI semantic conventions.
+///     Downgrades cancellation-only gen_ai spans from <see cref="ActivityStatusCode.Error" /> to
+///     <see cref="ActivityStatusCode.Unset" /> so user cancellation does not trigger service-failure alerts. Runs on
+///     <see cref="OnEnd" /> before export and preserves the semantic-convention <c>error.type</c> marker; other failures
+///     remain untouched.
 /// </summary>
 public sealed class GenAiCancellationStatusProcessor : BaseProcessor<Activity>
 {

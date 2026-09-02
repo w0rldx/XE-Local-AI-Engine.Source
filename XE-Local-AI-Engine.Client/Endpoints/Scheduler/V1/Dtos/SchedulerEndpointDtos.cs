@@ -1,9 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Scheduler.V1;
 
-// ---------------------------------------------------------------------------
-// Template DTOs
-// ---------------------------------------------------------------------------
-
 /// <summary>
 ///     Wire projection of a <c>ScheduledJobTemplateDescriptor</c>. Surfaced to the React template-picker UI via
 ///     <c>GET scheduler/templates</c>.
@@ -46,10 +42,6 @@ public sealed class ListScheduledJobTemplatesResponse
 {
     public required IReadOnlyList<ScheduledJobTemplateResponse> Items { get; init; }
 }
-
-// ---------------------------------------------------------------------------
-// Job request DTOs
-// ---------------------------------------------------------------------------
 
 /// <summary>Route-only request for <c>GET scheduler/jobs</c>. Query params are bound by FastEndpoints from the query string.</summary>
 public sealed class ListScheduledJobsRequest
@@ -105,7 +97,6 @@ public sealed class CreateScheduledJobRequest
 /// </summary>
 public sealed class UpdateScheduledJobRequest
 {
-    /// <summary>Route-bound job id.</summary>
     public Guid ScheduledJobId { get; init; }
 
     public required string TemplateId { get; init; }
@@ -152,10 +143,6 @@ public sealed class ScheduledJobActionRequest
 {
     public Guid ScheduledJobId { get; init; }
 }
-
-// ---------------------------------------------------------------------------
-// Job response DTO
-// ---------------------------------------------------------------------------
 
 /// <summary>
 ///     Wire projection of a <c>ScheduledJobDefinitionRecord</c>. Raw <c>parameter_json</c> is intentionally omitted;
@@ -214,10 +201,6 @@ public sealed class ListScheduledJobsResponse
     public required IReadOnlyList<ScheduledJobResponse> Items { get; init; }
 }
 
-// ---------------------------------------------------------------------------
-// Run request DTOs
-// ---------------------------------------------------------------------------
-
 /// <summary>
 ///     Query-string request for <c>GET scheduler/runs</c>. All filters are optional; omitted filters are ignored by the
 ///     service layer.
@@ -242,10 +225,6 @@ public sealed class ScheduledJobRunRouteRequest
 {
     public Guid RunId { get; init; }
 }
-
-// ---------------------------------------------------------------------------
-// Run response DTO
-// ---------------------------------------------------------------------------
 
 /// <summary>
 ///     Wire projection of a <c>ScheduledJobRunRecord</c>. Raw <c>details_json</c> and <c>error_details</c> are

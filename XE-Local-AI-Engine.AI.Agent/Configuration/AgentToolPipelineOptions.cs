@@ -9,7 +9,6 @@ using System.ComponentModel.DataAnnotations;
 /// </summary>
 public sealed class AgentToolPipelineOptions
 {
-    /// <summary>Configuration section holding the tool-pipeline bounds.</summary>
     public const string Section = "Agent:ToolPipeline";
 
     /// <summary>

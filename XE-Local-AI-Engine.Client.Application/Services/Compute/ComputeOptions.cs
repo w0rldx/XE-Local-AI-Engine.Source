@@ -17,7 +17,6 @@ namespace XE_Local_AI_Engine.Client.Services.Compute;
 /// </remarks>
 public sealed class ComputeOptions
 {
-    /// <summary>The configuration section this options type binds to.</summary>
     public const string SectionName = "Compute";
 
     /// <summary>Whether the sandboxed <c>run_python</c> tool may execute on this node. Off unless explicitly enabled.</summary>

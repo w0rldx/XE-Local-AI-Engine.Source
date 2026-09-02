@@ -148,19 +148,19 @@ describe("NodeSettingsFieldsModel mapping", () => {
 	it("seed defaults mirror the backend StoredNodeSettings Default* consts", () => {
 		// Each value must equal the corresponding C# const so a stale-server render shows the real defaults and the
 		// byte-cap fallbacks pass the backend `> 0` validator if ever saved.
-		expect(nodeSettingsFieldDefaults.enableTools).toBe(true); // DefaultEnableTools
-		expect(nodeSettingsFieldDefaults.customToolsEnabled).toBe(false); // DefaultCustomToolsEnabled
-		expect(nodeSettingsFieldDefaults.llamaMaxLoadedProcesses).toBe(3); // DefaultLlamaMaxLoadedProcesses
-		expect(nodeSettingsFieldDefaults.llamaIdleTimeToLiveSeconds).toBe(900); // DefaultLlamaIdleTimeToLiveSeconds
+		expect(nodeSettingsFieldDefaults.enableTools).toBe(true);
+		expect(nodeSettingsFieldDefaults.customToolsEnabled).toBe(false);
+		expect(nodeSettingsFieldDefaults.llamaMaxLoadedProcesses).toBe(3);
+		expect(nodeSettingsFieldDefaults.llamaIdleTimeToLiveSeconds).toBe(900);
 		expect(nodeSettingsFieldDefaults.keepModelWarmEnabled).toBe(false);
 		expect(nodeSettingsFieldDefaults.keepModelWarmModelName).toBe("");
 		expect(nodeSettingsFieldDefaults.keepModelWarmIntervalSeconds).toBe(300);
-		expect(nodeSettingsFieldDefaults.maxResponseSizeMb).toBe(10); // DefaultMaxResponseSizeMb
+		expect(nodeSettingsFieldDefaults.maxResponseSizeMb).toBe(10);
 		expect(nodeSettingsFieldDefaults.orchestrationIdleTimeoutSeconds).toBe(120); // DefaultOrchestrationIdleTimeoutSeconds
 		expect(nodeSettingsFieldDefaults.agentHomePrepareTimeoutSeconds).toBe(900); // DefaultAgentHomePrepareTimeoutSeconds
 		expect(nodeSettingsFieldDefaults.agentHomeCommandTimeoutSeconds).toBe(300); // DefaultAgentHomeCommandTimeoutSeconds
-		expect(nodeSettingsFieldDefaults.agentHomeMaxSelectedFolderBytes).toBe(536870912); // DefaultAgentHomeMaxSelectedFolderBytes (512 MiB)
-		expect(nodeSettingsFieldDefaults.agentHomeMaxPatchBytes).toBe(52428800); // DefaultAgentHomeMaxPatchBytes (50 MiB)
+		expect(nodeSettingsFieldDefaults.agentHomeMaxSelectedFolderBytes).toBe(536870912);
+		expect(nodeSettingsFieldDefaults.agentHomeMaxPatchBytes).toBe(52428800);
 		expect(nodeSettingsFieldDefaults.maxPendingToolCallAgeMinutes).toBe(10); // DefaultMaxPendingToolCallAgeMinutes
 		expect(nodeSettingsFieldDefaults.detachedGraceSeconds).toBe(300); // DefaultDetachedGraceSeconds
 	});

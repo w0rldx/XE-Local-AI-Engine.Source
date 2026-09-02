@@ -3,10 +3,7 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock the generated TanStack module so the hooks run against owned query/mutation fns (no network). The hooks still
-// compose the real withResponseValidation bridge. listAgentTemplatesOptions returns a hey-api options object
-// ({ queryKey, queryFn }); importAgentTemplatesMutation returns an object whose mutationFn the hook dispatches into;
-// listAgentTemplatesQueryKey is the key the import success-path invalidates.
+// Mock generated query/mutation factories to isolate the hook while retaining validation and mapping.
 const { listMock, importMutationFn, templatesKeyMock } = vi.hoisted(() => ({
 	listMock: vi.fn(),
 	importMutationFn: vi.fn(),
@@ -37,7 +34,6 @@ const generatedSummary = {
 	alreadyImported: false,
 };
 
-// Captures the queryKey of every invalidateQueries call so a test can assert which caches the import touched.
 const invalidatedKeys: unknown[] = [];
 
 function makeWrapper() {

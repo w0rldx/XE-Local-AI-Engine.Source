@@ -290,9 +290,6 @@ export function applyGenerationEvent(
 	return next;
 }
 
-// ---------------------------------------------------------------------------
-// Runtime + base-artifact view models.
-// ---------------------------------------------------------------------------
 
 // Domain view-models for the training feature. The generated shapes mark nullable fields as optional-and-nullable;
 // mapping them once here — at the query boundary — keeps `?? null` out of every component that reads them, and gives

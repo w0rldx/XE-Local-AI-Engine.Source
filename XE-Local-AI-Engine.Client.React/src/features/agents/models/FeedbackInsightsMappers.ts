@@ -11,13 +11,8 @@ import type {
 	ToolFeedbackBreakdown,
 } from "@/features/agents/models/FeedbackInsightsModels";
 
-// Maps the generated (OpenAPI) feedback-insights response to the stricter domain view-model the panel depends on.
-// The generated types are the single source of truth for the wire shape; their fields are all optional (`x?: T`),
-// so each mapper coalesces every field to a required value with a safe default. Boundary validation and ApiError
-// convergence are owned by the generated zod validator (`validator: true`) + the withResponseValidation bridge at
-// the hook — this mapper only projects the already-validated wire shape into the immutable domain shape (it no
-// longer re-validates, replacing the feature's former hand-zod safeParse). Redaction is the backend's: the mapper
-// surfaces only what the response carries (verbatim exemplar comments are already truncation-flagged server-side).
+// Maps optional generated wire fields into required domain values; validation remains at the API boundary.
+// Exemplar redaction and truncation remain backend-owned.
 
 function toOverall(dto: XeLocalAiEngineClientEndpointsAgentsV1OverallFeedbackResponse | undefined): OverallFeedback {
 	return {

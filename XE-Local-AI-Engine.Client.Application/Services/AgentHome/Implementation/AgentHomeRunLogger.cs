@@ -123,8 +123,6 @@ internal sealed class AgentHomeRunLogger : IAgentHomeRunLogger
         await AppendLineAsync(ToolCallsFile(), envelope, cancellationToken).ConfigureAwait(false);
     }
 
-    // ── helpers ──────────────────────────────────────────────────────────────
-
     private AgentHomeRunLogContext RequireContext()
     {
         return _context ?? throw new InvalidOperationException("AgentHomeRunLogger.OpenAsync must be called before any append operation.");
