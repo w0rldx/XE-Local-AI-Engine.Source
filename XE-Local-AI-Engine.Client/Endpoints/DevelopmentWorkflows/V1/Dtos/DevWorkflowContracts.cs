@@ -422,8 +422,14 @@ public sealed record DevWorkflowNodeRunDetailResponse(
 /// <summary>
 ///     Which rule text actually applied, by content hash. Names the document without copying its body, so the audit
 ///     stays truthful — and verifiable — after the rule set is edited or deleted.
+///     <para>
+///         <see cref="ContentSha256" /> is what the node run RECORDED and never changes.
+///         <see cref="CurrentContentSha256" /> is what the rule set holds now, or null when it has since been deleted —
+///         so a reader can say "edited since this ran" or "deleted" instead of having to assume the document still says
+///         what it said. Comparing the two is the whole reason the hash is recorded.
+///     </para>
 /// </summary>
-public sealed record DevWorkflowAppliedRuleSetResponse(Guid Id, string Name, string ContentSha256);
+public sealed record DevWorkflowAppliedRuleSetResponse(Guid Id, string Name, string ContentSha256, string? CurrentContentSha256);
 
 /// <summary>
 ///     Where a rule set applies. An EMPTY axis means "matches everything"; a populated one is an exact,

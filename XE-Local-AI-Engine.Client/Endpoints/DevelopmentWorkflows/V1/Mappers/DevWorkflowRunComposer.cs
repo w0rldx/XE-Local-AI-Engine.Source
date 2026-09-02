@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 
-using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -17,8 +16,6 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 /// </summary>
 public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefinitionStore agents, IAgentWorkSessionStore sessions)
 {
-    private static readonly JsonSerializerOptions PolicyOptions = new(JsonSerializerDefaults.Web);
-
     private readonly IAgentDefinitionStore _agents = agents ?? throw new ArgumentNullException(nameof(agents));
     private readonly IAgentWorkSessionStore _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
     private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -91,6 +88,12 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         var consumed = await _store.ListConsumedArtifactIdsAsync(nodeRunId, cancellationToken).ConfigureAwait(false);
         var decisions = await _store.ListDecisionsAsync(runId, cancellationToken).ConfigureAwait(false);
 
+        // One list, and only when this node actually recorded a resolution: rule sets are a handful of bodyless rows,
+        // so listing them beats a lookup per recorded id, and a node with no policy pays nothing at all.
+        var ruleSets = nodeRun.PolicyResolutionJson is null
+            ? []
+            : await _store.ListRuleSetsAsync(cancellationToken).ConfigureAwait(false);
+
         // Read from the other family on the loose session id, never stored here: a purged session leaves the node run
         // intact and the drill-down renders "transcript no longer available" instead of a broken link.
         Guid? conversationId = null;
@@ -126,7 +129,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             nodeRun.OutputJson,
             [.. produced.Select(static artifact => artifact.Id)],
             consumed,
-            AppliedRuleSets(nodeRun.PolicyResolutionJson),
+            AppliedRuleSets(nodeRun.PolicyResolutionJson, ruleSets),
             nodeRun.PendingDecisionKind?.ToString(),
             DevWorkflowGraphContract.AllowedDecisions(nodeRun.Status),
 
@@ -279,14 +282,21 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
     /// <summary>
     ///     Which rule text applied, read from the record written at materialization — never re-resolved. Re-resolving
     ///     would answer "what would apply now", a different and misleading question in an audit view.
+    ///     <para>
+    ///         The CURRENT hash of each named rule set rides alongside it, so a reader can tell an unchanged document
+    ///         from one edited since the node ran, and both from one deleted — which reads as a null current hash.
+    ///     </para>
+    ///     <para>
+    ///         Parsed through the runtime's own tolerant reader: an unreadable column is a hand-edited row, and it must
+    ///         cost this node its rule-set list rather than costing the whole drill-down a 500.
+    ///     </para>
     /// </summary>
-    private static IReadOnlyList<DevWorkflowAppliedRuleSetResponse> AppliedRuleSets(string? policyResolutionJson)
-    {
-        if (string.IsNullOrWhiteSpace(policyResolutionJson))
-        {
-            return [];
-        }
-
-        return JsonSerializer.Deserialize<IReadOnlyList<DevWorkflowAppliedRuleSetResponse>>(policyResolutionJson, PolicyOptions) ?? [];
-    }
+    private static IReadOnlyList<DevWorkflowAppliedRuleSetResponse> AppliedRuleSets(string? policyResolutionJson, IReadOnlyList<DevWorkflowRuleSetSummary> current) =>
+    [
+        .. DevWorkflowRulePolicyResolver.Read(policyResolutionJson)
+                                        .Select(applied => new DevWorkflowAppliedRuleSetResponse(applied.Id,
+                                            applied.Name,
+                                            applied.ContentSha256,
+                                            current.FirstOrDefault(ruleSet => ruleSet.Id == applied.Id)?.ContentSha256))
+    ];
 }

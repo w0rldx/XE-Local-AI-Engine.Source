@@ -154,16 +154,13 @@ internal static class DevWorkflowContractMapper
         JsonSerializer.Serialize(new DevWorkflowRuleScope(scope?.ProjectIds ?? [], scope?.NodeTypes ?? []), GraphOptions);
 
     /// <summary>
-    ///     The stored scope as the wire shape, with an absent axis rendered as the empty list the resolver reads it as.
-    ///     A column nothing can parse throws, like every other malformed row in this mapper: the endpoints are the only
-    ///     writer and they validate, so an unreadable scope is a corrupted database rather than a case to paper over —
-    ///     and rendering it as "applies everywhere" would be the more dangerous lie.
+    ///     The stored scope as the wire shape, read through the runtime's own parser so the page renders exactly the
+    ///     axes the resolver matches on. A column nothing can parse renders as empty axes rather than failing the read:
+    ///     the resolver already treats that row as applying to NOTHING, and a management page that cannot load it is a
+    ///     page nobody can use to fix it.
     /// </summary>
-    private static DevWorkflowRuleScope ToScope(string scopeJson)
-    {
-        var scope = JsonSerializer.Deserialize<DevWorkflowRuleScope>(scopeJson, GraphOptions);
-        return new DevWorkflowRuleScope(scope?.ProjectIds ?? [], scope?.NodeTypes ?? []);
-    }
+    private static DevWorkflowRuleScope ToScope(string scopeJson) =>
+        DevWorkflowRulePolicyResolver.ReadScope(scopeJson) is { } scope ? new DevWorkflowRuleScope(scope.ProjectIds, scope.NodeTypes) : new DevWorkflowRuleScope([], []);
 
     public static DevWorkflowRunEventResponse ToResponse(this DevWorkflowRunEventSnapshot value) =>
         new(value.Id, value.Sequence, value.EventType, value.NodeRunId, value.Outcome, value.DetailJson, value.OperationId, value.OccurredAtUtc);

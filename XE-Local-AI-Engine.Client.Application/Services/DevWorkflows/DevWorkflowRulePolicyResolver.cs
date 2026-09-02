@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         is additive whenever those lanes grow a place to put it.
 ///     </para>
 /// </summary>
-internal static class DevWorkflowRulePolicyResolver
+public static class DevWorkflowRulePolicyResolver
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -72,36 +72,56 @@ internal static class DevWorkflowRulePolicyResolver
         }
     }
 
-    private static bool Matches(DevWorkflowRuleSetSummary ruleSet, Guid? developmentProjectId, DevWorkflowNodeType nodeType)
+    /// <summary>
+    ///     A stored scope with each axis normalised to a list, or NULL when the column cannot be read at all.
+    ///     <para>
+    ///         The two states are kept apart on purpose, because the safe answer differs by caller: the resolver treats
+    ///         an unreadable scope as matching NOTHING — the endpoints are its only validating writer, so an unreadable
+    ///         one is a hand-edited row, and "applies to every node on this box" is the dangerous reading — while a
+    ///         read model renders it as empty axes, because a management page that cannot LOAD the row is a page nobody
+    ///         can use to fix it.
+    ///     </para>
+    /// </summary>
+    public static DevWorkflowRuleSetScope? ReadScope(string? scopeJson)
     {
-        RuleScope? scope;
+        if (string.IsNullOrWhiteSpace(scopeJson))
+        {
+            return null;
+        }
+
         try
         {
-            scope = JsonSerializer.Deserialize<RuleScope>(ruleSet.ScopeJson, JsonOptions);
+            return JsonSerializer.Deserialize<StoredScope>(scopeJson, JsonOptions) is { } scope
+                ? new DevWorkflowRuleSetScope(scope.ProjectIds ?? [], scope.NodeTypes ?? [])
+                : null;
         }
         catch (JsonException)
         {
-            // A scope nothing can read is not a scope that matches everything. The endpoints validate the document on
-            // the way in, so this is a hand-edited row, and the safe reading of an unreadable scope is "applies to
-            // nothing" rather than "applies to every node on this box".
-            return false;
+            return null;
         }
+    }
 
-        if (scope is null)
+    private static bool Matches(DevWorkflowRuleSetSummary ruleSet, Guid? developmentProjectId, DevWorkflowNodeType nodeType)
+    {
+        if (ReadScope(ruleSet.ScopeJson) is not { } scope)
         {
             return false;
         }
 
-        var projectMatches = scope.ProjectIds is not { Count: > 0 } projectIds || (developmentProjectId is { } projectId && projectIds.Contains(projectId));
-        var nodeTypeMatches = scope.NodeTypes is not { Count: > 0 } nodeTypes || nodeTypes.Contains(nodeType.ToString(), StringComparer.OrdinalIgnoreCase);
+        var projectMatches = scope.ProjectIds.Count == 0 || (developmentProjectId is { } projectId && scope.ProjectIds.Contains(projectId));
+        var nodeTypeMatches = scope.NodeTypes.Count == 0 || scope.NodeTypes.Contains(nodeType.ToString(), StringComparer.OrdinalIgnoreCase);
         return projectMatches && nodeTypeMatches;
     }
 
-    private sealed record RuleScope(IReadOnlyList<Guid>? ProjectIds, IReadOnlyList<string>? NodeTypes);
+    /// <summary>The stored document, whose axes may be absent — <see cref="ReadScope" /> is what normalises them.</summary>
+    private sealed record StoredScope(IReadOnlyList<Guid>? ProjectIds, IReadOnlyList<string>? NodeTypes);
 }
+
+/// <summary>Where a rule set applies, with both axes present. An EMPTY axis matches everything.</summary>
+public sealed record DevWorkflowRuleSetScope(IReadOnlyList<Guid> ProjectIds, IReadOnlyList<string> NodeTypes);
 
 /// <summary>
 ///     One rule set as a node-run records it: which document applied, under what name, at which exact text. The hash is
 ///     what keeps the audit truthful after the rule set is edited or deleted.
 /// </summary>
-internal sealed record DevWorkflowAppliedRuleSet(Guid Id, string Name, string ContentSha256);
+public sealed record DevWorkflowAppliedRuleSet(Guid Id, string Name, string ContentSha256);

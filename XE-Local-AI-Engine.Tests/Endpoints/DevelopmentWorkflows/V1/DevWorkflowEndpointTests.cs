@@ -533,6 +533,13 @@ public sealed class DevWorkflowEndpointTests
         using var response = await SendAsync(factory, "POST", RuleSets, request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
+        using (var created = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false)))
+        {
+            AssertEx.Equal("Never touch production.",
+                created.RootElement.GetProperty("body").GetString(),
+                "the 201 carries the store SNAPSHOT's plaintext body — the store decrypts on read, so a response echoing ciphertext would mean the mapper read an entity.");
+        }
+
         AssertEx.Equal($"/api/local/v1/development-workflows/rule-sets/{RuleSetId}",
             response.Headers.Location?.ToString(),
             "a 201 names where the created rule set can be read.");
@@ -565,6 +572,8 @@ public sealed class DevWorkflowEndpointTests
     [Arguments("""{"body":"Never touch production."}""", "needs a name")]
     [Arguments("""{"name":"House rules"}""", "needs a body")]
     [Arguments("""{"name":"House rules","body":"x","scope":{"projectIds":[],"nodeTypes":["Nonsense"]}}""", "scope.nodeTypes")]
+    [Arguments("""{"name":"House rules","body":"x","scope":{"projectIds":[],"nodeTypes":["3"]}}""", "scope.nodeTypes")]
+    [Arguments("""{"name":"House rules","body":"x","scope":{"projectIds":[],"nodeTypes":["-1"]}}""", "scope.nodeTypes")]
     public async Task CreateRuleSet_WithAMalformedBody_ReturnsBadRequestAndNeverReachesTheStore(string body, string expectedMessage)
     {
         var store = Store();
@@ -576,6 +585,53 @@ public sealed class DevWorkflowEndpointTests
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Contains(problem, expectedMessage, StringComparison.Ordinal);
         await store.DidNotReceive().CreateRuleSetAsync(Arg.Any<CreateDevWorkflowRuleSetCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     The body is bounded well below what an objective can carry, so a rule set the operator believes is in force
+    ///     cannot be one the agent only ever reads half of. 4096 is accepted; one character more is refused by name.
+    /// </summary>
+    [Test]
+    public async Task CreateRuleSet_WithABodyPastTheLimit_IsRefusedAndTheLimitItselfIsAccepted()
+    {
+        var store = Store();
+        store.CreateRuleSetAsync(Arg.Any<CreateDevWorkflowRuleSetCommand>(), Arg.Any<CancellationToken>()).Returns(RuleSetSnapshot());
+        await using var factory = EnabledFactory(store);
+
+        using var refused = await SendAsync(factory, "POST", RuleSets, $$"""{"name":"House rules","body":"{{new string('a', 4097)}}"}""").ConfigureAwait(false);
+        var problem = await refused.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        AssertEx.Contains(problem, "4096-character limit", StringComparison.Ordinal);
+        await store.DidNotReceive().CreateRuleSetAsync(Arg.Any<CreateDevWorkflowRuleSetCommand>(), Arg.Any<CancellationToken>());
+
+        using var accepted = await SendAsync(factory, "POST", RuleSets, $$"""{"name":"House rules","body":"{{new string('a', 4096)}}"}""").ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Created, accepted.StatusCode, "the bound itself is inclusive.");
+    }
+
+    /// <summary>
+    ///     A scope column nothing can parse renders as empty axes rather than failing the read. The resolver already
+    ///     treats such a row as applying to NOTHING, and a page that cannot load it is a page nobody can use to fix it.
+    /// </summary>
+    [Test]
+    public async Task GetRuleSet_WithAnUnreadableStoredScope_RendersEmptyAxesRatherThanFailing()
+    {
+        var store = Store();
+        store.GetRuleSetAsync(RuleSetId, Arg.Any<CancellationToken>()).Returns(RuleSetSnapshot() with
+        {
+            ScopeJson = "not json at all"
+        });
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "GET", RuleSet).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var scope = document.RootElement.GetProperty("scope");
+        AssertEx.Equal(expected: 0, scope.GetProperty("projectIds").GetArrayLength());
+        AssertEx.Equal(expected: 0, scope.GetProperty("nodeTypes").GetArrayLength());
     }
 
     [Test]
@@ -606,6 +662,11 @@ public sealed class DevWorkflowEndpointTests
                                    .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using (var updated = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false)))
+        {
+            AssertEx.Equal("Never touch production.", updated.RootElement.GetProperty("body").GetString(), "and so does the 200 a PUT answers with.");
+        }
+
         await store.Received(1)
                    .UpdateRuleSetAsync(Arg.Is<UpdateDevWorkflowRuleSetCommand>(command => command.ExpectedVersion == 4
                                                                                           && command.Name == "renamed"

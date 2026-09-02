@@ -31,6 +31,10 @@ public sealed class DevWorkflowRunEndpointTests
     private static readonly Guid SessionId = Guid.Parse("77777777-7777-7777-7777-777777777777");
     private static readonly Guid ConversationId = Guid.Parse("88888888-8888-8888-8888-888888888888");
     private static readonly Guid OperationId = Guid.Parse("99999999-9999-9999-9999-999999999999");
+    private static readonly Guid RuleSetId = Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+
+    /// <summary>What a node run recorded at materialization: the id, the name and the hash of the text that applied.</summary>
+    private const string RecordedPolicy = """[{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","name":"House rules","contentSha256":"content-hash"}]""";
 
     /// <summary>The seeded Slice-A shape: one agent into one TERMINAL gate — no out-edge takes a rejection.</summary>
     private const string SampleGraph = """
@@ -712,7 +716,7 @@ public sealed class DevWorkflowRunEndpointTests
         var store = Store();
         store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(GateNodeRun() with
         {
-            PolicyResolutionJson = """[{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","name":"House rules","contentSha256":"content-hash"}]"""
+            PolicyResolutionJson = RecordedPolicy
         });
         await using var factory = EnabledFactory(store, RunService());
 
@@ -726,6 +730,91 @@ public sealed class DevWorkflowRunEndpointTests
         AssertEx.Equal(expected: 1, applied.GetArrayLength(), "the recorded resolution reaches the node pane.");
         AssertEx.Equal("House rules", applied[0].GetProperty("name").GetString());
         AssertEx.Equal("content-hash", applied[0].GetProperty("contentSha256").GetString(), "the hash is what proves WHICH text applied.");
+    }
+
+    /// <summary>
+    ///     Editing a rule set mid-run is allowed, so the pane has to be able to SAY the document moved on: the recorded
+    ///     hash never changes, the current one comes from the row as it stands now, and a reader compares them. Without
+    ///     the second half, "which rules applied" silently reads as "which rules exist".
+    /// </summary>
+    [Test]
+    public async Task GetNodeRun_WhenTheRuleSetWasEditedSinceItApplied_ReportsBothHashes()
+    {
+        var store = Store();
+        store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(GateNodeRun() with
+        {
+            PolicyResolutionJson = RecordedPolicy
+        });
+        store.ListRuleSetsAsync(Arg.Any<CancellationToken>())
+             .Returns([
+                 new DevWorkflowRuleSetSummary(RuleSetId,
+                     "House rules, renamed",
+                     Description: null,
+                     """{"projectIds":[],"nodeTypes":[]}""",
+                     Enabled: true,
+                     "content-hash-v2",
+                     Version: 2,
+                     CreatedAtUtc: 1,
+                     UpdatedAtUtc: 3)
+             ]);
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var applied = document.RootElement.GetProperty("appliedRuleSets")[0];
+
+        AssertEx.Equal("content-hash", applied.GetProperty("contentSha256").GetString(), "the recorded hash is the audit and never moves.");
+        AssertEx.Equal("content-hash-v2", applied.GetProperty("currentContentSha256").GetString(), "and the current one is what says the document has been edited since.");
+        AssertEx.Equal("House rules", applied.GetProperty("name").GetString(), "the NAME stays the recorded one: renaming a rule set must not rewrite what the audit says applied.");
+    }
+
+    /// <summary>A deleted rule set reads as a null current hash — the recorded half is untouched, which is the point of recording it.</summary>
+    [Test]
+    public async Task GetNodeRun_WhenTheRuleSetWasDeleted_ReportsNoCurrentHashAndKeepsTheRecordedOne()
+    {
+        var store = Store();
+        store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(GateNodeRun() with
+        {
+            PolicyResolutionJson = RecordedPolicy
+        });
+        store.ListRuleSetsAsync(Arg.Any<CancellationToken>()).Returns([]);
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var applied = document.RootElement.GetProperty("appliedRuleSets")[0];
+
+        AssertEx.Equal("content-hash", applied.GetProperty("contentSha256").GetString());
+        AssertEx.Equal(JsonValueKind.Null, applied.GetProperty("currentContentSha256").ValueKind, "a deleted rule set has no current text, and null says so.");
+    }
+
+    /// <summary>
+    ///     A recorded resolution nothing can parse costs this node its rule-set list, not the whole drill-down. It can
+    ///     only come from a hand-edited row, and answering 500 would make one bad row hide every other thing the pane
+    ///     is there to show.
+    /// </summary>
+    [Test]
+    public async Task GetNodeRun_WithAnUnreadableRecordedResolution_AnswersAnEmptyListRatherThanFailing()
+    {
+        var store = Store();
+        store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(GateNodeRun() with
+        {
+            PolicyResolutionJson = "not json at all"
+        });
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 0, document.RootElement.GetProperty("appliedRuleSets").GetArrayLength());
     }
 
     private static IDevWorkflowRunService RunService(DevWorkflowRunDetail? detail = null)
