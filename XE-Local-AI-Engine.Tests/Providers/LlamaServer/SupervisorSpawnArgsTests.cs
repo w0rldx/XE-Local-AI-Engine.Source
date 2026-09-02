@@ -195,6 +195,45 @@ public sealed class SupervisorSpawnArgsTests
         consumer!.Dispose();
     }
 
+    /// <summary>
+    ///     The admitted arguments belong to the variant the ticket was granted against. A recorded source build can move
+    ///     the spawn off that variant after the identity check has already passed, and replaying Vulkan-resolved
+    ///     arguments onto a CUDA build would launch it against a backend nobody resolved for.
+    /// </summary>
+    [Test]
+    public async Task EnsureRunning_AdmittedVariantOutrankedByServedBuild_ReResolvesArgs()
+    {
+        var launcher = new FakeProcessLauncher();
+        var allocation = new ProcessContextAllocation(16384,
+            ModelTrainContextTokens: 131072,
+            ProcessContextAllocationSource.HardwareTier,
+            ProcessPlacementMode.GpuResident,
+            ResourceFootprint.Zero,
+            "llama3:0",
+            CacheKey: "cache");
+        var launchAdmissions = new ProcessLaunchAdmissionRegistry();
+
+        // Admitted as Vulkan with Explore args; the serve hands back the recorded CUDA build instead.
+        var admission = new ProcessLaunchAdmission("llama3",
+            ModelRole.Chat,
+            GpuVariant.Vulkan,
+            ResolvedLaunchArguments.Explore(),
+            allocation);
+        AssertEx.True(launchAdmissions.TryAcquire(admission, out var consumer));
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(GpuVariant.Vulkan),
+            profileResolver: new FakeInferenceProfileResolver(ResolvedLaunchArguments.Replay(ctxSize: 4096, nGpuLayers: 8)),
+            launchAdmissions: launchAdmissions,
+            binaryManager: new FakeBinaryManager(GpuVariant.Cuda));
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.Equal("8", spec!.Arguments[IndexOf(spec.Arguments, "--n-gpu-layers") + 1]);
+        AssertEx.False(spec.Arguments.Contains("--fit"), "The admitted Explore args were resolved for a variant this spawn is no longer on.");
+        consumer!.Dispose();
+    }
+
     [Test]
     [Arguments(GpuVariant.Vulkan, "llama3:0")]
     [Arguments(GpuVariant.Cuda, "different-content")]

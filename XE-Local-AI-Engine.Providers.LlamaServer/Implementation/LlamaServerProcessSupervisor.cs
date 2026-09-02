@@ -1013,7 +1013,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // Resolve the launch args (frozen-profile replay or explore-mode auto-fit, or operator-supplied profiling args)
         // for this (model, role, backend) BEFORE taking the admission gate, so a slow profile read never stalls
         // admission for other keys.
-        var resolved = admission?.ResolvedArguments ?? await resolveArgs(variant, ct).ConfigureAwait(false);
+        // The admitted arguments were resolved for the variant the admission was granted against, which the override
+        // above can have moved off: reuse them only while they still describe this backend, and re-resolve otherwise.
+        var resolved = admission is { } admitted && admitted.Variant == variant
+            ? admitted.ResolvedArguments
+            : await resolveArgs(variant, ct).ConfigureAwait(false);
 
         // Per-model developer/advanced override: extra llama-server flags the operator typed. Resolved here (alongside
         // the profile args, BEFORE the admission gate) so a slow store read never stalls admission for other keys, and
