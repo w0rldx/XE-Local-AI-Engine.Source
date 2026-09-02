@@ -1,4 +1,4 @@
-import { Alert, Badge, Button, Card, Group, SimpleGrid, Skeleton, Stack, Tabs, Text } from "@mantine/core";
+import { Alert, Badge, Button, Card, Group, Select, SimpleGrid, Skeleton, Stack, Tabs, Text } from "@mantine/core";
 import { IconAlertTriangle, IconPlus, IconSitemap } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -9,6 +9,7 @@ import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { toast } from "@/core/ui/notifications/Toast";
 import { type CreateWorkItemValues, CreateWorkItemDialog } from "@/features/devWorkflows/components/CreateWorkItemDialog";
+import { DevWorkflowDefinitionFormPanel } from "@/features/devWorkflows/components/DevWorkflowDefinitionFormPanel";
 import { DevWorkflowRuleSetsPanel } from "@/features/devWorkflows/components/DevWorkflowRuleSetsPanel";
 import {
 	DevWorkflowRunStatusBadge,
@@ -23,8 +24,11 @@ import {
 	useStartDevWorkflowRun,
 } from "@/features/devWorkflows/queries/useDevWorkflows";
 
-/** Two shelves of one surface: the runs an operator came here for, and the policy catalogue those runs read. */
-const devWorkflowsPageTabs = ["runs", "ruleSets"] as const;
+/**
+ * Three shelves of one surface: the runs an operator came here for, the templates those runs execute, and the policy
+ * catalogue the templates read. Runs stays the default because it is what this page is opened to look at.
+ */
+const devWorkflowsPageTabs = ["runs", "templates", "ruleSets"] as const;
 type DevWorkflowsPageTab = (typeof devWorkflowsPageTabs)[number];
 
 export function DevWorkflowsPage() {
@@ -35,6 +39,8 @@ export function DevWorkflowsPage() {
 	// Local, not a search param: which shelf of this page you are on is not a view of a run worth sharing, and the
 	// runs list stays the default because it is what an operator opens this page to look at.
 	const [tab, setTab] = useState<DevWorkflowsPageTab>("runs");
+	// Which template the editor is open on. Local: it is an editing position, not a view of a run worth sharing.
+	const [editedDefinitionId, setEditedDefinitionId] = useState<string | null>(null);
 
 	// The list polls itself at 5s while any listed run is live (X16 Q7) — the rule lives in the query hook.
 	const listQuery = useDevWorkflowWorkItems();
@@ -44,6 +50,7 @@ export function DevWorkflowsPage() {
 	const startMutation = useStartDevWorkflowRun();
 
 	const workItems = listQuery.data?.items ?? [];
+	const definitions = definitionsQuery.data?.items ?? [];
 	// A Dev Mode project has no name of its own — its objective is what identifies it in that surface too. Read once
 	// here because both the create dialog and the rule-set scope picker name the same projects.
 	const projectOptions = (projectsQuery.data?.items ?? []).map((project) => ({
@@ -100,6 +107,9 @@ export function DevWorkflowsPage() {
 				<Tabs.List>
 					<Tabs.Tab value="runs" data-testid="dev-workflows-tab-runs">
 						{t("pages.devWorkflows.tabs.runs", "Runs")}
+					</Tabs.Tab>
+					<Tabs.Tab value="templates" data-testid="dev-workflows-tab-templates">
+						{t("pages.devWorkflows.tabs.templates", "Templates")}
 					</Tabs.Tab>
 					<Tabs.Tab value="ruleSets" data-testid="dev-workflows-tab-rule-sets">
 						{t("pages.devWorkflows.tabs.ruleSets", "Rule sets")}
@@ -205,6 +215,27 @@ export function DevWorkflowsPage() {
 						)}
 					</Stack>
 				</Tabs.Panel>
+				<Tabs.Panel value="templates" pt="md">
+					{tab === "templates" ? (
+						<Stack gap="md">
+							<Select
+								label={t("pages.devWorkflows.definition.pickLabel", "Template")}
+								placeholder={t("pages.devWorkflows.definition.pickPlaceholder", "Pick a template to edit")}
+								data={definitions.map((definition) => ({ value: definition.id ?? "", label: definition.name ?? "" }))}
+								// An archived template leaves the picker (Y14), so a selection that survived an archive would
+								// hold the editor open on a row nothing can start any more.
+								value={definitions.some((definition) => definition.id === editedDefinitionId) ? editedDefinitionId : null}
+								onChange={setEditedDefinitionId}
+								data-testid="dev-workflows-definition-picker"
+							/>
+							<DevWorkflowDefinitionFormPanel
+								definitionId={
+									definitions.some((definition) => definition.id === editedDefinitionId) ? (editedDefinitionId ?? undefined) : undefined
+								}
+							/>
+						</Stack>
+					) : null}
+				</Tabs.Panel>
 				<Tabs.Panel value="ruleSets" pt="md">
 					{/* Mounted only while its own shelf is open. The catalogue is a second request, and an operator who
 					    came here to look at runs should not pay for it before they ask. */}
@@ -214,7 +245,7 @@ export function DevWorkflowsPage() {
 
 			<CreateWorkItemDialog
 				opened={dialogOpened}
-				definitions={definitionsQuery.data?.items ?? []}
+				definitions={definitions}
 				projects={projectOptions}
 				isSubmitting={createMutation.isPending || startMutation.isPending}
 				errorMessage={createError}

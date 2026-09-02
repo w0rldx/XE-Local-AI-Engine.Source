@@ -23,15 +23,19 @@ import {
 	getDevWorkflowRuleSetOptions,
 	getDevWorkflowRunOptions,
 	getDevWorkflowWorkItemOptions,
+	archiveDevWorkflowDefinitionMutation,
+	listAgentDefinitionsOptions,
 	listDevelopmentProjectsOptions,
 	listDevWorkflowArtifactsOptions,
 	listDevWorkflowDefinitionsOptions,
 	listDevWorkflowRuleSetsOptions,
 	listDevWorkflowRunEventsQueryKey,
 	listDevWorkflowWorkItemsOptions,
+	listLocalModelsOptions,
 	pauseDevWorkflowRunMutation,
 	resumeDevWorkflowRunMutation,
 	startDevWorkflowRunMutation,
+	updateDevWorkflowDefinitionMutation,
 	updateDevWorkflowRuleSetMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { callWithResponseValidation, withResponseValidation } from "@/core/api/ResponseValidation";
@@ -286,6 +290,65 @@ export function useDevWorkflowArtifactContent(runId: string | undefined, artifac
 		),
 		enabled: Boolean(runId) && Boolean(artifactId),
 	});
+}
+
+/**
+ * Agent definitions, for the definition editor's per-node agent binding. Read straight off the generated client the
+ * way the Dev Mode project list already is, rather than through `features/agents`' own hook: this needs the ids and
+ * names and nothing else, and reaching into another feature for a two-field projection is architecture debt the
+ * dependency baseline would have to carry forever.
+ */
+export function useDevWorkflowAgentOptions(options: FeedOptions = {}) {
+	return useQuery({
+		...withResponseValidation(listAgentDefinitionsOptions()),
+		enabled: options.enabled ?? true,
+		select: (data) => (data.items ?? []).map((agent) => ({ id: agent.id, label: agent.name })),
+	});
+}
+
+/**
+ * Chat models on this node, for a node's `modelProfile` override. Same filter the chat picker applies (`kind` is
+ * `Chat`), because a graph node that names a non-chat model is a run that fails at dispatch.
+ */
+export function useDevWorkflowModelOptions(options: FeedOptions = {}) {
+	return useQuery({
+		...withResponseValidation(listLocalModelsOptions()),
+		enabled: options.enabled ?? true,
+		select: (data) =>
+			(data.items ?? [])
+				.filter((model) => model.kind === "Chat")
+				.map((model) => ({ id: model.modelName ?? "", label: model.displayLabel ?? model.modelName ?? "" })),
+	});
+}
+
+/**
+ * Edit a definition, or archive it. Both invalidate the picker's list and the edited definition itself.
+ *
+ * The update carries the `Version` the edit was made from (X5: an int on the row, no version-history table), so a
+ * second editor's save is refused with a 409 rather than silently overwriting the first. Delete is an ARCHIVE (Y14) —
+ * a template a past run pinned a snapshot of must not stop existing, so the row is flagged and hidden from the picker.
+ */
+export function useDevWorkflowDefinitionMutations() {
+	const queryClient = useQueryClient();
+	const refresh = async (definitionId?: string): Promise<void> => {
+		await queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.definitions) });
+		if (definitionId) {
+			await queryClient.invalidateQueries({
+				queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.definition, { definitionId }),
+			});
+		}
+	};
+
+	const update = useMutation({
+		...withResponseValidation(updateDevWorkflowDefinitionMutation()),
+		onSuccess: (_data, variables) => refresh(variables.path?.definitionId),
+	});
+	const archive = useMutation({
+		...withResponseValidation(archiveDevWorkflowDefinitionMutation()),
+		onSuccess: (_data, variables) => refresh(variables.path?.definitionId),
+	});
+
+	return { update, archive };
 }
 
 /**

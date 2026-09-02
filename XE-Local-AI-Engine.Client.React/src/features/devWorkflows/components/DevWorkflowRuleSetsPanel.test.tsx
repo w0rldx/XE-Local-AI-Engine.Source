@@ -179,7 +179,7 @@ describe("DevWorkflowRuleSetsPanel", () => {
 		renderPanel();
 
 		fireEvent.click(await screen.findByTestId(`dev-workflow-rule-set-delete-${ruleSetId}`));
-		fireEvent.click(await screen.findByText("Delete"));
+		fireEvent.click(await screen.findByTestId("confirm-accept"));
 
 		await waitFor(() => expect(deleted).toBe(true));
 	});
