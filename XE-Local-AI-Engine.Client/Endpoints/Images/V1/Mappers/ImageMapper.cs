@@ -13,7 +13,6 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 /// </summary>
 internal static class ImageMapper
 {
-
     public static CreateImageJobInput ToInput(this CreateImageJobRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);

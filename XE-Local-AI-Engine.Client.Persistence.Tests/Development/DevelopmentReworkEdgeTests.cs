@@ -36,11 +36,11 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
         AssertEx.Equal("subject", await ApprovedSubjectHashAsync(dbContext, seed.TaskId).ConfigureAwait(false));
 
         var moved = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                            Guid.NewGuid(),
-                            DevelopmentTaskStatus.ChangesRequested,
-                            version,
-                            Reason))
-                        .ConfigureAwait(false);
+                                   Guid.NewGuid(),
+                                   DevelopmentTaskStatus.ChangesRequested,
+                                   version,
+                                   Reason))
+                               .ConfigureAwait(false);
 
         AssertEx.Equal(nameof(DevelopmentTaskStatus.ChangesRequested), moved.Status);
         AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Status);
@@ -70,11 +70,11 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
         var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
 
         var moved = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                            Guid.NewGuid(),
-                            DevelopmentTaskStatus.ChangesRequested,
-                            version,
-                            Reason))
-                        .ConfigureAwait(false);
+                                   Guid.NewGuid(),
+                                   DevelopmentTaskStatus.ChangesRequested,
+                                   version,
+                                   Reason))
+                               .ConfigureAwait(false);
 
         var written = await dbContext.DevelopmentEvents.AsNoTracking()
                                      .Where(entity => entity.TaskId == seed.TaskId && entity.EventType == "TaskTransitioned")
@@ -129,11 +129,11 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                        .ConfigureAwait(false);
 
         var moved = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                            Guid.NewGuid(),
-                            DevelopmentTaskStatus.ChangesRequested,
-                            version,
-                            Reason))
-                        .ConfigureAwait(false);
+                                   Guid.NewGuid(),
+                                   DevelopmentTaskStatus.ChangesRequested,
+                                   version,
+                                   Reason))
+                               .ConfigureAwait(false);
         AssertEx.True(await IsValidAsync(dbContext, artifactId).ConfigureAwait(false),
             "a task waiting for a new round has not produced anything to supersede the old report with yet.");
 
@@ -167,11 +167,11 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
 
         async Task MoveAsync(DevelopmentTaskStatus target, string? reason = null) =>
             _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                        Guid.NewGuid(),
-                        target,
-                        await VersionAsync().ConfigureAwait(false),
-                        reason))
-                    .ConfigureAwait(false);
+                               Guid.NewGuid(),
+                               target,
+                               await VersionAsync().ConfigureAwait(false),
+                               reason))
+                           .ConfigureAwait(false);
 
         // Round one reaches review, and the reviewer asks for changes.
         await MoveAsync(DevelopmentTaskStatus.Ready).ConfigureAwait(false);
@@ -184,13 +184,13 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
         await MoveAsync(DevelopmentTaskStatus.InProgress).ConfigureAwait(false);
         var attemptId = Guid.NewGuid();
         var attempt = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                              attemptId,
-                              Guid.NewGuid(),
-                              DevelopmentAttemptRole.Coder,
-                              "local-model",
-                              "local",
-                              await VersionAsync().ConfigureAwait(false)))
-                          .ConfigureAwait(false);
+                                     attemptId,
+                                     Guid.NewGuid(),
+                                     DevelopmentAttemptRole.Coder,
+                                     "local-model",
+                                     "local",
+                                     await VersionAsync().ConfigureAwait(false)))
+                                 .ConfigureAwait(false);
         _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attemptId,
                            Guid.NewGuid(),
                            DevelopmentAttemptStatus.Succeeded,

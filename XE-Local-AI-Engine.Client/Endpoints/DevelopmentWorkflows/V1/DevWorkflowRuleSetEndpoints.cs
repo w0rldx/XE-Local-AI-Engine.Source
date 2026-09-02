@@ -40,13 +40,13 @@ public sealed class CreateDevWorkflowRuleSetEndpoint(IDevWorkflowStore store) : 
         ArgumentNullException.ThrowIfNull(req);
 
         var created = await _store.CreateRuleSetAsync(new CreateDevWorkflowRuleSetCommand(Guid.NewGuid(),
-                                      req.Name,
-                                      req.Body,
-                                      DevWorkflowContractMapper.ToScopeJson(req.Scope),
-                                      req.Description,
-                                      req.Enabled),
-                                  ct)
-                              .ConfigureAwait(false);
+                                          req.Name,
+                                          req.Body,
+                                          DevWorkflowContractMapper.ToScopeJson(req.Scope),
+                                          req.Description,
+                                          req.Enabled),
+                                      ct)
+                                  .ConfigureAwait(false);
         await Send.CreatedAtAsync<GetDevWorkflowRuleSetEndpoint>(new
             {
                 ruleSetId = created.Id
@@ -102,14 +102,14 @@ public sealed class UpdateDevWorkflowRuleSetEndpoint(IDevWorkflowStore store) : 
         ArgumentNullException.ThrowIfNull(req);
 
         var updated = await _store.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand(req.RuleSetId,
-                                      req.Version,
-                                      req.Name,
-                                      req.Body,
-                                      DevWorkflowContractMapper.ToScopeJson(req.Scope),
-                                      req.Description,
-                                      req.Enabled),
-                                  ct)
-                              .ConfigureAwait(false);
+                                          req.Version,
+                                          req.Name,
+                                          req.Body,
+                                          DevWorkflowContractMapper.ToScopeJson(req.Scope),
+                                          req.Description,
+                                          req.Enabled),
+                                      ct)
+                                  .ConfigureAwait(false);
         await Send.OkAsync(updated.ToResponse(), ct).ConfigureAwait(false);
     }
 }

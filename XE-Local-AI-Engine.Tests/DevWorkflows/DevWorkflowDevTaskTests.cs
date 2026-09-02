@@ -775,7 +775,7 @@ public sealed class DevWorkflowDevTaskTests
         await using var scope = harness.Services.CreateAsyncScope();
         var management = scope.ServiceProvider.GetRequiredService<IDevelopmentManagementService>();
         return (await AssertEx.ThrowsAsync<Exception>(() => management.ApplyAsync(projectId, taskId, Guid.NewGuid(), onBehalfOfWorkflowRunId),
-                                 "an apply on a task with neither a connected repository nor an approved subject cannot succeed.")
+                                  "an apply on a task with neither a connected repository nor an approved subject cannot succeed.")
                               .ConfigureAwait(false)).Message;
     }
 
@@ -919,9 +919,9 @@ public sealed class DevWorkflowDevTaskTests
         var attempts = await store.ListAttemptsAsync(taskId).ConfigureAwait(false);
         var attempt = attempts[^1];
         _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attempt.Id,
-                               Guid.NewGuid(),
-                               DevelopmentAttemptStatus.Succeeded,
-                               attempt.Version))
+                           Guid.NewGuid(),
+                           DevelopmentAttemptStatus.Succeeded,
+                           attempt.Version))
                        .ConfigureAwait(false);
     }
 }

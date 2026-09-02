@@ -30,13 +30,13 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
         _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
 
         var created = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(seed.ProjectId,
-                                      Guid.NewGuid(),
-                                      Guid.NewGuid(),
-                                      "Implement the second slice",
-                                      "Do the other half.",
-                                      "[\"the other half is done\"]",
-                                      MaxReviewRounds: 5))
-                                  .ConfigureAwait(false);
+                                     Guid.NewGuid(),
+                                     Guid.NewGuid(),
+                                     "Implement the second slice",
+                                     "Do the other half.",
+                                     "[\"the other half is done\"]",
+                                     MaxReviewRounds: 5))
+                                 .ConfigureAwait(false);
 
         var tasks = await store.ListTasksAsync(seed.ProjectId).ConfigureAwait(false);
         AssertEx.Equal(expected: 2, tasks.Count, "A project carries as many tasks as its work was decomposed into.");
@@ -72,22 +72,22 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
         var operationId = Guid.NewGuid();
 
         var first = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(seed.ProjectId,
+                                   Guid.NewGuid(),
+                                   operationId,
+                                   "Implement the second slice",
+                                   "Do the other half.",
+                                   "[\"the other half is done\"]"))
+                               .ConfigureAwait(false);
+
+        // A different task id, deliberately: the replay must answer with the task that exists, not create the one the
+        // retry was about to ask for.
+        var replay = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(seed.ProjectId,
                                     Guid.NewGuid(),
                                     operationId,
                                     "Implement the second slice",
                                     "Do the other half.",
                                     "[\"the other half is done\"]"))
                                 .ConfigureAwait(false);
-
-        // A different task id, deliberately: the replay must answer with the task that exists, not create the one the
-        // retry was about to ask for.
-        var replay = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(seed.ProjectId,
-                                     Guid.NewGuid(),
-                                     operationId,
-                                     "Implement the second slice",
-                                     "Do the other half.",
-                                     "[\"the other half is done\"]"))
-                                 .ConfigureAwait(false);
 
         AssertEx.Equal(first.TaskId, replay.TaskId, "The same operation identity names the same task.");
         AssertEx.Equal(expected: 2,
@@ -127,14 +127,14 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
                                                        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
                                                        _ = start.SignalAndWait(TimeSpan.FromSeconds(30));
                                                        return await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(seed.ProjectId,
-                                                                              Guid.NewGuid(),
-                                                                              Guid.NewGuid(),
-                                                                              $"Slice {index}",
-                                                                              $"Implement slice {index}.",
-                                                                              "[\"the slice is done\"]"))
-                                                                          .ConfigureAwait(false);
+                                                                             Guid.NewGuid(),
+                                                                             Guid.NewGuid(),
+                                                                             $"Slice {index}",
+                                                                             $"Implement slice {index}.",
+                                                                             "[\"the slice is done\"]"))
+                                                                         .ConfigureAwait(false);
                                                    })))
-                                 .ConfigureAwait(false);
+                                .ConfigureAwait(false);
 
         await using var readScope = provider.CreateAsyncScope();
         var reader = readScope.ServiceProvider.GetRequiredService<IDevelopmentStore>();

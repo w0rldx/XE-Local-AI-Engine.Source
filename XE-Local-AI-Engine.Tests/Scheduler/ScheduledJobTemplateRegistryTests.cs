@@ -11,7 +11,6 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class ScheduledJobTemplateRegistryTests
 {
-
     [Test]
     public void ListTemplates_WhenMultipleHandlersRegistered_ReturnsAllDescriptors()
     {

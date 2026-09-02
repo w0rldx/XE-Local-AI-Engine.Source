@@ -19,7 +19,6 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 internal static class ModelFitMapper
 {
-
     public static GetLatestRecommendationsResponse ToResponse(this ModelFitLatestRecommendationsView view)
     {
         ArgumentNullException.ThrowIfNull(view);

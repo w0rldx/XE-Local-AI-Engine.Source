@@ -77,10 +77,10 @@ public sealed class HostGitRunnerBoundsTests : IDisposable
 
         // A megabyte: every pipe buffer this runs on is far smaller, so the write is still in flight when git exits.
         var result = await runner.RunAsync(repository,
-                                      AgentHomeGit.Arguments("--version"),
-                                      CancellationToken.None,
-                                      standardInput: new byte[1024 * 1024])
-                                  .ConfigureAwait(false);
+                                     AgentHomeGit.Arguments("--version"),
+                                     CancellationToken.None,
+                                     standardInput: new byte[1024 * 1024])
+                                 .ConfigureAwait(false);
 
         AssertEx.Equal(expected: -1, result.ExitCode, $"a git that never saw the input did not succeed at it: {result.StandardError}");
         AssertEx.Contains(result.StandardError, "stopped reading its input");

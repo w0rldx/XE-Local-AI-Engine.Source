@@ -248,14 +248,14 @@ internal sealed class DevWorkflowDevTaskExecutor
                            ?? throw new ArgumentException($"Node run '{nodeRun.NodeKey}' is a materialized development task whose input names no 'requirements' to implement.",
                                nameof(nodeRun));
         var created = await development.CreateTaskAsync(new DevelopmentCreateTaskCommand(projectId,
-                                           Guid.NewGuid(),
-                                           DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, ChildTaskAttempt, "devtask-create"),
-                                           Present(brief?.Title) ?? Label(graph, nodeRun.NodeKey),
-                                           requirements,
-                                           Present(brief?.AcceptanceCriteriaJson) ?? tasks[0].AcceptanceCriteriaJson,
-                                           tasks[0].MaxReviewRounds),
-                                       cancellationToken)
-                                   .ConfigureAwait(false);
+                                               Guid.NewGuid(),
+                                               DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, ChildTaskAttempt, "devtask-create"),
+                                               Present(brief?.Title) ?? Label(graph, nodeRun.NodeKey),
+                                               requirements,
+                                               Present(brief?.AcceptanceCriteriaJson) ?? tasks[0].AcceptanceCriteriaJson,
+                                               tasks[0].MaxReviewRounds),
+                                           cancellationToken)
+                                       .ConfigureAwait(false);
         return created.TaskId;
     }
 
@@ -493,15 +493,15 @@ internal sealed class DevWorkflowDevTaskExecutor
                 // node-run attempt would re-drive a task that is not going anywhere, so this is the class that goes
                 // straight to a human.
                 return await _retries.SettleFailureAsync(store,
-                        graph,
-                        run,
-                        nodeRun,
-                        nodeRuns,
-                        new DevWorkflowFailure(DevWorkflowFailureClasses.BudgetExhausted,
-                            task.BlockedReason ?? "The development task this node run was implementing was blocked.",
-                            Output(nodeRun, task, taskId, DevWorkflowFailureClasses.BudgetExhausted)),
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                                         graph,
+                                         run,
+                                         nodeRun,
+                                         nodeRuns,
+                                         new DevWorkflowFailure(DevWorkflowFailureClasses.BudgetExhausted,
+                                             task.BlockedReason ?? "The development task this node run was implementing was blocked.",
+                                             Output(nodeRun, task, taskId, DevWorkflowFailureClasses.BudgetExhausted)),
+                                         cancellationToken)
+                                     .ConfigureAwait(false);
 
             default:
                 break;
@@ -537,13 +537,13 @@ internal sealed class DevWorkflowDevTaskExecutor
                         cancellationToken)
                     .ConfigureAwait(false)
                 : await _retries.SettleFailureAsync(store,
-                        graph,
-                        run,
-                        nodeRun,
-                        nodeRuns,
-                        Failure(landed, nodeRun, task, taskId),
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                                    graph,
+                                    run,
+                                    nodeRun,
+                                    nodeRuns,
+                                    Failure(landed, nodeRun, task, taskId),
+                                    cancellationToken)
+                                .ConfigureAwait(false);
         }
 
         if (run.Status is DevWorkflowRunStatus.Pausing or DevWorkflowRunStatus.Cancelling)
@@ -642,15 +642,15 @@ internal sealed class DevWorkflowDevTaskExecutor
             // sanitized, and it can carry a host path or a fragment of a prompt.
             _logger.LogError(exception, "Development workflow dev-task node run {NodeRunId} of run {RunId} could not be advanced.", nodeRun.Id, run.Id);
             return await _retries.SettleFailureAsync(store,
-                    graph,
-                    run,
-                    nodeRun,
-                    nodeRuns,
-                    new DevWorkflowFailure(DevWorkflowFailureClasses.Internal,
-                        "This node run's development task stopped on an unexpected error. The engine log has the detail.",
-                        Output(nodeRun, task, taskId, DevWorkflowFailureClasses.Internal)),
-                    cancellationToken)
-                .ConfigureAwait(false);
+                                     graph,
+                                     run,
+                                     nodeRun,
+                                     nodeRuns,
+                                     new DevWorkflowFailure(DevWorkflowFailureClasses.Internal,
+                                         "This node run's development task stopped on an unexpected error. The engine log has the detail.",
+                                         Output(nodeRun, task, taskId, DevWorkflowFailureClasses.Internal)),
+                                     cancellationToken)
+                                 .ConfigureAwait(false);
         }
     }
 
@@ -685,28 +685,28 @@ internal sealed class DevWorkflowDevTaskExecutor
         if (task.CurrentReviewRound >= task.MaxReviewRounds)
         {
             return await _retries.SettleFailureAsync(store,
-                    graph,
-                    run,
-                    nodeRun,
-                    nodeRuns,
-                    new DevWorkflowFailure(DevWorkflowFailureClasses.BudgetExhausted,
-                        string.Create(CultureInfo.InvariantCulture,
-                            $"Node run '{failingNodeKey}' asked this task to be implemented again, and it has already used all {task.MaxReviewRounds} of its review rounds."),
-                        Output(nodeRun, task, task.Id, DevWorkflowFailureClasses.BudgetExhausted)),
-                    cancellationToken)
-                .ConfigureAwait(false);
+                                     graph,
+                                     run,
+                                     nodeRun,
+                                     nodeRuns,
+                                     new DevWorkflowFailure(DevWorkflowFailureClasses.BudgetExhausted,
+                                         string.Create(CultureInfo.InvariantCulture,
+                                             $"Node run '{failingNodeKey}' asked this task to be implemented again, and it has already used all {task.MaxReviewRounds} of its review rounds."),
+                                         Output(nodeRun, task, task.Id, DevWorkflowFailureClasses.BudgetExhausted)),
+                                     cancellationToken)
+                                 .ConfigureAwait(false);
         }
 
         var reason = await DescribePriorFailureAsync(store, run, nodeRun, failingNodeKey, cancellationToken).ConfigureAwait(false);
         try
         {
             _ = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(task.Id,
-                                     DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "devtask-request-changes"),
-                                     DevelopmentTaskStatus.ChangesRequested,
-                                     task.Version,
-                                     reason),
-                                 cancellationToken)
-                             .ConfigureAwait(false);
+                                         DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "devtask-request-changes"),
+                                         DevelopmentTaskStatus.ChangesRequested,
+                                         task.Version,
+                                         reason),
+                                     cancellationToken)
+                                 .ConfigureAwait(false);
             return 1;
         }
         catch (Exception exception) when (exception is DevelopmentConcurrencyException or DevelopmentInvalidTransitionException)
@@ -740,10 +740,10 @@ internal sealed class DevWorkflowDevTaskExecutor
         }
 
         return await development.FindOperationAsync(projectId,
-                       DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "devtask-request-changes"),
-                       DevelopmentOperationPhases.Completed,
-                       cancellationToken)
-                   .ConfigureAwait(false) is null
+                                    DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "devtask-request-changes"),
+                                    DevelopmentOperationPhases.Completed,
+                                    cancellationToken)
+                                .ConfigureAwait(false) is null
             ? failingNodeKey
             : null;
     }
@@ -957,13 +957,13 @@ internal sealed class DevWorkflowDevTaskExecutor
         string sanitizedReason,
         CancellationToken cancellationToken) =>
         await _retries.SettleFailureAsync(store,
-                graph,
-                run,
-                nodeRun,
-                nodeRuns,
-                new DevWorkflowFailure(failureClass, sanitizedReason, Output(nodeRun, task: null, nodeRun.DevelopmentTaskId, failureClass)),
-                cancellationToken)
-            .ConfigureAwait(false);
+                          graph,
+                          run,
+                          nodeRun,
+                          nodeRuns,
+                          new DevWorkflowFailure(failureClass, sanitizedReason, Output(nodeRun, task: null, nodeRun.DevelopmentTaskId, failureClass)),
+                          cancellationToken)
+                      .ConfigureAwait(false);
 
     private static async Task<int> SettleAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
@@ -996,13 +996,13 @@ internal sealed class DevWorkflowDevTaskExecutor
     /// </summary>
     private static string Output(DevWorkflowNodeRunSnapshot nodeRun, DevelopmentTaskSnapshot? task, Guid? taskId, string? failureClass) =>
         JsonSerializer.Serialize(new DevTaskOutput(task is { Status: DevelopmentTaskStatus.AwaitingApply or DevelopmentTaskStatus.Completed }
-                ? DevWorkflowNodeOutputStatuses.Succeeded
-                : DevWorkflowNodeOutputStatuses.Failed,
-            nodeRun.Attempt,
-            failureClass,
-            taskId,
-            task?.Status.ToString(),
-            task?.CurrentReviewRound),
+                    ? DevWorkflowNodeOutputStatuses.Succeeded
+                    : DevWorkflowNodeOutputStatuses.Failed,
+                nodeRun.Attempt,
+                failureClass,
+                taskId,
+                task?.Status.ToString(),
+                task?.CurrentReviewRound),
             JsonOptions);
 
     /// <summary>

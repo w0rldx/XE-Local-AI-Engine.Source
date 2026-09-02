@@ -163,7 +163,6 @@ public sealed record DevelopmentEventSnapshot(
     Guid? OperationId,
     string? OperationPhase,
     string? Outcome,
-
     /// <summary>
     ///     The sentence the event was written with, when it carries one — why a task was blocked, why validation
     ///     failed, why a workflow's fix loop sent an approved task back. The only member of the detail document that
@@ -197,7 +196,6 @@ public sealed record DevelopmentExecutionSnapshot(
     string Provider,
     long AttemptVersion,
     string? CommandProfileJson,
-
     /// <summary>
     ///     What the last request for changes on this task said, or nothing when it has never been asked for rework.
     ///     Resolved from the task's own event log rather than from a column, so it costs no migration and reads the same
@@ -293,6 +291,7 @@ public interface IDevelopmentStore
     /// </summary>
     /// <exception cref="KeyNotFoundException">The project does not exist.</exception>
     Task<DevelopmentOperationResult> CreateTaskAsync(DevelopmentCreateTaskCommand command, CancellationToken cancellationToken = default);
+
     Task<DevelopmentOperationResult> StartAttemptAsync(DevelopmentStartAttemptCommand command, CancellationToken cancellationToken = default);
     Task<DevelopmentOperationResult> TerminalizeAttemptAsync(DevelopmentTerminalizeAttemptCommand command, CancellationToken cancellationToken = default);
     Task<DevelopmentOperationResult> TransitionTaskAsync(DevelopmentTransitionTaskCommand command, CancellationToken cancellationToken = default);

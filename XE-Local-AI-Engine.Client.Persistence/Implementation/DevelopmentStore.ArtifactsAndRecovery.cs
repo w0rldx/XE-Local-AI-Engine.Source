@@ -295,7 +295,10 @@ public sealed partial class DevelopmentStore
                     task.Status.ToString(),
                     task.Version,
                     artifactId: null,
-                    Utf8(JsonSerializer.Serialize(new { reason = sanitizedReason }, JsonOptions)),
+                    Utf8(JsonSerializer.Serialize(new
+                    {
+                        reason = sanitizedReason
+                    }, JsonOptions)),
                     cancellationToken).ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);

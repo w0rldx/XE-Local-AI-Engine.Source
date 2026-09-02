@@ -308,13 +308,13 @@ internal sealed class DevWorkflowApplyCommands
         return
         [
             .. (await _store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false))
-            .Where(nodeRun => nodeRun.DevelopmentTaskId is not null
-                              && nodeRun.DevelopmentProjectId == projectId
-                              && nodeRun.Status == DevWorkflowNodeRunStatus.Succeeded
-                              && upstream.Contains(nodeRun.NodeKey))
-            .OrderBy(static nodeRun => nodeRun.MaterializationIndex ?? 0)
-            .ThenBy(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal)
-            .DistinctBy(static nodeRun => nodeRun.DevelopmentTaskId!.Value)
+               .Where(nodeRun => nodeRun.DevelopmentTaskId is not null
+                                 && nodeRun.DevelopmentProjectId == projectId
+                                 && nodeRun.Status == DevWorkflowNodeRunStatus.Succeeded
+                                 && upstream.Contains(nodeRun.NodeKey))
+               .OrderBy(static nodeRun => nodeRun.MaterializationIndex ?? 0)
+               .ThenBy(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal)
+               .DistinctBy(static nodeRun => nodeRun.DevelopmentTaskId!.Value)
         ];
     }
 

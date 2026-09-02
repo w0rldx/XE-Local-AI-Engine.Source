@@ -24,7 +24,6 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 [SupportedOSPlatform("windows")]
 internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProcessHandle
 {
-
     private const int JobObjectExtendedLimitInformation = 9;
     private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000;
     private readonly SafeJobHandle _job;

@@ -11,7 +11,6 @@ using PersistenceEntities = XE_Local_AI_Engine.Client.Persistence.Entities;
 /// </summary>
 internal static class SchedulerMapper
 {
-
     public static ScheduledJobTemplateResponse ToResponse(this ScheduledJobTemplateDescriptor descriptor)
     {
         ArgumentNullException.ThrowIfNull(descriptor);

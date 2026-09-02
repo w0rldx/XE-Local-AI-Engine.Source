@@ -457,8 +457,8 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         {
             _ = await AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
             var inFlight = (await ReadNodeRunsAsync(runId).ConfigureAwait(false))
-                .Where(nodeRun => ToolLane.IsInFlight(nodeRun.Id))
-                .ToList();
+                           .Where(nodeRun => ToolLane.IsInFlight(nodeRun.Id))
+                           .ToList();
             if (inFlight.Count == 0)
             {
                 return;

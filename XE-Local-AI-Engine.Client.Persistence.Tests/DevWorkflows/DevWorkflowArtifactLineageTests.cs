@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.DevWorkflows;
 
+using System.Text;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
@@ -169,8 +170,7 @@ public sealed class DevWorkflowArtifactLineageTests
         _ = await store.AppendArtifactAsync(command).ConfigureAwait(false);
 
         var recorded = context.DevWorkflowRunEvents.Single(entity => entity.EventType == DevWorkflowEventTypes.ArtifactSuperseded);
-        recorded.DetailJson = System.Text.Encoding.UTF8.GetBytes(
-            $$"""{"SupersededArtifactId":"{{firstId}}","SupersededManagedReference":"ref","Version":1}""");
+        recorded.DetailJson = Encoding.UTF8.GetBytes($$"""{"SupersededArtifactId":"{{firstId}}","SupersededManagedReference":"ref","Version":1}""");
         _ = await context.SaveChangesAsync().ConfigureAwait(false);
 
         var replayed = await store.AppendArtifactAsync(command).ConfigureAwait(false);

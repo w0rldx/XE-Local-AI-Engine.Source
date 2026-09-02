@@ -6,7 +6,6 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class NodeChatPartAccumulatorTests
 {
-
     [Test]
     public void AppendReasoning_ThenToolRequested_ThenAppendReasoning_ProducesThreePartsInOrder()
     {

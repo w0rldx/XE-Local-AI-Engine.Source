@@ -128,7 +128,11 @@ public sealed class DevWorkflowMaterializedIsolationTests
         var alphaTaskId = TaskId(alpha);
         var betaTaskId = TaskId(beta);
         AssertEx.NotEqual(alphaTaskId, betaTaskId);
-        foreach (var taskId in new[] { alphaTaskId, betaTaskId })
+        foreach (var taskId in new[]
+                 {
+                     alphaTaskId,
+                     betaTaskId
+                 })
         {
             AssertEx.Contains(await ReadAttemptsAsync(harness, taskId).ConfigureAwait(false),
                 attempt => attempt.Status == DevelopmentAttemptStatus.Running,

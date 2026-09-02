@@ -356,7 +356,10 @@ public sealed partial class DevelopmentStore
                     artifactId: null,
                     detailJson: command.Reason is null
                         ? null
-                        : Utf8(JsonSerializer.Serialize(new { reason = command.Reason }, JsonOptions)),
+                        : Utf8(JsonSerializer.Serialize(new
+                        {
+                            reason = command.Reason
+                        }, JsonOptions)),
                     cancellationToken).ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);

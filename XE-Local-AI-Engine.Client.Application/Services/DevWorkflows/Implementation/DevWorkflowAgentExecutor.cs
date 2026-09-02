@@ -244,15 +244,15 @@ internal sealed class DevWorkflowAgentExecutor
                 // re-attempted depends on the node's cap, the run's budget and whether the node routes its failures
                 // upstream — none of which is the session's business.
                 return await _retries.SettleFailureAsync(store,
-                        graph,
-                        run,
-                        nodeRun,
-                        nodeRuns,
-                        new DevWorkflowFailure(DevWorkflowFailureClasses.ProviderError,
-                            "The agent's work session failed.",
-                            FailureOutput(nodeRun, session, DevWorkflowFailureClasses.ProviderError)),
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                                         graph,
+                                         run,
+                                         nodeRun,
+                                         nodeRuns,
+                                         new DevWorkflowFailure(DevWorkflowFailureClasses.ProviderError,
+                                             "The agent's work session failed.",
+                                             FailureOutput(nodeRun, session, DevWorkflowFailureClasses.ProviderError)),
+                                         cancellationToken)
+                                     .ConfigureAwait(false);
 
             case AgentWorkSessionStatus.Cancelled:
                 return await SettleAsync(store,
