@@ -277,17 +277,23 @@ public sealed class DevWorkflowRunEndpointTests
     ///     The fan-out's identity and size are the SERVER's answer: the group is the decompose node run that produced
     ///     it, and the count is taken over the run's whole node-run list. A client counting the rows it drew is wrong by
     ///     construction past the render cap, which is the bug this replaces.
+    ///     <para>
+    ///         The template here is a TWO-node subtree cloned twice, which is the shape that catches the counting
+    ///         mistake: four clone ROWS, two CHILDREN, and a <c>materializationIndex</c> that only ever counts children.
+    ///         The badge reads "1 of 2", so the count has to be distinct indexes and not rows.
+    ///     </para>
     /// </summary>
     [Test]
-    public async Task GetRun_NamesAMaterializationGroupAndCountsItOverTheWholeRun()
+    public async Task GetRun_NamesAMaterializationGroupAndCountsItsChildrenRatherThanItsCloneRows()
     {
         const string DecompositionGraph = """
                                           {"schemaVersion":1,
                                            "nodes":[{"nodeKey":"decompose","nodeType":"Agent","label":"Decompose",
                                                      "materialization":{"templateNodeKey":"implement","artifactKind":"TaskPackage","joinNodeKey":"join","maxChildren":4}},
                                                     {"nodeKey":"implement","nodeType":"DevTask"},
+                                                    {"nodeKey":"review","nodeType":"Agent"},
                                                     {"nodeKey":"join","nodeType":"Join"}],
-                                           "edges":[{"from":"decompose","to":"join"},{"from":"implement","to":"join"}]}
+                                           "edges":[{"from":"decompose","to":"join"},{"from":"implement","to":"review"},{"from":"review","to":"join"}]}
                                           """;
 
         var decompose = GateNodeRun() with
@@ -297,7 +303,10 @@ public sealed class DevWorkflowRunEndpointTests
             Status = DevWorkflowNodeRunStatus.Succeeded,
             PendingDecisionKind = null
         };
-        var firstClone = GateNodeRun() with
+
+        // Two children of a two-node template: every node of the subtree is cloned per child, so the group holds FOUR
+        // rows carrying only TWO distinct indexes.
+        var firstChildImplement = GateNodeRun() with
         {
             Id = Guid.NewGuid(),
             NodeKey = "implement#1",
@@ -307,10 +316,22 @@ public sealed class DevWorkflowRunEndpointTests
             MaterializedFromNodeRunId = decompose.Id,
             MaterializationIndex = 0
         };
-        var secondClone = firstClone with
+        var firstChildReview = firstChildImplement with
+        {
+            Id = Guid.NewGuid(),
+            NodeKey = "review#1",
+            NodeType = DevWorkflowNodeType.Agent
+        };
+        var secondChildImplement = firstChildImplement with
         {
             Id = Guid.NewGuid(),
             NodeKey = "implement#2",
+            MaterializationIndex = 1
+        };
+        var secondChildReview = firstChildReview with
+        {
+            Id = Guid.NewGuid(),
+            NodeKey = "review#2",
             MaterializationIndex = 1
         };
         var join = GateNodeRun() with
@@ -325,7 +346,7 @@ public sealed class DevWorkflowRunEndpointTests
             {
                 GraphJson = DecompositionGraph
             },
-            [decompose, firstClone, secondClone, join],
+            [decompose, firstChildImplement, firstChildReview, secondChildImplement, secondChildReview, join],
             PendingDecisionCount: 0,
             BlockingGateNodeRunId: null));
         await using var factory = EnabledFactory(Store(), runs);
@@ -337,10 +358,11 @@ public sealed class DevWorkflowRunEndpointTests
         var nodes = document.RootElement.GetProperty("nodes").EnumerateArray().ToArray();
         var clones = nodes.Where(static node => node.GetProperty("isMaterialized").GetBoolean()).ToArray();
 
-        AssertEx.Equal(2, clones.Length);
+        AssertEx.Equal(4, clones.Length);
         AssertEx.True(clones.All(clone => clone.GetProperty("materializationGroupId").GetGuid() == decompose.Id),
             "one decompose node run materializes once, so its id names the group for the life of the run.");
-        AssertEx.True(clones.All(static clone => clone.GetProperty("materializationCount").GetInt32() == 2));
+        AssertEx.True(clones.All(static clone => clone.GetProperty("materializationCount").GetInt32() == 2),
+            "two children, whatever the template's node count — the badge reads 1 of 2 against the child ordinal, never 1 of 4.");
         AssertEx.Equal(JsonValueKind.Null,
             nodes.Single(static node => node.GetProperty("nodeKey").GetString() == "join").GetProperty("materializationGroupId").ValueKind,
             "a node that was never cloned belongs to no group and carries no count.");
@@ -350,6 +372,13 @@ public sealed class DevWorkflowRunEndpointTests
                               .Single(static node => node.GetProperty("nodeKey").GetString() == "implement")
                               .GetProperty("isTemplate")
                               .GetBoolean());
+        AssertEx.True(document.RootElement.GetProperty("graph")
+                              .GetProperty("nodes")
+                              .EnumerateArray()
+                              .Single(static node => node.GetProperty("nodeKey").GetString() == "review")
+                              .GetProperty("isTemplate")
+                              .GetBoolean(),
+            "the whole subtree short of the join is template, which is what makes this the two-node case.");
     }
 
     /// <summary>

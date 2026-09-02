@@ -41,11 +41,15 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
                              .Select(static node => node.NodeKey)
                              .ToHashSet(StringComparer.Ordinal);
 
-        // Counted over the run's WHOLE node-run list, once: a client counting the rows it drew is wrong by
-        // construction for a fan-out wider than its page.
+        // How many CHILDREN the decomposition produced, counted over the run's WHOLE node-run list, once: a client
+        // counting the rows it drew is wrong by construction for a fan-out wider than its page. Distinct INDEXES, not
+        // rows — a template subtree of more than one node clones every one of them per child, so counting rows would
+        // read a two-child fan-out of a two-node template as "1 of 4" against a MaterializationIndex that only ever
+        // counts children.
         var materializationCounts = detail.NodeRuns.Where(static nodeRun => nodeRun.MaterializedFromNodeRunId is not null)
                                           .GroupBy(static nodeRun => nodeRun.MaterializedFromNodeRunId!.Value)
-                                          .ToDictionary(static group => group.Key, static group => group.Count());
+                                          .ToDictionary(static group => group.Key,
+                                              static group => group.Select(static nodeRun => nodeRun.MaterializationIndex).Distinct().Count());
         var nodes = detail.NodeRuns
                           .Select(nodeRun => ToSummary(nodeRun,
                               nodesByKey.GetValueOrDefault(nodeRun.NodeKey),
