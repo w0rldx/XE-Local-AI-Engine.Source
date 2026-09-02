@@ -648,7 +648,24 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             : installed!;
         var backupMatches = recordTargetsActive && await TreeMatchesRecordAsync(backup, backupState, ct).ConfigureAwait(false);
 
-        if (Directory.Exists(active) && Directory.Exists(backup))
+        // Reconciliation keeps the installed-runtime record and the tree that record NAMES consistent. A record that
+        // does not name the active tree — a prebuilt record carrying no source path at all, or one pointing somewhere
+        // else — says nothing about this tree and is therefore not authority to delete it. Reading it as authority
+        // destroyed an operator's managed CUDA build on 2026-09-02: a node started against a fresh database wrote a
+        // Vulkan prebuilt record over the shared user-level installed-runtime.json, and the next start deleted the
+        // active and .backup trees because the record "did not match" them.
+        if (!Directory.Exists(active) && !Directory.Exists(backup))
+        {
+            await ClearSourceRecordAsync(sourceRecord, ct).ConfigureAwait(false);
+        }
+        else if (!recordTargetsActive)
+        {
+            _logger.LogWarning(
+                "The installed-runtime record does not name the managed source build at {ActivePath} (recorded source-build path: {RecordedSourceBuildPath}); leaving the source-build directories in place.",
+                active,
+                installed?.SourceBuildPath ?? "(none)");
+        }
+        else if (Directory.Exists(active) && Directory.Exists(backup))
         {
             if (activeMatches)
             {
@@ -683,17 +700,12 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                 await ClearSourceRecordAsync(sourceRecord, ct).ConfigureAwait(false);
             }
         }
-        else if (Directory.Exists(active))
+        else if (!activeMatches)
         {
-            if (!activeMatches)
-            {
-                DeleteDirectoryRequired(active);
-                _activeSignal.Clear();
-                await ClearSourceRecordAsync(sourceRecord, ct).ConfigureAwait(false);
-            }
-        }
-        else
-        {
+            // The record names this tree and the tree is not what the record promises (a rebuild that died between the
+            // swap and the record write, or a tampered tree). Replacing it is the record's own rebuild semantics.
+            DeleteDirectoryRequired(active);
+            _activeSignal.Clear();
             await ClearSourceRecordAsync(sourceRecord, ct).ConfigureAwait(false);
         }
 
