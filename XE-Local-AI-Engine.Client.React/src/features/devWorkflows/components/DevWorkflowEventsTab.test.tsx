@@ -112,9 +112,21 @@ describe("DevWorkflowEventsTab", () => {
 
 		expect(screen.queryByTestId("dev-workflow-events-reanchored")).toBeNull();
 
+		// Paging back is what puts history at risk; the anchored page itself is refetched either way.
+		fireEvent.click(screen.getByTestId("dev-workflow-events-load-more"));
 		rerenderWithAnchorParam(view, 400);
 
 		expect(screen.getByTestId("dev-workflow-events-reanchored")).toBeDefined();
+	});
+
+	it("stays quiet when the re-anchor discarded nothing the operator had paged back to", () => {
+		// A live run crosses a boundary every 200 sequences. On a feed nobody has paged back through, that reloads the
+		// one page already on screen — announcing it would train the operator to ignore the notice that matters.
+		const { view } = renderTab({ anchorParam: 200, hasMore: true });
+
+		rerenderWithAnchorParam(view, 400);
+
+		expect(screen.queryByTestId("dev-workflow-events-reanchored")).toBeNull();
 	});
 
 	it("stays quiet when the cursor first arrives — there was no loaded history to lose", () => {
@@ -129,9 +141,21 @@ describe("DevWorkflowEventsTab", () => {
 
 	it("clears the notice once the operator loads the older pages back", () => {
 		const { view } = renderTab({ anchorParam: 200, hasMore: true });
+		fireEvent.click(screen.getByTestId("dev-workflow-events-load-more"));
 		rerenderWithAnchorParam(view, 400);
 
 		fireEvent.click(screen.getByTestId("dev-workflow-events-load-more"));
+
+		expect(screen.queryByTestId("dev-workflow-events-reanchored")).toBeNull();
+	});
+
+	it("clears the notice when the operator switches ends, because that jump is their own act", () => {
+		const { view } = renderTab({ anchorParam: 200, hasMore: true });
+		fireEvent.click(screen.getByTestId("dev-workflow-events-load-more"));
+		rerenderWithAnchorParam(view, 400);
+		expect(screen.getByTestId("dev-workflow-events-reanchored")).toBeDefined();
+
+		fireEvent.click(screen.getByTestId("dev-workflow-events-jump-oldest"));
 
 		expect(screen.queryByTestId("dev-workflow-events-reanchored")).toBeNull();
 	});

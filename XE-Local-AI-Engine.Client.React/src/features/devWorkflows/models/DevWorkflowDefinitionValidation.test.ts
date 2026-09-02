@@ -24,6 +24,23 @@ function chain(overrides: Partial<DevWorkflowGraph> = {}): DevWorkflowGraph {
 	};
 }
 
+/** `feature-development-v1`'s shape: a template subtree hanging off `decompose` and handed back at `join`. */
+function templateGraph(overrides: Partial<DevWorkflowGraph> = {}): DevWorkflowGraph {
+	return {
+		schemaVersion: 1,
+		nodes: [
+			node("decompose", { materialization: { templateNodeKey: "implement", joinNodeKey: "join", maxChildren: 5 } }),
+			node("implement", { nodeType: "DevTask", isTemplate: true }),
+			node("join", { nodeType: "Join" }),
+		],
+		edges: [
+			{ from: "decompose", to: "join" },
+			{ from: "implement", to: "join" },
+		],
+		...overrides,
+	};
+}
+
 function rules(graph: DevWorkflowGraph | undefined): readonly string[] {
 	return validateDevWorkflowGraph(graph).map((issue) => issue.rule);
 }
@@ -131,22 +148,79 @@ describe("validateDevWorkflowGraph", () => {
 	});
 
 	it("does not call a materialization template an entry or an orphan — it has neither by design", () => {
-		// `implement` hangs off nothing and is reached by nothing from outside its own subtree. Without `isTemplate`
-		// it reads as a second entry AND as unreachable, which is two refusals over a graph the server accepts.
+		// `implement` hangs off nothing and is reached by nothing from outside its own subtree. Judged as an ordinary
+		// node it reads as a second entry AND as unreachable, which is two refusals over a graph the server accepts.
+		expect(validateDevWorkflowGraph(templateGraph())).toEqual([]);
+	});
+
+	it("takes the whole template SUBTREE as edited, so a node added inside one is not an orphan", () => {
+		// The wire's `isTemplate` is the server's verdict over the document as LOADED. A node the operator has just
+		// added inside the subtree carries no flag, and trusting the flag blocked a save the server accepts.
 		expect(
-			validateDevWorkflowGraph({
-				schemaVersion: 1,
-				nodes: [
-					node("decompose", { materialization: { templateNodeKey: "implement", joinNodeKey: "join", maxChildren: 5 } }),
-					node("implement", { nodeType: "DevTask", isTemplate: true }),
-					node("join", { nodeType: "Join" }),
-				],
-				edges: [
-					{ from: "decompose", to: "join" },
-					{ from: "implement", to: "join" },
-				],
-			}),
+			validateDevWorkflowGraph(
+				templateGraph({
+					nodes: [
+						node("decompose", { materialization: { templateNodeKey: "implement", joinNodeKey: "join", maxChildren: 5 } }),
+						node("implement", { nodeType: "DevTask", isTemplate: true }),
+						node("validate", { nodeType: "Tool" }),
+						node("join", { nodeType: "Join" }),
+					],
+					edges: [
+						{ from: "decompose", to: "join" },
+						{ from: "implement", to: "validate" },
+						{ from: "validate", to: "join" },
+					],
+				}),
+			),
 		).toEqual([]);
+	});
+
+	it("stops the subtree at the join, so the rest of the run is not swallowed into the template", () => {
+		// Walking through the join would make `join` and `verify` templates too, and then a graph with a genuinely
+		// unreachable tail would validate clean.
+		expect(
+			rules(
+				templateGraph({
+					nodes: [
+						node("decompose", { materialization: { templateNodeKey: "implement", joinNodeKey: "join", maxChildren: 5 } }),
+						node("implement", { nodeType: "DevTask", isTemplate: true }),
+						node("join", { nodeType: "Join" }),
+						node("verify"),
+						node("stranded"),
+					],
+					edges: [
+						{ from: "decompose", to: "join" },
+						{ from: "implement", to: "join" },
+						{ from: "join", to: "verify" },
+						{ from: "stranded", to: "verify" },
+					],
+				}),
+			),
+		).toContain("orphan");
+	});
+
+	it("stops treating a node as a template once the materializing node is deleted", () => {
+		// The stale `isTemplate: true` says otherwise. Believing it hid the second entry the server would refuse with
+		// a 400 the form could not explain.
+		expect(
+			rules(
+				templateGraph({
+					nodes: [node("implement", { nodeType: "DevTask", isTemplate: true }), node("join", { nodeType: "Join" })],
+					edges: [{ from: "implement", to: "join" }],
+				}),
+			),
+		).toEqual([]);
+		expect(
+			rules(
+				templateGraph({
+					nodes: [node("start"), node("implement", { nodeType: "DevTask", isTemplate: true }), node("join", { nodeType: "Join" })],
+					edges: [
+						{ from: "start", to: "join" },
+						{ from: "implement", to: "join" },
+					],
+				}),
+			),
+		).toContain("multipleEntries");
 	});
 
 	it("rejects a retry target this template does not declare", () => {

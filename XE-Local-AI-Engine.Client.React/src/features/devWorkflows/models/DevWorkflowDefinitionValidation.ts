@@ -10,7 +10,7 @@
 // Every rule below is the same question the server asks, phrased over the WIRE graph. Where the two could drift the
 // client is the one that must give way, which is why a save still renders whatever the server refuses.
 
-import type { DevWorkflowGraph } from "@/features/devWorkflows/models/DevWorkflowModels";
+import type { DevWorkflowGraph, DevWorkflowGraphNode } from "@/features/devWorkflows/models/DevWorkflowModels";
 
 /** One rule, one i18n key. The rule name IS the key suffix, so a new rule cannot ship without a message. */
 export const devWorkflowGraphRules = [
@@ -53,6 +53,49 @@ function descendants(start: string, successors: ReadonlyMap<string, readonly str
 		}
 	}
 	return seen;
+}
+
+/**
+ * The node keys of every materialization TEMPLATE subtree, derived from the graph BEING EDITED.
+ *
+ * Mirrors `DevWorkflowGraph.TemplateSubtree`: each declared `materialization.templateNodeKey` plus everything
+ * reachable from it WITHOUT passing through that materialization's `joinNodeKey`, because the join is where a template
+ * hands its work back to the graph. Each materialization gets its own visited set, like the server's, so two templates
+ * that overlap still declare their own subtrees in full.
+ *
+ * Derived here rather than read off the wire's `isTemplate`: that flag is the server's verdict over the document as
+ * LOADED, and this validator judges the document as EDITED. A node added inside a subtree carries no flag and read as
+ * an orphan; a materializing node the operator deleted left its children flagged as templates that no longer are.
+ * `isTemplate` remains what the run views display, where the loaded document is the only one there is.
+ */
+function templateNodeKeys(
+	nodes: readonly DevWorkflowGraphNode[],
+	successors: ReadonlyMap<string, readonly string[]>,
+): ReadonlySet<string> {
+	const templates = new Set<string>();
+	for (const node of nodes) {
+		const root = node.materialization?.templateNodeKey;
+		if (!root) {
+			continue;
+		}
+		const join = node.materialization?.joinNodeKey;
+		const subtree = new Set<string>([root]);
+		const pending = [root];
+		while (pending.length > 0) {
+			const from = pending.pop() ?? "";
+			for (const to of successors.get(from) ?? []) {
+				if (to === join || subtree.has(to)) {
+					continue;
+				}
+				subtree.add(to);
+				pending.push(to);
+			}
+		}
+		for (const key of subtree) {
+			templates.add(key);
+		}
+	}
+	return templates;
 }
 
 /**
@@ -141,10 +184,9 @@ export function validateDevWorkflowGraph(graph: DevWorkflowGraph | undefined): r
 	}
 
 	// A materialization TEMPLATE has no inbound edge from outside its own subtree and gets no node run until its
-	// children are materialized, so it is neither an entry nor an orphan. `isTemplate` is the server's own
-	// TemplateSubtree verdict on this document; a client walk of the same rule is the drift this replaced.
-	const isTemplate = new Map(nodes.map((node) => [node.nodeKey ?? "", node.isTemplate === true]));
-	const entries = [...declared].filter((key) => (inboundCount.get(key) ?? 0) === 0 && isTemplate.get(key) !== true);
+	// children are materialized, so it is neither an entry nor an orphan.
+	const templates = templateNodeKeys(nodes, successors);
+	const entries = [...declared].filter((key) => (inboundCount.get(key) ?? 0) === 0 && !templates.has(key));
 	if (declared.size > 0 && entries.length === 0) {
 		issues.push({ rule: "noEntry", subject: "" });
 	}
@@ -162,7 +204,7 @@ export function validateDevWorkflowGraph(graph: DevWorkflowGraph | undefined): r
 	if (entry !== undefined) {
 		const reachable = new Set([entry, ...descendants(entry, successors)]);
 		for (const key of declared) {
-			if (!reachable.has(key) && isTemplate.get(key) !== true) {
+			if (!reachable.has(key) && !templates.has(key)) {
 				issues.push({ rule: "orphan", subject: key });
 			}
 		}

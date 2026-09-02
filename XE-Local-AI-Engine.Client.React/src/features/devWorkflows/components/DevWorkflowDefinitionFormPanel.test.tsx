@@ -21,8 +21,9 @@ import { setupMswServer } from "@/test/UseMswServer";
 const definitionId = devWorkflowTestIds.definition;
 
 /**
- * research → plan, where `plan` carries the three fields the form must round-trip untouched. `toolMode` sits on a
- * Tool node because that is the only node type the server allows it on.
+ * research → plan, joined by a materialization whose template is `implement`. `plan` carries the three fields the form
+ * must round-trip untouched; `toolMode` sits on a Tool node because that is the only node type the server allows it on.
+ * The shape validates clean, which is what lets every save assertion below actually reach the wire.
  */
 const graph: DevWorkflowGraph = {
 	schemaVersion: 1,
@@ -34,10 +35,14 @@ const graph: DevWorkflowGraph = {
 			label: "Plan",
 			toolMode: "Apply",
 			requiredCapabilities: { gpu: "true" },
-			materialization: { templateNodeKey: "research", artifactKind: "TaskPackage", joinNodeKey: "research", maxChildren: 5 },
+			materialization: { templateNodeKey: "implement", artifactKind: "TaskPackage", joinNodeKey: "plan", maxChildren: 5 },
 		},
+		{ nodeKey: "implement", nodeType: "DevTask", label: "Implement", isTemplate: true },
 	],
-	edges: [{ from: "research", to: "plan" }],
+	edges: [
+		{ from: "research", to: "plan" },
+		{ from: "implement", to: "plan" },
+	],
 };
 
 function definitionRoute(overrides: { version?: number; graph?: DevWorkflowGraph } = {}) {
@@ -68,6 +73,29 @@ function renderPanel() {
 }
 
 setupMswServer();
+
+/** Loads a definition carrying one conditional edge, types `text` into the value cell, saves, and returns the body. */
+async function editConditionValue(
+	condition: { path: string; op: string; value: unknown },
+	text: string,
+): Promise<{ graph?: DevWorkflowGraph } | undefined> {
+	let sent: { graph?: DevWorkflowGraph } | undefined;
+	server.use(
+		...optionRoutes(),
+		definitionRoute({ graph: { ...graph, edges: [{ from: "research", to: "plan", condition }] } }),
+		http.put(localApiPath(`development-workflows/definitions/${definitionId}`), async ({ request }) => {
+			sent = (await request.json()) as typeof sent;
+			return HttpResponse.json({ id: definitionId, version: 4 });
+		}),
+	);
+	renderPanel();
+
+	fireEvent.change(await screen.findByTestId("dev-workflow-definition-edge-value-0"), { target: { value: text } });
+	fireEvent.click(screen.getByTestId("dev-workflow-definition-save"));
+	await waitFor(() => expect(sent).toBeDefined());
+	cleanup();
+	return sent;
+}
 
 describe("DevWorkflowDefinitionFormPanel", () => {
 	afterEach(() => {
@@ -126,7 +154,7 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 
 		const badges = await screen.findByTestId("dev-workflow-definition-node-readonly-1");
 		expect(badges.textContent).toContain("Apply");
-		expect(badges.textContent).toContain("research");
+		expect(badges.textContent).toContain("implement");
 	});
 
 	it("refuses to save a graph the server would reject, naming the node instead of waiting for a 400", async () => {
@@ -203,20 +231,66 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 		expect((screen.getByTestId("dev-workflow-definition-node-key-0") as HTMLInputElement).value).toBe("plan");
 
 		fireEvent.click(screen.getByTestId("dev-workflow-definition-add-node"));
-		expect(screen.getByTestId("dev-workflow-definition-node-2")).toBeDefined();
+		expect(screen.getByTestId("dev-workflow-definition-node-3")).toBeDefined();
 
-		fireEvent.click(screen.getByTestId("dev-workflow-definition-node-remove-2"));
-		expect(screen.queryByTestId("dev-workflow-definition-node-2")).toBeNull();
+		fireEvent.click(screen.getByTestId("dev-workflow-definition-node-remove-3"));
+		expect(screen.queryByTestId("dev-workflow-definition-node-3")).toBeNull();
 	});
 
 	it("gives every icon control an accessible name", async () => {
 		server.use(...optionRoutes(), definitionRoute());
 		renderPanel();
 
-		expect((await screen.findAllByLabelText("Move node up")).length).toBe(2);
+		expect((await screen.findAllByLabelText("Move node up")).length).toBe(3);
 		expect(screen.getAllByLabelText("Move node down").length).toBeGreaterThan(0);
-		expect(screen.getAllByLabelText("Remove node").length).toBe(2);
-		expect(screen.getByLabelText("Remove edge")).toBeDefined();
+		expect(screen.getAllByLabelText("Remove node").length).toBe(3);
+		expect(screen.getAllByLabelText("Remove edge").length).toBe(2);
+	});
+
+	it("keeps a boolean and a number scalar through the value cell, because the server compares by JSON kind", async () => {
+		const sent = await editConditionValue({ path: "$.ok", op: "eq", value: true }, "false");
+		expect(sent?.graph?.edges?.[0]?.condition?.value).toBe(false);
+
+		const numeric = await editConditionValue({ path: "$.count", op: "gte", value: 2 }, "5");
+		expect(numeric?.graph?.edges?.[0]?.condition?.value).toBe(5);
+	});
+
+	it("leaves a plain word a string, because a decision token is one", async () => {
+		const sent = await editConditionValue({ path: "$.decision", op: "eq", value: "Approve" }, "Reject");
+
+		expect(sent?.graph?.edges?.[0]?.condition?.value).toBe("Reject");
+	});
+
+	it("does not touch the value when only the operator changed — a rewritten scalar makes the edge silently dead", async () => {
+		let sent: { graph?: DevWorkflowGraph } | undefined;
+		server.use(
+			...optionRoutes(),
+			definitionRoute({ graph: { ...graph, edges: [{ from: "research", to: "plan", condition: { path: "$.ok", op: "eq", value: true } }] } }),
+			http.put(localApiPath(`development-workflows/definitions/${definitionId}`), async ({ request }) => {
+				sent = (await request.json()) as typeof sent;
+				return HttpResponse.json({ id: definitionId, version: 4 });
+			}),
+		);
+		renderPanel();
+
+		fireEvent.click(await screen.findByTestId("dev-workflow-definition-edge-op-0"));
+		fireEvent.click(await screen.findByText("ne"));
+		fireEvent.click(screen.getByTestId("dev-workflow-definition-save"));
+
+		await waitFor(() => expect(sent).toBeDefined());
+		expect(sent?.graph?.edges?.[0]?.condition?.op).toBe("ne");
+		expect(sent?.graph?.edges?.[0]?.condition?.value).toBe(true);
+	});
+
+	it("offers the operator as the server's closed set rather than free text", async () => {
+		server.use(...optionRoutes(), definitionRoute({ graph: { ...graph, edges: [{ from: "research", to: "plan" }] } }));
+		renderPanel();
+
+		fireEvent.click(await screen.findByTestId("dev-workflow-definition-edge-op-0"));
+
+		for (const operator of ["eq", "ne", "gt", "gte", "lt", "lte", "exists", "notExists"]) {
+			expect(screen.getByText(operator)).toBeDefined();
+		}
 	});
 
 	it("clears an edge's condition when its path is emptied, rather than saving one the runtime cannot evaluate", async () => {

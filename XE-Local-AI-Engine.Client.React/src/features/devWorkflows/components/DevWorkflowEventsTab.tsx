@@ -42,15 +42,35 @@ export function DevWorkflowEventsTab({
 	// rather than in an effect, so the notice and the rows it explains paint together.
 	//
 	// Only a FORWARD move from an already-established anchor counts. The first move is from 0, which is the run payload
-	// simply arriving with a `lastSequence` the feed had not seen yet — nothing was loaded to lose — and a move to 0 is
-	// the operator jumping to the oldest end, which is their own act and needs no explanation.
+	// simply arriving with a `lastSequence` the feed had not seen yet, and a move to 0 is the operator jumping to the
+	// oldest end, which is their own act and needs no explanation.
+	//
+	// And only when the operator had actually PAGED BACK. The anchored page is refetched either way, so a re-anchor
+	// with nothing older loaded discards no history — announcing it would train the operator to ignore the notice for
+	// the case where a log they had walked through really did vanish.
 	const previousAnchorParam = useRef(anchorParam);
+	const olderPagesLoaded = useRef(0);
 	const [wasReanchored, setWasReanchored] = useState(false);
 	if (previousAnchorParam.current !== anchorParam) {
 		const grew = previousAnchorParam.current > 0 && anchorParam > previousAnchorParam.current;
 		previousAnchorParam.current = anchorParam;
-		setWasReanchored(grew && anchor === "newest");
+		setWasReanchored(grew && anchor === "newest" && olderPagesLoaded.current > 0);
+		olderPagesLoaded.current = 0;
 	}
+
+	/**
+	 * Both anchor buttons and "load older" clear the notice; only the latter says older pages are loaded again.
+	 *
+	 * The state is dispatched only when the notice is actually up. A no-op `false` from a click is eagerly bailed out
+	 * of but stays QUEUED, and React then replays it after the render-phase update above — which put the notice back
+	 * down in the same commit that raised it.
+	 */
+	const resetNotice = (loadedOlder: boolean): void => {
+		olderPagesLoaded.current = loadedOlder ? olderPagesLoaded.current + 1 : 0;
+		if (wasReanchored) {
+			setWasReanchored(false);
+		}
+	};
 
 	// Sequences are strictly increasing but NOT contiguous — the run's counter is shared with node-runs and artifacts,
 	// so a gap between two event numbers is normal and must never be read as a lost event.
@@ -69,7 +89,10 @@ export function DevWorkflowEventsTab({
 				<Button
 					size="compact-xs"
 					variant={anchor === "newest" ? "light" : "subtle"}
-					onClick={() => onAnchorChange("newest")}
+					onClick={() => {
+						resetNotice(false);
+						onAnchorChange("newest");
+					}}
 					data-testid="dev-workflow-events-jump-newest"
 				>
 					{t("pages.devWorkflows.events.jumpNewest", "Newest")}
@@ -77,7 +100,10 @@ export function DevWorkflowEventsTab({
 				<Button
 					size="compact-xs"
 					variant={anchor === "oldest" ? "light" : "subtle"}
-					onClick={() => onAnchorChange("oldest")}
+					onClick={() => {
+						resetNotice(false);
+						onAnchorChange("oldest");
+					}}
 					data-testid="dev-workflow-events-jump-oldest"
 				>
 					{t("pages.devWorkflows.events.jumpOldest", "Oldest")}
@@ -170,7 +196,7 @@ export function DevWorkflowEventsTab({
 					variant="light"
 					loading={isLoadingMore}
 					onClick={() => {
-						setWasReanchored(false);
+						resetNotice(true);
 						onLoadMore();
 					}}
 					data-testid="dev-workflow-events-load-more"

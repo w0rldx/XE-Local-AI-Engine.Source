@@ -44,6 +44,13 @@ const reasoningEfforts = ["none", "low", "medium", "high"] as const;
 const joinPolicies = ["All", "Any"] as const;
 
 /**
+ * `DevWorkflowConditionOperator`, in the lowercase spelling the seeded templates use. The server parses it
+ * case-insensitively and REFUSES anything outside the set, so this is a picker for the same reason `nodeTypes` is: a
+ * token nothing parses is a definition whose routing nobody can predict, caught at save rather than at run start.
+ */
+const conditionOperators = ["eq", "ne", "gt", "gte", "lt", "lte", "exists", "notExists"] as const;
+
+/**
  * `DevelopmentCommandIds`, verbatim. A backend contract — a Tool node naming anything the repository's command profile
  * does not define is refused before a workspace is even prepared — so these are literals here, not a fetched list.
  */
@@ -616,10 +623,19 @@ function EdgeRow({
 	/**
 	 * The condition is written as a whole or not at all: an edge carrying a path with no operator is a rule the
 	 * runtime cannot evaluate, and clearing the path is how an operator says "always taken".
+	 *
+	 * `value` is only rewritten when the VALUE cell was the one edited. It is scalar JSON on the wire and the server
+	 * compares by JSON kind — `Compare` answers null on any type mismatch and the edge then silently never fires — so a
+	 * stored `true` must not become `"true"` because someone corrected the path beside it.
 	 */
 	const patchCondition = (patch: { path?: string; op?: string; value?: string }): void => {
-		const next = { path: condition?.path ?? "", op: condition?.op ?? "", value: readValue(condition?.value), ...patch };
-		onPatch(next.path.length === 0 ? { condition: null } : { condition: { path: next.path, op: next.op, value: next.value } });
+		const path = patch.path ?? condition?.path ?? "";
+		if (path.length === 0) {
+			onPatch({ condition: null });
+			return;
+		}
+		const value = "value" in patch ? parseConditionValue(patch.value ?? "") : (condition?.value ?? "");
+		onPatch({ condition: { path, op: patch.op ?? condition?.op ?? "", value } });
 	};
 
 	return (
@@ -651,10 +667,13 @@ function EdgeRow({
 				/>
 			</Table.Td>
 			<Table.Td>
-				<TextInput
+				{/* The stored operator is unioned in so a definition authored by hand in another casing still shows
+				    what it says and round-trips, instead of rendering as an empty picker. */}
+				<Select
 					aria-label={t("pages.devWorkflows.definition.conditionOp", "Operator")}
-					value={condition?.op ?? ""}
-					onChange={(event) => patchCondition({ op: event.currentTarget.value })}
+					data={[...new Set<string>([...conditionOperators, ...(condition?.op ? [condition.op] : [])])]}
+					value={condition?.op ?? null}
+					onChange={(value) => patchCondition({ op: value ?? "" })}
 					data-testid={`dev-workflow-definition-edge-op-${index}`}
 				/>
 			</Table.Td>
@@ -690,14 +709,27 @@ function toOptionalNumber(value: string | number): number | null {
 	return Number.isFinite(parsed) ? parsed : null;
 }
 
-/**
- * The stored condition value is scalar JSON — `true` and `"Approve"` are different documents — but the form edits it
- * as text. It is read back as a string, and written back as one: v1's conditions compare decision tokens, and
- * re-typing a string the operator typed would turn `"true"` into a boolean nobody asked for.
- */
+/** The stored scalar rendered for the text cell. A string shows as itself; everything else as its JSON text. */
 function readValue(value: unknown): string {
 	if (value === undefined || value === null) {
 		return "";
 	}
 	return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+/**
+ * The text cell back into the scalar JSON the wire carries. `true`, `42` and `null` become themselves — the server
+ * compares by JSON kind, so storing them as text makes the edge dead with nothing logged — and anything else stays the
+ * string it was typed as, because a decision token is a string and quoting it would be noise.
+ *
+ * ponytail: a stored STRING that looks like a number turns into a number if the operator edits that one cell. The
+ * lossless alternative is showing every string quoted, which makes the ordinary case (`Approve`) read as `"Approve"`.
+ */
+function parseConditionValue(text: string): unknown {
+	try {
+		const parsed: unknown = JSON.parse(text);
+		return parsed === null || typeof parsed === "boolean" || typeof parsed === "number" ? parsed : text;
+	} catch {
+		return text;
+	}
 }
