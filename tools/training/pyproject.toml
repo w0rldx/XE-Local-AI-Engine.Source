@@ -38,7 +38,7 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
     "torch==2.11.0",
     "torchvision==0.26.0",
-    "unsloth==2026.8.18",
+    "unsloth==2026.8.22",
     "bitsandbytes==0.50.1",
     "triton>=3.3.1",
     # Convert-script closure (llama.cpp requirements-convert_legacy_llama.txt at the inference pin).

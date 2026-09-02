@@ -210,17 +210,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/query-core@5.102.2",
+			"id": "frontend:@tanstack/query-core@5.102.6",
 			"name": "@tanstack/query-core",
-			"version": "5.102.2",
+			"version": "5.102.6",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/query",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-query@5.102.2",
+			"id": "frontend:@tanstack/react-query@5.102.6",
 			"name": "@tanstack/react-query",
-			"version": "5.102.2",
+			"version": "5.102.6",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/query",
 			"source": "frontend"
@@ -506,17 +506,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@xyflow/react@12.11.3",
+			"id": "frontend:@xyflow/react@12.11.5",
 			"name": "@xyflow/react",
-			"version": "12.11.3",
+			"version": "12.11.5",
 			"license": "MIT",
 			"homepageUrl": "https://reactflow.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@xyflow/system@0.0.80",
+			"id": "frontend:@xyflow/system@0.0.81",
 			"name": "@xyflow/system",
-			"version": "0.0.80",
+			"version": "0.0.81",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/xyflow/xyflow#readme",
 			"source": "frontend"
@@ -546,9 +546,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:axios@1.19.0",
+			"id": "frontend:axios@1.20.0",
 			"name": "axios",
-			"version": "1.19.0",
+			"version": "1.20.0",
 			"license": "MIT",
 			"homepageUrl": "https://axios-http.com",
 			"source": "frontend"
@@ -1874,25 +1874,25 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI@1.19.0",
+			"id": "backend:Microsoft.Agents.AI@1.20.0",
 			"name": "Microsoft.Agents.AI",
-			"version": "1.19.0",
+			"version": "1.20.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.Abstractions@1.19.0",
+			"id": "backend:Microsoft.Agents.AI.Abstractions@1.20.0",
 			"name": "Microsoft.Agents.AI.Abstractions",
-			"version": "1.19.0",
+			"version": "1.20.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.Workflows@1.19.0",
+			"id": "backend:Microsoft.Agents.AI.Workflows@1.20.0",
 			"name": "Microsoft.Agents.AI.Workflows",
-			"version": "1.19.0",
+			"version": "1.20.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
@@ -2362,9 +2362,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.FileSystemGlobbing@10.0.6",
+			"id": "backend:Microsoft.Extensions.FileSystemGlobbing@10.0.11",
 			"name": "Microsoft.Extensions.FileSystemGlobbing",
-			"version": "10.0.6",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2546,9 +2546,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.VectorData.Abstractions@10.7.0",
+			"id": "backend:Microsoft.Extensions.VectorData.Abstractions@10.8.2",
 			"name": "Microsoft.Extensions.VectorData.Abstractions",
-			"version": "10.7.0",
+			"version": "10.8.2",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/dotnet/ai/vector-stores/overview",
 			"source": "backend"
