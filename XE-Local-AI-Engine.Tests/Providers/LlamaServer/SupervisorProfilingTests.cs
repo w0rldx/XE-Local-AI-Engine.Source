@@ -508,6 +508,248 @@ public sealed class SupervisorProfilingTests
         AssertEx.Equal(expected: 2, launcher.LaunchCount);
     }
 
+    [Test]
+    public async Task Profiling_ConcurrentEnsureForSameKey_NeverReusesTheProfilingProcess()
+    {
+        // Race (A): the profiling process is registered and the exclusive gate is released while the benchmark body
+        // still runs, so a chat's fast reuse path could be handed the profiling endpoint — and then killed by the
+        // unconditional teardown. The chat must queue behind the per-key single-flight gate and spawn its own process.
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher);
+
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int? profilingProcessId = null;
+        var profiling = supervisor.RunExclusiveProfilingAsync("llama3",
+            ModelRole.Chat,
+            ResolvedLaunchArguments.Explore(),
+            enableMetrics: false,
+            async (context, _) =>
+            {
+                profilingProcessId = context.ProcessId;
+                entered.SetResult();
+                await release.Task;
+                return true;
+            },
+            CancellationToken.None);
+
+        await entered.Task;
+        var ensure = supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        // No sleep: a reuse of the profiling process completes the ensure synchronously (the reuse probe is
+        // rate-limited, so the fast path never awaits), while a correctly refused reuse parks on the gate. Sampled
+        // rather than asserted here so a failure cannot strand the barrier and hang the supervisor's disposal.
+        var completedDuringProfiling = ensure.IsCompleted;
+
+        release.SetResult();
+        await profiling;
+        var endpoint = await ensure;
+
+        AssertEx.False(completedDuringProfiling, "A chat must not be handed the profiling process while the benchmark runs.");
+        AssertEx.Equal(expected: 2, launcher.LaunchCount); // The chat spawned its own process after teardown.
+        var chat = AssertEx.NotNull(supervisor.GetRegisteredProcess("llama3", ModelRole.Chat));
+        AssertEx.NotEqual<int?>(profilingProcessId, chat.Handle.ProcessId);
+        AssertEx.False(chat.IsProfilingOwned);
+        AssertEx.Equal(chat.Endpoint.BaseAddress, endpoint.BaseAddress);
+        var handles = launcher.Handles.OrderBy(handle => handle.ProcessId).ToArray();
+        AssertEx.True(handles[0].WasTreeKilled, "The profiling process must still be torn down by teardown.");
+        AssertEx.False(handles[1].WasTreeKilled, "The chat's own process must survive the profiling teardown.");
+    }
+
+    [Test]
+    public async Task Profiling_UnpinnedProcess_StillRefusesReuse()
+    {
+        // The pin is NOT the flag: Pin() runs after registration and Unpin() runs before removal, so a reuse check
+        // keyed off IsProfilingPinned leaves both windows open. Clearing the pin emulates both; reuse must still refuse.
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher);
+
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int? profilingProcessId = null;
+        LlamaServerProcessSupervisor.RunningProcess? registered = null;
+        var profiling = supervisor.RunExclusiveProfilingAsync("llama3",
+            ModelRole.Chat,
+            ResolvedLaunchArguments.Explore(),
+            enableMetrics: false,
+            async (context, _) =>
+            {
+                profilingProcessId = context.ProcessId;
+                registered = supervisor.GetRegisteredProcess("llama3", ModelRole.Chat);
+                registered?.Unpin();
+                entered.SetResult();
+                await release.Task;
+                return true;
+            },
+            CancellationToken.None);
+
+        await entered.Task;
+        var ensure = supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+        var completedDuringProfiling = ensure.IsCompleted;
+
+        release.SetResult();
+        await profiling;
+        var endpoint = await ensure;
+
+        AssertEx.False(AssertEx.NotNull(registered, "The profiling process must be registered while its body runs.").IsProfilingPinned);
+        AssertEx.False(completedDuringProfiling, "An unpinned profiling process must still be refused for reuse.");
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+        AssertEx.NotEqual<int?>(profilingProcessId, AssertEx.NotNull(supervisor.GetRegisteredProcess("llama3", ModelRole.Chat)).Handle.ProcessId);
+        AssertEx.Equal(AssertEx.NotNull(supervisor.GetRegisteredProcess("llama3", ModelRole.Chat)).Endpoint.BaseAddress, endpoint.BaseAddress);
+    }
+
+    [Test]
+    public async Task Profiling_InferenceLease_IsRefusedForTheProfilingProcess()
+    {
+        // Chat paths ensure first and look the lease up by key afterwards, so a chat whose own process was replaced in
+        // between finds the profiling process under the same key. A lease there would be killed by profiling teardown.
+        await using var supervisor = SupervisorFactory.Create();
+
+        var acquisition = LlamaServerLeaseAcquisition.Evicting;
+        await supervisor.RunExclusiveProfilingAsync("llama3",
+            ModelRole.Chat,
+            ResolvedLaunchArguments.Explore(),
+            enableMetrics: false,
+            (_, _) =>
+            {
+                acquisition = supervisor.TryAcquireInferenceLease("llama3", ModelRole.Chat);
+                return Task.FromResult(result: true);
+            },
+            CancellationToken.None);
+
+        AssertEx.Null(acquisition.Lease, "Inference must never lease the transient profiling process.");
+        AssertEx.False(acquisition.ProcessEvicting, "The refusal is 'not running', not a draining eject.");
+    }
+
+    [Test]
+    public async Task Profiling_UnpinnedProcess_NotEvictedByCapAdmission()
+    {
+        // The registration-to-Pin() window again, this time against the LRU victim scan: with the pin cleared, only
+        // IsProfilingOwned keeps the measurement process out of the victim set for a cap-hitting competing spawn.
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var ttl = TimeSpan.FromMinutes(5);
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            options: new LlamaServerSupervisorOptions
+            {
+                MaxLoadedProcesses = 1,
+                IdleTimeToLive = ttl,
+                MaxRestartAttempts = 3
+            },
+            timeProvider: time);
+
+        LlamaRuntimeException? rejection = null;
+        await supervisor.RunExclusiveProfilingAsync("model-a",
+            ModelRole.Chat,
+            ResolvedLaunchArguments.Explore(),
+            enableMetrics: false,
+            async (_, _) =>
+            {
+                AssertEx.NotNull(supervisor.GetRegisteredProcess("model-a", ModelRole.Chat)).Unpin();
+                time.Advance(ttl + TimeSpan.FromMinutes(1));
+                rejection = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+                    supervisor.EnsureRunningAsync("model-b", ModelRole.Chat, CancellationToken.None));
+                return true;
+            },
+            CancellationToken.None);
+
+        AssertEx.NotNull(rejection);
+        AssertEx.Contains(rejection!.Message, "maximum number of local models", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Equal(expected: 1, launcher.LaunchCount); // model-b never launched; the profiling process survived.
+    }
+
+    [Test]
+    public async Task Profiling_PreSpawnEviction_RefusesWhenTheModelIsServingInference()
+    {
+        // Race (B): the pre-spawn eviction ran straight into RemoveProcessAsync with no lease check, tree-killing a
+        // chat that acquired its lease after the caller's busy check. It must refuse instead, having evicted nothing.
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher);
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        var acquisition = supervisor.TryAcquireInferenceLease("llama3", ModelRole.Chat);
+        using var lease = AssertEx.NotNull(acquisition.Lease);
+
+        var bodyRan = false;
+        var refusal = await AssertEx.ThrowsAsync<LlamaServerProfilingRefusedException>(() =>
+            supervisor.RunExclusiveProfilingAsync("llama3",
+                ModelRole.Chat,
+                ResolvedLaunchArguments.Explore(),
+                enableMetrics: false,
+                (_, _) =>
+                {
+                    bodyRan = true;
+                    return Task.FromResult(result: true);
+                },
+                CancellationToken.None));
+
+        AssertEx.Equal(ModelRole.Chat, refusal.Role);
+        AssertEx.Equal(expected: 1, refusal.ActiveLeases);
+        AssertEx.False(bodyRan, "The profiling body must not run when the pre-spawn eviction was refused.");
+        AssertEx.Equal(expected: 1, launcher.LaunchCount); // No profiling spawn.
+        AssertEx.False(launcher.Handles.Single().WasTreeKilled, "The chat's process must survive a refused eviction.");
+        AssertEx.False(AssertEx.NotNull(supervisor.GetRegisteredProcess("llama3", ModelRole.Chat)).IsEvicting);
+        AssertEx.False(lease.WasEjected, "The chat's lease must stay valid.");
+
+        // The refusal left the process leasable: the claim was released, not stranded.
+        var next = supervisor.TryAcquireInferenceLease("llama3", ModelRole.Chat);
+        AssertEx.False(next.ProcessEvicting);
+        AssertEx.NotNull(next.Lease).Dispose();
+    }
+
+    [Test]
+    public async Task Profiling_PreSpawnEviction_WhenAnotherTeardownOwnsTheProcess_ReportsThatReason()
+    {
+        // The other TryBeginEvict failure: the compare-exchange lost to a teardown that already owns the process.
+        // There is no lease count to report there, so the reason carries the meaning instead of a made-up number.
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher);
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+        AssertEx.NotNull(supervisor.GetRegisteredProcess("llama3", ModelRole.Chat)).MarkEvicting();
+
+        var refusal = await AssertEx.ThrowsAsync<LlamaServerProfilingRefusedException>(() =>
+            supervisor.RunExclusiveProfilingAsync("llama3",
+                ModelRole.Chat,
+                ResolvedLaunchArguments.Explore(),
+                enableMetrics: false,
+                (_, _) => Task.FromResult(result: true),
+                CancellationToken.None));
+
+        AssertEx.Equal(LlamaServerProfilingRefusalReason.EvictionAlreadyInProgress, refusal.Reason);
+        AssertEx.Equal(expected: 0, refusal.ActiveLeases);
+        AssertEx.Contains(refusal.Message, "already being torn down", StringComparison.Ordinal);
+        AssertEx.Equal(expected: 1, launcher.LaunchCount); // No profiling spawn.
+    }
+
+    [Test]
+    public async Task Profiling_PreSpawnEviction_RollsBackEarlierClaims_WhenALaterRoleRefuses()
+    {
+        // Two-phase: the eviction loops every role, so a per-role claim-and-remove would tear down Chat and only then
+        // discover Embedding is leased — leaving the model half evicted for a run that never happens.
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher);
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Embedding, CancellationToken.None);
+
+        using var lease = AssertEx.NotNull(supervisor.TryAcquireInferenceLease("llama3", ModelRole.Embedding).Lease);
+
+        var refusal = await AssertEx.ThrowsAsync<LlamaServerProfilingRefusedException>(() =>
+            supervisor.RunExclusiveProfilingAsync("llama3",
+                ModelRole.Chat,
+                ResolvedLaunchArguments.Explore(),
+                enableMetrics: false,
+                (_, _) => Task.FromResult(result: true),
+                CancellationToken.None));
+
+        AssertEx.Equal(ModelRole.Embedding, refusal.Role);
+        AssertEx.Equal(expected: 2, launcher.LaunchCount); // Neither warm role was replaced by a profiling spawn.
+        AssertEx.Empty(launcher.Handles.Where(handle => handle.WasTreeKilled));
+
+        var chat = AssertEx.NotNull(supervisor.GetRegisteredProcess("llama3", ModelRole.Chat));
+        AssertEx.False(chat.IsEvicting, "The first role's claim must be released, not stranded.");
+        AssertEx.NotNull(supervisor.TryAcquireInferenceLease("llama3", ModelRole.Chat).Lease).Dispose();
+    }
+
     private static void AssertArgumentValue(IReadOnlyList<string> arguments, string argument, string expectedValue)
     {
         var index = -1;

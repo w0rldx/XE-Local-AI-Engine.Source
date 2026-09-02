@@ -257,7 +257,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
                 // Fast path: an already-running, live process is reused without taking the spawn gate — subject to a
                 // rate-limited liveness probe so a wedged (alive but unresponsive) process is respawned instead of handed out.
-                if (_processes.TryGetValue(key, out var existing) && !existing.Handle.HasExited)
+                // A profiling-owned process is never handed out: its teardown evicts unconditionally, so a reuse here would
+                // be killed mid-generation. Falling through queues this caller on the per-key gate profiling holds until
+                // teardown, after which it spawns its own process.
+                if (_processes.TryGetValue(key, out var existing) && !existing.Handle.HasExited && !existing.IsProfilingOwned)
                 {
                     var reused = await TryReuseAsync(key, existing, ct).ConfigureAwait(false);
                     if (reused is not null)
@@ -309,6 +312,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     internal int CountInflightSpawns() =>
         _inflightSpawns.Count;
 
+    /// <summary>The registered process for a key, or <see langword="null" />. Test seam for process-state assertions.</summary>
+    internal RunningProcess? GetRegisteredProcess(string modelName, ModelRole role) =>
+        _processes.TryGetValue(new ProcessKey(modelName, role), out var running) ? running : null;
+
     /// <summary>
     ///     The single-flight decision, taken under the per-key gate held only briefly: reuse a now-registered process,
     ///     or return the shared DETACHED spawn task (creating it if none is in flight). The gate is released before the
@@ -323,7 +330,14 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         {
             // Re-check under the gate — a detached spawn may have registered a live process while we waited (it
             // registers into _processes before removing itself from _inflightSpawns, so a reuse here never misses it).
-            if (_processes.TryGetValue(key, out var existing) && !existing.Handle.HasExited)
+            _processes.TryGetValue(key, out var existing);
+
+            // Profiling holds this same gate through its own teardown, so a profiling-owned entry cannot be seen here
+            // today. The reuse arm is guarded anyway; the reap below is deliberately NOT, so that if the invariant ever
+            // breaks a lingering entry is still torn down rather than orphaning its child process.
+            var profilingOwned = existing is { IsProfilingOwned: true };
+
+            if (existing is not null && !existing.Handle.HasExited && !profilingOwned)
             {
                 var reused = await TryReuseAsync(key, existing, ct).ConfigureAwait(false);
                 if (reused is not null)
@@ -580,6 +594,66 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
     }
 
+    /// <summary>
+    ///     Profiling's pre-spawn eviction: lease-aware and two-phase, unlike the operator <see cref="EvictCoreAsync" />
+    ///     force path. Every live role for the model is CLAIMED first through
+    ///     <see cref="RunningProcess.TryBeginEvict" /> — the same atomic check-and-mark cap admission uses — and only a
+    ///     complete set of claims is torn down. A role serving in-flight inference refuses its claim, the claims already
+    ///     taken are released with <see cref="RunningProcess.ClearEvicting" /> (an abandoned claim would refuse every
+    ///     future lease on a process nobody is tearing down), and the caller is told which role refused: a measurement
+    ///     is never worth killing a live generation for, and a half-evicted model for a run that never happens is worse
+    ///     than no eviction at all. Returns the refusing role, what it was serving and why, or <see langword="null" />
+    ///     when every role was evicted.
+    /// </summary>
+    private async Task<(ModelRole Role, int ActiveLeases, LlamaServerProfilingRefusalReason Reason)?> TryEvictAllRolesForProfilingAsync(string modelName)
+    {
+        var claimed = new List<(ProcessKey Key, RunningProcess Process)>();
+        var exited = new List<(ProcessKey Key, RunningProcess Process)>();
+        foreach (var role in Enum.GetValues<ModelRole>())
+        {
+            var key = new ProcessKey(modelName, role);
+            if (!_processes.TryGetValue(key, out var running))
+            {
+                continue;
+            }
+
+            // An exited process holds no real lease: it is reaped with the rest so its slot and port are reclaimed,
+            // and it is never claimed, so a refusal leaves an operator eject's own mark on it untouched.
+            if (running.Handle.HasExited)
+            {
+                exited.Add((key, running));
+                continue;
+            }
+
+            if (!running.TryBeginEvict(out var alreadyEvicting))
+            {
+                foreach (var (_, claimedProcess) in claimed)
+                {
+                    claimedProcess.ClearEvicting();
+                }
+
+                // Sampled HERE, in the refusal branch: a lost compare-exchange means another teardown owns the process
+                // and there is no lease count to report, so the reason carries the meaning instead of a made-up number.
+                var activeLeases = alreadyEvicting ? 0 : running.ActiveLeases;
+                var reason = alreadyEvicting
+                    ? LlamaServerProfilingRefusalReason.EvictionAlreadyInProgress
+                    : LlamaServerProfilingRefusalReason.InUse;
+                _logger.LogInformation("Profiling for model {ModelName} was skipped: role {Role} could not be claimed ({Reason}, {ActiveLeases} in-flight request(s)).",
+                    modelName, role, reason, activeLeases);
+                return (role, activeLeases, reason);
+            }
+
+            claimed.Add((key, running));
+        }
+
+        foreach (var (key, running) in exited.Concat(claimed))
+        {
+            await _reaper.RemoveProcessAsync(key, running).ConfigureAwait(false);
+        }
+
+        return null;
+    }
+
     /// <inheritdoc />
     public async Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct)
     {
@@ -659,7 +733,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 
         var key = new ProcessKey(modelName, role);
-        if (!_processes.TryGetValue(key, out var running) || running.Handle.HasExited)
+
+        // A profiling-owned process is invisible to inference: chat paths ensure first and look the lease up by key
+        // afterwards, so without this a chat whose own process was replaced in between would lease the transient
+        // profiling process and be killed by its teardown. NotRunning rather than Evicting — there is nothing to drain,
+        // and the caller should treat it exactly as it treats an un-warm key.
+        if (!_processes.TryGetValue(key, out var running) || running.Handle.HasExited || running.IsProfilingOwned)
         {
             return LlamaServerLeaseAcquisition.NotRunning;
         }
@@ -750,9 +829,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         // Synchronous in-memory read (no HTTP): the effective context was captured once after readiness. Null when the
         // process is not running, has exited, or /props did not report a usable value.
+        // A profiling-owned process is excluded: its context comes from explore/replay launch args, not from serving
+        // policy, so reporting it would size a chat's context budget off a measurement spawn.
         var key = new ProcessKey(modelName, role);
         if (_processes.TryGetValue(key, out var running)
             && !running.Handle.HasExited
+            && !running.IsProfilingOwned
             && running.EffectiveContextTokens is { } effectiveContext)
         {
             return new LlamaServerRuntimeInfo(effectiveContext);
@@ -898,7 +980,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         bool applyLaunchPolicy,
         ProcessLaunchAdmission? admission,
         CancellationToken ct,
-        LlamaServerBenchmarkLaunchPolicy? benchmarkPolicy = null)
+        LlamaServerBenchmarkLaunchPolicy? benchmarkPolicy = null,
+        bool profilingOwned = false)
     {
         var modelFilePath = await _modelStore.ResolveModelFilePathAsync(key.ModelName, ct).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(modelFilePath))
@@ -1294,7 +1377,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     EffectiveContextTokens = effectiveContext,
                     SuccessfulLaunchArguments = fitParamsCapture is null ? [] : [.. spec.Arguments],
                     LoadObservation = loadObservation,
-                    LaunchReceipt = launchReceipt
+                    LaunchReceipt = launchReceipt,
+                    IsProfilingOwned = profilingOwned
                 };
                 _processes[key] = running;
 
@@ -1762,7 +1846,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     // auto-evicts an IDLE LRU victim, so a freshly-used sibling role would otherwise survive, contaminate
                     // the pre-spawn baseline, and make the profiling spawn non-exclusive. The runtime-mutation gate is
                     // still held here, so no new ensure decision can repopulate any role until after this spawn registers.
-                    await EvictAllRolesCoreAsync(modelName).ConfigureAwait(false);
+                    // A role serving in-flight inference refuses the eviction and the whole run is skipped, evicting nothing.
+                    if (await TryEvictAllRolesForProfilingAsync(modelName).ConfigureAwait(false) is { } refusal)
+                    {
+                        throw new LlamaServerProfilingRefusedException(modelName, refusal.Role, refusal.ActiveLeases, refusal.Reason);
+                    }
 
                     var preSpawnVram = captureVramBeforeSpawn is null
                         ? null
@@ -1794,7 +1882,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                                 applyLaunchPolicy: launchArgs.ExploreMode,
                                 admission: null,
                                 ct,
-                                benchmarkPolicy)
+                                benchmarkPolicy,
+                                profilingOwned: true)
                             .ConfigureAwait(false);
 
                         // The profiling process is registered, so mutation attempts now observe it and return null. Release
@@ -1964,6 +2053,18 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         /// <summary>What this spawn actually launched. Benchmark spawns only; null for every other spawn.</summary>
         public LlamaServerLaunchReceipt? LaunchReceipt { get; init; }
 
+        /// <summary>
+        ///     <see langword="true" /> for the transient process an exclusive profiling run spawned for its own
+        ///     measurement. Set as part of registration, so it holds from the first instant the process is visible in
+        ///     <see cref="LlamaServerProcessSupervisor._processes" /> until profiling's teardown removes it — normal
+        ///     inference never reuses it, and is never killed by that teardown. Deliberately independent of
+        ///     <see cref="IsProfilingPinned" />, which is only set after registration and cleared before removal.
+        ///     A refused chat parks on the per-key single-flight gate while holding only the SHARED runtime-mutation
+        ///     gate, which profiling no longer holds by then, so the wait is bounded by the profiling body and stays
+        ///     cancellable by the caller's token — it cannot invert against the exclusive gate.
+        /// </summary>
+        public bool IsProfilingOwned { get; init; }
+
         public DateTimeOffset LastUsedUtc => new(Interlocked.Read(ref _lastUsedTicks), TimeSpan.Zero);
 
         /// <summary>
@@ -2005,10 +2106,20 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ///     racing lease) and then re-checks that no lease slipped in first. Returns <see langword="false" /> —
         ///     clearing the flag — when a lease won the race, so a process is never torn down under in-flight inference.
         /// </summary>
-        public bool TryBeginEvict()
+        public bool TryBeginEvict() => TryBeginEvict(out _);
+
+        /// <summary>
+        ///     As <see cref="TryBeginEvict()" />, additionally reporting WHICH failure occurred:
+        ///     <paramref name="alreadyEvicting" /> is <see langword="true" /> when another teardown already owned this
+        ///     process (the compare-exchange lost) and <see langword="false" /> when an in-flight lease won the race.
+        ///     A caller that reports the refusal needs the distinction — the lost-exchange case has no lease count.
+        /// </summary>
+        public bool TryBeginEvict(out bool alreadyEvicting)
         {
+            alreadyEvicting = false;
             if (Interlocked.CompareExchange(ref _evicting, value: 1, comparand: 0) != 0)
             {
+                alreadyEvicting = true;
                 return false; // An operator eject already owns this process's teardown.
             }
 

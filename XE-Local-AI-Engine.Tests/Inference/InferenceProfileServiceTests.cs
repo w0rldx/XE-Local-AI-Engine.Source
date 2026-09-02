@@ -194,6 +194,58 @@ public sealed class InferenceProfileServiceTests
     }
 
     [Test]
+    public async Task Explore_WhenProfilingRefusedByLiveInference_ReturnsSkipped()
+    {
+        // The supervisor refuses the pre-spawn eviction while a role is serving. ExploreAsync has no try/catch of its
+        // own, so a refusal implemented as a plain runtime throw would escape the service entirely.
+        var fixture = new ServiceFixture();
+        fixture.WithLocalModel();
+        fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: null, IsMoe: false));
+        fixture.WithExploreProfilingRefusal(ModelRole.Chat, activeLeases: 2);
+
+        var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(result.Skipped, "A refused explore is skipped, not failed.");
+        AssertEx.False(result.Success);
+
+        // The operator-facing sentence, pinned verbatim — the endpoint renders exactly this.
+        AssertEx.Equal($"Skipped: {Model} (Chat) is serving 2 in-flight request(s); profiling did not run and nothing was evicted. Retry when the model is idle.",
+            result.FailureReason);
+        await fixture.ProfileStore.DidNotReceive().CreateOrUpdateExploredAsync(Arg.Any<InferenceProfileInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Benchmark_WhenProfilingRefusedByLiveInference_ReturnsSkipped_AndClosesTheSnapshot()
+    {
+        var fixture = new ServiceFixture();
+        var profile = ExploredRecord();
+        fixture.WithProfiles(profile);
+        fixture.WithLocalModel();
+        var snapshotId = Guid.NewGuid();
+        fixture.WithRunningSnapshot(snapshotId);
+        fixture.WithBenchmarkProfilingRefusal(ModelRole.Embedding, activeLeases: 1);
+
+        var result = await fixture.CreateService().BenchmarkAsync(profile.Id, CancellationToken.None);
+
+        AssertEx.True(result.Skipped, "A refused benchmark is skipped, not failed.");
+        AssertEx.False(result.Success);
+        AssertEx.Contains(result.FailureReason, "Embedding", StringComparison.Ordinal);
+        // The snapshot was opened before the refusal, so it must not be left Running forever.
+        await fixture.SnapshotStore.Received(1).MarkTerminalAsync(snapshotId,
+            ModelFitRunStatus.Cancelled,
+            Arg.Any<int?>(),
+            Arg.Any<long?>(),
+            Arg.Any<string?>(),
+            Arg.Any<string?>(),
+            Arg.Any<string?>(),
+            Arg.Any<long>(),
+            Arg.Any<CancellationToken>());
+        await fixture.BenchmarkStore.DidNotReceive().ReplaceForSnapshotAsync(Arg.Any<Guid>(),
+            Arg.Any<IReadOnlyList<ModelFitBenchmarkInput>>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task Benchmark_WhenHarnessFails_MarksSnapshotFailed_NoFreeze()
     {
         var fixture = new ServiceFixture();
@@ -642,6 +694,30 @@ public sealed class InferenceProfileServiceTests
                           var body = callInfo.Arg<Func<LlamaServerProfilingContext, CancellationToken, Task<InferenceBenchmarkMetrics>>>();
                           return await body(context, CancellationToken.None);
                       });
+        }
+
+        // The exclusive profiling spawn refuses because a warm role is serving in-flight inference.
+        public void WithExploreProfilingRefusal(ModelRole busyRole, int activeLeases)
+        {
+            Supervisor.RunExclusiveProfilingAsync(Arg.Any<string>(),
+                          Arg.Any<ModelRole>(),
+                          Arg.Any<ResolvedLaunchArguments>(),
+                          Arg.Any<bool>(),
+                          Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<ResolvedLaunchArguments?>>>(),
+                          Arg.Any<CancellationToken>())
+                      .Returns<Task<ResolvedLaunchArguments?>>(_ => throw new LlamaServerProfilingRefusedException(Model, busyRole, activeLeases, LlamaServerProfilingRefusalReason.InUse));
+        }
+
+        public void WithBenchmarkProfilingRefusal(ModelRole busyRole, int activeLeases)
+        {
+            Supervisor.RunExclusiveProfilingAsync(Arg.Any<string>(),
+                          Arg.Any<ModelRole>(),
+                          Arg.Any<ResolvedLaunchArguments>(),
+                          Arg.Any<bool>(),
+                          Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<InferenceBenchmarkMetrics>>>(),
+                          Arg.Any<CancellationToken>(),
+                          Arg.Any<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>>())
+                      .Returns<Task<InferenceBenchmarkMetrics>>(_ => throw new LlamaServerProfilingRefusedException(Model, busyRole, activeLeases, LlamaServerProfilingRefusalReason.InUse));
         }
 
         public void EchoExploredUpsert()
