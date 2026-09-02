@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-07-21
 - **Scope:** Development Mode cloud-egress carrier and enforcement boundary
-- **Pinned dependency (current):** `Microsoft.Extensions.AI` 10.8.3 / `Microsoft.Extensions.AI.Abstractions` 10.9.0 (`Directory.Packages.props`)
+- **Pinned dependency (current):** `Microsoft.Extensions.AI` 10.9.0 / `Microsoft.Extensions.AI.Abstractions` 10.9.0 (`Directory.Packages.props`)
 - **Pinned dependency (at decision):** `Microsoft.Extensions.AI` / `Microsoft.Extensions.AI.Abstractions` 10.7.0 — see "Re-verification 2026-08-17"
 
 ## Context
@@ -57,3 +57,12 @@ What was checked on 2026-08-17, and what was not:
 - **Carrier regression tests re-run and green.** `dotnet test XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj --configuration Debug --no-build -- --treenode-filter "/*/*/DevelopmentCloudEgressAuthorizationTests/*"` -> 19 total, 19 succeeded, 0 failed, 0 skipped. That class still contains `FunctionLoop_NonStreaming_ForcedCloneAuthorizesBothRawRoundsBeforeTransport` and `FunctionLoop_Streaming_ForcedCloneAuthorizesBothRawRoundsBeforeTransport` with the Decision 5 assertions unchanged (distinct `ChatOptions`, distinct `AdditionalProperties` dictionaries, same carrier value reference in both, authorizer before each transport). Under the current pin the forced-clone branch is therefore still taken and the carrier still survives it.
 - **The version-aware evidence above has NOT been re-derived.** Its dotnet/extensions source links are pinned to the 10.7.0 commit and describe that revision only; nobody has read the 10.8.3/10.9.0 sources to confirm the clone semantics are unchanged. Read that section as historical evidence for the original decision, not as a statement about the running package. The passing tests are the current evidence.
 - **The dedicated-client fallback named in Decision 7 is still not implemented.** No dedicated Development chat client type exists in the tree.
+
+## Re-verification 2026-09-02
+
+Dependabot's agent-ai-coupled bump (#32) moved `Microsoft.Extensions.AI` 10.8.3 -> 10.9.0 alongside `Microsoft.Agents.AI` 1.17.0 -> 1.19.0.
+
+- **Upstream source compared, not just tests.** `src/Libraries/Microsoft.Extensions.AI/ChatCompletion/FunctionInvokingChatClient.cs` and `src/Libraries/Microsoft.Extensions.AI.Abstractions/ChatCompletion/ChatOptions.cs` were fetched at dotnet/extensions tags `v10.8.3` and `v10.9.0` and are byte-identical (matching SHA-256), so the clone-and-reuse semantics Decision 5 relies on did not change in this bump.
+- **Carrier regression tests re-run and green** against Release binaries linked to 10.9.0 / 1.19.0: `DevelopmentCloudEgressAuthorizationTests` 19 total, 19 succeeded, 0 failed.
+- **MAF 1.18.0's "forward AG-UI context and additional properties" change is unrelated**: it concerns the AG-UI protocol wrapper, and the Development carrier is applied and enforced only on the `RuntimeChatClient` / `FunctionInvokingChatClient` path, which `ChatClientAgent` callers in this repository do not use.
+- The dedicated-client fallback named in Decision 7 remains unimplemented.
