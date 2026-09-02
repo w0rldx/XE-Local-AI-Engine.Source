@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -51,6 +52,38 @@ public sealed class DevWorkflowDevTaskTests
                                               "edges": []
                                             }
                                             """;
+
+    /// <summary>
+    ///     The X9 shape on an implementation node: the check routes its failure back at the node that produced what it
+    ///     was judging, which is a real Development task rather than a work session.
+    /// </summary>
+    private const string DevTaskFixLoop = """
+                                          {
+                                            "schemaVersion": 1,
+                                            "nodes": [
+                                              { "nodeKey": "implement", "nodeType": "DevTask", "label": "Implement", "maxAttempts": 2 },
+                                              { "nodeKey": "validate", "nodeType": "Tool", "label": "Validate", "retryTarget": "implement" }
+                                            ],
+                                            "edges": [{ "from": "implement", "to": "validate" }]
+                                          }
+                                          """;
+
+    /// <summary>
+    ///     What the validate node's own report says, in the shape <c>DevWorkflowToolCommands</c> writes it: the fix
+    ///     loop's routed payload carries only counts, so the REPORT is where the sentence a coder can act on lives.
+    /// </summary>
+    private const string FailingReport = """
+                                         {"passed":false,"nodeKey":"validate","attempt":1,"baseCommit":"0123456789abcdef",
+                                          "commandProfileId":"generic-git","commandProfileDigest":"digest",
+                                          "failureCode":"tests_failed",
+                                          "failureDetail":"The release test command reported failing tests.",
+                                          "commands":[{"commandId":"dotnet_test_release_no_build","exitCode":1,"completed":true,
+                                                       "outputTruncated":false,"durationMilliseconds":1200,
+                                                       "standardOutput":"Failed! TheThing.ShouldWork","standardError":"",
+                                                       "testOutcome":{"adapter":"dotnet","parsed":true,"discovered":15,"executed":15,
+                                                                      "passed":12,"failed":3,"parseFailureCode":null,"parseFailureDetail":null}}],
+                                          "completedAtUtc":0}
+                                         """;
 
     /// <summary>One implementation node with one re-attempt in hand.</summary>
     private const string SingleDevTask = """
@@ -362,6 +395,95 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>
+    ///     The fix loop can now FIX a development task. A routed re-attempt against a task the chain has already taken
+    ///     to <c>AwaitingApply</c> asks Dev Mode for a new coder round — with the routed node's own validation report as
+    ///     the review evidence — instead of re-succeeding in the same tick against work nothing asked to be changed.
+    ///     <para>
+    ///         Measured live on 2026-09-01 as the opposite: both routed re-attempts of the implementation node emitted
+    ///         <c>node.started</c> and <c>node.completed</c> in the same second, and all three validation reports
+    ///         carried the identical patch hash.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ARoutedReAttemptAsksAnApprovedTaskForANewRoundInsteadOfReSucceeding()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        await DriveToAwaitingApplyAsync(harness, projectId, taskId).ConfigureAwait(false);
+
+        // The round the change request asks for is held mid-flight, which is the only place its brief can be read: it
+        // is composed when the attempt starts, from what the transition that asked for it recorded.
+        harness.Chain.HoldNextAttempt();
+        harness.Tools.Answer("validate",
+            FakeDevWorkflowToolCommands.Failing() with
+            {
+                Report = Encoding.UTF8.GetBytes(FailingReport)
+            },
+            FakeDevWorkflowToolCommands.Passing());
+        var runId = await harness.StartRunAsync(DevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var routed = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Single(static entry => entry.EventType == "node.retry.routed");
+        AssertEx.Contains(AssertEx.NotNull(routed.DetailJson), "\"from\":\"validate\"");
+        AssertEx.Contains(AssertEx.NotNull(routed.DetailJson), "\"to\":\"implement\"");
+        AssertEx.Contains(harness.Chain.Actions,
+            static action => action == nameof(DevelopmentTaskStatus.ChangesRequested),
+            $"the routed re-attempt asked for rework and a genuinely new coder round ran from it: {string.Join(", ", harness.Chain.Actions)}");
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress,
+            (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status,
+            "the task left the approval it was sitting on and is being implemented again, rather than re-succeeding on the patch just refused.");
+
+        var feedback = AssertEx.NotNull((await ReadCoderSnapshotAsync(harness, taskId).ConfigureAwait(false)).PreviousRoundFeedback,
+            "the new round must be told what was wrong with the last one, or it re-implements blind.");
+        AssertEx.Contains(feedback, "dotnet_test_release_no_build");
+        AssertEx.Contains(feedback, "3 of 15 tests failed");
+        AssertEx.Contains(feedback,
+            "TheThing.ShouldWork",
+            StringComparison.Ordinal,
+            "the tail of the failing command's own output is what a coder can act on; the routed counts alone are not.");
+
+        // The second round lands where the first did, and the node run settles on ITS attempt rather than asking again:
+        // the change request is one-shot per attempt, keyed on the operation the transition was written under.
+        await LandTheHeldAttemptAsync(harness, taskId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
+        AssertEx.Equal(expected: 2, implemented.Attempt);
+        AssertEx.Contains(AssertEx.NotNull(implemented.OutputJson), "\"taskStatus\":\"AwaitingApply\"");
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
+    ///     A task that has spent every review round is stood down where the reason is still legible, instead of being
+    ///     driven through a whole coder attempt whose only possible end is Dev Mode blocking it at the review hop. The
+    ///     change request itself charges no round — rounds are spent ENTERING review, and this transition never does.
+    /// </summary>
+    [Test]
+    public async Task WithNoReviewRoundsLeft_ARoutedReAttemptStandsDownInsteadOfAskingForARoundThatCannotFinish()
+    {
+        await using var harness = NewHarness();
+        var (projectId, _) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var onlyOneRound = await AddTaskAsync(harness, projectId, "One review round only", maxReviewRounds: 1).ConfigureAwait(false);
+        await DriveToAwaitingApplyAsync(harness, projectId, onlyOneRound).ConfigureAwait(false);
+        harness.Tools.Answer("validate", FakeDevWorkflowToolCommands.Failing());
+        var runId = await harness.StartRunAsync(DevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+        await PinTaskAsync(harness, runId, "implement", onlyOneRound).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, implemented.Status, AssertEx.NotNull(implemented.OutputJson));
+        AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, implemented.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(implemented.TerminalReason), "review rounds");
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
+            (await ReadTaskAsync(harness, onlyOneRound).ConfigureAwait(false)).Status,
+            "a round it cannot finish is not asked for, so the task keeps the approval it earned.");
+    }
+
+    /// <summary>
     ///     A node run against a task the chain has ALREADY driven to <c>AwaitingApply</c> succeeds without asking it for
     ///     anything — the development state machine has no way back to <c>InProgress</c>, and the claim the node makes
     ///     is true either way. This is what a fix loop routed into an implementation node lands on.
@@ -640,7 +762,7 @@ public sealed class DevWorkflowDevTaskTests
         harness.ListDevelopmentTasksAsync(projectId);
 
     /// <summary>A second task on the project, through the internal capability decomposition uses.</summary>
-    private static async Task<Guid> AddTaskAsync(DevWorkflowHarness harness, Guid projectId, string title)
+    private static async Task<Guid> AddTaskAsync(DevWorkflowHarness harness, Guid projectId, string title, int maxReviewRounds = 3)
     {
         await using var scope = harness.Services.CreateAsyncScope();
         var created = await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>()
@@ -649,7 +771,8 @@ public sealed class DevWorkflowDevTaskTests
                                      Guid.NewGuid(),
                                      title,
                                      "It has to do the other thing.",
-                                     "[\"it does the other thing\"]"))
+                                     "[\"it does the other thing\"]",
+                                     maxReviewRounds))
                                  .ConfigureAwait(false);
         return created.TaskId ?? throw new AssertionException("The create answered without naming the task it created.");
     }
@@ -707,6 +830,24 @@ public sealed class DevWorkflowDevTaskTests
                              }
                              """))
                        .ConfigureAwait(false);
+    }
+
+    /// <summary>Walks the task to <c>AwaitingApply</c> out of band, which is where a routed re-attempt finds it.</summary>
+    private static async Task DriveToAwaitingApplyAsync(DevWorkflowHarness harness, Guid projectId, Guid taskId)
+    {
+        while ((await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status != DevelopmentTaskStatus.AwaitingApply)
+        {
+            _ = await harness.Chain.StartNextActionAsync(projectId, taskId, Guid.NewGuid()).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>The brief the task's latest coder attempt was composed from — the channel a rework reason travels down.</summary>
+    private static async Task<DevelopmentExecutionSnapshot> ReadCoderSnapshotAsync(DevWorkflowHarness harness, Guid taskId)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var attempts = await store.ListAttemptsAsync(taskId).ConfigureAwait(false);
+        return await store.GetExecutionSnapshotAsync(attempts[^1].Id).ConfigureAwait(false);
     }
 
     /// <summary>Lands the held attempt the way its runner would have, so the drain has nothing left to wait for.</summary>

@@ -331,7 +331,8 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
 
     private const int MaxDescribedPaths = 5;
 
-    private static string BuildPrompt(DevelopmentExecutionSnapshot snapshot,
+    /// <summary>Internal so the composition can be pinned directly; nothing outside this class calls it.</summary>
+    internal static string BuildPrompt(DevelopmentExecutionSnapshot snapshot,
         DevelopmentWorkspaceSession session,
         DevelopmentCommandProfile profile)
     {
@@ -340,6 +341,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         return string.Concat("Task: ", snapshot.Title,
             "\nRequirements:\n", snapshot.Requirements,
             "\nAcceptance criteria:\n", snapshot.AcceptanceCriteriaJson,
+            Feedback(snapshot.PreviousRoundFeedback),
             "\nBase commit: ", session.BaseCommit,
             "\nCommand profile: ", profile.ProfileId,
             "\nValid run_command ids: ", string.Join(", ", profile.Commands.Select(static command => command.CommandId)),
@@ -357,6 +359,16 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
             "\n- commandIds must contain only ids you actually ran with run_command in this attempt.",
             "\n- summary must be non-empty.");
     }
+
+    /// <summary>
+    ///     What the last round was told to fix, when there was one. Without this a rework round is handed the SAME
+    ///     three fields the round before it was handed, and re-implements blind — which is true of an ordinary Dev Mode
+    ///     ChangesRequested round as much as of a workflow's routed one.
+    /// </summary>
+    private static string Feedback(string? previousRound) =>
+        string.IsNullOrWhiteSpace(previousRound)
+            ? string.Empty
+            : string.Concat("\nFeedback from the previous round:\n", previousRound);
 
     /// <summary>The workspace policy's message, or the generic line when it cannot be shown safely.</summary>
     private static string PolicyReason(DevelopmentWorkspaceSecurityException exception)

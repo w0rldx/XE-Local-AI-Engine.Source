@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 public sealed partial class DevelopmentStore
@@ -68,8 +70,49 @@ public sealed partial class DevelopmentStore
             // The attempt's own immutable snapshot wins. Falling back to the project only when the attempt has none
             // keeps attempts that predate the column behaving exactly as before, and lets a project whose profile was
             // backfilled after the attempt started still resolve one.
-            snapshot.Attempt.CommandProfileJson ?? snapshot.Project.CommandProfileJson);
+            snapshot.Attempt.CommandProfileJson ?? snapshot.Project.CommandProfileJson,
+            await PreviousRoundFeedbackAsync(snapshot.Task.Id, cancellationToken).ConfigureAwait(false));
     }
+
+    /// <summary>
+    ///     The reason the last request for changes on this task gave, so the next coder round is told what was wrong
+    ///     with the last one instead of being asked for the same work again.
+    ///     <para>
+    ///         One row, off the task's own append-only log: the most recent event that CARRIES a reason and could have
+    ///         moved the task, which is either the reviewer's <c>ReviewFinalized</c> or a workflow's own
+    ///         <c>TaskTransitioned</c>. Its recorded status is then what decides — an event that carries a reason but
+    ///         did not ask for rework (a block, a validation recovery) is not feedback and answers nothing.
+    ///     </para>
+    /// </summary>
+    private async Task<string?> PreviousRoundFeedbackAsync(Guid taskId, CancellationToken cancellationToken)
+    {
+        var latest = await _dbContext.DevelopmentEvents.AsNoTracking()
+                                     .Where(entity => entity.TaskId == taskId
+                                                      && entity.DetailJson != null
+                                                      && (entity.EventType == "TaskTransitioned" || entity.EventType == "ReviewFinalized"))
+                                     .OrderByDescending(entity => entity.Sequence)
+                                     .FirstOrDefaultAsync(cancellationToken)
+                                     .ConfigureAwait(false);
+        if (latest is not { DetailJson: { } detail, ResultMetadataJson: { } metadata })
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<DevelopmentOperationResult>(metadata, JsonOptions) is { Status: nameof(DevelopmentTaskStatus.ChangesRequested) }
+                ? JsonSerializer.Deserialize<ReasonDetail>(detail, JsonOptions)?.Reason
+                : null;
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            // A row this build cannot read is a row with no feedback in it. The attempt still runs.
+            return null;
+        }
+    }
+
+    /// <summary>The one shape every reason-carrying event detail in this store is written in.</summary>
+    private sealed record ReasonDetail(string? Reason);
 
     public async Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default)
     {

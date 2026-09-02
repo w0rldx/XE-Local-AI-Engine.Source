@@ -32,7 +32,14 @@ public sealed partial class DevelopmentStore(NodeChatDbContext dbContext, TimePr
             [DevelopmentTaskStatus.Validation] = [DevelopmentTaskStatus.InProgress, DevelopmentTaskStatus.InReview, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
             [DevelopmentTaskStatus.InReview] = [DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.AwaitingApply, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
             [DevelopmentTaskStatus.ChangesRequested] = [DevelopmentTaskStatus.InProgress, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
-            [DevelopmentTaskStatus.AwaitingApply] = [DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled]
+
+            // ChangesRequested is reachable from AwaitingApply because a workflow's fix loop can route a downstream
+            // validation failure back at an implementation node whose task is already approved: without this edge the
+            // re-attempt has nowhere to go, re-succeeds in the same tick, and the loop burns its budget in seconds
+            // without ever asking for a different patch. Completed is deliberately still absent — apply completion is
+            // the explicit apply port's, not a generic transition's.
+            [DevelopmentTaskStatus.AwaitingApply] =
+                [DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled]
         };
 
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));

@@ -188,7 +188,14 @@ public sealed record DevelopmentExecutionSnapshot(
     string ModelId,
     string Provider,
     long AttemptVersion,
-    string? CommandProfileJson);
+    string? CommandProfileJson,
+
+    /// <summary>
+    ///     What the last request for changes on this task said, or nothing when it has never been asked for rework.
+    ///     Resolved from the task's own event log rather than from a column, so it costs no migration and reads the same
+    ///     sentence a reviewer wrote and a workflow's fix loop wrote.
+    /// </summary>
+    string? PreviousRoundFeedback = null);
 
 public sealed record DevelopmentProjectSnapshot(
     Guid Id,
