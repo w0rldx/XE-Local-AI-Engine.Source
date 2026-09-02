@@ -257,6 +257,30 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.Equal("8", spec.Arguments[IndexOf(spec.Arguments, "-tb") + 1]);
     }
 
+    /// <summary>
+    ///     Placement must follow the binary actually launched, not the selector. A recorded managed source build is
+    ///     authoritative and is served even when the requested variant disagrees — which happens whenever the cached
+    ///     signal has not been seeded yet (a spawn beating startup, or a build another checkout adopted). Every GPU
+    ///     argument is gated on <c>variant != Cpu</c> in <see cref="LlamaServerLaunchProjection" />, so keying the spawn
+    ///     off the selector runs a CUDA build with no offload at all on the Cpu row below.
+    /// </summary>
+    [Test]
+    [Arguments(GpuVariant.Cpu)]
+    [Arguments(GpuVariant.Vulkan)]
+    public async Task EnsureRunning_ServedBuildOutranksSelectedVariant_EmitsGpuPlacement(GpuVariant selected)
+    {
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(selected),
+            binaryManager: new FakeBinaryManager(GpuVariant.Cuda));
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.True(spec!.Arguments.Contains("--fit"), "A served GPU build must hand placement to auto-fit.");
+        AssertEx.False(spec.Arguments.Contains("-t"), "A served GPU build must not take the CPU thread policy.");
+    }
+
     [Test]
     public async Task EnsureRunning_FrozenProfileReplay_ReplaysVerbatim_NoPolicyDoubleContext()
     {

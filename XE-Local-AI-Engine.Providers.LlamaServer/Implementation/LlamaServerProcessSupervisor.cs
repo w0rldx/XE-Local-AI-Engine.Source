@@ -995,6 +995,15 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
 
         var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
+
+        // Everything below keys off `variant`: the VRAM admission gate, the placement sniffer, the launch policy and,
+        // through LlamaServerLaunchProjection, every GPU argument (it gates -ngl/--fit/-ctk on `variant != Cpu`). A
+        // serve can hand back a build of a DIFFERENT variant than was asked for — the managed source-build record is
+        // authoritative and wins when the selector's cached signal has not been seeded yet — so follow the binary that
+        // is actually being launched. Selecting Cpu and serving a CUDA build would otherwise spawn it with no offload
+        // at all. The admission identity check above deliberately stays on the SELECTED variant: that is the variant
+        // the admission was granted against.
+        variant = binary.Variant;
         var capabilityManifest = await _capabilityManifestProbe.GetManifestAsync(binary, ct).ConfigureAwait(false);
         if (!capabilityManifest.ProbeSucceeded)
         {
