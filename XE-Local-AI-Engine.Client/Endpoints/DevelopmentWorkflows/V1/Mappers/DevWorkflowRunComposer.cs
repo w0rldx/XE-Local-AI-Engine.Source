@@ -244,9 +244,11 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
     }
 
     /// <summary>
-    ///     Which node runs consumed an artifact that has since been superseded. Nothing marks staleness before Slice D,
-    ///     so the common answer is "none" and costs one artifact read — the per-node read only happens once a stale
-    ///     row actually exists.
+    ///     Which node runs consumed an artifact that has since been superseded. Staleness IS written today, by the two
+    ///     callers that supersede an artifact — an agent-node promotion and a Tool node's report, both through
+    ///     <c>MarkDependentsStaleAsync</c> — so this answers a real question rather than a reserved one. It is still
+    ///     "none" for most runs, and costs one artifact read to say so: the per-node read only happens once a stale row
+    ///     actually exists.
     /// </summary>
     private async Task<IReadOnlySet<Guid>> ResolveStaleInputsAsync(Guid runId,
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
