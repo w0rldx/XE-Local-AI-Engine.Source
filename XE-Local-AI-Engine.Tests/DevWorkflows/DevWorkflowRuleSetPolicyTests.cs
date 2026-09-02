@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -140,6 +141,18 @@ public sealed class DevWorkflowRuleSetPolicyTests
         var toolRules = await harness.CreateRuleSetAsync("Sandbox rules", "Run the fast suite only.", """{"projectIds":[],"nodeTypes":["Tool"]}""")
                                      .ConfigureAwait(false);
 
+        // The project axis on the clone side, both ways. A clone inherits its PRODUCER's project rather than re-deriving
+        // one, so a rule set scoped to that project has to reach it and one scoped to another must not — the half that
+        // an all-empty scope would have passed without ever being exercised.
+        var projectRules = await harness.CreateRuleSetAsync("Project sandbox rules",
+                                            "Never run the slow suite here.",
+                                            $$"""{"projectIds":["{{ProjectId}}"],"nodeTypes":["Tool"]}""")
+                                        .ConfigureAwait(false);
+        _ = await harness.CreateRuleSetAsync("Another project's sandbox rules",
+                             "Run everything.",
+                             $$"""{"projectIds":["{{OtherProjectId}}"],"nodeTypes":["Tool"]}""")
+                         .ConfigureAwait(false);
+
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionSubtree, developmentProjectId: ProjectId).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
         _ = await harness.SaveAgentArtifactAsync(runId,
@@ -154,9 +167,39 @@ public sealed class DevWorkflowRuleSetPolicyTests
         var clonedAgent = await harness.ReadNodeRunAsync(runId, "implement#alpha").ConfigureAwait(false);
 
         var onTheTool = DevWorkflowRulePolicyResolver.Read(clonedTool.PolicyResolutionJson);
-        AssertEx.Equal(expected: 1, onTheTool.Count, "the cloned Tool node resolved against its OWN node type.");
-        AssertEx.Equal(toolRules.Id, onTheTool[0].Id);
+        AssertEx.Equal("Project sandbox rules, Sandbox rules",
+            string.Join(", ", onTheTool.Select(entry => entry.Name)),
+            "the cloned Tool node resolved against its OWN node type and against the project it inherited from its producer — and NOT against another project's rule set.");
+        AssertEx.True(onTheTool.Any(entry => entry.Id == toolRules.Id) && onTheTool.Any(entry => entry.Id == projectRules.Id));
         AssertEx.Empty(DevWorkflowRulePolicyResolver.Read(clonedAgent.PolicyResolutionJson), "and the cloned Agent node beside it recorded nothing, because nothing applied.");
+    }
+
+    /// <summary>
+    ///     Policy text is TRUNCATED, visibly, rather than dropped. Two long rule sets split the room left the way the
+    ///     upstream artifacts do, so a long first policy cannot crowd out the one after it, and each says in the
+    ///     objective that it was cut — an agent handed half a policy has to be able to tell that the rest exists.
+    /// </summary>
+    [Test]
+    public async Task PolicyTextTooLongForTheObjective_IsTruncatedWithAMarkerRatherThanSilentlyDropped()
+    {
+        await using var harness = new DevWorkflowHarness();
+        _ = await harness.CreateRuleSetAsync("Alpha rules", "ALPHA-HEAD " + new string('a', 4096), """{"projectIds":[],"nodeTypes":[]}""").ConfigureAwait(false);
+        _ = await harness.CreateRuleSetAsync("Bravo rules", "BRAVO-HEAD " + new string('b', 4096), """{"projectIds":[],"nodeTypes":[]}""").ConfigureAwait(false);
+
+        var runId = await harness.StartRunAsync(SingleAgent, developmentProjectId: ProjectId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var objective = harness.Agent.Objectives.Single();
+
+        AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
+            $"the objective is {objective.Length} characters, past the {DevWorkflowAgentExecutor.MaxObjectiveCharacters} the work-session layer accepts.");
+        AssertEx.Contains(objective, "## Policy: Alpha rules");
+        AssertEx.Contains(objective, "## Policy: Bravo rules", message: "the fair share leaves room for the SECOND rule set: a long first one must not crowd it out.");
+        AssertEx.Contains(objective, "ALPHA-HEAD", message: "what did fit is the head of the document, not an empty heading.");
+        AssertEx.Contains(objective, "BRAVO-HEAD");
+        AssertEx.Equal(expected: 2,
+            objective.Split("[policy text truncated:", StringSplitOptions.None).Length - 1,
+            "both cut policies say so in the objective — a truncation an agent cannot see is one it will treat as the whole rule.");
     }
 
     private static DevWorkflowRuleSetSummary Summary(string name, string scopeJson) =>

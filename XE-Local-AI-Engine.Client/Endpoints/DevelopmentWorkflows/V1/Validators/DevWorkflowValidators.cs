@@ -120,8 +120,13 @@ public sealed class CreateDevWorkflowRuleSetRequestValidator : Validator<CreateD
     ///     The node-type axis is a CLOSED token set. A token nothing parses could only ever match nothing, silently —
     ///     the same trap that got <c>languages</c> and <c>taskTypes</c> dropped — so it is refused at the door.
     /// </summary>
+    /// <summary>
+    ///     Matched against the NAMES, not through <c>Enum.TryParse</c>: that also accepts the underlying numbers, so
+    ///     "3" and "-1" would be stored verbatim and then never match anything at resolution time — precisely the
+    ///     silent-no-op trap this check exists to close.
+    /// </summary>
     internal static bool HasOnlyKnownNodeTypes(DevWorkflowRuleScope? scope) =>
-        scope?.NodeTypes is not { } nodeTypes || nodeTypes.All(static nodeType => Enum.TryParse<DevWorkflowNodeType>(nodeType, ignoreCase: true, out _));
+        scope?.NodeTypes is not { } nodeTypes || nodeTypes.All(static nodeType => Enum.GetNames<DevWorkflowNodeType>().Contains(nodeType, StringComparer.OrdinalIgnoreCase));
 
     internal static string UnknownNodeTypeMessage { get; } = $"scope.nodeTypes must contain only {string.Join(", ", Enum.GetNames<DevWorkflowNodeType>())}.";
 }
@@ -261,8 +266,13 @@ internal static class DevWorkflowRequestLimits
 
     public const int MaxRuleSetDescriptionLength = 1024;
 
-    /// <summary>A rule set is a whole markdown document, so it gets the same ceiling a gate payload has.</summary>
-    public const int MaxRuleSetBodyLength = 262_144;
+    /// <summary>
+    ///     A rule set body, bounded by what an objective can actually carry. Deliberately well under
+    ///     <c>DevWorkflowAgentExecutor.MaxObjectiveCharacters</c> (7000), because a body accepted here that the
+    ///     objective then has to cut is policy the operator believed was in force and the agent never fully read. A
+    ///     document longer than this wants splitting into scoped rule sets, which is the whole point of the scope.
+    /// </summary>
+    public const int MaxRuleSetBodyLength = 4096;
 
     public const int MaxRunPageSize = 200;
     public const int MaxEventPageSize = 500;
