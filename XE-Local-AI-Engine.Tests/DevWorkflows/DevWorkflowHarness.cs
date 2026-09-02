@@ -284,7 +284,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
                                  definition.Version,
                                  definition.GraphHash,
                                  graphJson,
-                                 Seeds(graphJson, workItem)))
+                                 await SeedsAsync(store, graphJson, workItem).ConfigureAwait(false)))
                              .ConfigureAwait(false);
         return run.Id;
     }
@@ -298,14 +298,16 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     ///         still has to fail cleanly at its first tick.
     ///     </para>
     /// </summary>
-    private IReadOnlyList<DevWorkflowNodeRunSeed>? Seeds(string graphJson, DevWorkflowWorkItemSnapshot workItem)
+    private async Task<IReadOnlyList<DevWorkflowNodeRunSeed>?> SeedsAsync(IDevWorkflowStore store, string graphJson, DevWorkflowWorkItemSnapshot workItem)
     {
+        var enabledRuleSets = await store.ListEnabledRuleSetsAsync().ConfigureAwait(false);
         try
         {
             return DevWorkflowRunSeeds.Compose(DevWorkflowGraph.Parse(graphJson),
                 workItem,
                 inputsJson: null,
-                Services.GetRequiredService<IOptions<DevWorkflowOptions>>().Value.MaxNodeRunsPerRun);
+                Services.GetRequiredService<IOptions<DevWorkflowOptions>>().Value.MaxNodeRunsPerRun,
+                enabledRuleSets);
         }
         catch (DevWorkflowValidationException)
         {
@@ -331,6 +333,21 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     {
         await using var scope = Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ArchiveDefinitionAsync(definitionId).ConfigureAwait(false);
+    }
+
+    /// <summary>A rule set the resolver will see, created before the run that has to resolve against it.</summary>
+    public async Task<DevWorkflowRuleSetSnapshot> CreateRuleSetAsync(string name, string body, string scopeJson, bool enabled = true)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
+                          .CreateRuleSetAsync(new CreateDevWorkflowRuleSetCommand(Guid.NewGuid(), name, body, scopeJson, Enabled: enabled))
+                          .ConfigureAwait(false);
+    }
+
+    public async Task DeleteRuleSetAsync(Guid ruleSetId)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().DeleteRuleSetAsync(ruleSetId).ConfigureAwait(false);
     }
 
     /// <summary>Runs one call against the scoped run service, which is how every endpoint will reach it.</summary>

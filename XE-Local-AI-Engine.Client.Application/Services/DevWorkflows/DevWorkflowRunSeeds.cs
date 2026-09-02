@@ -22,13 +22,20 @@ internal static class DevWorkflowRunSeeds
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    /// <summary>
+    ///     <paramref name="enabledRuleSets" /> is read once by the CALLER, which is the only thing here that touches
+    ///     the store — keeping this composition static and testable, exactly as <c>maxNodeRunsPerRun</c> is passed in
+    ///     as a plain value rather than looked up.
+    /// </summary>
     public static IReadOnlyList<DevWorkflowNodeRunSeed> Compose(DevWorkflowGraph graph,
         DevWorkflowWorkItemSnapshot workItem,
         string? inputsJson,
-        int maxNodeRunsPerRun)
+        int maxNodeRunsPerRun,
+        IReadOnlyList<DevWorkflowRuleSetSummary> enabledRuleSets)
     {
         ArgumentNullException.ThrowIfNull(graph);
         ArgumentNullException.ThrowIfNull(workItem);
+        ArgumentNullException.ThrowIfNull(enabledRuleSets);
 
         var entryKeys = graph.EntryNodeKeys.Where(key => !graph.TemplateKeys.Contains(key)).ToHashSet(StringComparer.Ordinal);
 
@@ -43,7 +50,12 @@ internal static class DevWorkflowRunSeeds
                              node.MaxAttempts,
                              node.AgentDefinitionId,
                              workItem.DevelopmentProjectId,
-                             entryKeys.Contains(node.NodeKey) ? entryInput : null))
+                             entryKeys.Contains(node.NodeKey) ? entryInput : null,
+
+                             // Recorded on EVERY node run, not only the entry ones and not only the agent ones: the
+                             // resolution is what the node-run detail answers "which rules applied" with, and a row
+                             // that skipped it would read as "none did".
+                             DevWorkflowRulePolicyResolver.Compose(enabledRuleSets, workItem.DevelopmentProjectId, node.NodeType)))
                          .ToList();
 
         return seeds.Count > maxNodeRunsPerRun

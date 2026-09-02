@@ -441,6 +441,34 @@ internal sealed class DevWorkflowAgentExecutor
         var objective = new StringBuilder();
         _ = objective.AppendLine(node.Instructions is { Length: > 0 } instructions ? instructions : $"Carry out the '{node.Label}' step of this development workflow.");
 
+        // The scoped rule sets, between the node's own instructions and what was asked, per §5.6.1a. Their text counts
+        // against the same budget everything else does: policy that pushed the objective over the limit would silently
+        // crowd out the request it is supposed to govern.
+        //
+        // Best-effort by design. A rule set deleted since materialization is SKIPPED rather than failing the dispatch —
+        // the node-run's recorded {id, name, contentSha256} is the audit, and it survives the document either way.
+        foreach (var applied in DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson))
+        {
+            DevWorkflowRuleSetSnapshot document;
+            try
+            {
+                document = await store.GetRuleSetAsync(applied.Id, cancellationToken).ConfigureAwait(false);
+            }
+            catch (DevWorkflowNotFoundException)
+            {
+                continue;
+            }
+
+            // The name is the one RECORDED at materialization, not the one the row carries now: it is what the audit
+            // says applied, and rendering a since-renamed heading would put a second story in the objective.
+            var policy = string.Create(CultureInfo.InvariantCulture,
+                $"{Environment.NewLine}## Policy: {applied.Name}{Environment.NewLine}{document.Body}{Environment.NewLine}");
+            if (objective.Length + policy.Length <= MaxObjectiveCharacters)
+            {
+                _ = objective.Append(policy);
+            }
+        }
+
         if (ReadInput(nodeRun.InputJson) is { Count: > 0 } input)
         {
             _ = objective.AppendLine().AppendLine("## What was asked");

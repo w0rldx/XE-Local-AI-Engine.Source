@@ -140,6 +140,10 @@ internal sealed class DevWorkflowMaterializer
         }
 
         var expansion = Compose(graph, run.GraphJson, node, materialization, tasks);
+
+        // Read once for this expansion, after the decision to expand has been made: every clone's resolution comes off
+        // the same list, and a tick that expands nothing never touches the table at all.
+        var enabledRuleSets = await store.ListEnabledRuleSetsAsync(cancellationToken).ConfigureAwait(false);
         _ = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(run.Id,
                                DevWorkflowVersions.Any,
                                operationId,
@@ -151,7 +155,11 @@ internal sealed class DevWorkflowMaterializer
                                        clone.Node.AgentDefinitionId,
                                        producer.DevelopmentProjectId,
                                        clone.InputJson,
-                                       PolicyResolutionJson: null,
+
+                                       // The clone inherits the producer's project, so it resolves against the same
+                                       // project axis its parent did — and against its OWN node type, which is what
+                                       // makes a rule set scoped to Tool nodes reach a materialized Tool clone.
+                                       DevWorkflowRulePolicyResolver.Compose(enabledRuleSets, producer.DevelopmentProjectId, clone.Node.NodeType),
                                        producer.Id,
                                        clone.Index))
                                ],
