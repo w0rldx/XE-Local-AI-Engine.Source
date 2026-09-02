@@ -227,10 +227,18 @@ internal sealed class DevelopmentManagementService(
         // that was offline at boot becomes usable as soon as it is back — no restart. A no-op once the profile exists.
         project = await _profileBackfill.EnsureAsync(project, cancellationToken).ConfigureAwait(false);
         var tasks = await _store.ListTasksAsync(projectId, cancellationToken).ConfigureAwait(false);
+
+        // ONE query for every task's workflow pointer, not one per task: this read always has the whole task list, so
+        // asking the single-task question in a loop is a round trip per row on the page that renders most often.
+        var workflowRunIds = await _workflows.FindRunIdsForDevelopmentTasksAsync([.. tasks.Select(static task => task.Id)], cancellationToken)
+                                             .ConfigureAwait(false);
         var aggregates = new List<DevelopmentTaskAggregate>(tasks.Count);
         foreach (var task in tasks)
         {
-            aggregates.Add(await GetTaskAsync(projectId, task.Id, cancellationToken).ConfigureAwait(false));
+            aggregates.Add(new DevelopmentTaskAggregate(task,
+                await _store.ListAttemptsAsync(task.Id, cancellationToken).ConfigureAwait(false),
+                await _store.ListArtifactsAsync(task.Id, cancellationToken).ConfigureAwait(false),
+                workflowRunIds.TryGetValue(task.Id, out var runId) ? runId : null));
         }
 
         return new DevelopmentProjectAggregate(project,

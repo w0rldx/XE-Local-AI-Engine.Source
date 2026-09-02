@@ -730,6 +730,16 @@ public interface IDevWorkflowStore
     Task<Guid?> FindRunIdForDevelopmentTaskAsync(Guid developmentTaskId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     The same question for a whole task list, in ONE query. The project page asks it once per task otherwise,
+    ///     which is a round trip per row on the one read that always has every row.
+    ///     <para>
+    ///         Same CONTRACT as the single-task read: the latest node run naming a task answers for it, and a task no
+    ///         workflow owns is simply absent from the dictionary.
+    ///     </para>
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, Guid>> FindRunIdsForDevelopmentTasksAsync(IReadOnlyList<Guid> developmentTaskIds, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Records an artifact, resolving its lineage by <c>(run, producing node key, name)</c>: the same node key
     ///     appending again versions the same lineage, and materialized siblings under one template get distinct ones.
     ///     Deleting the superseded version's bytes is the caller's job.

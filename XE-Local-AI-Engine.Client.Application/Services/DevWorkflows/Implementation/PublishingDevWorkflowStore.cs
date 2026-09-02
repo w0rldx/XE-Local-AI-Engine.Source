@@ -138,6 +138,10 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner, IDevWo
     public Task<Guid?> FindRunIdForDevelopmentTaskAsync(Guid developmentTaskId, CancellationToken cancellationToken = default) =>
         _inner.FindRunIdForDevelopmentTaskAsync(developmentTaskId, cancellationToken);
 
+    public Task<IReadOnlyDictionary<Guid, Guid>> FindRunIdsForDevelopmentTasksAsync(IReadOnlyList<Guid> developmentTaskIds,
+        CancellationToken cancellationToken = default) =>
+        _inner.FindRunIdsForDevelopmentTasksAsync(developmentTaskIds, cancellationToken);
+
     public Task<DevWorkflowMutationResult> AppendArtifactAsync(AppendDevWorkflowArtifactCommand command, CancellationToken cancellationToken = default) =>
         PublishAsync(_inner.AppendArtifactAsync(command, cancellationToken), DevWorkflowChangeKind.Artifact, cancellationToken);
 

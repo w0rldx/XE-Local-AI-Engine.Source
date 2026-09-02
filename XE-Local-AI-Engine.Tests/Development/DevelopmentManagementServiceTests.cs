@@ -197,6 +197,55 @@ public sealed class DevelopmentManagementServiceTests
         AssertEx.Equal("Attempt", result.Action);
     }
 
+    /// <summary>
+    ///     The project read always has the whole task list, so it asks for every task's workflow pointer ONCE. Asking
+    ///     per task was a round trip per row on the page that renders most often, and the single-task read still
+    ///     answers the single-task question.
+    /// </summary>
+    [Test]
+    public async Task GetProject_ResolvesEveryTasksWorkflowRunIdInOneStoreCall()
+    {
+        var projectId = Guid.NewGuid();
+        var operatorDriven = Guid.NewGuid();
+        var workflowDriven = Guid.NewGuid();
+        var alsoOperatorDriven = Guid.NewGuid();
+        var runId = Guid.NewGuid();
+        var store = Substitute.For<IDevelopmentStore>();
+        store.GetProjectAsync(projectId, Arg.Any<CancellationToken>()).Returns(ProjectSnapshot(projectId));
+        store.ListTasksAsync(projectId, Arg.Any<CancellationToken>())
+             .Returns([
+                 TaskSnapshot(projectId, operatorDriven),
+                 TaskSnapshot(projectId, workflowDriven),
+                 TaskSnapshot(projectId, alsoOperatorDriven)
+             ]);
+        store.ListAttemptsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<DevelopmentAttemptSnapshot>());
+        store.ListArtifactsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<DevelopmentArtifactSnapshot>());
+        store.ListEventsAsync(projectId, Arg.Any<CancellationToken>()).Returns(Array.Empty<DevelopmentEventSnapshot>());
+
+        var workflows = Substitute.For<IDevWorkflowStore>();
+        workflows.FindRunIdsForDevelopmentTasksAsync(Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
+                 .Returns(new Dictionary<Guid, Guid>
+                 {
+                     [workflowDriven] = runId
+                 });
+
+        var service = CreateService(store,
+            Substitute.For<IDevelopmentCoordinator>(),
+            Substitute.For<IDevelopmentAttemptExecutionSupervisor>(),
+            workflows: workflows);
+
+        var project = await service.GetProjectAsync(projectId);
+
+        AssertEx.Equal(3, project.Tasks.Count);
+        AssertEx.Null(project.Tasks[0].WorkflowRunId);
+        AssertEx.Equal(runId, project.Tasks[1].WorkflowRunId!.Value);
+        AssertEx.Null(project.Tasks[2].WorkflowRunId);
+        await workflows.Received(1)
+                       .FindRunIdsForDevelopmentTasksAsync(Arg.Is<IReadOnlyList<Guid>>(ids => ids.Count == 3 && ids.Contains(workflowDriven)),
+                           Arg.Any<CancellationToken>());
+        await workflows.DidNotReceive().FindRunIdForDevelopmentTaskAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
     /// <summary>A Ready task on a project whose coder model is <paramref name="coderModelId" />, stubbed only as far as the model gate.</summary>
     private static (IDevelopmentStore Store, IDevelopmentCoordinator Coordinator, IDevelopmentRepositoryBindingService Bindings, Guid ProjectId, Guid TaskId)
         ExternalModelFixture(string coderModelId, DevelopmentEgressPolicy egressPolicy)
@@ -257,7 +306,8 @@ public sealed class DevelopmentManagementServiceTests
         IDevelopmentAttemptExecutionSupervisor supervisor,
         IDevelopmentRepositoryBindingService? repositoryBindings = null,
         Guid? selectedFolderId = null,
-        IModelTrustResolver? modelTrustResolver = null) =>
+        IModelTrustResolver? modelTrustResolver = null,
+        IDevWorkflowStore? workflows = null) =>
         new(store,
             coordinator,
             supervisor,
@@ -274,7 +324,7 @@ public sealed class DevelopmentManagementServiceTests
             Substitute.For<IDevelopmentTemplateStore>(),
 
             // No workflow drives these tasks: the substitute answers null, which is the ordinary operator-driven case.
-            Substitute.For<IDevWorkflowStore>(),
+            workflows ?? Substitute.For<IDevWorkflowStore>(),
 
             // Workflows ON, so the apply-ownership guard is the one under test wherever these tests reach it.
             Options.Create(new DevWorkflowOptions
