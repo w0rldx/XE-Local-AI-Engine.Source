@@ -162,7 +162,15 @@ public sealed record DevelopmentEventSnapshot(
     long OccurredAtUtc,
     Guid? OperationId,
     string? OperationPhase,
-    string? Outcome);
+    string? Outcome,
+
+    /// <summary>
+    ///     The sentence the event was written with, when it carries one — why a task was blocked, why validation
+    ///     failed, why a workflow's fix loop sent an approved task back. The only member of the detail document that
+    ///     leaves this store: it is authored or sanitized and bounded at every write site, which the rest of the
+    ///     document is not.
+    /// </summary>
+    string? Reason = null);
 
 public sealed record DevelopmentExecutionSnapshot(
     Guid ProjectId,

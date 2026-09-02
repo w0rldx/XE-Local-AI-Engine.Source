@@ -10,21 +10,25 @@ public sealed partial class DevelopmentStore
 {
     public async Task<IReadOnlyList<DevelopmentEventSnapshot>> ListEventsAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
-        return await _dbContext.DevelopmentEvents.AsNoTracking()
-                               .Where(entity => entity.ProjectId == projectId)
-                               .OrderBy(entity => entity.Sequence)
-                               .Select(entity => new DevelopmentEventSnapshot(entity.Id,
-                                   entity.ProjectId,
-                                   entity.TaskId,
-                                   entity.AttemptId,
-                                   entity.Sequence,
-                                   entity.EventType,
-                                   entity.OccurredAtUtc,
-                                   entity.OperationId,
-                                   entity.OperationPhase,
-                                   entity.Outcome))
-                               .ToListAsync(cancellationToken)
-                               .ConfigureAwait(false);
+        // Materialized rather than projected, because the reason lives in an ENCRYPTED column: the decryption
+        // interceptor runs on materialization, and a projection straight to the bytes would hand back ciphertext.
+        var events = await _dbContext.DevelopmentEvents.AsNoTracking()
+                                     .Where(entity => entity.ProjectId == projectId)
+                                     .OrderBy(entity => entity.Sequence)
+                                     .ToListAsync(cancellationToken)
+                                     .ConfigureAwait(false);
+        return events.Select(static entity => new DevelopmentEventSnapshot(entity.Id,
+                         entity.ProjectId,
+                         entity.TaskId,
+                         entity.AttemptId,
+                         entity.Sequence,
+                         entity.EventType,
+                         entity.OccurredAtUtc,
+                         entity.OperationId,
+                         entity.OperationPhase,
+                         entity.Outcome,
+                         ReasonOf(entity.DetailJson)))
+                     .ToArray();
     }
 
     public async Task<DevelopmentExecutionSnapshot> GetExecutionSnapshotAsync(Guid attemptId, CancellationToken cancellationToken = default)
@@ -109,12 +113,34 @@ public sealed partial class DevelopmentStore
         {
             return JsonSerializer.Deserialize<DevelopmentOperationResult>(metadata, JsonOptions)
                 is { Status: nameof(DevelopmentTaskStatus.ChangesRequested) or nameof(DevelopmentTaskStatus.InProgress) }
-                ? JsonSerializer.Deserialize<ReasonDetail>(detail, JsonOptions)?.Reason
+                ? ReasonOf(detail)
                 : null;
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
             // A row this build cannot read is a row with no feedback in it. The attempt still runs.
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     The sentence an event detail carries, or nothing. Read with the store's own options, which are
+    ///     case-insensitive — so the PascalCase rows written before the store re-cased its documents still answer.
+    /// </summary>
+    private static string? ReasonOf(byte[]? detailJson)
+    {
+        if (detailJson is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<ReasonDetail>(detailJson, JsonOptions)?.Reason;
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            // A detail shape this build cannot read is one with no reason in it. The event still lists.
             return null;
         }
     }

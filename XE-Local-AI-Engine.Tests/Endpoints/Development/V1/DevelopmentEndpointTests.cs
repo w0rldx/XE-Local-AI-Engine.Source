@@ -86,6 +86,44 @@ public sealed class DevelopmentEndpointTests
     }
 
     /// <summary>
+    ///     An event that was written with a reason says it on the wire. An operator could see THAT a workflow's fix
+    ///     loop sent an approved task back — the transition is in the feed — but not why, because the only place the
+    ///     sentence lived was a detail document that never left the store.
+    /// </summary>
+    [Test]
+    public async Task ListEvents_CarriesTheReasonAnEventWasWrittenWithAndNothingWhenItHasNone()
+    {
+        const string Reason = "Node 'validate' rejected this implementation: 3 of 15 tests failed.";
+        var service = Substitute.For<IDevelopmentManagementService>();
+        service.ListEventsAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns([Event("TaskTransitioned", Reason), Event("AttemptStarted", reason: null)]);
+        await using var factory = EnabledFactory(service);
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/local/v1/development/projects/{ProjectId}/events");
+        factory.AddNodeBearerToken(request);
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Contains(json, "3 of 15 tests failed");
+        AssertEx.Contains(json, "\"reason\":null", StringComparison.OrdinalIgnoreCase, "an event with no reason says so rather than inheriting the one before it.");
+    }
+
+    private static DevelopmentEventSnapshot Event(string eventType, string? reason) =>
+        new(Guid.NewGuid(),
+            ProjectId,
+            TaskId,
+            AttemptId: null,
+            Sequence: 1,
+            eventType,
+            OccurredAtUtc: 0,
+            OperationId: null,
+            OperationPhase: null,
+            Outcome: null,
+            reason);
+
+    /// <summary>
     ///     A task a workflow drives says so on the wire, and one an operator drives themselves says nothing — which is
     ///     what lets this page keep offering its own apply for every task that is not behind a workflow's gate.
     /// </summary>
