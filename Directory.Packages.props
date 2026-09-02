@@ -87,9 +87,9 @@
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.9.0" />
     <!-- Compatibility cohort: upgrade the stable MAF trio together after verifying their matching release set. -->
-    <PackageVersion Include="Microsoft.Agents.AI" Version="1.19.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.19.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.19.0" />
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.20.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.20.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.20.0" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.9.0" />
     <!-- ModelContextProtocol.AspNetCore takes an exact dependency on the matching ModelContextProtocol
          build, so these two only ever move together; a split bump fails restore with NU1107/NU1608. -->
