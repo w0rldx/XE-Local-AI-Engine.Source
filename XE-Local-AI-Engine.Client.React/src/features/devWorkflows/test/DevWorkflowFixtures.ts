@@ -95,6 +95,8 @@ export function devWorkflowNodeRunSummary(overrides: Partial<NodeRunSummaryRespo
 		isMaterialized: false,
 		materializedFromNodeKey: null,
 		materializationIndex: null,
+		materializationGroupId: null,
+		materializationCount: null,
 		developmentProjectId: null,
 		developmentTaskId: null,
 		agentDefinitionId: null,

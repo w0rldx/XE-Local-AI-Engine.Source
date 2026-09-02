@@ -173,6 +173,7 @@ describe("DevWorkflowGraphView", () => {
 							isMaterialized: true,
 							materializedFromNodeKey: "decompose",
 							materializationIndex: index,
+							materializationCount: 2,
 						}),
 					),
 					devWorkflowNodeRunSummary({
@@ -181,14 +182,16 @@ describe("DevWorkflowGraphView", () => {
 						isMaterialized: true,
 						materializedFromNodeKey: "review",
 						materializationIndex: 1,
+						materializationCount: 1,
 					}),
 				])}
 				onSelect={vi.fn()}
 			/>,
 		);
 
-		// `MaterializationIndex` is the SERVER's and is already 1-based (C2), so the card renders it as it stands.
-		// Adding one to it is what made a decomposition of one read "generated · 2 of 2" on live hardware.
+		// Both numbers are the SERVER's: the index is already 1-based (C2) and the count is the group size the runtime
+		// computed. Adding one to the index is what made a decomposition of one read "generated · 2 of 2" on live
+		// hardware; counting rows client-side is what made a two-child clone read "of 4".
 		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-implement-1").textContent).toBe(
 			"generated · 1 of 2",
 		);
@@ -210,6 +213,9 @@ describe("DevWorkflowGraphView", () => {
 								isMaterialized: true,
 								materializedFromNodeKey: "decompose",
 								materializationIndex: child,
+								// The runtime counts the CHILDREN of the decomposition; four rows is what a cloned
+								// two-node subtree looks like, and the count must not follow the row count.
+								materializationCount: 2,
 							}),
 						),
 					),

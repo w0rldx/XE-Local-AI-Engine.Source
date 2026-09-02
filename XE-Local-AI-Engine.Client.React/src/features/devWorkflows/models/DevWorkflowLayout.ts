@@ -3,7 +3,7 @@
 //
 // rank(n)     = 0 with no inbound edge, else 1 + max(rank(pred))   — longest path, taken in Kahn order
 // orderInRank = definition nodes before materialized clones, then ONE barycenter pass over predecessor orders,
-//               ties broken by (materializedFromNodeKey, materializationIndex, nodeKey, id)
+//               ties broken by (materializationGroupKey, materializationIndex, nodeKey, id)
 // x = rank * 280, y = indexInRank * 130                            — TOP-ALIGNED, see below
 //
 // ponytail: single barycenter pass, no crossing-minimisation iterations — swap in dagre if edge crossings become
@@ -17,7 +17,12 @@ export interface DevWorkflowLayoutNode {
 	readonly id: string;
 	/** The tie-break key of last resort before `id`, so sibling order follows the definition rather than a GUID. */
 	readonly nodeKey: string;
-	readonly materializedFromNodeKey?: string;
+	/**
+	 * Which materialization this clone belongs to. The server's `materializationGroupId` where there is one, falling
+	 * back to the template node key: two decompositions of the SAME template are distinct groups, and the key alone
+	 * cannot tell them apart.
+	 */
+	readonly materializationGroupKey?: string;
 	readonly materializationIndex?: number;
 }
 
@@ -48,7 +53,7 @@ export function devWorkflowEdgeKey(edge: DevWorkflowLayoutEdge): string {
 function compareTieBreak(left: DevWorkflowLayoutNode, right: DevWorkflowLayoutNode): number {
 	// Origin before index, so two decompositions sharing a rank read as two blocks rather than an interleave. Which
 	// origin sorts first does not matter; that they never split does.
-	const origin = (left.materializedFromNodeKey ?? "").localeCompare(right.materializedFromNodeKey ?? "");
+	const origin = (left.materializationGroupKey ?? "").localeCompare(right.materializationGroupKey ?? "");
 	if (origin !== 0) {
 		return origin;
 	}
@@ -148,7 +153,7 @@ export function layoutDevWorkflowGraph(
 			// pre-existing node down the rank would move it — the exact jump top-alignment exists to prevent. Within the
 			// clones the barycenter still orders the groups.
 			const materialized =
-				Number(left.materializedFromNodeKey !== undefined) - Number(right.materializedFromNodeKey !== undefined);
+				Number(left.materializationGroupKey !== undefined) - Number(right.materializationGroupKey !== undefined);
 			if (materialized !== 0) {
 				return materialized;
 			}

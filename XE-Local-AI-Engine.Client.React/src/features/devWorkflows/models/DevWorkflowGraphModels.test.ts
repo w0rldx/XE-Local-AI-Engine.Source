@@ -7,7 +7,6 @@ import {
 	DEV_WORKFLOW_MAX_RENDERED_NODES,
 	type DevWorkflowCanvasNodeData,
 	devWorkflowGraphStructuralKey,
-	devWorkflowTemplateNodeKeys,
 	toDevWorkflowCanvasGraph,
 	toDevWorkflowDefinitionCanvasGraph,
 } from "@/features/devWorkflows/models/DevWorkflowGraphModels";
@@ -77,66 +76,43 @@ describe("toDevWorkflowCanvasGraph", () => {
 		});
 	});
 
-	it("counts each materialization's siblings per origin, so one group's size is never another's", () => {
+	it("reads each materialization's group size off the node-run row rather than counting the feed", () => {
+		// The runtime counts the CHILDREN of a decomposition. The client cannot: C2 clones a template SUBTREE whole, so
+		// two children of a two-node template are four rows sharing one origin, and counting rows told every card of
+		// that group it was "… of 4". Both groups below are two children over four rows, which is the case that broke.
 		const graph = toDevWorkflowCanvasGraph(
 			chainRun({
 				nodes: [
 					devWorkflowNodeRunSummary({ id: "node-plan", nodeKey: "plan" }),
-					...[1, 2, 3].map((index) =>
-						devWorkflowNodeRunSummary({
-							id: `node-implement-${index}`,
-							nodeKey: `implement#${index}`,
-							isMaterialized: true,
-							materializedFromNodeKey: "decompose",
-							materializationIndex: index,
-						}),
+					...[1, 2].flatMap((child) =>
+						["implement", "validate"].map((step) =>
+							devWorkflowNodeRunSummary({
+								id: `node-${step}-${child}`,
+								nodeKey: `${step}#child-${child}`,
+								isMaterialized: true,
+								materializedFromNodeKey: "decompose",
+								materializationGroupId: "group-decompose",
+								materializationIndex: child,
+								materializationCount: 2,
+							}),
+						),
 					),
-					devWorkflowNodeRunSummary({
-						id: "node-verify-1",
-						nodeKey: "verify#1",
-						isMaterialized: true,
-						materializedFromNodeKey: "review",
-						materializationIndex: 1,
-					}),
 				],
 			}),
 		);
 
-		expect([1, 2, 3].map((index) => dataOf(graph, `node-implement-${index}`).materializationCount)).toEqual([3, 3, 3]);
-		expect(dataOf(graph, "node-verify-1").materializationCount).toBe(1);
-		// A node the definition named is not part of anyone's group, so it carries no count at all.
-		expect(dataOf(graph, "node-plan").materializationCount).toBeUndefined();
-	});
-
-	it("counts the CHILDREN of a decomposition, not the rows a cloned subtree left behind", () => {
-		// C2 clones a template SUBTREE whole, so two children of a two-node template are FOUR rows sharing one origin.
-		// Counting rows made every card of that decomposition read "… of 4" over two children.
-		const graph = toDevWorkflowCanvasGraph(
-			chainRun({
-				nodes: [1, 2].flatMap((child) =>
-					["implement", "validate"].map((step) =>
-						devWorkflowNodeRunSummary({
-							id: `node-${step}-${child}`,
-							nodeKey: `${step}#child-${child}`,
-							isMaterialized: true,
-							materializedFromNodeKey: "decompose",
-							materializationIndex: child,
-						}),
-					),
-				),
-			}),
-		);
-
 		expect(
-			[1, 2].flatMap((child) => ["implement", "validate"].map((step) => dataOf(graph, `node-${step}-${child}`))).map(
-				(data) => [data.materializationIndex, data.materializationCount],
-			),
+			[1, 2]
+				.flatMap((child) => ["implement", "validate"].map((step) => dataOf(graph, `node-${step}-${child}`)))
+				.map((data) => [data.materializationIndex, data.materializationCount]),
 		).toEqual([
 			[1, 2],
 			[1, 2],
 			[2, 2],
 			[2, 2],
 		]);
+		// A node the definition named is not part of anyone's group, so it carries no count at all.
+		expect(dataOf(graph, "node-plan").materializationCount).toBeUndefined();
 	});
 
 	it("reads a RUN's apply node off the pinned graph, since a node-run row carries no toolMode", () => {
@@ -324,47 +300,5 @@ describe("toDevWorkflowDefinitionCanvasGraph", () => {
 
 	it("renders nothing rather than throwing when no definition has been picked", () => {
 		expect(toDevWorkflowDefinitionCanvasGraph(undefined).nodes).toEqual([]);
-	});
-});
-
-describe("devWorkflowTemplateNodeKeys", () => {
-	/** `feature-development-v1`'s shape: a two-node template subtree hanging off `decompose`, handed back at `join`. */
-	const graph = {
-		schemaVersion: 1,
-		nodes: [
-			{
-				nodeKey: "decompose",
-				nodeType: "Agent",
-				label: "Decompose",
-				materialization: { templateNodeKey: "implement", artifactKind: "TaskPackage", joinNodeKey: "join" },
-			},
-			{ nodeKey: "implement", nodeType: "DevTask", label: "Implement" },
-			{ nodeKey: "validate", nodeType: "Tool", label: "Validate" },
-			{ nodeKey: "join", nodeType: "Join", label: "Join" },
-			{ nodeKey: "verify", nodeType: "Agent", label: "Verify" },
-		],
-		edges: [
-			{ from: "decompose", to: "join" },
-			{ from: "implement", to: "validate" },
-			{ from: "validate", to: "join" },
-			{ from: "join", to: "verify" },
-		],
-	};
-
-	it("takes the whole template SUBTREE, because C2 clones it whole", () => {
-		expect([...devWorkflowTemplateNodeKeys(graph)].toSorted()).toEqual(["implement", "validate"]);
-	});
-
-	it("stops at the join, so the rest of the run is not swallowed into the template", () => {
-		// The join is where a template hands its work back to the graph. Walking through it would make `join` and
-		// `verify` templates too — and then a join would name itself as a dependency that never materializes.
-		const templates = devWorkflowTemplateNodeKeys(graph);
-		expect(templates.has("join")).toBe(false);
-		expect(templates.has("verify")).toBe(false);
-	});
-
-	it("declares nothing for a graph with no materialization, and nothing for no graph at all", () => {
-		expect(devWorkflowTemplateNodeKeys({ ...graph, nodes: graph.nodes.map(({ materialization, ...rest }) => rest) }).size).toBe(0);
-		expect(devWorkflowTemplateNodeKeys(undefined).size).toBe(0);
 	});
 });

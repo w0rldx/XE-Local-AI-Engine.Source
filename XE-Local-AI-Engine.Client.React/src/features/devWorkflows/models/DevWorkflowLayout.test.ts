@@ -66,7 +66,7 @@ describe("layoutDevWorkflowGraph", () => {
 		const children = Array.from({ length: 5 }, (_, index) =>
 			node(`child-${index}`, {
 				nodeKey: "task",
-				materializedFromNodeKey: "decompose",
+				materializationGroupKey: "decompose",
 				materializationIndex: index,
 			}),
 		);
@@ -99,7 +99,7 @@ describe("layoutDevWorkflowGraph", () => {
 		const children = Array.from({ length: 3 }, (_, index) =>
 			node(`implement-${index}`, {
 				nodeKey: `implement#${index}`,
-				materializedFromNodeKey: "decompose",
+				materializationGroupKey: "decompose",
 				materializationIndex: index,
 			}),
 		);

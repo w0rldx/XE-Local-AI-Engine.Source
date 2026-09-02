@@ -504,8 +504,8 @@ describe("DevWorkflowNodePanel", () => {
 							label: "Decompose",
 							materialization: { templateNodeKey: "implement", artifactKind: "TaskPackage", joinNodeKey: "join" },
 						},
-						{ nodeKey: "implement", nodeType: "DevTask", label: "Implement" },
-						{ nodeKey: "validate", nodeType: "Tool", label: "Validate" },
+						{ nodeKey: "implement", nodeType: "DevTask", label: "Implement", isTemplate: true },
+						{ nodeKey: "validate", nodeType: "Tool", label: "Validate", isTemplate: true },
 						{ nodeKey: "plan", nodeType: "Agent", label: "Plan" },
 						{ nodeKey: "join", nodeType: "Join", label: "Join" },
 					],
@@ -522,7 +522,7 @@ describe("DevWorkflowNodePanel", () => {
 			}),
 		});
 
-		// `validate` is reached from the template root without passing the join, so it is part of the template subtree.
+		// `validate` is inside the template subtree, which the SERVER declares on the pinned graph as `isTemplate`.
 		expect(screen.getByTestId("dev-workflow-node-dependency-validate").textContent).toContain("template");
 		expect(screen.getByTestId("dev-workflow-node-dependency-validate").textContent).not.toContain("satisfied");
 		// A real dependency the runtime IS waiting on is unaffected.

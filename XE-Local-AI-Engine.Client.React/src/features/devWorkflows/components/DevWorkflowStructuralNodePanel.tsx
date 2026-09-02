@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { DevWorkflowNodeStatusBadge } from "@/features/devWorkflows/components/DevWorkflowStatusBadge";
-import { devWorkflowTemplateNodeKeys } from "@/features/devWorkflows/models/DevWorkflowGraphModels";
 import {
 	type DevWorkflowNodeRunDetailResponse,
 	type DevWorkflowNodeRunSummaryResponse,
@@ -50,7 +49,12 @@ export function DevWorkflowStructuralNodePanel({ nodeRun, nodeType, run }: DevWo
 	const inbound = edges.filter((edge) => (edge.to ?? "") === nodeKey);
 	// A template key never gets a node run — its children get the rows — so it is not a dependency at all, and reading
 	// its row-less-ness as anything but "template" claimed a node that had not run and could not run had satisfied one.
-	const templates = devWorkflowTemplateNodeKeys(run?.graph);
+	// `isTemplate` is the SERVER's own `TemplateSubtree` verdict on the pinned graph (Slice D), which replaced a client
+	// mirror of that walk: one walk, one answer, and no way for the two to drift apart on a graph shape neither side
+	// had been tried against.
+	const templates = new Set(
+		(run?.graph?.nodes ?? []).filter((node) => node.isTemplate === true).map((node) => node.nodeKey ?? ""),
+	);
 	// The ONE thing a dead edge's wording turns on. `All` is the parser's own default for an absent policy
 	// (`DevWorkflowGraph.cs:257`): under `All` a single dead edge is why the join SKIPS, under `Any` it is ignored for
 	// as long as a sibling is satisfied.
