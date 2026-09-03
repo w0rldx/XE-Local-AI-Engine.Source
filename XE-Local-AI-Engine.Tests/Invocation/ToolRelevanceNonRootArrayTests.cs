@@ -31,37 +31,24 @@ public sealed class ToolRelevanceNonRootArrayTests
     }
 
     [Test]
-    public async Task OrchestrationParticipantTurn_AboveTheThreshold_SendsItsOwnCompleteToolArray()
+    public async Task AnArrayWithoutAListToolsFunction_AboveTheThreshold_IsSentWholeAndUnchanged()
     {
+        // ONE test, not two: an orchestration participant's array and a spawned sub-agent's curated (approval-stripped)
+        // array are the same scenario at this seam — both are resolved through InvocationToolResolver, both set
+        // Instructions, both run under the parent's AsyncLocal scope, and neither carries a list_tools instance. What
+        // separates them lives above this hop, so a second copy of this test would have graded nothing extra. The
+        // "only one product site appends list_tools" half of the property is pinned by
+        // Architecture/ToolRelevanceOfferArchitectureTests.
         var resolved = await ResolveTwentyToolsAsync(requiresApproval: false);
         var options = new ChatOptions
         {
             Tools = resolved,
-            // A participant builds its own ChatOptions and DOES set Instructions, unlike either root agent-build path.
             Instructions = "You are the reviewer participant."
         };
 
         var sent = await SendAsync(options);
 
-        AssertEx.True(ReferenceEquals(options, sent), "A participant array carries no escape hatch, so it is never filtered.");
-        AssertEx.Equal(expected: 20, sent!.Tools!.Count);
-    }
-
-    [Test]
-    public async Task SpawnedSubAgentTurn_AboveTheThreshold_SendsItsOwnCompleteToolArray()
-    {
-        // A spawned child's curated set is approval-STRIPPED and, like a participant's, carries no list_tools. It also
-        // runs under the parent's AsyncLocal, so it reaches the same scope — and must still send everything it has.
-        var resolved = await ResolveTwentyToolsAsync(requiresApproval: false);
-        var options = new ChatOptions
-        {
-            Tools = resolved,
-            Instructions = "You are the child agent."
-        };
-
-        var sent = await SendAsync(options);
-
-        AssertEx.True(ReferenceEquals(options, sent));
+        AssertEx.True(ReferenceEquals(options, sent), "An array with no escape hatch is never filtered — the same instance is sent on.");
         AssertEx.Equal(expected: 20, sent!.Tools!.Count);
     }
 

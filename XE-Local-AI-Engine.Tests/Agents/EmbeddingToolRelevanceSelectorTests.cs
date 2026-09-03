@@ -259,6 +259,98 @@ public sealed class EmbeddingToolRelevanceSelectorTests
         }
     }
 
+    [Test]
+    public async Task SelectAsync_WhenTheBatchDegradesAfterTheBoundHasExpired_LogsOneDegradeNotTwo()
+    {
+        // The batch comes back short (a degrade that is NOT an exception) only once the 2 s bound has already fired.
+        // Handing that inner fallback the BOUNDED token would make the lexical selector's opening
+        // ThrowIfCancellationRequested throw, the outer catch would degrade a second time with the right token, and one
+        // degrade would log two warnings. The caller's token is the one that keeps this a single event.
+        var provider = new FakeEmbeddingProvider
+        {
+            ReturnShortResponse = true,
+            ReturnsAfterTheBoundExpires = true
+        };
+        var (selector, logger) = BuildSelector(provider, embeddingTimeout: TimeSpan.FromMilliseconds(20));
+        var candidates = SampleCandidates();
+
+        var selection = await selector.SelectAsync(Query, candidates, Threshold, CancellationToken.None);
+
+        await AssertMatchesLexicalAsync(selection, candidates);
+        AssertEx.Equal(expected: 1,
+            logger.Entries.Count(static entry => entry.Level == LogLevel.Warning),
+            "One degrade is one warning, whether or not the bound had already expired when it happened.");
+    }
+
+    [Test]
+    public async Task SelectAsync_WhenACandidateVectorIsEmpty_ScoresZeroAndKeepsTheDeterministicIndexOrder()
+    {
+        // CosineScore's first guard. An empty vector carries no comparable signal, so every candidate ties at zero and
+        // the ThenBy(Index) tiebreak decides — a stable answer rather than a throw.
+        await AssertDegenerateVectorsFallToIndexOrderAsync(static _ => ReadOnlyMemory<float>.Empty);
+    }
+
+    [Test]
+    public async Task SelectAsync_WhenACandidateVectorHasAMismatchedLength_ScoresZeroAndKeepsTheDeterministicIndexOrder()
+    {
+        // The guard that matters most: without it a mid-run dimension change reaches TensorPrimitives.CosineSimilarity
+        // as an ArgumentException, which is OUTSIDE this selector's catch set — so the turn would lose the filter
+        // entirely at the hop's own catch instead of degrading to lexical here.
+        await AssertDegenerateVectorsFallToIndexOrderAsync(static _ => new float[] { 1f, 0f, 0f, 0f });
+    }
+
+    [Test]
+    public async Task SelectAsync_WhenACandidateVectorHasZeroMagnitude_GuardsTheNaNCosineToZero()
+    {
+        // Same dimension, no direction: CosineSimilarity divides by a zero magnitude and returns NaN, which sorts
+        // unpredictably. The guard turns it into the same honest zero the other two shapes produce.
+        await AssertDegenerateVectorsFallToIndexOrderAsync(static _ => new float[16]);
+    }
+
+    [Test]
+    public async Task SelectAsync_WithANullToolDescription_RanksWithoutThrowing()
+    {
+        // A null Description reaches three places at once — the cache key, the byte estimator and CandidateText — and
+        // an AITool is free to carry none.
+        var provider = new FakeEmbeddingProvider();
+        var (selector, logger) = BuildSelector(provider);
+        var candidates = SampleCandidates()
+                         .Select(static candidate => candidate.Name == "deploy_production_build"
+                                     ? candidate with
+                                     {
+                                         Description = null
+                                     }
+                                     : candidate)
+                         .ToList();
+
+        var selection = await selector.SelectAsync(Query, candidates, Threshold, CancellationToken.None);
+
+        AssertEx.Equal(candidates.Count, selection.OfferedNames.Count + selection.HiddenNames.Count, "Every candidate is accounted for.");
+        AssertEx.Contains(selection.OfferedNames, "core_tool", "Core is never ranked and never trimmed.");
+        AssertEx.False(logger.Entries.Any(static entry => entry.Level == LogLevel.Warning), "A description-free tool is ranked, not a degrade.");
+    }
+
+    // Every non-core candidate gets the same degenerate vector, so all seven tie at a zero score and the offer is
+    // decided by the index tiebreak alone: core plus the first five rankable names, in array order.
+    private static async Task AssertDegenerateVectorsFallToIndexOrderAsync(Func<string, ReadOnlyMemory<float>> degenerate)
+    {
+        var provider = new FakeEmbeddingProvider
+        {
+            OverrideToolVector = degenerate
+        };
+        var (selector, logger) = BuildSelector(provider);
+        var candidates = SampleCandidates();
+
+        var selection = await selector.SelectAsync(Query, candidates, Threshold, CancellationToken.None);
+
+        AssertEx.True(
+            selection.OfferedNames.SequenceEqual(["core_tool", "deploy_production_build", "summarise_notes", "incident_runbook", "weather_forecast", "cooking_recipe"],
+                StringComparer.Ordinal),
+            "A tie across every candidate resolves to the deterministic candidate order.");
+        AssertEx.True(selection.HiddenNames.SequenceEqual(["translate_text", "play_music"], StringComparer.Ordinal));
+        AssertEx.False(logger.Entries.Any(static entry => entry.Level == LogLevel.Warning), "A degenerate vector is scored, not a degrade.");
+    }
+
     private static async Task AssertMatchesLexicalAsync(ToolRelevanceSelection selection, IReadOnlyList<ToolRelevanceCandidate> candidates)
     {
         var expected = await Lexical().SelectAsync(Query, candidates, Threshold, CancellationToken.None);
@@ -346,6 +438,16 @@ public sealed class EmbeddingToolRelevanceSelectorTests
 
         public bool ReturnShortResponse { get; init; }
 
+        /// <summary>Replaces the derived vector for every TOOL text; the query keeps its real one.</summary>
+        public Func<string, ReadOnlyMemory<float>>? OverrideToolVector { get; init; }
+
+        /// <summary>
+        ///     Waits for the caller's token before returning, so a response shape that degrades WITHOUT throwing
+        ///     (<see cref="ReturnShortResponse" />) can be made to land after the selector's own bound has expired —
+        ///     deterministically, rather than by racing a delay against the timeout.
+        /// </summary>
+        public bool ReturnsAfterTheBoundExpires { get; init; }
+
         public int TotalEmbeddedTexts => EmbeddedTexts.Count;
 
         public string ProviderName => ProviderKey;
@@ -417,17 +519,29 @@ public sealed class EmbeddingToolRelevanceSelectorTests
                     throw owner.GenerateFailure;
                 }
 
+                // The batch is the missing tool texts followed by the query, so the override applies to everything but
+                // the last entry: a test that degrades the CANDIDATE vectors still scores them against a real query.
+                var texts = values.ToList();
                 var embeddings = new List<Embedding<float>>();
-                foreach (var value in values)
+                for (var position = 0; position < texts.Count; position++)
                 {
+                    var value = texts[position];
                     owner.Record(value);
-                    embeddings.Add(new Embedding<float>(BuildVector(value)));
+                    var isQuery = position == texts.Count - 1;
+                    embeddings.Add(new Embedding<float>(!isQuery && owner.OverrideToolVector is { } overrideVector ? overrideVector(value) : BuildVector(value)));
                 }
 
                 if (owner.ReturnShortResponse && embeddings.Count > 0)
                 {
                     // A misbehaving or partial response that returns fewer embeddings than inputs.
                     embeddings.RemoveAt(embeddings.Count - 1);
+                }
+
+                if (owner.ReturnsAfterTheBoundExpires)
+                {
+                    var expired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    await using var registration = cancellationToken.Register(() => expired.TrySetResult());
+                    await expired.Task;
                 }
 
                 return new GeneratedEmbeddings<Embedding<float>>(embeddings);

@@ -98,7 +98,7 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
 
         try
         {
-            return await RankByEmbeddingAsync(query, candidates, threshold, model, timeout.Token).ConfigureAwait(false);
+            return await RankByEmbeddingAsync(query, candidates, threshold, model, timeout.Token, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
@@ -155,11 +155,18 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
         return _lexical.SelectAsync(query, candidates, threshold, cancellationToken);
     }
 
+    /// <param name="cancellationToken">The selector's own bounded token — the one the embedding round-trip runs under.</param>
+    /// <param name="callerToken">
+    ///     The token <see cref="SelectAsync" /> was handed, used for the lexical degrade below. The bounded token would
+    ///     make an in-bound degrade throw once the bound had already expired, and the caller's catch would then degrade
+    ///     a SECOND time with the right token — one degrade, two warnings.
+    /// </param>
     private async Task<ToolRelevanceSelection> RankByEmbeddingAsync(string query,
         IReadOnlyList<ToolRelevanceCandidate> candidates,
         int threshold,
         string model,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        CancellationToken callerToken)
     {
         // Node-local BY CONSTRUCTION: the resolver hands back an ILocalModelProvider, so there is no cloud client this
         // path could reach even if EmbeddingProviderName were mis-set — an unregistered name throws
@@ -207,7 +214,7 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
 
         if (candidateVectors is null)
         {
-            return await FallBackToLexicalAsync(query, candidates, threshold, exception: null, cancellationToken).ConfigureAwait(false);
+            return await FallBackToLexicalAsync(query, candidates, threshold, exception: null, callerToken).ConfigureAwait(false);
         }
 
         var selected = rankable

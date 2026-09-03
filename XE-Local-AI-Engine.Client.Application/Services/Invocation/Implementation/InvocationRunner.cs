@@ -225,10 +225,22 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // the envelope row. CaptureEfficiencySnapshot is a pure counter read, so calling it once per terminal path is
         // free; it is reported on the failed and cancelled paths too, because the number is most interesting on a turn
         // that ran out of context. Counts only — no tool name reaches this seam.
+        // Telemetry never decides an outcome: the report runs immediately BEFORE each terminal report, so on the
+        // completed path a throw here would fall into the catch below and turn a finished turn into a failed one, and
+        // on the two failure paths it would replace the real classification with its own. The shipped dispatcher
+        // cannot throw (UpdateInvocation is a logged no-op for an unknown id), which is exactly why swallowing costs
+        // nothing and why the guard is worth having against a future one that can.
         async Task ReportToolSchemaEstimateAsync()
         {
-            var efficiency = providerBudget.CaptureEfficiencySnapshot();
-            await dispatcher.ReportToolSchemaTokensAsync(package.InvocationId, efficiency.ToolSchemaTokens, efficiency.MaximumToolSchemaTokens).ConfigureAwait(false);
+            try
+            {
+                var efficiency = providerBudget.CaptureEfficiencySnapshot();
+                await dispatcher.ReportToolSchemaTokensAsync(package.InvocationId, efficiency.ToolSchemaTokens, efficiency.MaximumToolSchemaTokens).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Could not report the tool-schema token estimate for invocation {InvocationId}; the turn's outcome is unaffected.", package.InvocationId);
+            }
         }
 
         // Seeded in the SAME place and for the same reason as the provider budget: the send-time relevance hop runs
