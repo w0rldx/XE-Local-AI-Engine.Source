@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -755,13 +756,35 @@ internal sealed class DevWorkflowDevTaskExecutor
         }
 
         var reason = await DescribePriorFailureAsync(store, run, nodeRun, failingNodeKey, cancellationToken).ConfigureAwait(false);
+        if (!reason.Evidenced)
+        {
+            // No readable validation report and no command or test that actually ran. Asking for a round on that is
+            // how a coder is told to redo approved work for no stated reason; SUCCEEDING on it instead would send the
+            // run straight back round the loop to re-fail the same check, spending the budget on having tried nothing.
+            // So it stands the node down where a human can read why, with the approved task untouched behind it.
+            _logger.LogWarning(
+                "Development workflow node run {NodeRunId} carries a routed failure from node '{NodeKey}' with no validation report and no command counts behind it, so the node is stood down instead of asking for another round.",
+                nodeRun.Id,
+                failingNodeKey);
+            return await _retries.SettleFailureAsync(store,
+                    graph,
+                    run,
+                    nodeRun,
+                    nodeRuns,
+                    new DevWorkflowFailure(DevWorkflowFailureClasses.Configuration,
+                        $"Node '{failingNodeKey}' routed a failure here but left no validation report or failing counts to act on, so there is nothing to ask for a new round about.",
+                        Output(nodeRun, task, task.Id, DevWorkflowFailureClasses.Configuration)),
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         try
         {
             _ = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(task.Id,
                                      DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "devtask-request-changes"),
                                      DevelopmentTaskStatus.ChangesRequested,
                                      task.Version,
-                                     reason),
+                                     reason.Reason),
                                  cancellationToken)
                              .ConfigureAwait(false);
             return 1;
@@ -845,7 +868,7 @@ internal sealed class DevWorkflowDevTaskExecutor
     ///         or carries material the sanitizer refuses, the counts are what is left and they are still true.
     ///     </para>
     /// </summary>
-    private async Task<string> DescribePriorFailureAsync(IDevWorkflowStore store,
+    private async Task<PriorFailureReason> DescribePriorFailureAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         string failingNodeKey,
@@ -853,12 +876,13 @@ internal sealed class DevWorkflowDevTaskExecutor
     {
         // The counts go through the same bound and the same sanitizer as the report does: the node key interpolated
         // into them comes from a stored graph definition, which is authored text like any other.
-        var counts = Bounded(DescribeCounts(nodeRun.InputJson, failingNodeKey), GenericChangeRequest);
+        var (countsText, hasCounts) = DescribeCounts(nodeRun.InputJson, failingNodeKey);
+        var counts = Bounded(countsText, GenericChangeRequest);
         try
         {
             return await ReadValidationReportAsync(store, run, failingNodeKey, cancellationToken).ConfigureAwait(false) is { } report
-                ? Bounded(Describe(report, failingNodeKey, counts), counts)
-                : counts;
+                ? new PriorFailureReason(Bounded(Describe(report, failingNodeKey, counts), counts), Evidenced: true)
+                : new PriorFailureReason(counts, hasCounts);
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or IOException or UnauthorizedAccessException)
         {
@@ -867,9 +891,17 @@ internal sealed class DevWorkflowDevTaskExecutor
             // letting it escape would fail the tick and re-throw on every sweep after it. The counts are authored here
             // from numbers, so they are always the safe answer.
             _logger.LogDebug(exception, "Development workflow node run {NodeRunId} could not quote node '{NodeKey}' validation report.", nodeRun.Id, failingNodeKey);
-            return counts;
+            return new PriorFailureReason(counts, hasCounts);
         }
     }
+
+    /// <summary>
+    ///     One rework reason and whether anything actually judged the work behind it — a readable validation report, or
+    ///     a routed payload carrying a command or test that really ran. A reason with neither is a sentence, not a
+    ///     verdict, and nothing may spend a coder round on it.
+    /// </summary>
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct PriorFailureReason(string Reason, bool Evidenced);
 
     /// <summary>
     ///     One reason, sanitized and bounded, or <paramref name="fallback" /> when the sanitizer refuses it. Every
@@ -946,11 +978,12 @@ internal sealed class DevWorkflowDevTaskExecutor
 
     /// <summary>
     ///     What the ROUTED payload says, which is only counts — the fallback when the report itself cannot be quoted.
-    ///     Authored from numbers this engine wrote, so there is nothing in it to sanitize.
+    ///     Authored from numbers this engine wrote, so there is nothing in it to sanitize. <c>HasCounts</c> is false
+    ///     when nothing ran, which is the difference between a verdict and a sentence that sounds like one.
     /// </summary>
-    private static string DescribeCounts(string? inputJson, string failingNodeKey)
+    private static (string Text, bool HasCounts) DescribeCounts(string? inputJson, string failingNodeKey)
     {
-        var generic = $"Node '{failingNodeKey}' rejected this implementation and asked for it to be done again.";
+        (string Text, bool HasCounts) generic = ($"Node '{failingNodeKey}' rejected this implementation and asked for it to be done again.", false);
         if (string.IsNullOrWhiteSpace(inputJson))
         {
             return generic;
@@ -969,8 +1002,14 @@ internal sealed class DevWorkflowDevTaskExecutor
             var commandsFailed = Number(failure, "commandsFailed");
             var commandsRun = Number(failure, "commandsRun");
             var testsFailed = Number(failure, "testsFailed");
-            return string.Create(CultureInfo.InvariantCulture,
-                $"{generic} {commandsFailed} of {commandsRun} commands failed, {testsFailed} tests failed.");
+
+            // Nothing ran, so there is nothing to count. The sentence this used to author — "0 of 0 commands failed, 0
+            // tests failed" — was read live on 2026-09-02 by a coder being asked to redo approved work, and it says
+            // less than the generic line does while sounding like a measurement.
+            return commandsRun <= 0 && commandsFailed <= 0 && testsFailed <= 0
+                ? generic
+                : (string.Create(CultureInfo.InvariantCulture,
+                    $"{generic.Text} {commandsFailed} of {commandsRun} commands failed, {testsFailed} tests failed."), true);
         }
         catch (JsonException)
         {

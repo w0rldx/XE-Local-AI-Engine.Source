@@ -220,6 +220,13 @@ internal sealed class DevWorkflowRetryPolicy
         // The next attempt is told what the last one came to (§7.2), or the agent composes a byte-identical objective
         // and does the same thing again. Read off the failure in hand rather than the row, which the Pending write is
         // about to clear; the helper strips any earlier priorFailure, so rounds replace rather than nest.
+        //
+        // NO priorFailureNode: that key names the OTHER node whose verdict sent the run back here, and only RouteAsync
+        // has one. Writing this node's own key into it made a same-node retry indistinguishable from a cross-node
+        // rejection — measured live on 2026-09-02, a transient reviewer failure on a DevTask node then had the
+        // executor ask an ALREADY-APPROVED task to be implemented again, quoting a verdict nothing had reached, until
+        // the task's review rounds ran out and its approved patch was discarded. An earlier genuine route's key is left
+        // in place: a transient retry in the middle of a fix loop must not lose the rework the loop asked for.
         return await ReAttemptAsync(store,
                 run,
                 nodeRun,
@@ -227,7 +234,7 @@ internal sealed class DevWorkflowRetryPolicy
                 DetailFor(nodeRun, failure),
                 failure.Outcome ?? DevWorkflowOutcomes.Failed,
                 cancellationToken,
-                PriorFailure(nodeRun.InputJson, nodeRun.NodeKey, failure.OutputJson))
+                PriorFailure(nodeRun.InputJson, fromNodeKey: null, failure.OutputJson))
             .ConfigureAwait(false);
     }
 
@@ -538,9 +545,24 @@ internal sealed class DevWorkflowRetryPolicy
     /// <summary>
     ///     The target's inputs with the failure that sent the run back to it, as two flat members so the objective
     ///     renders them as the lines it renders every other input as.
+    ///     <para>
+    ///         <paramref name="fromNodeKey" /> is the node whose verdict routed the run back, and it is
+    ///         <see langword="null" /> for a same-node retry, which has no such node. The DevTask lane reads
+    ///         <c>priorFailureNode</c> as "a downstream node rejected this implementation", so a retry that wrote its
+    ///         own key there was read as a rejection; a null leaves whatever an earlier genuine route put there
+    ///         untouched, and adds none.
+    ///     </para>
     /// </summary>
-    private static string PriorFailure(string? inputJson, string fromNodeKey, string outputJson)
+    private static string PriorFailure(string? inputJson, string? fromNodeKey, string outputJson)
     {
+        if (fromNodeKey is null && CarriesRoutedFailure(inputJson))
+        {
+            // A transient retry landing in the MIDDLE of a genuine fix loop. Overwriting priorFailure here would leave
+            // the routed node's name with this node's own count-less output under it, so the rework request that
+            // follows quotes a verdict it can no longer evidence. Both members stay as the route wrote them.
+            return inputJson!;
+        }
+
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
         {
@@ -550,14 +572,19 @@ internal sealed class DevWorkflowRetryPolicy
                 if (existing is not null)
                 {
                     foreach (var property in existing.RootElement.EnumerateObject()
-                                                     .Where(static property => property.Name is not ("priorFailure" or "priorFailureNode")))
+                                                     .Where(property => property.Name != "priorFailure"
+                                                                        && (fromNodeKey is null || property.Name != "priorFailureNode")))
                     {
                         property.WriteTo(writer);
                     }
                 }
             }
 
-            writer.WriteString("priorFailureNode", fromNodeKey);
+            if (fromNodeKey is not null)
+            {
+                writer.WriteString("priorFailureNode", fromNodeKey);
+            }
+
             writer.WritePropertyName("priorFailure");
             using (var output = Parse(outputJson))
             {
@@ -575,6 +602,13 @@ internal sealed class DevWorkflowRetryPolicy
         }
 
         return Encoding.UTF8.GetString(buffer.ToArray());
+    }
+
+    /// <summary>Whether these inputs already name the node whose verdict routed the run back to them.</summary>
+    private static bool CarriesRoutedFailure(string? inputJson)
+    {
+        using var existing = Parse(inputJson);
+        return existing is not null && existing.RootElement.TryGetProperty("priorFailureNode", out _);
     }
 
     /// <summary>A JSON object, or null when there is none or the text is not one this can carry through.</summary>

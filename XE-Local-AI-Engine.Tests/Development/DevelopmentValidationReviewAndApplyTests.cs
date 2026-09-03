@@ -8,8 +8,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -25,6 +29,100 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
 {
     private static readonly Guid SelectedFolderId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+
+    /// <summary>
+    ///     L1 on the reviewer side: the round is budgeted against the window the model is REALLY serving, and reserves a
+    ///     quarter of it rather than the whole configured output maximum. Same defect, same fix, separately proven —
+    ///     the two roles open their own budget scopes and drifted apart once before.
+    /// </summary>
+    [Test]
+    public async Task ReviewerModel_BudgetsTheRoundAgainstTheWindowTheRuntimeIsServing()
+    {
+        const int Served = 65_536;
+        const int MaxOutput = 32_768;
+        var cloud = Substitute.For<IActiveCloudChatClientFactory>();
+        cloud.IsCloudProviderSelected(Arg.Any<string>()).Returns(false);
+        using var chat = new CapturingReviewerChatClient();
+        var model = new DevelopmentReviewerModel(chat,
+            cloud,
+            LocalModelResolver(Served, ReviewerLocalModel()),
+            new FakeModelTrustResolver(),
+            NullLogger<DevelopmentReviewerModel>.Instance);
+
+        _ = await model.RunAsync("reviewer-local", "review", new NullWorkspaceTools(), MaxOutput, maxToolCalls: 8).ConfigureAwait(false);
+
+        var options = AssertEx.NotNull(chat.Options);
+        AssertEx.True(AssertEx.NotNull(options.AdditionalProperties).TryGetValue<int>(SamplingOptionKeys.NumCtx, out var numCtx),
+            "the served window has to reach the request, because that key is what the provider-round budgeter prefers over its default.");
+        AssertEx.Equal(Served, numCtx);
+
+        var budget = AssertEx.NotNull(chat.Budget);
+        AssertEx.Equal(Served, budget.DefaultContextTokens, "and the scope's own default names the same window, so the two cannot disagree.");
+        AssertEx.Equal(Served / 4, budget.ReservedOutputTokenFloor, "a quarter of the window is reserved for the answer, not the whole configured maximum.");
+        AssertEx.Equal<int?>(Served / 4, options.MaxOutputTokens);
+    }
+
+    /// <summary>
+    ///     A runtime that reports no window keeps the conservative synthetic budget and says which one it fell back to,
+    ///     sending no <c>num_ctx</c> override for a window nothing promised.
+    /// </summary>
+    [Test]
+    public async Task ReviewerModel_WithNoServedWindow_FallsBackAndWarnsWhichFallbackItUsed()
+    {
+        const int MaxOutput = 4096;
+        var cloud = Substitute.For<IActiveCloudChatClientFactory>();
+        cloud.IsCloudProviderSelected(Arg.Any<string>()).Returns(false);
+        using var chat = new CapturingReviewerChatClient();
+        var logger = new RecordingLogger<DevelopmentReviewerModel>();
+        var model = new DevelopmentReviewerModel(chat, cloud, LocalModelResolver(ReviewerLocalModel()), new FakeModelTrustResolver(), logger);
+
+        _ = await model.RunAsync("reviewer-local", "review", new NullWorkspaceTools(), MaxOutput, maxToolCalls: 8).ConfigureAwait(false);
+
+        var budget = AssertEx.NotNull(chat.Budget);
+        AssertEx.Equal(MaxOutput * 2, budget.DefaultContextTokens, "the fallback is the pre-existing synthetic window, unchanged.");
+        AssertEx.Equal(MaxOutput, budget.ReservedOutputTokenFloor, "and a fictional window does not also hand out a smaller reserve.");
+        AssertEx.False(AssertEx.NotNull(chat.Options).AdditionalProperties?.ContainsKey(SamplingOptionKeys.NumCtx) ?? false,
+            "a window nothing reported must not be asserted onto the request.");
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, "no served context window"),
+            $"the operator has to be told which window the attempt was budgeted against: {string.Join(" | ", logger.Entries.Select(static entry => entry.Message))}");
+    }
+
+    /// <summary>
+    ///     L3: a mis-spelled disposition is a correction, not the end of the attempt. Thrown, it terminalized the whole
+    ///     reviewer round and cost the DevTask node one of its three attempts — three times in a row on 2026-09-02,
+    ///     from a model that had approved the same subject correctly minutes earlier.
+    /// </summary>
+    [Test]
+    public async Task ReviewerModel_WithAMisSpelledDisposition_CorrectsTheModelInsteadOfLosingTheAttempt()
+    {
+        var cloud = Substitute.For<IActiveCloudChatClientFactory>();
+        cloud.IsCloudProviderSelected(Arg.Any<string>()).Returns(false);
+        using var chat = new CorrectingReviewerChatClient();
+        var model = new DevelopmentReviewerModel(chat,
+            cloud,
+            LocalModelResolver(ReviewerLocalModel()),
+            new FakeModelTrustResolver(),
+            NullLogger<DevelopmentReviewerModel>.Instance);
+
+        var result = await model.RunAsync("reviewer-local", "review", new NullWorkspaceTools(), maxOutputTokens: 64, maxToolCalls: 8).ConfigureAwait(false);
+
+        AssertEx.Equal(DevelopmentReviewDisposition.Approved, result.Submission.Disposition, "the corrected second call is the round's verdict.");
+        AssertEx.Contains(AssertEx.NotNull(chat.FirstAnswer), "Approved", message: "the tool result names the two values that are accepted.");
+        AssertEx.Contains(AssertEx.NotNull(chat.FirstAnswer), "ChangesRequested");
+    }
+
+    /// <summary>The reviewer's one local model, available and tool-capable, which is all these budget tests need.</summary>
+    private static LocalModelDescriptor ReviewerLocalModel() =>
+        new()
+        {
+            ModelName = "reviewer-local",
+            ProviderName = "local",
+            IsAvailable = true,
+            SizeBytes = null,
+            ModifiedAt = null,
+            MaxContextTokens = 4096,
+            IsToolCapable = true
+        };
 
     /// <summary>
     ///     The validation list both code-owned .NET profiles carry, joined so order-sensitive comparison reads
@@ -302,7 +400,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                 MaxContextTokens = 4096,
                 IsToolCapable = true
             }),
-            new FakeModelTrustResolver());
+            new FakeModelTrustResolver(),
+            NullLogger<DevelopmentReviewerModel>.Instance);
 
         var result = await model.RunAsync("reviewer-local",
             "review exact subject",
@@ -532,7 +631,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         using var exactChat = new CapturingReviewerChatClient(inputTokens: 40_000, outputTokens: 64);
         var exact = new DevelopmentReviewerModel(exactChat,
             cloud,
-            resolver, new FakeModelTrustResolver());
+            resolver, new FakeModelTrustResolver(), NullLogger<DevelopmentReviewerModel>.Instance);
 
         var result = await exact.RunAsync("reviewer-local",
             "review exact subject",
@@ -545,7 +644,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
 
         // More than one call's budget across the loop is normal, and must be accepted.
         using var multiRoundChat = new CapturingReviewerChatClient(inputTokens: 40_000, outputTokens: 65);
-        var multiRound = new DevelopmentReviewerModel(multiRoundChat, cloud, resolver, new FakeModelTrustResolver());
+        var multiRound = new DevelopmentReviewerModel(multiRoundChat, cloud, resolver, new FakeModelTrustResolver(), NullLogger<DevelopmentReviewerModel>.Instance);
         var accepted = await multiRound.RunAsync("reviewer-local",
                                            "review exact subject",
                                            new NullWorkspaceTools(),
@@ -557,7 +656,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         // maxToolCalls 8 => at most 9 provider calls => a whole-attempt ceiling of 9 x 64.
         const int Ceiling = 9 * 64;
         using var overChat = new CapturingReviewerChatClient(inputTokens: 40_000, outputTokens: Ceiling + 1);
-        var over = new DevelopmentReviewerModel(overChat, cloud, resolver, new FakeModelTrustResolver());
+        var over = new DevelopmentReviewerModel(overChat, cloud, resolver, new FakeModelTrustResolver(), NullLogger<DevelopmentReviewerModel>.Instance);
         var failure = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() => over.RunAsync("reviewer-local",
                                         "review exact subject",
                                         new NullWorkspaceTools(),
@@ -1143,10 +1242,26 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     private static void EnsureSuccess(CommandResult result) =>
         AssertEx.Equal(expected: 0, result.ExitCode, result.StandardError);
 
-    private static ILocalModelProviderResolver LocalModelResolver(params LocalModelDescriptor[] models)
+    private static ILocalModelProviderResolver LocalModelResolver(params LocalModelDescriptor[] models) =>
+        LocalModelResolver(servedContextTokens: null, models);
+
+    /// <summary>
+    ///     A resolver whose runtime reports <paramref name="servedContextTokens" /> as the window it launched with, or
+    ///     nothing — which is the runtime that has no fixed window, and the one that has not started yet.
+    ///     <para>
+    ///         The window is reported only AFTER the model has been warmed, exactly as the real runtime behaves: it
+    ///         knows the launched context of a process it is running and nothing about one it has not started. Delete
+    ///         the warm from the budget resolver and every served-window test falls back instead.
+    ///     </para>
+    /// </summary>
+    private static ILocalModelProviderResolver LocalModelResolver(int? servedContextTokens, params LocalModelDescriptor[] models)
     {
+        var warmed = false;
         var provider = Substitute.For<ILocalModelProvider>();
         provider.ListModelsAsync(Arg.Any<CancellationToken>()).Returns(models);
+        provider.When(runtime => runtime.WarmModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())).Do(_ => warmed = true);
+        provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(_ => servedContextTokens is { } served && warmed ? new LocalModelRuntimeInfo(served) : null);
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(provider);
         return resolver;
@@ -1274,14 +1389,72 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                 OutputTokens: 10));
     }
 
-    private sealed class CapturingReviewerChatClient(long inputTokens = 10, long outputTokens = 10) : IChatClient
+    /// <summary>A reviewer that mis-spells the disposition once, reads what came back, and calls again correctly.</summary>
+    private sealed class CorrectingReviewerChatClient : IChatClient
     {
-        public HashSet<string> ToolNames { get; } = new(StringComparer.Ordinal);
+        public string? FirstAnswer { get; private set; }
 
         public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
             CancellationToken cancellationToken = default)
         {
+            var submit = AssertEx.NotNull(options?.Tools?.OfType<AIFunction>().SingleOrDefault(static tool => tool.Name == "submit_review"));
+            FirstAnswer = (await submit.InvokeAsync(new AIFunctionArguments
+            {
+                ["disposition"] = "approve",
+                ["summary"] = "looks fine",
+                ["findings"] = Array.Empty<DevelopmentReviewFinding>()
+            }, cancellationToken).ConfigureAwait(false))?.ToString();
+            _ = await submit.InvokeAsync(new AIFunctionArguments
+            {
+                ["disposition"] = "Approved",
+                ["summary"] = "looks fine",
+                ["findings"] = Array.Empty<DevelopmentReviewFinding>()
+            }, cancellationToken).ConfigureAwait(false);
+            return new ChatResponse(new ChatMessage(ChatRole.Assistant, "approved"))
+            {
+                Usage = new UsageDetails
+                {
+                    InputTokenCount = 10,
+                    OutputTokenCount = 10,
+                    TotalTokenCount = 20
+                }
+            };
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
+        {
+            var response = await GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            foreach (var update in response.ToChatResponseUpdates())
+            {
+                yield return update;
+            }
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) =>
+            null;
+
+        public void Dispose() { }
+    }
+
+    private sealed class CapturingReviewerChatClient(long inputTokens = 10, long outputTokens = 10) : IChatClient
+    {
+        public HashSet<string> ToolNames { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>The round's own options, and the provider-call budget the attempt opened around it.</summary>
+        public ChatOptions? Options { get; private set; }
+
+        public ProviderCallBudgetOptions? Budget { get; private set; }
+
+        public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            Options = options;
+            Budget = ProviderCallBudget.Current?.Options;
             foreach (var tool in options?.Tools?.OfType<AIFunction>() ?? [])
             {
                 ToolNames.Add(tool.Name);

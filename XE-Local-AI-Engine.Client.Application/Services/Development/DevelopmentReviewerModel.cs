@@ -2,10 +2,12 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 
 using System.ComponentModel;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 internal enum DevelopmentReviewDisposition
@@ -42,12 +44,14 @@ internal sealed class DevelopmentReviewerModel(
     IChatClient chatClient,
     IActiveCloudChatClientFactory cloudFactory,
     ILocalModelProviderResolver localProviderResolver,
-    IModelTrustResolver modelTrustResolver) : IDevelopmentReviewerModel
+    IModelTrustResolver modelTrustResolver,
+    ILogger<DevelopmentReviewerModel> logger) : IDevelopmentReviewerModel
 {
     private readonly IChatClient _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
     private readonly IActiveCloudChatClientFactory _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
     private readonly ILocalModelProviderResolver _localProviderResolver = localProviderResolver ?? throw new ArgumentNullException(nameof(localProviderResolver));
     private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
+    private readonly ILogger<DevelopmentReviewerModel> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public async Task<DevelopmentReviewerModelResult> RunAsync(string modelId,
         string prompt,
@@ -76,6 +80,7 @@ internal sealed class DevelopmentReviewerModel(
         var gateway = new ToolGateway(tools, maxToolCalls, liveProgress);
         ChatOptions options;
         IReadOnlyList<ChatMessage> messages;
+        DevelopmentAttemptContextBudget contextBudget;
         if (isCloud)
         {
             var resolvedProvider = _cloudFactory.ResolveActiveCloudProviderName(modelId);
@@ -86,6 +91,8 @@ internal sealed class DevelopmentReviewerModel(
                 throw new DevelopmentWorkspaceSecurityException("The selected cloud provider/model no longer matches the authorized Development route.");
             }
 
+            // A cloud route has no launched window to read, so it keeps the conservative synthetic budget.
+            contextBudget = DevelopmentAttemptContextBudget.Unknown(maxOutputTokens);
             options = cloudRoute.Options;
             options.ModelId = modelId;
             options.MaxOutputTokens = maxOutputTokens;
@@ -112,11 +119,23 @@ internal sealed class DevelopmentReviewerModel(
                 throw new DevelopmentWorkspaceSecurityException("Development reviewer attempts require a known, available local model.");
             }
 
+            contextBudget = await DevelopmentAttemptContextBudget.ResolveAsync(localProvider, modelId, maxOutputTokens, "reviewer", _logger, cancellationToken)
+                                                                  .ConfigureAwait(false);
             options = new ChatOptions
             {
                 ModelId = modelId,
-                MaxOutputTokens = maxOutputTokens,
+                MaxOutputTokens = contextBudget.RoundOutputTokens,
                 AllowMultipleToolCalls = false,
+
+                // The served window travels as the option the provider-round budgeter prefers, exactly as the chat and
+                // orchestration lanes carry it, so a round is measured against the context the model really has. A
+                // runtime that reports none sends no override, the same fallback every other lane takes.
+                AdditionalProperties = contextBudget.Served
+                    ? new AdditionalPropertiesDictionary
+                    {
+                        [SamplingOptionKeys.NumCtx] = contextBudget.ContextTokens
+                    }
+                    : null,
                 Tools =
                 [
                     AIFunctionFactory.Create(gateway.ListFilesAsync, "list_files", "List files below a workspace-relative path."),
@@ -140,8 +159,8 @@ internal sealed class DevelopmentReviewerModel(
         {
             MaxProviderCallsPerInvocation = providerCalls,
             MaxCumulativeInputTokens = (int)Math.Min(int.MaxValue, Math.Max(1024L, (long)maxOutputTokens * providerCalls)),
-            DefaultContextTokens = Math.Max(2048, maxOutputTokens * 2),
-            ReservedOutputTokenFloor = maxOutputTokens,
+            DefaultContextTokens = contextBudget.ContextTokens,
+            ReservedOutputTokenFloor = contextBudget.RoundOutputTokens,
             RecentMessagesToKeep = 2,
             OversizedToolResultExcerptChars = 2000
         });
@@ -161,6 +180,9 @@ internal sealed class DevelopmentReviewerModel(
         var (inputTokens, outputTokens) = DevelopmentAttemptOutputBudget.Accept(usage?.InputTokenCount,
             usage?.OutputTokenCount,
             usage?.TotalTokenCount,
+
+            // The CONFIGURED per-call budget, not the round ceiling this attempt narrowed to fit the window: this is a
+            // whole-attempt ceiling, and tightening it here would newly fail long tool loops that no round overspent.
             maxOutputTokens,
             providerCalls,
             "reviewer");
@@ -264,7 +286,15 @@ internal sealed class DevelopmentReviewerModel(
 
             if (!Enum.TryParse<DevelopmentReviewDisposition>(disposition, ignoreCase: true, out var parsed))
             {
-                throw new ArgumentException("Review disposition must be Approved or ChangesRequested.", nameof(disposition));
+                // Handed BACK as a tool result rather than thrown, the way a rejected command id is. A thrown
+                // ArgumentException here terminalizes the WHOLE reviewer attempt and costs the node one of its three —
+                // measured live on 2026-09-02, three attempts in a row on one task, from a model that had produced a
+                // valid Approved review on the same subject minutes earlier. A mis-spelled enum is a formatting flake,
+                // and the model can answer a correction; it cannot answer a discarded attempt. The round still ends
+                // unsubmitted if it never corrects itself, which is the existing missing-submission failure.
+                _liveProgress?.ToolCompleted("submit_review");
+                return "submit_review was not accepted: disposition must be exactly \"Approved\" or \"ChangesRequested\". "
+                       + "Call submit_review again with one of those two values.";
             }
 
             var boundedFindings = (findings ?? []).Take(64).ToArray();

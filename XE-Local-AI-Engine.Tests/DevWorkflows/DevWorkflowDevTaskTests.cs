@@ -87,6 +87,21 @@ public sealed class DevWorkflowDevTaskTests
                                           "completedAtUtc":0}
                                          """;
 
+    /// <summary>
+    ///     The same X9 shape with an extra attempt on the implementation node, so a transient failure can be retried
+    ///     WITHOUT ending the fix loop the route started.
+    /// </summary>
+    private const string PatientDevTaskFixLoop = """
+                                                 {
+                                                   "schemaVersion": 1,
+                                                   "nodes": [
+                                                     { "nodeKey": "implement", "nodeType": "DevTask", "label": "Implement", "maxAttempts": 4 },
+                                                     { "nodeKey": "validate", "nodeType": "Tool", "label": "Validate", "retryTarget": "implement" }
+                                                   ],
+                                                   "edges": [{ "from": "implement", "to": "validate" }]
+                                                 }
+                                                 """;
+
     /// <summary>The rule set a workflow injects, so an assertion can name the text rather than a hash.</summary>
     private const string HouseRules = "Never touch production without an approved plan.";
 
@@ -459,6 +474,120 @@ public sealed class DevWorkflowDevTaskTests
         AssertEx.Contains(AssertEx.NotNull(implemented.OutputJson), "\"taskStatus\":\"AwaitingApply\"");
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status);
         AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
+    ///     L8: a node's OWN transient failure must not read as a downstream node rejecting the work.
+    ///     <para>
+    ///         A same-node retry used to write <c>priorFailureNode = &lt;itself&gt;</c> onto the next attempt's input —
+    ///         the identical carrier the cross-node fix loop uses for a real validation verdict — so the executor met an
+    ///         approved, <c>AwaitingApply</c> task carrying what looked like a rejection and asked Dev Mode to implement
+    ///         it again. Measured live on 2026-09-02: three transient reviewer failures on <c>add-negate-method</c> spent
+    ///         the task's last review round that way, and the node ended <c>Blocked / BudgetExhausted</c> while a coder
+    ///         attempt that had SUCCEEDED and a reviewer attempt that had APPROVED it sat unapplied.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ATransientFailureOnTheNodeItselfDoesNotAskAnApprovedTaskToBeImplementedAgain()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        harness.Chain.FailNextAttempts(1);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
+        AssertEx.Equal(expected: 2, implemented.Attempt, "the transient failure cost the node one of its own attempts, which is the only budget it should touch.");
+        AssertEx.False(AssertEx.NotNull(implemented.InputJson).Contains("priorFailureNode", StringComparison.Ordinal),
+            $"a same-node retry names no rejecting node, because there is none: {implemented.InputJson}");
+
+        var task = await ReadTaskAsync(harness, taskId).ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, task.Status);
+        AssertEx.Equal(expected: 1,
+            task.CurrentReviewRound,
+            "the approved work went through review exactly once; a retry that spends a review round is spending the wrong budget.");
+        AssertEx.False(harness.Chain.Actions.Contains(nameof(DevelopmentTaskStatus.ChangesRequested), StringComparer.Ordinal),
+            $"nothing judged this implementation, so nothing may ask for it to be done again: {string.Join(", ", harness.Chain.Actions)}");
+    }
+
+    /// <summary>
+    ///     L4: a rework reason has to be backed by something that actually ran. A routed failure carrying no readable
+    ///     validation report and no command or test counts produced the sentence "0 of 0 commands failed, 0 tests
+    ///     failed" — a measurement of nothing — and spent a coder round on it.
+    ///     <para>
+    ///         Stood down rather than succeeded: succeeding would send the run straight back round the loop to re-fail
+    ///         the same check and spend the whole budget having tried nothing, so the node ends where an operator can
+    ///         read why and Retry it, with the approved task untouched behind it.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ARoutedFailureWithNoReportAndNoCountsStandsTheNodeDownInsteadOfAskingForARound()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        await DriveToAwaitingApplyAsync(harness, projectId, taskId).ConfigureAwait(false);
+        var drivenBefore = harness.Chain.Actions.Count;
+        harness.Tools.Answer("validate",
+            FakeDevWorkflowToolCommands.Refusing(DevWorkflowFailureClasses.ToolCommandFailed, "The gate stopped before it ran anything."),
+            FakeDevWorkflowToolCommands.Passing());
+        var runId = await harness.StartRunAsync(DevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var task = await ReadTaskAsync(harness, taskId).ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, task.Status, "a verdict nobody reached does not move an approved task.");
+        AssertEx.Equal(expected: 1, task.CurrentReviewRound, "and it spends none of the rounds a real rejection would.");
+        AssertEx.False(harness.Chain.Actions.Skip(drivenBefore).Contains(nameof(DevelopmentTaskStatus.ChangesRequested), StringComparer.Ordinal),
+            $"no change was requested: {string.Join(", ", harness.Chain.Actions.Skip(drivenBefore))}");
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, implemented.Status, "the node ends rather than polling forever on an ask it will not make.");
+        AssertEx.Equal(DevWorkflowFailureClasses.Configuration, implemented.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(implemented.TerminalReason), "left no validation report or failing counts");
+        AssertEx.Equal(DevWorkflowDecisionKind.Abandon, implemented.PendingDecisionKind, "a human is asked, which is what makes the dead end recoverable.");
+        AssertEx.Contains(await harness.ReadEventTrailAsync(runId).ConfigureAwait(false),
+            "node.intervention.required",
+            message: "the stand-down reaches the feed, so the operator is told rather than left reading a stalled row.");
+    }
+
+    /// <summary>
+    ///     The interaction the two L8 fixes could have broken between them: a transient same-node failure landing in the
+    ///     MIDDLE of a genuine fix loop. The routed verdict's own evidence has to survive it — keeping the routed node's
+    ///     name while overwriting its counts with this node's count-less output would hand the L4 gate a rejection it
+    ///     could no longer evidence, and stand a genuinely rejected implementation down as unactionable.
+    /// </summary>
+    [Test]
+    public async Task ATransientFailureInsideAFixLoopKeepsTheRoutedVerdictAndItsEvidence()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        await DriveToAwaitingApplyAsync(harness, projectId, taskId).ConfigureAwait(false);
+        harness.Tools.Answer("validate",
+            FakeDevWorkflowToolCommands.Failing() with
+            {
+                Report = Encoding.UTF8.GetBytes(FailingReport)
+            },
+            FakeDevWorkflowToolCommands.Passing());
+
+        // The coder round the route asks for fails transiently, which is what sends the node round its OWN retry while
+        // the routed failure is still outstanding on its inputs.
+        harness.Chain.FailNextAttempts(1);
+        var runId = await harness.StartRunAsync(PatientDevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var input = AssertEx.NotNull(implemented.InputJson);
+        AssertEx.Contains(input, "\"priorFailureNode\":\"validate\"", message: "the transient retry must not drop the node whose verdict routed the run back.");
+        AssertEx.Contains(input, "\"testsFailed\":3", message: "nor overwrite that verdict's counts with its own count-less output.");
+        AssertEx.Contains(harness.Chain.Actions,
+            static action => action == nameof(DevelopmentTaskStatus.ChangesRequested),
+            $"the rejection still asks for a new round: {string.Join(", ", harness.Chain.Actions)}");
+
+        var feedback = AssertEx.NotNull((await ReadCoderSnapshotAsync(harness, taskId).ConfigureAwait(false)).PreviousRoundFeedback);
+        AssertEx.Contains(feedback, "dotnet_test_release_no_build", StringComparison.Ordinal, "and still quotes the report rather than a generic sentence.");
+        AssertEx.Contains(feedback, "3 of 15 tests failed");
     }
 
     /// <summary>

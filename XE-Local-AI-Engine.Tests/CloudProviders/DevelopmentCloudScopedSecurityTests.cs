@@ -157,7 +157,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
         var cloud = new FixedCloudFactory(chat, route.ProviderName);
         var localResolver = Substitute.For<ILocalModelProviderResolver>();
         var workspace = new CapturingWorkspaceTools();
-        var model = new DevelopmentCoderModel(chat, cloud, localResolver, new FakeModelTrustResolver());
+        var model = new DevelopmentCoderModel(chat, cloud, localResolver, new FakeModelTrustResolver(), NullLogger<DevelopmentCoderModel>.Instance);
 
         var result = await model.RunAsync(route.ModelId,
             "must not be sent to cloud",
@@ -182,7 +182,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
         using var chat = new RoleSubmittingChatClient(isReviewer: true);
         var cloud = new FixedCloudFactory(chat, route.ProviderName);
         var localResolver = Substitute.For<ILocalModelProviderResolver>();
-        var model = new DevelopmentReviewerModel(chat, cloud, localResolver, new FakeModelTrustResolver());
+        var model = new DevelopmentReviewerModel(chat, cloud, localResolver, new FakeModelTrustResolver(), NullLogger<DevelopmentReviewerModel>.Instance);
 
         var result = await model.RunAsync(route.ModelId,
             "must not be sent to cloud",

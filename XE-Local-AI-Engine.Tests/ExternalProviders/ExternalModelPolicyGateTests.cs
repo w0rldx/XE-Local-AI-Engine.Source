@@ -152,7 +152,7 @@ public sealed class ExternalModelPolicyGateTests
     public async Task DevelopmentCoderModel_RefusesAnExternalModelThatIsNotDeclaredLocal()
     {
         using var chat = new CountingChatClient();
-        var model = new DevelopmentCoderModel(chat, NonCloudFactory(), Substitute.For<ILocalModelProviderResolver>(), Trust());
+        var model = new DevelopmentCoderModel(chat, NonCloudFactory(), Substitute.For<ILocalModelProviderResolver>(), Trust(), NullLogger<DevelopmentCoderModel>.Instance);
 
         _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
             model.RunAsync(CloudExternalModel, "prompt", new UnusedWorkspaceTools(), maxOutputTokens: 64, maxToolCalls: 2));
@@ -165,7 +165,7 @@ public sealed class ExternalModelPolicyGateTests
     public async Task DevelopmentCoderModel_RefusesAnUnresolvedExternalModel()
     {
         using var chat = new CountingChatClient();
-        var model = new DevelopmentCoderModel(chat, NonCloudFactory(), Substitute.For<ILocalModelProviderResolver>(), Trust());
+        var model = new DevelopmentCoderModel(chat, NonCloudFactory(), Substitute.For<ILocalModelProviderResolver>(), Trust(), NullLogger<DevelopmentCoderModel>.Instance);
 
         _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
             model.RunAsync(DeletedExternalModel, "prompt", new UnusedWorkspaceTools(), maxOutputTokens: 64, maxToolCalls: 2));
@@ -175,7 +175,7 @@ public sealed class ExternalModelPolicyGateTests
     public async Task DevelopmentReviewerModel_RefusesAnExternalModelThatIsNotDeclaredLocal()
     {
         using var chat = new CountingChatClient();
-        var model = new DevelopmentReviewerModel(chat, NonCloudFactory(), Substitute.For<ILocalModelProviderResolver>(), Trust());
+        var model = new DevelopmentReviewerModel(chat, NonCloudFactory(), Substitute.For<ILocalModelProviderResolver>(), Trust(), NullLogger<DevelopmentReviewerModel>.Instance);
 
         _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
             model.RunAsync(CloudExternalModel, "prompt", new UnusedWorkspaceTools(), maxOutputTokens: 64, maxToolCalls: 2));
