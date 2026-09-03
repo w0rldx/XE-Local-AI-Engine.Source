@@ -282,6 +282,52 @@ public sealed class DevWorkflowStateMachineTests
     }
 
     /// <summary>
+    ///     A skipped node is judged under ITS OWN join policy. An <c>Any</c> node is admitted by one satisfied edge, so
+    ///     the dead sibling it never waited on says nothing about why an operator skipped it afterwards — and reading
+    ///     that sibling as a refusal is what would make this skip a cascade and throw its own join's survivor away.
+    /// </summary>
+    [Test]
+    public void EdgeState_AnAnyNodeThatWasAdmittedIsWaivedDespiteItsDeadSibling()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.AnyWorkNodeOverAMixedFanIn);
+        var nodeRuns = ByKey(NodeRun("mixedsplit", DevWorkflowNodeRunStatus.Succeeded),
+            NodeRun("mixedgood", DevWorkflowNodeRunStatus.Succeeded),
+            NodeRun("mixedbad", DevWorkflowNodeRunStatus.Failed),
+            NodeRun("mixedsibling", DevWorkflowNodeRunStatus.Succeeded),
+            NodeRun("mixedwork", DevWorkflowNodeRunStatus.Skipped));
+
+        AssertEx.Equal(DevWorkflowEdgeState.Waived,
+            DevWorkflowStateMachine.EdgeState(graph.OutboundEdges("mixedwork")[0], graph, nodeRuns),
+            "one satisfied edge was the whole contract it waited on, so only a person can have stopped it after that.");
+
+        AssertEx.Equal(DevWorkflowNodeAdmission.Eligible,
+            DevWorkflowStateMachine.Admission(graph.Nodes["mixedmerge"], graph, nodeRuns),
+            "and the All join behind it still carries the branch that did arrive.");
+    }
+
+    /// <summary>
+    ///     The conservative half of the same rule: an <c>Any</c> node with nothing satisfied never had an admission of
+    ///     its own to lose, so a dead branch beside an excused one leaves its skip a cascade, exactly as before.
+    /// </summary>
+    [Test]
+    public void EdgeState_AnAnyNodeNothingSatisfiedStaysDead()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.AnyWorkNodeOverAMixedFanIn);
+        var nodeRuns = ByKey(NodeRun("mixedsplit", DevWorkflowNodeRunStatus.Succeeded),
+            NodeRun("mixedgood", DevWorkflowNodeRunStatus.Skipped),
+            NodeRun("mixedbad", DevWorkflowNodeRunStatus.Failed),
+            NodeRun("mixedsibling", DevWorkflowNodeRunStatus.Succeeded),
+            NodeRun("mixedwork", DevWorkflowNodeRunStatus.Skipped));
+
+        AssertEx.Equal(DevWorkflowEdgeState.Dead,
+            DevWorkflowStateMachine.EdgeState(graph.OutboundEdges("mixedwork")[0], graph, nodeRuns),
+            "excused beside broken and nothing arrived: the failure is still what this node is standing in front of.");
+
+        AssertEx.Equal(DevWorkflowNodeAdmission.Skip,
+            DevWorkflowStateMachine.Admission(graph.Nodes["mixedmerge"], graph, nodeRuns));
+    }
+
+    /// <summary>
     ///     A cascaded skip records WHY, because a run whose tail was skipped is fourteen identical rows otherwise and
     ///     an operator cannot tell which one of them was the decision.
     /// </summary>

@@ -320,10 +320,13 @@ internal sealed class DevWorkflowMaterializer
             return $"Expanding {tasks.Count} tasks would take this run past the {maxNodeRunsPerRun} node runs it may carry.";
         }
 
-        // Whether the template's root is a DevTask decides whether a task has to name the files it changes: that is the
-        // node type whose clone becomes a Development coder attempt, and the "must export a patch" contract is the
-        // attempt's, not the decomposition's. Read once, because it cannot differ between tasks of one package.
-        var devTaskRoot = graph.Nodes.TryGetValue(materialization.TemplateNodeKey, out var templateRoot) && templateRoot.NodeType == DevWorkflowNodeType.DevTask;
+        // Whether the template carries a DevTask ANYWHERE decides whether a task has to name the files it changes: that
+        // is the node type whose clone becomes a Development coder attempt, and the "must export a patch" contract is
+        // the attempt's, not the decomposition's. The whole subtree rather than its root, because a custom template is
+        // free to root itself in an Agent that briefs a DevTask below it — and there the coder that cannot finish on an
+        // empty patch is exactly as real, just one node further down. Read once, because it cannot differ between tasks
+        // of one package.
+        var subtreeHasDevTask = subtree.Any(key => graph.Nodes.TryGetValue(key, out var templateNode) && templateNode.NodeType == DevWorkflowNodeType.DevTask);
 
         var ids = new HashSet<string>(StringComparer.Ordinal);
 
@@ -350,14 +353,14 @@ internal sealed class DevWorkflowMaterializer
                 return $"The task package names '{task.Id}' twice, and two tasks cannot share one identity.";
             }
 
-            // A DevTask-rooted template only. There a task becomes a Development coder attempt, and that attempt
+            // A template carrying a DevTask only. There a task becomes a Development coder attempt, and that attempt
             // cannot finish without exporting a NON-EMPTY patch: a slice with nothing to change — a survey, a style
             // profile, a verification — is refused, re-attempted twice more, refused twice more, and then blocks the
             // run in front of a human. Live, four runs went that way. 'changes' is the one signal the package carries
             // that there IS something to change, so a package that names none is handed straight back to the node that
-            // wrote it, while it is still cheap to fix. An Agent-rooted template keeps the old contract: its clones are
-            // ordinary sessions with no patch to export and nothing this would be judging.
-            if (devTaskRoot)
+            // wrote it, while it is still cheap to fix. A template with no DevTask in it keeps the old contract: its
+            // clones are ordinary sessions with no patch to export and nothing this would be judging.
+            if (subtreeHasDevTask)
             {
                 var changes = (task.Changes ?? []).Where(static change => !string.IsNullOrWhiteSpace(change)).ToList();
                 if (changes.Count == 0)

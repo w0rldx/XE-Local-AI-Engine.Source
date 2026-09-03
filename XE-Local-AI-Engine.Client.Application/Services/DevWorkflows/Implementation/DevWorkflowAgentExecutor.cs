@@ -502,30 +502,52 @@ internal sealed class DevWorkflowAgentExecutor
         if ((upstream.Count > 0 || skipped.Count > 0) && objective.Length + section.Length <= MaxObjectiveCharacters)
         {
             _ = objective.Append(section);
+
+            // Composed FIRST though they are appended last. One line per skipped step, carrying the reason the row
+            // kept — which for an operator's decision is the operator's own words — with the heading folded into the
+            // first line, so a budget that runs out leaves no heading promising steps it could not name.
+            var lines = skipped.Select(static skip => string.Create(CultureInfo.InvariantCulture,
+                                    $"- '{skip.NodeKey}' was skipped{(skip.TerminalReason is { Length: > 0 } reason ? $": {reason}" : ".")}{Environment.NewLine}"))
+                               .ToList();
+            if (lines.Count > 0)
+            {
+                lines[0] = $"{Environment.NewLine}### Skipped steps{Environment.NewLine}{lines[0]}";
+            }
+
+            // Their room is then held BACK from what the artifacts apportion. The share below hands the bodies every
+            // remaining character, so one long document would truncate to the ceiling itself and leave the lines
+            // nothing to fit into — the node would again be told nothing about the work that did not happen, and an
+            // absence cannot be read. Reserving is cheap: a line is a node key and a reason bounded at a kilobyte.
+            // Capped at half the room so the reserve cannot invert the problem, a wide fan-out of skipped branches
+            // crowding out the branches that DID produce.
+            var reserve = Math.Min(lines.Sum(static line => line.Length), (MaxObjectiveCharacters - objective.Length) / 2);
+            var artifactCeiling = MaxObjectiveCharacters - reserve;
             for (var index = 0; index < upstream.Count; index++)
             {
                 var artifact = upstream[index];
                 var header = string.Create(CultureInfo.InvariantCulture,
                     $"{Environment.NewLine}### {artifact.Kind} '{artifact.Name}' (version {artifact.Version}, id {artifact.Id}){Environment.NewLine}");
 
-                // Everything still to be written shares the room left equally, so a long first document cannot crowd
-                // out the ones after it and a short one hands its slack on. The share has to cover this artifact's own
-                // header and marker as well as its body, which is why both come off it before the body is asked for.
-                var share = (MaxObjectiveCharacters - objective.Length) / (upstream.Count - index);
+                // Everything still to be written shares the room left equally — the room left BELOW the reserve, not
+                // below the limit — so a long first document cannot crowd out the ones after it and a short one hands
+                // its slack on. The share has to cover this artifact's own header and marker as well as its body,
+                // which is why both come off it before the body is asked for.
+                var share = (artifactCeiling - objective.Length) / (upstream.Count - index);
                 var body = await RenderArtifactAsync(run.Id, artifact, share - header.Length - DevWorkflowPolicyText.TruncationMarkerReserve, cancellationToken).ConfigureAwait(false);
 
                 // The bound is enforced HERE, on the FINISHED block, with the header, the body, whichever marker was
                 // rendered and the newlines all counted. Nothing reaches the objective except through this check, so
-                // no reference-only line, marker or rounding can push it past the limit. A block that will not fit
-                // falls back to its header alone — the agent still learns the artifact exists, which is the half that
-                // matters most — and an artifact with no room even for that is dropped rather than allowed to overrun.
+                // no reference-only line, marker or rounding can push it past the reserved ceiling. A block that will
+                // not fit falls back to its header alone — the agent still learns the artifact exists, which is the
+                // half that matters most — and one with no room even for that is dropped rather than allowed to
+                // overrun.
                 foreach (var candidate in new[]
                          {
                              header + body + Environment.NewLine,
                              header
                          })
                 {
-                    if (objective.Length + candidate.Length <= MaxObjectiveCharacters)
+                    if (objective.Length + candidate.Length <= artifactCeiling)
                     {
                         _ = objective.Append(candidate);
                         break;
@@ -533,16 +555,11 @@ internal sealed class DevWorkflowAgentExecutor
                 }
             }
 
-            // Last, and under the SAME bound as everything else: a line about work that did not happen must not push
-            // out a document that did. One line per skipped step, carrying the reason the row kept — which for an
-            // operator's decision is the operator's own words. The header goes on only with a line under it, so a
-            // budget that runs out mid-list leaves no heading promising steps it could not name.
-            var lines = skipped.Select(static skip => string.Create(CultureInfo.InvariantCulture,
-                                    $"- '{skip.NodeKey}' was skipped{(skip.TerminalReason is { Length: > 0 } reason ? $": {reason}" : ".")}{Environment.NewLine}"))
-                               .ToList();
-            for (var index = 0; index < lines.Count; index++)
+            // Last, and under the SAME overall bound as everything else rather than under the reserve: whatever the
+            // artifacts left unspent is the list's to use, and a line about work that did not happen still must not
+            // push the objective past the limit.
+            foreach (var line in lines)
             {
-                var line = index == 0 ? $"{Environment.NewLine}### Skipped steps{Environment.NewLine}{lines[0]}" : lines[index];
                 if (objective.Length + line.Length > MaxObjectiveCharacters)
                 {
                     break;

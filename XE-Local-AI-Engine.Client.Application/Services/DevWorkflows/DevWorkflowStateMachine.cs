@@ -191,10 +191,23 @@ internal static class DevWorkflowStateMachine
     }
 
     /// <summary>
-    ///     Whether a Skipped node's own skip was a person's choice rather than something upstream refusing it: every
-    ///     one of its dependencies reads <c>Satisfied</c> or <c>Waived</c>, all the way back. A node with NO inbound
-    ///     edges is vacuously waived, and that is the right answer rather than a gap — an entry node has nothing
-    ///     upstream that could have refused it, so an operator is the only thing that can have skipped it.
+    ///     Whether a Skipped node's own skip was a person's choice rather than something upstream refusing it. The
+    ///     question is asked under the node's OWN join policy, because that policy is what decides which of its
+    ///     dependencies ever had to arrive. Under <c>All</c> every one of them did, so a skip is a person's only when
+    ///     they all read <c>Satisfied</c> or <c>Waived</c>. Under <c>Any</c> one arriving was the whole contract: a
+    ///     node admitted on one satisfied edge RAN, and if it then blocked and an operator skipped it, the Dead sibling
+    ///     it was never waiting on is not what caused that. Judging it with an <c>All</c> predicate regardless is how
+    ///     one such skip read as a cascade and took a downstream <c>All</c> join's surviving work down with it.
+    ///     <para>
+    ///         A node with NO inbound edges is vacuously waived under either policy, and that is the right answer
+    ///         rather than a gap — an entry node has nothing upstream that could have refused it, so an operator is
+    ///         the only thing that can have skipped it. An <c>Any</c> node whose edges are Dead and Waived with none
+    ///         Satisfied stays <c>Dead</c>: nothing arrived, so it never had an admission of its own to lose.
+    ///     </para>
+    ///     <para>
+    ///         A <c>Pending</c> dependency waives nothing under either policy, which is the conservative half of the
+    ///         old rule kept intact: a source still to settle may yet die, and answering now is answering ahead of it.
+    ///     </para>
     ///     <para>
     ///         Two collections, and both are load-bearing. <paramref name="waived" /> MEMOIZES: a diamond reaches the
     ///         same ancestor down two paths, and re-walking it is what turns a wide fan-out into an exponential one.
@@ -220,8 +233,13 @@ internal static class DevWorkflowStateMachine
             return false;
         }
 
-        var answer = Dependencies(graph, nodeKey)
-            .All(edge => EdgeState(edge, graph, nodeRunsByKey, waived, resolving) is DevWorkflowEdgeState.Satisfied or DevWorkflowEdgeState.Waived);
+        var states = Dependencies(graph, nodeKey)
+                     .Select(edge => EdgeState(edge, graph, nodeRunsByKey, waived, resolving))
+                     .ToList();
+        var nothingRefusedIt = states.All(static state => state is DevWorkflowEdgeState.Satisfied or DevWorkflowEdgeState.Waived);
+        var answer = graph.Nodes.GetValueOrDefault(nodeKey)?.JoinPolicy == DevWorkflowJoinPolicy.Any
+            ? nothingRefusedIt || states.Contains(DevWorkflowEdgeState.Satisfied)
+            : nothingRefusedIt;
         _ = resolving.Remove(nodeKey);
         waived[nodeKey] = answer;
         return answer;

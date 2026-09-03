@@ -369,6 +369,32 @@ internal static class DevWorkflowGraphs
                                                     """;
 
     /// <summary>
+    ///     A template whose ROOT is an Agent and which carries a <c>DevTask</c> below it: the brief is written by a
+    ///     session, the code is written by a coder. A custom shape rather than the seeded one, and the reason the
+    ///     "must name its files" rule is asked of the whole subtree — the coder that cannot finish on an empty patch is
+    ///     here too, one node further down, where reading only the root would miss it.
+    /// </summary>
+    public const string DecompositionIntoAnAgentOverADevTask = """
+                                                               {
+                                                                 "schemaVersion": 1,
+                                                                 "nodes": [
+                                                                   { "nodeKey": "decompose", "nodeType": "Agent", "label": "Decompose",
+                                                                     "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b",
+                                                                     "materialization": { "templateNodeKey": "prepare", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                                                   { "nodeKey": "prepare", "nodeType": "Agent", "label": "Prepare",
+                                                                     "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                                                   { "nodeKey": "implement", "nodeType": "DevTask", "label": "Implement", "nodeTimeoutSeconds": 900 },
+                                                                   { "nodeKey": "join", "nodeType": "Join" }
+                                                                 ],
+                                                                 "edges": [
+                                                                   { "from": "decompose", "to": "join" },
+                                                                   { "from": "prepare", "to": "implement" },
+                                                                   { "from": "implement", "to": "join" }
+                                                                 ]
+                                                               }
+                                                               """;
+
+    /// <summary>
     ///     <see cref="DecompositionIntoDevTasks" /> with the integration stage on the end: the fan-out joins, an
     ///     operator is asked, and only their approval routes into the node that applies the patches. The seeded
     ///     <c>feature-development-v1</c> shape without its research, plan and verification agents, which add ticks and
@@ -454,6 +480,35 @@ internal static class DevWorkflowGraphs
                                               ]
                                             }
                                             """;
+
+    /// <summary>
+    ///     A WORK node that waits on <c>Any</c> — two branches in, one enough to admit it — with an <c>All</c> join
+    ///     behind it that also has a branch of its own. The shape that tells a skip's two origins apart under a policy
+    ///     that is not <c>All</c>: the node runs on one satisfied edge while its sibling is already dead, and what an
+    ///     operator's Skip on it then means cannot be read off that dead sibling.
+    /// </summary>
+    public const string AnyWorkNodeOverAMixedFanIn = """
+                                                     {
+                                                       "schemaVersion": 1,
+                                                       "nodes": [
+                                                         { "nodeKey": "mixedsplit", "nodeType": "Parallel" },
+                                                         { "nodeKey": "mixedgood", "nodeType": "Tool" },
+                                                         { "nodeKey": "mixedbad", "nodeType": "Tool" },
+                                                         { "nodeKey": "mixedwork", "nodeType": "Tool", "joinPolicy": "Any" },
+                                                         { "nodeKey": "mixedsibling", "nodeType": "Tool" },
+                                                         { "nodeKey": "mixedmerge", "nodeType": "Join" }
+                                                       ],
+                                                       "edges": [
+                                                         { "from": "mixedsplit", "to": "mixedgood" },
+                                                         { "from": "mixedsplit", "to": "mixedbad" },
+                                                         { "from": "mixedsplit", "to": "mixedsibling" },
+                                                         { "from": "mixedgood", "to": "mixedwork" },
+                                                         { "from": "mixedbad", "to": "mixedwork" },
+                                                         { "from": "mixedwork", "to": "mixedmerge" },
+                                                         { "from": "mixedsibling", "to": "mixedmerge" }
+                                                       ]
+                                                     }
+                                                     """;
 
     /// <summary>
     ///     Two branches into an <c>Any</c> join, one of which cannot run at all: the agent node binds no definition, so

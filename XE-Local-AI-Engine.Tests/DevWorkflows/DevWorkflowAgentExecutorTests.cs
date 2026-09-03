@@ -770,6 +770,42 @@ public sealed class DevWorkflowAgentExecutorTests
     }
 
     /// <summary>
+    ///     The skipped steps survive a branch that produced more than the objective can hold. The artifact bodies share
+    ///     whatever room is left, so before their share was cut by the list's own length a single long document would
+    ///     truncate to the ceiling and the lines under it — appended last — would silently not fit. The node would once
+    ///     again judge four slices as if they were five, and nothing in the objective would say otherwise.
+    /// </summary>
+    [Test]
+    public async Task TheObjective_WhenAnUpstreamArtifactWouldFillIt_StillNamesTheStepsAPersonSkipped()
+    {
+        // A private host: Objectives is the shared fake's whole history, and this asserts on the LAST one.
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(TwoBranchesIntoAVerification).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", new string('a', 20_000)).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
+        await harness.DecideAsync(runId, "doomed", DevWorkflowDecisionKind.Skip, comment: "No repository binding exists for this branch.")
+                     .ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
+            (await harness.ReadNodeRunAsync(runId, "verify").ConfigureAwait(false)).Status,
+            "the node ran: an over-long objective is refused, and the refusal blocks it for a human.");
+
+        var objective = harness.Agent.Objectives[^1];
+        AssertEx.Contains(objective, " characters.)", message: "the document that DID arrive is truncated, which is what leaves the list nothing to fit in.");
+        AssertEx.Contains(objective, "### Skipped steps");
+        AssertEx.Contains(objective,
+            "- 'doomed' was skipped: Skipped by an operator: No repository binding exists for this branch.",
+            message: "and the skipped branch is still named, because its room was set aside before the bodies apportioned the rest.");
+        AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
+            $"the objective was {objective.Length} characters, past the ceiling.");
+        AssertEx.True(objective.Length > DevWorkflowAgentExecutor.MaxObjectiveCharacters - 500,
+            $"the objective came to only {objective.Length} characters, so the artifact never crowded the budget and this test proves nothing.");
+    }
+
+    /// <summary>
     ///     The seeded contract, end to end: the plan node is told to turn research.md into a plan, so it has to be
     ///     handed research.md — the whole of it, promoted onto the run and rendered into the objective. A reference it
     ///     cannot dereference would leave it inventing a plan while the run still reported success.

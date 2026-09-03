@@ -201,9 +201,52 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>
-    ///     The rule is the DevTask lane's, so an Agent-rooted template is untouched by it. An Agent clone is an ordinary
-    ///     work session with no patch to export and nothing "changes" would be describing, and a package written for one
-    ///     has never had to name a file — refusing it would break every template that is not the seeded one.
+    ///     The rule follows the DevTask, not the template's root. A custom template is free to root itself in an Agent
+    ///     that writes the brief and put the coder one node below it — and there the attempt that cannot finish on an
+    ///     empty patch is exactly as real, so reading only the root would wave the package straight past it.
+    /// </summary>
+    [Test]
+    public async Task ADevTaskBelowAnAgentRootStillRequiresChanges()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await DecomposeAsync(harness,
+                              """[{"id":"survey","title":"Survey the style","goal":"Read the calculator and capture the style profile."}]""",
+                              DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask)
+                          .ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var decompose = await harness.ReadNodeRunAsync(runId, "decompose").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, decompose.Status, $"the row settled on {decompose.Status} rather than cloning a coder that cannot finish.");
+        AssertEx.Contains(AssertEx.NotNull(decompose.TerminalReason), "names no file it will add or edit in 'changes'");
+        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).Count, "a refused package clones nothing.");
+    }
+
+    /// <summary>The same template with the files named: the rule is a gate on the package, not a refusal of the shape.</summary>
+    [Test]
+    public async Task ADevTaskBelowAnAgentRootMaterializesOnceItNamesItsChanges()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await DecomposeAsync(harness,
+                              """[{"id":"alpha","title":"Add Square","goal":"Add a Square method.","changes":["src/Calc/Calculator.cs"]}]""",
+                              DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask)
+                          .ConfigureAwait(false);
+
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "decompose").ConfigureAwait(false)).Status);
+        AssertEx.Contains(AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "implement#alpha").ConfigureAwait(false)).InputJson),
+            "Files this task will add or edit: src/Calc/Calculator.cs",
+            message: "and the coder below the Agent root is told the files, exactly as a DevTask-rooted clone is.");
+    }
+
+    /// <summary>
+    ///     The rule is the DevTask lane's, so a template with no DevTask in it at all is untouched by it. An Agent clone
+    ///     is an ordinary work session with no patch to export and nothing "changes" would be describing, and a package
+    ///     written for one has never had to name a file — refusing it would break every template that is not the seeded
+    ///     one.
     /// </summary>
     [Test]
     public async Task AnAgentRootedDecompositionStillMaterializesWithoutChanges()
