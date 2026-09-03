@@ -431,6 +431,55 @@ public sealed class DevWorkflowEndpointTests
     }
 
     /// <summary>
+    ///     The capability fields cross the wire in BOTH directions, or they are not authorable at all: the mapper
+    ///     serializes the wire DTO, so a graph field absent from it is DROPPED on any save round-trip — which is how
+    ///     <c>toolMode</c> was lost once already. All three are asserted on one trip: the node's declared effects and
+    ///     its loop cap, and the graph-level waiver, in what the store was handed and in what the caller reads back.
+    /// </summary>
+    [Test]
+    public async Task Definition_KeepsTheCapabilityFieldsThroughTheRoundTrip()
+    {
+        const string CapabilityGraph = """
+                                       {"schemaVersion":1,"allowUngatedWrites":true,
+                                        "nodes":[{"nodeKey":"implement","nodeType":"Agent",
+                                                  "requiredCapabilities":{"WriteExecute":"runs the release script"}},
+                                                 {"nodeKey":"check","nodeType":"Tool","retryTarget":"implement","maxLoopIterations":2}],
+                                        "edges":[{"from":"implement","to":"check"}]}
+                                       """;
+        var store = Store();
+        string? stored = null;
+        store.CreateDefinitionAsync(Arg.Any<CreateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call =>
+             {
+                 stored = call.Arg<CreateDevWorkflowDefinitionCommand>().GraphJson;
+                 return DefinitionSnapshot(stored);
+             });
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(CapabilityGraph)).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
+        AssertEx.NotNull(stored);
+        using var storedDocument = JsonDocument.Parse(stored!);
+        AssertEx.True(storedDocument.RootElement.GetProperty("allowUngatedWrites").GetBoolean(), "the waiver is what a run pins, so it has to survive into the blob.");
+        var storedNodes = storedDocument.RootElement.GetProperty("nodes");
+        AssertEx.Equal("runs the release script",
+            storedNodes[0].GetProperty("requiredCapabilities").GetProperty("WriteExecute").GetString(),
+            "the author's reason rides the blob untouched — nothing in the runtime reads it, and the editor renders it.");
+        AssertEx.Equal(expected: 2, storedNodes[1].GetProperty("maxLoopIterations").GetInt32());
+        AssertEx.False(storedNodes[0].TryGetProperty("maxLoopIterations", out _),
+            "and a node that names no cap writes none, so a definition authored before this field keeps its bytes.");
+
+        using var document = JsonDocument.Parse(body);
+        var graph = document.RootElement.GetProperty("graph");
+        AssertEx.True(graph.GetProperty("allowUngatedWrites").GetBoolean());
+        var nodes = graph.GetProperty("nodes");
+        AssertEx.Equal("runs the release script", nodes[0].GetProperty("requiredCapabilities").GetProperty("WriteExecute").GetString());
+        AssertEx.Equal(expected: 2, nodes[1].GetProperty("maxLoopIterations").GetInt32());
+    }
+
+    /// <summary>
     ///     And the parse rules apply to an API-authored apply node exactly as they do to the seeded one: an apply the
     ///     graph does not put a human gate in front of is refused at save time, with the parser's own sentence.
     /// </summary>

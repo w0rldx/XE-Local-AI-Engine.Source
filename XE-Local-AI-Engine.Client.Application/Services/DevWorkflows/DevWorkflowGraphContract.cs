@@ -80,6 +80,37 @@ public static class DevWorkflowGraphContract
     }
 
     /// <summary>
+    ///     What each node of a stored graph can change, as effect names — the editor's badge row.
+    ///     <para>
+    ///         Asked of the parser rather than re-derived from the wire document, for the reason this class exists: the
+    ///         invariants refuse a save on these effects, so an editor computing its own set would show badges that
+    ///         disagree with the 400 the operator gets. The author's REASON is not here — it stays on the wire node's
+    ///         own <c>requiredCapabilities</c>, which is the field it was written into.
+    ///     </para>
+    ///     <para>
+    ///         Answers EMPTY for a graph that cannot be parsed, exactly as <see cref="TemplateNodeKeys" /> does and for
+    ///         the same reason: this is a read path, and a run whose pinned graph is unroutable is the one an operator
+    ///         most needs to be able to open.
+    ///     </para>
+    /// </summary>
+    public static IReadOnlyDictionary<string, IReadOnlyList<string>> EffectsOf(string graphJson)
+    {
+        try
+        {
+            return DevWorkflowGraph.Parse(graphJson)
+                                   .Nodes
+                                   .ToDictionary(static node => node.Key,
+                                       static IReadOnlyList<string> (node) =>
+                                           [.. DevWorkflowGraph.Effects(node.Value).Select(static effect => effect.ToString()).Order(StringComparer.Ordinal)],
+                                       StringComparer.Ordinal);
+        }
+        catch (DevWorkflowValidationException)
+        {
+            return new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        }
+    }
+
+    /// <summary>
     ///     Whether a <c>Reject</c> at <paramref name="nodeKey" /> has somewhere to go. False means X10: the rejection
     ///     ends the run, and the confirm dialog can only say so because the server answered this before the click.
     ///     <para>

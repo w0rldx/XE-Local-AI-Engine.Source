@@ -46,18 +46,22 @@ public sealed class DevWorkflowIntegrationApplyTests
                                                 "nodes": [
                                                   { "nodeKey": "fork", "nodeType": "Parallel", "label": "Fork" },
                                                   { "nodeKey": "alphaimplement", "nodeType": "DevTask", "label": "Implement alpha", "nodeTimeoutSeconds": 900 },
+                                                  { "nodeKey": "alphacheck", "nodeType": "Tool", "label": "Validate alpha" },
                                                   { "nodeKey": "alphaapproval", "nodeType": "HumanGate", "label": "Approve alpha" },
                                                   { "nodeKey": "alphaapply", "nodeType": "Tool", "toolMode": "Apply", "label": "Apply alpha" },
                                                   { "nodeKey": "betaimplement", "nodeType": "DevTask", "label": "Implement beta", "nodeTimeoutSeconds": 900 },
+                                                  { "nodeKey": "betacheck", "nodeType": "Tool", "label": "Validate beta" },
                                                   { "nodeKey": "betaapproval", "nodeType": "HumanGate", "label": "Approve beta" },
                                                   { "nodeKey": "betaapply", "nodeType": "Tool", "toolMode": "Apply", "label": "Apply beta" }
                                                 ],
                                                 "edges": [
                                                   { "from": "fork", "to": "alphaimplement" },
                                                   { "from": "fork", "to": "betaimplement" },
-                                                  { "from": "alphaimplement", "to": "alphaapproval" },
+                                                  { "from": "alphaimplement", "to": "alphacheck" },
+                                                  { "from": "alphacheck", "to": "alphaapproval" },
                                                   { "from": "alphaapproval", "to": "alphaapply", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
-                                                  { "from": "betaimplement", "to": "betaapproval" },
+                                                  { "from": "betaimplement", "to": "betacheck" },
+                                                  { "from": "betacheck", "to": "betaapproval" },
                                                   { "from": "betaapproval", "to": "betaapply", "condition": { "path": "decision", "op": "eq", "value": "Approve" } }
                                                 ]
                                               }

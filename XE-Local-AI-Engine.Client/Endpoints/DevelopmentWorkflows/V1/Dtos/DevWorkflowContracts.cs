@@ -208,7 +208,15 @@ public sealed class DevWorkflowArtifactRequest
 // with. There is no edge table anywhere: this shape is composed from the encrypted graph blob on the definition row or
 // the run row, which is the single source of routing truth.
 
-public sealed record DevWorkflowGraph(int SchemaVersion, IReadOnlyList<DevWorkflowGraphNode> Nodes, IReadOnlyList<DevWorkflowGraphEdge> Edges)
+public sealed record DevWorkflowGraph(int SchemaVersion,
+    IReadOnlyList<DevWorkflowGraphNode> Nodes,
+    IReadOnlyList<DevWorkflowGraphEdge> Edges,
+    /// <summary>
+    ///     The template's own waiver of the rule that a node writing outside its sandbox is reached through a human
+    ///     gate. Absent means <c>false</c>: the rule is new, so nothing already stored can be relying on the waiver, and
+    ///     a definition written before this field keeps every byte it had.
+    /// </summary>
+    bool? AllowUngatedWrites = null)
 {
     public static DevWorkflowGraph Empty { get; } = new(1, [], []);
 }
@@ -238,6 +246,12 @@ public sealed record DevWorkflowGraphNode(
     DevWorkflowMaterialization? Materialization,
     IReadOnlyDictionary<string, string>? RequiredCapabilities,
     string? ToolMode,
+    /// <summary>
+    ///     How many times this node's fix loop may re-run before the run stops and asks a human. Only meaningful beside
+    ///     a <c>RetryTarget</c>, and refused without one. Absent means no per-loop cap at all — the run-wide attempt
+    ///     budget is what bounds it then, exactly as it does today.
+    /// </summary>
+    int? MaxLoopIterations,
     /// <summary>
     ///     Whether this node belongs to a materialization template subtree — a clone-in-waiting the run gives no node
     ///     run to. DERIVED on the way out from the runtime's own parser, never authored and never stored: the save path

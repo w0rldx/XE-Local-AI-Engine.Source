@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using System.Reflection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -87,6 +89,420 @@ public sealed class DevWorkflowGraphTests
         AssertEx.Null(only.ModelProfile);
         AssertEx.Null(only.ReasoningEffort);
     }
+
+    /// <summary>
+    ///     <c>requiredCapabilities</c> is an OBJECT — effect token to the author's reason — and it is the one effect
+    ///     answer a graph can give for an Agent node, whose real reach follows from the definition it binds and is not
+    ///     knowable until dispatch. The tokens are matched case-insensitively, like every other vocabulary here.
+    /// </summary>
+    [Test]
+    public void Parse_ReadsRequiredCapabilitiesAsATypedEffectSet()
+    {
+        var graph = DevWorkflowGraph.Parse(
+            """
+            {"schemaVersion":1,"allowUngatedWrites":true,
+             "nodes":[{"nodeKey":"release","nodeType":"Agent",
+                       "requiredCapabilities":{"writeexecute":"runs the release script","Network":"pushes the tag"}}],
+             "edges":[]}
+            """);
+
+        AssertEx.Equal("Network, WriteExecute",
+            string.Join(", ", DevWorkflowGraph.Effects(graph.Nodes["release"]).Select(static effect => effect.ToString()).Order(StringComparer.Ordinal)));
+    }
+
+    /// <summary>
+    ///     An Agent that declares nothing carries nothing. The alternative — reading an undeclared agent as a writer —
+    ///     would classify every node of every seeded template as a write, because they are all instructed to save
+    ///     artifacts, and the product's own templates would stop validating.
+    /// </summary>
+    [Test]
+    public void Parse_WithoutRequiredCapabilities_LeavesAnAgentNodeDeclaringNothing()
+    {
+        var research = DevWorkflowGraph.Parse(DevWorkflowGraphs.ResearchPlanApproval).Nodes["research"];
+
+        AssertEx.Empty(research.RequiredCapabilities);
+        AssertEx.Empty(DevWorkflowGraph.Effects(research));
+    }
+
+    /// <summary>
+    ///     What the other node types carry is DERIVED, because the node itself says what it does. A Tool naming no
+    ///     command inherits the project profile's set, chosen when a run picks a project up, so the answer fails toward
+    ///     the wider set rather than guessing the narrower one.
+    /// </summary>
+    [Test]
+    public void Parse_DerivesTheEffectsOfEveryNodeTypeThatSaysWhatItDoes()
+    {
+        var fanOut = DevWorkflowGraph.Parse(DevWorkflowGraphs.FanOut);
+        var gated = DevWorkflowGraph.Parse(GatedApply);
+
+        AssertEx.Equal("WriteExecute", Effects(fanOut, "implement"), "a DevTask writes.");
+        AssertEx.Equal(DevWorkflowEffectScope.Sandbox, DevWorkflowGraph.ScopeOf(fanOut.Nodes["implement"]), "…into a worktree under this node's own data root.");
+        AssertEx.Equal("Network, ReadLocal", Effects(fanOut, "lint"), "a validation naming no command may be given one that restores packages.");
+        AssertEx.Equal("", Effects(fanOut, "join"), "a join routes; it does not act.");
+        AssertEx.Equal("", Effects(gated, "gate"));
+        AssertEx.Equal("WriteExecute", Effects(gated, "apply"), "an apply writes…");
+        AssertEx.Equal(DevWorkflowEffectScope.Repository, DevWorkflowGraph.ScopeOf(gated.Nodes["apply"]), "…the operator's own repository.");
+    }
+
+    /// <summary>
+    ///     A validation whose commands are all local reaches nothing off the machine; naming the restore command is
+    ///     what puts it on the network. The distinction is worth making because it is the only one the derived half of
+    ///     the vocabulary can draw from a definition alone.
+    /// </summary>
+    [Test]
+    public void Parse_ReadsAValidationsNetworkReachFromTheCommandsItNames()
+    {
+        var graph = DevWorkflowGraph.Parse(
+            """
+            {"schemaVersion":1,
+             "nodes":[{"nodeKey":"local","nodeType":"Tool","validationCommandIds":["git_status","dotnet_build_release_no_restore"]},
+                      {"nodeKey":"restoring","nodeType":"Tool","validationCommandIds":["dotnet_restore"]}],
+             "edges":[{"from":"local","to":"restoring"}]}
+            """);
+
+        AssertEx.Equal("ReadLocal", Effects(graph, "local"));
+        AssertEx.Equal("Network, ReadLocal", Effects(graph, "restoring"));
+    }
+
+    /// <summary>
+    ///     The per-loop cap, and the reason it is optional: absent means NO cap, so every already-stored definition
+    ///     routes at run start exactly as it does today.
+    /// </summary>
+    [Test]
+    public void Parse_ReadsMaxLoopIterationsBesideARetryTarget()
+    {
+        var graph = DevWorkflowGraph.Parse(
+            """
+            {"schemaVersion":1,
+             "nodes":[{"nodeKey":"implement","nodeType":"Agent"},
+                      {"nodeKey":"check","nodeType":"Tool","retryTarget":"implement","maxLoopIterations":2}],
+             "edges":[{"from":"implement","to":"check"}]}
+            """);
+
+        AssertEx.Equal(expected: 2, graph.Nodes["check"].MaxLoopIterations);
+        AssertEx.Null(graph.Nodes["implement"].MaxLoopIterations, "a node that names no cap has none, rather than inheriting a default nobody asked for.");
+    }
+
+    /// <summary>
+    ///     The graph-level waiver. Absent is <c>false</c>, which is what keeps a definition written before this field
+    ///     byte-identical: the rule it waives is new, so nothing stored can be relying on the waiver.
+    /// </summary>
+    [Test]
+    public void Parse_ReadsAllowUngatedWritesFromTheGraphRoot()
+    {
+        AssertEx.True(DevWorkflowGraph.Parse("""{"schemaVersion":1,"allowUngatedWrites":true,"nodes":[{"nodeKey":"only","nodeType":"Agent"}],"edges":[]}""")
+                                      .AllowUngatedWrites);
+        AssertEx.False(DevWorkflowGraph.Parse(DevWorkflowGraphs.ResearchPlanApproval).AllowUngatedWrites, "a graph that says nothing waives nothing.");
+    }
+
+    /// <summary>
+    ///     The reason beside a capability is a one-line justification a reviewer reads next to the node, and the whole
+    ///     graph document is encrypted and rewritten on every materialization — so it is bounded where it is authored
+    ///     rather than where it is stored.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnOverlongCapabilityReason_IsRejected()
+    {
+        var json = """{"schemaVersion":1,"nodes":[{"nodeKey":"release","nodeType":"Agent","requiredCapabilities":{"WriteExecute":"REASON"}}],"edges":[]}"""
+            .Replace("REASON", new string('x', 201), StringComparison.Ordinal);
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message, "longer than 200 characters");
+    }
+
+    /// <summary>
+    ///     <c>GRAPH-C4-1</c>. The bug class this closes is a real one and reads correctly:
+    ///     <c>value: "Approved"</c> — the past participle — is not an answer the gate can give, so the branch behind it
+    ///     is written and unreachable. The complaint names the GATE, because that is where the damage is; the run could
+    ///     not complete from there whatever is behind it.
+    /// </summary>
+    [Test]
+    public void Parse_WithAGateWhoseOnlyOutEdgeCanNeverFire_IsRejected()
+    {
+        const string StrandedBranch = """
+                                      {"schemaVersion":1,
+                                       "nodes":[{"nodeKey":"research","nodeType":"Agent"},
+                                                {"nodeKey":"planapproval","nodeType":"HumanGate"},
+                                                {"nodeKey":"ship","nodeType":"Agent"}],
+                                       "edges":[{"from":"research","to":"planapproval"},
+                                                {"from":"planapproval","to":"ship","condition":{"path":"decision","op":"eq","value":"Approved"}}]}
+                                      """;
+
+        var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(StrandedBranch)).Message;
+
+        AssertEx.Contains(refusal, "Node 'planapproval' is a human gate whose only out-edge can never fire");
+        AssertEx.Contains(refusal, "GRAPH-C4-1", StringComparison.Ordinal, "the id is what the operator quotes and what the client mirrors.");
+    }
+
+    /// <summary>
+    ///     A dead edge that stranded nothing is still a definition saying something the runtime will not do, so it is
+    ///     reported on its own — after the stranding check, because that one names the greater damage.
+    /// </summary>
+    [Test]
+    public void Parse_WithADeadGateEdgeBesideALiveOne_IsRejectedNamingTheEdge()
+    {
+        const string DeadBesideLive = """
+                                      {"schemaVersion":1,
+                                       "nodes":[{"nodeKey":"research","nodeType":"Agent"},
+                                                {"nodeKey":"approve","nodeType":"HumanGate"},
+                                                {"nodeKey":"ship","nodeType":"Agent"},
+                                                {"nodeKey":"rework","nodeType":"Agent"}],
+                                       "edges":[{"from":"research","to":"approve"},
+                                                {"from":"approve","to":"ship","condition":{"path":"decision","op":"eq","value":"Approve"}},
+                                                {"from":"approve","to":"rework","condition":{"path":"decision","op":"eq","value":"Approved"}}]}
+                                      """;
+
+        var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(DeadBesideLive)).Message;
+
+        AssertEx.Contains(refusal, "The edge 'approve' → 'rework' leaves a human gate and is false for all three answers");
+        AssertEx.Contains(refusal, "GRAPH-C4-1", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     The fourth step, and the one that is a rule rather than a footnote: a template leaf carries no out-edge, so
+    ///     it lands in <c>TerminalNodeKeys</c> — and the zero-task decomposition's no-op verdict row would then make a
+    ///     run read <c>Completed</c> at a key whose real tail never ran.
+    /// </summary>
+    [Test]
+    public void Parse_WithATemplateNodeThatNoEdgeLeaves_IsRejected()
+    {
+        const string EdgelessTemplate = """
+                                        {"schemaVersion":1,
+                                         "nodes":[{"nodeKey":"decompose","nodeType":"Agent",
+                                                   "materialization":{"templateNodeKey":"implement","artifactKind":"TaskPackage","joinNodeKey":"join","maxChildren":4}},
+                                                  {"nodeKey":"implement","nodeType":"DevTask"},
+                                                  {"nodeKey":"join","nodeType":"Join"}],
+                                         "edges":[{"from":"decompose","to":"join"}]}
+                                        """;
+
+        var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(EdgelessTemplate)).Message;
+
+        AssertEx.Contains(refusal, "Node 'implement' is inside the materialization template of 'decompose' and no edge leaves it");
+        AssertEx.Contains(refusal, "Give it an edge to the join node 'join'");
+        AssertEx.Contains(refusal, "GRAPH-C4-1", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     What the rule is deliberately NOT: answer coverage. Both seeded gates carry an <c>Approve</c> edge and
+    ///     nothing else, so a rejection ends the run — X10 working as designed. Reading C4-1 as "every answer has
+    ///     somewhere to go" would refuse the product's own templates.
+    /// </summary>
+    [Test]
+    public void Parse_WithAGateWhoseRejectionEndsTheRun_IsAccepted()
+    {
+        var graph = DevWorkflowGraph.Parse(GatedApply);
+
+        AssertEx.False(DevWorkflowStateMachine.GateEdgeFires(graph.OutboundEdges("gate")[0], DevWorkflowDecisionKind.Reject),
+            "the gate's one edge takes the approval and only the approval…");
+        AssertEx.Equal(expected: 3, graph.Nodes.Count, "…and the graph validates anyway.");
+    }
+
+    /// <summary>
+    ///     A <c>Gate</c> node's output document is whatever the node produced, so no definition-time reading of its
+    ///     conditions can say which of them will fire. The dead-edge rule is decidable for a HUMAN gate only, and a
+    ///     conditional edge out of an inline decision must stay authorable.
+    /// </summary>
+    [Test]
+    public void Parse_WithAConditionalEdgeOutOfAnInlineGate_IsAccepted() =>
+        AssertEx.Equal(expected: 3,
+            DevWorkflowGraph.Parse(
+                                """
+                                {"schemaVersion":1,
+                                 "nodes":[{"nodeKey":"decide","nodeType":"Gate"},{"nodeKey":"ship","nodeType":"Agent"},{"nodeKey":"stop","nodeType":"Agent"}],
+                                 "edges":[{"from":"decide","to":"ship","condition":{"path":"passed","op":"eq","value":true}},
+                                          {"from":"decide","to":"stop","condition":{"path":"passed","op":"eq","value":false}}]}
+                                """)
+                            .Nodes.Count);
+
+    /// <summary>
+    ///     <c>GRAPH-C4-2</c>. An author who declares a write is declaring a real one, so a run must not be able to
+    ///     reach the node without an operator having been asked. Y3 does not catch this: the node is an Agent, not an
+    ///     apply.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnAgentDeclaringAWriteAndNoUpstreamGate_IsRejected()
+    {
+        var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(DeclaredWrite(gated: false, waived: false))).Message;
+
+        AssertEx.Contains(refusal, "Node 'release' can write outside its sandbox and a run can reach it without an operator ever being asked");
+        AssertEx.Contains(refusal, "GRAPH-C4-2", StringComparison.Ordinal);
+    }
+
+    [Test]
+    public void Parse_WithAnAgentDeclaringAWriteBehindAGate_IsAccepted() =>
+        AssertEx.Equal(expected: 3, DevWorkflowGraph.Parse(DeclaredWrite(gated: true, waived: false)).Nodes.Count);
+
+    /// <summary>
+    ///     The escape hatch is the TEMPLATE's, written once and in the open, rather than each node quietly opting
+    ///     itself out. It waives C4-2 and nothing else — Y3 still requires a gate in front of an apply node, because
+    ///     approval policy here is tighten-only.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnUngatedDeclaredWriteAndTheTemplatesWaiver_IsAccepted()
+    {
+        var graph = DevWorkflowGraph.Parse(DeclaredWrite(gated: false, waived: true));
+
+        AssertEx.True(graph.AllowUngatedWrites);
+        AssertEx.Equal(expected: 2, graph.Nodes.Count);
+    }
+
+    /// <summary>
+    ///     Ruling D8: a <c>DevTask</c> writes a worktree created under this node's own data root, and its patch reaches
+    ///     the operator's repository only through an apply node a gate already stands in front of — so it is a SANDBOX
+    ///     write and needs no gate of its own. Saying otherwise would reject this fixture, whose DevTask is the ENTRY
+    ///     node and therefore cannot have an upstream gate at all.
+    /// </summary>
+    [Test]
+    public void Parse_WithASandboxScopedDevTaskWrite_NeedsNoGate()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.FanOut);
+
+        AssertEx.Equal("WriteExecute", Effects(graph, "implement"));
+        AssertEx.Equal(DevWorkflowEffectScope.Sandbox, DevWorkflowGraph.ScopeOf(graph.Nodes["implement"]));
+    }
+
+    /// <summary>
+    ///     <c>GRAPH-C4-3</c> at an <c>Any</c> convergence, where <c>Combine</c> is AND: only one branch may have run,
+    ///     so a validation on one of them assures nothing. Driven down the branch that skips the check, the apply would
+    ///     integrate patches nothing judged.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnApplyReachableByABranchThatSkipsValidation_IsRejected()
+    {
+        const string HalfValidated = """
+                                     {"schemaVersion":1,
+                                      "nodes":[{"nodeKey":"decide","nodeType":"Gate"},
+                                               {"nodeKey":"check","nodeType":"Tool"},
+                                               {"nodeKey":"straightthrough","nodeType":"Agent"},
+                                               {"nodeKey":"merge","nodeType":"Join","joinPolicy":"Any"},
+                                               {"nodeKey":"approval","nodeType":"HumanGate"},
+                                               {"nodeKey":"integrate","nodeType":"Tool","toolMode":"Apply"}],
+                                      "edges":[{"from":"decide","to":"check","condition":{"path":"passed","op":"eq","value":true}},
+                                               {"from":"decide","to":"straightthrough","condition":{"path":"passed","op":"eq","value":false}},
+                                               {"from":"check","to":"merge"},
+                                               {"from":"straightthrough","to":"merge"},
+                                               {"from":"merge","to":"approval"},
+                                               {"from":"approval","to":"integrate","condition":{"path":"decision","op":"eq","value":"Approve"}}]}
+                                     """;
+
+        var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(HalfValidated)).Message;
+
+        AssertEx.Contains(refusal, "Node 'integrate' applies approved patches and a run can reach it without any validation node having run");
+        AssertEx.Contains(refusal, "GRAPH-C4-3", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     The entry node's own property COUNTS. Initialising the fixpoint to false on the entry erases it, and this
+    ///     shape — the gate guarding the write IS the entry — would be refused with a 400 naming no real fault.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnEntryHumanGateAheadOfADeclaredWrite_IsAccepted()
+    {
+        const string EntryGate = """
+                                 {"schemaVersion":1,
+                                  "nodes":[{"nodeKey":"approval","nodeType":"HumanGate"},
+                                           {"nodeKey":"release","nodeType":"Agent","requiredCapabilities":{"WriteExecute":"runs the release script"}}],
+                                  "edges":[{"from":"approval","to":"release"}]}
+                                 """;
+
+        AssertEx.Equal(expected: 2, DevWorkflowGraph.Parse(EntryGate).Nodes.Count);
+    }
+
+    /// <summary>
+    ///     The same fix for the other invariant: the validation ahead of the gate and the apply is itself the entry
+    ///     node, and it is what assures the apply. Both shapes are valid and both were 400s under a false-initialised
+    ///     entry.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnEntryValidationAheadOfTheGateAndTheApply_IsAccepted() =>
+        AssertEx.Equal(expected: 3, DevWorkflowGraph.Parse(GatedApply).Nodes.Count, "'check' is the entry AND the validation the apply is assured by.");
+
+    /// <summary>
+    ///     <c>Combine</c> is keyed on <c>joinPolicy</c> and never on node TYPE. This fixture is the shape that catches
+    ///     the difference: <c>verify</c> is an AGENT with two inbound edges and therefore an implicit <c>All</c>, so a
+    ///     rule keyed on <c>NodeType == Join</c> would read it as AND and reject the product's own template.
+    /// </summary>
+    [Test]
+    public void Parse_WithAVerificationBehindTwoInboundEdges_IsAcceptedBecauseCombineReadsTheJoinPolicy()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.DecompositionWithVerification);
+
+        AssertEx.Equal(expected: 2, graph.InboundEdges("verify").Count);
+        AssertEx.Equal(DevWorkflowJoinPolicy.All, graph.Nodes["verify"].JoinPolicy, "an Agent node carries a joinPolicy too, and it defaults to All.");
+    }
+
+    /// <summary>
+    ///     The byte-identical pin. All THREE seeder graph constants, because a run pinned on the prior revision is
+    ///     re-parsed by the graph cache long after the seeder has upgraded the definition row — so the revision the
+    ///     product no longer ships must satisfy every invariant here as well.
+    /// </summary>
+    [Test]
+    [Arguments(nameof(DevWorkflowDefinitionSeeder.ResearchPlanApprovalGraph))]
+    [Arguments(nameof(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph))]
+    [Arguments(nameof(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision1))]
+    public void SeededTemplatesStillValidate(string constantName)
+    {
+        var json = (string)typeof(DevWorkflowDefinitionSeeder).GetField(constantName, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static)!
+                                                              .GetRawConstantValue()!;
+
+        AssertEx.NotEmpty(DevWorkflowGraph.Parse(json).Nodes, $"the seeded graph '{constantName}' must satisfy every invariant this validator holds.");
+    }
+
+    /// <summary>
+    ///     And every test fixture, found by REFLECTION rather than listed, so a fixture added later cannot quietly fall
+    ///     out of coverage — which is how the two added by the follow-up round are covered here without an edit.
+    /// </summary>
+    [Test]
+    public void EveryFixtureGraphStillValidates()
+    {
+        var fixtures = typeof(DevWorkflowGraphs).GetFields(BindingFlags.Public | BindingFlags.Static)
+                                                .Where(static field => field is { IsLiteral: true, IsInitOnly: false } && field.FieldType == typeof(string))
+                                                .ToList();
+        AssertEx.True(fixtures.Count >= 24, $"the reflection has to actually find the fixtures; it found {fixtures.Count}.");
+
+        var refused = new List<string>();
+        foreach (var fixture in fixtures)
+        {
+            try
+            {
+                _ = DevWorkflowGraph.Parse((string)fixture.GetRawConstantValue()!);
+            }
+            catch (DevWorkflowValidationException exception)
+            {
+                refused.Add($"{fixture.Name}: {exception.Message}");
+            }
+        }
+
+        AssertEx.Empty(refused, $"every fixture graph must still validate unchanged:{Environment.NewLine}{string.Join(Environment.NewLine, refused)}");
+    }
+
+    /// <summary>
+    ///     <c>research → release</c>, with the write DECLARED on the second node and the gate optionally between them.
+    ///     The waiver rides the graph ROOT, which is where a template says once and in writing that it means it.
+    /// </summary>
+    private static string DeclaredWrite(bool gated, bool waived)
+    {
+        const string Ungated = """
+                               {"schemaVersion":1,
+                                "nodes":[{"nodeKey":"research","nodeType":"Agent"},
+                                         {"nodeKey":"release","nodeType":"Agent","requiredCapabilities":{"WriteExecute":"runs the release script"}}],
+                                "edges":[{"from":"research","to":"release"}]}
+                               """;
+        const string Gated = """
+                             {"schemaVersion":1,
+                              "nodes":[{"nodeKey":"research","nodeType":"Agent"},
+                                       {"nodeKey":"approval","nodeType":"HumanGate"},
+                                       {"nodeKey":"release","nodeType":"Agent","requiredCapabilities":{"WriteExecute":"runs the release script"}}],
+                              "edges":[{"from":"research","to":"approval"},{"from":"approval","to":"release"}]}
+                             """;
+
+        var graph = gated ? Gated : Ungated;
+        return waived
+            ? graph.Replace("""{"schemaVersion":1,""", """{"schemaVersion":1,"allowUngatedWrites":true,""", StringComparison.Ordinal)
+            : graph;
+    }
+
+    private static string Effects(DevWorkflowGraph graph, string nodeKey) =>
+        string.Join(", ", DevWorkflowGraph.Effects(graph.Nodes[nodeKey]).Select(static effect => effect.ToString()).Order(StringComparer.Ordinal));
 
     [Test]
     public void Parse_ReadsTheLabelFromTheNodeKeyWhenNoneIsGiven()
@@ -270,6 +686,14 @@ public sealed class DevWorkflowGraphTests
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Tool","validationCommandIds":"build"}],"edges":[]}""", "array of strings")]
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","reasoningEffort":"exhaustive"}],"edges":[]}""", "unknown 'reasoningEffort'")]
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","reasoningEffort":"xhigh"}],"edges":[]}""", "unknown 'reasoningEffort'")]
+    [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","requiredCapabilities":["WriteExecute"]}],"edges":[]}""", "must be an object")]
+    [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","requiredCapabilities":{"Sorcery":"why"}}],"edges":[]}""", "unknown capability 'Sorcery'")]
+    [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","requiredCapabilities":{"WriteExecute":true}}],"edges":[]}""", "needs a reason")]
+    [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","requiredCapabilities":{"WriteExecute":""}}],"edges":[]}""", "needs a reason")]
+    [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","maxLoopIterations":3}],"edges":[]}""", "no 'retryTarget'")]
+    [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Tool","retryTarget":"a","maxLoopIterations":0}],"edges":[{"from":"a","to":"b"}]}""",
+        "must be positive")]
+    [Arguments("""{"allowUngatedWrites":"true","nodes":[{"nodeKey":"a","nodeType":"Agent"}],"edges":[]}""", "must be true or false")]
     public void Parse_RejectsAGraphItCannotRoute(string json, string expectedMessage) =>
         AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message, expectedMessage);
 

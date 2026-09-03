@@ -179,6 +179,33 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>
+    ///     Every capability invariant holds on the graph AS MATERIALIZED, not only on the definition. The rewrite is
+    ///     re-parsed by the graph cache on the tick after expansion, so a rule that held at save and broke after the
+    ///     clones were wired would fail a run mid-flight rather than an author at their keyboard.
+    ///     <para>
+    ///         The proof the rewrite preserves them is the virtual edge: what the invariants read from a materializing
+    ///         node to its template root before expansion is the definition-time image of the real edge the
+    ///         materializer wires afterwards, so the fixpoint gives the same answer on both graphs.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task MaterializedGraphStillValidates()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await DecomposeAsync(harness, TwoTasks, DevWorkflowGraphs.DecompositionIntoDevTasksAndIntegration).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+
+        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, run.GraphRevision, "the graph really was rewritten, or this asserts the definition again.");
+
+        var materialized = DevWorkflowGraph.Parse(run.GraphJson);
+
+        AssertEx.Contains(materialized.Nodes.Keys, key => key.Contains('#', StringComparison.Ordinal), "the clones are in the graph being judged.");
+        AssertEx.NotEmpty(materialized.Nodes.Values.Where(static node => node.ToolMode == DevWorkflowToolMode.Apply),
+            "and so is the apply node whose validation ancestry GRAPH-C4-3 asks about.");
+    }
+
+    /// <summary>
     ///     "There is no follow-up work" is a legitimate answer, not malformed output (review F4). The join keeps the edge
     ///     it already had, fires on the decomposition itself, and the run completes — where the alternative reading
     ///     leaves it Pending for ever.

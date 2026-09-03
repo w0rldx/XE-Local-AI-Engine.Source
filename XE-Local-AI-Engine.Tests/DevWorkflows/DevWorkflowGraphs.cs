@@ -261,7 +261,11 @@ internal static class DevWorkflowGraphs
                                              }
                                              """;
 
-    /// <summary>A decomposing node whose template is unreachable on purpose.</summary>
+    /// <summary>
+    ///     A decomposing node whose template is unreachable on purpose. The template's own edge to the join is what
+    ///     keeps it out of <c>TerminalNodeKeys</c>, which is <c>GRAPH-C4-1</c>'s fourth step: a template leaf that
+    ///     counted as an end of the run would let a no-op verdict row read as the run having finished.
+    /// </summary>
     public const string Decomposition = """
                                         {
                                           "schemaVersion": 1,
@@ -272,7 +276,8 @@ internal static class DevWorkflowGraphs
                                             { "nodeKey": "join", "nodeType": "Join" }
                                           ],
                                           "edges": [
-                                            { "from": "decompose", "to": "join" }
+                                            { "from": "decompose", "to": "join" },
+                                            { "from": "implement", "to": "join" }
                                           ]
                                         }
                                         """;

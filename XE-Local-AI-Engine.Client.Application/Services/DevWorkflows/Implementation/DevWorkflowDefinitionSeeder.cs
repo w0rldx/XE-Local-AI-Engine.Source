@@ -47,7 +47,7 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
 
     private const string ResearchPlanApprovalName = "Research → Plan → Approval";
 
-    private const string ResearchPlanApprovalGraph = $$"""
+    internal const string ResearchPlanApprovalGraph = $$"""
                                                        {
                                                          "schemaVersion": 1,
                                                          "nodes": [
@@ -137,7 +137,7 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
 
     private const string FeatureDevelopmentName = "Feature Development v1";
 
-    private const string FeatureDevelopmentGraph = $$"""
+    internal const string FeatureDevelopmentGraph = $$"""
                                                     {
                                                       "schemaVersion": 1,
                                                       "nodes": [
