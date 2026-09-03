@@ -54,7 +54,7 @@ internal readonly record struct DevWorkflowRunOutcome(DevWorkflowRunStatus Statu
 /// </summary>
 /// <param name="GateAnswer">The decision token a human gate settled on; null on every other node type.</param>
 /// <param name="Truncated">Whether keys were dropped to keep the serialized document inside the column's bound.</param>
-internal sealed record DevWorkflowRoute(IReadOnlyList<string> Satisfied, IReadOnlyList<string> Dead, string? GateAnswer, bool Truncated);
+public sealed record DevWorkflowRoute(IReadOnlyList<string> Satisfied, IReadOnlyList<string> Dead, string? GateAnswer, bool Truncated);
 
 /// <summary>
 ///     The run and node-run state machines, as pure functions over persisted rows and the parsed graph.

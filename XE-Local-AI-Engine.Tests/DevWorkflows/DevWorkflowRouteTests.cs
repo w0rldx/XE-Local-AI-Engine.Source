@@ -196,6 +196,64 @@ public sealed class DevWorkflowRouteTests
             DevWorkflowStateMachine.RouteJson(route));
     }
 
+    /// <summary>What the writer emits is what the reader gives back — the round trip both halves of the column live on.</summary>
+    [Test]
+    public void TryParseRoute_ReadsBackWhatRouteJsonWrote()
+    {
+        var route = new DevWorkflowRoute(["ship"], ["revise"], "Approve", Truncated: true);
+
+        var json = DevWorkflowStateMachine.RouteJson(route);
+        var parsed = AssertEx.NotNull(DevWorkflowNodeRunDocuments.TryParseRoute(json));
+
+        AssertEx.Equal(json, DevWorkflowStateMachine.RouteJson(parsed), "the stored document IS the route, so the round trip must be an identity.");
+    }
+
+    /// <summary>
+    ///     A document that omits a list, or carries a null inside one, still yields a route with two real lists: the
+    ///     generated client validates with zod, which rejects a null where it expects an array of strings, so one
+    ///     hand-edited member must not cost the whole read.
+    /// </summary>
+    [Test]
+    public void TryParseRoute_OnAPartialDocument_AnswersEmptyListsRatherThanNulls()
+    {
+        var parsed = AssertEx.NotNull(DevWorkflowNodeRunDocuments.TryParseRoute("""{"gateAnswer":"Approve","truncated":false}"""));
+
+        AssertEx.Empty(parsed.Satisfied);
+        AssertEx.Empty(parsed.Dead);
+        AssertEx.Equal("Approve", parsed.GateAnswer, "and the members the document DID carry survive.");
+
+        var withNull = AssertEx.NotNull(DevWorkflowNodeRunDocuments.TryParseRoute("""{"satisfied":["ship",null],"dead":[]}"""));
+
+        AssertEx.Equal("ship", string.Join(",", withNull.Satisfied), "a null key is dropped, never shipped into an array of strings.");
+    }
+
+    /// <summary>An unreadable or empty column costs the node its route, never the read that asked for it.</summary>
+    [Test]
+    [Arguments("{ this was hand-edited")]
+    [Arguments("[1,2,3]")]
+    [Arguments("null")]
+    [Arguments("   ")]
+    [Arguments(null)]
+    public void TryParseRoute_OnAnUnreadableDocument_AnswersNull(string? routeJson) =>
+        AssertEx.Null(DevWorkflowNodeRunDocuments.TryParseRoute(routeJson));
+
+    /// <summary>
+    ///     The tool-name array reads back with its truncation marker kept and its null entries dropped, and an
+    ///     unreadable column answers the same null an unwritten one does.
+    /// </summary>
+    [Test]
+    public void ToolNames_KeepsTheTruncationMarkerAndDropsNullEntries()
+    {
+        AssertEx.Equal("read_document,search_web,\u2026",
+            string.Join(",", AssertEx.NotNull(DevWorkflowNodeRunDocuments.ToolNames("""["read_document","search_web","\u2026"]"""))),
+            "the trailing marker is the writer's, not a tool, and it must survive the read.");
+        AssertEx.Equal("read_document",
+            string.Join(",", AssertEx.NotNull(DevWorkflowNodeRunDocuments.ToolNames("""["read_document",null]"""))),
+            "a null entry is dropped rather than shipped into an array of strings.");
+        AssertEx.Null(DevWorkflowNodeRunDocuments.ToolNames("[oops"));
+        AssertEx.Null(DevWorkflowNodeRunDocuments.ToolNames(toolNamesJson: null));
+    }
+
     /// <summary>Every graph fixture the runtime suites route over, by name, so a new one joins the sweep for free.</summary>
     private static IEnumerable<(string Name, string GraphJson)> FixtureGraphs() =>
         typeof(DevWorkflowGraphs).GetFields(BindingFlags.Public | BindingFlags.Static)

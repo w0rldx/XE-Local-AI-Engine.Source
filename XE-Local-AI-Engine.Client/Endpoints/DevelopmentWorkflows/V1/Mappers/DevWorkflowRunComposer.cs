@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 
-using System.Text.Json;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -21,9 +20,6 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
     private readonly IAgentDefinitionStore _agents = agents ?? throw new ArgumentNullException(nameof(agents));
     private readonly IAgentWorkSessionStore _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
     private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
-
-    /// <summary>camelCase, matching the documents the runtime wrote into these columns.</summary>
-    private static readonly JsonSerializerOptions TelemetryJsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task<DevWorkflowRunResponse> ComposeAsync(DevWorkflowRunDetail detail, CancellationToken cancellationToken)
     {
@@ -175,7 +171,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             ProviderCalls: nodeRun.ProviderCalls,
             ToolCalls: nodeRun.ToolCalls,
             ToolSchemaTokens: nodeRun.ToolSchemaTokens,
-            ToolNames: ToolNames(nodeRun.ToolNamesJson),
+            ToolNames: DevWorkflowNodeRunDocuments.ToolNames(nodeRun.ToolNamesJson),
             ProviderTurnMs: nodeRun.ProviderTurnMs,
             ServedModelName: nodeRun.ServedModelName,
             Route: Route(nodeRun.RouteJson),
@@ -252,50 +248,14 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
     private static int? Add(int? total, int? term) => term is { } value ? (total ?? 0) + value : total;
 
     /// <summary>
-    ///     The route as the column stores it. The response record IS the stored document's shape, so this is a parse
-    ///     rather than a translation — and an unreadable column costs this node its route rather than costing the
-    ///     drill-down a 500, exactly as an unreadable policy resolution does.
-    ///     <para>
-    ///         Both lists are non-nullable on the wire, and a tolerant parse cannot promise that on its own: a document
-    ///         that omits <c>satisfied</c> deserialises to a null list, and the generated client validates the response
-    ///         with zod, whose <c>.optional()</c> accepts a missing member and REJECTS a null one. An absent list is
-    ///         therefore an empty list — the node keeps its route rather than losing the drill-down.
-    ///     </para>
+    ///     The stored route on the wire, parsed by the runtime's own reader — the one that owns the document — and only
+    ///     re-shaped here. An unreadable column costs this node its route rather than costing the drill-down a 500,
+    ///     exactly as an unreadable policy resolution does.
     /// </summary>
     private static DevWorkflowNodeRouteResponse? Route(string? routeJson) =>
-        Read<DevWorkflowNodeRouteResponse>(routeJson) is { } route
-            ? route with
-            {
-                Satisfied = route.Satisfied ?? [],
-                Dead = route.Dead ?? []
-            }
+        DevWorkflowNodeRunDocuments.TryParseRoute(routeJson) is { } route
+            ? new DevWorkflowNodeRouteResponse(route.Satisfied, route.Dead, route.GateAnswer, route.Truncated)
             : null;
-
-    /// <summary>
-    ///     The tool names as the column stores them: a JSON string array whose last element may be the truncation
-    ///     marker. A null element is dropped for the same reason the route's lists are defaulted — zod rejects a null
-    ///     inside the array and the whole drill-down would fail over one bad entry.
-    /// </summary>
-    private static IReadOnlyList<string>? ToolNames(string? toolNamesJson) =>
-        Read<IReadOnlyList<string>>(toolNamesJson)?.Where(static name => name is not null).ToList();
-
-    private static T? Read<T>(string? json)
-        where T : class
-    {
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return null;
-        }
-
-        try
-        {
-            return JsonSerializer.Deserialize<T>(json, TelemetryJsonOptions);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
 
     /// <summary>
     ///     Which upstream nodes a <c>Pending</c> node run is still waiting on, computed here rather than left to the
