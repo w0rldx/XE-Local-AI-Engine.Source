@@ -52,7 +52,9 @@ using XE_Local_AI_Engine.Client.Services.Validation.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
+using XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -3398,6 +3400,103 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task Dispatch_WhenTheExternalOriginalBindingChangesBeforeTheFallback_RefusesTheFallbackSend()
+    {
+        // The turn is authorised for a declared-LOCAL external model and swaps to a node-local fast model. The fast
+        // send fails before any output, and while it fails the operator flips that connection to Cloud. The fallback
+        // re-runs the ORIGINAL model inside the pin scope opened before the swap — so unless that scope also carries
+        // the ORIGINAL model's pin, the fallback falls through to the transport's weaker unpinned rule and honours a
+        // Local->Cloud escalation the pin exists to refuse.
+        var sender = new MockHubMessageSender();
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        var observed = new List<InvocationAgentDefinition>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateExternalFallbackFactory("qwen3-1.7b",
+                registry,
+                recorder,
+                observed,
+                onFastModelSend: () => registry.Replace(ExternalProviderTestData.Connection(locality: ExternalProviderLocality.Cloud),
+                    ExternalProviderTestData.Model())),
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub,
+            externalProviderRegistry: registry);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithModel(ExternalProviderTestData.ModelId).WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
+
+        AssertEx.Equal(expected: 2, observed.Count, "the fallback must have been attempted");
+        AssertEx.Empty(recorder.Requests, "the prompt must never reach the changed endpoint");
+        AssertEx.True(sender.SentEncryptedFailures.Count > 0, "a refused fallback fails the turn rather than sending");
+    }
+
+    [Test]
+    public async Task Dispatch_WhenTheExternalOriginalBindingIsUnchanged_TheFallbackStillSends()
+    {
+        // The other half of the pin: an untouched binding must not be turned into a refusal by pinning the original
+        // model as well. The fallback sends, on the endpoint the turn was authorised for, and the turn completes.
+        var sender = new MockHubMessageSender();
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        var observed = new List<InvocationAgentDefinition>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateExternalFallbackFactory("qwen3-1.7b", registry, recorder, observed),
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub,
+            externalProviderRegistry: registry);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithModel(ExternalProviderTestData.ModelId).WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
+
+        AssertEx.Equal(expected: 1, recorder.Requests.Count, "the fallback must reach the pinned endpoint");
+        AssertEx.Equal("http://127.0.0.1:18099/v1/chat/completions", recorder.LastRequest.Uri?.AbsoluteUri);
+        AssertEx.Empty(sender.SentEncryptedFailures);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheTurnNeverSwapsModels_ResolvesExactlyOnePin()
+    {
+        // Byte-identical guard for the pin set. Resolving BOTH the dispatched and the original model must not widen
+        // the ambient set on any turn that did not swap: a non-`auto` turn and an `auto` turn that stayed on its own
+        // model both name the same id twice, and the resolver de-duplicates.
+        var nonAutoPins = await RunNoSwapTurnAndCapturePinsAsync("medium");
+        var autoPins = await RunNoSwapTurnAndCapturePinsAsync("auto");
+
+        foreach (var pins in new[] { nonAutoPins, autoPins })
+        {
+            AssertEx.Equal(expected: 1, pins.Count, "a turn that never swapped must pin exactly the model it runs");
+            AssertEx.Equal(ExternalProviderTestData.ModelId, pins[0].ModelId);
+        }
+    }
+
+    /// <summary>
+    ///     One completed turn on an external model that never swaps, returning the pins in force at its send. The
+    ///     `auto` case dispatches to the SAME model, so it is dispatched but not swapped.
+    /// </summary>
+    private static async Task<IReadOnlyList<ExternalProviderBindingPin>> RunNoSwapTurnAndCapturePinsAsync(string effort)
+    {
+        var sender = new MockHubMessageSender();
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        var pinsAtSend = new List<IReadOnlyList<ExternalProviderBindingPin>>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Normal,
+            ExternalProviderTestData.ModelId,
+            "medium",
+            ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateExternalFallbackFactory("qwen3-1.7b", registry, recorder, [], pinsAtSend: pinsAtSend),
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub,
+            externalProviderRegistry: registry);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithModel(ExternalProviderTestData.ModelId).WithReasoningEffort(effort).Build());
+
+        AssertEx.Empty(sender.SentEncryptedFailures);
+        AssertEx.Equal(expected: 1, pinsAtSend.Count, "the turn must have sent exactly once");
+        return pinsAtSend[0];
+    }
+
+    [Test]
     public async Task RunAsync_WhenAToolReturnsTheDisabledMarker_SurfacesAToolDisabledNoticeOncePerTool()
     {
         var sender = new MockHubMessageSender();
@@ -3989,7 +4088,8 @@ public sealed class InvocationRunnerTests
         IToolApprovalPolicy? approvalPolicy = null,
         IInvocationAttachmentTracker? attachmentTracker = null,
         ToolRelevanceOptions? toolRelevanceOptions = null,
-        Func<IServiceProvider, IReasoningEffortDispatcher>? reasoningEffortDispatcherFactory = null)
+        Func<IServiceProvider, IReasoningEffortDispatcher>? reasoningEffortDispatcherFactory = null,
+        IExternalProviderRegistry? externalProviderRegistry = null)
     {
         var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
@@ -4089,7 +4189,7 @@ public sealed class InvocationRunnerTests
                 pendingToolCallRegistry,
                 runtimeSettings),
             new InvocationLifecycleTracker(attachmentTracker ?? CreateAttachmentTracker(), pendingToolCallRegistry, runtimeSettings),
-            new FakeExternalProviderRegistry(),
+            externalProviderRegistry ?? new FakeExternalProviderRegistry(),
             // The runner opens ONE scope per `auto` turn and resolves the dispatcher from it. The default provider
             // registers nothing, so a test that never sends `auto` proves — by not throwing — that no scope is used.
             CreateScopeFactory(reasoningEffortDispatcherFactory),
@@ -4340,6 +4440,64 @@ public sealed class InvocationRunnerTests
                });
 
         return factory;
+    }
+
+    /// <summary>
+    ///     Like <see cref="CreateModelRoutedFactory" />, except every non-failing model sends through the REAL
+    ///     <see cref="ExternalOpenAiChatClient" /> over a recording transport — so the pin check that refuses a changed
+    ///     binding is the production one, running inside the runner's own ambient pin scope, rather than a copy of its
+    ///     rule restated in the test.
+    /// </summary>
+    private static IInvocationAgentFactory CreateExternalFallbackFactory(string failingModel,
+        IExternalProviderRegistry registry,
+        OpenAiWireRecorder recorder,
+        List<InvocationAgentDefinition> observed,
+        Action? onFastModelSend = null,
+        List<IReadOnlyList<ExternalProviderBindingPin>>? pinsAtSend = null)
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(callInfo =>
+               {
+                   var definition = callInfo.Arg<InvocationAgentDefinition>();
+                   observed.Add(definition);
+                   var fails = string.Equals(definition.ModelId, failingModel, StringComparison.Ordinal);
+                   Func<CancellationToken, IAsyncEnumerable<AgentResponseUpdate>> updates = fails
+                       ? _ => FailingFastModelUpdates(onFastModelSend)
+                       : token => ExternalSendUpdates(registry, definition.ModelId, recorder, pinsAtSend, token);
+
+                   return Task.FromResult(new InvocationAgentContext
+                   {
+                       Agent = new FakeAIAgent(updates, onSessionObserved: null),
+                       Session = null,
+                       SeedMessages = definition.ConversationContext
+                                                .Prepend(new ChatMessage(ChatRole.System, definition.Instructions))
+                                                .ToList()
+                   });
+               });
+
+        return factory;
+    }
+
+    /// <summary>The fast model going away at the send boundary, with the operator's edit landing as it does.</summary>
+    private static async IAsyncEnumerable<AgentResponseUpdate> FailingFastModelUpdates(Action? onSend)
+    {
+        onSend?.Invoke();
+        await Task.Yield();
+        yield return await Task.FromException<AgentResponseUpdate>(new InvalidOperationException("the fast model is gone"));
+    }
+
+    /// <summary>One real external send, made from inside the turn's ambient pin scope.</summary>
+    private static async IAsyncEnumerable<AgentResponseUpdate> ExternalSendUpdates(IExternalProviderRegistry registry,
+        string modelId,
+        OpenAiWireRecorder recorder,
+        List<IReadOnlyList<ExternalProviderBindingPin>>? pinsAtSend,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        pinsAtSend?.Add(ExternalProviderBindingPinScope.Current);
+        using var client = new ExternalOpenAiChatClient(registry, modelId, recorder.CreateHandler);
+        var response = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, cancellationToken).ConfigureAwait(false);
+        yield return new AgentResponseUpdate(ChatRole.Assistant, response.Text);
     }
 
     /// <summary>Streams one chunk and then fails, so the turn has recorded first output before the failure.</summary>

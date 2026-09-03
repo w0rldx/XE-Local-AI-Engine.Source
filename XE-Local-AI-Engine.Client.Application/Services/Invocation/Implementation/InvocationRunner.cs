@@ -395,7 +395,14 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // later sends. A node-local or cloud model resolves nothing and the scope is inert.
             // The scope is opened HERE rather than inside the resolver: the ambient set is an AsyncLocal, and a write
             // to one inside an async method never reaches that method's caller.
-            var turnPins = await ExternalProviderInvocationPin.ResolveAsync(_externalProviderRegistry, resolvedModel, invocationToken).ConfigureAwait(false);
+            // BOTH models, not just the dispatched one: the send-boundary retry below switches `resolvedModel` back to
+            // the original inside THIS scope, and a pin it never resolved leaves that fallback send falling through to
+            // the transport's weaker unpinned check — the Local->Cloud / endpoint edit this pin exists to refuse. On a
+            // non-`auto` turn, and on an `auto` turn that did not swap, the two are the same id and the resolver
+            // de-duplicates, so the pin set is exactly what it was before.
+            var turnPins = await ExternalProviderInvocationPin
+                                 .ResolveAsync(_externalProviderRegistry, [resolvedModel, originalModel], invocationToken)
+                                 .ConfigureAwait(false);
             using var externalBindingPin = ExternalProviderBindingPinScope.Begin(turnPins);
 
             // Seed the active conversation id into the same root tool-loop scope so the AgentHome tool gateway can stage
