@@ -1107,6 +1107,63 @@ public sealed class DevWorkflowDevTaskTests
             "a round started after the workflow settled is governed by nothing the workflow injected.");
     }
 
+    /// <summary>
+    ///     The OTHER ways a node run stops driving its task, each of which left the injection standing while the
+    ///     dispatch re-recorded it every tick: a stand-down for a human, a cancelled attempt settling the row, and the
+    ///     run cancel that writes the terminal itself. The clear now sits with the shared writers rather than at the
+    ///     call sites, which is why one assertion covers all three.
+    ///     <para>
+    ///         Nothing transitions out of Blocked or Cancelled, so the proof here is that the clear was WRITTEN. That a
+    ///         blank row reads back as no policy is the store's own test.
+    ///     </para>
+    /// </summary>
+    [Test]
+    [Arguments("blocked", DevWorkflowNodeRunStatus.Blocked)]
+    [Arguments("attempt-cancelled", DevWorkflowNodeRunStatus.Cancelled)]
+    [Arguments("run-cancelled", DevWorkflowNodeRunStatus.Cancelled)]
+    public async Task EveryTerminalPath_ClearsTheWorkflowPolicyItInjected(string shape, DevWorkflowNodeRunStatus expected)
+    {
+        await using var harness = NewHarness();
+        var (projectId, _) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        _ = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":["DevTask"]}""").ConfigureAwait(false);
+
+        switch (shape)
+        {
+            case "blocked":
+                harness.Chain.RefuseNextAttemptsOnPolicy(5);
+                break;
+            case "attempt-cancelled":
+
+                // Held, so the cancel finds a real attempt in flight: the stop cancels THAT and the next poll settles
+                // the row off what it landed as.
+                harness.Chain.HoldNextAttempt();
+                break;
+            default:
+
+                // Stalled in validation, so the run cancel finds NO attempt in flight and writes the terminal itself.
+                harness.Chain.StallInValidation(count: 10);
+                break;
+        }
+
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        if (shape != "blocked")
+        {
+            await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling).ConfigureAwait(false);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        }
+
+        AssertEx.Equal(expected, (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Status);
+
+        await using var scope = harness.Services.CreateAsyncScope();
+        var development = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var events = await development.ListEventsAsync(projectId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 2,
+            events.Count(entry => entry.EventType == "WorkflowPolicyApplied"),
+            $"the '{shape}' terminal must revoke the policy it was dispatched with, once.");
+    }
+
     private static DevWorkflowHarness NewHarness(TimeProvider? clock = null) =>
         DevWorkflowHarness.WithAScriptedChain(clock);
 

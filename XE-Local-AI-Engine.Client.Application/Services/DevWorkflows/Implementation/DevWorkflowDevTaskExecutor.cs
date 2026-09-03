@@ -313,17 +313,30 @@ internal sealed class DevWorkflowDevTaskExecutor
     }
 
     /// <summary>
-    ///     Revokes the injection when this node run is finished with the task, so what governed the workflow's rounds
-    ///     does not go on governing the operator's own later ones. Called only where the TASK itself has settled —
-    ///     approved, applied, cancelled, or blocked — never on a failure the retry policy may still re-attempt, because
-    ///     that node run is coming back and would come back ungoverned.
+    ///     Revokes the injection when this node run stops driving the task, so what governed the workflow's rounds does
+    ///     not go on governing the operator's own later ones. Called from the shared writers that settle, block and
+    ///     cancel a node run rather than from their call sites — every terminal path has to revoke, and naming them one
+    ///     by one is how the attempt-cancelled settle, the stand-downs and the run cancel were missed.
+    ///     <para>
+    ///         Deliberately OVER-EAGER: a failure the retry policy re-attempts increments the node run's attempt, so the
+    ///         re-dispatch derives a new operation id and records the policy again. A PAUSE is the one stop that does
+    ///         not — it parks the row at the same attempt, whose operation id is already written — which is why only the
+    ///         cancelling half of the stop clears.
+    ///     </para>
+    ///     <para>
+    ///         Best-effort by construction: a node run that never bound a task, and a node whose Development Mode is
+    ///         switched off, have no injection to revoke.
+    ///     </para>
     /// </summary>
-    private static async Task ClearPolicyAsync(IDevelopmentStore development,
-        DevWorkflowRunSnapshot run,
-        DevWorkflowNodeRunSnapshot nodeRun,
-        Guid taskId,
-        CancellationToken cancellationToken) =>
+    private async Task ClearPolicyAsync(DevWorkflowRunSnapshot run, DevWorkflowNodeRunSnapshot nodeRun, CancellationToken cancellationToken)
+    {
+        if (nodeRun.DevelopmentTaskId is not { } taskId || Resolve().Development is not { } development)
+        {
+            return;
+        }
+
         await WritePolicyAsync(development, run, nodeRun, taskId, string.Empty, [], "devtask-policy-clear", cancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>
     ///     One policy write, keyed to this node-run ATTEMPT and phase: a replayed tick meets the store's idempotency and
@@ -463,6 +476,14 @@ internal sealed class DevWorkflowDevTaskExecutor
         }
 
         var target = cancel ? DevWorkflowNodeRunStatus.Cancelled : DevWorkflowNodeRunStatus.Pending;
+        if (cancel)
+        {
+            // Only the cancel. A pause parks the row at the SAME attempt, so the resume's re-dispatch re-derives an
+            // operation id the store has already written and would record nothing — clearing here would leave the
+            // resumed round ungoverned.
+            await ClearPolicyAsync(run, nodeRun, cancellationToken).ConfigureAwait(false);
+        }
+
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, target, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
                                nodeRun.Id,
@@ -551,7 +572,6 @@ internal sealed class DevWorkflowDevTaskExecutor
                 // A re-attempt with no routed failure behind it succeeds immediately, and that is the honest answer
                 // rather than a shortcut: nothing has said this implementation is wrong, and the claim the node is
                 // making — this task is implemented and waiting to be applied — is still true.
-                await ClearPolicyAsync(development, run, nodeRun, taskId, cancellationToken).ConfigureAwait(false);
                 return await SettleAsync(store,
                         run,
                         nodeRun,
@@ -564,7 +584,6 @@ internal sealed class DevWorkflowDevTaskExecutor
                     .ConfigureAwait(false);
 
             case DevelopmentTaskStatus.Cancelled:
-                await ClearPolicyAsync(development, run, nodeRun, taskId, cancellationToken).ConfigureAwait(false);
                 return await SettleAsync(store,
                         run,
                         nodeRun,
@@ -580,10 +599,8 @@ internal sealed class DevWorkflowDevTaskExecutor
 
                 // The chain gave up on its own terms — its review rounds ran out, or an operator stood it down. Another
                 // node-run attempt would re-drive a task that is not going anywhere, so this is the class that goes
-                // straight to a human. BudgetExhausted is not a retryable class, so this settle is terminal and the
-                // clear cannot strand a re-attempt.
-                await ClearPolicyAsync(development, run, nodeRun, taskId, cancellationToken).ConfigureAwait(false);
-                return await _retries.SettleFailureAsync(store,
+                // straight to a human.
+                return await SettleFailureAsync(store,
                         graph,
                         run,
                         nodeRun,
@@ -627,7 +644,7 @@ internal sealed class DevWorkflowDevTaskExecutor
                         Output(nodeRun, task, taskId, DevWorkflowFailureClasses.Cancelled),
                         cancellationToken)
                     .ConfigureAwait(false)
-                : await _retries.SettleFailureAsync(store,
+                : await SettleFailureAsync(store,
                         graph,
                         run,
                         nodeRun,
@@ -732,7 +749,7 @@ internal sealed class DevWorkflowDevTaskExecutor
             // The message is NOT surfaced: an unexpected exception's text is the one string on this path nothing has
             // sanitized, and it can carry a host path or a fragment of a prompt.
             _logger.LogError(exception, "Development workflow dev-task node run {NodeRunId} of run {RunId} could not be advanced.", nodeRun.Id, run.Id);
-            return await _retries.SettleFailureAsync(store,
+            return await SettleFailureAsync(store,
                     graph,
                     run,
                     nodeRun,
@@ -777,7 +794,7 @@ internal sealed class DevWorkflowDevTaskExecutor
         // for a reason nobody can act on. So the node stands down here instead, while the reason is still legible.
         if (task.CurrentReviewRound >= task.MaxReviewRounds)
         {
-            return await _retries.SettleFailureAsync(store,
+            return await SettleFailureAsync(store,
                     graph,
                     run,
                     nodeRun,
@@ -801,7 +818,7 @@ internal sealed class DevWorkflowDevTaskExecutor
                 "Development workflow node run {NodeRunId} carries a routed failure from node '{NodeKey}' with no validation report and no command counts behind it, so the node is stood down instead of asking for another round.",
                 nodeRun.Id,
                 failingNodeKey);
-            return await _retries.SettleFailureAsync(store,
+            return await SettleFailureAsync(store,
                     graph,
                     run,
                     nodeRun,
@@ -1140,7 +1157,7 @@ internal sealed class DevWorkflowDevTaskExecutor
         string failureClass,
         string sanitizedReason,
         CancellationToken cancellationToken) =>
-        await _retries.SettleFailureAsync(store,
+        await SettleFailureAsync(store,
                 graph,
                 run,
                 nodeRun,
@@ -1149,7 +1166,23 @@ internal sealed class DevWorkflowDevTaskExecutor
                 cancellationToken)
             .ConfigureAwait(false);
 
-    private static async Task<int> SettleAsync(IDevWorkflowStore store,
+    /// <summary>
+    ///     The one door this executor hands a failing node run to the retry policy through, so the policy revocation
+    ///     sits with the write instead of being remembered at each of the six call sites.
+    /// </summary>
+    private async Task<int> SettleFailureAsync(IDevWorkflowStore store,
+        DevWorkflowGraph graph,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
+        DevWorkflowFailure failure,
+        CancellationToken cancellationToken)
+    {
+        await ClearPolicyAsync(run, nodeRun, cancellationToken).ConfigureAwait(false);
+        return await _retries.SettleFailureAsync(store, graph, run, nodeRun, nodeRuns, failure, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<int> SettleAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
@@ -1159,6 +1192,7 @@ internal sealed class DevWorkflowDevTaskExecutor
         string outputJson,
         CancellationToken cancellationToken)
     {
+        await ClearPolicyAsync(run, nodeRun, cancellationToken).ConfigureAwait(false);
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, target, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
                                nodeRun.Id,

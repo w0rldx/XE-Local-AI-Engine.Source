@@ -258,6 +258,50 @@ public sealed class BenchmarkQueueHostedServiceTests
             "A registered planner must not report a skip.");
     }
 
+    /// <summary>
+    ///     Pairwise reconciliation gates NOTHING. It re-enqueues one cohort's missing comparisons; folding it into the
+    ///     claim gate let a persistently failing planner starve every primary, judge and fidelity run for the whole
+    ///     process lifetime — the exact starvation the recovery gate exists to prevent, reintroduced beside it.
+    /// </summary>
+    [Test]
+    public async Task ExecuteAsync_WhenPairwiseReconciliationKeepsThrowing_StillClaimsOtherWork()
+    {
+        var planner = Substitute.For<IBenchmarkPairwisePlanner>();
+        _ = planner.ReconcilePairwiseAsync(Arg.Any<CancellationToken>())
+                   .Returns(_ => Task.FromException(new InvalidOperationException("pairwise planning failed")));
+        using var harness = new Harness(planner);
+        var work = Work(BenchmarkWorkKind.Primary);
+        harness.Enqueue(work);
+
+        await harness.RunToIdleAsync();
+
+        await harness.RunExecutor.Received(1).ExecuteAsync(work, Arg.Any<CancellationToken>());
+        AssertEx.True(harness.Logger.HasEntry(LogLevel.Error, "Pairwise benchmark reconciliation failed"),
+            "A failed reconciliation must be reported rather than swallowed or promoted into a claim gate.");
+        AssertEx.False(harness.Logger.HasEntry(LogLevel.Error, "startup recovery failed"),
+            "A pairwise fault is not a recovery failure.");
+    }
+
+    /// <summary>And once it lands it stops being retried, so the success is reported exactly once.</summary>
+    [Test]
+    public async Task ExecuteAsync_WhenPairwiseReconciliationRecovers_LogsTheSuccessOnce()
+    {
+        var planner = Substitute.For<IBenchmarkPairwisePlanner>();
+        var attempts = 0;
+        _ = planner.ReconcilePairwiseAsync(Arg.Any<CancellationToken>())
+                   .Returns(_ => ++attempts == 1 ? Task.FromException(new InvalidOperationException("pairwise planning failed")) : Task.CompletedTask);
+        using var harness = new Harness(planner);
+        harness.Signal.CancelOnWaitNumber = 3;
+
+        await harness.RunToIdleAsync();
+
+        AssertEx.Equal(expected: 2, attempts, "A failed reconciliation is retried on the poll interval, then stops once it lands.");
+        AssertEx.Equal(expected: 1,
+            harness.Logger.Entries.Count(entry => entry.Level == LogLevel.Information
+                                                  && entry.Message.Contains("Reconciled missing pairwise", StringComparison.Ordinal)),
+            "The success is reported once, not on every poll.");
+    }
+
     private static BenchmarkClaimedWork Work(BenchmarkWorkKind kind)
     {
         var runId = Guid.NewGuid();

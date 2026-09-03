@@ -25,6 +25,7 @@ public sealed class BenchmarkQueueHostedService(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var recovered = false;
+        var reconciled = false;
         while (!stoppingToken.IsCancellationRequested)
         {
             // Nothing is CLAIMED until recovery has succeeded once. Guarding the throw kept the host up, but the loop
@@ -39,6 +40,15 @@ public sealed class BenchmarkQueueHostedService(
                     await signal.WaitAsync(_pollInterval, stoppingToken).ConfigureAwait(false);
                     continue;
                 }
+            }
+
+            // Pairwise reconciliation is BEST-EFFORT and gates nothing. It re-enqueues comparisons a crash left
+            // missing, which is a cohort's problem and not this consumer's: blocking the claim on it would let one
+            // persistently failing planner starve every primary, judge and fidelity run for the process's lifetime.
+            // Retried on the same poll interval until it lands once.
+            if (!reconciled)
+            {
+                reconciled = await ReconcilePairwiseAsync(stoppingToken).ConfigureAwait(false);
             }
 
             BenchmarkClaimedWork? work = null;
@@ -163,14 +173,34 @@ public sealed class BenchmarkQueueHostedService(
             }
 
             logger.LogInformation("Recovered {RunCount} interrupted benchmark runs.", recovered.Count);
+            return true;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogError(exception, "Benchmark startup recovery failed; retrying after the poll interval before any work is claimed.");
+            return false;
+        }
+    }
 
-            // The sweep above terminalizes what the kill interrupted; this re-enqueues what it left missing. A crash
-            // between a primary succeeding and its pairs being enqueued would otherwise leave a cohort permanently one
-            // comparison short, with every run in it stuck pending and nothing that would ever notice.
-            //
-            // Resolved optionally, unlike the executors in the loop: this runs BEFORE the first claim, so a host that
-            // composed the queue without a planner would die here at startup and starve EVERY kind of benchmark work
-            // over a leg that had nothing to do — a host with no planner cannot have enqueued pairwise work either.
+    /// <summary>
+    ///     Re-enqueues the comparisons a crash left missing: a kill between a primary succeeding and its pairs being
+    ///     enqueued leaves a cohort permanently one comparison short, with every run in it stuck pending and nothing
+    ///     that would ever notice.
+    ///     <para>
+    ///         Separate from <c>RecoverAsync</c> and gating NOTHING. It is one cohort's problem, and a planner that
+    ///         keeps throwing must not starve every primary, judge and fidelity run for the process's lifetime — which
+    ///         is what folding it into the claim gate did. Answers whether it landed, so the loop stops retrying it.
+    ///     </para>
+    ///     <para>
+    ///         The planner is resolved optionally: a host that composed the queue without one cannot have enqueued
+    ///         pairwise work either, so there is nothing to reconcile and nothing to retry.
+    ///     </para>
+    /// </summary>
+    private async Task<bool> ReconcilePairwiseAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
             var planner = scope.ServiceProvider.GetService<IBenchmarkPairwisePlanner>();
             if (planner is null)
             {
@@ -179,11 +209,12 @@ public sealed class BenchmarkQueueHostedService(
             }
 
             await planner.ReconcilePairwiseAsync(cancellationToken).ConfigureAwait(false);
+            logger.LogInformation("Reconciled missing pairwise benchmark comparisons.");
             return true;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.LogError(exception, "Benchmark startup recovery failed; retrying after the poll interval before any work is claimed.");
+            logger.LogError(exception, "Pairwise benchmark reconciliation failed; retrying after the poll interval. Other benchmark work is unaffected.");
             return false;
         }
     }
