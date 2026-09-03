@@ -5051,7 +5051,8 @@
 				"appliesPatches": "wendet Patches an",
 				"materializedOf": "erzeugt · {{index}} von {{count}}",
 				"staleInputs": "Veraltete Eingaben",
-				"agentWithModel": "{{agent}} · {{model}}"
+				"agentWithModel": "{{agent}} · {{model}}",
+				"notApplicable": "nichts zu validieren"
 			},
 			"events": {
 				"title": "Ereignisse",
@@ -5271,7 +5272,22 @@
 				"retryTargetPlaceholder": "Diesen Knoten selbst wiederholen",
 				"toolMode": "Werkzeugmodus: {{mode}}",
 				"materialization": "erzeugt {{template}} (max. {{max}})",
-				"requiredCapabilities": "benötigt {{count}} Fähigkeit(en)",
+				"requiredCapabilities": "Deklarierte Fähigkeiten",
+				"allowUngatedWrites": "Schreibzugriff ohne Freigabe erlauben",
+				"allowUngatedWritesHelp": "Erlaubt einem Knoten dieser Vorlage, in das Repository zu schreiben, ohne dass auf jedem Weg dorthin eine menschliche Freigabe liegt.",
+				"maxLoopIterations": "Grenze der Korrekturschleife",
+				"maxLoopIterationsPlaceholder": "Keine Grenze",
+				"maxLoopIterationsHelp": "Wie oft dieser Knoten zurückspringen darf, bevor der Lauf anhält und Sie fragt. Eine Wiederholung durch Sie zählt nicht mit.",
+				"requiredCapabilitiesHint": "Was der Agent dieses Knotens über das Lesen hinaus tun darf. Ein deklarierter Schreibzugriff braucht auf jedem Weg dorthin eine menschliche Freigabe.",
+				"capabilityReason": "Wofür {{effect}}?",
+				"capabilityReasonRequired": "Eine deklarierte Fähigkeit braucht eine Begründung.",
+				"effectDerived": "Ergibt sich daraus, was dieser Knoten ausführt.",
+				"effects": {
+					"ReadLocal": "liest das Repository",
+					"WriteExecute": "schreibt in das Repository oder führt Befehle aus",
+					"Orchestration": "orchestriert andere Agenten",
+					"Network": "greift auf das Netzwerk zu"
+				},
 				"edges": "Kanten",
 				"addEdge": "Kante hinzufügen",
 				"noEdges": "Diese Vorlage hat noch keine Kanten.",
@@ -5292,7 +5308,11 @@
 					"orphan": "Nichts erreicht „{{subject}}“, der Knoten würde also nie laufen.",
 					"unknownRetryTarget": "„{{subject}}“ wiederholt zu einem Knoten, den diese Vorlage nicht deklariert.",
 					"retryTargetNotAncestor": "„{{subject}}“ wiederholt zu einem Knoten, der ihn nicht erreichen kann. Ein Wiederholungsziel muss stromaufwärts liegen.",
-					"joinAnyNeedsTwoInbound": "„{{subject}}“ verwendet Any, hat aber weniger als zwei eingehende Kanten."
+					"joinAnyNeedsTwoInbound": "„{{subject}}“ verwendet Any, hat aber weniger als zwei eingehende Kanten.",
+					"deadGateEdge": "„{{subject}}“ ist eine menschliche Freigabe mit einer ausgehenden Kante, die keine Antwort je nimmt — dahinter würde nichts laufen.",
+					"strandedBranch": "„{{subject}}“ erreicht kein Ende des Laufs: Jeder Weg von dort führt über eine Kante einer Freigabe, die nie zutreffen kann.",
+					"ungatedWrite": "„{{subject}}“ kann in das Repository schreiben und ein Lauf erreicht den Knoten, ohne dass jemand gefragt wird. Legen Sie auf jeden Weg dorthin eine menschliche Freigabe, oder erlauben Sie Schreibzugriff ohne Freigabe für diese Vorlage und begründen Sie es.",
+					"applyWithoutValidation": "„{{subject}}“ wendet freigegebene Patches an und ein Lauf erreicht den Knoten, ohne dass eine Validierung gelaufen ist. Legen Sie auf jeden Weg dorthin einen Werkzeugknoten im Modus „Validate“."
 				}
 			},
 			"devTaskStatus": {
