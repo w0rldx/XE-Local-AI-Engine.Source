@@ -279,9 +279,7 @@ public sealed class SupervisorLaunchSpecProfileTests
         AssertEx.Null(SpeculativeDecodingSettings.ClassOf("draft-bogus"));
         AssertEx.False(SpeculativeDecodingSettings.IsAllowedMode("draft-bogus"));
 
-        // b10201 also accepts these, but the app allowlist is a deliberate subset — they must stay rejected.
-        AssertEx.False(SpeculativeDecodingSettings.IsAllowedMode("draft-dflash"));
-        AssertEx.False(SpeculativeDecodingSettings.IsAllowedMode("draft-dspark"));
+        // draft-dflash / draft-dspark are exposed as external-draft modes; SpeculativeDecodingSettingsTests owns that pin.
     }
 
     [Test]
@@ -487,7 +485,7 @@ public sealed class SupervisorLaunchSpecProfileTests
         AssertEx.Equal("32", safe.Arguments[IndexOf(safe.Arguments, "--n-gpu-layers") + 1]);
 
         // Same store the explore-mode fallback uses: the backend, not the model, is the culprit.
-        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, CancellationToken.None),
+        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None),
             "a successful safe retry must record the optimized-config fallback for the backend.");
     }
 

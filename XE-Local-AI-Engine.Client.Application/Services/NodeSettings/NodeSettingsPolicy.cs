@@ -10,6 +10,7 @@ public enum NodeSettingsField
     SpeculativeMode,
     SpeculativeDraftMaxTokens,
     SpeculativeDraftGpuLayers,
+    KvCacheType,
     ChatCacheReuse,
     LlamaIdleTimeToLiveSeconds,
     KeepModelWarmModelName,

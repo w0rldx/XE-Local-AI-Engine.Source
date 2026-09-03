@@ -4,6 +4,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Inference;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -557,6 +558,120 @@ public sealed class LaunchPolicyFingerprintProviderTests : IDisposable
             File.Delete(path);
             DeleteBinaryDirectory(binaryPath);
         }
+    }
+
+    // ---- S1 / D13: the node's SELECTED KV-cache type is part of a frozen profile's identity ----
+
+    [Test]
+    public async Task Fingerprint_WithTheDefaultKvCacheType_IsByteIdenticalToTheUnseededOptions()
+    {
+        // Byte-identical default. The knob is FOLDED at q8_0, so a node that never touched it hashes exactly the bytes
+        // it has always hashed and shipping this slice invalidates no stored profile. If the seed default and the
+        // provider default ever drift apart, this fails loudly instead of silently staling every profile on every node.
+        var path = await CreateModelFileAsync();
+        var binaryPath = await CreateBinaryFileAsync();
+        try
+        {
+            var unseeded = BuildProvider(Runtime("runtime-sha"), binaryPath);
+            var seededFromUnsetSettings = BuildProvider(Runtime("runtime-sha"),
+                binaryPath,
+                launchPolicyOptions: new LlamaServerLaunchPolicyOptions
+                {
+                    KvCacheType = StoredNodeSettings.DefaultKvCacheType,
+                    EnableGpuKvCacheQuantization = true
+                });
+
+            var withProviderDefault = await unseeded.CaptureAsync(Input(path), CancellationToken.None);
+            var withSeededDefault = await seededFromUnsetSettings.CaptureAsync(Input(path), CancellationToken.None);
+
+            AssertEx.Equal(withProviderDefault.Value, withSeededDefault.Value);
+            AssertEx.Equal(expected: 5, withProviderDefault.Version);
+            AssertEx.Equal(expected: 5, LaunchPolicyFingerprintProvider.CurrentVersion);
+        }
+        finally
+        {
+            File.Delete(path);
+            DeleteBinaryDirectory(binaryPath);
+        }
+    }
+
+    [Test]
+    public async Task Fingerprint_ChangesWithTheSelectedKvCacheType()
+    {
+        // Never inert, never sticky (D13): switching the knob in EITHER direction moves the hash, so axis (b) stales a
+        // frozen profile explored under the other type and it re-explores before it can replay.
+        var path = await CreateModelFileAsync();
+        var binaryPath = await CreateBinaryFileAsync();
+        try
+        {
+            var q8 = await CaptureWithKvCacheTypeAsync(binaryPath, path, LlamaServerKvCacheTypes.Q8_0);
+            var f16 = await CaptureWithKvCacheTypeAsync(binaryPath, path, LlamaServerKvCacheTypes.F16);
+            var q4 = await CaptureWithKvCacheTypeAsync(binaryPath, path, LlamaServerKvCacheTypes.Q4_0);
+            var providerDefault = await BuildProvider(Runtime("runtime-sha"), binaryPath).CaptureAsync(Input(path), CancellationToken.None);
+
+            AssertEx.Equal(providerDefault.Value, q8);
+            AssertEx.False(string.Equals(q8, f16, StringComparison.Ordinal), "f16 must not hash as the q8_0 default.");
+            AssertEx.False(string.Equals(q8, q4, StringComparison.Ordinal), "q4_0 must not hash as the q8_0 default.");
+            AssertEx.False(string.Equals(f16, q4, StringComparison.Ordinal), "f16 and q4_0 must not hash alike.");
+
+            // What staleness actually reads: a profile frozen under q8_0 stops matching once the operator selects
+            // q4_0, and matches again the moment they switch back. The rule is symmetric, which is what "never
+            // sticky" means.
+            var frozenUnderQ8 = Profile(Input(path), await BuildProvider(Runtime("runtime-sha"), binaryPath).CaptureAsync(Input(path), CancellationToken.None));
+            AssertEx.False(await ProviderWithKvCacheType(binaryPath, LlamaServerKvCacheTypes.Q4_0).MatchesAsync(frozenUnderQ8, path, CancellationToken.None),
+                "A q8_0-frozen profile must not match once q4_0 is selected.");
+            AssertEx.True(await ProviderWithKvCacheType(binaryPath, LlamaServerKvCacheTypes.Q8_0).MatchesAsync(frozenUnderQ8, path, CancellationToken.None),
+                "Switching back to q8_0 must make the profile valid again.");
+        }
+        finally
+        {
+            File.Delete(path);
+            DeleteBinaryDirectory(binaryPath);
+        }
+    }
+
+    [Test]
+    public async Task Fingerprint_OnACpuBackend_IgnoresTheKvCacheType()
+    {
+        // A CPU spawn never quantizes KV, so a CPU-backend profile must not go stale for a knob that cannot reach it.
+        var path = await CreateModelFileAsync();
+        var binaryPath = await CreateBinaryFileAsync();
+        try
+        {
+            var cpuInput = Input(path) with { Backend = "cpu" };
+            var cpuRuntime = Runtime("runtime-sha") with { Variant = GpuVariant.Cpu };
+            var withDefault = await BuildProvider(cpuRuntime, binaryPath).CaptureAsync(cpuInput, CancellationToken.None);
+            var withQ4 = await BuildProvider(cpuRuntime,
+                    binaryPath,
+                    launchPolicyOptions: new LlamaServerLaunchPolicyOptions { KvCacheType = LlamaServerKvCacheTypes.Q4_0 })
+                .CaptureAsync(cpuInput, CancellationToken.None);
+
+            AssertEx.Equal(withDefault.Value, withQ4.Value);
+        }
+        finally
+        {
+            File.Delete(path);
+            DeleteBinaryDirectory(binaryPath);
+        }
+    }
+
+    // Builds a provider with the options the DI seed would produce for one selected KV type: f16 collapses the
+    // quantization flag, exactly as BuildSeededLlamaServerLaunchPolicyOptions does.
+    private LaunchPolicyFingerprintProvider ProviderWithKvCacheType(string binaryPath, string kvCacheType)
+    {
+        return BuildProvider(Runtime("runtime-sha"),
+            binaryPath,
+            launchPolicyOptions: new LlamaServerLaunchPolicyOptions
+            {
+                KvCacheType = kvCacheType,
+                EnableGpuKvCacheQuantization = !string.Equals(kvCacheType, LlamaServerKvCacheTypes.F16, StringComparison.Ordinal)
+            });
+    }
+
+    private async Task<string> CaptureWithKvCacheTypeAsync(string binaryPath, string modelPath, string kvCacheType)
+    {
+        var fingerprint = await ProviderWithKvCacheType(binaryPath, kvCacheType).CaptureAsync(Input(modelPath), CancellationToken.None);
+        return fingerprint.Value;
     }
 
     private LaunchPolicyFingerprintProvider BuildProvider(InstalledRuntimeState runtime,

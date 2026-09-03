@@ -25402,6 +25402,10 @@
             "type": "string",
             "nullable": true
           },
+          "kvCacheType": {
+            "type": "string",
+            "nullable": true
+          },
           "speculativeDraftModelName": {
             "type": "string",
             "nullable": true
@@ -25610,6 +25614,10 @@
             "nullable": true
           },
           "speculativeMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "kvCacheType": {
             "type": "string",
             "nullable": true
           },

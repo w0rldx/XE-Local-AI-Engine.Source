@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
 ///     The KV-cache types a benchmark run may be launched with, and the single place that turns a requested type into
@@ -20,9 +21,14 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </remarks>
 public static class BenchmarkKvCacheType
 {
-    public const string F16 = "f16";
-    public const string Q8_0 = "q8_0";
-    public const string Q4_0 = "q4_0";
+    /// <inheritdoc cref="LlamaServerKvCacheTypes.F16" />
+    public const string F16 = LlamaServerKvCacheTypes.F16;
+
+    /// <inheritdoc cref="LlamaServerKvCacheTypes.Q8_0" />
+    public const string Q8_0 = LlamaServerKvCacheTypes.Q8_0;
+
+    /// <inheritdoc cref="LlamaServerKvCacheTypes.Q4_0" />
+    public const string Q4_0 = LlamaServerKvCacheTypes.Q4_0;
 
     /// <summary>The run asked for this exact type.</summary>
     public const string SourceExplicit = "explicit";
@@ -30,29 +36,18 @@ public static class BenchmarkKvCacheType
     /// <summary>The run asked for Auto and freeze picked the type.</summary>
     public const string SourceAuto = "auto";
 
-    private static readonly string[] SupportedTypes = [F16, Q8_0, Q4_0];
-
     /// <summary><see langword="true" /> when the canonical <paramref name="type" /> needs <c>-ctk/-ctv</c> + <c>-fa on</c>.</summary>
-    public static bool IsQuantized(string type) =>
-        string.Equals(type, Q8_0, StringComparison.Ordinal) || string.Equals(type, Q4_0, StringComparison.Ordinal);
+    public static bool IsQuantized(string type) => LlamaServerKvCacheTypes.IsQuantized(type);
 
     /// <summary>
-    ///     Canonicalizes a requested type: trimmed and lowercased. A missing/blank request is Auto
-    ///     (<paramref name="normalized" /> is <see langword="null" />) and is valid; an unrecognized value returns
-    ///     <see langword="false" /> so the endpoint can answer 400.
+    ///     Canonicalizes a requested type: trimmed and lowercased, against the shared allow-list in
+    ///     <see cref="LlamaServerKvCacheTypes" />. A missing/blank request is Auto (<paramref name="normalized" /> is
+    ///     <see langword="null" />) and is valid — that resolution belongs to THIS caller, not to the shared authority,
+    ///     which answers validity only; an unrecognized value returns <see langword="false" /> so the endpoint can
+    ///     answer 400.
     /// </summary>
-    public static bool TryNormalize(string? requested, out string? normalized)
-    {
-        normalized = null;
-        if (string.IsNullOrWhiteSpace(requested))
-        {
-            return true;
-        }
-
-        var candidate = requested.Trim();
-        normalized = Array.Find(SupportedTypes, supported => string.Equals(candidate, supported, StringComparison.OrdinalIgnoreCase));
-        return normalized is not null;
-    }
+    public static bool TryNormalize(string? requested, out string? normalized) =>
+        LlamaServerKvCacheTypes.TryNormalize(requested, out normalized);
 
     /// <summary>
     ///     The frozen replay re-expressed with <paramref name="effective" /> as its KV-cache type, keeping the frozen

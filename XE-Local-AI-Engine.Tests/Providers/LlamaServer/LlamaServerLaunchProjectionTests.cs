@@ -51,6 +51,67 @@ public sealed class LlamaServerLaunchProjectionTests
     }
 
     [Test]
+    public void ArgumentVector_KvTypeF16_EmitsNoKvOrFlashArgs()
+    {
+        // Selecting f16 collapses to EnableGpuKvCacheQuantization = false in the DI seed, so the plan carries
+        // UseKvCacheQuantization: false and the vector loses -fa/-ctk/-ctv entirely — the same KV segment (none) a CPU
+        // spawn emits today.
+        var plan = new LlamaServerLaunchPlan(RequestedContextTokens: 16384,
+            UseKvCacheQuantization: false,
+            LlamaServerKvCacheTypes.F16,
+            CpuThreads: null,
+            CpuThreadsBatch: null);
+
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(ChatKey,
+            ExecutablePath,
+            ModelFilePath,
+            Port,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            chatCacheReuse: 256,
+            plan: plan,
+            chatCacheRamMiB: 512);
+
+        AssertVector(spec,
+        [
+            "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "1", "--no-warmup",
+            "--metrics", "--fit", "on", "-c", "16384",
+            "--jinja", "--cache-reuse", "256", "--cache-ram", "512"
+        ]);
+        AssertEx.False(spec.Arguments.Contains("-ctk"), "f16 must emit no -ctk.");
+        AssertEx.False(spec.Arguments.Contains("-ctv"), "f16 must emit no -ctv.");
+        AssertEx.False(spec.Arguments.Contains("-fa"), "f16 must leave flash attention at the runtime default.");
+    }
+
+    [Test]
+    public void ArgumentVector_KvTypeQ4_EmitsCtkCtvQ4()
+    {
+        // What the explore spawn following a q4_0-induced stale mark actually launches with.
+        var plan = new LlamaServerLaunchPlan(RequestedContextTokens: 16384,
+            UseKvCacheQuantization: true,
+            LlamaServerKvCacheTypes.Q4_0,
+            CpuThreads: null,
+            CpuThreadsBatch: null);
+
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(ChatKey,
+            ExecutablePath,
+            ModelFilePath,
+            Port,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            chatCacheReuse: 256,
+            plan: plan,
+            chatCacheRamMiB: 512);
+
+        AssertVector(spec,
+        [
+            "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "1", "--no-warmup",
+            "--metrics", "--fit", "on", "-c", "16384", "-fa", "on", "-ctk", "q4_0", "-ctv", "q4_0",
+            "--jinja", "--cache-reuse", "256", "--cache-ram", "512"
+        ]);
+    }
+
+    [Test]
     public void ArgumentVector_GpuReplayWithNoPlan_IsUnchanged()
     {
         // The benchmark/replay-profiling shape: policy bypassed entirely, frozen args emitted verbatim. This is the

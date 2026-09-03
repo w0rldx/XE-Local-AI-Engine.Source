@@ -192,14 +192,32 @@ public sealed class LlamaServerLaunchPolicyTests
     }
 
     [Test]
+    public async Task GpuReplay_KvCacheTypeSetting_IsNotApplied()
+    {
+        // The policy never overrides a replay's KV: a frozen profile pins its own -ctk/-ctv verbatim. Under D13 that
+        // stays true AND is now unreachable in the superseded case — changing the knob stales the profile through the
+        // launch-policy fingerprint first, so a replay carrying a KV type the operator has since abandoned never runs.
+        var policy = NewPolicy(new LlamaServerLaunchPolicyOptions { KvCacheType = LlamaServerKvCacheTypes.Q4_0 });
+
+        var gpuReplay = await policy.ResolveAsync(ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Replay(ctxSize: 8192, kvTypeK: "q8_0", kvTypeV: "q8_0", flashAttn: true),
+            Allocation(8192, ProcessPlacementMode.GpuResident, source: ProcessContextAllocationSource.FrozenProfile),
+            CancellationToken.None);
+
+        AssertEx.False(gpuReplay.UseKvCacheQuantization, "a replay owns its own KV/FA — the policy must not add them.");
+        AssertEx.True(gpuReplay.RequestedContextTokens is null, "a GPU replay's -c must come from the frozen profile.");
+    }
+
+    [Test]
     public async Task RecordOptimizedConfigFailed_PersistsThroughTheStore()
     {
         var fallbackStore = new FakeLaunchFallbackStore();
         var policy = new LlamaServerLaunchPolicy(new LlamaServerLaunchPolicyOptions(), fallbackStore);
 
-        await policy.RecordOptimizedConfigFailedAsync(GpuVariant.Vulkan, CancellationToken.None);
+        await policy.RecordOptimizedConfigFailedAsync(GpuVariant.Vulkan, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None);
 
-        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Vulkan, CancellationToken.None),
+        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Vulkan, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None),
             "recording a failed optimized config must persist through the fallback store.");
     }
 

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -37,7 +38,7 @@ public sealed class SupervisorLaunchFallbackTests
         AssertEx.False(safe.Arguments.Contains("-fa"), "the safe retry drops the forced flash attention.");
 
         // The fallback was persisted for this backend so future spawns skip the known-bad optimized config.
-        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, CancellationToken.None),
+        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None),
             "a successful safe retry must record the optimized-config fallback for the backend.");
 
         var observations = telemetry.Observations.ToArray();
@@ -86,7 +87,7 @@ public sealed class SupervisorLaunchFallbackTests
         AssertEx.NotNull(endpoint);
         AssertEx.Equal(expected: 2, launcher.LaunchCount);
         AssertEx.Equal(expected: 1, supervisor.CountRunningProcesses());
-        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, CancellationToken.None));
+        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None));
     }
 
     [Test]
@@ -142,7 +143,7 @@ public sealed class SupervisorLaunchFallbackTests
         AssertEx.Contains(optimized!.Arguments, "-ctk");
         AssertEx.True(launcher.Launches.TryDequeue(out var safe));
         AssertEx.False(safe!.Arguments.Contains("-ctk"));
-        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, CancellationToken.None));
+        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None));
     }
 
     [Test]
@@ -193,7 +194,7 @@ public sealed class SupervisorLaunchFallbackTests
         AssertEx.True(launcher.Launches.TryDequeue(out var safe));
         AssertEx.False(safe!.Arguments.Contains("-ctk"));
         AssertEx.False(safe.Arguments.Contains("--flash-attn"));
-        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, CancellationToken.None));
+        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None));
     }
 
     /// <summary>Health probe whose readiness wait fails once (the optimized spawn) then succeeds (the safe retry).</summary>

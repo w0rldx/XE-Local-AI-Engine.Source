@@ -71,6 +71,7 @@ internal sealed class NodeSettingsAdministrationService(
             SpeculativeDraftModelName = TrimWhenProvided(patch.SpeculativeDraftModelName, current.SpeculativeDraftModelName),
             SpeculativeDraftMaxTokens = patch.SpeculativeDraftMaxTokens ?? current.SpeculativeDraftMaxTokens,
             SpeculativeDraftGpuLayers = patch.SpeculativeDraftGpuLayers ?? current.SpeculativeDraftGpuLayers,
+            KvCacheType = TrimWhenProvided(patch.KvCacheType, current.KvCacheType),
             RerankerModelName = TrimWhenProvided(patch.RerankerModelName, current.RerankerModelName)
         };
 
@@ -130,5 +131,6 @@ internal sealed class NodeSettingsAdministrationService(
             settings.SpeculativeDraftModelName,
             settings.SpeculativeDraftMaxTokens,
             settings.SpeculativeDraftGpuLayers,
+            settings.KvCacheType,
             settings.RerankerModelName);
 }

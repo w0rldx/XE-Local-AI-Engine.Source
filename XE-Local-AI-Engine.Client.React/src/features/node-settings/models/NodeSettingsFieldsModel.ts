@@ -51,6 +51,8 @@ const speculativeModeClasses = new Map<string, SpeculativeModeClass>([
 	["ngram-cache", "draftless"],
 	["draft-simple", "external-draft"],
 	["draft-eagle3", "external-draft"],
+	["draft-dflash", "external-draft"],
+	["draft-dspark", "external-draft"],
 	["draft-mtp", "main-model-heads"],
 ]);
 
@@ -61,8 +63,20 @@ export const speculativeModeSelectValues = [
 	"ngram-cache",
 	"draft-simple",
 	"draft-eagle3",
+	"draft-dflash",
+	"draft-dspark",
 	"draft-mtp",
 ] as const;
+
+// KV-cache element types for GPU chat spawns, mirroring the backend LlamaServerKvCacheTypes allow-list. `f16` emits no
+// -ctk/-ctv at all; the quantized types halve (q8_0) or quarter (q4_0) the KV bytes and require flash attention.
+export const KV_CACHE_TYPE_DEFAULT = "q8_0";
+
+export const kvCacheTypeSelectValues = ["f16", KV_CACHE_TYPE_DEFAULT, "q4_0"] as const;
+
+export function isAllowedKvCacheType(type: string): boolean {
+	return (kvCacheTypeSelectValues as readonly string[]).includes(type.trim());
+}
 
 export function isAllowedSpeculativeMode(mode: string): boolean {
 	return speculativeModeClasses.has(mode.trim());
@@ -171,7 +185,8 @@ export interface NodeSettingsFieldsForm {
 	keepModelWarmModelName: string;
 	keepModelWarmIntervalSeconds: number | string;
 	maxResponseSizeMb: number | string;
-	// Chat launch tuning (speculative decoding + prompt-cache reuse)
+	// Chat launch tuning (KV-cache type + speculative decoding + prompt-cache reuse)
+	kvCacheType: string;
 	speculativeMode: string;
 	speculativeDraftModelName: string;
 	speculativeDraftMaxTokens: number | string;
@@ -206,6 +221,7 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	keepModelWarmModelName: "",
 	keepModelWarmIntervalSeconds: 300,
 	maxResponseSizeMb: 10,
+	kvCacheType: KV_CACHE_TYPE_DEFAULT,
 	speculativeMode: SPECULATIVE_DISABLED_MODE,
 	speculativeDraftModelName: "",
 	speculativeDraftMaxTokens: 3,
@@ -252,6 +268,7 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 			nodeSettingsFieldDefaults.keepModelWarmIntervalSeconds,
 		),
 		maxResponseSizeMb: numberOr(response.maxResponseSizeMb, nodeSettingsFieldDefaults.maxResponseSizeMb),
+		kvCacheType: response.kvCacheType ?? nodeSettingsFieldDefaults.kvCacheType,
 		speculativeMode: response.speculativeMode ?? nodeSettingsFieldDefaults.speculativeMode,
 		speculativeDraftModelName: response.speculativeDraftModelName ?? "",
 		speculativeDraftMaxTokens: numberOr(response.speculativeDraftMaxTokens, nodeSettingsFieldDefaults.speculativeDraftMaxTokens),
@@ -370,6 +387,8 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 //   llamaMaxLoadedProcesses         — AddNodeModelRuntimeExtensions.BuildSeededLlamaServerSupervisorOptions
 //   llamaIdleTimeToLiveSeconds      — same seed method
 //   chatCacheReuse                  — same seed method (LlamaServerSupervisorOptions.ChatCacheReuse)
+//   kvCacheType                     — AddNodeModelRuntimeExtensions.BuildSeededLlamaServerLaunchPolicyOptions, the
+//                                     ONLY consumer (LlamaServerLaunchPolicyOptions is built once at host build)
 //   speculativeMode                 — same seed method
 //   speculativeDraftModelName       — same seed method
 //   speculativeDraftMaxTokens       — same seed method
@@ -388,6 +407,7 @@ export const restartGatedNodeSettingsFields: ReadonlySet<keyof NodeSettingsField
 	"llamaMaxLoadedProcesses",
 	"llamaIdleTimeToLiveSeconds",
 	"chatCacheReuse",
+	"kvCacheType",
 	"speculativeMode",
 	"speculativeDraftModelName",
 	"speculativeDraftMaxTokens",
@@ -548,6 +568,17 @@ export function buildNodeSettingsRequest(
 			body.maxResponseSizeMb = v;
 		},
 	);
+
+	// KV-cache type. Sent whenever it differs from the baseline; an unknown value is a hard error rather than a silent
+	// drop, the same way speculativeMode is handled. Changing this invalidates every frozen inference profile on the
+	// node, which the field description spells out.
+	if (form.kvCacheType !== baseline.kvCacheType) {
+		if (!isAllowedKvCacheType(form.kvCacheType)) {
+			errors["kvCacheType"] = "type";
+		} else {
+			body.kvCacheType = form.kvCacheType.trim();
+		}
+	}
 
 	// Speculative decoding mode. Sent whenever it differs from the baseline (including a switch back to "none"). An
 	// unknown mode is a hard error rather than a silent drop.

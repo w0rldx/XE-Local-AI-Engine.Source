@@ -117,6 +117,13 @@ public sealed partial record StoredNodeSettings
     /// <summary>Default <c>--spec-type</c> — speculative decoding off (operator opt-in). Mirrors <c>SpeculativeDecodingSettings.DisabledMode</c>.</summary>
     public const string DefaultSpeculativeMode = SpeculativeDecodingSettings.DisabledMode;
 
+    /// <summary>
+    ///     Default KV-cache type for GPU chat spawns. Mirrors <c>LlamaServerLaunchPolicyOptions.KvCacheType</c>'s own
+    ///     default, so an unset setting seeds an options object equal to the provider default and the launch argv,
+    ///     launch identity and inference-profile fingerprint are all byte-identical to a node that never had this knob.
+    /// </summary>
+    public const string DefaultKvCacheType = LlamaServerKvCacheTypes.Q8_0;
+
     /// <summary>Default draft tokens per step (<c>--spec-draft-n-max</c>); mirrors <c>LlamaServerSupervisorOptions.SpeculativeDraftMaxTokens</c>.</summary>
     public const int DefaultSpeculativeDraftMaxTokens = 3;
 
@@ -177,6 +184,16 @@ public sealed partial record StoredNodeSettings
     public static bool SpeculativeModeRequiresDraftModel(string? mode)
     {
         return SpeculativeDecodingSettings.ModeRequiresDraftModel(mode);
+    }
+
+    /// <summary>
+    ///     Returns <see langword="true" /> when <paramref name="type" /> is a recognized KV-cache type (or empty, i.e.
+    ///     "use the node default"). Delegates to <see cref="LlamaServerKvCacheTypes.IsAllowed" /> so the allow-list has
+    ///     one authority shared with the benchmark KV picker.
+    /// </summary>
+    public static bool IsValidKvCacheType(string? type)
+    {
+        return LlamaServerKvCacheTypes.IsAllowed(type);
     }
 
     public int MaxMessageRequestTimeoutSeconds { get; init; } = DefaultMaxMessageRequestTimeoutSeconds;
@@ -266,6 +283,15 @@ public sealed partial record StoredNodeSettings
     ///     on the next node restart.
     /// </summary>
     public string? SpeculativeMode { get; init; }
+
+    /// <summary>
+    ///     KV-cache element type for GPU chat spawns (<c>-ctk</c>/<c>-ctv</c>): <c>f16</c> | <c>q8_0</c> | <c>q4_0</c>.
+    ///     Seed: <c>q8_0</c>. <c>f16</c> emits no KV or flash-attention flags at all. Unknown falls back to
+    ///     <see langword="null" /> (re-seeded to the default). Applies on the next node restart, and CHANGING IT
+    ///     invalidates every frozen inference profile on this node — the selected type is part of the launch-policy
+    ///     fingerprint, so each model re-explores under the new type before it can replay again.
+    /// </summary>
+    public string? KvCacheType { get; init; }
 
     /// <summary>
     ///     Installed draft-model NAME for <c>draft-*</c> speculative modes, resolved server-side to its GGUF path on the

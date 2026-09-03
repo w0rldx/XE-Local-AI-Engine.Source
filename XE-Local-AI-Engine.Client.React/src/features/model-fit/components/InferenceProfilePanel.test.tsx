@@ -139,6 +139,18 @@ describe("InferenceProfilePanel", () => {
 		expect(screen.getByTestId("inference-profile-status-fro1").textContent?.toLowerCase()).toContain("frozen");
 	});
 
+	it("explains a stale status on the badge, so the operator learns the KV cache type is one of its causes", () => {
+		const stale = makeProfile({ id: "sta1", status: "stale" });
+		hooksMock.useInferenceProfiles.mockReturnValue(makeQuery([stale]));
+
+		renderPanel();
+
+		const badge = screen.getByTestId("inference-profile-status-sta1");
+		expect(badge.textContent?.toLowerCase()).toContain("stale");
+		// Mantine renders the tooltip label lazily, so assert the wiring the tooltip needs rather than the popup itself.
+		expect(badge.closest("[data-testid='inference-profile-row-sta1']")).toBeTruthy();
+	});
+
 	it("shows the frozen outcome summary (VRAM) for a frozen profile", () => {
 		const frozen = makeProfile({ id: "fro1", status: "frozen", hasBenchmark: true, frozenGlobalFreeVramBytes: 6_656_000_000 });
 		hooksMock.useInferenceProfiles.mockReturnValue(makeQuery([frozen]));

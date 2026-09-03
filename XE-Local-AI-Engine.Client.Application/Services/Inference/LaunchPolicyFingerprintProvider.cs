@@ -293,8 +293,37 @@ public sealed class LaunchPolicyFingerprintProvider(
         };
 
         var json = JsonSerializer.Serialize(canonical, SerializerOptions);
+
+        // D13 — the node's SELECTED KV-cache type is part of a profile's identity, so a frozen profile explored under a
+        // different type goes stale and re-explores instead of replaying a type the operator has since changed. The KV
+        // pair inside the canonical document above is the profile's OWN frozen one (MatchesAsync rebuilds it from the
+        // same row, so it can never mismatch); this is the node's current selection, which is a different fact.
+        //
+        // It is APPENDED after a complete JSON document rather than added as a member: the canonical shape is an
+        // anonymous type serialized with JsonSerializerDefaults.Web, which writes nulls, so no member can be omitted
+        // conditionally and adding one would change every hash ever produced. A fixed literal suffix can never be read
+        // as document content. BindValidationHash already combines values outside the JSON the same way.
+        //
+        // And it is FOLDED at the default: a node that never touched the knob hashes exactly the bytes it has always
+        // hashed, so shipping this invalidates no stored profile. A CPU spawn never quantizes KV, so a CPU row must not
+        // go stale for a knob that cannot reach it.
+        var selectedKv = ResolveSelectedKvCacheIdentity();
+        if (requestedVariant != GpuVariant.Cpu
+            && !string.Equals(selectedKv, LlamaServerKvCacheTypes.Q8_0, StringComparison.Ordinal))
+        {
+            json = string.Concat(json, "|selectedKvCacheType=", selectedKv);
+        }
+
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
     }
+
+    // The KV-cache type this node would launch with today. EnableGpuKvCacheQuantization is what the launch policy
+    // actually tests, so the flag and the type collapse into one token here: quantization off reads as f16 whatever the
+    // type string says.
+    private string ResolveSelectedKvCacheIdentity() =>
+        _launchPolicyOptions.EnableGpuKvCacheQuantization
+            ? _launchPolicyOptions.KvCacheType
+            : LlamaServerKvCacheTypes.F16;
 
     /// <summary>
     ///     The adapter member of a LoRA model's identity — <see langword="null" /> for an ordinary model, so an entry

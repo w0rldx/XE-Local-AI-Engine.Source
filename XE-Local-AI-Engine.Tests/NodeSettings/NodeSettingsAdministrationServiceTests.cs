@@ -66,11 +66,11 @@ public sealed class NodeSettingsAdministrationServiceTests
             "LlamaMaxLoadedProcesses", "LlamaIdleTimeToLiveSeconds", "KeepModelWarmEnabled",
             "KeepModelWarmModelName", "KeepModelWarmIntervalSeconds", "MaxMessageRequestTimeoutSeconds",
             "ChatCacheReuse", "SpeculativeMode", "SpeculativeDraftModelName", "SpeculativeDraftMaxTokens",
-            "SpeculativeDraftGpuLayers", "RerankerModelName"
+            "SpeculativeDraftGpuLayers", "KvCacheType", "RerankerModelName"
         ];
 
         AssertEx.Equal(approved.Length, names.Count);
-        AssertEx.True(names.SetEquals(approved), "the agentic patch must expose exactly the approved 16 fields.");
+        AssertEx.True(names.SetEquals(approved), "the agentic patch must expose exactly the approved 17 fields.");
         AssertEx.False(names.Contains(nameof(StoredNodeSettings.CustomToolsEnabled)));
         AssertEx.False(names.Contains(nameof(StoredNodeSettings.ToolApprovalPolicy)));
         AssertEx.False(names.Contains(nameof(StoredNodeSettings.OllamaEndpoint)));

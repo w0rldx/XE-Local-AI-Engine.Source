@@ -143,9 +143,20 @@ function InferenceProfileRow({
 		<>
 			<Table.Tr data-testid={`inference-profile-row-${profile.id}`}>
 				<Table.Td>
-					<Badge color={statusColor[profile.status]} variant="light" data-testid={`inference-profile-status-${profile.id}`}>
-						{t(`pages.modelFit.inferenceProfiles.status.${profile.status}`, profile.status)}
-					</Badge>
+					<Tooltip
+						label={t(
+							"pages.modelFit.inferenceProfiles.status.staleTooltip",
+							"Re-exploration required. A profile goes stale when the llama.cpp build, the GPU, the free VRAM at freeze, or this node's KV cache type has changed since it was frozen.",
+						)}
+						multiline={true}
+						w={320}
+						withArrow={true}
+						disabled={profile.status !== "stale"}
+					>
+						<Badge color={statusColor[profile.status]} variant="light" data-testid={`inference-profile-status-${profile.id}`}>
+							{t(`pages.modelFit.inferenceProfiles.status.${profile.status}`, profile.status)}
+						</Badge>
+					</Tooltip>
 				</Table.Td>
 				<Table.Td>
 					<Text size="sm" fw={500}>

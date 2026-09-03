@@ -30,6 +30,7 @@ public sealed class StubNodeRuntimeSettings
     private int _orchestrationIdleTimeoutSeconds = StoredNodeSettings.DefaultOrchestrationIdleTimeoutSeconds;
     private IReadOnlyList<string> _toolCapableModels = ["qwen3:8b"];
     private int _chatCacheReuse = StoredNodeSettings.DefaultChatCacheReuse;
+    private string _kvCacheType = StoredNodeSettings.DefaultKvCacheType;
     private string _speculativeMode = StoredNodeSettings.DefaultSpeculativeMode;
     private string? _speculativeDraftModelName;
     private int _speculativeDraftMaxTokens = StoredNodeSettings.DefaultSpeculativeDraftMaxTokens;
@@ -40,6 +41,13 @@ public sealed class StubNodeRuntimeSettings
     public static StubNodeRuntimeSettings Create()
     {
         return new StubNodeRuntimeSettings();
+    }
+
+    public StubNodeRuntimeSettings WithKvCacheType(string kvCacheType)
+    {
+        ArgumentNullException.ThrowIfNull(kvCacheType);
+        _kvCacheType = kvCacheType;
+        return this;
     }
 
     public StubNodeRuntimeSettings WithDefaultModelName(string defaultModelName)
@@ -212,6 +220,7 @@ public sealed class StubNodeRuntimeSettings
         settings.GetMaxPendingToolCallAgeMinutesAsync(Arg.Any<CancellationToken>()).Returns(_maxPendingToolCallAgeMinutes);
         settings.GetDetachedGraceSecondsAsync(Arg.Any<CancellationToken>()).Returns(_detachedGraceSeconds);
         settings.GetChatCacheReuseAsync(Arg.Any<CancellationToken>()).Returns(_chatCacheReuse);
+        settings.GetKvCacheTypeAsync(Arg.Any<CancellationToken>()).Returns(_kvCacheType);
         settings.GetSpeculativeModeAsync(Arg.Any<CancellationToken>()).Returns(_speculativeMode);
         settings.GetSpeculativeDraftModelNameAsync(Arg.Any<CancellationToken>()).Returns(_speculativeDraftModelName);
         settings.GetSpeculativeDraftMaxTokensAsync(Arg.Any<CancellationToken>()).Returns(_speculativeDraftMaxTokens);
@@ -233,6 +242,7 @@ public sealed class StubNodeRuntimeSettings
         settings.GetMaxPendingToolCallAgeMinutes().Returns(_maxPendingToolCallAgeMinutes);
         settings.GetDetachedGraceSeconds().Returns(_detachedGraceSeconds);
         settings.GetChatCacheReuse().Returns(_chatCacheReuse);
+        settings.GetKvCacheType().Returns(_kvCacheType);
         settings.GetSpeculativeMode().Returns(_speculativeMode);
         settings.GetSpeculativeDraftModelName().Returns(_speculativeDraftModelName);
         settings.GetSpeculativeDraftMaxTokens().Returns(_speculativeDraftMaxTokens);

@@ -1408,7 +1408,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     // The safe config reached readiness where the optimized (KV-quant + flash-attention) config could
                     // not — so the optimized config is the culprit for THIS backend (not a broken model, which would
                     // fail the safe config too). Record it so subsequent spawns skip the known-bad optimized config.
-                    await _launchPolicy.RecordOptimizedConfigFailedAsync(variant, ct).ConfigureAwait(false);
+                    // WithoutKvCacheQuantization() leaves the plan's KvCacheType intact, so the retry candidate still
+                    // names the type the primary failed on and the verdict is scoped to that pair, not the backend.
+                    await _launchPolicy.RecordOptimizedConfigFailedAsync(variant, candidate.Plan?.KvCacheType ?? string.Empty, ct).ConfigureAwait(false);
                 }
 
                 return running;

@@ -64,7 +64,7 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
         // GPU explore: the shared allocation's context plus the KV-cache quantization + flash attention optimization,
         // unless this backend already had the optimized config recorded as unable to reach readiness.
         var useKvQuant = _options.EnableGpuKvCacheQuantization
-                         && !await _fallbackStore.IsOptimizedConfigDisabledAsync(variant, ct).ConfigureAwait(false);
+                         && !await _fallbackStore.IsOptimizedConfigDisabledAsync(variant, _options.KvCacheType, ct).ConfigureAwait(false);
 
         return new LlamaServerLaunchPlan(allocation.ProcessContextTokens,
             useKvQuant,
@@ -94,10 +94,10 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
     }
 
     /// <inheritdoc />
-    public Task RecordOptimizedConfigFailedAsync(GpuVariant variant, CancellationToken ct)
+    public Task RecordOptimizedConfigFailedAsync(GpuVariant variant, string kvCacheType, CancellationToken ct)
     {
-        _logger.LogWarning("Recording optimized llama-server launch config (KV-cache quant + flash attention) as unsupported for backend {Variant}; future spawns will use the safe config.", variant);
-        return _fallbackStore.DisableOptimizedConfigAsync(variant, ct);
+        _logger.LogWarning("Recording optimized llama-server launch config (KV-cache quant + flash attention) as unsupported for backend {Variant} at KV-cache type {KvCacheType}; future spawns of that pair will use the safe config.", variant, kvCacheType);
+        return _fallbackStore.DisableOptimizedConfigAsync(variant, kvCacheType, ct);
     }
 
     /// <summary>Derives (<c>-t</c>, <c>-tb</c>) for a CPU build; a GPU build gets both null — no thread flags.</summary>

@@ -188,7 +188,7 @@ CLI; use the linked runbook rather than translating syntax between clients.
 5. Use `list_workspaces` only when the seeded read-only Coder needs an operator-authorized workspace.
 
 A `delegate` key sees exactly 8 shared tools. An `agentic` key sees all 23: those 8 plus 15
-administration tools. The exact names, inputs, lifecycle values, and 16-field settings whitelist are
+administration tools. The exact names, inputs, lifecycle values, and 17-field settings whitelist are
 in the [MCP tools reference](../../skills/xe-local-ai-engine/references/mcp-tools.md).
 
 ## 7. Security model

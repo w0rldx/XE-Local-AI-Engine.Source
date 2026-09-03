@@ -1800,6 +1800,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
 	speculativeMode: z.string().nullish(),
+	kvCacheType: z.string().nullish(),
 	speculativeDraftModelName: z.string().nullish(),
 	speculativeDraftMaxTokens: z
 		.int()
@@ -1946,6 +1947,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
 	speculativeMode: z.string().nullish(),
+	kvCacheType: z.string().nullish(),
 	speculativeDraftModelName: z.string().nullish(),
 	speculativeDraftMaxTokens: z
 		.int()

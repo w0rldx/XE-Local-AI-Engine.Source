@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class BenchmarkRunFreezeServiceTests
@@ -824,7 +825,8 @@ public sealed class BenchmarkRunFreezeServiceTests
                     Variants(variant),
                     LaunchInspector,
                     FallbackStore(optimizedConfigDisabled),
-                    LaunchPolicy()),
+                    LaunchPolicy(),
+                    new LlamaServerLaunchPolicyOptions()),
                 TimeProvider.System,
                 NullLogger<BenchmarkRunFreezeService>.Instance);
         }
@@ -1008,7 +1010,7 @@ public sealed class BenchmarkRunFreezeServiceTests
         private static ILlamaServerLaunchFallbackStore FallbackStore(bool disabled)
         {
             var store = Substitute.For<ILlamaServerLaunchFallbackStore>();
-            store.IsOptimizedConfigDisabledAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>()).Returns(disabled);
+            store.IsOptimizedConfigDisabledAsync(Arg.Any<GpuVariant>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(disabled);
             return store;
         }
 

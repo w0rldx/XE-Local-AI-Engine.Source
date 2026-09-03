@@ -119,6 +119,36 @@ public sealed class InferenceProfileResolverTests
         await store.Received(1).MarkStaleAsync(record.Id, Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    [Arguments("q8_0", "q4_0")]
+    [Arguments("q4_0", "q8_0")]
+    public async Task FrozenProfile_AfterKvCacheTypeChange_IsMarkedStaleAndReturnsExplore(string frozenKvType, string selectedKvType)
+    {
+        // D13's lifecycle, from the resolver's side and in BOTH directions: the KV-cache knob is one more thing axis (b)
+        // covers, so the existing MarkStale -> Explore path carries it with no new axis, call site or column. The
+        // following spawn is an ordinary auto-fit explore, which no profiling lease can refuse.
+        var store = Substitute.For<IInferenceProfileStore>();
+        var record = Record(InferenceProfileStatus.Frozen, ctxSize: 4096, nGpuLayers: 20) with
+        {
+            KvTypeK = frozenKvType,
+            KvTypeV = frozenKvType,
+            FlashAttn = true
+        };
+        store.GetByKeyAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<InferenceProfileRecord?>(record));
+        var resolver = BuildResolver(store, out var invalidation);
+
+        // The launch-policy axis reports drift because the node now selects a different KV type than the row was frozen
+        // under; LaunchPolicyFingerprintProviderTests owns the pin that the hash actually moves.
+        invalidation.IsStaleAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<CancellationToken>())
+                    .Returns(Task.FromResult(!string.Equals(frozenKvType, selectedKvType, StringComparison.Ordinal)));
+
+        var result = await resolver.ResolveAsync(Model, ModelRole.Chat, GpuVariant.Cuda, CancellationToken.None);
+
+        AssertEx.True(result.ExploreMode, "A staled profile must fall back to auto-fit under the newly selected KV type.");
+        await store.Received(1).MarkStaleAsync(record.Id, Arg.Any<CancellationToken>());
+    }
+
     private static InferenceProfileResolver BuildResolver(IInferenceProfileStore store, out IInferenceInvalidationEvaluator invalidation)
     {
         invalidation = Substitute.For<IInferenceInvalidationEvaluator>();

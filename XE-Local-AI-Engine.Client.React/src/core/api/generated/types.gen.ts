@@ -1506,6 +1506,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	minChatCacheReuse?: number;
 	maxAllowedChatCacheReuse?: number;
 	speculativeMode?: string | null;
+	kvCacheType?: string | null;
 	speculativeDraftModelName?: string | null;
 	speculativeDraftMaxTokens?: number | null;
 	minSpeculativeDraftMaxTokens?: number;
@@ -1559,6 +1560,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	recommendedLlamaCppTag?: string | null;
 	chatCacheReuse?: number | null;
 	speculativeMode?: string | null;
+	kvCacheType?: string | null;
 	speculativeDraftModelName?: string | null;
 	speculativeDraftMaxTokens?: number | null;
 	speculativeDraftGpuLayers?: number | null;
