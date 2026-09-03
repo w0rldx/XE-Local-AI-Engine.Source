@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -62,15 +63,21 @@ internal sealed class DevWorkflowRetryPolicy
     /// </summary>
     private readonly ConcurrentDictionary<Guid, ScheduledRetry> _notBefore = new();
 
+    private readonly ILogger<DevWorkflowRetryPolicy> _logger;
+
     private readonly DevWorkflowOptions _options;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
 
-    public DevWorkflowRetryPolicy(IServiceScopeFactory scopeFactory, IOptions<DevWorkflowOptions> options, TimeProvider timeProvider)
+    public DevWorkflowRetryPolicy(IServiceScopeFactory scopeFactory,
+        IOptions<DevWorkflowOptions> options,
+        TimeProvider timeProvider,
+        ILogger<DevWorkflowRetryPolicy> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
     }
 
@@ -359,16 +366,15 @@ internal sealed class DevWorkflowRetryPolicy
         // Running. The run would then repeat the check and complete on evidence and an approval about an implementation
         // that no longer existed. All or nothing means a crash leaves the failure still recorded, which the next sweep
         // re-derives and re-routes.
-        _ = await store.RouteRetryAsync(new RouteDevWorkflowRetryCommand(new AppendDevWorkflowEventCommand(run.Id,
-                                   DevWorkflowVersions.Any,
-                                   DevWorkflowEventTypes.NodeRetryRouted,
-                                   nodeRun.Id,
-                                   DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "retry-routed"),
-                                   failure.Outcome ?? DevWorkflowOutcomes.Failed,
-                                   JsonSerializer.Serialize(new RoutedDetail(nodeRun.NodeKey, retryTarget, failure.FailureClass, failure.SanitizedReason), JsonOptions)),
-                               [.. moves.Select(static move => move.Command)]),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+        var route = new RouteDevWorkflowRetryCommand(new AppendDevWorkflowEventCommand(run.Id,
+                DevWorkflowVersions.Any,
+                DevWorkflowEventTypes.NodeRetryRouted,
+                nodeRun.Id,
+                DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "retry-routed"),
+                failure.Outcome ?? DevWorkflowOutcomes.Failed,
+                JsonSerializer.Serialize(new RoutedDetail(nodeRun.NodeKey, retryTarget, failure.FailureClass, failure.SanitizedReason), JsonOptions)),
+            [.. moves.Select(static move => move.Command)]);
+        await RouteOnceMoreOnAClashAsync(store, run, nodeRun, retryTarget, route, cancellationToken).ConfigureAwait(false);
 
         // After the commit: a cushion for a re-attempt that did not commit would hold back a row nothing reset.
         foreach (var (_, nodeRunId, delayUntil) in moves)
@@ -377,6 +383,63 @@ internal sealed class DevWorkflowRetryPolicy
         }
 
         return moves.Count + 1;
+    }
+
+    /// <summary>
+    ///     Writes the route, and on a lost race asks EXACTLY once more before giving up on this tick.
+    ///     <para>
+    ///         The immediate re-ask exists because the lanes this route supersedes are already stopped by the time the
+    ///         write is attempted, and a clash rolls that write back whole. Leaving it to the next sweep would leave
+    ///         cancelled attempts with nothing reset — and a cancelled DevTask attempt is read by that lane as a
+    ///         cancellation rather than as a round to redo, so the fix loop would come back as a cancelled run.
+    ///     </para>
+    ///     <para>
+    ///         The SAME command, deliberately, rather than one re-derived from re-read rows. Every part of it already
+    ///         carries <see cref="DevWorkflowVersions.Any" />, so a re-read cannot change a single field; it could only
+    ///         change which rows are in the reset set, and a row that moved into that set after the snapshot was taken
+    ///         is the same race the first attempt runs anyway. Re-sending it unchanged also makes the operation id do
+    ///         its job: if the first attempt did commit and only its answer was lost, this is a replay, not a second
+    ///         route.
+    ///     </para>
+    ///     <para>
+    ///         Twice and no further. A third ask is a writer that is not going away, and the honest answer is the one
+    ///         that was there before: the failure is still recorded, so the next sweep re-derives it and routes again.
+    ///     </para>
+    /// </summary>
+    private async Task RouteOnceMoreOnAClashAsync(IDevWorkflowStore store,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        string retryTarget,
+        RouteDevWorkflowRetryCommand route,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            _ = await store.RouteRetryAsync(route, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+        catch (DevWorkflowConcurrencyException clash)
+        {
+            _logger.LogDebug(clash,
+                "Development workflow run {RunId} lost a race routing '{NodeKey}' back to '{RetryTarget}', so the route is being asked once more.",
+                run.Id,
+                nodeRun.NodeKey,
+                retryTarget);
+        }
+
+        try
+        {
+            _ = await store.RouteRetryAsync(route, cancellationToken).ConfigureAwait(false);
+        }
+        catch (DevWorkflowConcurrencyException persistent)
+        {
+            _logger.LogWarning(persistent,
+                "Development workflow run {RunId} lost the race routing '{NodeKey}' back to '{RetryTarget}' twice, so the lanes it stopped are left for the next sweep to re-derive and route again.",
+                run.Id,
+                nodeRun.NodeKey,
+                retryTarget);
+            throw;
+        }
     }
 
     /// <summary>
