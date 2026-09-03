@@ -101,7 +101,7 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
     [Test]
     public async Task TurnRead_WithoutACompactionSynopsis_LoadsEverythingExactlyAsTheFullRead()
     {
-        // The cap is gated on a non-empty synopsis AND a covered sequence — the same pair BuildConversationContext gates
+        // The cap is gated on a non-empty synopsis AND a covered sequence — the same pair ConversationContextBuilder.Build gates
         // its own drop on — so an uncompacted conversation (the overwhelming majority) must be untouched.
         await using var provider = await BuildProviderAsync("turn-read-cap-uncompacted.sqlite").ConfigureAwait(false);
         var service = CreateService(provider);
@@ -215,7 +215,7 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
     }
 
     /// <summary>
-    ///     Mirrors what <c>NodeChatStreamService.BuildConversationContext</c> sends: resolve the selected path, drop
+    ///     Mirrors what <c>ConversationContextBuilder.Build</c> sends: resolve the selected path, drop
     ///     everything the synopsis covers, then keep completed non-empty messages in sequence order. Any divergence
     ///     between the full and turn reads shows up as a difference in this projection.
     /// </summary>

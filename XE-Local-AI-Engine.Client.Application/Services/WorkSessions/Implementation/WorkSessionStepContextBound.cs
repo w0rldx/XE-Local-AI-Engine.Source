@@ -108,7 +108,7 @@ internal sealed class WorkSessionStepContextBound(
     /// <summary>
     ///     Estimates the tokens the next step's request will carry for HISTORY: the synopsis plus every completed,
     ///     content-bearing message the synopsis does not already cover. Mirrors
-    ///     <c>NodeChatStreamService.BuildConversationContext</c> — same selected-path collapse, same anchor space, same
+    ///     <c>ConversationContextBuilder.Build</c> — same selected-path collapse, same anchor space, same
     ///     completed/non-empty filter — and measures with the same <see cref="ITokenEstimator" /> the context budgeters
     ///     use, under the same per-model calibration, so this projection and their verdicts are in one arithmetic. The
     ///     state block for the coming step is deliberately NOT counted: it is bounded by construction and is what the
