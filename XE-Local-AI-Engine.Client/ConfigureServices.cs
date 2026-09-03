@@ -436,6 +436,10 @@ public static class ConfigureServices
         // The external integration API's hand-mapped handler, scoped like the proxy forwarder for the same reason: its
         // collaborators are scoped stores and application services.
         builder.Services.AddScoped<IntegrationApiHandler>();
+
+        // Singleton: it owns the process-wide open-stream semaphore, and a scoped one would give every request its own
+        // cap, which is no cap at all.
+        builder.Services.AddSingleton<IntegrationSseWriter>();
         builder.Services.AddHttpClient(LocalModelProxyForwarder.HttpClientName)
                .ConfigureHttpClient(static client => client.Timeout = Timeout.InfiniteTimeSpan);
 

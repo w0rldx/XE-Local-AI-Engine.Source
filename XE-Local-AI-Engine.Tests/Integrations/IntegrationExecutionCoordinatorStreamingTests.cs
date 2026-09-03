@@ -1,12 +1,28 @@
 namespace XE_Local_AI_Engine.Tests.Integrations;
 
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Integrations;
+using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 using Harness = XE_Local_AI_Engine.Tests.Integrations.IntegrationCoordinatorHarness;
+
+/// <summary>The writer's options, spelled out once so the reaper test reads as one thought.</summary>
+internal sealed class IntegrationSseWriterOptions : IOptions<IntegrationOptions>, IDisposable
+{
+    public IntegrationOptions Value { get; } = new();
+
+    public void Dispose()
+    {
+    }
+}
 
 /// <summary>
 ///     The stream mapper as the coordinator actually drives it: hung on the ONE subscription the coordinator opens
@@ -106,6 +122,52 @@ public sealed class IntegrationExecutionCoordinatorStreamingTests
                                                  || streamEvent.Type.StartsWith("execution.failed", StringComparison.Ordinal)
                                                  || streamEvent.Type.StartsWith("execution.cancelled", StringComparison.Ordinal)),
             "One terminal, from one producer, even when the drain is what failed.");
+    }
+
+    /// <summary>
+    ///     §9(b) as a NEGATIVE requirement: neither the coordinator nor the SSE writer registers an attachment handle,
+    ///     so the reaper cannot see an integration run at all. If either ever attached, an integrator that closed its
+    ///     stream to poll instead would have its run cancelled 300 s later — the exact failure the brief forbids.
+    /// </summary>
+    [Test]
+    public async Task DetachedInvocationReaper_NeverSeesAnIntegrationRun_EvenAfterAStreamCameAndWent()
+    {
+        using var harness = new Harness();
+        var executionId = harness.SeedLive();
+        var invocationId = Guid.Empty;
+        harness.DuringRun = (h, package) =>
+        {
+            invocationId = package.InvocationId;
+            RaiseContent(h, package.InvocationId, "answer", InvocationStatus.Running);
+        };
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        // An SSE consumer attaches and goes away, which is what a caller that switches to polling actually does.
+        using var options = new IntegrationSseWriterOptions();
+        using var writer = new IntegrationSseWriter(harness.Buffer, options, TimeProvider.System);
+        var context = new DefaultHttpContext
+        {
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        _ = await writer.WriteAsync(context, executionId, sinceSequence: 0, context.RequestAborted);
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var tracker = new InvocationAttachmentTracker(new Lazy<IWorkerEventDispatcher>(() => dispatcher), TimeProvider.System);
+        var runner = Substitute.For<IInvocationRunner>();
+        var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
+        _ = runtimeSettings.GetDetachedGraceSecondsAsync(Arg.Any<CancellationToken>()).Returns(1);
+        var reaper = new DetachedInvocationReaper(tracker, runner, runtimeSettings, TimeProvider.System, NullLogger<DetachedInvocationReaper>.Instance);
+
+        AssertEx.Empty(tracker.ListDetached(), "An entry exists only after Attach, and nothing on this path ever calls it.");
+        await reaper.ReapAsync(CancellationToken.None);
+
+        runner.DidNotReceive().CancelDetached(Arg.Any<Guid>());
+        runner.DidNotReceive().CancelDetached(invocationId);
+        reaper.Dispose();
     }
 
     private static void RaiseContent(Harness harness, Guid invocationId, string content, InvocationStatus status) =>

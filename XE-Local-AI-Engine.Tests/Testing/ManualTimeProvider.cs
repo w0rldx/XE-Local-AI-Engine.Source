@@ -23,6 +23,22 @@ internal sealed class ManualTimeProvider : TimeProvider
     public ManualTimeProvider(DateTimeOffset? start = null) =>
         _now = start ?? new DateTimeOffset(year: 2026, month: 1, day: 1, hour: 0, minute: 0, second: 0, TimeSpan.Zero);
 
+    /// <summary>
+    ///     How many timers are currently ARMED. A suite that advances before the code under test has registered its
+    ///     timer moves the clock past a window nothing was waiting on, and then waits forever for an effect that will
+    ///     never come.
+    /// </summary>
+    public int ArmedTimerCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _timers.Count(static timer => timer.DueAtUtc is not null);
+            }
+        }
+    }
+
     public override DateTimeOffset GetUtcNow()
     {
         lock (_gate)
