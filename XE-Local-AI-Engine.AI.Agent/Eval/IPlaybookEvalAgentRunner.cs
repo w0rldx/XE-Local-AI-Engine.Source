@@ -17,9 +17,17 @@ public interface IPlaybookEvalAgentRunner
     /// <param name="chatClient">Node-local chat client supplied by the caller; never disposed here (caller owns it).</param>
     /// <param name="systemInstructions">The system prompt under evaluation (baseline or candidate).</param>
     /// <param name="inputTurns">The golden-conversation turns to replay through the agent.</param>
+    /// <param name="reasoningEffort">
+    ///     Optional reasoning effort for the run, from the ordinary vocabulary (never <c>auto</c> — that is what the
+    ///     dispatcher resolves). <see langword="null" /> is the default and leaves the run's chat options exactly as
+    ///     they were before this parameter existed, so every existing caller is byte-identical. A supplied effort is
+    ///     translated through the same matrix the production loop uses, on the assumption that the eval model is
+    ///     thinking-capable — which the node's configured chat model is.
+    /// </param>
     /// <param name="cancellationToken">Cancellation token for the run.</param>
     Task<string> RunAsync(IChatClient chatClient,
         string systemInstructions,
         IReadOnlyList<ChatMessage> inputTurns,
+        string? reasoningEffort = null,
         CancellationToken cancellationToken = default);
 }

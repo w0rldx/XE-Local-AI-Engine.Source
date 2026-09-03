@@ -21,7 +21,7 @@ public sealed class MafPlaybookEvalAgentRunnerTests
         using var scripted = new ScriptedEvalChatClient();
         var runner = new MafPlaybookEvalAgentRunner(NullLoggerFactory.Instance, EmptyServiceProvider.Instance);
 
-        var result = await runner.RunAsync(scripted, BaselineInstructions, BuildTurns(), CancellationToken.None);
+        var result = await runner.RunAsync(scripted, BaselineInstructions, BuildTurns(), cancellationToken: CancellationToken.None);
 
         AssertEx.Equal(ScriptedEvalChatClient.BaselineReply, result);
     }
@@ -32,7 +32,7 @@ public sealed class MafPlaybookEvalAgentRunnerTests
         using var scripted = new ScriptedEvalChatClient();
         var runner = new MafPlaybookEvalAgentRunner(NullLoggerFactory.Instance, EmptyServiceProvider.Instance);
 
-        _ = await runner.RunAsync(scripted, BaselineInstructions, BuildTurns(), CancellationToken.None);
+        _ = await runner.RunAsync(scripted, BaselineInstructions, BuildTurns(), cancellationToken: CancellationToken.None);
 
         var options = AssertEx.NotNull(scripted.LastOptions, "the chat client must have been invoked at least once");
         AssertEx.True(options.Tools is null || options.Tools.Count == 0,
@@ -45,7 +45,7 @@ public sealed class MafPlaybookEvalAgentRunnerTests
         using var scripted = new ScriptedEvalChatClient();
         var runner = new MafPlaybookEvalAgentRunner(NullLoggerFactory.Instance, EmptyServiceProvider.Instance);
 
-        _ = await runner.RunAsync(scripted, BaselineInstructions, BuildTurns(), CancellationToken.None);
+        _ = await runner.RunAsync(scripted, BaselineInstructions, BuildTurns(), cancellationToken: CancellationToken.None);
 
         var options = AssertEx.NotNull(scripted.LastOptions, "the chat client must have been invoked at least once");
         AssertEx.Equal(expected: (float?)0f, options.Temperature,
@@ -58,8 +58,8 @@ public sealed class MafPlaybookEvalAgentRunnerTests
         using var scripted = new ScriptedEvalChatClient();
         var runner = new MafPlaybookEvalAgentRunner(NullLoggerFactory.Instance, EmptyServiceProvider.Instance);
 
-        var baseline = await runner.RunAsync(scripted, BaselineInstructions, BuildTurns(), CancellationToken.None);
-        var candidate = await runner.RunAsync(scripted, CandidateInstructions, BuildTurns(), CancellationToken.None);
+        var baseline = await runner.RunAsync(scripted, BaselineInstructions, BuildTurns(), cancellationToken: CancellationToken.None);
+        var candidate = await runner.RunAsync(scripted, CandidateInstructions, BuildTurns(), cancellationToken: CancellationToken.None);
 
         AssertEx.Equal(ScriptedEvalChatClient.BaselineReply, baseline);
         AssertEx.Equal(ScriptedEvalChatClient.CandidateReply, candidate);
@@ -74,7 +74,7 @@ public sealed class MafPlaybookEvalAgentRunnerTests
         using var scripted = new ScriptedEvalChatClient();
         var runner = new MafPlaybookEvalAgentRunner(NullLoggerFactory.Instance, EmptyServiceProvider.Instance);
 
-        var result = await runner.RunAsync(scripted, BaselineInstructions, BuildTurns(), CancellationToken.None);
+        var result = await runner.RunAsync(scripted, BaselineInstructions, BuildTurns(), cancellationToken: CancellationToken.None);
 
         AssertEx.False(scripted.SawConversationId,
             "a threadless run must not carry a ChatOptions.ConversationId (no persisted session state)");
@@ -87,7 +87,7 @@ public sealed class MafPlaybookEvalAgentRunnerTests
         using var capturing = new CapturingEvalChatClient();
         var runner = new MafPlaybookEvalAgentRunner(NullLoggerFactory.Instance, EmptyServiceProvider.Instance);
 
-        _ = await runner.RunAsync(capturing, BaselineInstructions, BuildTurns(), CancellationToken.None);
+        _ = await runner.RunAsync(capturing, BaselineInstructions, BuildTurns(), cancellationToken: CancellationToken.None);
 
         var messages = AssertEx.NotNull(capturing.CapturedMessages, "the chat client must have captured the outbound messages");
 
@@ -103,6 +103,37 @@ public sealed class MafPlaybookEvalAgentRunnerTests
             "the eval agent name must never appear as message content");
         AssertEx.True(string.IsNullOrEmpty(outboundInstructions) || !outboundInstructions.Contains("playbook-eval", StringComparison.Ordinal),
             "the eval agent name must never be sent as instructions");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenEffortIsNull_ChatOptionsAreByteIdentical()
+    {
+        // The default keeps every existing caller's request exactly as it was: Temperature pinned, and NO additional
+        // properties at all — not an empty dictionary, which would already be a different request on the wire.
+        using var scripted = new ScriptedEvalChatClient();
+        var runner = new MafPlaybookEvalAgentRunner(NullLoggerFactory.Instance, EmptyServiceProvider.Instance);
+
+        _ = await runner.RunAsync(scripted, BaselineInstructions, BuildTurns(), cancellationToken: CancellationToken.None);
+
+        var options = AssertEx.NotNull(scripted.LastOptions, "the chat client must have been invoked at least once");
+        AssertEx.Equal(expected: (float?)0f, options.Temperature);
+        AssertEx.Null(options.AdditionalProperties, "a null effort must add nothing to the request");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenEffortIsHigh_CarriesTheBudgetMarker()
+    {
+        // A supplied effort goes through the same matrix the production loop uses, so the eval sends what a real turn
+        // at that effort would send: the graded think level and the per-request llama.cpp reasoning budget.
+        using var scripted = new ScriptedEvalChatClient();
+        var runner = new MafPlaybookEvalAgentRunner(NullLoggerFactory.Instance, EmptyServiceProvider.Instance);
+
+        _ = await runner.RunAsync(scripted, BaselineInstructions, BuildTurns(), "high", CancellationToken.None);
+
+        var properties = AssertEx.NotNull(scripted.LastOptions?.AdditionalProperties, "a supplied effort must reach the request");
+        AssertEx.True(properties.TryGetValue<int>("xe.llama.reasoning_budget_tokens", out var budget));
+        AssertEx.True(budget > 0, "a graded effort carries a positive reasoning budget");
+        AssertEx.Equal(expected: (object)"high", properties["think"]);
     }
 
     private static List<ChatMessage> BuildTurns()

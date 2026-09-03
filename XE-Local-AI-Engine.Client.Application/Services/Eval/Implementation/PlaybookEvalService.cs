@@ -154,8 +154,10 @@ internal sealed class PlaybookEvalService(
             return new PlaybookEvalCaseResult(goldenCase.Id, InvalidInputScoredBy, BaselinePass: false, CandidatePass: false, Regressed: false);
         }
 
-        var baselineText = await _evalAgentRunner.RunAsync(chatClient, baselinePrompt, turns, cancellationToken).ConfigureAwait(false);
-        var candidateText = await _evalAgentRunner.RunAsync(chatClient, candidatePrompt, turns, cancellationToken).ConfigureAwait(false);
+        // Both arms run at the SAME configured effort (null by default, which is the pre-existing behaviour): the gate
+        // measures the injected prompt, so an effort difference between the two would confound it.
+        var baselineText = await _evalAgentRunner.RunAsync(chatClient, baselinePrompt, turns, _options.ReasoningEffort, cancellationToken).ConfigureAwait(false);
+        var candidateText = await _evalAgentRunner.RunAsync(chatClient, candidatePrompt, turns, _options.ReasoningEffort, cancellationToken).ConfigureAwait(false);
 
         var baselineScore = await _evalJudge.ScoreAsync(goldenCase, baselineText, chatClient, cancellationToken).ConfigureAwait(false);
         var candidateScore = await _evalJudge.ScoreAsync(goldenCase, candidateText, chatClient, cancellationToken).ConfigureAwait(false);
