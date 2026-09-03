@@ -1,0 +1,208 @@
+namespace XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
+
+using System.Diagnostics;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Chat;
+
+/// <summary>
+///     The admin reads over integration executions, and the ONE cancel primitive both the operator surface and the
+///     external route call.
+///     <para>
+///         <b>No interface.</b> A one-implementation interface neither the brief nor a ruling asked for is
+///         scaffolding: the endpoints are as testable against this class, whose own collaborators are all interfaces.
+///         It is <c>public</c> rather than <c>internal</c> because the Client endpoints live in another assembly.
+///     </para>
+///     <para>
+///         <b>The cancel is not key-scoped.</b> An operator cancelling from the admin UI is not acting as an
+///         integrator and must be able to reach every row, so this method deliberately does NOT go through
+///         <see cref="IntegrationExternalAccess" />. The external route applies that rule itself, before it calls here.
+///     </para>
+/// </summary>
+public sealed class IntegrationExecutionQueryService
+{
+    private readonly IAgentExecutionLogStore _auditLog;
+    private readonly IIntegrationExecutionEventBuffer _buffer;
+    private readonly IntegrationCancellationRegistry _cancellations;
+    private readonly IIntegrationExecutionStore _executions;
+    private readonly ILogger<IntegrationExecutionQueryService> _logger;
+    private readonly TimeProvider _timeProvider;
+    private readonly IIntegrationTriggerStore _triggers;
+
+    internal IntegrationExecutionQueryService(IIntegrationExecutionStore executions,
+        IIntegrationTriggerStore triggers,
+        IIntegrationExecutionEventBuffer buffer,
+        IntegrationCancellationRegistry cancellations,
+        IAgentExecutionLogStore auditLog,
+        TimeProvider timeProvider,
+        ILogger<IntegrationExecutionQueryService> logger)
+    {
+        _executions = executions ?? throw new ArgumentNullException(nameof(executions));
+        _triggers = triggers ?? throw new ArgumentNullException(nameof(triggers));
+        _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
+        _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
+        _auditLog = auditLog ?? throw new ArgumentNullException(nameof(auditLog));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    public Task<IReadOnlyList<IntegrationExecutionSnapshot>> ListAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default) =>
+        _executions.ListAsync(filter, cancellationToken);
+
+    public Task<IntegrationExecutionSnapshot?> GetAsync(Guid executionId, CancellationToken cancellationToken = default) =>
+        _executions.GetByIdAsync(executionId, cancellationToken);
+
+    /// <summary>
+    ///     Requests cancellation, in the fixed order the transition table needs.
+    ///     <list type="number">
+    ///         <item>Stamp the durable stop marker, so a restart cannot resurrect the run.</item>
+    ///         <item>
+    ///             Terminalize a row that has not started, in ONE transaction. Whoever's CAS wins owns the terminal
+    ///             event and the one audit row; a loser appends nothing, because the coordinator won the
+    ///             <c>Queued -&gt; Running</c> race and will produce them itself.
+    ///         </item>
+    ///         <item>
+    ///             Signal the registered token on EVERY path, whether step 2 won or lost and whatever the row reads.
+    ///             Signalling only for a running row leaves the coordinator blocked in its lease wait until the lease
+    ///             comes free on its own, which is not a cancel a caller can observe.
+    ///         </item>
+    ///     </list>
+    ///     A step-2 CAS lost to the coordinator is not a dropped cancel: the marker is already durable, the signal has
+    ///     already fired, and the coordinator's pre-run re-read plus its cancellable run token both catch it.
+    /// </summary>
+    public async Task<IntegrationCancelOutcome> RequestCancelAsync(Guid executionId, CancellationToken cancellationToken = default)
+    {
+        var execution = await _executions.GetByIdAsync(executionId, cancellationToken).ConfigureAwait(false);
+        if (execution is null)
+        {
+            return IntegrationCancelOutcome.NotFound;
+        }
+
+        if (execution.Status is not (IntegrationExecutionStatus.Accepted or IntegrationExecutionStatus.Queued or IntegrationExecutionStatus.Running))
+        {
+            return IntegrationCancelOutcome.AlreadyTerminal;
+        }
+
+        var nowUnixMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+
+        // NewStatus equal to the current status makes this a pure marker write under the same compare-and-swap, so it
+        // cannot resurrect a row that terminalized a moment ago.
+        var marked = await _executions.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(executionId,
+                                              execution.Version,
+                                              new HashSet<IntegrationExecutionStatus>
+                                              {
+                                                  execution.Status
+                                              },
+                                              execution.Status,
+                                              StartedAtUtc: null,
+                                              EndedAtUtc: null,
+                                              InvocationId: null,
+                                              nowUnixMs),
+                                          cancellationToken)
+                                      .ConfigureAwait(false);
+
+        if (marked && execution.Status is IntegrationExecutionStatus.Accepted or IntegrationExecutionStatus.Queued)
+        {
+            await TryTerminalizeCancelledAsync(execution, execution.Version + 1, nowUnixMs, cancellationToken).ConfigureAwait(false);
+        }
+
+        _ = _cancellations.Signal(executionId);
+        return IntegrationCancelOutcome.Requested;
+    }
+
+    private async Task TryTerminalizeCancelledAsync(IntegrationExecutionSnapshot execution,
+        long expectedVersion,
+        long nowUnixMs,
+        CancellationToken cancellationToken)
+    {
+        // An entry that a previous process created, or one the ring already evicted, cannot carry an event. Seeding it
+        // from the persisted watermark is idempotent and keeps the buffer the sole minter; if the ring refuses, the
+        // marker and the signal still stand and the coordinator terminalizes the row on its pre-run re-read.
+        if (!_buffer.TryCreate(execution.Id, execution.LastSequence))
+        {
+            _logger.LogWarning("The event buffer refused an entry for integration execution {ExecutionId}; the cancel marker stands and the coordinator will terminalize it.", execution.Id);
+            return;
+        }
+
+        var sequence = _buffer.Reserve(execution.Id);
+        var published = false;
+        try
+        {
+            var won = await _executions.TryTerminalizeAsync(new IntegrationTerminalizeCommand(execution.Id,
+                                               expectedVersion,
+                                               new HashSet<IntegrationExecutionStatus>
+                                               {
+                                                   IntegrationExecutionStatus.Accepted,
+                                                   IntegrationExecutionStatus.Queued
+                                               },
+                                               IntegrationExecutionStatus.Cancelled,
+                                               sequence,
+                                               IntegrationStreamEventTypes.ExecutionCancelled,
+                                               nowUnixMs,
+                                               FailureCategory: null,
+                                               FailureSummary: null),
+                                           cancellationToken)
+                                       .ConfigureAwait(false);
+            if (!won)
+            {
+                return;
+            }
+
+            _buffer.Publish(new IntegrationStreamEvent(IntegrationStreamEventTypes.ExecutionCancelled,
+                sequence,
+                execution.Id,
+                execution.SessionId,
+                nowUnixMs,
+                ContentType: null,
+                Payload: null));
+            published = true;
+
+            await WriteAuditAsync(execution, nowUnixMs, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (!published)
+            {
+                // An unresolved reservation is not a hole readers tolerate; it parks every reader on this execution at
+                // the barrier until the entry is evicted.
+                _buffer.Abandon(execution.Id, sequence);
+            }
+        }
+    }
+
+    private async Task WriteAuditAsync(IntegrationExecutionSnapshot execution, long endedAtUtc, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var trigger = await _triggers.GetByIdAsync(execution.TriggerId, cancellationToken).ConfigureAwait(false);
+            await _auditLog.AddIntegrationInvocationAsync(new IntegrationInvocationAuditInput(execution.InvocationId,
+                    execution.RequestId,
+                    trigger?.Name ?? execution.TriggerId.ToString("D"),
+                    execution.KeyPrefix,
+                    trigger?.TargetAgentDefinitionId ?? Guid.Empty,
+                    NodeChatMessageStatusValues.Cancelled,
+                    Activity.Current?.TraceId.ToString(),
+                    Math.Max(val1: 0L, endedAtUtc - execution.ReceivedAtUtc)),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            // The row is already terminal and the event is already published; losing the audit row is worth a log line,
+            // not a reversal of a committed terminal.
+            _logger.LogError(exception, "The kind-3 audit row for cancelled integration execution {ExecutionId} could not be written.", execution.Id);
+        }
+    }
+}
+
+/// <summary>What a cancel decided. Each value maps to exactly one status at both the admin and the external route.</summary>
+public enum IntegrationCancelOutcome
+{
+    /// <summary>The stop marker is durable and the run was signalled. 202.</summary>
+    Requested,
+
+    /// <summary>No row with that id. 404.</summary>
+    NotFound,
+
+    /// <summary>The run had already finished. 409.</summary>
+    AlreadyTerminal
+}

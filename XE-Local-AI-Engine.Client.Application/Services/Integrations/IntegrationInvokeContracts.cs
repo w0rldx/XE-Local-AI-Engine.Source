@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Integrations;
 
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
@@ -122,3 +123,44 @@ public static class IntegrationFailureCategories
         SessionPolicy
     };
 }
+
+/// <summary>
+///     One input as it arrives on the wire. <see cref="Json" /> is kept as a <see cref="JsonElement" /> so the raw text
+///     the caller sent survives into the seed unchanged; the handler takes <c>GetRawText()</c> from it and never
+///     re-serialises.
+/// </summary>
+public sealed record IntegrationInvokeInput(string? Type, string? Text, string? Label, JsonElement? Json);
+
+/// <summary>
+///     The invoke body. Every member is nullable because this is the FIRST thing an external caller controls: a missing
+///     or mistyped field must produce a validation answer, never a deserialisation exception.
+/// </summary>
+public sealed record IntegrationInvokeRequest(Guid? RequestId, Guid? SessionId, IReadOnlyList<IntegrationInvokeInput>? Inputs);
+
+/// <summary>
+///     Where a caller goes next. S1 carries <c>self</c>; S2 adds the persisted-events link to this same record and
+///     changes nothing else about it.
+/// </summary>
+public sealed record IntegrationExecutionLinks(string Self);
+
+/// <summary>The 202 body: enough to poll, and nothing about rows the caller does not own.</summary>
+public sealed record IntegrationAcceptResponse(Guid ExecutionId, Guid SessionId, string Status, IntegrationExecutionLinks Links);
+
+/// <summary>
+///     The status GET body.
+///     <para>
+///         <see cref="OutputCount" /> is the execution row's transactional counter, never a buffer read and never a row
+///         count: the buffer is evictable and a restarted node would report zero for a run that did emit. It reads
+///         <c>0</c> until the built-in output tool ships, which is the true answer rather than a placeholder.
+///     </para>
+/// </summary>
+public sealed record IntegrationExecutionStatusResponse(Guid ExecutionId,
+    Guid SessionId,
+    string Status,
+    string? FailureCategory,
+    string? FailureSummary,
+    long ReceivedAtUnixMs,
+    long? StartedAtUnixMs,
+    long? EndedAtUnixMs,
+    int OutputCount,
+    IntegrationExecutionLinks Links);

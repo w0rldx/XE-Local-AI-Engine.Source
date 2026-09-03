@@ -37,6 +37,12 @@ internal sealed class IntegrationApiKeyAuthenticationHandler : AuthenticationHan
     /// <summary>The scheme name. Referenced by <see cref="NodeAuthorizationPolicies.IntegrationApi" />.</summary>
     public const string SchemeName = "IntegrationApiKey";
 
+    /// <summary>
+    ///     The RFC 6750 challenge this scheme writes. A constant because the hand-mapped handler has to answer a
+    ///     mid-request revocation with a BYTE-IDENTICAL 401, and two literals would eventually drift.
+    /// </summary>
+    internal const string BearerChallenge = "Bearer realm=\"xe-local-ai-engine-integration\"";
+
     private const string BearerPrefix = "Bearer ";
 
     private readonly IIntegrationApiKeyService _apiKeyService;
@@ -90,7 +96,7 @@ internal sealed class IntegrationApiKeyAuthenticationHandler : AuthenticationHan
         Response.StatusCode = StatusCodes.Status401Unauthorized;
         // RFC 6750 bearer challenge. No OAuth / resource-metadata parameter: this surface accepts only a static
         // pre-shared key, so advertising a discovery document that does not exist would only mislead a client.
-        Response.Headers.WWWAuthenticate = "Bearer realm=\"xe-local-ai-engine-integration\"";
+        Response.Headers.WWWAuthenticate = BearerChallenge;
         return Task.CompletedTask;
     }
 }

@@ -45,6 +45,16 @@ internal sealed class FakeIntegrationApiKeyStore : IIntegrationApiKeyStore
             LastUsedAtUtc = atUtc
         }));
 
+    /// <summary>Re-scopes a credential's allowlist, so a suite can prove the key row is re-read per request.</summary>
+    public void Rescope(Guid keyId, string? allowedTriggerIdsJson)
+    {
+        var index = _rows.FindIndex(row => row.Id == keyId);
+        _rows[index] = _rows[index] with
+        {
+            AllowedTriggerIdsJson = allowedTriggerIdsJson
+        };
+    }
+
     public Task<bool> RevokeAsync(Guid keyId, long atUtc, CancellationToken cancellationToken = default) =>
         Task.FromResult(Replace(keyId, row => row with
         {
@@ -490,6 +500,16 @@ internal sealed class FakeIntegrationSessionStore : IIntegrationSessionStore
             LastActivityUtc = atUtc
         };
         return Task.FromResult(true);
+    }
+
+    /// <summary>Points a seeded session at a different integrator, which is what the masking rule keys on.</summary>
+    public void Reassign(Guid sessionId, Guid principalId)
+    {
+        var index = _rows.FindIndex(row => row.Id == sessionId);
+        _rows[index] = _rows[index] with
+        {
+            PrincipalId = principalId
+        };
     }
 
     public IntegrationSessionSnapshot Seed(Guid sessionId, Guid triggerId, Guid conversationId, Guid agentDefinitionId)

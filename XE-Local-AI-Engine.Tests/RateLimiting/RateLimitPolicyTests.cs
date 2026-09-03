@@ -24,7 +24,14 @@ public sealed class RateLimitedHostFixture : IAsyncInitializer, IAsyncDisposable
 {
     public TestServerWebAppFactory Factory { get; } = new()
     {
-        EnvironmentName = "RateLimitEnforcement"
+        EnvironmentName = "RateLimitEnforcement",
+        AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            // The external integration family's COARSE PER-IP ceiling, lowered so its window is observable here. This is
+            // the IP key, not RateLimitPerMinute: that 600 is the per-principal budget and it is spent inside the
+            // hand-mapped handler, where a principal exists, not by this middleware.
+            ["Integrations:IpRateLimitPerMinute"] = "2"
+        }
     };
 
     public Task InitializeAsync() =>
@@ -49,6 +56,9 @@ public sealed class RateLimitPolicyTests
 {
     // The production AuthPolicy permit limit (ConfigureServices): 10 requests per fixed 1-minute window per peer.
     private const int ProductionAuthPermitLimit = 10;
+
+    // The integration family's per-IP ceiling, lowered by the fixture's configuration overlay above.
+    private const int IntegrationIpPermitLimit = 2;
 
     [ClassDataSource<RateLimitedHostFixture>(Shared = SharedType.PerClass)]
     public required RateLimitedHostFixture Host { get; init; }
@@ -133,7 +143,8 @@ public sealed class RateLimitPolicyTests
             {
                 NodeAuthRateLimits.AuthPolicy,
                 NodeAuthRateLimits.McpPolicy,
-                NodeAuthRateLimits.LocalModelProxyPolicy
+                NodeAuthRateLimits.LocalModelProxyPolicy,
+                NodeAuthRateLimits.IntegrationApiPolicy
             }), $"Endpoints reference rate-limiting policies [{string.Join(", ", referenced)}], which is not the registered set.");
     }
 
@@ -162,6 +173,53 @@ public sealed class RateLimitPolicyTests
         AssertEx.NotEqual(HttpStatusCode.InternalServerError,
             proxyResponse.StatusCode,
             $"{NodeAuthRateLimits.LocalModelProxyPolicy} must resolve; a 500 means it is referenced but not registered.");
+    }
+
+    [Test]
+    public async Task IntegrationApiPolicy_WhenWindowExhausted_Returns429WithRetryAfter()
+    {
+        using var client = Host.Factory.CreateClient();
+
+        // The limiter runs BEFORE authentication, so an unauthenticated 401 still spends a permit. That is asserted
+        // here as a FACT about this layer, not as a desirable one: it is precisely why the per-IP policy is a coarse
+        // abuse ceiling and per-principal fairness lives in the handler instead.
+        HttpResponseMessage? rejected = null;
+        var attempts = 0;
+        try
+        {
+            for (var attempt = 1; attempt <= (IntegrationIpPermitLimit * 2) + 1; attempt++)
+            {
+                attempts = attempt;
+                var response = await PostInvokeAsync(client).ConfigureAwait(false);
+                if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    rejected = response;
+                    break;
+                }
+
+                AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode, "An unauthenticated invoke is a 401, which still spends a permit.");
+                response.Dispose();
+            }
+
+            var throttled = rejected
+                            ?? throw new AssertionException($"No 429 within {attempts} invoke attempts — the {IntegrationIpPermitLimit}/window integration permit limit is not enforced.");
+            AssertEx.True(attempts > IntegrationIpPermitLimit, $"Invoke attempt {attempts} was rejected inside the {IntegrationIpPermitLimit}/window permit limit.");
+            AssertEx.Equal("60",
+                throttled.Headers.TryGetValues("Retry-After", out var retryAfter) ? string.Join(",", retryAfter) : null,
+                "A 429 must carry the Retry-After hint OnRejected sets.");
+        }
+        finally
+        {
+            rejected?.Dispose();
+        }
+    }
+
+    private static Task<HttpResponseMessage> PostInvokeAsync(HttpClient client)
+    {
+        return client.PostAsJsonAsync(new Uri("/api/local/v1/integration-api/triggers/rate-limit-probe/invoke", UriKind.Relative), new
+        {
+            requestId = Guid.NewGuid()
+        });
     }
 
     private static Task<HttpResponseMessage> PostLoginAsync(HttpClient client)

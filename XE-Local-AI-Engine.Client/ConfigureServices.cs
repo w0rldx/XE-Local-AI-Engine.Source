@@ -432,6 +432,10 @@ public static class ConfigureServices
         // catalog and streams one response. The client has an INFINITE timeout because a long generation must not be
         // severed by a client-side timeout — the caller's disconnect (request-abort) is the cancellation signal instead.
         builder.Services.AddScoped<LocalModelProxyForwarder>();
+
+        // The external integration API's hand-mapped handler, scoped like the proxy forwarder for the same reason: its
+        // collaborators are scoped stores and application services.
+        builder.Services.AddScoped<IntegrationApiHandler>();
         builder.Services.AddHttpClient(LocalModelProxyForwarder.HttpClientName)
                .ConfigureHttpClient(static client => client.Timeout = Timeout.InfiniteTimeSpan);
 

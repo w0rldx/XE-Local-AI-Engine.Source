@@ -54,6 +54,19 @@ internal static class AddNodeIntegrationsExtensions
         builder.Services.AddSingleton<IntegrationCancellationRegistry>();
         builder.Services.AddScoped<IIntegrationInvocationService, IntegrationInvocationService>();
 
+        // Two concrete classes with no interface, registered as themselves and injected as themselves: a
+        // one-implementation interface neither the brief nor a ruling asked for is scaffolding. Both take an INTERNAL
+        // collaborator, so they are constructed here rather than by the container's public-constructor activator.
+        builder.Services.AddScoped(static serviceProvider => new IntegrationExecutionQueryService(
+            serviceProvider.GetRequiredService<IIntegrationExecutionStore>(),
+            serviceProvider.GetRequiredService<IIntegrationTriggerStore>(),
+            serviceProvider.GetRequiredService<IIntegrationExecutionEventBuffer>(),
+            serviceProvider.GetRequiredService<IntegrationCancellationRegistry>(),
+            serviceProvider.GetRequiredService<IAgentExecutionLogStore>(),
+            serviceProvider.GetRequiredService<TimeProvider>(),
+            serviceProvider.GetRequiredService<ILogger<IntegrationExecutionQueryService>>()));
+        builder.Services.AddScoped<IntegrationExternalAccess>();
+
         // The single consumer of that channel. Hosted, so its startup sweep runs before the loop reads an id, and so
         // the loop stops with the host.
         builder.Services.AddHostedService<IntegrationExecutionCoordinator>();
