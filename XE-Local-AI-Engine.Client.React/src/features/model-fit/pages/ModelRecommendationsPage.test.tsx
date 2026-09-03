@@ -186,6 +186,9 @@ function makeRecommendationFixture(overrides: Record<string, unknown> = {}) {
 		kvQuantHeadroomGb: null,
 		kvQuantFits: null,
 		kvQuantRequiresFlashAttention: null,
+		kvBytesPerToken: null,
+		kvBytesPerTokenQuant: null,
+		attentionArch: null,
 		...overrides,
 	};
 }

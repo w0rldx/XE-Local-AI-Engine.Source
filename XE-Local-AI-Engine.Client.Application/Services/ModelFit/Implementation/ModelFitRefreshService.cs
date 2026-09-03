@@ -346,7 +346,10 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             entry.Id,
             entry.DisplayName,
             entry.Notes,
-            candidate.KvQuantAdvisory);
+            candidate.KvQuantAdvisory,
+            candidate.KvBytesPerTokenAtCtx,
+            candidate.KvBytesPerTokenAtCtx is null ? null : KvCacheQuant.Q8_0,
+            candidate.AttentionArchTag);
     }
 
     /// <summary>
@@ -709,6 +712,21 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                     writer.WriteBoolean("kv_quant_requires_flash_attention", kvAdvisory.RequiresFlashAttention);
                 }
 
+                // KV cost per token of context and the model's attention shape, at the chat launch's own q8_0 element
+                // size (NOT the fp16 ranking estimate above) so the figure answers "what will this cost me on this
+                // node". The quant rides along because an unlabelled KV byte count is ambiguous by a factor of two.
+                // Absent for a row whose header cannot size the KV term; a pre-existing snapshot reads them as null.
+                if (recommendation.KvBytesPerTokenAtCtx is { } kvBytesPerToken && recommendation.KvBytesPerTokenQuant is { } kvBytesQuant)
+                {
+                    writer.WriteNumber("kv_bytes_per_token", kvBytesPerToken);
+                    writer.WriteString("kv_bytes_per_token_quant", kvBytesQuant.ToString());
+                }
+
+                if (recommendation.AttentionArchTag is not null)
+                {
+                    writer.WriteString("attention_arch", recommendation.AttentionArchTag);
+                }
+
                 // Recency + trust boosts surfaced to the UI. release_date carries the repo's last-modified timestamp (a
                 // "newer model" signal); the parser preserves both in the recommendation diagnostics blob (no new column).
                 // Only emit a date when HF actually supplied one — a default(DateTimeOffset) would surface as a year-0001
@@ -760,6 +778,13 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     ///     Advisory-only quantized-KV estimate for a catalog-lane row (<see langword="null" /> for an explore-lane row or
     ///     when the header lacks the KV-sizing metadata). Never used for membership/ranking — see <see cref="KvQuantAdvisory" />.
     /// </param>
+    /// <param name="KvBytesPerTokenAtCtx">
+    ///     KV-cache bytes per token of context at the run's context target, or <see langword="null" /> when the header
+    ///     cannot size the KV term. Always paired with <paramref name="KvBytesPerTokenQuant" />: unlabelled, the figure
+    ///     is ambiguous by a factor of two.
+    /// </param>
+    /// <param name="KvBytesPerTokenQuant">The element size <paramref name="KvBytesPerTokenAtCtx" /> was computed at (the chat launch default, <see cref="KvCacheQuant.Q8_0" />).</param>
+    /// <param name="AttentionArchTag">The candidate's attention shape as a stable lowercase token (<c>mla</c>/<c>swa</c>/<c>gqa</c>/<c>mha</c>).</param>
     private sealed record AdvisorRecommendation(
         string RepoId,
         string ModelName,
@@ -775,5 +800,8 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         string? CatalogId = null,
         string? CatalogDisplayName = null,
         string? CatalogNotes = null,
-        KvQuantAdvisory? KvQuantAdvisory = null);
+        KvQuantAdvisory? KvQuantAdvisory = null,
+        long? KvBytesPerTokenAtCtx = null,
+        KvCacheQuant? KvBytesPerTokenQuant = null,
+        string? AttentionArchTag = null);
 }

@@ -129,9 +129,14 @@ public sealed class MemoryFitEstimator
         ArgumentNullException.ThrowIfNull(profile);
 
         var weightsBytes = EstimateWeightsBytes(quant, paramCount, fileSizeBytes);
-        var bytesPerKvElement = ResolveKvBytesPerElement(kvCacheQuantized, kvCacheQuant);
-        var kv = EstimateKvCacheBytes(blockCount, attentionHeadCountKV, embeddingLength, attentionHeadCount, ctxTarget, bytesPerKvElement, attention);
-        var kvBytes = kv.Bytes;
+        var kv = EstimateKvCacheFootprint(blockCount,
+            attentionHeadCountKV,
+            embeddingLength,
+            attentionHeadCount,
+            ctxTarget,
+            ResolveKvCacheQuant(kvCacheQuantized, kvCacheQuant),
+            attention);
+        var kvBytes = kv.BytesAtContext;
 
         // The estimate is approximate whenever a required input was derived or fell back: weights from the on-disk file
         // size (no param count), or head_dim from embedding_length / n_heads (no explicit key/value length in the header).
@@ -338,16 +343,53 @@ public sealed class MemoryFitEstimator
         return (long)(weightsBytes * DefaultExpertWeightShareFraction);
     }
 
-    private static double ResolveKvBytesPerElement(bool kvCacheQuantized, KvCacheQuant? kvCacheQuant)
+    // The legacy (bool, nullable-enum) pair collapsed to the one enum the KV formula actually needs. Byte-identical to
+    // the pair it replaces: an explicit quant wins, and an absent one is Q8_0 when the caller asked for a quantized KV
+    // cache and F16 otherwise — the same 1 vs 2 bytes/element the pair produced.
+    private static KvCacheQuant ResolveKvCacheQuant(bool kvCacheQuantized, KvCacheQuant? kvCacheQuant)
+    {
+        return kvCacheQuant ?? (kvCacheQuantized ? KvCacheQuant.Q8_0 : KvCacheQuant.F16);
+    }
+
+    private static double ResolveKvBytesPerElement(KvCacheQuant kvCacheQuant)
     {
         return kvCacheQuant switch
         {
-            KvCacheQuant.F16 => 2d,
             KvCacheQuant.Q8_0 => 1d,
             KvCacheQuant.Q4_0 => 0.5d,
-            null => kvCacheQuantized ? 1d : 2d,
             _ => 2d
         };
+    }
+
+    /// <summary>
+    ///     The KV cache this geometry needs at <paramref name="ctxTarget" />, at an EXPLICITLY named element size. The
+    ///     one KV formula in the application: <see cref="Estimate" /> calls this too, so a figure shown to an operator
+    ///     and the figure the admission ledger reserves can never drift apart.
+    /// </summary>
+    /// <remarks>
+    ///     <paramref name="kvCacheQuant" /> is required and is echoed on the result because a bare "KV bytes/token" is
+    ///     ambiguous by a factor of two: a candidate's ranking estimate is fp16-sized by contract while the chat launch
+    ///     runs <c>q8_0</c>. Every consumer must label the number with the quant it came back with.
+    /// </remarks>
+    public static KvCacheFootprint EstimateKvCacheFootprint(long blockCount,
+        long attentionHeadCountKV,
+        long embeddingLength,
+        long attentionHeadCount,
+        long ctxTarget,
+        KvCacheQuant kvCacheQuant,
+        GgufAttentionShape? attention = null)
+    {
+        var estimate = EstimateKvCacheBytes(blockCount,
+            attentionHeadCountKV,
+            embeddingLength,
+            attentionHeadCount,
+            ctxTarget,
+            ResolveKvBytesPerElement(kvCacheQuant),
+            attention);
+        // Bytes/token is the total divided by the requested context, so an interleaved sliding-window model reports the
+        // AVERAGE per-token cost across its layers rather than a full-attention figure it never pays.
+        var bytesPerToken = ctxTarget > 0 ? estimate.Bytes / (double)ctxTarget : 0d;
+        return new KvCacheFootprint(estimate.Bytes, bytesPerToken, kvCacheQuant, estimate.HeadDimDerived);
     }
 
     // KV-cache bytes across all layers. Uses the GGUF's explicit per-head key/value dimensions when supplied (correct for

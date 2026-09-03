@@ -73,6 +73,9 @@ function toModelFitRecommendation(
 		kvQuantHeadroomGb: dto.kvQuantHeadroomGb ?? null,
 		kvQuantFits: dto.kvQuantFits ?? null,
 		kvQuantRequiresFlashAttention: dto.kvQuantRequiresFlashAttention ?? null,
+		kvBytesPerToken: dto.kvBytesPerToken ?? null,
+		kvBytesPerTokenQuant: dto.kvBytesPerTokenQuant ?? null,
+		attentionArch: dto.attentionArch ?? null,
 	};
 }
 

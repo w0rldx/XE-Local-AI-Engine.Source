@@ -171,6 +171,33 @@ public sealed class RecommendationJsonParserTests
     }
 
     [Test]
+    public void Parse_WhenKvPerTokenFieldsPresent_RoundTripsThemIntoDiagnostics()
+    {
+        // The KV cost per token, its element size and the attention tag ride the same diagnostics seam. The quant label
+        // must survive with the number: alone, the byte count is ambiguous by a factor of two.
+        const string json = """
+                            {
+                              "models": [
+                                {
+                                  "name": "org/mla-model:Q4_K_M",
+                                  "kv_bytes_per_token": 640,
+                                  "kv_bytes_per_token_quant": "Q8_0",
+                                  "attention_arch": "mla"
+                                }
+                              ]
+                            }
+                            """;
+
+        var result = RecommendationJsonParser.Parse(json);
+
+        AssertEx.True(result.IsSuccess);
+        var diagnostics = AssertEx.NotNull(result.Recommendations[0].DiagnosticsJson);
+        AssertEx.Contains(diagnostics, "\"kv_bytes_per_token\":640");
+        AssertEx.Contains(diagnostics, "\"kv_bytes_per_token_quant\":\"Q8_0\"");
+        AssertEx.Contains(diagnostics, "\"attention_arch\":\"mla\"");
+    }
+
+    [Test]
     public void Parse_WhenSectionAbsent_RowStillParsesSuccessfully()
     {
         // A pre-existing (pre-catalog-lane) snapshot row has no "section" key — the parser must not require it (the

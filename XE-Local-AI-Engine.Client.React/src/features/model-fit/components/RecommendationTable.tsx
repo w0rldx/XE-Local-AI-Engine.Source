@@ -121,6 +121,43 @@ function KvQuantHint({ recommendation }: { recommendation: ModelFitRecommendatio
 	);
 }
 
+// The KV cost of one token of context, plus the model's attention shape, as a second dimmed line under the Req. VRAM
+// figure. Deliberately independent of KvQuantHint: that one is an advisory about a DIFFERENT launch configuration, this
+// one is what the row's own context target costs. Rendered only when the header could size the KV term AND the quant
+// label came with it — an unlabelled byte count is ambiguous by a factor of two, so half a fact is not shown.
+function KvPerTokenHint({ recommendation }: { recommendation: ModelFitRecommendation }) {
+	const { t } = useTranslation();
+	const bytesPerToken = recommendation.kvBytesPerToken ?? null;
+	const quant = recommendation.kvBytesPerTokenQuant ?? null;
+	if (bytesPerToken === null || quant === null) {
+		return null;
+	}
+	const arch = recommendation.attentionArch ?? null;
+	const archLabel = arch === null ? null : t(`pages.modelFit.recommendations.attentionArch.${arch}`, arch.toUpperCase());
+	const perToken = t("pages.modelFit.recommendations.kvPerToken.hint", "{{kb}} KB/token ({{quant}} KV)", {
+		kb: (bytesPerToken / 1024).toFixed(1),
+		quant: quant.toLowerCase(),
+	});
+	return (
+		<Tooltip
+			label={t(
+				"pages.modelFit.recommendations.kvPerToken.tooltip",
+				"KV-cache cost of one token at {{context}} context, computed with a {{quant}} KV cache (the chat launch default) rather than the fp16 cache the required-memory figures above use.",
+				{
+					context: formatContextTokens(recommendation.contextTokens),
+					quant: quant.toLowerCase(),
+				},
+			)}
+			multiline={true}
+			maw={280}
+		>
+			<Text size="xs" c="dimmed" data-testid={`model-fit-kv-per-token-${recommendation.rank}`}>
+				{archLabel === null ? perToken : `${archLabel} · ${perToken}`}
+			</Text>
+		</Tooltip>
+	);
+}
+
 // The Fit cell renders the advisor's run-mode fit level ("GPU"/"CPU") as a colored badge plus a CPU-mode badge for a
 // CPU run. The "CPU" fit level duplicates the dedicated CPU-mode badge, so a CPU row shows only the CPU-mode badge;
 // a non-CPU fit level renders its own colored badge. When neither applies, the cell shows a dash.
@@ -246,6 +283,7 @@ export function RecommendationTable({ recommendations, onDownload, downloadingMo
 								<Table.Td>
 									{formatMemoryMb(recommendation.requiredVramMb)}
 									<KvQuantHint recommendation={recommendation} />
+									<KvPerTokenHint recommendation={recommendation} />
 								</Table.Td>
 								{/* Date-only, locale-formatted; the raw ISO value stays available as the cell's tooltip. */}
 								<Table.Td title={recommendation.releaseDate ?? undefined}>

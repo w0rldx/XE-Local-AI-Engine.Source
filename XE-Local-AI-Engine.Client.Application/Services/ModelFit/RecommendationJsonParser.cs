@@ -135,6 +135,11 @@ public static class RecommendationJsonParser
             wroteAny |= CopyProperty(model, "kv_quant_headroom_gb", writer);
             wroteAny |= CopyProperty(model, "kv_quant_fits", writer);
             wroteAny |= CopyProperty(model, "kv_quant_requires_flash_attention", writer);
+            // KV cost per token at the run's context target plus the attention shape, on the same additive seam.
+            // Presentation and a ranking tiebreak's companion — neither drives membership.
+            wroteAny |= CopyProperty(model, "kv_bytes_per_token", writer);
+            wroteAny |= CopyProperty(model, "kv_bytes_per_token_quant", writer);
+            wroteAny |= CopyProperty(model, "attention_arch", writer);
             writer.WriteEndObject();
 
             if (!wroteAny)

@@ -210,6 +210,82 @@ public sealed class CatalogRecommendationServiceTests
         AssertEx.Empty(result.CanRun);
     }
 
+    [Test]
+    public async Task Ranking_KvBytesTiebreak_OnlyAppliesWithinEqualTierFitAndQuant()
+    {
+        // Two S-tier entries, same fit class and same quant, so the KV-bytes clause is the first step that can separate
+        // them. "cheap-kv" is given the OLDER release date and the later id, i.e. it loses BOTH steps below the
+        // tiebreak — so it can only rank first through its smaller KV term. The B-tier entry has the smallest KV term
+        // of the three and must still rank LAST, proving the clause cannot reorder rows that differ above it.
+        var entries = new[]
+        {
+            Entry("b-tier", useCases: ["general"], tier: "B", releaseDate: "2026-06-01"),
+            Entry("aaa-expensive-kv", useCases: ["general"], tier: "S", releaseDate: "2026-06-01"),
+            Entry("zzz-cheap-kv", useCases: ["general"], tier: "S", releaseDate: "2020-01-01")
+        };
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.InspectRepoAsync("org/b-tier-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/b-tier-GGUF", File("Q4_K_M", paramCountB: 1, attentionHeadCountKV: 1))));
+        discovery.InspectRepoAsync("org/aaa-expensive-kv-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/aaa-expensive-kv-GGUF", File("Q4_K_M", paramCountB: 1, attentionHeadCountKV: 4))));
+        discovery.InspectRepoAsync("org/zzz-cheap-kv-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/zzz-cheap-kv-GGUF", File("Q4_K_M", paramCountB: 1, attentionHeadCountKV: 2))));
+        var service = BuildService(entries, discovery, installedTag: "b9692");
+
+        var result = await service.BuildRecommendationsAsync(useCase: null, "Q4_K_M", ctxTarget: 8192, GpuProfile(64 * Gb), Empty, CancellationToken.None);
+
+        var ids = result.Recommended.Select(c => c.Entry.Id).ToList();
+        AssertEx.Equal("zzz-cheap-kv", ids[0]);
+        AssertEx.Equal("aaa-expensive-kv", ids[1]);
+        AssertEx.Equal("b-tier", ids[2]);
+
+        var cheap = result.Recommended.Single(c => c.Entry.Id == "zzz-cheap-kv");
+        var expensive = result.Recommended.Single(c => c.Entry.Id == "aaa-expensive-kv");
+        AssertEx.True(cheap.KvBytesPerTokenAtCtx < expensive.KvBytesPerTokenAtCtx,
+            "the tiebreak is only meaningful if the two candidates really do carry different KV costs per token.");
+    }
+
+    [Test]
+    public async Task BuildRecommendationsAsync_CompleteMetadata_CarriesKvBytesPerTokenAndTheArchTag()
+    {
+        // The default helper geometry is 4 layers × 2 KV heads over 4 query heads, i.e. GQA. At Q8_0 (1 byte/element)
+        // one token costs layers · kv_heads · (key_dim + value_dim) = 4 · 2 · (4 + 4) = 64 bytes, with head_dim derived
+        // as embedding_length / n_heads = 16 / 4. Pinning the arithmetic keeps the figure honest, not merely present.
+        var entries = new[]
+        {
+            Entry("fits-model", useCases: ["general"], tier: "S")
+        };
+        var discovery = DiscoveryReturning(entries, paramCountB: 1);
+        var service = BuildService(entries, discovery, installedTag: "b9692");
+
+        var result = await service.BuildRecommendationsAsync(useCase: null, "Q4_K_M", ctxTarget: 8192, GpuProfile(64 * Gb), Empty, CancellationToken.None);
+
+        var candidate = result.Recommended.Single(c => c.Entry.Id == "fits-model");
+        AssertEx.Equal(expected: 64L, candidate.KvBytesPerTokenAtCtx!.Value);
+        AssertEx.Equal(AttentionArchTag.Gqa, candidate.AttentionArchTag);
+    }
+
+    [Test]
+    public async Task BuildRecommendationsAsync_IncompleteMetadata_OmitsKvBytesPerTokenButStillTags()
+    {
+        // No BlockCount ⇒ the KV term cannot be sized ⇒ null, so the candidate sorts LAST on the tiebreak rather than
+        // winning it with a zero. The arch tag is still decidable from the head counts alone.
+        var entries = new[]
+        {
+            Entry("no-blocks-model", useCases: ["general"], tier: "S")
+        };
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.InspectRepoAsync("org/no-blocks-model-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/no-blocks-model-GGUF", File("Q4_K_M", paramCountB: 1, blockCount: null))));
+        var service = BuildService(entries, discovery, installedTag: "b9692");
+
+        var result = await service.BuildRecommendationsAsync(useCase: null, "Q4_K_M", ctxTarget: 8192, GpuProfile(64 * Gb), Empty, CancellationToken.None);
+
+        var candidate = result.Recommended.Concat(result.CanRun).Single(c => c.Entry.Id == "no-blocks-model");
+        AssertEx.Null(candidate.KvBytesPerTokenAtCtx, "an unsizeable KV term must be null, never zero.");
+        AssertEx.Equal(AttentionArchTag.Gqa, candidate.AttentionArchTag);
+    }
+
     private static IReadOnlySet<string> Empty { get; } = new HashSet<string>(StringComparer.Ordinal);
 
     private static ModelCatalogEntry Entry(string id,

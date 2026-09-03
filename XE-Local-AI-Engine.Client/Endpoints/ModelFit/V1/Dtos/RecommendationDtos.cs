@@ -104,6 +104,23 @@ public sealed class ModelFitRecommendationResponse
 
     /// <summary>Always <c>true</c> when an advisory is present — llama.cpp requires flash attention for a quantized KV cache; <c>null</c> when <see cref="KvQuant" /> is null.</summary>
     public bool? KvQuantRequiresFlashAttention { get; init; }
+
+    /// <summary>
+    ///     KV-cache bytes for one token of context at the snapshot's context target, computed at
+    ///     <see cref="KvBytesPerTokenQuant" /> — the chat launch's own element size, NOT the fp16 estimate the row's
+    ///     required-memory figures use. <c>null</c> when the GGUF header cannot size the KV term or the row predates
+    ///     this field. Always render it together with the quant: unlabelled, it is ambiguous by a factor of two.
+    /// </summary>
+    public long? KvBytesPerToken { get; init; }
+
+    /// <summary>The KV element size <see cref="KvBytesPerToken" /> was computed at (currently always <c>Q8_0</c>); <c>null</c> when that is null.</summary>
+    public string? KvBytesPerTokenQuant { get; init; }
+
+    /// <summary>
+    ///     The model's attention shape as a stable lowercase token — <c>mla</c>, <c>swa</c>, <c>gqa</c> or <c>mha</c> —
+    ///     derived from GGUF numbers, never from the architecture string. <c>null</c> on a row that predates this field.
+    /// </summary>
+    public string? AttentionArch { get; init; }
 }
 
 /// <summary>

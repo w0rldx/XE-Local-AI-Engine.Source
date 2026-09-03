@@ -56,6 +56,22 @@ public enum MoeFitVerdict
 }
 
 /// <summary>
+///     What the KV cache costs for one model geometry at one context target, with the element size it was computed at
+///     named on the result. Produced by <see cref="MemoryFitEstimator.EstimateKvCacheFootprint" />.
+/// </summary>
+/// <param name="BytesAtContext">Total KV-cache bytes across every layer at the requested context, or <c>0</c> when the header cannot size it.</param>
+/// <param name="BytesPerToken">
+///     <paramref name="BytesAtContext" /> divided by the requested context — the average per-token cost across all
+///     layers, so an interleaved sliding-window model reports what it actually pays rather than a full-attention figure.
+/// </param>
+/// <param name="Quant">
+///     The element size the figures were computed at. REQUIRED on the result: an unlabelled KV byte count is ambiguous
+///     by a factor of two between the fp16 ranking estimate and the <c>q8_0</c> chat launch.
+/// </param>
+/// <param name="HeadDimDerived">Whether head_dim was derived from <c>embedding_length / n_heads</c> rather than read explicitly.</param>
+public readonly record struct KvCacheFootprint(long BytesAtContext, double BytesPerToken, KvCacheQuant Quant, bool HeadDimDerived);
+
+/// <summary>
 ///     Optional explicit attention geometry read from a GGUF header, preferred over the derived
 ///     <c>head_dim = embedding_length / n_heads</c> when present. All fields are optional; passing <see langword="null" />
 ///     (or an all-null record) to <see cref="MemoryFitEstimator.Estimate" /> preserves the legacy derived-head_dim,

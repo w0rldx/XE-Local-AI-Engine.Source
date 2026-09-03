@@ -87,7 +87,12 @@ internal static class ModelFitMapper
             KvQuantEstimatedGb = ExtractDouble(record.DiagnosticsJson, "kv_quant_estimated_gb"),
             KvQuantHeadroomGb = ExtractDouble(record.DiagnosticsJson, "kv_quant_headroom_gb"),
             KvQuantFits = ExtractBool(record.DiagnosticsJson, "kv_quant_fits"),
-            KvQuantRequiresFlashAttention = ExtractBool(record.DiagnosticsJson, "kv_quant_requires_flash_attention")
+            KvQuantRequiresFlashAttention = ExtractBool(record.DiagnosticsJson, "kv_quant_requires_flash_attention"),
+            // KV cost per token of context at the snapshot's context target and the model's attention shape, from the
+            // same blob. A row written before this shipped carries none of the keys and reads as null.
+            KvBytesPerToken = ExtractLong(record.DiagnosticsJson, "kv_bytes_per_token"),
+            KvBytesPerTokenQuant = ExtractString(record.DiagnosticsJson, "kv_bytes_per_token_quant"),
+            AttentionArch = ExtractString(record.DiagnosticsJson, "attention_arch")
         };
     }
 
@@ -682,6 +687,29 @@ internal static class ModelFitMapper
     }
 
     /// <summary>Pulls a single numeric property out of the persisted diagnostics blob; tolerant of a null/malformed blob or a missing/non-numeric property.</summary>
+    private static long? ExtractLong(string? diagnosticsJson, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(diagnosticsJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(diagnosticsJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.TryGetProperty(propertyName, out var value)
+                   && value.ValueKind == JsonValueKind.Number
+                   && value.TryGetInt64(out var number)
+                ? number
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static double? ExtractDouble(string? diagnosticsJson, string propertyName)
     {
         if (string.IsNullOrWhiteSpace(diagnosticsJson))

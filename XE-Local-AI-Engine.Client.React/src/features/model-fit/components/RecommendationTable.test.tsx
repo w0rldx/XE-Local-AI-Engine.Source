@@ -55,6 +55,9 @@ function makeRecommendation(overrides: Partial<ModelFitRecommendation>): ModelFi
 		kvQuantHeadroomGb: null,
 		kvQuantFits: null,
 		kvQuantRequiresFlashAttention: null,
+		kvBytesPerToken: null,
+		kvBytesPerTokenQuant: null,
+		attentionArch: null,
 		...overrides,
 	};
 }
@@ -347,6 +350,42 @@ describe("RecommendationTable", () => {
 		renderTable(<RecommendationTable recommendations={[noAdvisory]} />);
 
 		expect(screen.queryByTestId("model-fit-kv-quant-hint-1")).toBeNull();
+	});
+
+	it("shows the KV-per-token line with the attention tag when both the figure and its quant are present", () => {
+		const withPerToken = makeRecommendation({
+			rank: 1,
+			kvBytesPerToken: 640,
+			kvBytesPerTokenQuant: "Q8_0",
+			attentionArch: "mla",
+		});
+
+		renderTable(<RecommendationTable recommendations={[withPerToken]} />);
+
+		expect(screen.getByTestId("model-fit-kv-per-token-1")).toBeTruthy();
+	});
+
+	it("renders the KV-per-token line without an arch tag when the row carries no attention tag", () => {
+		const noArch = makeRecommendation({ rank: 1, kvBytesPerToken: 640, kvBytesPerTokenQuant: "Q8_0", attentionArch: null });
+
+		renderTable(<RecommendationTable recommendations={[noArch]} />);
+
+		expect(screen.getByTestId("model-fit-kv-per-token-1")).toBeTruthy();
+	});
+
+	it("withholds the KV-per-token line when the figure has no quant label", () => {
+		// Half a fact is worse than none: an unlabelled KV byte count is ambiguous by a factor of two.
+		const unlabelled = makeRecommendation({ rank: 1, kvBytesPerToken: 640, kvBytesPerTokenQuant: null });
+
+		renderTable(<RecommendationTable recommendations={[unlabelled]} />);
+
+		expect(screen.queryByTestId("model-fit-kv-per-token-1")).toBeNull();
+	});
+
+	it("renders no KV-per-token line for a row that predates the field", () => {
+		renderTable(<RecommendationTable recommendations={[makeRecommendation({ rank: 1 })]} />);
+
+		expect(screen.queryByTestId("model-fit-kv-per-token-1")).toBeNull();
 	});
 
 	it("renders an explore-section row (all new fields null/false) without crashing", () => {
