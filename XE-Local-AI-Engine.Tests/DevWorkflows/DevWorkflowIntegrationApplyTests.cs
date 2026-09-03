@@ -579,6 +579,56 @@ public sealed class DevWorkflowIntegrationApplyTests
     }
 
     /// <summary>
+    ///     The route survives the host dying the instant after it. It commits as ONE transaction, so the restart finds
+    ///     the whole subtree under the re-run node uniformly <c>Pending</c> — never the failed check back at
+    ///     <c>Pending</c> while the verification, the answered gate and the executed apply beside it still read
+    ///     <c>Succeeded</c>. Startup recovery reconciles neither shape: it only judges rows left <c>Queued</c> or
+    ///     <c>Running</c>, so a lone <c>Pending</c> row under succeeded ancestors is re-dispatched as if fresh and the
+    ///     run completes on evidence and an approval about an implementation that no longer exists.
+    /// </summary>
+    [Test]
+    public async Task ARoutedRetryThatCommitted_SurvivesARestartWithItsWholeSubtreeReset()
+    {
+        await using var harness = DevWorkflowHarness.WithAScriptedChain();
+        harness.Tools.Answer("fullvalidate", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
+
+        var (projectId, _) = await harness.SeedDevelopmentProjectAsync().ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.ShippedTailFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "decompose", "tasks.json", TwoIndependentTasks).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        // Round one, through the gate and the apply, to the full check that fails and routes back to the verification.
+        _ = await harness.SaveAgentArtifactAsync(runId, "verify", "verification.md", "round one").ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "verify").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "integrationapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        await harness.RestartAsync().ConfigureAwait(false);
+
+        foreach (var nodeKey in new[] { "verify", "integrationapproval", "integrate", "fullvalidate" })
+        {
+            AssertEx.Equal(DevWorkflowNodeRunStatus.Pending,
+                (await harness.ReadNodeRunAsync(runId, nodeKey).ConfigureAwait(false)).Status,
+                $"'{nodeKey}' is under the node being re-run, so a restart must find it reset with the rest of the subtree.");
+        }
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "verify", "verification.md", "round two").ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "verify").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "integrationapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 2,
+            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "gate.decided"),
+            "the gate was asked again after the route, so the approval the run completed on is about the verification it finished with.");
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
     ///     A seeded row nobody has touched follows the template this build ships. Insert-if-absent alone left every
     ///     installation that already had the slug on the graph it was first seeded with, so a template fix reached only
     ///     brand-new databases — and the run started before the upgrade still renders from the graph IT pinned, which is

@@ -126,6 +126,13 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner, IDevWo
         return PublishAsync(_inner.TransitionNodeRunAsync(command, cancellationToken), kind, cancellationToken);
     }
 
+    /// <summary>
+    ///     ONE announcement for the whole route, because it is one commit. Its watermark names the routing event, and
+    ///     every reset the same transaction wrote sits after it, so a subscriber replaying from there still sees them.
+    /// </summary>
+    public Task<DevWorkflowMutationResult> RouteRetryAsync(RouteDevWorkflowRetryCommand command, CancellationToken cancellationToken = default) =>
+        PublishAsync(_inner.RouteRetryAsync(command, cancellationToken), DevWorkflowChangeKind.Node, cancellationToken);
+
     public Task<DevWorkflowMutationResult> AttachWorkSessionAsync(AttachDevWorkflowWorkSessionCommand command, CancellationToken cancellationToken = default) =>
         PublishAsync(_inner.AttachWorkSessionAsync(command, cancellationToken), DevWorkflowChangeKind.Node, cancellationToken);
 

@@ -426,6 +426,16 @@ public sealed record TransitionDevWorkflowNodeRunCommand(
     string? Outcome = null,
     DevWorkflowWorkItemStatus? WorkItemStatus = null);
 
+/// <summary>
+///     One cross-node retry route, as the single decision it is: the <c>node.retry.routed</c> event that records it and
+///     every node-run reset that decision implies.
+/// </summary>
+/// <param name="Route">The routing event. Its run, expected version and operation id govern the whole command.</param>
+/// <param name="Resets">
+///     The node-run moves the route implies, applied IN ORDER after the event. Each must name <c>Route.RunId</c>.
+/// </param>
+public sealed record RouteDevWorkflowRetryCommand(AppendDevWorkflowEventCommand Route, IReadOnlyList<TransitionDevWorkflowNodeRunCommand> Resets);
+
 public sealed record AttachDevWorkflowWorkSessionCommand(
     Guid RunId,
     Guid NodeRunId,
@@ -698,6 +708,27 @@ public interface IDevWorkflowStore
     Task<DevWorkflowMutationResult> MaterializeNodeRunsAsync(MaterializeDevWorkflowNodesCommand command, CancellationToken cancellationToken = default);
 
     Task<DevWorkflowMutationResult> TransitionNodeRunAsync(TransitionDevWorkflowNodeRunCommand command, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     A cross-node retry route, as ONE transaction: the <c>node.retry.routed</c> event and every node-run reset it
+    ///     implies commit together or not at all.
+    ///     <para>
+    ///         Not a loop of <see cref="TransitionNodeRunAsync" /> calls, and the difference is a correctness one. A
+    ///         route resets the whole subtree under the node it re-runs; a crash part-way through that loop left some
+    ///         of those rows <c>Pending</c> while the rest kept the answers the re-run is about to invalidate — an
+    ///         already-executed apply, an already-answered gate. Nothing reconciles that afterwards: startup recovery
+    ///         only judges rows left <c>Queued</c> or <c>Running</c>, so a <c>Pending</c> row under <c>Succeeded</c>
+    ///         ancestors is re-dispatched as if fresh and the run completes on the stale evidence beside it. All or
+    ///         nothing means a crash leaves either the failure still recorded, which the dispatcher re-derives and
+    ///         re-routes on its next sweep, or the fully reset subtree.
+    ///     </para>
+    ///     <para>
+    ///         The operation id on <c>Route</c> is the whole command's: a replay answers the recorded result and writes
+    ///         nothing. Quiescing the live lane work the resets supersede is the CALLER's, and belongs before this —
+    ///         stopping a session is not something a transaction can roll back.
+    ///     </para>
+    /// </summary>
+    Task<DevWorkflowMutationResult> RouteRetryAsync(RouteDevWorkflowRetryCommand command, CancellationToken cancellationToken = default);
 
     Task<DevWorkflowMutationResult> AttachWorkSessionAsync(AttachDevWorkflowWorkSessionCommand command, CancellationToken cancellationToken = default);
 

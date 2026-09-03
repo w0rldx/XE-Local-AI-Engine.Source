@@ -591,6 +591,95 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>
+    ///     The rejection is answered ONCE, however many of its own attempts the node spends getting there.
+    ///     <para>
+    ///         The one ask used to be keyed on the target's own attempt, and a transient failure between the change
+    ///         request and the round it asked for moves that attempt while the same rejection is still on the input. So
+    ///         the rework round arrived back at <c>AwaitingApply</c> under a key nothing had written, and the node asked
+    ///         for the SAME rejection to be implemented again — a second coder round against work a reviewer had just
+    ///         approved, spending a review round each time until the task ran out of them and its approved patch was
+    ///         discarded.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ATransientFailureAfterTheChangeRequest_DoesNotAskForTheSameRejectionTwice()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        await DriveToAwaitingApplyAsync(harness, projectId, taskId).ConfigureAwait(false);
+        harness.Tools.Answer("validate",
+            FakeDevWorkflowToolCommands.Failing() with
+            {
+                Report = Encoding.UTF8.GetBytes(FailingReport)
+            },
+            FakeDevWorkflowToolCommands.Passing());
+
+        // The coder round the change request asked for fails transiently, which is what moves the node's own attempt
+        // while the rejection that asked for it is still outstanding.
+        harness.Chain.FailNextAttempts(1);
+        var runId = await harness.StartRunAsync(PatientDevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1,
+            harness.Chain.Actions.Count(static action => action == nameof(DevelopmentTaskStatus.ChangesRequested)),
+            $"one rejection is one ask, whatever the node spent reaching it: {string.Join(", ", harness.Chain.Actions)}");
+
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
+
+        var task = await ReadTaskAsync(harness, taskId).ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, task.Status, "the round the rejection asked for landed, and nothing re-opened it afterwards.");
+        AssertEx.Equal(expected: 2,
+            task.CurrentReviewRound,
+            "one round for the original approval and one for the rework: a third would be the same rejection charged twice.");
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
+    ///     A check that refuses before running anything writes no report, and must not be evidenced by the PREVIOUS
+    ///     attempt's.
+    ///     <para>
+    ///         The report was picked by run and producing node key alone, so the latest one for the key was the earlier
+    ///         attempt's — about an implementation that has since been rewritten and re-approved. That made the reason
+    ///         look evidenced and asked a coder to fix output nothing had just produced, straight past the stand-down
+    ///         that exists for exactly this case.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ACheckThatRefusedWithoutRunningAnything_DoesNotBorrowTheEarlierAttemptsReport()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        await DriveToAwaitingApplyAsync(harness, projectId, taskId).ConfigureAwait(false);
+
+        // Round one refuses WITH a report, which is a real verdict. Round two refuses before it runs anything, so the
+        // only report the node has ever written is round one's.
+        harness.Tools.Answer("validate",
+            FakeDevWorkflowToolCommands.Failing() with
+            {
+                Report = Encoding.UTF8.GetBytes(FailingReport)
+            },
+            FakeDevWorkflowToolCommands.Refusing(DevWorkflowFailureClasses.ToolCommandFailed, "The gate stopped before it ran anything."),
+            FakeDevWorkflowToolCommands.Passing());
+        var runId = await harness.StartRunAsync(PatientDevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1,
+            harness.Chain.Actions.Count(static action => action == nameof(DevelopmentTaskStatus.ChangesRequested)),
+            $"only the verdict that actually judged something asked for a round: {string.Join(", ", harness.Chain.Actions)}");
+
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
+        AssertEx.Equal(DevWorkflowFailureClasses.Configuration, implemented.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(implemented.TerminalReason), "left no validation report or failing counts");
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
+            (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status,
+            "and the approved work is untouched behind the stand-down.");
+    }
+
+    /// <summary>
     ///     A disk or permission fault reading the routed node's report is not a reason to stop asking for the round.
     ///     The blob store answers a missing or tampered blob with a status, but it still throws on an I/O fault — and
     ///     letting that escape would fail the tick and re-throw on every sweep after it, so the routed counts are what
