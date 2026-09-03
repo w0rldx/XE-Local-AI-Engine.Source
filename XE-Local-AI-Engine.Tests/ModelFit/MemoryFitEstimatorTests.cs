@@ -598,6 +598,138 @@ public sealed class MemoryFitEstimatorTests
         AssertEx.Equal(FitConfidence.Approximate, estimate.Confidence);
     }
 
+    // ---- S4: Multi-head Latent Attention (deepseek2), clamped conservative until measured ----
+
+    // DeepSeek-V2-Lite shape, the worked example the plan pins: 27 layers, 16 kv-heads, explicit key/value 192/128,
+    // key_length_mla = kv_lora_rank 512 + rope.dimension_count 64 = 576, value_length_mla = 512.
+    private const long MlaBlockCount = 27L;
+    private const long MlaKvHeads = 16L;
+    private const long MlaKeyLength = 192L;
+    private const long MlaValueLength = 128L;
+    private const long MlaLatentKeyLength = 576L;
+    private const long MlaLatentValueLength = 512L;
+    private const long MlaCtx = 8192L;
+
+    [Test]
+    public void MlaBranch_NeverReturnsFewerBytesThanTheGenericFormula()
+    {
+        // The estimator sizes the VRAM admission ledger, so the MLA branch is clamped with max(mla, generic): it may
+        // only ever RAISE an estimate. On the worked example the generic term (16 · (192+128) = 5120 B per layer per
+        // token) dwarfs the MLA term (1 · 576 = 576 B), so the MLA file must estimate EXACTLY what it does today.
+        var profile = GpuProfile(64 * Gb);
+        var estimator = new MemoryFitEstimator();
+
+        var generic = new GgufAttentionShape(MlaKeyLength, MlaValueLength);
+        var mla = new GgufAttentionShape(MlaKeyLength, MlaValueLength, SlidingWindow: null, SlidingWindowPattern: null,
+            MlaLatentKeyLength, MlaLatentValueLength);
+        AssertEx.False(generic.IsMla, "Without both *_mla lengths llama.cpp's is_mla() is false.");
+        AssertEx.True(mla.IsMla, "Both *_mla lengths present and positive IS is_mla().");
+
+        var withoutMla = EstimateMla(estimator, profile, generic);
+        var withMla = EstimateMla(estimator, profile, mla);
+
+        AssertEx.Equal(withoutMla.EstimatedBytes, withMla.EstimatedBytes);
+        AssertEx.True(withMla.EstimatedBytes >= withoutMla.EstimatedBytes,
+            "The MLA branch must never lower an estimate the admission ledger reserves against.");
+    }
+
+    [Test]
+    public void MlaBranch_UnclampedFigure_MatchesTheWorkedExample()
+    {
+        // Two pins in one place, so Phase 2b (unclamp) is a one-line product change plus one expectation swap here.
+        //   generic, per layer per token: 16 · (192 + 128) · 1 B (q8_0) = 5120 B  → · 27 · 8192 = 1_132_462_080 B
+        //   MLA,     per layer per token:  1 ·  576        · 1 B (q8_0) =  576 B  → · 27 · 8192 =   127_401_984 B (8.9× lower)
+        const long genericKvBytes = MlaKvHeads * (MlaKeyLength + MlaValueLength) * MlaBlockCount * MlaCtx;
+        const long unclampedMlaKvBytes = MlaLatentKeyLength * MlaBlockCount * MlaCtx;
+        AssertEx.Equal(expected: 1_132_462_080L, genericKvBytes);
+        AssertEx.Equal(expected: 127_401_984L, unclampedMlaKvBytes);
+
+        var profile = GpuProfile(64 * Gb);
+        var estimator = new MemoryFitEstimator();
+        var mla = new GgufAttentionShape(MlaKeyLength, MlaValueLength, SlidingWindow: null, SlidingWindowPattern: null,
+            MlaLatentKeyLength, MlaLatentValueLength);
+
+        // What Phase 2 SHIPS: the clamped figure, i.e. the generic KV term, byte for byte.
+        var weights = (long)(ParamCount * MemoryFitEstimator.BytesPerWeight("Q4_K_M"));
+        var expected = weights + genericKvBytes + (long)((weights + genericKvBytes) * 0.12d) + MemoryFitEstimator.RuntimeOverheadBytes;
+        AssertEx.Equal(expected, EstimateMla(estimator, profile, mla).EstimatedBytes);
+
+        // The MLA arithmetic itself, exercised through the same code path by making the latent row the larger of the
+        // two: a 16-byte generic head geometry puts the generic term below the latent one, so max() returns the latent
+        // figure and pins `key_length_mla · 1 kv-head · bytes/element · layers · ctx`.
+        var latentDominates = new GgufAttentionShape(KeyLength: 8, ValueLength: 8, SlidingWindow: null, SlidingWindowPattern: null,
+            MlaLatentKeyLength, MlaLatentValueLength);
+        var latentKv = MlaLatentKeyLength * MlaBlockCount * MlaCtx;
+        var latentExpected = weights + latentKv + (long)((weights + latentKv) * 0.12d) + MemoryFitEstimator.RuntimeOverheadBytes;
+        AssertEx.Equal(latentExpected, EstimateMla(estimator, profile, latentDominates).EstimatedBytes);
+        AssertEx.Equal(unclampedMlaKvBytes, latentKv);
+    }
+
+    [Test]
+    public void MlaBranch_WithNoComputableGenericTerm_ReturnsTheZeroEstimateNotTheMlaFigure()
+    {
+        // A deepseek2 file carrying key_length_mla but NO attention.key_length/value_length and no derivable head_dim
+        // (embedding 0 / head count 0) has no generic term to clamp against. Clamping against an implicit zero would
+        // ship the bare MLA under-estimate — the exact regression the clamp exists to prevent — so the MLA branch must
+        // not apply at all and the KV term stays the existing zero estimate.
+        var profile = GpuProfile(64 * Gb);
+        var estimator = new MemoryFitEstimator();
+        var mlaOnly = new GgufAttentionShape(KeyLength: null, ValueLength: null, SlidingWindow: null, SlidingWindowPattern: null,
+            MlaLatentKeyLength, MlaLatentValueLength);
+
+        var withMlaOnly = estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, MlaBlockCount, MlaKvHeads,
+            embeddingLength: 0, attentionHeadCount: 0, MlaCtx, profile, kvCacheQuantized: false,
+            kvCacheQuant: KvCacheQuant.Q8_0, attention: mlaOnly);
+        var noAttentionAtAll = estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, MlaBlockCount, MlaKvHeads,
+            embeddingLength: 0, attentionHeadCount: 0, MlaCtx, profile, kvCacheQuantized: false,
+            kvCacheQuant: KvCacheQuant.Q8_0);
+
+        var weights = (long)(ParamCount * MemoryFitEstimator.BytesPerWeight("Q4_K_M"));
+        var weightsOnly = weights + (long)(weights * 0.12d) + MemoryFitEstimator.RuntimeOverheadBytes;
+        AssertEx.Equal(weightsOnly, withMlaOnly.EstimatedBytes);
+        AssertEx.Equal(noAttentionAtAll.EstimatedBytes, withMlaOnly.EstimatedBytes);
+    }
+
+    [Test]
+    public void Estimate_WithoutMlaKeys_IsByteIdenticalToTheCurrentFormula()
+    {
+        // Byte-identical default: a non-MLA GGUF (both *_mla keys absent, which is every model but deepseek2) must be
+        // sized by exactly the pre-slice formula. Recomputed here from first principles over the Qwen3 and Gemma3
+        // fixtures, including the sliding-window layer accounting.
+        var profile = GpuProfile(64 * Gb);
+        var estimator = new MemoryFitEstimator();
+
+        // Qwen3-style: explicit key/value 128, 28 layers, 8 kv-heads, ctx 4096, fp16 KV.
+        const long qwenBlocks = 28L;
+        const long qwenKvHeads = 8L;
+        const long qwenCtx = 4096L;
+        var qwen = estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, qwenBlocks, qwenKvHeads, embeddingLength: 1024,
+            attentionHeadCount: 32, qwenCtx, profile, kvCacheQuantized: false,
+            attention: new GgufAttentionShape(KeyLength: 128, ValueLength: 128));
+        var qwenWeights = (long)(ParamCount * MemoryFitEstimator.BytesPerWeight("Q4_K_M"));
+        var qwenKv = (long)(qwenKvHeads * (128d + 128d) * 2d * (qwenBlocks * (double)qwenCtx));
+        AssertEx.Equal(qwenWeights + qwenKv + (long)((qwenWeights + qwenKv) * 0.12d) + MemoryFitEstimator.RuntimeOverheadBytes,
+            qwen.EstimatedBytes);
+
+        // Gemma3-style SWA: 48 layers, key/value 256, window 1024, pattern 6 ⇒ 8 global + 40 window-limited layers.
+        const long gemmaBlocks = 48L;
+        const long gemmaKvHeads = 8L;
+        const long gemmaCtx = 8192L;
+        var gemma = estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, gemmaBlocks, gemmaKvHeads, embeddingLength: 0,
+            attentionHeadCount: 0, gemmaCtx, profile, kvCacheQuantized: false,
+            attention: new GgufAttentionShape(KeyLength: 256, ValueLength: 256, SlidingWindow: 1024, SlidingWindowPattern: 6));
+        var gemmaTokens = (8L * (double)gemmaCtx) + (40L * 1024d);
+        var gemmaKv = (long)(gemmaKvHeads * (256d + 256d) * 2d * gemmaTokens);
+        AssertEx.Equal(qwenWeights + gemmaKv + (long)((qwenWeights + gemmaKv) * 0.12d) + MemoryFitEstimator.RuntimeOverheadBytes,
+            gemma.EstimatedBytes);
+    }
+
+    private static MemoryFitEstimate EstimateMla(MemoryFitEstimator estimator, HardwareProfile profile, GgufAttentionShape attention)
+    {
+        return estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, MlaBlockCount, MlaKvHeads, embeddingLength: 0,
+            attentionHeadCount: 0, MlaCtx, profile, kvCacheQuantized: false, kvCacheQuant: KvCacheQuant.Q8_0, attention: attention);
+    }
+
     private static HardwareProfile GpuProfile(long vramBytes, long? availableVramBytes = null)
     {
         return new HardwareProfile

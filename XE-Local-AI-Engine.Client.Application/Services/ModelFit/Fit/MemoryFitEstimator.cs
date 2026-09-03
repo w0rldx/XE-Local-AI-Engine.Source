@@ -399,6 +399,26 @@ public sealed class MemoryFitEstimator
         // Per-layer, per-token KV bytes: n_kv_heads · (key_dim + value_dim) · bytes/element. Equals the legacy
         // 2 · n_kv_heads · head_dim · bytes when key_dim == value_dim == head_dim (symmetric derived head_dim).
         var perLayerPerToken = attentionHeadCountKV * (keyDim + valueDim) * bytesPerElement;
+
+        // Multi-head Latent Attention (deepseek2): llama.cpp allocates ONE latent K tensor per layer and no V tensor at
+        // all, so the row is key_length_mla wide with a single KV head — far below the generic figure above. Two inputs
+        // to that width are ASSUMPTIONS, not facts: llama.cpp sizes the cache as n_embd_head_k · n_head_kv (not
+        // n_embd_head_k_mla), so both "the row is key_length_mla wide" and "n_head_kv is 1 under MLA" depend on what
+        // the deepseek2 loader writes into those hparams, and neither is provable from the published sources.
+        // This estimate is not display-only — ProcessContextAllocationResolver turns it into the ResourceFootprint the
+        // VRAM admission ledger reserves, and an under-estimate admits a model that then OOMs on load. So the MLA term
+        // is CLAMPED with Math.Max against the generic term: it can only ever raise the estimate, never lower it, until
+        // a live measurement against llama.cpp's own /metrics KV figure says which assumption holds. Removing the clamp
+        // is a one-line change gated on that evidence.
+        // The clamp's generic term is whatever the ladder above produced. When neither rung is computable this method
+        // has already returned the zero estimate, so a header carrying key_length_mla but no usable key/value geometry
+        // never clamps against zero and never ships the bare MLA figure.
+        if (attention?.IsMla == true)
+        {
+            var mlaPerLayerPerToken = attention.KeyLengthMla!.Value * bytesPerElement;
+            perLayerPerToken = Math.Max(mlaPerLayerPerToken, perLayerPerToken);
+        }
+
         var totalTokensAcrossLayers = TotalKvTokensAcrossLayers(blockCount, ctxTarget, attention);
         return new KvCacheEstimate((long)(perLayerPerToken * totalTokensAcrossLayers), headDimDerived);
     }

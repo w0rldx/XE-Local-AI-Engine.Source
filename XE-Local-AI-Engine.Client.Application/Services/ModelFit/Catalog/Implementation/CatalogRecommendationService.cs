@@ -234,6 +234,7 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
     // estimator on its legacy derived-head_dim, no-SWA path.
     private static GgufAttentionShape BuildAttentionShape(GgufRepoFile file)
     {
-        return new GgufAttentionShape(file.AttentionKeyLength, file.AttentionValueLength, file.SlidingWindow, file.SlidingWindowPattern);
+        return new GgufAttentionShape(file.AttentionKeyLength, file.AttentionValueLength, file.SlidingWindow, file.SlidingWindowPattern,
+            file.AttentionKeyLengthMla, file.AttentionValueLengthMla);
     }
 }

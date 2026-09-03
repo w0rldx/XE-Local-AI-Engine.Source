@@ -161,6 +161,54 @@ public sealed class GgufHeaderReaderLocalFileTests
         AssertEx.Null(metadata.SlidingWindowPattern); // no window key AND qwen35 has no interleaved-SWA arch default
     }
 
+    [Test]
+    public async Task ReadHeaderFromFile_ExtractsMlaKeyValueLengths_DeepSeek2()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var path = dir.FilePath("deepseek-v2-lite-Q4_K_M.gguf");
+        // deepseek2 writes BOTH attention.key_length_mla (kv_lora_rank 512 + rope.dimension_count 64 = 576) and
+        // attention.value_length_mla (512) beside the ordinary explicit lengths. Both keys present and positive is
+        // llama.cpp's is_mla() test, and the reader must carry them without touching the ordinary pair.
+        var header = new GgufHeaderBytesBuilder()
+                     .WithString("general.architecture", "deepseek2")
+                     .WithUint32("deepseek2.block_count", value: 27)
+                     .WithUint32("deepseek2.attention.head_count", value: 16)
+                     .WithUint32("deepseek2.attention.head_count_kv", value: 16)
+                     .WithUint32("deepseek2.attention.key_length", value: 192)
+                     .WithUint32("deepseek2.attention.value_length", value: 128)
+                     .WithUint32("deepseek2.attention.key_length_mla", value: 576)
+                     .WithUint32("deepseek2.attention.value_length_mla", value: 512)
+                     .Build();
+        await File.WriteAllBytesAsync(path, header);
+        var reader = NewReader();
+
+        var metadata = await reader.ReadHeaderFromFileAsync(path, CancellationToken.None);
+
+        AssertEx.Equal(expected: 576L, metadata.AttentionKeyLengthMla!.Value);
+        AssertEx.Equal(expected: 512L, metadata.AttentionValueLengthMla!.Value);
+        AssertEx.Equal(expected: 192L, metadata.AttentionKeyLength!.Value);
+        AssertEx.Equal(expected: 128L, metadata.AttentionValueLength!.Value);
+    }
+
+    [Test]
+    public async Task ReadHeaderFromFile_NonMlaModel_LeavesTheMlaLengthsNull()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var path = dir.FilePath("qwen35-non-mla.gguf");
+        var header = new GgufHeaderBytesBuilder()
+                     .WithString("general.architecture", "qwen35")
+                     .WithUint32("qwen35.attention.key_length", value: 128)
+                     .WithUint32("qwen35.attention.value_length", value: 128)
+                     .Build();
+        await File.WriteAllBytesAsync(path, header);
+        var reader = NewReader();
+
+        var metadata = await reader.ReadHeaderFromFileAsync(path, CancellationToken.None);
+
+        AssertEx.Null(metadata.AttentionKeyLengthMla);
+        AssertEx.Null(metadata.AttentionValueLengthMla);
+    }
+
     private static string[] BuildVocab(int count)
     {
         var tokens = new string[count];

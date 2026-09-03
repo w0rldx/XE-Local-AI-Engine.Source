@@ -442,6 +442,55 @@ public sealed class ProcessContextAllocationResolverTests
     }
 
     [Test]
+    public async Task Resolve_FromHeaderFacts_CarriesTheMlaLatentLengths()
+    {
+        // The admission path is the reason the MLA branch is clamped, so the two latent lengths must survive the
+        // GgufModelFootprintFacts -> GgufAttentionShape hop. This geometry is chosen so the latent row (576) dominates
+        // the derived head_dim term (embedding 16 / 4 heads = 4), which makes a dropped length visible as a byte
+        // difference rather than being hidden by the clamp.
+        var profile = Profile(64 * Gb, vram: 0, vramKnown: false);
+        var facts = Facts(quant: "Q4_K_M",
+            fileSizeBytes: 2 * Gb,
+            paramCount: 1_000_000_000,
+            blockCount: 4,
+            attentionHeadCount: 4,
+            attentionHeadCountKv: 2,
+            embeddingLength: 16,
+            attentionKeyLengthMla: 576,
+            attentionValueLengthMla: 512);
+        var resolver = BuildResolver(profile, facts: facts);
+
+        var allocation = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cpu,
+            ResolvedLaunchArguments.Replay(ctxSize: 2048),
+            CancellationToken.None));
+
+        var budgeted = profile with
+        {
+            AvailableRamBytes = UsableRamBudget(profile.TotalRamBytes)
+        };
+        var estimator = new MemoryFitEstimator();
+        var expected = estimator.Estimate("Q4_K_M", paramCount: 1_000_000_000, fileSizeBytes: 2 * Gb, blockCount: 4,
+            attentionHeadCountKV: 2, embeddingLength: 16, attentionHeadCount: 4, ctxTarget: 2048, budgeted,
+            kvCacheQuantized: false,
+            moeFacts: new MoeFacts(ActiveParamCount: null, ExpertCount: null, ExpertUsedCount: null),
+            attention: new GgufAttentionShape(KeyLength: null, ValueLength: null, SlidingWindow: null, SlidingWindowPattern: null,
+                KeyLengthMla: 576, ValueLengthMla: 512),
+            nativeQuantFormat: false);
+        var withoutMla = estimator.Estimate("Q4_K_M", paramCount: 1_000_000_000, fileSizeBytes: 2 * Gb, blockCount: 4,
+            attentionHeadCountKV: 2, embeddingLength: 16, attentionHeadCount: 4, ctxTarget: 2048, budgeted,
+            kvCacheQuantized: false,
+            moeFacts: new MoeFacts(ActiveParamCount: null, ExpertCount: null, ExpertUsedCount: null),
+            attention: new GgufAttentionShape(KeyLength: null, ValueLength: null, SlidingWindow: null, SlidingWindowPattern: null),
+            nativeQuantFormat: false);
+
+        AssertEx.Equal(expected.EstimatedBytes, allocation.Footprint.RamBytes);
+        AssertEx.True(expected.EstimatedBytes > withoutMla.EstimatedBytes,
+            "the latent row dominates this geometry, so dropping the MLA lengths on the way through would be visible.");
+    }
+
+    [Test]
     public async Task Resolve_FromFileSize_WhenParamCountMissing()
     {
         var resolver = BuildResolver(Profile(64 * Gb, vram: 0, vramKnown: false),
@@ -668,7 +717,9 @@ public sealed class ProcessContextAllocationResolverTests
         long? blockCount = 32,
         long? attentionHeadCount = 32,
         long? attentionHeadCountKv = 8,
-        long? embeddingLength = 4096) =>
+        long? embeddingLength = 4096,
+        long? attentionKeyLengthMla = null,
+        long? attentionValueLengthMla = null) =>
         new(quant,
             FileSizeBytes: fileSizeBytes,
             ParamCount: paramCount,
@@ -680,7 +731,9 @@ public sealed class ProcessContextAllocationResolverTests
             ContentIdentity: "sha256:model",
             Architecture: expertCount is > 0 ? "qwen3moe" : "llama",
             ExpertCount: expertCount,
-            ExpertUsedCount: expertUsedCount);
+            ExpertUsedCount: expertUsedCount,
+            AttentionKeyLengthMla: attentionKeyLengthMla,
+            AttentionValueLengthMla: attentionValueLengthMla);
 
     // A dense 70B at Q4_K_M: 39.4 GB of weights (36.67 GiB) over 80 layers with GQA (8 kv-heads, head_dim 128). Nothing
     // this size fits a 16 GiB / 32 GiB desktop, which is exactly the point — it exercises the exhausted-tier-walk path.

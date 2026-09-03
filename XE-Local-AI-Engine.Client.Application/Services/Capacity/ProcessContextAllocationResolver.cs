@@ -493,7 +493,9 @@ public sealed class ProcessContextAllocationResolver(
             attention: new GgufAttentionShape(facts.AttentionKeyLength,
                 facts.AttentionValueLength,
                 facts.SlidingWindow,
-                facts.SlidingWindowPattern),
+                facts.SlidingWindowPattern,
+                facts.AttentionKeyLengthMla,
+                facts.AttentionValueLengthMla),
             nativeQuantFormat: QuantLadder.IsNativeFormat(quant));
     }
 

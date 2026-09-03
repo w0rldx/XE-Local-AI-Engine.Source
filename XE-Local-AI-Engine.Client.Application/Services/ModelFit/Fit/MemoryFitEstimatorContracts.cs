@@ -75,11 +75,29 @@ public enum MoeFitVerdict
 ///     local:global pattern, 2 for Gemma2). Resolved from the header or a per-arch default; <see langword="null" /> leaves
 ///     every layer full-attention (a conservative over-estimate).
 /// </param>
+/// <param name="KeyLengthMla">
+///     <c>{arch}.attention.key_length_mla</c> — the latent key dimension of Multi-head Latent Attention. Together with
+///     <paramref name="ValueLengthMla" /> it is llama.cpp's <c>is_mla()</c> test (both present and positive); under MLA
+///     the cache is a single latent K tensor per layer and NO V tensor is allocated at all.
+/// </param>
+/// <param name="ValueLengthMla">
+///     <c>{arch}.attention.value_length_mla</c> — the MLA latent value dimension. It takes part in detection only: no V
+///     cache exists under MLA, so it contributes no bytes.
+/// </param>
 public sealed record GgufAttentionShape(
     long? KeyLength = null,
     long? ValueLength = null,
     long? SlidingWindow = null,
-    long? SlidingWindowPattern = null);
+    long? SlidingWindowPattern = null,
+    long? KeyLengthMla = null,
+    long? ValueLengthMla = null)
+{
+    /// <summary>
+    ///     True when the header declares BOTH positive MLA lengths — llama.cpp's <c>is_mla()</c>. The single detection
+    ///     authority; no architecture name is ever consulted.
+    /// </summary>
+    public bool IsMla => KeyLengthMla is > 0 && ValueLengthMla is > 0;
+}
 
 /// <summary>
 ///     Optional Mixture-of-Experts facts for a GGUF model. All fields are additive/optional — omitting this record
