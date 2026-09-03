@@ -27,6 +27,10 @@ public sealed class InferenceProfileServiceTests
     private const string Build = "b9692";
     private const string ModelFilePath = "/models/model.gguf";
 
+    // What llama.cpp turns --cpu-moe into: the ffn-experts pattern pinned to the CPU buffer type. llama-fit-params
+    // fits against it and echoes it back as -ot, which is how the expert placement reaches a frozen profile.
+    private const string ExpertOverride = @"\.ffn_(up|down|gate|gate_up)_(ch|)exps=CPU";
+
     [Test]
     public async Task Explore_PersistsDraftFromParsedFitOutput()
     {
@@ -123,6 +127,101 @@ public sealed class InferenceProfileServiceTests
         AssertEx.Null(profile.KvTypeK);
         AssertEx.Null(profile.KvTypeV);
         AssertEx.False(profile.FlashAttn);
+    }
+
+    [Test]
+    public async Task Explore_WhenExpertsStayInSystemRam_PersistsTheEquivalentOverrideTensor()
+    {
+        // D14, end to end: the spawn that decided expert offload carried --cpu-moe, the helper fitted against it and
+        // echoed the equivalent tensor override, and THAT is what freezes. The frozen intent therefore replays the
+        // placement the admission ledger booked, without a --cpu-moe the replay branch never sets.
+        var fixture = new ServiceFixture();
+        fixture.WithLocalModel();
+        fixture.WithMetadata(new GgufModelMetadata(ParamCount: 30_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: 128, IsMoe: true));
+        fixture.WithExploreFitParamsOutput(startupOutput: [],
+            successfulLaunchArguments: ["--fit", "on", "--cpu-moe"],
+            $@"-c 8192 -ngl 33 -ot ""{ExpertOverride}""");
+        fixture.EchoExploredUpsert();
+
+        var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal(ExpertOverride, AssertEx.NotNull(result.Profile).OverrideTensor);
+        await fixture.ProfileStore.Received(1).CreateOrUpdateExploredAsync(
+            Arg.Is<InferenceProfileInput>(input => input.OverrideTensor == ExpertOverride && input.IsMoe),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Explore_WhenExpertOffloadYieldsNoOverrideTensor_PersistsNothing()
+    {
+        // The fit line cannot express the placement the spawn ran under. Freezing it would replay the experts back
+        // onto the GPU, outside the reserved footprint, so the explore fails instead of saving a partial profile.
+        var fixture = new ServiceFixture();
+        fixture.WithLocalModel();
+        fixture.WithMetadata(new GgufModelMetadata(ParamCount: 30_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: 128, IsMoe: true));
+        fixture.WithExploreFitParamsOutput(startupOutput: [],
+            successfulLaunchArguments: ["--fit", "on", "--cpu-moe"],
+            "-c 8192 -ngl 33");
+
+        var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.False(result.Success);
+        await fixture.ProfileStore.DidNotReceive()
+                     .CreateOrUpdateExploredAsync(Arg.Any<InferenceProfileInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Benchmark_ForAnExpertOffloadProfile_ReplaysTheFrozenExpertPlacement()
+    {
+        var fixture = new ServiceFixture();
+        var profile = ExploredRecord() with
+        {
+            OverrideTensor = ExpertOverride,
+            IsMoe = true,
+            ExpertCount = 128
+        };
+        fixture.WithProfiles(profile);
+        fixture.WithLocalModel();
+        fixture.WithRunningSnapshot(Guid.NewGuid());
+        fixture.WithBenchmarkResult(SuccessMetrics());
+
+        var result = await fixture.CreateService().BenchmarkAsync(profile.Id, CancellationToken.None);
+
+        AssertEx.True(result.Success);
+        await fixture.Supervisor.Received(1).RunExclusiveProfilingAsync(profile.ModelName,
+            ModelRole.Chat,
+            Arg.Is<ResolvedLaunchArguments>(args => !args.ExploreMode && args.OverrideTensor == ExpertOverride),
+            enableMetrics: true,
+            Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<InferenceBenchmarkMetrics>>>(),
+            Arg.Any<CancellationToken>(),
+            Arg.Any<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>>());
+    }
+
+    [Test]
+    public async Task Benchmark_ForAResidentProfile_ReplaysWithNoOverrideTensor()
+    {
+        // The byte-identical pin: a dense/fully-resident profile's replay is untouched by the expert-offload rule.
+        var fixture = new ServiceFixture();
+        var profile = ExploredRecord();
+        fixture.WithProfiles(profile);
+        fixture.WithLocalModel();
+        fixture.WithRunningSnapshot(Guid.NewGuid());
+        fixture.WithBenchmarkResult(SuccessMetrics());
+
+        var result = await fixture.CreateService().BenchmarkAsync(profile.Id, CancellationToken.None);
+
+        AssertEx.True(result.Success);
+        await fixture.Supervisor.Received(1).RunExclusiveProfilingAsync(profile.ModelName,
+            ModelRole.Chat,
+            Arg.Is<ResolvedLaunchArguments>(args => !args.ExploreMode
+                                                    && args.OverrideTensor == null
+                                                    && args.CtxSize == 8192
+                                                    && args.NGpuLayers == 33),
+            enableMetrics: true,
+            Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<InferenceBenchmarkMetrics>>>(),
+            Arg.Any<CancellationToken>(),
+            Arg.Any<Func<CancellationToken, Task<LlamaServerProfilingVramSnapshot>>>());
     }
 
     [Test]

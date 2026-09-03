@@ -503,6 +503,11 @@ public sealed class InferenceProfileService : IInferenceProfileService
                && string.Equals(benchmark.LaunchPolicyFingerprint, profile.LaunchPolicyFingerprint, StringComparison.Ordinal);
     }
 
+    // A GPU profile is replayable only with a concrete -ngl. Expert placement needs no separate check here: a spawn
+    // that kept its experts in system RAM is frozen with the equivalent -ot (the fit parser refuses to draft one
+    // otherwise), so -ot is the placement and it already travels through the fingerprint, BenchmarkMatchesProfile and
+    // BuildReplay. There is no CpuMoe column to consult and no pre-slice row can carry the decision unrecorded --
+    // --cpu-moe was never emitted before this slice.
     private static bool HasCompletePlacement(InferenceProfileRecord profile)
     {
         return string.Equals(profile.Backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase)

@@ -11,8 +11,10 @@ public interface IFittedArgsParser
     ///     <paramref name="startupOutput" /> placement evidence and the exact
     ///     <paramref name="successfulLaunchArguments" /> that reached readiness, or <see langword="null" /> when no
     ///     concrete replay can be proven. The helper's automatic <c>-ngl -1</c> sentinel is replayable only when startup
-    ///     output proves every layer was offloaded. KV/flash-attention policy is preserved only from the successful argv,
-    ///     so a failed optimized candidate cannot contaminate a safe fallback profile.
+    ///     output proves every layer was offloaded. KV/flash-attention policy and expert placement are preserved only
+    ///     from the successful argv, so a failed optimized candidate cannot contaminate a safe fallback profile. A spawn
+    ///     that carried <c>--cpu-moe</c> yields a draft only when the fit output names the equivalent <c>-ot</c>
+    ///     placement — a replay that silently dropped the flag would run outside its admitted footprint.
     /// </summary>
     ResolvedLaunchArguments? TryParseFittedArgs(IReadOnlyList<string> fitParamsOutput,
         IReadOnlyList<string> startupOutput,
