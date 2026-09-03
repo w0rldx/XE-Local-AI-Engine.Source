@@ -28,6 +28,8 @@ internal static class RunEnvelopeMapper
             CompletionTokens = record.CompletionTokens,
             ReasoningTokens = record.ReasoningTokens,
             TotalTokens = record.TotalTokens,
+            ToolSchemaTokens = record.ToolSchemaTokens,
+            MaxToolSchemaTokens = record.MaxToolSchemaTokens,
             ContentChunkCount = record.ContentChunkCount,
             ReasoningChunkCount = record.ReasoningChunkCount,
             TraceId = record.TraceId,

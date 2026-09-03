@@ -216,6 +216,15 @@ public sealed partial class InvocationRunner
             : $"Model '{requestedModel}' could not be verified; this turn ran on the node's default model '{fallbackModel}' instead.";
     }
 
+    /// <summary>
+    ///     Sanitized, user-facing text for a <see cref="TurnNoticeKind.ToolsFiltered" /> notice. Counts only — it never
+    ///     names a tool, and it names the escape hatch so a reader knows nothing was taken away.
+    /// </summary>
+    private static string BuildToolsFilteredNoticeMessage(int hiddenCount, int totalCount)
+    {
+        return $"{hiddenCount} of {totalCount} tools were held back from this turn to save context; the assistant can list and use them by calling list_tools.";
+    }
+
     /// <summary>Sanitized, user-facing text for a <see cref="TurnNoticeKind.ToolDisabled" /> notice.</summary>
     private static string BuildToolDisabledNoticeMessage(string toolName)
     {

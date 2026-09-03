@@ -107,7 +107,8 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             definition.MemoryExtractionEnabled,
             effectiveModelIsCloud,
             definition.Kind,
-            customTools);
+            customTools,
+            definition.DisableToolRelevanceFilter);
     }
 
     /// <summary>

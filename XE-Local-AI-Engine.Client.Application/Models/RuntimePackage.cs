@@ -63,6 +63,16 @@ public sealed record RuntimePackage
     /// </summary>
     public bool IsUnattended { get; init; }
 
+    /// <summary>
+    ///     Whether the bound agent opted OUT of the send-time tool-relevance filter, so every offered tool is put in
+    ///     front of the model on every round however many there are. Read by the invocation runner when it seeds the
+    ///     relevance scope. Deliberately excluded from the config hash (mirrors <see cref="IsUnattended" />): the filter
+    ///     narrows only the array handed to the provider — never the offer, the resolved prompt or the approval wrap —
+    ///     so an agent with the filter off must hash identically to the same agent with it on, and toggling it can never
+    ///     invalidate a resume.
+    /// </summary>
+    public bool DisableToolRelevanceFilter { get; init; }
+
     public List<string>? RequestedCapabilities { get; init; }
 
     public required TimeoutSettings Timeouts { get; init; }

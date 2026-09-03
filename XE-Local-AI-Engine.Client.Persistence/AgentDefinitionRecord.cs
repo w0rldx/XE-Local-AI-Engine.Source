@@ -29,4 +29,5 @@ public sealed record AgentDefinitionRecord(
     bool DefaultTemporaryChat = false,
     bool MemoryExtractionEnabled = true,
     bool DisableBaseScaffold = false,
-    string? GenerationMetadataJson = null);
+    string? GenerationMetadataJson = null,
+    bool DisableToolRelevanceFilter = false);

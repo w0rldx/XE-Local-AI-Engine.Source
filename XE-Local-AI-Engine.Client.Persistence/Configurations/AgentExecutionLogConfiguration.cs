@@ -92,6 +92,14 @@ internal sealed class AgentExecutionLogConfiguration : IEntityTypeConfiguration<
         builder.Property(entity => entity.StartedAtUtc)
                .HasColumnName("started_at_utc");
 
+        // Tool-schema token telemetry, both nullable with no backfill: a pre-migration envelope row simply reports
+        // null. SQLite INTEGER is 64-bit either way, so the widened cumulative column costs the schema nothing.
+        builder.Property(entity => entity.ToolSchemaTokens)
+               .HasColumnName("tool_schema_tokens");
+
+        builder.Property(entity => entity.MaxToolSchemaTokens)
+               .HasColumnName("max_tool_schema_tokens");
+
         // The paged list-by-agent read filters by agent and orders newest-first, so index the pair. No FK to
         // agent_definitions: a run log is diagnostic telemetry that should outlive the definition (mirrors the no-FK
         // conversation->definition choice), so deleting an agent must not cascade-delete its execution history.

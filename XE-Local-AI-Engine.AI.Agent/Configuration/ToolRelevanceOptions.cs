@@ -21,10 +21,15 @@ public sealed class ToolRelevanceOptions
     public bool Enabled { get; set; }
 
     /// <summary>
-    ///     Offered-tool count above which filtering engages, counted over EVERY offered tool (core included). At or
-    ///     below it the whole array is sent unchanged. This is a TRIGGER, not a cap: because
-    ///     <see cref="MinimumRankedSlots" /> floors the ranked fill, an agent with a large core may still be offered
-    ///     more than this many tools (see the option below).
+    ///     Filtering engages for an agent carrying more than this many RESOLVED tools, counted over every tool the
+    ///     agent resolves (core included) and not just the rankable ones. At or below it the whole array is sent
+    ///     unchanged. "Resolved" is the operator-facing count deliberately: the array the model actually receives also
+    ///     carries the <c>list_tools</c> escape hatch, so the first array that can be filtered holds one more entry
+    ///     than this number.
+    ///     <para>
+    ///         This is a TRIGGER, not a cap: because <see cref="MinimumRankedSlots" /> floors the ranked fill, an agent
+    ///         with a large core may still be offered more than this many tools (see the option below).
+    ///     </para>
     /// </summary>
     [Range(1, 1000)]
     public int Threshold { get; set; } = 12;

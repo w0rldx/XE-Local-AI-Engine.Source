@@ -31,6 +31,7 @@ internal static class AgentDefinitionMapper
             DefaultTemporaryChat = record.DefaultTemporaryChat,
             MemoryExtractionEnabled = record.MemoryExtractionEnabled,
             DisableBaseScaffold = record.DisableBaseScaffold,
+            DisableToolRelevanceFilter = record.DisableToolRelevanceFilter,
             AllowedSkillIds = record.AllowedSkillIds ?? [],
             Version = record.Version,
             CreatedAtUtc = record.CreatedAtUtc,
@@ -59,7 +60,8 @@ internal static class AgentDefinitionMapper
             request.DefaultTemporaryChat,
             request.MemoryExtractionEnabled,
             request.DisableBaseScaffold,
-            GenerationProvenance.ToPersistedJson(request.GenerationMetadata, request.Name, request.Description, request.Instructions, now));
+            GenerationProvenance.ToPersistedJson(request.GenerationMetadata, request.Name, request.Description, request.Instructions, now),
+            request.DisableToolRelevanceFilter);
     }
 
     public static AgentDefinitionInput ToInput(this UpdateAgentDefinitionRequest request, DateTimeOffset now)
@@ -80,6 +82,7 @@ internal static class AgentDefinitionMapper
             request.DefaultTemporaryChat,
             request.MemoryExtractionEnabled,
             request.DisableBaseScaffold,
-            GenerationProvenance.ToPersistedJson(request.GenerationMetadata, request.Name, request.Description, request.Instructions, now));
+            GenerationProvenance.ToPersistedJson(request.GenerationMetadata, request.Name, request.Description, request.Instructions, now),
+            request.DisableToolRelevanceFilter);
     }
 }

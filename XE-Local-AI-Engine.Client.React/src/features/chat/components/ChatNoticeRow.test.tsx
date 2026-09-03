@@ -86,6 +86,26 @@ describe("ChatNoticeRow", () => {
 		).toBeTruthy();
 	});
 
+	it("renders the tools-filtered notice with its own kind tag and the server's counts-only text", () => {
+		// The notice never names a tool: the server sentence is counts only, and it points at the escape hatch so a
+		// reader knows nothing was taken away.
+		renderWithProviders(
+			<ChatNoticeRow
+				part={noticePart({
+					noticeKind: "ToolsFiltered",
+					text: "7 of 20 tools were held back from this turn to save context; the assistant can list and use them by calling list_tools.",
+				})}
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("ToolsFiltered");
+		expect(
+			screen.getByText(
+				"7 of 20 tools were held back from this turn to save context; the assistant can list and use them by calling list_tools.",
+			),
+		).toBeTruthy();
+	});
+
 	it("falls back gracefully for an unknown/forward-compat notice kind", () => {
 		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "SomethingNew", text: "A new kind of notice." })} />);
 

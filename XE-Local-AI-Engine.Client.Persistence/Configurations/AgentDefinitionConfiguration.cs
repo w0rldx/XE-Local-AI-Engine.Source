@@ -64,6 +64,13 @@ internal sealed class AgentDefinitionConfiguration : IEntityTypeConfiguration<Ag
                .HasColumnName("disable_base_scaffold")
                .HasDefaultValue(false);
 
+        // Tool-relevance opt-out — additive structural column. Plaintext (a bool); default and backfill false so every
+        // existing definition follows the node setting. Non-config-affecting: the filter narrows only the provider-bound
+        // tools array, never the offer or the resolved prompt, so it never bumps this definition's own Version.
+        builder.Property(entity => entity.DisableToolRelevanceFilter)
+               .HasColumnName("disable_tool_relevance_filter")
+               .HasDefaultValue(false);
+
         // Per-agent default-temporary-chat flag — additive structural column. Plaintext (a bool); default and backfill
         // false so a pre-feature definition reads as non-temporary. Non-config-affecting (like playbook_enabled): gates
         // post-run memory extraction only, never the runtime config hash.

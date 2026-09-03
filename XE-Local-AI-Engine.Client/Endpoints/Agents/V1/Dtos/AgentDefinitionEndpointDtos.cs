@@ -47,6 +47,13 @@ public sealed class CreateAgentDefinitionRequest
     /// </summary>
     public bool DisableBaseScaffold { get; init; }
 
+    /// <summary>
+    ///     Whether this agent opts out of the node's send-time tool-relevance filter, so every offered tool is shown to
+    ///     the model on every round. Additive; NOT config-affecting — the filter narrows only the array handed to the
+    ///     provider, never the offer or the resolved prompt, so toggling it leaves the runtime config hash unmoved.
+    /// </summary>
+    public bool DisableToolRelevanceFilter { get; init; }
+
     /// <summary>The per-agent skill picklist — skill ids (Guids) selected into this agent for MAF progressive disclosure.</summary>
     public IReadOnlyList<Guid>? AllowedSkillIds { get; init; }
 
@@ -99,6 +106,13 @@ public sealed class UpdateAgentDefinitionRequest
     ///     change already drives the runtime config hash directly.
     /// </summary>
     public bool DisableBaseScaffold { get; init; }
+
+    /// <summary>
+    ///     Whether this agent opts out of the node's send-time tool-relevance filter, so every offered tool is shown to
+    ///     the model on every round. Additive; NOT config-affecting — the filter narrows only the array handed to the
+    ///     provider, never the offer or the resolved prompt, so toggling it leaves the runtime config hash unmoved.
+    /// </summary>
+    public bool DisableToolRelevanceFilter { get; init; }
 
     /// <summary>The per-agent skill picklist — skill ids (Guids) selected into this agent for MAF progressive disclosure.</summary>
     public IReadOnlyList<Guid>? AllowedSkillIds { get; init; }
@@ -157,6 +171,9 @@ public sealed class AgentDefinitionResponse
 
     /// <summary>Whether this definition opts out of the versioned base instruction scaffold. False (the default) means the scaffold is prepended.</summary>
     public required bool DisableBaseScaffold { get; init; }
+
+    /// <summary>Whether this definition opts out of the node's send-time tool-relevance filter. False (the default) means it follows the node setting.</summary>
+    public required bool DisableToolRelevanceFilter { get; init; }
 
     /// <summary>The per-agent skill picklist (skill ids). Always present; empty when no skills are assigned.</summary>
     public required IReadOnlyList<Guid> AllowedSkillIds { get; init; }

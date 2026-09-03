@@ -98,6 +98,16 @@ public sealed class InvocationState
     public int? ReasoningTokens { get; set; }
 
     /// <summary>
+    ///     Estimated tool-schema tokens the turn spent across all its provider rounds, read from the provider-call
+    ///     budget just before the terminal report. A count, never a tool name. Null on a turn whose runner never
+    ///     reported one (the platform path, and any stream that ended without a terminal state).
+    /// </summary>
+    public long? ToolSchemaTokens { get; set; }
+
+    /// <summary>The largest single round's estimated tool-schema token count for the turn; null for the same reasons as <see cref="ToolSchemaTokens" />.</summary>
+    public int? MaxToolSchemaTokens { get; set; }
+
+    /// <summary>
     ///     Why the model stopped generating, verbatim from <c>ChatFinishReason.Value</c> on the last streamed update
     ///     that carried one (<c>stop</c>, <c>length</c>, <c>tool_calls</c>, <c>content_filter</c>, or a provider's own
     ///     token). Null when the provider reported none — every non-OpenAI-shaped path, the orchestration path, and any
@@ -173,6 +183,8 @@ public sealed class InvocationState
             OutputTokens = OutputTokens,
             TotalTokens = TotalTokens,
             ReasoningTokens = ReasoningTokens,
+            ToolSchemaTokens = ToolSchemaTokens,
+            MaxToolSchemaTokens = MaxToolSchemaTokens,
             GenerationDurationMs = GenerationDurationMs,
             FinishReason = FinishReason,
             Throughput = Throughput,

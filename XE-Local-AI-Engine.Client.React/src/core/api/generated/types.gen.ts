@@ -5014,6 +5014,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = {
 	defaultTemporaryChat: boolean;
 	memoryExtractionEnabled: boolean;
 	disableBaseScaffold: boolean;
+	disableToolRelevanceFilter: boolean;
 	allowedSkillIds: Array<string>;
 	version: number;
 	createdAtUtc: number;
@@ -5039,6 +5040,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest =
 	defaultTemporaryChat?: boolean;
 	memoryExtractionEnabled?: boolean;
 	disableBaseScaffold?: boolean;
+	disableToolRelevanceFilter?: boolean;
 	allowedSkillIds?: Array<string> | null;
 	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadata | null;
 };
@@ -5304,6 +5306,8 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse = {
 	completionTokens?: number | null;
 	reasoningTokens?: number | null;
 	totalTokens?: number | null;
+	toolSchemaTokens?: number | null;
+	maxToolSchemaTokens?: number | null;
 	contentChunkCount?: number | null;
 	reasoningChunkCount?: number | null;
 	traceId?: string | null;
@@ -5335,6 +5339,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest =
 	defaultTemporaryChat?: boolean;
 	memoryExtractionEnabled?: boolean;
 	disableBaseScaffold?: boolean;
+	disableToolRelevanceFilter?: boolean;
 	allowedSkillIds?: Array<string> | null;
 	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadata | null;
 };

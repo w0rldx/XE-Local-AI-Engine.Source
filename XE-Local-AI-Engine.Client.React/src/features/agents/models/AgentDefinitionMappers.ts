@@ -45,6 +45,7 @@ export function toAgentDefinition(dto: XeLocalAiEngineClientEndpointsAgentsV1Age
 		// Backend default is ON; an absent wire value degrades to true so a pre-feature row keeps learning from runs.
 		memoryExtractionEnabled: dto.memoryExtractionEnabled ?? true,
 		disableBaseScaffold: dto.disableBaseScaffold ?? false,
+		disableToolRelevanceFilter: dto.disableToolRelevanceFilter ?? false,
 		version: dto.version ?? 0,
 		createdAtUtc: dto.createdAtUtc ?? 0,
 		updatedAtUtc: dto.updatedAtUtc ?? 0,
@@ -86,6 +87,7 @@ export function toSaveAgentDefinitionRequest(
 		defaultTemporaryChat: form.defaultTemporaryChat,
 		memoryExtractionEnabled: form.memoryExtractionEnabled,
 		disableBaseScaffold: form.disableBaseScaffold,
+		disableToolRelevanceFilter: form.disableToolRelevanceFilter,
 		// Provenance of an applied AI draft, echoed back exactly as the draft endpoint returned it. Null on an
 		// ordinary edit, which the server reads as "leave the stored provenance alone" rather than "clear it".
 		generationMetadata: form.generationMetadata,

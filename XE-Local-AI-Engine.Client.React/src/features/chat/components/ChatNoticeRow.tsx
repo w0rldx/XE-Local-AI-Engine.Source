@@ -20,6 +20,8 @@ function noticeIcon(noticeKind: string) {
 			return IconHistory;
 		case "OrchestrationDegraded":
 			return IconUsersGroup;
+		case "ToolsFiltered":
+			return IconToolsOff;
 		default:
 			return IconInfoCircle;
 	}
@@ -36,6 +38,8 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 			return "chat.notices.historyTruncated";
 		case "OrchestrationDegraded":
 			return "chat.notices.orchestrationDegraded";
+		case "ToolsFiltered":
+			return "chat.notices.toolsFiltered";
 		default:
 			return undefined;
 	}

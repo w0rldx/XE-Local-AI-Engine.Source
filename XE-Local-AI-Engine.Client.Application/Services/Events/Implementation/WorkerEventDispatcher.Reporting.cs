@@ -76,6 +76,20 @@ public sealed partial class WorkerEventDispatcher
         return Task.CompletedTask;
     }
 
+    public Task ReportToolSchemaTokensAsync(Guid invocationId, long? toolSchemaTokens, int? maxToolSchemaTokens)
+    {
+        // A no-op when the id is not the current invocation, exactly like the phase report above.
+        UpdateInvocation(invocationId,
+            state =>
+            {
+                state.ToolSchemaTokens = toolSchemaTokens;
+                state.MaxToolSchemaTokens = maxToolSchemaTokens;
+                return state;
+            });
+
+        return Task.CompletedTask;
+    }
+
     public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(failureMessage);

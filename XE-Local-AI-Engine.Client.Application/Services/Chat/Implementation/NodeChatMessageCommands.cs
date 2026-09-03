@@ -60,13 +60,13 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
     private const string EnvelopeColumns = """
                                            (id, record_kind, schema_version, agent_definition_id, conversation_id, message_id, invocation_id, request_id,
                                             model_name, provider, config_hash, terminal_status, latency_ms, prompt_tokens, completion_tokens, reasoning_tokens, total_tokens,
-                                            content_chunk_count, reasoning_chunk_count, trace_id, started_at_utc, success, error_class, created_at_utc)
+                                            content_chunk_count, reasoning_chunk_count, trace_id, started_at_utc, tool_schema_tokens, max_tool_schema_tokens, success, error_class, created_at_utc)
                                            """;
 
     private const string EnvelopeValues = """
                                           $id, $record_kind, $schema_version, $agent_definition_id, $conversation_id, $message_id, $invocation_id, $request_id,
                                           $model_name, $provider, $config_hash, $terminal_status, $latency_ms, $prompt_tokens, $completion_tokens, $reasoning_tokens, $total_tokens,
-                                          $content_chunk_count, $reasoning_chunk_count, $trace_id, $started_at_utc, $success, $error_class, $created_at_utc
+                                          $content_chunk_count, $reasoning_chunk_count, $trace_id, $started_at_utc, $tool_schema_tokens, $max_tool_schema_tokens, $success, $error_class, $created_at_utc
                                           """;
 
     // InsertIfAbsent: the WHERE NOT EXISTS on (record_kind, message_id) makes the write a no-op when the message already
@@ -111,6 +111,8 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                                                   reasoning_chunk_count = excluded.reasoning_chunk_count,
                                                   trace_id = excluded.trace_id,
                                                   started_at_utc = excluded.started_at_utc,
+                                                  tool_schema_tokens = excluded.tool_schema_tokens,
+                                                  max_tool_schema_tokens = excluded.max_tool_schema_tokens,
                                                   success = excluded.success,
                                                   error_class = excluded.error_class,
                                                   created_at_utc = excluded.created_at_utc;
@@ -634,6 +636,8 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
         AddParameter(command, "$reasoning_chunk_count", envelope.ReasoningChunkCount);
         AddParameter(command, "$trace_id", envelope.TraceId);
         AddParameter(command, "$started_at_utc", envelope.StartedAtUtc);
+        AddParameter(command, "$tool_schema_tokens", envelope.ToolSchemaTokens);
+        AddParameter(command, "$max_tool_schema_tokens", envelope.MaxToolSchemaTokens);
         AddParameter(command, "$success", string.Equals(terminalStatus, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal) ? 1 : 0);
         AddParameter(command, "$error_class", envelope.FailureCategory);
         AddParameter(command, "$created_at_utc", createdAtUtc);

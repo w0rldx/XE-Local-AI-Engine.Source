@@ -84,4 +84,7 @@ public sealed record ResolvedAgentRuntime(
     bool MemoryExtractionEnabled = true,
     bool EffectiveModelIsCloud = false,
     AgentDefinitionKind Kind = AgentDefinitionKind.Single,
-    IReadOnlyList<ResolvedCustomTool>? CustomTools = null);
+    IReadOnlyList<ResolvedCustomTool>? CustomTools = null,
+    // Per-agent opt-out from the send-time tool-relevance filter. Trailing and non-config-affecting for the same reason
+    // as the members above: the filter narrows only the array handed to the provider, never the offer or the prompt.
+    bool DisableToolRelevanceFilter = false);
