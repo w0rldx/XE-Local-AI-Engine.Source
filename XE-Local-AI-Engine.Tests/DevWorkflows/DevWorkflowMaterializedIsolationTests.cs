@@ -33,8 +33,8 @@ public sealed class DevWorkflowMaterializedIsolationTests
     /// </summary>
     private const string TwoIndependentTasks = """
                                                [
-                                                 { "id": "alpha", "title": "Add the parser", "goal": "Parse the manifest." },
-                                                 { "id": "beta", "title": "Add the writer", "goal": "Write the manifest." }
+                                                 { "id": "alpha", "title": "Add the parser", "goal": "Parse the manifest.", "changes": ["src/Manifest/Parser.cs"] },
+                                                 { "id": "beta", "title": "Add the writer", "goal": "Write the manifest.", "changes": ["src/Manifest/Writer.cs"] }
                                                ]
                                                """;
 
