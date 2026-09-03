@@ -152,6 +152,25 @@ public sealed class AnnotatedOptionsBoundsTests
         }
     }
 
+    [Test]
+    public void IntegrationCrossFieldCaps_RejectAPerUnitCeilingAboveItsAggregate()
+    {
+        // Neither pair can be caught by a [Range]: each member is individually in range and only the relation is wrong.
+        AssertEx.Contains(Validate(new IntegrationOptions { MaxQueuedExecutions = 4, MaxQueuedExecutionsPerPrincipal = 5 }),
+            error => error.MemberNames.Contains(nameof(IntegrationOptions.MaxQueuedExecutionsPerPrincipal), StringComparer.Ordinal),
+            "A per-principal cap above the node-wide one is a dead number: the node-wide count always bites first.");
+
+        AssertEx.Empty(Validate(new IntegrationOptions { MaxQueuedExecutions = 4, MaxQueuedExecutionsPerPrincipal = 4 })
+            .Where(static error => error.MemberNames.Contains(nameof(IntegrationOptions.MaxQueuedExecutionsPerPrincipal), StringComparer.Ordinal)));
+
+        AssertEx.Contains(Validate(new IntegrationOptions { MaxOutputBytes = 262_144, MaxOutputBytesPerExecution = 131_072 }),
+            error => error.MemberNames.Contains(nameof(IntegrationOptions.MaxOutputBytes), StringComparer.Ordinal),
+            "A single emit_output larger than the whole execution's budget could never be accepted.");
+
+        AssertEx.Empty(Validate(new IntegrationOptions { MaxOutputBytes = 131_072, MaxOutputBytesPerExecution = 131_072 })
+            .Where(static error => error.MemberNames.Contains(nameof(IntegrationOptions.MaxOutputBytes), StringComparer.Ordinal)));
+    }
+
     private static void AssertBoundary(Type optionsType, PropertyInfo property, decimal? bound, bool isMinimum)
     {
         if (bound is not { } boundary)
@@ -170,7 +189,10 @@ public sealed class AnnotatedOptionsBoundsTests
         var atBoundary = AssertEx.NotNull(TryCreateWith(optionsType, property, boundary),
             $"{optionsType.Name}.{property.Name} could not be set to its own declared bound {boundary}.");
 
-        AssertEx.False(Validate(atBoundary).Any(error => error.MemberNames.Contains(property.Name, StringComparer.Ordinal)),
+        // Scoped to the property's OWN attributes. A class-level IValidatableObject cross-field rule can legitimately
+        // reject a lone property pushed to its bound while every other member keeps its default, and that is a
+        // statement about the pair, not about this [Range].
+        AssertEx.Empty(ValidateProperty(atBoundary, property),
             $"{optionsType.Name}.{property.Name} rejected {boundary}, which its own [Range] declares as valid.");
     }
 
@@ -207,6 +229,15 @@ public sealed class AnnotatedOptionsBoundsTests
 
     private static object Create(Type optionsType) =>
         Activator.CreateInstance(optionsType) ?? throw new InvalidOperationException($"{optionsType.Name} has no parameterless constructor.");
+
+    private static IReadOnlyList<ValidationResult> ValidateProperty(object instance, PropertyInfo property)
+    {
+        var results = new List<ValidationResult>();
+        _ = Validator.TryValidateProperty(property.GetValue(instance),
+            new ValidationContext(instance) { MemberName = property.Name },
+            results);
+        return results;
+    }
 
     private static IReadOnlyList<ValidationResult> Validate(object instance)
     {

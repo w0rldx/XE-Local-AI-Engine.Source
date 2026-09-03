@@ -19,6 +19,16 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 public sealed partial class IntegrationExecutionStore : IIntegrationExecutionStore
 {
+    /// <summary>
+    ///     The brief's bound on a non-output event's detail, in UTF-8 bytes. <c>external.output</c> is exempt because it
+    ///     carries the caller-facing payload and is bounded at <c>IntegrationOptions.MaxOutputBytes</c> by the append
+    ///     path that writes it.
+    /// </summary>
+    private const int MaxEventDetailBytes = 4096;
+
+    /// <summary>The one exempt event type. A literal, because this assembly cannot see the application's type list.</summary>
+    private const string ExternalOutputEventType = "external.output";
+
     private readonly string _connectionString;
     private readonly NodeChatDbContext _dbContext;
 
@@ -134,6 +144,13 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
             _dbContext.ChangeTracker.Clear();
             return false;
         }
+        catch (DbUpdateException)
+        {
+            // Any other failed save leaves the mutated entity tracked; clear it so the next call on a scoped context
+            // does not replay this one's changes.
+            _dbContext.ChangeTracker.Clear();
+            throw;
+        }
 
         return true;
     }
@@ -181,6 +198,13 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
             _dbContext.ChangeTracker.Clear();
             return false;
         }
+        catch (DbUpdateException)
+        {
+            // Not a lost CAS but a failed save — a constraint the terminal event violated, say. The tracker still holds
+            // the mutated entities, so a scoped context reused for the next call would replay them on its next save.
+            _dbContext.ChangeTracker.Clear();
+            throw;
+        }
 
         return true;
     }
@@ -188,6 +212,13 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
     public async Task AppendEventAsync(IntegrationEventAppend command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        if (command.DetailJson is { } detail
+            && !string.Equals(command.EventType, ExternalOutputEventType, StringComparison.Ordinal)
+            && Encoding.UTF8.GetByteCount(detail) > MaxEventDetailBytes)
+        {
+            throw new ArgumentException($"A '{command.EventType}' event's detail may not exceed {MaxEventDetailBytes} UTF-8 bytes.", nameof(command));
+        }
 
         var entity = await _dbContext.IntegrationExecutions.SingleOrDefaultAsync(row => row.Id == command.ExecutionId, cancellationToken).ConfigureAwait(false)
                      ?? throw new InvalidOperationException($"Integration execution '{command.ExecutionId}' does not exist.");
@@ -205,7 +236,17 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         entity.LastSequence = Math.Max(entity.LastSequence, command.Sequence);
         await MoveSessionWatermarkAsync(entity.SessionId, command.Sequence, command.OccurredAtUtc, cancellationToken).ConfigureAwait(false);
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateException)
+        {
+            // A duplicate (ExecutionId, Sequence) is a caller bug and rethrows, but the failed event and both moved
+            // watermarks stay tracked; without this clear the next append on the same scoped context replays them.
+            _dbContext.ChangeTracker.Clear();
+            throw;
+        }
     }
 
     public async Task<IReadOnlyList<IntegrationExecutionEventSnapshot>> ListEventsAsync(Guid executionId,

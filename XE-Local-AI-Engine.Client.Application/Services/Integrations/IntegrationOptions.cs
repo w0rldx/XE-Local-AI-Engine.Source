@@ -128,5 +128,23 @@ public sealed class IntegrationOptions : IValidatableObject
                 $"{Section}:{nameof(EventBufferTtlAfterTerminal)} must be between {MinEventBufferTtl} and {MaxEventBufferTtl}.",
                 [nameof(EventBufferTtlAfterTerminal)]);
         }
+
+        // A per-principal cap above the node-wide one is not a tighter fairness floor, it is a dead number: the
+        // node-wide count is checked first and always bites first.
+        if (MaxQueuedExecutionsPerPrincipal > MaxQueuedExecutions)
+        {
+            yield return new ValidationResult(
+                $"{Section}:{nameof(MaxQueuedExecutionsPerPrincipal)} must not exceed {nameof(MaxQueuedExecutions)}.",
+                [nameof(MaxQueuedExecutionsPerPrincipal), nameof(MaxQueuedExecutions)]);
+        }
+
+        // A single emit_output larger than the whole execution's budget can never be accepted, so the per-call ceiling
+        // would silently be the aggregate one.
+        if (MaxOutputBytes > MaxOutputBytesPerExecution)
+        {
+            yield return new ValidationResult(
+                $"{Section}:{nameof(MaxOutputBytes)} must not exceed {nameof(MaxOutputBytesPerExecution)}.",
+                [nameof(MaxOutputBytes), nameof(MaxOutputBytesPerExecution)]);
+        }
     }
 }

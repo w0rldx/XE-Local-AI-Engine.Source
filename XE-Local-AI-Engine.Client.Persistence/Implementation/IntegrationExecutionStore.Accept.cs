@@ -56,6 +56,27 @@ public sealed partial class IntegrationExecutionStore
             throw new ArgumentException("The accepted event must carry no detail: this path does not run the encryption interceptor.", nameof(command));
         }
 
+        // The command carries the same identity twice by design (see IntegrationAcceptCommand), so a caller that
+        // disagrees with itself would silently write an execution onto a session or an event onto an execution that
+        // neither names. Fail before the transaction opens rather than commit an unreachable row.
+        if (command.NewSession is { } declaredSession)
+        {
+            if (declaredSession.SessionId != command.SessionId)
+            {
+                throw new ArgumentException("The new session's id must equal the command's session id.", nameof(command));
+            }
+
+            if (declaredSession.TriggerId != command.TriggerId)
+            {
+                throw new ArgumentException("The new session's trigger id must equal the command's trigger id.", nameof(command));
+            }
+        }
+
+        if (command.AcceptedEvent.ExecutionId != command.ExecutionId)
+        {
+            throw new ArgumentException("The accepted event's execution id must equal the command's execution id.", nameof(command));
+        }
+
         await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = BeginImmediateTransaction(connection);
 
@@ -215,11 +236,20 @@ public sealed partial class IntegrationExecutionStore
         await using var update = CreateCommand(connection, transaction, """
                                                                        UPDATE integration_sessions
                                                                           SET execution_count = execution_count + 1, last_activity_utc = $receivedAtUtc
-                                                                        WHERE id = $sessionId;
+                                                                        WHERE id = $sessionId AND principal_id = $principalId AND status = $status;
                                                                        """);
         Add(update, "$receivedAtUtc", command.ReceivedAtUtc);
         Add(update, "$sessionId", ToDb(command.SessionId));
-        _ = await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        Add(update, "$principalId", ToDb(command.PrincipalId));
+        Add(update, "$status", IntegrationSessionStatus.Active.ToString());
+
+        if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) == 0)
+        {
+            // Missing, another principal's, or closed. An unscoped UPDATE would have silently affected nothing and let
+            // the accept commit an execution onto a session that cannot host it; aborting here is what keeps the join
+            // checked. The transaction is disposed uncommitted, so nothing lands in any of the three tables.
+            throw new IntegrationSessionUnavailableException("The continuation's session is missing, not this principal's, or no longer active.");
+        }
     }
 
     private static async Task InsertExecutionAsync(SqliteConnection connection,

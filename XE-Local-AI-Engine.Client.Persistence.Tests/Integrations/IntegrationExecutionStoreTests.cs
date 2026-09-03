@@ -153,6 +153,75 @@ public sealed class IntegrationExecutionStoreTests
     }
 
     [Test]
+    public async Task AcceptAsync_ContinuationOntoASessionItMayNotJoin_ThrowsAndWritesNothing()
+    {
+        using var fixture = new IntegrationTestFixture();
+        var seed = await SeedAsync(fixture).ConfigureAwait(false);
+
+        await using var context = fixture.CreateContext();
+        var store = new IntegrationExecutionStore(context);
+        var first = NewAccept(seed);
+        AssertEx.True(await store.AcceptAsync(first, maxActive: 8, maxActivePerPrincipal: 4).ConfigureAwait(false));
+
+        var missing = NewAccept(seed) with { NewSession = null, SessionId = Guid.NewGuid() };
+        var foreign = NewAccept(seed) with { NewSession = null, SessionId = first.SessionId, PrincipalId = Guid.NewGuid() };
+
+        foreach (var refused in new[] { missing, foreign })
+        {
+            var before = await CountsAsync(fixture).ConfigureAwait(false);
+            _ = await AssertEx.ThrowsAsync<IntegrationSessionUnavailableException>(() => store.AcceptAsync(refused, maxActive: 8, maxActivePerPrincipal: 4))
+                              .ConfigureAwait(false);
+            AssertEx.Equal(before, await CountsAsync(fixture).ConfigureAwait(false),
+                "An unscoped UPDATE would have affected no row and still committed the execution.");
+        }
+
+        // The same session, its own principal, but closed: no further execution may join it.
+        await fixture.RawExecuteAsync("UPDATE integration_sessions SET status = 'Closed' WHERE id = $id;",
+                         command => command.Parameters.AddWithValue("$id", first.SessionId))
+                     .ConfigureAwait(false);
+
+        var closedBefore = await CountsAsync(fixture).ConfigureAwait(false);
+        var closed = NewAccept(seed) with { NewSession = null, SessionId = first.SessionId };
+        _ = await AssertEx.ThrowsAsync<IntegrationSessionUnavailableException>(() => store.AcceptAsync(closed, maxActive: 8, maxActivePerPrincipal: 4))
+                          .ConfigureAwait(false);
+        AssertEx.Equal(closedBefore, await CountsAsync(fixture).ConfigureAwait(false));
+
+        // And the admitted case, so the scoping is not simply refusing everything.
+        await fixture.RawExecuteAsync("UPDATE integration_sessions SET status = 'Active' WHERE id = $id;",
+                         command => command.Parameters.AddWithValue("$id", first.SessionId))
+                     .ConfigureAwait(false);
+        AssertEx.True(await store.AcceptAsync(NewAccept(seed) with { NewSession = null, SessionId = first.SessionId }, maxActive: 8, maxActivePerPrincipal: 4)
+                                 .ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task AcceptAsync_WhenTheCommandDisagreesWithItself_ThrowsAndWritesNothing()
+    {
+        using var fixture = new IntegrationTestFixture();
+        var seed = await SeedAsync(fixture).ConfigureAwait(false);
+
+        await using var context = fixture.CreateContext();
+        var store = new IntegrationExecutionStore(context);
+        var before = await CountsAsync(fixture).ConfigureAwait(false);
+
+        var wrongSessionId = NewAccept(seed);
+        wrongSessionId = wrongSessionId with { NewSession = wrongSessionId.NewSession! with { SessionId = Guid.NewGuid() } };
+
+        var wrongTriggerId = NewAccept(seed);
+        wrongTriggerId = wrongTriggerId with { NewSession = wrongTriggerId.NewSession! with { TriggerId = Guid.NewGuid() } };
+
+        var wrongExecutionId = NewAccept(seed);
+        wrongExecutionId = wrongExecutionId with { AcceptedEvent = wrongExecutionId.AcceptedEvent with { ExecutionId = Guid.NewGuid() } };
+
+        foreach (var contradictory in new[] { wrongSessionId, wrongTriggerId, wrongExecutionId })
+        {
+            _ = await AssertEx.ThrowsAsync<ArgumentException>(() => store.AcceptAsync(contradictory, maxActive: 8, maxActivePerPrincipal: 4)).ConfigureAwait(false);
+            AssertEx.Equal(before, await CountsAsync(fixture).ConfigureAwait(false),
+                "The command carries each identity twice; a caller that disagrees with itself must not commit an unreachable row.");
+        }
+    }
+
+    [Test]
     public async Task AcceptAsync_UnderConcurrency_CommitsExactlyTheCapAndNoMore()
     {
         using var fixture = new IntegrationTestFixture();
@@ -485,6 +554,62 @@ public sealed class IntegrationExecutionStoreTests
         _ = await AssertEx.ThrowsAsync<DbUpdateException>(
                               () => store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), accept.ExecutionId, Sequence: 9, "tool.started", null, 8_200)))
                           .ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task AppendEventAsync_AfterAFailedSave_LeavesTheStoreUsableAndReplaysNothing()
+    {
+        using var fixture = new IntegrationTestFixture();
+        var seed = await SeedAsync(fixture).ConfigureAwait(false);
+
+        await using var context = fixture.CreateContext();
+        var store = new IntegrationExecutionStore(context);
+        var accept = NewAccept(seed);
+        AssertEx.True(await store.AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4).ConfigureAwait(false));
+
+        // Sequence 1 is the accepted event's, so this violates ux_integration_execution_events_execution_sequence.
+        _ = await AssertEx.ThrowsAsync<DbUpdateException>(
+                              () => store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), accept.ExecutionId, Sequence: 1, "tool.started", null, 8_000)))
+                          .ConfigureAwait(false);
+
+        // The SAME store instance, i.e. the same scoped context. Without the tracker clear its next save replays the
+        // rejected row and throws again.
+        await store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), accept.ExecutionId, Sequence: 2, "tool.completed", null, OccurredAtUtc: 8_100))
+                   .ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 2L, await fixture.RawTableCountAsync("integration_execution_events").ConfigureAwait(false),
+            "The accepted event plus the one valid append — the duplicate was never written.");
+    }
+
+    [Test]
+    public async Task AppendEventAsync_BoundsANonOutputEventDetailAtFourKibibytes()
+    {
+        using var fixture = new IntegrationTestFixture();
+        var seed = await SeedAsync(fixture).ConfigureAwait(false);
+
+        await using var context = fixture.CreateContext();
+        var store = new IntegrationExecutionStore(context);
+        var accept = NewAccept(seed);
+        AssertEx.True(await store.AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4).ConfigureAwait(false));
+
+        await store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), accept.ExecutionId, Sequence: 2, "tool.completed", new string('a', count: 4096), 8_000))
+                   .ConfigureAwait(false);
+
+        var before = await fixture.RawTableCountAsync("integration_execution_events").ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<ArgumentException>(
+                              () => store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(),
+                                  accept.ExecutionId,
+                                  Sequence: 3,
+                                  "tool.completed",
+                                  new string('a', count: 4097),
+                                  OccurredAtUtc: 8_100)))
+                          .ConfigureAwait(false);
+        AssertEx.Equal(before, await fixture.RawTableCountAsync("integration_execution_events").ConfigureAwait(false));
+
+        // external.output is exempt: its payload is the caller-facing one, bounded at MaxOutputBytes by the append
+        // path S3 adds for it.
+        await store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), accept.ExecutionId, Sequence: 4, "external.output", new string('a', count: 4097), 8_200))
+                   .ConfigureAwait(false);
     }
 
     [Test]

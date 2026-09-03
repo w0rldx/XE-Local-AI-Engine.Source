@@ -138,6 +138,12 @@ public sealed record IntegrationExecutionFilter(
 public sealed class IntegrationQueueFullException(string message) : InvalidOperationException(message);
 
 /// <summary>
+///     A continuation named a session that cannot host it: no such row, another principal's row, or one that is no
+///     longer <c>Active</c>. Nothing is written when it is thrown — the admission transaction is abandoned.
+/// </summary>
+public sealed class IntegrationSessionUnavailableException(string message) : Exception(message);
+
+/// <summary>
 ///     Persistence boundary for integration executions and their event feed.
 ///     <para>
 ///         There is no <c>CreateAsync</c> — an execution row is only ever born accepted — and no <c>CountActiveAsync</c>:
@@ -161,6 +167,13 @@ public interface IIntegrationExecutionStore
     ///     <para>
     ///         Both caps are parameters rather than command fields because they are policy numbers the caller reads from
     ///         <c>IntegrationOptions</c>, not part of the row being written.
+    ///     </para>
+    ///     <para>
+    ///         On a continuation (<c>NewSession</c> null) the session bump is scoped to the caller's own <c>Active</c>
+    ///         session and throws <see cref="IntegrationSessionUnavailableException" /> when it matches no row. The
+    ///         caller (S3) has already pre-checked ownership and status under its per-session semaphore and answers the
+    ///         proper 404/409 there; this is the RACE-FREE BACKSTOP for the window between that check and this
+    ///         transaction, not the place a caller learns which of the three it was.
     ///     </para>
     ///     <para>
     ///         <b>After this returns</b> the caller creates the owned <c>NodeConversation</c> at the pre-minted
