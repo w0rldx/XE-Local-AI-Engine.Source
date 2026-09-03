@@ -10,9 +10,12 @@ namespace XE_Local_AI_Engine.AI.Agent.Tools;
 ///         <list type="bullet">
 ///             <item><see cref="ReadLocal" /> — read-only, node-local, side-effect-free reads (clock/arithmetic, the
 ///             read-only coder workspace tools, the read-only knowledge-base tools).</item>
-///             <item><see cref="WriteExecute" /> — reserved for tools that can write files or run commands on the node. No
-///             tool in the categorized OFFER currently uses it: the one write/execute gateway (<c>run_in_agent_home</c>)
-///             lives on the ClientLocal registry seam, not the offer, and is floored via the registry pre-wrap
+///             <item><see cref="WriteExecute" /> — tools that can write files or run commands on the node. The four
+///             work-session state tools carry it in the categorized offer, and a workflow Agent node is judged on
+///             exactly that (<c>GRAPH-C4-2</c>'s runtime half, which excludes those four by name because every agent
+///             node is offered them). A stdio MCP tool is <see cref="WriteExecute" /> too; an HTTP one is
+///             <see cref="Network" />. The one write/execute gateway that is NOT here — <c>run_in_agent_home</c> — lives
+///             on the ClientLocal registry seam rather than the offer, and is floored via the registry pre-wrap
 ///             (<c>ApprovalRequiredAIFunction</c>), not this category.</item>
 ///             <item><see cref="Orchestration" /> — can spawn or drive other agents/models (<c>spawn_subagent</c>).</item>
 ///             <item><see cref="Network" /> — reaches an external/out-of-process surface (every discovered MCP tool).</item>
