@@ -31,6 +31,28 @@ public static class NodeAuthorizationPolicies
     /// </summary>
     public const string LocalModelProxy = "LocalModelProxy";
 
+    /// <summary>
+    ///     Gates the hand-mapped external integration API. Like <see cref="McpServer" /> and
+    ///     <see cref="LocalModelProxy" /> it is SEPARATE from <see cref="Operator" /> and satisfied by its own
+    ///     authentication scheme (an <c>xeint_</c> key, never JWT): an external integrator is a strictly lesser
+    ///     principal than the node operator and must never inherit the operator's reach over the local admin API — nor
+    ///     the MCP client's reach over the agent tool surface.
+    /// </summary>
+    public const string IntegrationApi = "IntegrationApi";
+
+    /// <summary>
+    ///     The integrator identity. <b>This is the claim that carries authority</b>: session and execution ownership,
+    ///     the request-uniqueness index, the dedup fingerprint and the masking rule all key on it, so two keys issued
+    ///     to the same integrator share everything a rotation must not strand.
+    /// </summary>
+    public const string IntegrationPrincipalClaimType = "xe:integration_principal";
+
+    /// <summary>
+    ///     Which credential made the call. <b>Attribution only</b> — nothing reads it to decide anything, and a
+    ///     decision written against it would break the moment a key is rotated.
+    /// </summary>
+    public const string IntegrationKeyPrefixClaimType = "xe:integration_key_prefix";
+
     public const string AdminRole = "Admin";
     public const string RoleClaimType = "role";
 
