@@ -411,7 +411,10 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             // needs the flag beside it, because a caller-supplied effort otherwise LOSES to the agent's.
             Model: run.Runtime?.ModelProfile,
             ReasoningEffort: run.Runtime?.ReasoningEffort,
-            ReasoningEffortOverridesAgentPin: run.Runtime?.ReasoningEffort is { Length: > 0 });
+            ReasoningEffortOverridesAgentPin: run.Runtime?.ReasoningEffort is { Length: > 0 },
+            // No operator is attached to a workflow-owned session, and its embedded chat is read-only, so an ask_user
+            // question could only ever go unanswered — see the flag's own comment for what that costs.
+            SuppressAskUser: state.Session.Kind == AgentWorkSessionKind.Workflow);
 
         // Tighten the tool-result ceiling for this step, seeded BEFORE the enumeration starts so the value flows into
         // the invocation's async context (the send path calls the runner inline, not through a detached Task). The

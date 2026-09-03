@@ -109,7 +109,22 @@ public sealed record NodeChatStreamRequest(
     // node's authored effort IS that session's pin and there is no composer behind it. False everywhere else, so every
     // ordinary send keeps the precedence it has today. Trailing optional so the SignalR hub forwards the record
     // unchanged.
-    bool ReasoningEffortOverridesAgentPin = false);
+    bool ReasoningEffortOverridesAgentPin = false,
+    // Whether this turn must be sent WITHOUT the ask_user tool, overriding the "every tool-enabled turn can always ask
+    // its operator a question" invariant AskUserToolOffer otherwise holds. True only for a work session owned by a
+    // development-workflow node, because there is no operator attached to one: its embedded chat is read-only (the
+    // session's lifecycle is driven through the workflow run, not the work-sessions surface), so no card exists to
+    // answer the question on. The question then goes unanswered for the full node-wide pending-tool-call age
+    // (WorkerNode:MaxPendingToolCallAgeMinutes, 10 minutes by default) before the model is handed a "no answer" result.
+    // WorkSessions:MaxParkedSeconds is meant to bound that wait sooner, but it did not fire in the live incident this
+    // flag was written for, so do NOT treat it as a working fallback here; why it did not arm is a separate residual.
+    // A tool the model never sees is a tool it cannot park on. False everywhere else, so every ordinary send keeps the
+    // offer it has today. Withdrawing the tool DOES move a workflow-owned session's runtime-package config hash once,
+    // since ask_user leaves the hashed tool list: expect one resume invalidation for in-flight sessions on upgrade.
+    // Scoped to the supervisor's step send. NodeChatRegenerationService and NodeChatVariantBranchService build their own
+    // packages and keep the tool, deliberately — both are operator-initiated, so someone is there to answer.
+    // Trailing optional so the SignalR hub forwards the record unchanged.
+    bool SuppressAskUser = false);
 
 public sealed record ChatStreamEvent(
     string Type,

@@ -473,6 +473,124 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessageAsync_WhenAskUserIsSuppressed_WithholdsOnlyThatToolFromTheRuntimePackage()
+    {
+        // The workflow-owned work-session send: no operator is attached to answer a question, so the tool is withdrawn
+        // rather than left to park the turn. Everything else the turn was offered has to survive the filter.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
+            CreateLocalToolDto(AskUserTool.ToolName, "{\"type\":\"object\"}"),
+            CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
+            Substitute.For<IConversationSandboxStager>(),
+            Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true,
+                           SuppressAskUser: true)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.Equal(expected: 2, runner.LastAllowedTools.Count);
+        AssertEx.Contains(runner.LastAllowedTools, tool => tool.Name == "GetCurrentTime");
+        AssertEx.Contains(runner.LastAllowedTools, tool => tool.Name == "Calculate");
+        AssertEx.False(runner.LastAllowedTools.Any(tool => tool.Name == AskUserTool.ToolName),
+            "The suppressed turn must reach the runtime package without ask_user.");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenAskUserIsNotSuppressed_LeavesTheOfferedToolInPlace()
+    {
+        // The other half of the pin: suppression is opt-in per send, so an ordinary chat turn keeps the tool it has
+        // always been offered. Same offer as the suppressed case, so only the flag can explain the difference.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
+            CreateLocalToolDto(AskUserTool.ToolName, "{\"type\":\"object\"}"),
+            CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
+            Substitute.For<IConversationSandboxStager>(),
+            Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.Equal(expected: 3, runner.LastAllowedTools.Count);
+        AssertEx.Contains(runner.LastAllowedTools, tool => tool.Name == AskUserTool.ToolName);
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenResolvedNull_NodePolicyTightensFallbackOffer()
     {
         // Bypass seam #4 fix: an unbound / deleted-agent turn (resolved == null) builds the offer from the fallback
@@ -2128,6 +2246,74 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessageAsync_WhenAskUserIsSuppressed_WithholdsItFromEveryOrchestrationParticipant()
+    {
+        // The other list the withdrawal has to reach. Participants carry their own projected offer on the compiled
+        // spec, so a workflow node bound to an Orchestrator agent would otherwise still park on a question. This send
+        // offers no local tools at all, which leaves the spec as the only path the assertion can be reading.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentDefinitionId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { }, agentDefinitionId);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new PackageCapturingInvocationRunner(dispatcher);
+
+        var store = Substitute.For<IAgentDefinitionStore>();
+        store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
+        var agentDefinitionResolver = Substitute.For<IAgentDefinitionResolver>();
+        agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                               .Returns(new ResolvedAgentRuntime("Orchestrator persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 4,
+                                   agentDefinitionId, "Orchestrator", Kind: AgentDefinitionKind.Orchestrator));
+        var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
+        var spec = CreateSampleSpec();
+        orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                             .Returns(OrchestrationResolution.Compiled(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4,
+                                 AnyParticipantIsCloud: false, FirstCloudParticipantModel: null)));
+
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(agentDefinitionResolver, store, orchestrationResolver, CreateModelCapabilityResolver(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
+            Substitute.For<IConversationSandboxStager>(),
+            Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           SuppressAskUser: true)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        var withdrawn = AssertEx.NotNull(runner.LastOrchestrationSpec);
+        AssertEx.Equal(expected: 2, withdrawn.Participants.Count, "The withdrawal rewrites the tools and nothing else.");
+        AssertEx.False(withdrawn.Participants.Any(participant => participant.Tools.Any(tool => tool.Name == AskUserTool.ToolName)),
+            "No participant may reach the runner still able to park on a question.");
+        AssertEx.Contains(withdrawn.Participants.Single(participant => participant.Key == "b").Tools, tool => tool.Name == "Calculate");
+        AssertEx.Contains(spec.Participants, participant => participant.Tools.Any(tool => tool.Name == AskUserTool.ToolName));
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenOrchestrationDegrades_EmitsOneNoticeNamingTheReason()
     {
         // An orchestrator whose orchestration does not compile runs as a lone single agent. That used to be visible
@@ -3777,7 +3963,9 @@ public sealed class NodeChatStreamServiceTests
                     Name = "Triage",
                     Instructions = "Triage.",
                     ModelId = "qwen3:8b",
-                    Tools = []
+                    // Participants carry their OWN projected offer, which is the list the ask_user withdrawal has to
+                    // reach — the send's single allowed-tool list never sees them.
+                    Tools = [CreateLocalToolDto(AskUserTool.ToolName, "{\"type\":\"object\"}")]
                 },
                 new OrchestrationSpecParticipant
                 {
@@ -3785,7 +3973,7 @@ public sealed class NodeChatStreamServiceTests
                     Name = "Specialist",
                     Instructions = "Specialist.",
                     ModelId = "qwen3:8b",
-                    Tools = []
+                    Tools = [CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"), CreateLocalToolDto(AskUserTool.ToolName, "{\"type\":\"object\"}")]
                 }
             ],
             Edges =
