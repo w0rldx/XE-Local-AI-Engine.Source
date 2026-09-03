@@ -5,19 +5,20 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Deterministic i18n: t returns the supplied default string (or a {{var}}-interpolated defaultValue from the options
-// object form) so labels and the hidden-count note are readable in assertions.
+// Deterministic i18n: t returns the supplied default string with its {{var}} placeholders filled from whichever
+// argument carries them — t(key, defaultValue, params), t(key, { defaultValue, ...params }) or t(key, defaultValue).
+// Interpolating all three forms is what lets an assertion read the value a cell actually shows rather than a template.
+interface TranslationOptions {
+	defaultValue?: string;
+	[param: string]: unknown;
+}
+
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
-		t: (key: string, fallbackOrOptions?: string | { defaultValue?: string; [param: string]: unknown }) => {
-			if (typeof fallbackOrOptions === "string") {
-				return fallbackOrOptions;
-			}
-			if (fallbackOrOptions && typeof fallbackOrOptions === "object") {
-				const template = fallbackOrOptions.defaultValue ?? key;
-				return template.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(fallbackOrOptions[name] ?? ""));
-			}
-			return key;
+		t: (key: string, fallbackOrOptions?: string | TranslationOptions, maybeOptions?: TranslationOptions) => {
+			const template = typeof fallbackOrOptions === "string" ? fallbackOrOptions : (fallbackOrOptions?.defaultValue ?? key);
+			const params = typeof fallbackOrOptions === "string" ? maybeOptions : fallbackOrOptions;
+			return template.replace(/\{\{(\w+)\}\}/g, (match, name: string) => (params && name in params ? String(params[name]) : match));
 		},
 	}),
 }));
@@ -362,7 +363,8 @@ describe("RecommendationTable", () => {
 
 		renderTable(<RecommendationTable recommendations={[withPerToken]} />);
 
-		expect(screen.getByTestId("model-fit-kv-per-token-1")).toBeTruthy();
+		// 640 B/token is 0.6 KB: the line reports KB, and the quant it was computed with, lower-cased.
+		expect(screen.getByTestId("model-fit-kv-per-token-1").textContent).toBe("MLA \u00b7 0.6 KB/token (q8_0 KV)");
 	});
 
 	it("renders the KV-per-token line without an arch tag when the row carries no attention tag", () => {
@@ -370,7 +372,8 @@ describe("RecommendationTable", () => {
 
 		renderTable(<RecommendationTable recommendations={[noArch]} />);
 
-		expect(screen.getByTestId("model-fit-kv-per-token-1")).toBeTruthy();
+		// No tag means no separator either: the line starts at the figure rather than with a dangling middle dot.
+		expect(screen.getByTestId("model-fit-kv-per-token-1").textContent).toBe("0.6 KB/token (q8_0 KV)");
 	});
 
 	it("withholds the KV-per-token line when the figure has no quant label", () => {

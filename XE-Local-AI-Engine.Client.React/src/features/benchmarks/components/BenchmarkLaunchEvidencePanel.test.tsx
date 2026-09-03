@@ -39,9 +39,10 @@ describe("BenchmarkLaunchEvidencePanel", () => {
 		expect(screen.getByTestId("benchmark-intended-effective-differs")).toBeTruthy();
 	});
 
-	// A row frozen under a superseded launch-identity scheme holds two hashes that were never meant to be compared, so
-	// the panel says so once instead of raising a drift alert about a launch that in fact matched.
-	it("renders the not-comparable line instead of a drift alert for a superseded identity scheme", () => {
+	// A superseded scheme retires the identity comparison and nothing else. The executable digest was never
+	// scheme-bound, so a run frozen before the cutover still shows its digest drift, with the not-comparable line
+	// beside it rather than in place of it.
+	it("keeps the executable-digest drift row and adds the not-comparable line for a superseded identity scheme", () => {
 		renderWithProviders(
 			<BenchmarkLaunchEvidencePanel
 				run={detail({
@@ -58,7 +59,33 @@ describe("BenchmarkLaunchEvidencePanel", () => {
 		);
 
 		expect(screen.getByTestId("benchmark-intended-effective-differs-scheme-outdated")).toBeTruthy();
+		expect(screen.getByTestId("benchmark-intended-effective-differs")).toBeTruthy();
+		const rows = [...screen.getByTestId("benchmark-intended-effective-differs-table").querySelectorAll("tbody tr")];
+		const marked = rows.filter((row) => row.getAttribute("data-differs") === "true").map((row) => row.textContent ?? "");
+
+		expect(marked).toHaveLength(1);
+		expect(marked[0]).toContain("launch.executableSha256");
+	});
+
+	// The identity row under a superseded scheme is not a difference, so two unequal identities alone raise nothing.
+	it("stays silent for a superseded identity scheme when only the identity differs", () => {
+		renderWithProviders(
+			<BenchmarkLaunchEvidencePanel
+				run={detail({
+					primaryLaunch: {
+						...noBenchmarkLaunchFacts,
+						launchIdentitySchemeOutdated: true,
+						intendedLaunchIdentity: "identity-1",
+						effectiveLaunchIdentity: "identity-2",
+						intendedExecutableSha256: "a".repeat(64),
+						executableSha256: "a".repeat(64),
+					},
+				})}
+			/>,
+		);
+
 		expect(screen.queryByTestId("benchmark-intended-effective-differs")).toBeNull();
+		expect(screen.queryByTestId("benchmark-intended-effective-differs-scheme-outdated")).toBeNull();
 	});
 
 	// A row under the CURRENT scheme keeps today's behaviour exactly: the flag is inert unless it is true.

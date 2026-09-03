@@ -47,7 +47,7 @@ build once that build is running.
 |---|---|---|
 | `benchmark_runs` | `PrimaryStatus` in `Queued`, `Running`, `CancelRequested` | `primary_launch_identity_scheme` |
 | `benchmark_judge_attempts` | `Status` in `Queued`, `Running` | `launch_identity_scheme` |
-| `benchmark_judge_comparisons` | `Status` in `Queued`, `Running` | `launch_identity_scheme` |
+| `benchmark_comparisons` | `Status` in `Queued`, `Running` | `launch_identity_scheme` |
 
 Fidelity work is exempt for the same reason it is exempt at cutover: it runs `llama-perplexity` with no llama-server
 and therefore has no launch identity at all.
@@ -64,7 +64,7 @@ SELECT COUNT(*) FROM benchmark_runs
 SELECT COUNT(*) FROM benchmark_judge_attempts
  WHERE launch_identity_scheme = 2 AND status IN ('Queued', 'Running');
 
-SELECT COUNT(*) FROM benchmark_judge_comparisons
+SELECT COUNT(*) FROM benchmark_comparisons
  WHERE launch_identity_scheme = 2 AND status IN ('Queued', 'Running');
 ```
 

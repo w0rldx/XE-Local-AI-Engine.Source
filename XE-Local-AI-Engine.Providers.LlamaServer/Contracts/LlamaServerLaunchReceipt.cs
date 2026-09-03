@@ -39,7 +39,7 @@ public readonly record struct LlamaServerLaunchPlacement(
 ///         executable is identified by digest and version only.
 ///     </para>
 /// </remarks>
-/// <param name="ReceiptVersion">Schema version of this receipt; <c>1</c> today.</param>
+/// <param name="ReceiptVersion">Schema version of this receipt; <see cref="LlamaServerLaunchReceipt.CurrentVersion" /> is what a spawn on this build writes.</param>
 /// <param name="Variant">The llama.cpp build the spawn ran on.</param>
 /// <param name="Os">Host operating system token (<c>linux</c>/<c>windows</c>/<c>macos</c>/<c>unknown</c>).</param>
 /// <param name="ExecutableVersion">The llama.cpp release the executable reported, or <see langword="null" />.</param>

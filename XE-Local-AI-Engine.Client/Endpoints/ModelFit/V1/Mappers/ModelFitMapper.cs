@@ -663,73 +663,54 @@ internal static class ModelFitMapper
         }
     }
 
+    /// <summary>
+    ///     The one parse behind every value extractor below: a null, whitespace or malformed blob, a non-object root and
+    ///     a missing property all read as null, and <paramref name="read" /> decides what a present property of the wrong
+    ///     shape does. It runs inside the <c>using</c> because a <see cref="JsonElement" /> does not outlive its document.
+    /// </summary>
+    private static T? ExtractValue<T>(string? diagnosticsJson, string propertyName, Func<JsonElement, T?> read)
+        where T : struct
+    {
+        if (string.IsNullOrWhiteSpace(diagnosticsJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(diagnosticsJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.TryGetProperty(propertyName, out var value)
+                ? read(value)
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Pulls a single boolean property out of the persisted diagnostics blob; tolerant of a null/malformed blob or a missing/non-boolean property.</summary>
     private static bool? ExtractBool(string? diagnosticsJson, string propertyName)
     {
-        if (string.IsNullOrWhiteSpace(diagnosticsJson))
-        {
-            return null;
-        }
+        return ExtractValue<bool>(diagnosticsJson,
+            propertyName,
+            static value => value.ValueKind is JsonValueKind.True or JsonValueKind.False ? value.ValueKind == JsonValueKind.True : null);
+    }
 
-        try
-        {
-            using var document = JsonDocument.Parse(diagnosticsJson);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                   && document.RootElement.TryGetProperty(propertyName, out var value)
-                   && value.ValueKind is JsonValueKind.True or JsonValueKind.False
-                ? value.ValueKind == JsonValueKind.True
-                : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
+    /// <summary>Pulls a single integer property out of the persisted diagnostics blob; tolerant of a null/malformed blob or a missing/non-integral property (a fractional or out-of-range number reads as null).</summary>
+    private static long? ExtractLong(string? diagnosticsJson, string propertyName)
+    {
+        return ExtractValue<long>(diagnosticsJson,
+            propertyName,
+            static value => value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number) ? number : null);
     }
 
     /// <summary>Pulls a single numeric property out of the persisted diagnostics blob; tolerant of a null/malformed blob or a missing/non-numeric property.</summary>
-    private static long? ExtractLong(string? diagnosticsJson, string propertyName)
-    {
-        if (string.IsNullOrWhiteSpace(diagnosticsJson))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(diagnosticsJson);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                   && document.RootElement.TryGetProperty(propertyName, out var value)
-                   && value.ValueKind == JsonValueKind.Number
-                   && value.TryGetInt64(out var number)
-                ? number
-                : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
     private static double? ExtractDouble(string? diagnosticsJson, string propertyName)
     {
-        if (string.IsNullOrWhiteSpace(diagnosticsJson))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(diagnosticsJson);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                   && document.RootElement.TryGetProperty(propertyName, out var value)
-                   && value.ValueKind == JsonValueKind.Number
-                   && value.TryGetDouble(out var number)
-                ? number
-                : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
+        return ExtractValue<double>(diagnosticsJson,
+            propertyName,
+            static value => value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var number) ? number : null);
     }
 }

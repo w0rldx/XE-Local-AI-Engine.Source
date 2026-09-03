@@ -401,7 +401,7 @@ public sealed class BenchmarkRunDetailResponse : BenchmarkRunSummaryResponse
     public long? StartedAtUtc { get; init; }
     public long? PrimaryCompletedAtUtc { get; init; }
 
-    /// <summary>The decoded launch receipt (<c>LlamaServerLaunchReceipt</c> v1), or null when none was recorded.</summary>
+    /// <summary>The decoded launch receipt (<c>LlamaServerLaunchReceipt</c>), or null when none was recorded. Its own <c>receiptVersion</c> field says which schema a stored receipt was written under.</summary>
     public JsonElement? PrimaryLaunchReceipt { get; init; }
 
     /// <summary>The decoded pre-launch environment capture (<c>RuntimeEnvironmentFactsV1</c>), or null.</summary>
