@@ -213,8 +213,9 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 		expect(sent?.graph?.nodes?.[2]?.modelProfile).toBe("qwen3-30b");
 		expect(sent?.graph?.nodes?.[2]?.reasoningEffort).toBe("high");
 		expect(sent?.graph?.nodes?.[2]?.maxLoopIterations).toBe(2);
-		// And an untouched template keeps its waiver absent rather than gaining an explicit `false`.
-		expect(sent?.graph?.allowUngatedWrites ?? null).toBeNull();
+		// And an untouched template keeps its waiver ABSENT — an explicit `null` would be a document saying something
+		// it never said, and `?? null` would have passed on one.
+		expect("allowUngatedWrites" in (sent?.graph ?? {})).toBe(false);
 	});
 
 	it("shows the fields it will not edit as read-only badges, so nothing looks lost", async () => {
@@ -514,6 +515,20 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 
 		await waitFor(() => expect(sent).toBeDefined());
 		expect(sent?.graph?.nodes?.[2]?.maxLoopIterations).toBe(3);
+
+		// Clearing the target takes the cap with it. This is the branch that keeps the server from 400ing over a field
+		// the form has just hidden, and without this half a refactor that dropped `maxLoopIterations: null` stays green.
+		const retryTarget = screen.getByTestId("dev-workflow-definition-node-retry-target-2");
+		const clear = retryTarget.parentElement?.querySelector("button");
+		expect(clear).toBeDefined();
+		fireEvent.click(clear as HTMLButtonElement);
+
+		expect(screen.queryByTestId("dev-workflow-definition-node-max-loops-2")).toBeNull();
+		fireEvent.click(screen.getByTestId("dev-workflow-definition-save"));
+
+		// The second PUT is the one with no target; waiting on that is what tells it apart from the first.
+		await waitFor(() => expect(sent?.graph?.nodes?.[2]?.retryTarget ?? null).toBeNull());
+		expect(sent?.graph?.nodes?.[2]?.maxLoopIterations ?? null).toBeNull();
 	});
 
 	it("archives behind a confirmation rather than deleting the template outright", async () => {

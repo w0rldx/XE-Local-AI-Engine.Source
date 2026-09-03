@@ -37,6 +37,7 @@ export const devWorkflowGraphRules = [
 	"retryTargetNotAncestor",
 	"joinAnyNeedsTwoInbound",
 	"deadGateEdge",
+	"orphanedGateEdge",
 	"strandedBranch",
 	"ungatedWrite",
 	"applyWithoutValidation",
@@ -47,6 +48,15 @@ export interface DevWorkflowGraphIssue {
 	readonly rule: DevWorkflowGraphRule;
 	/** The node or edge the rule is about, for the message and for pointing the operator at the row. */
 	readonly subject: string;
+}
+
+/**
+ * This node's type, lower-cased. The parser reads it with `Enum.TryParse(..., ignoreCase: true)`, so every comparison
+ * in this file does too — a definition authored through the API may carry any casing, and a case-sensitive mirror
+ * refuses graphs the server accepts, which is the one direction that blocks a save outright.
+ */
+function nodeTypeOf(node: DevWorkflowGraphNode): string {
+	return (node.nodeType ?? "Agent").toLowerCase();
 }
 
 /** Edges the graph actually declares, with both endpoints as plain strings. */
@@ -133,15 +143,15 @@ export const devWorkflowCapabilityReasonMaxLength = 200;
  * below would refuse — or fail to refuse — on a graph nobody is looking at any more.
  */
 export function devWorkflowEffectsOf(node: DevWorkflowGraphNode): readonly DevWorkflowNodeEffect[] {
-	switch (node.nodeType ?? "Agent") {
-		case "Agent":
+	switch (nodeTypeOf(node)) {
+		case "agent":
 			// Case-insensitively, as the parser reads them; an unknown key is the parser's own 400 and not an effect.
 			return devWorkflowNodeEffects.filter((effect) =>
 				Object.keys(node.requiredCapabilities ?? {}).some((key) => key.toLowerCase() === effect.toLowerCase()),
 			);
-		case "DevTask":
+		case "devtask":
 			return ["WriteExecute"];
-		case "Tool": {
+		case "tool": {
 			if (isDevWorkflowApplyToolMode(node.toolMode)) {
 				return ["WriteExecute"];
 			}
@@ -160,7 +170,7 @@ export function devWorkflowEffectsOf(node: DevWorkflowGraphNode): readonly DevWo
  * root and its patch reaches a real repository only through an apply node, so it is not what the gate rule is about.
  */
 function writesTheRepository(node: DevWorkflowGraphNode): boolean {
-	return (node.nodeType ?? "Agent") !== "DevTask" && devWorkflowEffectsOf(node).includes("WriteExecute");
+	return nodeTypeOf(node) !== "devtask" && devWorkflowEffectsOf(node).includes("WriteExecute");
 }
 
 /**
@@ -258,15 +268,23 @@ function conditionFires(condition: DevWorkflowGraphEdge["condition"], output: Re
 		return op === "notexists";
 	}
 	const value = condition.value;
+	// `Compare` answers "not comparable at all" for anything that is not two booleans, two nulls, two numbers or two
+	// strings — and BOTH `eq` and `ne` read that as "no". So an `ne` against a value of another type does not fire,
+	// which is the opposite of what `!==` would say.
+	const comparable =
+		(typeof resolved === "boolean" && typeof value === "boolean") ||
+		(resolved === null && value === null) ||
+		(typeof resolved === "number" && typeof value === "number") ||
+		(typeof resolved === "string" && typeof value === "string");
 	switch (op) {
 		case "exists":
 			return true;
 		case "notexists":
 			return false;
 		case "eq":
-			return resolved === value;
+			return comparable && resolved === value;
 		case "ne":
-			return resolved !== value;
+			return comparable && resolved !== value;
 		default:
 			// The four relational operators order numbers numerically and strings ordinally; anything else, a type
 			// mismatch included, is not an ordering and reads as "no".
@@ -291,7 +309,7 @@ function deadGateEdges(
 	nodes: readonly DevWorkflowGraphNode[],
 	edges: readonly DevWorkflowGraphEdge[],
 ): readonly DevWorkflowGraphEdge[] {
-	const gates = new Set(nodes.filter((node) => node.nodeType === "HumanGate").map((node) => node.nodeKey ?? ""));
+	const gates = new Set(nodes.filter((node) => nodeTypeOf(node) === "humangate").map((node) => node.nodeKey ?? ""));
 	return edges.filter(
 		(edge) =>
 			gates.has(edge.from ?? "") &&
@@ -486,14 +504,16 @@ function capabilityInvariants(
 				(left, right) =>
 					(left.from ?? "").localeCompare(right.from ?? "") || (left.to ?? "").localeCompare(right.to ?? ""),
 			)[0];
-			issues.push({ rule: "deadGateEdge", subject: `${orphaned?.from ?? ""} → ${orphaned?.to ?? ""}` });
+			// Its own rule, not `deadGateEdge`: that message is written about a NODE, and pushing an edge label into it
+			// reads as "'g → b' is a human gate". The server has a separate sentence here for the same reason.
+			issues.push({ rule: "orphanedGateEdge", subject: `${orphaned?.from ?? ""} → ${orphaned?.to ?? ""}` });
 		}
 	}
 
 	// GRAPH-C4-2: a node that writes outside its sandbox is reached through a human gate, unless the template says
 	// once and in writing that it need not be.
 	if (graph.allowUngatedWrites !== true) {
-		const gated = assured(nodes, augmented, (node) => node.nodeType === "HumanGate");
+		const gated = assured(nodes, augmented, (node) => nodeTypeOf(node) === "humangate");
 		const ungated = nodes.find((node) => writesTheRepository(node) && !gated.has(node.nodeKey ?? ""));
 		if (ungated) {
 			issues.push({ rule: "ungatedWrite", subject: ungated.nodeKey ?? "" });
@@ -506,7 +526,7 @@ function capabilityInvariants(
 		const validated = assured(
 			nodes,
 			augmented,
-			(node) => node.nodeType === "Tool" && !isDevWorkflowApplyToolMode(node.toolMode),
+			(node) => nodeTypeOf(node) === "tool" && !isDevWorkflowApplyToolMode(node.toolMode),
 		);
 		const unvalidated = applies.find((node) => !validated.has(node.nodeKey ?? ""));
 		if (unvalidated) {

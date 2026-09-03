@@ -1045,10 +1045,12 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     ///     the rule is about.
     ///     <para>
     ///         <c>Dead</c> and <c>Pending</c> are the two that must never be in it — a branch that did not run, or has
-    ///         not run yet, carries no provenance. Every OTHER state the state machine grows belongs here, and
+    ///         not run yet, carries no provenance. Every other state the machine has today belongs here.
     ///         <c>DevWorkflowMaterializationTests.TheProvenanceWalkCrossesEveryEdgeStateThatIsNotDeadOrPending</c>
-    ///         asserts exactly that, so a new one cannot be added to <see cref="DevWorkflowEdgeState" /> without this
-    ///         walk being told about it.
+    ///         ENFORCES that rather than proving it: it demands an entry for every state outside those two, so a new
+    ///         one cannot be added to <see cref="DevWorkflowEdgeState" /> without this walk being told about it. A
+    ///         future state that means "undecided in some new way" is a third exclusion for that test to name, not an
+    ///         entry here — the assertion asks whoever hits it which of the two it is.
     ///     </para>
     /// </summary>
     private static readonly DevWorkflowEdgeState[] ProvenanceEdgeStates = [DevWorkflowEdgeState.Satisfied];

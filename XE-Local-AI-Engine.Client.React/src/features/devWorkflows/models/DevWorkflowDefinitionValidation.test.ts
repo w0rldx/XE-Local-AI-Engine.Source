@@ -29,7 +29,9 @@ function templateGraph(overrides: Partial<DevWorkflowGraph> = {}): DevWorkflowGr
 	return {
 		schemaVersion: 1,
 		nodes: [
-			node("decompose", { materialization: { templateNodeKey: "implement", joinNodeKey: "join", maxChildren: 5 } }),
+			node("decompose", {
+				materialization: { templateNodeKey: "implement", artifactKind: "TaskPackage", joinNodeKey: "join", maxChildren: 5 },
+			}),
 			node("implement", { nodeType: "DevTask", isTemplate: true }),
 			node("join", { nodeType: "Join" }),
 		],
@@ -195,7 +197,9 @@ describe("validateDevWorkflowGraph", () => {
 			validateDevWorkflowGraph(
 				templateGraph({
 					nodes: [
-						node("decompose", { materialization: { templateNodeKey: "implement", joinNodeKey: "join", maxChildren: 5 } }),
+						node("decompose", {
+							materialization: { templateNodeKey: "implement", artifactKind: "TaskPackage", joinNodeKey: "join", maxChildren: 5 },
+						}),
 						node("implement", { nodeType: "DevTask", isTemplate: true }),
 						node("validate", { nodeType: "Tool" }),
 						node("join", { nodeType: "Join" }),
@@ -217,7 +221,9 @@ describe("validateDevWorkflowGraph", () => {
 			rules(
 				templateGraph({
 					nodes: [
-						node("decompose", { materialization: { templateNodeKey: "implement", joinNodeKey: "join", maxChildren: 5 } }),
+						node("decompose", {
+							materialization: { templateNodeKey: "implement", artifactKind: "TaskPackage", joinNodeKey: "join", maxChildren: 5 },
+						}),
 						node("implement", { nodeType: "DevTask", isTemplate: true }),
 						node("join", { nodeType: "Join" }),
 						node("verify"),
@@ -426,6 +432,70 @@ describe("validateDevWorkflowGraph", () => {
 				],
 			}),
 		).toEqual([]);
+	});
+
+	it("reads a node TYPE case-insensitively, so a definition the server accepts can still be saved", () => {
+		// The parser takes node types with `ignoreCase: true`. A graph authored through the API may spell them any way,
+		// and a case-sensitive mirror refuses a save the server would have taken — the one direction that blocks work.
+		expect(
+			validateDevWorkflowGraph(
+				chain({
+					nodes: [
+						node("approval", { nodeType: "humangate" }),
+						node("release", { requiredCapabilities: { WriteExecute: "runs the release script" } }),
+					],
+					edges: [{ from: "approval", to: "release" }],
+				}),
+			),
+		).toEqual([]);
+		expect(
+			validateDevWorkflowGraph({
+				schemaVersion: 1,
+				nodes: [
+					node("validate", { nodeType: "tool" }),
+					node("approval", { nodeType: "HumanGate" }),
+					node("integrate", { nodeType: "Tool", toolMode: "Apply" }),
+				],
+				edges: [
+					{ from: "validate", to: "approval" },
+					{ from: "approval", to: "integrate", condition: { path: "decision", op: "eq", value: "Approve" } },
+				],
+			}),
+		).toEqual([]);
+	});
+
+	it("answers a condition on a value of another type the way `Compare` does — neither eq nor ne fires", () => {
+		// `DevWorkflowCondition.Compare` returns "not comparable" for a type mismatch, and `Ne` reads that as false. A
+		// plain `!==` says the opposite, and the gate edge below then looks live here and is a 400 at the server.
+		const gate = (value: unknown): DevWorkflowGraph =>
+			chain({
+				nodes: [node("research"), node("approval", { nodeType: "HumanGate" }), node("integrate")],
+				edges: [
+					{ from: "research", to: "approval" },
+					{ from: "approval", to: "integrate", condition: { path: "decision", op: "ne", value } },
+				],
+			});
+		expect(rules(gate(5))).toContain("deadGateEdge");
+		expect(rules(gate(null))).toContain("deadGateEdge");
+		// Against a string it is an ordinary live edge: every answer but "Approve" takes it.
+		expect(validateDevWorkflowGraph(gate("Approve"))).toEqual([]);
+	});
+
+	it("gives a dead edge that strands nothing its own sentence, because that message is about an EDGE", () => {
+		// The gate still reaches an end down its live edge, so no node is stranded. Reporting this as `deadGateEdge`
+		// put the edge label into a message written about a node: "'approval → integrate' is a human gate".
+		const issues = validateDevWorkflowGraph(
+			chain({
+				nodes: [node("research"), node("approval", { nodeType: "HumanGate" }), node("integrate"), node("reject")],
+				edges: [
+					{ from: "research", to: "approval" },
+					{ from: "approval", to: "integrate", condition: { path: "decision", op: "eq", value: "Approved" } },
+					{ from: "approval", to: "reject", condition: { path: "decision", op: "eq", value: "Reject" } },
+				],
+			}),
+		);
+		expect(issues.map((issue) => issue.rule)).toEqual(["orphanedGateEdge"]);
+		expect(issues[0]?.subject).toBe("approval → integrate");
 	});
 
 	it("insists an Any join has at least two inbound edges, since one is the same as All", () => {
