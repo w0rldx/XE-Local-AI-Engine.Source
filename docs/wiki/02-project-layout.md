@@ -90,7 +90,7 @@ Solid arrows are `ProjectReference` edges (verified from each `.csproj`).
             │                                      │  │  │
             └► Providers.Ollama ──┐   Providers.{Llama,HF,Codex,Capabilities,Ollama,SDcpp,Training}
                                   ▼                │  │  │
-                       Providers.Abstractions ◄────┴──┴──┘
+                       Providers.Abstractions ◄────┴──┴──┘ ◄── Client.Persistence (benchmark contracts)
                                   ▲
   Capabilities / CodexOAuth / HuggingFace / LlamaServer / Ollama / OpenAICompat / StableDiffusionCpp / Training
      (each references ONLY Abstractions; LlamaServer + OpenAICompat also ► OpenAICompatible.Core, a leaf)
@@ -121,7 +121,7 @@ Notable edges:
         ▼
    Application            Client.Application     (decisions / services)
         │
-        ├──► Domain/Persistence   Client.Persistence  (EF Core + SQLite)
+        ├──► Domain/Persistence   Client.Persistence  (EF Core + SQLite; ──► Providers.Abstractions for benchmark contracts)
         ├──► Agent                AI.Agent            (MAF/MEAI)
         └──► Provider seams       Providers.Abstractions
                                        ▲
@@ -139,7 +139,7 @@ their abstractions; persistence does not depend back on the web host.
 Maintainer invariants:
 
 1. **Providers behind abstractions.** Code outside a provider project depends on `ILocalModelProvider` / `IChatClient` / `IEmbeddingGenerator` (MEAI) — never on a provider SDK type. Adding a model backend = a new `Providers.*` project that references **only** `Providers.Abstractions`, plus DI registration in `Client.Application`/`Client`. See [03-local-runtime-and-providers.md](03-local-runtime-and-providers.md).
-2. **One-way flow.** Web → Application → (Persistence / Agent / Provider seams). `Client.Persistence` and `Providers.Abstractions` must stay leaves. Do not add an upward reference (e.g. Persistence → Application).
+2. **One-way flow.** Web → Application → (Persistence / Agent / Provider seams). `Providers.Abstractions` and `AI.Contracts` must stay leaves. `Client.Persistence` may reference only `Providers.Abstractions` (it does, for the benchmark contract types persisted in `BenchmarkRun`); do not add any other outbound reference, and never an upward one (e.g. Persistence → Application).
 3. **Contracts shared, not duplicated.** Cross-boundary DTOs/events/enums live in `AI.Contracts`; reuse them rather than redefining per layer.
 4. **Application holds decisions; Web is wiring.** Business/orchestration logic belongs in `Client.Application` services; `Client` endpoints/hubs orchestrate and apply security (loopback-only, Host/Origin checks, secret redaction). See [12-security-and-privacy.md](12-security-and-privacy.md).
 5. **No Docker on the inference path; no HostAgent at all.** Per the 2026-06-17 runtime re-architecture, inference + AgentHome run as host processes (`Providers.LlamaServer` + a process sandbox provider), and there is no HostAgent project. Don't reintroduce a HostAgent reference, and don't put a container between the app and a model. **One scoped exception:** [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) permits a Docker Engine API client (`Docker.DotNet.Enhanced`) for **Development Mode build/test/lint execution only**, behind the existing `ISandboxRuntimeProvider` seam — AgentHome and Coder stay on the process provider. A container reference anywhere else is still a defect.
