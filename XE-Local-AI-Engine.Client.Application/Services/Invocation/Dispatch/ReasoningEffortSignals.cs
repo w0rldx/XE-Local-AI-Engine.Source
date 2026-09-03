@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 
+using System.Text;
+
 /// <summary>
 ///     The deterministic ladder behind reasoning effort <c>auto</c>: the phrase vocabularies and the integer score
 ///     that turns one turn's SHAPE into a <see cref="ReasoningTier" />. Separated from the dispatcher so the whole
@@ -67,9 +69,14 @@ public static class ReasoningEffortSignals
     public static (ReasoningTier Tier, string ReasonCode) Resolve(string latestUserText, bool hasAttachments, int conversationDepth)
     {
         var text = latestUserText ?? string.Empty;
-        var upper = text.ToUpperInvariant();
 
         var hasCodeFence = text.Contains(CodeFence, StringComparison.Ordinal);
+
+        // Phrases are read from the PROSE only. A pasted snippet containing `debug`, `refactor` or `briefly` is code
+        // the user wants looked at, not an instruction about how hard to think about it; the fence's own +2 already
+        // says the turn is real work. Lengths and the fence itself still measure the whole message, because a long
+        // paste IS a long message.
+        var upper = (hasCodeFence ? StripFencedBlocks(text) : text).ToUpperInvariant();
         var hasDeepPhrase = ContainsPhrase(upper, DeepPhrasesUpper);
         var hasFastPhrase = ContainsPhrase(upper, FastPhrasesUpper);
         var isLong = text.Length >= LongMessageChars;
@@ -156,7 +163,42 @@ public static class ReasoningEffortSignals
             return ReasoningDispatchReasons.LongMessage;
         }
 
+        // Both arms are unreachable at the current weights — reaching Deep needs a score of 3, and without a fence, a
+        // deep phrase or a long message the maximum is 2 (attachment +1, deep conversation +1). Kept so this stays a
+        // total function: a future weight change must not be able to produce an empty reason.
         return isDeepContext ? ReasoningDispatchReasons.DeepContext : ReasoningDispatchReasons.Balanced;
+    }
+
+    /// <summary>
+    ///     Returns the message with every fenced region removed, so a phrase inside a pasted snippet cannot move the
+    ///     score. Walks <c>```</c> markers pairwise; an UNCLOSED fence swallows the rest of the message, which is the
+    ///     safe direction — everything after an opener is code until proven otherwise. Called only when a fence is
+    ///     present, so an ordinary message allocates nothing.
+    /// </summary>
+    private static string StripFencedBlocks(string text)
+    {
+        var prose = new StringBuilder(text.Length);
+        var cursor = 0;
+        while (cursor < text.Length)
+        {
+            var opener = text.IndexOf(CodeFence, cursor, StringComparison.Ordinal);
+            if (opener < 0)
+            {
+                _ = prose.Append(text, cursor, text.Length - cursor);
+                break;
+            }
+
+            _ = prose.Append(text, cursor, opener - cursor);
+            var closer = text.IndexOf(CodeFence, opener + CodeFence.Length, StringComparison.Ordinal);
+            if (closer < 0)
+            {
+                break;
+            }
+
+            cursor = closer + CodeFence.Length;
+        }
+
+        return prose.ToString();
     }
 
     /// <summary>

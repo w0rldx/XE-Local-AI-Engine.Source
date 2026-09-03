@@ -171,25 +171,6 @@ public sealed record TurnPolicy
     ///     <c>num_ctx</c> chat option the INNER per-round budgeter reads — the two must agree for a warm local model.
     ///     <see cref="ReservedOutputTokens" /> is only ever clamped down: it can never exceed the real window.
     /// </summary>
-    /// <summary>
-    ///     Widens the turn's reserved output budget to the one the reasoning-effort dispatcher chose for an
-    ///     <c>auto</c> turn. Mirrors <see cref="WithEffectiveContext" />'s shape: a null (or non-positive) value
-    ///     returns <c>this</c>, so every non-<c>auto</c> turn is a reference-identical no-op.
-    ///     <para>
-    ///         It only ever widens. <see cref="WithEffectiveContext" /> runs AFTER it and clamps the reservation down
-    ///         to the window the model was actually launched with, so the real window always has the last word.
-    ///     </para>
-    /// </summary>
-    public TurnPolicy WithDispatchedOutputBudget(int? dispatchedOutputTokens)
-    {
-        if (dispatchedOutputTokens is not > 0)
-        {
-            return this;
-        }
-
-        return this with { ReservedOutputTokens = Math.Max(ReservedOutputTokens, dispatchedOutputTokens.Value) };
-    }
-
     public TurnPolicy WithEffectiveContext(int? effectiveContextTokens)
     {
         if (effectiveContextTokens is not > 0)

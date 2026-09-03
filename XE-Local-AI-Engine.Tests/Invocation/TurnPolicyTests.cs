@@ -176,57 +176,6 @@ public sealed class TurnPolicyTests
         AssertEx.Equal(expected: 2048, folded.ReservedOutputTokens);
     }
 
-    [Test]
-    public void WithDispatchedOutputBudget_WhenTheDispatcherChoseNoBudget_LeavesThePolicyUnchanged()
-    {
-        // Every non-`auto` turn takes this path, so it must be a reference-identical no-op.
-        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions());
-
-        AssertEx.Equal(policy, policy.WithDispatchedOutputBudget(dispatchedOutputTokens: null));
-        AssertEx.Equal(policy, policy.WithDispatchedOutputBudget(dispatchedOutputTokens: 0));
-    }
-
-    [Test]
-    public void WithDispatchedOutputBudget_WhenAboveTheReservation_WidensIt()
-    {
-        // The FAST tier's 4096 exceeds the 1024 reserved-output floor, which is what makes this method do real work
-        // rather than being a no-op the reasoning cap then fights.
-        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions
-        {
-            ReservedOutputTokenFloor = 1024
-        });
-
-        AssertEx.Equal(expected: 4096, policy.WithDispatchedOutputBudget(dispatchedOutputTokens: 4096).ReservedOutputTokens);
-    }
-
-    [Test]
-    public void WithDispatchedOutputBudget_WhenBelowTheReservation_LeavesTheReservationAlone()
-    {
-        // It only ever WIDENS: a send that already reserved more keeps its own number.
-        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions
-        {
-            ReservedOutputTokenFloor = 8192
-        });
-
-        AssertEx.Equal(expected: 8192, policy.WithDispatchedOutputBudget(dispatchedOutputTokens: 4096).ReservedOutputTokens);
-    }
-
-    [Test]
-    public void WithDispatchedOutputBudget_IsStillClampedByTheLaunchedWindow()
-    {
-        // The runner applies it BEFORE WithEffectiveContext, so the window the model was actually launched with always
-        // has the last word over a dispatched budget.
-        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions
-        {
-            DefaultContextTokens = 8192,
-            ReservedOutputTokenFloor = 1024
-        });
-
-        var folded = policy.WithDispatchedOutputBudget(dispatchedOutputTokens: 4096).WithEffectiveContext(effectiveContextTokens: 2048);
-
-        AssertEx.Equal(expected: 2048, folded.ReservedOutputTokens);
-    }
-
     private static TurnPolicy ResolveWithDefaults(ConversationContextBudgetOptions budgetOptions)
     {
         return TurnPolicy.Resolve(RuntimePackageBuilder.Valid().Build(),
