@@ -195,6 +195,16 @@ internal sealed class ToolRelevanceState
     public required IReadOnlySet<string> CoreNames { get; init; }
 
     /// <summary>
+    ///     Whether this array already has a decision (computed or in flight). The send-time hop asks before deciding
+    ///     whether it still needs a relevance query: one decision per array per turn means a round that carries no
+    ///     text of its own - an approval resume - must reuse the decision rather than fall through to the full array.
+    /// </summary>
+    public bool HasDecision(ArrayKey key)
+    {
+        return _byArray.ContainsKey(key);
+    }
+
+    /// <summary>
     ///     Returns this array's decision, running <paramref name="factory" /> at most once per distinct key even under
     ///     concurrent callers — <see cref="LazyThreadSafetyMode.ExecutionAndPublication" /> is exactly-once by contract,
     ///     so every caller after the first awaits the same task.
@@ -222,6 +232,22 @@ internal sealed class ToolRelevanceState
         // GetOrAdd may build more than one Lazy under contention, but only the published one is ever materialized here,
         // so the factory still runs exactly once per key.
         var shared = lazy.Value;
+
+        // Eviction cannot depend on a waiter being present. If the only waiter's own wait aborts and the shared task
+        // LATER ends faulted or cancelled with nobody awaiting, the finally below never runs for it and the next
+        // caller would be handed the dead task and degrade to the unfiltered offer for free. The continuation hangs
+        // off the shared task itself, so it fires either way; the finally stays as the belt. Attaching one per caller
+        // is harmless - TryRemove is value-comparing and idempotent - and observing Exception here keeps an unawaited
+        // fault off TaskScheduler.UnobservedTaskException.
+        _ = shared.ContinueWith(task =>
+            {
+                _ = task.Exception;
+                _ = _byArray.TryRemove(KeyValuePair.Create(key, lazy));
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.NotOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
         try
         {
             return await shared.WaitAsync(callerToken).ConfigureAwait(false);

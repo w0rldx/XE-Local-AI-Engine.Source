@@ -273,6 +273,49 @@ public sealed class ToolRelevanceScopeTests
     }
 
     [Test]
+    public async Task GetOrComputeAsync_WhenTheOnlyWaiterCancelsAndTheSharedTaskThenFaults_TheNextCallerRecomputes()
+    {
+        using (ToolRelevanceScope.BeginScope(active: true, CoreNames()))
+        {
+            var state = AssertEx.NotNull(ToolRelevanceScope.Current);
+            var gate = new TaskCompletionSource();
+            var invocations = 0;
+            using var cancelledCaller = new CancellationTokenSource();
+
+            // The only waiter abandons its wait, and only THEN does the shared computation fail. Nobody is inside the
+            // finally at that moment, so waiter-side eviction alone would leave the dead task cached and hand it
+            // straight to the next round, which would degrade to the unfiltered offer without even trying.
+            var abandoned = state.GetOrComputeAsync(Key("a", "b"),
+                async () =>
+                {
+                    _ = Interlocked.Increment(ref invocations);
+                    await gate.Task;
+                    throw new InvalidOperationException("the embedding provider timed out");
+                },
+                cancelledCaller.Token);
+
+            await cancelledCaller.CancelAsync();
+            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(async () => await abandoned);
+
+            gate.SetResult();
+            await AssertEx.EventuallyAsync(() => !state.HasDecision(Key("a", "b")),
+                TimeSpan.FromSeconds(5),
+                "The shared task's own continuation evicts the entry with no waiter present.");
+
+            var recovered = await state.GetOrComputeAsync(Key("a", "b"),
+                () =>
+                {
+                    _ = Interlocked.Increment(ref invocations);
+                    return Task.FromResult(Decision(["a"], ["b"]));
+                },
+                CancellationToken.None);
+
+            AssertEx.Contains(recovered.OfferedNames, "a", "The next caller must get a fresh computation, not the stale fault.");
+            AssertEx.Equal(expected: 2, Volatile.Read(ref invocations), "The abandoned attempt and the recovery are two runs — the second was not served the cached fault.");
+        }
+    }
+
+    [Test]
     public async Task ArrayKey_WhenTwoNameSequencesHashAlike_AreNotEqualAndKeepTwoDecisions()
     {
         var left = new ArrayKey(hash: 42, ["a", "b"]);

@@ -149,9 +149,13 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
         Exception? exception,
         CancellationToken cancellationToken)
     {
-        _logger.LogWarning(exception,
-            "Embedding-based tool-relevance selection failed for {CandidateCount} candidates; falling back to lexical ranking for this turn.",
-            candidates.Count);
+        // The exception OBJECT never reaches the sink: sinks render Message and every inner exception, and this call
+        // failed while carrying the query and the tool descriptions, so a transport error that echoes its request body
+        // would write raw trajectory content to disk under a template that was scrubbed to counts. The TYPE name is
+        // the whole allow-listed diagnosis; "none" is the non-exceptional degrade.
+        _logger.LogWarning("Embedding-based tool-relevance selection failed for {CandidateCount} candidates ({FailureType}); falling back to lexical ranking for this turn.",
+            candidates.Count,
+            exception?.GetType().Name ?? "none");
         return _lexical.SelectAsync(query, candidates, threshold, cancellationToken);
     }
 

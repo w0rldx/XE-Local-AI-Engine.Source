@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.AI.Agent.Tests.Chat;
 using System.Runtime.CompilerServices;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
@@ -520,6 +521,96 @@ public sealed class ToolRelevanceChatClientTests
         AssertEx.Equal(expected: 1, selector.Invocations, "A caller's cancelled wait evicts nothing.");
     }
 
+    [Test]
+    public async Task GetResponseAsync_OnAnApprovalResumeRound_SendsTheSameNarrowedArrayAndKeepsTheBinding()
+    {
+        // The runner replays history plus ONE user message whose only content is ToolApprovalResponseContent. That
+        // message has no text, so a per-send query re-derivation resolved blank and the whole array went back out
+        // mid-turn: hidden tools reappeared, the prompt prefix churned and list_tools still answered from the first
+        // round's decision. One decision per array per turn is what makes the resume round identical to the first.
+        var (tools, listTools) = BuildArray(FillerNames(30));
+        var selector = new CountingSelector();
+        using var inner = new CapturingChatClient();
+        using var sut = BuildSut(inner, selector);
+
+        using (ToolRelevanceScope.BeginScope(active: true, Core()))
+        {
+            _ = await sut.GetResponseAsync(Conversation(), OptionsFor(tools));
+            var firstDecision = AssertEx.NotNull(listTools.BoundDecision);
+
+            _ = await sut.GetResponseAsync(ApprovalResumeConversation(), OptionsFor(tools));
+
+            AssertEx.Equal(expected: 1, selector.Invocations, "The resume round reuses the array's decision instead of computing a second one.");
+            AssertEx.True(ReferenceEquals(firstDecision, listTools.BoundDecision), "list_tools must not be left answering from a decision the model is no longer looking at.");
+        }
+
+        var first = NamesOf(inner.ReceivedOptions[0]);
+        var resumed = NamesOf(inner.ReceivedOptions[1]);
+
+        AssertEx.False(ReferenceEquals(inner.ReceivedOptions[0], inner.ReceivedOptions[1]), "Each send narrows its own options clone.");
+        AssertEx.True(first.SequenceEqual(resumed, StringComparer.Ordinal), "The approval round-trip must not re-expose a single hidden tool.");
+        AssertEx.True(resumed.Count < tools.Count, "The resume round is still narrowed, not the full array.");
+    }
+
+    [Test]
+    public async Task GetResponseAsync_WithOnlyATextLessUserMessageAndNoDecision_PassesTheOptionsInstanceThrough()
+    {
+        // The other half of the same rule: reuse is what a text-less round gets, never a decision computed from a
+        // blank query. With nothing yet decided for this array the hop takes the byte-identical path exactly as it
+        // does for a conversation with no user message at all.
+        var (tools, listTools) = BuildArray(FillerNames(30));
+
+        var sent = await SendAsync(tools, messages: ApprovalResumeConversation(userText: null));
+
+        AssertEx.True(sent.PassedThrough, "A round with no text to rank against and no decision to reuse is unchanged.");
+        AssertEx.Null(listTools.BoundDecision, "Nothing was decided, so nothing was bound.");
+    }
+
+    [Test]
+    public async Task GetResponseAsync_WhenTheSelectorThrows_NeverHandsTheExceptionToTheLogSink()
+    {
+        // Sinks render Exception.Message and every inner exception. The selector call carries the query and the tool
+        // descriptions, so a transport error echoing its request body would write raw trajectory content to disk
+        // under a template deliberately scrubbed to counts. The type name is the whole allowed diagnosis.
+        const string Secret = "SECRET-TRAJECTORY-MARKER";
+        var (tools, _) = BuildArray(FillerNames(30));
+        var logger = new CapturingLogger<ToolRelevanceChatClient>();
+        using var inner = new CapturingChatClient();
+        using var sut = new ToolRelevanceChatClient(inner,
+            new ThrowingSelector($"the selector broke on {Secret}", new InvalidOperationException($"inner {Secret}")),
+            new ToolRelevanceOptions(),
+            logger);
+        var options = OptionsFor(tools);
+
+        using (ToolRelevanceScope.BeginScope(active: true, Core()))
+        {
+            _ = await sut.GetResponseAsync(Conversation(), options);
+        }
+
+        var entry = logger.Entries.Single();
+        AssertEx.True(ReferenceEquals(options, inner.ReceivedOptions.Single()), "A selector failure costs the saving and nothing else.");
+        AssertEx.Null(entry.Exception, "The exception object must never reach the sink — the sink is what renders its message.");
+        AssertEx.False(entry.Message.Contains(Secret, StringComparison.Ordinal), "No exception text may reach the log.");
+        AssertEx.True(entry.Message.Contains(nameof(InvalidOperationException), StringComparison.Ordinal), "The failure TYPE is the allowed diagnosis.");
+    }
+
+    // The runner's approval-resume shape: history, then one user message carrying only ToolApprovalResponseContent.
+    private static IReadOnlyList<ChatMessage> ApprovalResumeConversation(string? userText = Query)
+    {
+        var call = new FunctionCallContent("call-1", "tool_0");
+        var response = new ToolApprovalRequestContent("call-1", call).CreateResponse(approved: true, "Approved by user.");
+
+        List<ChatMessage> messages = [new ChatMessage(ChatRole.System, "You are helpful.")];
+        if (userText is not null)
+        {
+            messages.Add(new ChatMessage(ChatRole.User, userText));
+        }
+
+        messages.Add(new ChatMessage(ChatRole.Assistant, [call]));
+        messages.Add(new ChatMessage(ChatRole.User, [response]));
+        return messages;
+    }
+
     // Whether every element of `inner` appears in `outer` in the same relative order.
     private static bool IsSubsequence(IReadOnlyList<string> inner, IReadOnlyList<string> outer)
     {
@@ -610,16 +701,39 @@ public sealed class ToolRelevanceChatClientTests
 
     private sealed record SentArray(bool PassedThrough, List<string> Names);
 
-    // Stands in for a node-side selector that breaks in a way the hop cannot anticipate.
-    private sealed class ThrowingSelector : IToolRelevanceSelector
+    // Stands in for a node-side selector that breaks in a way the hop cannot anticipate. The message and inner
+    // exception are settable so the privacy test can plant a marker and prove neither reaches the sink.
+    private sealed class ThrowingSelector(string message = "the selector broke", Exception? inner = null) : IToolRelevanceSelector
     {
         public Task<ToolRelevanceSelection> SelectAsync(string? query,
             IReadOnlyList<ToolRelevanceCandidate> candidates,
             int threshold,
             CancellationToken cancellationToken)
         {
-            throw new InvalidOperationException("the selector broke");
+            throw new InvalidOperationException(message, inner);
         }
+    }
+
+    // Keeps the exception argument as well as the formatted message: a template scrubbed to counts proves nothing if
+    // the exception object rides alongside it, because the sink renders that too.
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<Entry> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull =>
+            null;
+
+        public bool IsEnabled(LogLevel logLevel) =>
+            true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            ArgumentNullException.ThrowIfNull(formatter);
+            Entries.Add(new Entry(formatter(state, exception), exception));
+        }
+
+        public sealed record Entry(string Message, Exception? Exception);
     }
 
     // Counts selections and, when gated, blocks every caller inside the shared factory so a race is observable.

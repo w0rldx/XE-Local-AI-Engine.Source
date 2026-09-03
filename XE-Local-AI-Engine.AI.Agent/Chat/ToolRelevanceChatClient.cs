@@ -129,12 +129,6 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
             return options;
         }
 
-        var query = LastUserText(messages);
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            return options;
-        }
-
         var names = new string[tools.Count];
         for (var index = 0; index < tools.Count; index++)
         {
@@ -142,6 +136,17 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
         }
 
         var key = new ArrayKey(names);
+
+        // ONE decision per array per turn, so the query matters only for a FIRST-time computation. An approval-resume
+        // send replays the history plus one user message whose only content is ToolApprovalResponseContent - no text -
+        // and re-deriving a query per send would resolve blank there, fall through to the full array mid-turn and
+        // strand list_tools on the previous round's binding. Once this array HAS a decision it is reused whatever the
+        // round's text looks like; only the no-decision-yet case still needs a query and can still pass through.
+        var query = LastUserText(messages);
+        if (string.IsNullOrWhiteSpace(query) && !scope.HasDecision(key))
+        {
+            return options;
+        }
 
         ArrayDecision decision;
         try
@@ -158,9 +163,14 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
             // else, and the caller's own options instance goes downstream byte-identical. Counts only in the log:
             // no tool name, description or query text (trajectory policy). A cancel of the CALLER's own token is not
             // caught - the send really is going away.
-            _logger.LogWarning(exception,
-                "Tool-relevance selection failed for an array of {ToolCount} tools; sending the unfiltered offer.",
-                tools.Count);
+            //
+            // The exception OBJECT is deliberately not passed to the sink: sinks render Message and every inner
+            // exception, and a selector failure carries the query and the tool descriptions into the failing call, so
+            // an HTTP or provider error that echoes its request body would write raw trajectory content to disk under
+            // an adjacent template that was scrubbed to counts. The TYPE name is the whole allow-listed diagnosis.
+            _logger.LogWarning("Tool-relevance selection failed for an array of {ToolCount} tools ({FailureType}); sending the unfiltered offer.",
+                tools.Count,
+                exception.GetType().Name);
             return options;
         }
 
@@ -177,13 +187,16 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
     }
 
     /// <summary>
-    ///     Computes one array's decision. Runs at most once per array per turn and — deliberately — under NO caller
-    ///     token: the shared result must not be cancellable by whichever caller happened to arrive first. Its only
+    ///     Computes one array's decision. <paramref name="query" /> is non-blank on every path that reaches here in
+    ///     practice; it is nullable only for the narrow race where the array's entry is evicted between the
+    ///     has-a-decision check and the single-flight publication, and <see cref="IToolRelevanceSelector" /> defines a
+    ///     blank query as "no signal" rather than an error. Runs at most once per array per turn and — deliberately —
+    ///     under NO caller token: the shared result must not be cancellable by whichever caller happened to arrive first. Its only
     ///     bound is the one the selector applies to itself.
     /// </summary>
     private async Task<ArrayDecision> SelectAsync(ToolRelevanceState scope,
         IList<AITool> tools,
-        string query,
+        string? query,
         ChatOptions options,
         IReadOnlyList<ChatMessage> messages)
     {
@@ -233,12 +246,15 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
     }
 
     // The relevance query. Instructions are null on both ROOT agent-build paths by design (the system prompt rides the
-    // seed message), so the query is derived from the round's messages the hop already receives.
+    // seed message), so the query is derived from the round's messages the hop already receives. A text-LESS user
+    // message is skipped rather than accepted as a blank query: the runner appends approval responses as a user-role
+    // message carrying only ToolApprovalResponseContent, and the round's real question is the text-bearing user
+    // message behind it.
     private static string? LastUserText(IReadOnlyList<ChatMessage> messages)
     {
         for (var index = messages.Count - 1; index >= 0; index--)
         {
-            if (messages[index].Role == ChatRole.User)
+            if (messages[index].Role == ChatRole.User && !string.IsNullOrWhiteSpace(messages[index].Text))
             {
                 return messages[index].Text;
             }
