@@ -934,4 +934,41 @@ public static class LocalApiRoutes
         public const string Collection = "workspaces";
         public const string ById = "workspaces/{workspaceId}";
     }
+
+    /// <summary>
+    ///     Operator-gated management of the external integration surface: the named triggers an integrator invokes, the
+    ///     <c>xeint_</c> credentials that authenticate it, the sessions those invocations own, and the executions they
+    ///     produce. Ordinary FastEndpoints routes behind <c>NodeAuthorizationPolicies.Operator</c> — the surface an
+    ///     integrator actually calls is <see cref="IntegrationApi" />, and the two never overlap.
+    /// </summary>
+    public static class Integrations
+    {
+        public const string Triggers = "integrations/triggers";
+        public const string TriggerById = "integrations/triggers/{triggerId}";
+        public const string Keys = "integrations/keys";
+        public const string KeyById = "integrations/keys/{keyId}";
+        public const string Sessions = "integrations/sessions";
+        public const string SessionById = "integrations/sessions/{sessionId}";
+        public const string Executions = "integrations/executions";
+        public const string ExecutionById = "integrations/executions/{executionId}";
+        public const string ExecutionEvents = "integrations/executions/{executionId}/events";
+        public const string ExecutionCancel = "integrations/executions/{executionId}/cancel";
+    }
+
+    /// <summary>
+    ///     The EXTERNAL integration API: what an automation, a sensor or a webhook receiver calls with an
+    ///     <c>xeint_</c> bearer key. Mapped OUTSIDE FastEndpoints (like <c>MapMcp</c> and the model proxy) but
+    ///     deliberately INSIDE the <c>/api/local/v1</c> prefix, so <c>LocalApiSecurityMiddleware</c>'s loopback peer +
+    ///     Host + Origin gate still covers it; moving it outside the prefix would silently drop that layer and leave
+    ///     the bearer key as the only control. Off the OpenAPI document for the same reason the proxy is: the bodies
+    ///     are a caller contract rather than node DTOs.
+    /// </summary>
+    public static class IntegrationApi
+    {
+        public const string Invoke = "integration-api/triggers/{triggerName}/invoke";
+        public const string ExecutionById = "integration-api/executions/{executionId}";
+        public const string ExecutionEvents = "integration-api/executions/{executionId}/events";
+        public const string ExecutionCancel = "integration-api/executions/{executionId}/cancel";
+        public const string SessionById = "integration-api/sessions/{sessionId}";
+    }
 }
