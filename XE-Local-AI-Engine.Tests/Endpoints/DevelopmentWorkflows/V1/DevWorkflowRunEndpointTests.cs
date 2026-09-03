@@ -961,6 +961,69 @@ public sealed class DevWorkflowRunEndpointTests
         AssertEx.Equal(expected: 0, document.RootElement.GetProperty("appliedRuleSets").GetArrayLength());
     }
 
+    /// <summary>
+    ///     Whether a skip is WAIVED is the server's answer, because the row cannot be read on its own. An operator's
+    ///     skip is excused and an <c>All</c> join carries on past it as long as a sibling arrived; a skip that cascaded
+    ///     off a Failed ancestor is dead and the join skips with it. Both are <c>Skipped</c>, and the ancestor that
+    ///     decides which is which — <c>broken</c> here — is not among the join's own dependencies, so a client reading
+    ///     status alone would tell an operator the join carries on in exactly the case where the runtime skips it.
+    /// </summary>
+    [Test]
+    public async Task GetRun_TellsAnExcusedSkipFromOneThatCascadedOffAFailure()
+    {
+        const string SkipGraph = """
+                                 {"schemaVersion":1,
+                                  "nodes":[{"nodeKey":"survey","nodeType":"Agent"},
+                                           {"nodeKey":"excused","nodeType":"Agent"},
+                                           {"nodeKey":"broken","nodeType":"Agent"},
+                                           {"nodeKey":"cascaded","nodeType":"Agent"},
+                                           {"nodeKey":"join","nodeType":"Join"}],
+                                  "edges":[{"from":"survey","to":"join"},{"from":"survey","to":"excused"},
+                                           {"from":"survey","to":"broken"},{"from":"excused","to":"join"},
+                                           {"from":"broken","to":"cascaded"},{"from":"cascaded","to":"join"}]}
+                                 """;
+
+        var runs = RunService(new DevWorkflowRunDetail(RunSnapshot() with
+            {
+                GraphJson = SkipGraph
+            },
+            [
+                WorkNodeRun(1, "survey", DevWorkflowNodeRunStatus.Succeeded),
+                WorkNodeRun(2, "excused", DevWorkflowNodeRunStatus.Skipped),
+                WorkNodeRun(3, "broken", DevWorkflowNodeRunStatus.Failed),
+                WorkNodeRun(4, "cascaded", DevWorkflowNodeRunStatus.Skipped),
+                WorkNodeRun(5, "join", DevWorkflowNodeRunStatus.Pending) with { NodeType = DevWorkflowNodeType.Join }
+            ],
+            PendingDecisionCount: 0,
+            BlockingGateNodeRunId: null));
+        await using var factory = EnabledFactory(Store(), runs);
+
+        using var response = await SendAsync(factory, "GET", Run).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var nodes = document.RootElement.GetProperty("nodes")
+                            .EnumerateArray()
+                            .ToDictionary(static node => node.GetProperty("nodeKey").GetString()!, static node => node.GetProperty("skipWaived"));
+
+        AssertEx.True(nodes["excused"].GetBoolean(), "an operator skipped it with nothing dead behind it, so the join carries on past it.");
+        AssertEx.False(nodes["cascaded"].GetBoolean(), "it cascaded off a Failed ancestor, so the join will skip with it.");
+        AssertEx.Equal(JsonValueKind.Null, nodes["survey"].ValueKind, "the question only means something for a skipped row.");
+    }
+
+    /// <summary>One work node run of the run under test, distinguished only by its key and status.</summary>
+    private static DevWorkflowNodeRunSnapshot WorkNodeRun(int ordinal, string nodeKey, DevWorkflowNodeRunStatus status) =>
+        GateNodeRun() with
+        {
+            Id = Guid.Parse($"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb{ordinal}"),
+            NodeKey = nodeKey,
+            NodeType = DevWorkflowNodeType.Agent,
+            Status = status,
+            PendingDecisionKind = null,
+            Sequence = ordinal
+        };
+
     private static IDevWorkflowRunService RunService(DevWorkflowRunDetail? detail = null)
     {
         var runs = Substitute.For<IDevWorkflowRunService>();

@@ -36,6 +36,46 @@ internal static class DevWorkflowUpstreamArtifacts
     }
 
     /// <summary>
+    ///     The same nearest producing ancestors, but the ones whose node run was SKIPPED — oldest first, and empty
+    ///     whenever nothing upstream was.
+    ///     <para>
+    ///         A skipped producer contributes no artifact, and until an <c>All</c> join could carry on past one that
+    ///         absence was invisible by construction: the consumer simply received one document fewer than the fan-out
+    ///         was wide and had no way to know it. Now that a person can excuse one slice of a decomposition and let
+    ///         the rest reach the verification node, that node has to be TOLD which slice was excused — otherwise it
+    ///         judges a partial result as if it were the whole one, which is the same lie the join used to tell in the
+    ///         other direction.
+    ///     </para>
+    ///     <para>
+    ///         Read off the node-run rows rather than off a synthetic artifact: a <see cref="DevWorkflowArtifactSnapshot" />
+    ///         is backed by blob storage and recorded as consumed, and inventing one for work that never happened would
+    ///         put a document in the audit that no node produced.
+    ///     </para>
+    /// </summary>
+    public static async Task<IReadOnlyList<DevWorkflowNodeRunSnapshot>> SkippedAsync(IDevWorkflowStore store,
+        DevWorkflowGraph graph,
+        Guid runId,
+        string nodeKey,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(graph);
+
+        var sources = ProducingAncestors(graph, nodeKey);
+        if (sources.Count == 0)
+        {
+            return [];
+        }
+
+        var nodeRuns = await store.ListNodeRunsAsync(runId, cancellationToken).ConfigureAwait(false);
+        return
+        [
+            .. nodeRuns.Where(nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Skipped && sources.Contains(nodeRun.NodeKey))
+                       .OrderBy(static nodeRun => nodeRun.Sequence)
+        ];
+    }
+
+    /// <summary>
     ///     The nearest ancestors that can have produced anything, walking back through the ones that cannot.
     ///     <para>
     ///         Only the three work types produce artifacts; a HumanGate, Gate, Parallel or Join is a routing decision

@@ -27,23 +27,48 @@ public sealed class DevWorkflowStateMachineTests
                      DevWorkflowNodeRunStatus.Blocked
                  })
         {
-            AssertEx.Equal(DevWorkflowEdgeState.Pending, DevWorkflowStateMachine.EdgeState(edge, NodeRun("research", status)), status.ToString());
+            AssertEx.Equal(DevWorkflowEdgeState.Pending,
+                DevWorkflowStateMachine.EdgeState(edge, graph, ByKey(NodeRun("research", status))),
+                status.ToString());
         }
 
         AssertEx.Equal(DevWorkflowEdgeState.Pending,
-            DevWorkflowStateMachine.EdgeState(edge, source: null),
+            DevWorkflowStateMachine.EdgeState(edge, graph, ByKey()),
             "a source that has not been materialized yet is a wait, not a refusal.");
     }
 
     [Test]
     [Arguments(DevWorkflowNodeRunStatus.Failed)]
-    [Arguments(DevWorkflowNodeRunStatus.Skipped)]
     [Arguments(DevWorkflowNodeRunStatus.Cancelled)]
-    public void EdgeState_WhenTheSourceSettledWithoutSucceeding_IsDead(DevWorkflowNodeRunStatus status)
+    public void EdgeState_WhenTheSourceBroke_IsDead(DevWorkflowNodeRunStatus status)
     {
         var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.ResearchPlanApproval);
 
-        AssertEx.Equal(DevWorkflowEdgeState.Dead, DevWorkflowStateMachine.EdgeState(graph.OutboundEdges("research")[0], NodeRun("research", status)));
+        AssertEx.Equal(DevWorkflowEdgeState.Dead,
+            DevWorkflowStateMachine.EdgeState(graph.OutboundEdges("research")[0], graph, ByKey(NodeRun("research", status))));
+    }
+
+    /// <summary>
+    ///     A Skip is a person's decision or a cascade off one, and the graph is what tells the two apart. An ENTRY node
+    ///     has nothing upstream that could have refused it, so its skip can only have been chosen — and a decision to
+    ///     route around one step is not a reason to abandon the ones that worked.
+    /// </summary>
+    [Test]
+    public void EdgeState_WhenASkipHadNothingDeadBehindIt_IsWaivedRatherThanDead()
+    {
+        var entry = DevWorkflowGraph.Parse(DevWorkflowGraphs.ResearchPlanApproval);
+
+        AssertEx.Equal(DevWorkflowEdgeState.Waived,
+            DevWorkflowStateMachine.EdgeState(entry.OutboundEdges("research")[0], entry, ByKey(NodeRun("research", DevWorkflowNodeRunStatus.Skipped))),
+            "'research' has no inbound edge at all, so nothing but a person can have skipped it.");
+
+        var gated = DevWorkflowGraph.Parse(DevWorkflowGraphs.ThreeLevelChain);
+
+        AssertEx.Equal(DevWorkflowEdgeState.Dead,
+            DevWorkflowStateMachine.EdgeState(gated.OutboundEdges("first")[0],
+                gated,
+                ByKey(NodeRun("gate", DevWorkflowNodeRunStatus.Succeeded, """{"passed":false}"""), NodeRun("first", DevWorkflowNodeRunStatus.Skipped))),
+            "and a skip the gate above it caused stays Dead — the run was told where it may not go.");
     }
 
     [Test]
@@ -54,8 +79,8 @@ public sealed class DevWorkflowStateMachineTests
         var revise = graph.OutboundEdges("approve").Single(edge => edge.To == "revise");
         var approved = NodeRun("approve", DevWorkflowNodeRunStatus.Succeeded, """{"decision":"Approve"}""");
 
-        AssertEx.Equal(DevWorkflowEdgeState.Satisfied, DevWorkflowStateMachine.EdgeState(ship, approved));
-        AssertEx.Equal(DevWorkflowEdgeState.Dead, DevWorkflowStateMachine.EdgeState(revise, approved));
+        AssertEx.Equal(DevWorkflowEdgeState.Satisfied, DevWorkflowStateMachine.EdgeState(ship, graph, ByKey(approved)));
+        AssertEx.Equal(DevWorkflowEdgeState.Dead, DevWorkflowStateMachine.EdgeState(revise, graph, ByKey(approved)));
     }
 
     /// <summary>
@@ -72,7 +97,7 @@ public sealed class DevWorkflowStateMachineTests
         var ship = graph.OutboundEdges("approve").Single(edge => edge.To == "ship");
 
         AssertEx.Equal(DevWorkflowEdgeState.Dead,
-            DevWorkflowStateMachine.EdgeState(ship, NodeRun("approve", DevWorkflowNodeRunStatus.Succeeded, outputJson)));
+            DevWorkflowStateMachine.EdgeState(ship, graph, ByKey(NodeRun("approve", DevWorkflowNodeRunStatus.Succeeded, outputJson))));
     }
 
     /// <summary>
@@ -143,6 +168,267 @@ public sealed class DevWorkflowStateMachineTests
                 graph,
                 ByKey(NodeRun("ship", DevWorkflowNodeRunStatus.Skipped), NodeRun("revise", DevWorkflowNodeRunStatus.Skipped))),
             "with every branch dead, even an Any join has nothing to carry.");
+    }
+
+    /// <summary>
+    ///     The C1 ruling, and the shape the live finding took: an operator skipped one clone's implementation because
+    ///     that slice could never succeed, and the <c>All</c> join skipped over its succeeding siblings, taking the
+    ///     fourteen nodes behind it and the run's own status with it. A skip a person chose is excused; the join goes
+    ///     on as long as a sibling actually arrived.
+    /// </summary>
+    [Test]
+    public void Admission_UnderAll_CompletesWhenOneLeafIsSkippedAndItsSiblingSucceeded()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.FanOut);
+
+        AssertEx.Equal(DevWorkflowNodeAdmission.Eligible,
+            DevWorkflowStateMachine.Admission(graph.Nodes["join"],
+                graph,
+                ByKey(NodeRun("implement", DevWorkflowNodeRunStatus.Succeeded),
+                    NodeRun("lint", DevWorkflowNodeRunStatus.Succeeded),
+                    NodeRun("test", DevWorkflowNodeRunStatus.Skipped))),
+            "one leaf excused, one home: the join carries what arrived.");
+    }
+
+    /// <summary>
+    ///     The other half of the same rule, and the reason it is read off the graph rather than off the row: a skip
+    ///     BELOW something that failed is the failure travelling, not a decision, and it must kill the join exactly as
+    ///     it always has.
+    /// </summary>
+    [Test]
+    public void Admission_UnderAll_StillSkipsWhenTheSkippedLeafSitsUnderAFailure()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.FanOutOverAFailingChain);
+
+        AssertEx.Equal(DevWorkflowNodeAdmission.Skip,
+            DevWorkflowStateMachine.Admission(graph.Nodes["join"],
+                graph,
+                ByKey(NodeRun("start", DevWorkflowNodeRunStatus.Succeeded),
+                    NodeRun("lint", DevWorkflowNodeRunStatus.Succeeded),
+                    NodeRun("broken", DevWorkflowNodeRunStatus.Failed),
+                    NodeRun("after", DevWorkflowNodeRunStatus.Skipped))),
+            "a skip with a failure behind it is the failure reaching the join, whatever the sibling did.");
+    }
+
+    /// <summary>
+    ///     A gate's not-taken branch is Skipped like any other, and it is the one skip nobody chose — the condition
+    ///     refused it. Excusing it would let every gate's losing branch carry a join it was never routed through.
+    /// </summary>
+    [Test]
+    public void Admission_UnderAll_StillSkipsOnAGatesNotTakenBranch()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.GateBranchesIntoAJoin);
+
+        AssertEx.Equal(DevWorkflowNodeAdmission.Skip,
+            DevWorkflowStateMachine.Admission(graph.Nodes["join"],
+                graph,
+                ByKey(NodeRun("gate", DevWorkflowNodeRunStatus.Succeeded, """{"passed":true}"""),
+                    NodeRun("taken", DevWorkflowNodeRunStatus.Succeeded),
+                    NodeRun("nottaken", DevWorkflowNodeRunStatus.Skipped))));
+    }
+
+    /// <summary>
+    ///     With every branch excused there is nothing to carry, so the join skips — and its own skip is then waived in
+    ///     turn, which is how the cascade travels exactly as far as the excusing does.
+    ///     <para>
+    ///         The seeded <c>feature-development-v1</c> shape is the documented exception: its join also has the
+    ///         decomposition's own edge, satisfied from the moment the decomposition succeeded, so a run whose every
+    ///         clone was skipped still reaches verification — which then judges that nothing was produced. Accepted.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public void Admission_UnderAll_SkipsWhenEveryLeafWasSkippedUnlessSomethingElseSatisfiesIt()
+    {
+        var fanOut = DevWorkflowGraph.Parse(DevWorkflowGraphs.FanOut);
+
+        AssertEx.Equal(DevWorkflowNodeAdmission.Skip,
+            DevWorkflowStateMachine.Admission(fanOut.Nodes["join"],
+                fanOut,
+                ByKey(NodeRun("implement", DevWorkflowNodeRunStatus.Succeeded),
+                    NodeRun("lint", DevWorkflowNodeRunStatus.Skipped),
+                    NodeRun("test", DevWorkflowNodeRunStatus.Skipped))),
+            "excused is not arrived: with nothing carried the join has nothing to join.");
+
+        var seeded = DevWorkflowGraph.Parse(DevWorkflowGraphs.MaterializedDecompositionJoin);
+
+        AssertEx.Equal(DevWorkflowNodeAdmission.Eligible,
+            DevWorkflowStateMachine.Admission(seeded.Nodes["join"],
+                seeded,
+                ByKey(NodeRun("decompose", DevWorkflowNodeRunStatus.Succeeded),
+                    NodeRun("implement#one", DevWorkflowNodeRunStatus.Skipped),
+                    NodeRun("implement#two", DevWorkflowNodeRunStatus.Skipped))),
+            "the decomposition's own edge into the join is satisfied, and the materializer keeps it on purpose.");
+    }
+
+    /// <summary>
+    ///     Where a waived skip stops travelling. The join carries the surviving branch, so the tail behind it runs —
+    ///     which is the whole of what the live finding lost.
+    /// </summary>
+    [Test]
+    public void Admission_AWaivedSkipStopsCascadingAtTheJoinThatHadASurvivor()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.AllJoinOverASkippedBranch);
+        var nodeRuns = ByKey(NodeRun("allsplit", DevWorkflowNodeRunStatus.Succeeded),
+            NodeRun("allsurvivor", DevWorkflowNodeRunStatus.Succeeded),
+            NodeRun("alldoomed", DevWorkflowNodeRunStatus.Skipped));
+
+        AssertEx.Equal(DevWorkflowNodeAdmission.Eligible, DevWorkflowStateMachine.Admission(graph.Nodes["allmerge"], graph, nodeRuns));
+
+        AssertEx.Equal(DevWorkflowNodeAdmission.Eligible,
+            DevWorkflowStateMachine.Admission(graph.Nodes["alltail"],
+                graph,
+                ByKey([.. nodeRuns.Values, NodeRun("allmerge", DevWorkflowNodeRunStatus.Succeeded)])),
+            "and the tail behind it runs, which is the fourteen nodes the live run lost.");
+    }
+
+    /// <summary>
+    ///     A skipped node is judged under ITS OWN join policy. An <c>Any</c> node is admitted by one satisfied edge, so
+    ///     the dead sibling it never waited on says nothing about why an operator skipped it afterwards — and reading
+    ///     that sibling as a refusal is what would make this skip a cascade and throw its own join's survivor away.
+    /// </summary>
+    [Test]
+    public void EdgeState_AnAnyNodeThatWasAdmittedIsWaivedDespiteItsDeadSibling()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.AnyWorkNodeOverAMixedFanIn);
+        var nodeRuns = ByKey(NodeRun("mixedsplit", DevWorkflowNodeRunStatus.Succeeded),
+            NodeRun("mixedgood", DevWorkflowNodeRunStatus.Succeeded),
+            NodeRun("mixedbad", DevWorkflowNodeRunStatus.Failed),
+            NodeRun("mixedsibling", DevWorkflowNodeRunStatus.Succeeded),
+            NodeRun("mixedwork", DevWorkflowNodeRunStatus.Skipped));
+
+        AssertEx.Equal(DevWorkflowEdgeState.Waived,
+            DevWorkflowStateMachine.EdgeState(graph.OutboundEdges("mixedwork")[0], graph, nodeRuns),
+            "one satisfied edge was the whole contract it waited on, so only a person can have stopped it after that.");
+
+        AssertEx.Equal(DevWorkflowNodeAdmission.Eligible,
+            DevWorkflowStateMachine.Admission(graph.Nodes["mixedmerge"], graph, nodeRuns),
+            "and the All join behind it still carries the branch that did arrive.");
+    }
+
+    /// <summary>
+    ///     The conservative half of the same rule: an <c>Any</c> node with nothing satisfied never had an admission of
+    ///     its own to lose, so a dead branch beside an excused one leaves its skip a cascade, exactly as before.
+    /// </summary>
+    [Test]
+    public void EdgeState_AnAnyNodeNothingSatisfiedStaysDead()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.AnyWorkNodeOverAMixedFanIn);
+        var nodeRuns = ByKey(NodeRun("mixedsplit", DevWorkflowNodeRunStatus.Succeeded),
+            NodeRun("mixedgood", DevWorkflowNodeRunStatus.Skipped),
+            NodeRun("mixedbad", DevWorkflowNodeRunStatus.Failed),
+            NodeRun("mixedsibling", DevWorkflowNodeRunStatus.Succeeded),
+            NodeRun("mixedwork", DevWorkflowNodeRunStatus.Skipped));
+
+        AssertEx.Equal(DevWorkflowEdgeState.Dead,
+            DevWorkflowStateMachine.EdgeState(graph.OutboundEdges("mixedwork")[0], graph, nodeRuns),
+            "excused beside broken and nothing arrived: the failure is still what this node is standing in front of.");
+
+        AssertEx.Equal(DevWorkflowNodeAdmission.Skip,
+            DevWorkflowStateMachine.Admission(graph.Nodes["mixedmerge"], graph, nodeRuns));
+    }
+
+    /// <summary>
+    ///     A cascaded skip records WHY, because a run whose tail was skipped is fourteen identical rows otherwise and
+    ///     an operator cannot tell which one of them was the decision.
+    /// </summary>
+    [Test]
+    public void SkipReason_NamesTheDependencyThatRefusedTheNode()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.FanOutOverAFailingChain);
+
+        AssertEx.Equal("Skipped: upstream 'broken' did not succeed.",
+            DevWorkflowStateMachine.SkipReason(graph.Nodes["after"], graph, ByKey(NodeRun("broken", DevWorkflowNodeRunStatus.Failed))));
+
+        AssertEx.Equal("Skipped: upstream 'after' was skipped.",
+            DevWorkflowStateMachine.SkipReason(graph.Nodes["join"],
+                graph,
+                ByKey(NodeRun("start", DevWorkflowNodeRunStatus.Succeeded),
+                    NodeRun("lint", DevWorkflowNodeRunStatus.Succeeded),
+                    NodeRun("broken", DevWorkflowNodeRunStatus.Failed),
+                    NodeRun("after", DevWorkflowNodeRunStatus.Skipped))));
+
+        var fanOut = DevWorkflowGraph.Parse(DevWorkflowGraphs.FanOut);
+
+        AssertEx.Equal("Skipped: every step before this one was skipped.",
+            DevWorkflowStateMachine.SkipReason(fanOut.Nodes["join"],
+                fanOut,
+                ByKey(NodeRun("implement", DevWorkflowNodeRunStatus.Succeeded),
+                    NodeRun("lint", DevWorkflowNodeRunStatus.Skipped),
+                    NodeRun("test", DevWorkflowNodeRunStatus.Skipped))),
+            "no edge died and neither excused row carries a reason of its own — nothing to quote.");
+    }
+
+    /// <summary>
+    ///     An operator's comment is free text and is cut to fit the column; the cut must not land inside a surrogate
+    ///     pair, or the row keeps half an emoji as a lone surrogate.
+    /// </summary>
+    [Test]
+    public void Bounded_NeverEndsOnTheHighHalfOfASurrogatePair()
+    {
+        var pairAtTheCut = new string('a', 499) + "😀";
+        var bounded = DevWorkflowStateMachine.Bounded(pairAtTheCut, 500);
+
+        AssertEx.Equal(499, bounded.Length);
+        AssertEx.False(char.IsHighSurrogate(bounded[^1]));
+        AssertEx.Equal("abc", DevWorkflowStateMachine.Bounded("abc", 500));
+        AssertEx.Equal(new string('a', 500), DevWorkflowStateMachine.Bounded(new string('a', 500), 500));
+    }
+
+    /// <summary>
+    ///     The reason a person gave has to survive the clone between them. On the seeded template an operator skips
+    ///     <c>implement#task</c>, the <c>validate#task</c> behind it is skipped in turn, and the VALIDATE clone is what
+    ///     a verification node's producing-ancestor walk stops at — so a validate clone that restated the skip
+    ///     generically is a comment explaining the whole thing that never reached the agent asked to judge it.
+    /// </summary>
+    [Test]
+    public void SkipReason_CarriesTheOperatorsOwnSentenceDownAChainOfExcusedSteps()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.FanOut);
+        var decided = NodeRun("implement", DevWorkflowNodeRunStatus.Skipped) with
+        {
+            TerminalReason = "Skipped by an operator: This slice names a file the repository does not have."
+        };
+
+        var validate = DevWorkflowStateMachine.SkipReason(graph.Nodes["lint"], graph, ByKey(decided));
+
+        AssertEx.Equal("Skipped: upstream 'implement' was skipped by an operator: This slice names a file the repository does not have.", validate);
+
+        AssertEx.Equal(
+            "Skipped: upstream 'lint' was skipped: upstream 'implement' was skipped by an operator: "
+            + "This slice names a file the repository does not have.",
+            DevWorkflowStateMachine.SkipReason(graph.Nodes["join"],
+                graph,
+                ByKey(decided,
+                    NodeRun("lint", DevWorkflowNodeRunStatus.Skipped) with
+                    {
+                        TerminalReason = validate
+                    },
+                    NodeRun("test", DevWorkflowNodeRunStatus.Skipped) with
+                    {
+                        TerminalReason = validate
+                    })),
+            "and one more hop still ends on the sentence the person typed.");
+    }
+
+    /// <summary>
+    ///     Two dead edges, and only one of them is news: a gate taking its other branch is the graph working, so the
+    ///     branch that was actually refused is named even when the routed-past one is listed first.
+    /// </summary>
+    [Test]
+    public void SkipReason_PrefersARefusedBranchOverOneAGateMerelyRoutedPast()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.GateBranchesIntoAJoin);
+        var gate = NodeRun("gate", DevWorkflowNodeRunStatus.Succeeded, """{"passed":true}""");
+
+        AssertEx.Equal("Skipped: upstream 'nottaken' was skipped.",
+            DevWorkflowStateMachine.SkipReason(graph.Nodes["join"],
+                graph,
+                ByKey(gate, NodeRun("taken", DevWorkflowNodeRunStatus.Succeeded), NodeRun("nottaken", DevWorkflowNodeRunStatus.Skipped))),
+            "the gate's own dead edge into the join is listed first and is still not the cause.");
+
+        AssertEx.Equal("Skipped: upstream 'gate' routed elsewhere.",
+            DevWorkflowStateMachine.SkipReason(graph.Nodes["nottaken"], graph, ByKey(gate)),
+            "a branch the condition did not accept did not fail — it was not taken.");
     }
 
     /// <summary>A skip is transitive: the skipped node's out-edges are dead, and so on all the way down.</summary>
