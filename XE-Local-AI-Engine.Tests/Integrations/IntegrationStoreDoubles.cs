@@ -214,9 +214,34 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
     private readonly List<IntegrationExecutionEventSnapshot> _events = [];
     private readonly List<IntegrationExecutionSnapshot> _rows = [];
 
-    public IReadOnlyList<IntegrationExecutionSnapshot> Rows => _rows;
+    /// <summary>
+    ///     The coordinator dispatches each execution onto its own task, so two runs reach these lists at once — which
+    ///     a bare <see cref="List{T}" /> loses items to. Re-entrant, because the <see cref="BeforeNextStatusCas" />
+    ///     hook writes through this same store.
+    /// </summary>
+    private readonly Lock _gate = new();
 
-    public IReadOnlyList<IntegrationExecutionEventSnapshot> Events => _events;
+    public IReadOnlyList<IntegrationExecutionSnapshot> Rows
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _rows.ToArray();
+            }
+        }
+    }
+
+    public IReadOnlyList<IntegrationExecutionEventSnapshot> Events
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _events.ToArray();
+            }
+        }
+    }
 
     /// <summary>Sessions an accept created, so a suite can assert exactly one was written per admitted execution.</summary>
     public List<IntegrationSessionCreate> CreatedSessions { get; } = [];
@@ -240,60 +265,77 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        if (RevokedKeyPrefixes.Contains(command.KeyPrefix))
+        lock (_gate)
         {
-            return Task.FromResult(false);
+            if (RevokedKeyPrefixes.Contains(command.KeyPrefix))
+            {
+                return Task.FromResult(false);
+            }
+
+            if (FailNextAcceptWithUniqueViolation)
+            {
+                FailNextAcceptWithUniqueViolation = false;
+
+                // The real AcceptAsync is raw ADO under BEGIN IMMEDIATE with no SaveChanges anywhere, so the unique index
+                // surfaces as SqliteException with SQLITE_CONSTRAINT — never as the EF-only DbUpdateException.
+                throw new SqliteException("UNIQUE constraint failed: integration_executions.principal_id, integration_executions.request_id",
+                    errorCode: 19);
+            }
+
+            var active = _rows.Where(static row => row.Status is IntegrationExecutionStatus.Accepted
+                                                   or IntegrationExecutionStatus.Queued
+                                                   or IntegrationExecutionStatus.Running)
+                              .ToArray();
+            if (active.Length >= maxActive || active.Count(row => row.PrincipalId == command.PrincipalId) >= maxActivePerPrincipal)
+            {
+                throw new IntegrationQueueFullException("The node is at its concurrent execution limit.");
+            }
+
+            if (command.NewSession is { } session)
+            {
+                CreatedSessions.Add(session);
+            }
+
+            _rows.Add(new IntegrationExecutionSnapshot(command.ExecutionId,
+                command.TriggerId,
+                command.SessionId,
+                command.PrincipalId,
+                command.RequestId,
+                command.RequestFingerprint,
+                command.KeyPrefix,
+                InvocationId: Guid.Empty,
+                IntegrationExecutionStatus.Accepted,
+                command.ReceivedAtUtc,
+                StartedAtUtc: null,
+                EndedAtUtc: null,
+                StopRequestedAtUtc: null,
+                FailureCategory: null,
+                FailureSummary: null,
+                OutputCount: 0,
+                OutputBytes: 0,
+                command.AcceptedEvent.Sequence,
+                Version: 0));
+            AddEvent(command.AcceptedEvent);
+            return Task.FromResult(true);
         }
-
-        if (FailNextAcceptWithUniqueViolation)
-        {
-            FailNextAcceptWithUniqueViolation = false;
-
-            // The real AcceptAsync is raw ADO under BEGIN IMMEDIATE with no SaveChanges anywhere, so the unique index
-            // surfaces as SqliteException with SQLITE_CONSTRAINT — never as the EF-only DbUpdateException.
-            throw new SqliteException("UNIQUE constraint failed: integration_executions.principal_id, integration_executions.request_id",
-                errorCode: 19);
-        }
-
-        var active = _rows.Where(static row => row.Status is IntegrationExecutionStatus.Accepted
-                                               or IntegrationExecutionStatus.Queued
-                                               or IntegrationExecutionStatus.Running)
-                          .ToArray();
-        if (active.Length >= maxActive || active.Count(row => row.PrincipalId == command.PrincipalId) >= maxActivePerPrincipal)
-        {
-            throw new IntegrationQueueFullException("The node is at its concurrent execution limit.");
-        }
-
-        if (command.NewSession is { } session)
-        {
-            CreatedSessions.Add(session);
-        }
-
-        _rows.Add(new IntegrationExecutionSnapshot(command.ExecutionId,
-            command.TriggerId,
-            command.SessionId,
-            command.PrincipalId,
-            command.RequestId,
-            command.RequestFingerprint,
-            command.KeyPrefix,
-            InvocationId: Guid.Empty,
-            IntegrationExecutionStatus.Accepted,
-            command.ReceivedAtUtc,
-            StartedAtUtc: null,
-            EndedAtUtc: null,
-            StopRequestedAtUtc: null,
-            FailureCategory: null,
-            FailureSummary: null,
-            OutputCount: 0,
-            OutputBytes: 0,
-            command.AcceptedEvent.Sequence,
-            Version: 0));
-        AddEvent(command.AcceptedEvent);
-        return Task.FromResult(true);
     }
 
-    public Task<IntegrationExecutionSnapshot?> GetByIdAsync(Guid executionId, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_rows.SingleOrDefault(row => row.Id == executionId));
+    /// <summary>Makes the next row read throw before the run's own handler is in scope, which is what escapes ProcessOneAsync.</summary>
+    public bool ThrowOnNextGetById { get; set; }
+
+    public Task<IntegrationExecutionSnapshot?> GetByIdAsync(Guid executionId, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            if (ThrowOnNextGetById)
+            {
+                ThrowOnNextGetById = false;
+                throw new SqliteException("database is locked", errorCode: 5);
+            }
+
+            return Task.FromResult(_rows.SingleOrDefault(row => row.Id == executionId));
+        }
+    }
 
     /// <summary>
     ///     Inserts a row an earlier accept would have committed, so a suite can start from any point of the state
@@ -309,53 +351,62 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
         long? stopRequestedAtUtc = null,
         string keyPrefix = "xeint_abcdefgh")
     {
-        var snapshot = new IntegrationExecutionSnapshot(executionId,
-            triggerId,
-            sessionId,
-            PrincipalId: Guid.NewGuid(),
-            RequestId: Guid.NewGuid(),
-            RequestFingerprint: ReadOnlyMemory<byte>.Empty,
-            keyPrefix,
-            InvocationId: Guid.Empty,
-            status,
-            receivedAtUtc,
-            StartedAtUtc: null,
-            EndedAtUtc: null,
-            stopRequestedAtUtc,
-            FailureCategory: null,
-            FailureSummary: null,
-            OutputCount: 0,
-            OutputBytes: 0,
-            lastSequence,
-            version);
-        _rows.Add(snapshot);
-        return snapshot;
+        lock (_gate)
+        {
+            var snapshot = new IntegrationExecutionSnapshot(executionId,
+                triggerId,
+                sessionId,
+                PrincipalId: Guid.NewGuid(),
+                RequestId: Guid.NewGuid(),
+                RequestFingerprint: ReadOnlyMemory<byte>.Empty,
+                keyPrefix,
+                InvocationId: Guid.Empty,
+                status,
+                receivedAtUtc,
+                StartedAtUtc: null,
+                EndedAtUtc: null,
+                stopRequestedAtUtc,
+                FailureCategory: null,
+                FailureSummary: null,
+                OutputCount: 0,
+                OutputBytes: 0,
+                lastSequence,
+                version);
+            _rows.Add(snapshot);
+            return snapshot;
+        }
     }
 
     public Task<IntegrationExecutionSnapshot?> GetByRequestIdAsync(Guid principalId, Guid requestId, CancellationToken cancellationToken = default)
     {
-        if (HideNextRequestIdLookup)
+        lock (_gate)
         {
-            HideNextRequestIdLookup = false;
-            return Task.FromResult<IntegrationExecutionSnapshot?>(null);
-        }
+            if (HideNextRequestIdLookup)
+            {
+                HideNextRequestIdLookup = false;
+                return Task.FromResult<IntegrationExecutionSnapshot?>(null);
+            }
 
-        return Task.FromResult(_rows.SingleOrDefault(row => row.PrincipalId == principalId && row.RequestId == requestId));
+            return Task.FromResult(_rows.SingleOrDefault(row => row.PrincipalId == principalId && row.RequestId == requestId));
+        }
     }
 
     public Task<IReadOnlyList<IntegrationExecutionSnapshot>> ListAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
 
-        var matches = _rows.Where(row => (filter.TriggerId is null || row.TriggerId == filter.TriggerId)
-                                         && (filter.SessionId is null || row.SessionId == filter.SessionId)
-                                         && (filter.Status is null || row.Status == filter.Status))
-                           .OrderByDescending(static row => row.ReceivedAtUtc)
-                           .ThenByDescending(static row => row.Id)
-                           .Skip(filter.Offset)
-                           .Take(filter.Limit)
-                           .ToArray();
-        return Task.FromResult<IReadOnlyList<IntegrationExecutionSnapshot>>(matches);
+        lock (_gate)
+        {
+            var matches = _rows.Where(row => (filter.TriggerId is null || row.TriggerId == filter.TriggerId)
+                                             && (filter.SessionId is null || row.SessionId == filter.SessionId)
+                                             && (filter.Status is null || row.Status == filter.Status))
+                               .OrderByDescending(static row => row.ReceivedAtUtc)
+                               .ThenByDescending(static row => row.Id)
+                               .Skip(filter.Offset)
+                               .Take(filter.Limit)
+                               .ToArray();
+            return Task.FromResult<IReadOnlyList<IntegrationExecutionSnapshot>>(matches);
+        }
     }
 
     /// <summary>Makes the next non-terminal CAS lose, as it does when a concurrent cancel CASed the same version first.</summary>
@@ -375,42 +426,45 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
         // RequestAborted into a write that must survive the client, and no test can tell.
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (ThrowOnNextStatusCas)
+        lock (_gate)
         {
-            ThrowOnNextStatusCas = false;
-            throw new SqliteException("database is locked", errorCode: 5);
-        }
+            if (ThrowOnNextStatusCas)
+            {
+                ThrowOnNextStatusCas = false;
+                throw new SqliteException("database is locked", errorCode: 5);
+            }
 
-        if (BeforeNextStatusCas is { } hook)
-        {
-            BeforeNextStatusCas = null;
-            hook();
-        }
+            if (BeforeNextStatusCas is { } hook)
+            {
+                BeforeNextStatusCas = null;
+                hook();
+            }
 
-        if (FailNextStatusCas)
-        {
-            FailNextStatusCas = false;
-            return Task.FromResult(false);
-        }
+            if (FailNextStatusCas)
+            {
+                FailNextStatusCas = false;
+                return Task.FromResult(false);
+            }
 
-        var index = _rows.FindIndex(row => row.Id == command.ExecutionId);
-        if (index < 0 || _rows[index].Version != command.ExpectedVersion || !command.ExpectedStatuses.Contains(_rows[index].Status))
-        {
-            return Task.FromResult(false);
-        }
+            var index = _rows.FindIndex(row => row.Id == command.ExecutionId);
+            if (index < 0 || _rows[index].Version != command.ExpectedVersion || !command.ExpectedStatuses.Contains(_rows[index].Status))
+            {
+                return Task.FromResult(false);
+            }
 
-        _rows[index] = _rows[index] with
-        {
-            Status = command.NewStatus,
-            StartedAtUtc = command.StartedAtUtc ?? _rows[index].StartedAtUtc,
-            EndedAtUtc = command.EndedAtUtc ?? _rows[index].EndedAtUtc,
-            InvocationId = command.InvocationId ?? _rows[index].InvocationId,
-            StopRequestedAtUtc = command.StopRequestedAtUtc ?? _rows[index].StopRequestedAtUtc,
-            FailureCategory = command.FailureCategory ?? _rows[index].FailureCategory,
-            FailureSummary = command.FailureSummary ?? _rows[index].FailureSummary,
-            Version = _rows[index].Version + 1
-        };
-        return Task.FromResult(true);
+            _rows[index] = _rows[index] with
+            {
+                Status = command.NewStatus,
+                StartedAtUtc = command.StartedAtUtc ?? _rows[index].StartedAtUtc,
+                EndedAtUtc = command.EndedAtUtc ?? _rows[index].EndedAtUtc,
+                InvocationId = command.InvocationId ?? _rows[index].InvocationId,
+                StopRequestedAtUtc = command.StopRequestedAtUtc ?? _rows[index].StopRequestedAtUtc,
+                FailureCategory = command.FailureCategory ?? _rows[index].FailureCategory,
+                FailureSummary = command.FailureSummary ?? _rows[index].FailureSummary,
+                Version = _rows[index].Version + 1
+            };
+            return Task.FromResult(true);
+        }
     }
 
     /// <summary>Makes the next terminal transaction throw, which must publish nothing and leave the row non-terminal.</summary>
@@ -425,11 +479,14 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
     /// <summary>Moves a row's receive stamp, so a queue-age deadline can be driven without waiting real minutes.</summary>
     public void Backdate(Guid executionId, long receivedAtUtc)
     {
-        var index = _rows.FindIndex(row => row.Id == executionId);
-        _rows[index] = _rows[index] with
+        lock (_gate)
         {
-            ReceivedAtUtc = receivedAtUtc
-        };
+            var index = _rows.FindIndex(row => row.Id == executionId);
+            _rows[index] = _rows[index] with
+            {
+                ReceivedAtUtc = receivedAtUtc
+            };
+        }
     }
 
     public Task<bool> TryTerminalizeAsync(IntegrationTerminalizeCommand command, CancellationToken cancellationToken = default)
@@ -437,41 +494,48 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
         ArgumentNullException.ThrowIfNull(command);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (ThrowOnNextTerminalize)
+        lock (_gate)
         {
-            ThrowOnNextTerminalize = false;
-            throw new DbUpdateException("The terminal transaction failed.");
-        }
+            if (ThrowOnNextTerminalize)
+            {
+                ThrowOnNextTerminalize = false;
+                throw new DbUpdateException("The terminal transaction failed.");
+            }
 
-        if (FailNextTerminalizeCas)
-        {
-            FailNextTerminalizeCas = FailSecondTerminalizeCas;
-            FailSecondTerminalizeCas = false;
-            return Task.FromResult(false);
-        }
+            if (FailNextTerminalizeCas)
+            {
+                FailNextTerminalizeCas = FailSecondTerminalizeCas;
+                FailSecondTerminalizeCas = false;
+                return Task.FromResult(false);
+            }
 
-        var index = _rows.FindIndex(row => row.Id == command.ExecutionId);
-        if (index < 0 || _rows[index].Version != command.ExpectedVersion || !command.ExpectedStatuses.Contains(_rows[index].Status))
-        {
-            return Task.FromResult(false);
-        }
+            var index = _rows.FindIndex(row => row.Id == command.ExecutionId);
+            if (index < 0 || _rows[index].Version != command.ExpectedVersion || !command.ExpectedStatuses.Contains(_rows[index].Status))
+            {
+                return Task.FromResult(false);
+            }
 
-        _rows[index] = _rows[index] with
-        {
-            Status = command.NewStatus,
-            EndedAtUtc = command.EndedAtUtc,
-            FailureCategory = command.FailureCategory,
-            FailureSummary = command.FailureSummary,
-            LastSequence = Math.Max(_rows[index].LastSequence, command.Sequence),
-            Version = _rows[index].Version + 1
-        };
-        AddEvent(new IntegrationEventAppend(Guid.NewGuid(), command.ExecutionId, command.Sequence, command.EventType, DetailJson: null, command.EndedAtUtc));
-        return Task.FromResult(true);
+            _rows[index] = _rows[index] with
+            {
+                Status = command.NewStatus,
+                EndedAtUtc = command.EndedAtUtc,
+                FailureCategory = command.FailureCategory,
+                FailureSummary = command.FailureSummary,
+                LastSequence = Math.Max(_rows[index].LastSequence, command.Sequence),
+                Version = _rows[index].Version + 1
+            };
+            AddEvent(new IntegrationEventAppend(Guid.NewGuid(), command.ExecutionId, command.Sequence, command.EventType, DetailJson: null, command.EndedAtUtc));
+            return Task.FromResult(true);
+        }
     }
 
     public Task AppendEventAsync(IntegrationEventAppend command, CancellationToken cancellationToken = default)
     {
-        AddEvent(command);
+        lock (_gate)
+        {
+            AddEvent(command);
+        }
+
         return Task.CompletedTask;
     }
 
@@ -482,11 +546,14 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
 
-        var matches = _events.Where(row => row.ExecutionId == executionId && row.Sequence > sinceSequence)
-                             .OrderBy(static row => row.Sequence)
-                             .Take(limit)
-                             .ToArray();
-        return Task.FromResult<IReadOnlyList<IntegrationExecutionEventSnapshot>>(matches);
+        lock (_gate)
+        {
+            var matches = _events.Where(row => row.ExecutionId == executionId && row.Sequence > sinceSequence)
+                                 .OrderBy(static row => row.Sequence)
+                                 .Take(limit)
+                                 .ToArray();
+            return Task.FromResult<IReadOnlyList<IntegrationExecutionEventSnapshot>>(matches);
+        }
     }
 
     private void AddEvent(IntegrationEventAppend command)

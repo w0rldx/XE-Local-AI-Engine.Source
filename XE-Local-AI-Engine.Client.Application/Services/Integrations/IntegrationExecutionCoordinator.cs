@@ -169,27 +169,60 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         }
     }
 
+    /// <summary>
+    ///     ONE channel reader, but processing is NOT serialised on it. Awaiting <see cref="ProcessOneAsync" /> here kept
+    ///     the next id in the channel for the whole of the current run, and every deadline control — the queue-age
+    ///     pre-check, the <c>CancelAfter</c> on the lease wait, the post-acquisition re-check — plus the sole writer of
+    ///     <c>Queued</c> live inside that method. A second execution therefore never reached <c>Queued</c>, never
+    ///     started measuring its queue age, and only timed out once the run ahead of it finished: R5-2's bound
+    ///     measured the wrong thing.
+    ///     <para>
+    ///         Dispatching instead lets every admitted execution wait on the node's invocation lease itself, which is
+    ///         what serialises the runs — a <see cref="SemaphoreSlim" /> granting in wait order. The number of live
+    ///         tasks is bounded by the admission cap, because each one holds a non-terminal row against it.
+    ///     </para>
+    /// </summary>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Touched only by this loop, so no lock: pruning on every dispatch keeps it at the live-task count.
+        var inFlight = new List<Task>();
         try
         {
             // Queued ids left behind when the token trips are simply dropped: their rows are still Accepted, and the
             // next StartAsync sweep flips them to Failed / restart.
             while (await _queue.Reader.WaitToReadAsync(stoppingToken).ConfigureAwait(false))
             {
-                while (_queue.Reader.TryRead(out var executionId))
+                while (!stoppingToken.IsCancellationRequested && _queue.Reader.TryRead(out var executionId))
                 {
-                    await ProcessOneAsync(executionId, stoppingToken).ConfigureAwait(false);
-                    if (stoppingToken.IsCancellationRequested)
-                    {
-                        return;
-                    }
+                    _ = inFlight.RemoveAll(static task => task.IsCompleted);
+                    inFlight.Add(RunDispatchedAsync(executionId, stoppingToken));
                 }
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             // Ordinary shutdown.
+        }
+
+        // Every dispatched run terminalizes itself on the way down (`shutdown`), so the host must not tear their DI
+        // scopes away mid-write. RunDispatchedAsync never faults, so this cannot throw.
+        await Task.WhenAll(inFlight).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Runs one dispatched execution to completion. <see cref="ProcessOneAsync" /> terminalizes its own faults;
+    ///     anything that still escapes it — a store read that throws before the run's own handler is in scope — must
+    ///     not take the reader loop, and with it every later execution on this node, down with it.
+    /// </summary>
+    private async Task RunDispatchedAsync(Guid executionId, CancellationToken stoppingToken)
+    {
+        try
+        {
+            await ProcessOneAsync(executionId, stoppingToken).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Integration execution {ExecutionId} faulted outside its own handler; its row is left for the next restart sweep.", executionId);
         }
     }
 

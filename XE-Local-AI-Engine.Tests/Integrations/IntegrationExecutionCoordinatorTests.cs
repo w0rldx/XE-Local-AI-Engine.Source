@@ -600,6 +600,123 @@ public sealed class IntegrationExecutionCoordinatorTests
         }
     }
 
+    [Test]
+    public async Task ExecuteAsync_WhileAnotherHolderOwnsTheLease_MovesEveryQueuedExecutionToQueued()
+    {
+        // Live F1: the reader awaited ProcessOneAsync, so the second id sat in the channel for the whole of the first
+        // run. It never reached Queued and never started measuring its queue age.
+        using var harness = new Harness();
+        harness.HoldLeaseSlot();
+        var first = harness.SeedLive();
+        var second = harness.SeedLive();
+
+        await harness.Coordinator.StartAsync(CancellationToken.None);
+        try
+        {
+            await harness.Queue.Writer.WriteAsync(first);
+            await harness.Queue.Writer.WriteAsync(second);
+
+            await WaitUntilAsync(() => harness.Row(first).Status == IntegrationExecutionStatus.Queued
+                                       && harness.Row(second).Status == IntegrationExecutionStatus.Queued);
+        }
+        finally
+        {
+            harness.ReleaseLeaseSlot();
+            await harness.Coordinator.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhileAnotherHolderOwnsTheLease_TimesTheSecondExecutionOutOnItsOwnDeadline()
+    {
+        // The second execution must WAIT on the lease and time out there — not sit in the channel and get failed by
+        // the pre-check the moment the run ahead of it finishes, which is what the live round recorded at 227 s.
+        using var harness = new Harness(maxQueueAgeSeconds: 1);
+        harness.HoldLeaseSlot();
+        var first = harness.SeedLive();
+        var second = harness.SeedLive();
+
+        await harness.Coordinator.StartAsync(CancellationToken.None);
+        try
+        {
+            await harness.Queue.Writer.WriteAsync(first);
+            await harness.Queue.Writer.WriteAsync(second);
+
+            await WaitUntilAsync(() => harness.Row(second).Status == IntegrationExecutionStatus.Failed);
+            var row = harness.Row(second);
+            AssertEx.Equal(IntegrationFailureCategories.QueueTimeout, row.FailureCategory);
+            AssertEx.True(row.StartedAtUtc is null, "A run that never got the lease never started.");
+            AssertEx.True(harness.Executions.Events.Any(candidate => candidate.ExecutionId == second
+                                                                     && string.Equals(candidate.EventType, IntegrationStreamEventTypes.ExecutionQueued, StringComparison.Ordinal)),
+                "Queued is the proof it was waiting on the lease rather than on the channel reader.");
+        }
+        finally
+        {
+            harness.ReleaseLeaseSlot();
+            await harness.Coordinator.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenOneDispatchedTaskFaults_KeepsDequeuingTheRest()
+    {
+        // A store read that throws before the run's own handler is in scope escapes ProcessOneAsync. On the reader
+        // loop that killed the loop, and with it every later execution on the node.
+        using var harness = new Harness();
+        var faulting = harness.SeedLive();
+        var healthy = harness.SeedLive();
+
+        await harness.Coordinator.StartAsync(CancellationToken.None);
+        try
+        {
+            harness.Executions.ThrowOnNextGetById = true;
+            await harness.Queue.Writer.WriteAsync(faulting);
+            await WaitUntilAsync(() => !harness.Executions.ThrowOnNextGetById);
+
+            await harness.Queue.Writer.WriteAsync(healthy);
+            await WaitUntilAsync(() => harness.Row(healthy).Status == IntegrationExecutionStatus.Completed);
+
+            AssertEx.Equal(IntegrationExecutionStatus.Accepted, harness.Row(faulting).Status,
+                "The faulted row is left non-terminal for the next restart sweep, which is the documented outcome.");
+        }
+        finally
+        {
+            await harness.Coordinator.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Test]
+    public async Task StopAsync_WithSeveralExecutionsWaitingOnTheLease_TerminalizesEveryOneAsShutdown()
+    {
+        using var harness = new Harness();
+        harness.HoldLeaseSlot();
+        var first = harness.SeedLive();
+        var second = harness.SeedLive();
+
+        await harness.Coordinator.StartAsync(CancellationToken.None);
+        try
+        {
+            await harness.Queue.Writer.WriteAsync(first);
+            await harness.Queue.Writer.WriteAsync(second);
+            await WaitUntilAsync(() => harness.Row(first).Status == IntegrationExecutionStatus.Queued
+                                       && harness.Row(second).Status == IntegrationExecutionStatus.Queued);
+
+            // ExecuteAsync awaits its dispatched tasks, so StopAsync does not return until both have terminalized.
+            await harness.Coordinator.StopAsync(CancellationToken.None);
+
+            foreach (var executionId in new[] { first, second })
+            {
+                var row = harness.Row(executionId);
+                AssertEx.Equal(IntegrationExecutionStatus.Failed, row.Status);
+                AssertEx.Equal(IntegrationFailureCategories.Shutdown, row.FailureCategory, "A run stopped by the host is a shutdown, not a queue timeout.");
+            }
+        }
+        finally
+        {
+            harness.ReleaseLeaseSlot();
+        }
+    }
+
     private static bool IsTerminalEvent(string eventType) =>
         string.Equals(eventType, IntegrationStreamEventTypes.ExecutionCompleted, StringComparison.Ordinal)
         || string.Equals(eventType, IntegrationStreamEventTypes.ExecutionFailed, StringComparison.Ordinal)
@@ -640,6 +757,13 @@ public sealed class IntegrationExecutionCoordinatorTests
         private readonly FakeIntegrationSessionStore _sessions = new();
         private readonly TrackingDisposable _reservation;
         private readonly TrackingAsyncDisposable _lease;
+
+        /// <summary>
+        ///     The node's single invocation permit, modelled for real rather than faked away: F1 is entirely about who
+        ///     waits on it and when, and a lease every caller gets instantly cannot show that.
+        /// </summary>
+        private readonly SemaphoreSlim _leaseSlot = new(initialCount: 1, maxCount: 1);
+
         private readonly ServiceProvider _provider;
         private readonly IntegrationTriggerSnapshot _trigger;
         private TaskCompletionSource _leaseGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -738,8 +862,9 @@ public sealed class IntegrationExecutionCoordinatorTests
             services.AddSingleton(UsageProviders);
             _provider = services.BuildServiceProvider();
 
+            Queue = Channel.CreateBounded<Guid>(8);
             Coordinator = new IntegrationExecutionCoordinator(_provider.GetRequiredService<IServiceScopeFactory>(),
-                Channel.CreateBounded<Guid>(8),
+                Queue,
                 _buffer,
                 Cancellations,
                 new QueueAgeOptions(this),
@@ -748,6 +873,9 @@ public sealed class IntegrationExecutionCoordinatorTests
         }
 
         public IntegrationExecutionCoordinator Coordinator { get; }
+
+        /// <summary>The coordinator's own queue, so a test can drive the hosted loop instead of calling into it.</summary>
+        public Channel<Guid> Queue { get; }
 
         public FakeIntegrationExecutionStore Executions { get; } = new();
 
@@ -855,6 +983,13 @@ public sealed class IntegrationExecutionCoordinatorTests
         public IntegrationExecutionSnapshot Row(Guid executionId) =>
             Executions.Rows.Single(row => row.Id == executionId);
 
+        /// <summary>
+        ///     A row admitted AFTER this coordinator was constructed, so the startup sweep leaves it alone and the
+        ///     hosted loop is the only thing that touches it.
+        /// </summary>
+        public Guid SeedLive() =>
+            SeedAccepted(receivedAtUtc: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 1_000);
+
         public void DisableTrigger() =>
             _triggers.Disable(_trigger.Id);
 
@@ -864,8 +999,16 @@ public sealed class IntegrationExecutionCoordinatorTests
         public void ReleaseLease() =>
             _leaseGate.TrySetResult();
 
+        /// <summary>Takes the node's one permit on behalf of something else — a chat turn, a scheduled run.</summary>
+        public void HoldLeaseSlot() =>
+            _leaseSlot.Wait();
+
+        public void ReleaseLeaseSlot() =>
+            _ = _leaseSlot.Release();
+
         public void Dispose()
         {
+            _leaseSlot.Dispose();
             _buffer.Dispose();
             _reservation.Dispose();
             _provider.Dispose();
@@ -931,6 +1074,9 @@ public sealed class IntegrationExecutionCoordinatorTests
         {
             LeaseRequested = true;
             await _leaseGate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            // The permit wait is the cancellable part, exactly as the dispatcher's SemaphoreSlim is.
+            await _leaseSlot.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (LeaseDelay > TimeSpan.Zero)
             {
                 // Deliberately NOT linked to the deadline token: the lease has to arrive LATE, not be cancelled.
@@ -1009,6 +1155,7 @@ public sealed class IntegrationExecutionCoordinatorTests
             public ValueTask DisposeAsync()
             {
                 harness.RecordLeaseDisposed();
+                harness.ReleaseLeaseSlot();
                 return ValueTask.CompletedTask;
             }
         }
