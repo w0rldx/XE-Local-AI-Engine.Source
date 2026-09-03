@@ -3,11 +3,13 @@ namespace XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default <see cref="IInferenceInvalidationEvaluator" />. Runs three cheap checks against the freeze baseline —
-///     active build tag, GPU vendor/VRAM delta, and live global-free VRAM. NVIDIA's refreshed global figure is preferred
+///     Default <see cref="IInferenceInvalidationEvaluator" />. Runs four checks against the freeze baseline — active
+///     build tag, GPU vendor/VRAM delta, live global-free VRAM, and the placement axis that refuses a row whose replay
+///     would contradict today's expert-offload verdict. NVIDIA's refreshed global figure is preferred
 ///     because llama.cpp's process budget can ignore external WDDM pressure. Cold validation deliberately does not
 ///     launch a process-budget probe; global-free VRAM is the only live invalidation baseline.
 /// </summary>
@@ -20,12 +22,14 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
     private readonly IGgufModelStore _ggufModelStore;
     private readonly IInstalledRuntimeStore _installedRuntimeStore;
     private readonly ILaunchPolicyFingerprintProvider _launchPolicyFingerprintProvider;
+    private readonly IProcessContextAllocationResolver _allocationResolver;
     private readonly ILogger<InferenceInvalidationEvaluator> _logger;
 
     public InferenceInvalidationEvaluator(IInstalledRuntimeStore installedRuntimeStore,
         IGgufModelStore ggufModelStore,
         ILaunchPolicyFingerprintProvider launchPolicyFingerprintProvider,
         IHardwareProfiler hardwareProfiler,
+        IProcessContextAllocationResolver allocationResolver,
         ILogger<InferenceInvalidationEvaluator> logger)
     {
         _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
@@ -33,6 +37,7 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
         _launchPolicyFingerprintProvider =
             launchPolicyFingerprintProvider ?? throw new ArgumentNullException(nameof(launchPolicyFingerprintProvider));
         _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
+        _allocationResolver = allocationResolver ?? throw new ArgumentNullException(nameof(allocationResolver));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -63,7 +68,59 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
         }
 
         // (d) Live global-free VRAM below the frozen global-free baseline. Process budget is never launched or substituted.
-        return HasLiveFreeVramRegressed(profile, hardware);
+        if (HasLiveFreeVramRegressed(profile, hardware))
+        {
+            return true;
+        }
+
+        // (e) The frozen placement contradicts today's expert-offload verdict. Last because it is the only axis that
+        // prices the model against the current budgets; the cheap short-circuits above have already run.
+        return await ContradictsCurrentPlacementAsync(profile, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> ContradictsCurrentPlacementAsync(InferenceProfileRecord profile, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        // Only a row with NO tensor override can be hiding an expert-offload decision, and only a GPU backend can have
+        // made one. Both exits are the dense/resident byte-identical path: nothing is priced, nothing is probed.
+        if (!string.IsNullOrWhiteSpace(profile.OverrideTensor)
+            || !InferenceBackends.TryGetGpuVariant(profile.Backend, out var variant))
+        {
+            return false;
+        }
+
+        try
+        {
+            // The SAME allocation the serving spawn resolves for these very replay arguments (the resolver caches by
+            // content/role/variant/args), so the verdict this reads is the verdict that spawn would launch under.
+            var replay = ResolvedLaunchArguments.Replay(profile.CtxSize,
+                profile.NGpuLayers,
+                profile.TensorSplit,
+                profile.OverrideTensor,
+                profile.KvTypeK,
+                profile.KvTypeV,
+                profile.FlashAttn);
+            var allocation = await _allocationResolver
+                .ResolveAsync(profile.ModelName, (ModelRole)profile.Role, variant, replay, ct)
+                .ConfigureAwait(false);
+            if (allocation?.Placement != ProcessPlacementMode.ExpertOffload)
+            {
+                return false;
+            }
+
+            _logger.LogWarning("Inference profile {ProfileId} carries no tensor override while the current memory-fit verdict places its experts in system RAM; flagging for re-explore rather than replaying it as fully resident.",
+                profile.Id);
+            return true;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // This runs on the cold spawn path, which must never throw. An unavailable verdict degrades to "no
+            // contradiction" — the same axis-skips-on-unknown-input rule the build and hardware axes already follow.
+            _logger.LogWarning(exception, "Could not re-derive the current placement verdict for inference profile {ProfileId}; leaving its placement axis unjudged.", profile.Id);
+            return false;
+        }
     }
 
     private async Task<bool> HasLaunchPolicyDriftedAsync(InferenceProfileRecord profile, CancellationToken ct)

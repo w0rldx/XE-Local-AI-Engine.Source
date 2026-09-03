@@ -214,7 +214,8 @@ public sealed class InferenceInvalidationEvaluatorTests
     private static InferenceInvalidationEvaluator BuildEvaluator(string installedTag,
         HardwareProfile hardware,
         string modelFilePath,
-        ILaunchPolicyFingerprintProvider fingerprintProvider)
+        ILaunchPolicyFingerprintProvider fingerprintProvider,
+        IProcessContextAllocationResolver? allocationResolver = null)
     {
         var hardwareProfiler = Substitute.For<IHardwareProfiler>();
         hardwareProfiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(hardware));
@@ -231,6 +232,7 @@ public sealed class InferenceInvalidationEvaluatorTests
             modelStore,
             fingerprintProvider,
             hardwareProfiler,
+            allocationResolver ?? Substitute.For<IProcessContextAllocationResolver>(),
             NullLogger<InferenceInvalidationEvaluator>.Instance);
     }
 
@@ -265,6 +267,7 @@ public sealed class InferenceInvalidationEvaluatorTests
             modelStore,
             fingerprintProvider,
             hardwareProfiler,
+            Substitute.For<IProcessContextAllocationResolver>(),
             NullLogger<InferenceInvalidationEvaluator>.Instance);
     }
 
@@ -282,6 +285,107 @@ public sealed class InferenceInvalidationEvaluatorTests
             CpuCores = 16,
             FreeDiskBytes = 500 * Gb
         };
+    }
+
+    [Test]
+    public async Task Placement_LegacyExpertOffloadRowWithNoOverrideTensor_ContradictsCurrentVerdict()
+    {
+        // The row an intermediate build could freeze: the explore decided expert offload but recorded no -ot, so its
+        // replay would launch the model fully resident under a verdict that says the experts belong in system RAM.
+        var evaluator = BuildEvaluatorWithPlacement(ProcessPlacementMode.ExpertOffload, out _);
+
+        var contradicts =
+            await evaluator.ContradictsCurrentPlacementAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb) with { IsMoe = true, ExpertCount = 128 },
+                CancellationToken.None);
+
+        AssertEx.True(contradicts);
+    }
+
+    [Test]
+    public async Task Placement_ExpertOffloadRowThatCarriesItsOverrideTensor_IsNotContradicted()
+    {
+        // -ot IS the frozen expert placement, so a row that has one agrees with the verdict by construction — and the
+        // verdict is never even priced.
+        var evaluator = BuildEvaluatorWithPlacement(ProcessPlacementMode.ExpertOffload, out var allocationResolver);
+
+        var contradicts = await evaluator.ContradictsCurrentPlacementAsync(
+            FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb) with
+            {
+                IsMoe = true,
+                ExpertCount = 128,
+                OverrideTensor = @"\.ffn_(up|down|gate|gate_up)_(ch|)exps=CPU"
+            },
+            CancellationToken.None);
+
+        AssertEx.False(contradicts);
+        await allocationResolver.DidNotReceiveWithAnyArgs()
+                                .ResolveAsync(default!, default, default, default!, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Placement_ResidentVerdictLeavesADenseRowUntouched()
+    {
+        // The byte-identical pin: a dense model that fits resident keeps replaying with no tensor override.
+        var evaluator = BuildEvaluatorWithPlacement(ProcessPlacementMode.GpuResident, out _);
+
+        var contradicts = await evaluator.ContradictsCurrentPlacementAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb),
+            CancellationToken.None);
+
+        AssertEx.False(contradicts);
+    }
+
+    [Test]
+    public async Task Placement_WhenTheVerdictCannotBeDerived_TheAxisIsSkippedRatherThanReportingStale()
+    {
+        var allocationResolver = Substitute.For<IProcessContextAllocationResolver>();
+        allocationResolver.ResolveAsync(Arg.Any<string>(),
+                              Arg.Any<ModelRole>(),
+                              Arg.Any<GpuVariant>(),
+                              Arg.Any<ResolvedLaunchArguments>(),
+                              Arg.Any<CancellationToken>())
+                          .Returns<Task<ProcessContextAllocation?>>(_ => throw new InvalidOperationException("no facts"));
+
+        var evaluator = BuildEvaluator(FrozenBuild,
+            NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb),
+            "/models/model.gguf",
+            MatchingFingerprintProvider(),
+            allocationResolver);
+
+        AssertEx.False(await evaluator.ContradictsCurrentPlacementAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb),
+            CancellationToken.None));
+    }
+
+    private static InferenceInvalidationEvaluator BuildEvaluatorWithPlacement(ProcessPlacementMode placement,
+        out IProcessContextAllocationResolver allocationResolver)
+    {
+        var resolver = Substitute.For<IProcessContextAllocationResolver>();
+        resolver.ResolveAsync(Arg.Any<string>(),
+                    Arg.Any<ModelRole>(),
+                    Arg.Any<GpuVariant>(),
+                    Arg.Any<ResolvedLaunchArguments>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult<ProcessContextAllocation?>(new ProcessContextAllocation(ProcessContextTokens: 4096,
+                    ModelTrainContextTokens: null,
+                    ProcessContextAllocationSource.FrozenProfile,
+                    placement,
+                    new ResourceFootprint(8 * Gb, 8 * Gb),
+                    ContentIdentity: "content",
+                    CacheKey: "key")));
+        allocationResolver = resolver;
+
+        return BuildEvaluator(FrozenBuild,
+            NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb),
+            "/models/model.gguf",
+            MatchingFingerprintProvider(),
+            resolver);
+    }
+
+    private static ILaunchPolicyFingerprintProvider MatchingFingerprintProvider()
+    {
+        var fingerprintProvider = Substitute.For<ILaunchPolicyFingerprintProvider>();
+        fingerprintProvider.MatchesAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+                           .Returns(Task.FromResult(true));
+        return fingerprintProvider;
     }
 
     private static InferenceProfileRecord FrozenRecord(string build, long? freeVramAtFreeze)

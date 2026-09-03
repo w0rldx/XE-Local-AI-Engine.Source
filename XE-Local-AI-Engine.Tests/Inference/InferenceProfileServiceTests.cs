@@ -199,6 +199,31 @@ public sealed class InferenceProfileServiceTests
     }
 
     [Test]
+    public async Task Benchmark_ForALegacyExpertOffloadProfileWithNoOverrideTensor_IsStaleAndNeverSpawns()
+    {
+        // The legacy row an intermediate C5 build could freeze: fingerprint version 5, expert offload decided, but no
+        // -ot recorded. Its replay would launch an MoE model fully resident, so the placement axis marks it Stale.
+        var fixture = new ServiceFixture();
+        var profile = ExploredRecord() with
+        {
+            OverrideTensor = null,
+            IsMoe = true,
+            ExpertCount = 128
+        };
+        fixture.WithProfiles(profile);
+        fixture.WithLocalModel();
+        fixture.InvalidationEvaluator.ContradictsCurrentPlacementAsync(profile, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult(true));
+
+        var result = await fixture.CreateService().BenchmarkAsync(profile.Id, CancellationToken.None);
+
+        AssertEx.False(result.Success);
+        AssertEx.NotNullOrEmpty(result.FailureReason);
+        await fixture.ProfileStore.Received(1).MarkStaleAsync(profile.Id, Arg.Any<CancellationToken>());
+        AssertEx.Empty(fixture.Supervisor.ReceivedCalls());
+    }
+
+    [Test]
     public async Task Benchmark_ForAResidentProfile_ReplaysWithNoOverrideTensor()
     {
         // The byte-identical pin: a dense/fully-resident profile's replay is untouched by the expert-offload rule.
@@ -679,6 +704,8 @@ public sealed class InferenceProfileServiceTests
         public ILaunchPolicyFingerprintProvider LaunchPolicyFingerprintProvider { get; } =
             Substitute.For<ILaunchPolicyFingerprintProvider>();
 
+        public IInferenceInvalidationEvaluator InvalidationEvaluator { get; } = Substitute.For<IInferenceInvalidationEvaluator>();
+
         public LlamaServerProfilingContext? CapturedBenchmarkContext { get; private set; }
 
         public InferenceBenchmarkSpec? CapturedBenchmarkSpec { get; private set; }
@@ -841,6 +868,7 @@ public sealed class InferenceProfileServiceTests
                 HardwareProfiler,
                 ProcessVramBudgetProbe,
                 LaunchPolicyFingerprintProvider,
+                InvalidationEvaluator,
                 Options.Create(new InferenceBenchmarkVramAdmissionOptions()),
                 NullLogger<InferenceProfileService>.Instance);
         }
