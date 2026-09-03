@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using XE_Local_AI_Engine.Client;
+using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -40,6 +41,23 @@ public sealed class ServiceProviderValidationTests
         // Reaching here means Build() itself passed ValidateOnBuild: every non-factory registration's dependencies are
         // registered, and no singleton captures a scoped service.
         AssertEx.NotNull(host.App.Services);
+    }
+
+    /// <summary>
+    ///     The reasoning-effort dispatcher must be resolvable ONLY from a scope. Its own dependencies are scoped, and
+    ///     the invocation runner that uses it is a singleton, so a captive dependency here would be silent in
+    ///     production and fatal under load. <c>CompositionRoot_BuildsWithScopeAndBuildValidationEnabled</c> above is
+    ///     the negative half — the build itself fails if the runner ever captures it — and this is the positive half.
+    /// </summary>
+    [Test]
+    public async Task ReasoningEffortDispatcher_ResolvesFromAScopeOnly()
+    {
+        await using var host = await ValidatedHost.CreateAsync();
+
+        AssertEx.Throws<InvalidOperationException>(() => host.App.Services.GetRequiredService<IReasoningEffortDispatcher>());
+
+        using var scope = host.App.Services.CreateScope();
+        AssertEx.NotNull(scope.ServiceProvider.GetRequiredService<IReasoningEffortDispatcher>());
     }
 
     [Test]

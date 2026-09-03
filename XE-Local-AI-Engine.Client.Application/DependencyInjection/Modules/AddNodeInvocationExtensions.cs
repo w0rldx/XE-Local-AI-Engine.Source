@@ -19,6 +19,8 @@ using XE_Local_AI_Engine.Client.Services.Interaction;
 using XE_Local_AI_Engine.Client.Services.Interaction.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
+using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
@@ -93,6 +95,10 @@ internal static class AddNodeInvocationExtensions
         builder.Services.AddSingleton<ToolApprovalCoordinator>();
         builder.Services.AddSingleton<ApiToolCallBridge>();
         builder.Services.AddSingleton<InvocationLifecycleTracker>();
+        // SCOPED, and the singleton runner above may not hold it under any wrapper — not even Lazy<T>, which defers
+        // construction but never opens a scope. The runner opens ONE explicit scope per `auto` turn instead (see
+        // InvocationRunner.RunAsync), so a turn with any other effort never resolves this service at all.
+        builder.Services.AddScoped<IReasoningEffortDispatcher, DefaultReasoningEffortDispatcher>();
         builder.Services.AddSingleton<IInvocationRunner, InvocationRunner>();
         builder.Services.AddHostedService<DetachedInvocationReaper>();
         builder.Services.AddSingleton<IInvocationHistory, InvocationHistory>();
