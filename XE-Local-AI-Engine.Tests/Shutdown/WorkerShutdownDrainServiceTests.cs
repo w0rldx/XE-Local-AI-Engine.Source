@@ -345,6 +345,11 @@ public sealed class WorkerShutdownDrainServiceTests
             return Task.CompletedTask;
         }
 
+        public Task ReportServedModelAsync(Guid invocationId, string modelUsed)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory)
         {
             return Task.CompletedTask;

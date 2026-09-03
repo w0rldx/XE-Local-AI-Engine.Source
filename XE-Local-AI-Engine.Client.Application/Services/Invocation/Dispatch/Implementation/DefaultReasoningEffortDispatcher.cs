@@ -91,16 +91,35 @@ public sealed class DefaultReasoningEffortDispatcher(
             return Decide(request, tier, tierReason);
         }
 
-        // Swap gate 1. ModelTrustLocality treats `Unresolved` exactly as `Cloud`, so `== Local` is fail-closed by
-        // construction.
-        var resolvedIsLocal = await IsNodeLocalAsync(request.ResolvedModel, cancellationToken).ConfigureAwait(false);
-        var swap = await ResolveSwapAsync(request, resolvedIsLocal, cancellationToken).ConfigureAwait(false);
+        var swap = await ResolveSwapAsync(request, cancellationToken).ConfigureAwait(false);
         if (swap.FastModel is null)
         {
             return Decide(request, tier, swap.RefusalReason ?? tierReason);
         }
 
-        return await DecideSwappedAsync(tier, tierReason, swap, cancellationToken).ConfigureAwait(false);
+        // OWNERSHIP OF THE RESERVATION TRANSFERS ONLY WITH A RETURNED DECISION. Admission has already booked the fast
+        // model's bytes and, on an Allow verdict, one loaded-process slot; the capability re-resolution below is the
+        // one node-side call still standing between that booking and the runner receiving it. Every non-success exit
+        // from here therefore releases it, or the ledger holds a slot for a turn that never ran on the fast model and
+        // later admissions are wrongly rejected.
+        try
+        {
+            return await DecideSwappedAsync(tier, tierReason, swap, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // The turn itself is terminating, so the cancellation propagates exactly as it does out of the swap
+            // ladder below — but the booking is still ours to release.
+            swap.Reservation?.Dispose();
+            throw;
+        }
+        catch (Exception)
+        {
+            // Same fail-soft contract as the swap ladder: a capability lookup that throws means "this node cannot
+            // serve a swap right now", never a failed turn.
+            swap.Reservation?.Dispose();
+            return Decide(request, tier, ReasoningDispatchReasons.FastModelUnavailable);
+        }
     }
 
     /// <summary>
@@ -129,70 +148,71 @@ public sealed class DefaultReasoningEffortDispatcher(
 
     /// <summary>
     ///     Either the node-local FAST model this turn may be moved onto (with the ledger reservation its admission
-    ///     produced, when it produced one), or the reason it may not be. Ordered cheapest-first: the pure request-shape
-    ///     gates run before any node-side lookup, so a turn that can never swap pays for no settings read, no trust
-    ///     lookup and no capacity probe, and the reason names the most specific rule that applies.
+    ///     produced, when it produced one), or the reason it may not be. Ordered so the reason names the most specific
+    ///     rule that applies, and so a turn that can never swap pays for no settings read and no capacity probe.
     ///     <para>
     ///         It never propagates a node-side failure. The dispatcher's contract is that it never fails a turn — a
-    ///         settings read, a provider lookup or a capacity probe that throws means "this node cannot serve a swap
-    ///         right now", which is exactly <see cref="ReasoningDispatchReasons.FastModelUnavailable" />. A
-    ///         cancellation still propagates, because the turn itself is terminating.
+    ///         TRUST lookup, a settings read, a provider lookup or a capacity probe that throws means "this node
+    ///         cannot serve a swap right now", which is exactly
+    ///         <see cref="ReasoningDispatchReasons.FastModelUnavailable" />. Every node-side call therefore sits
+    ///         INSIDE the try below, the resolved model's own locality lookup included: it is the first gate, and a
+    ///         trust store that is briefly unreachable must degrade the turn, not fail it. A cancellation still
+    ///         propagates, because the turn itself is terminating.
     ///     </para>
     /// </summary>
-    private async Task<SwapResolution> ResolveSwapAsync(ReasoningDispatchRequest request,
-        bool resolvedIsLocal,
-        CancellationToken cancellationToken)
+    private async Task<SwapResolution> ResolveSwapAsync(ReasoningDispatchRequest request, CancellationToken cancellationToken)
     {
-        // The turn's data was admitted upstream against the resolved model's egress posture; replacing a cloud model
-        // would move that data somewhere the gate never authorised.
-        if (!resolvedIsLocal)
-        {
-            return SwapResolution.Refused(ReasoningDispatchReasons.CloudNoSwap);
-        }
-
-        // Fail-closed: unknown provenance is `false`, so every construction site that never heard of this feature
-        // refuses the swap without an edit.
-        if (!request.AllowAutoModelSwap)
-        {
-            return SwapResolution.Refused(ReasoningDispatchReasons.ModelPinned);
-        }
-
-        // The small model would have to drive a tool loop against an offer that was ranked, resolved and authorised
-        // for the big one. The TIER still stands — this refuses only the swap.
-        if (request.OfferedToolCount > 0)
-        {
-            return SwapResolution.Refused(ReasoningDispatchReasons.ToolsNoSwap);
-        }
-
-        // The fast model's vision capability is a separate question from its reasoning depth, and the attachment
-        // egress gate admitted the image against the resolved model.
-        if (request.HasAttachments)
-        {
-            return SwapResolution.Refused(ReasoningDispatchReasons.AttachmentsNoSwap);
-        }
-
-        // A skill-bearing turn expects the model to fetch and follow a skill body over progressive disclosure; a small
-        // model handed that loop fails differently from one that simply answers more briefly.
-        if (request.HasSkills)
-        {
-            return SwapResolution.Refused(ReasoningDispatchReasons.SkillsNoSwap);
-        }
-
-        // The schema compiles to a grammar the swapped model was never chosen for.
-        if (request.HasResponseSchema)
-        {
-            return SwapResolution.Refused(ReasoningDispatchReasons.SchemaNoSwap);
-        }
-
-        // A scheduled run already holds a capacity reservation for its effective model; a second one double-books the
-        // ledger and burns a loaded-process slot for a single turn.
-        if (request.IsUnattended)
-        {
-            return SwapResolution.Refused(ReasoningDispatchReasons.UnattendedNoSwap);
-        }
-
         try
         {
+            // Swap gate 1. The turn's data was admitted upstream against the resolved model's egress posture, and
+            // replacing a cloud model would move that data somewhere the gate never authorised. Unresolved trust is
+            // treated exactly as cloud, so demanding local is fail-closed by construction.
+            if (!await IsNodeLocalAsync(request.ResolvedModel, cancellationToken).ConfigureAwait(false))
+            {
+                return SwapResolution.Refused(ReasoningDispatchReasons.CloudNoSwap);
+            }
+
+            // Fail-closed: unknown provenance is `false`, so every construction site that never heard of this feature
+            // refuses the swap without an edit.
+            if (!request.AllowAutoModelSwap)
+            {
+                return SwapResolution.Refused(ReasoningDispatchReasons.ModelPinned);
+            }
+
+            // The small model would have to drive a tool loop against an offer that was ranked, resolved and
+            // authorised for the big one. The TIER still stands — this refuses only the swap.
+            if (request.OfferedToolCount > 0)
+            {
+                return SwapResolution.Refused(ReasoningDispatchReasons.ToolsNoSwap);
+            }
+
+            // The fast model's vision capability is a separate question from its reasoning depth, and the attachment
+            // egress gate admitted the image against the resolved model.
+            if (request.HasAttachments)
+            {
+                return SwapResolution.Refused(ReasoningDispatchReasons.AttachmentsNoSwap);
+            }
+
+            // A skill-bearing turn expects the model to fetch and follow a skill body over progressive disclosure; a
+            // small model handed that loop fails differently from one that simply answers more briefly.
+            if (request.HasSkills)
+            {
+                return SwapResolution.Refused(ReasoningDispatchReasons.SkillsNoSwap);
+            }
+
+            // The schema compiles to a grammar the swapped model was never chosen for.
+            if (request.HasResponseSchema)
+            {
+                return SwapResolution.Refused(ReasoningDispatchReasons.SchemaNoSwap);
+            }
+
+            // A scheduled run already holds a capacity reservation for its effective model; a second one double-books
+            // the ledger and burns a loaded-process slot for a single turn.
+            if (request.IsUnattended)
+            {
+                return SwapResolution.Refused(ReasoningDispatchReasons.UnattendedNoSwap);
+            }
+
             var fastModel = await _nodeRuntimeSettings.GetAutoEffortFastModelNameAsync(cancellationToken).ConfigureAwait(false);
 
             // The answer on every node that leaves the setting blank, which is the shipped default.

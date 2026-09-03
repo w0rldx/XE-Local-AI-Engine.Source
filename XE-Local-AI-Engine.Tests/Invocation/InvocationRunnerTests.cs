@@ -3204,6 +3204,92 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task Dispatch_WhenModelSwapped_RecordsTheServedModelOnTheInvocationState()
+    {
+        // The invocation state is seeded with the model the PACKAGE named, and BOTH the persisted message row and the
+        // run envelope's provider attribution are read from it. A swapped turn that leaves it alone is recorded, and
+        // measured, against a model that never saw the turn — the fast model's tokens and latency land on the big
+        // model's row.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender, agentUpdates: CreateUpdates("ok"), eventDispatcher: dispatcher, reasoningEffortDispatcherFactory: _ => stub);
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportServedModelAsync(package.InvocationId, "qwen3-1.7b");
+    }
+
+    [Test]
+    [Arguments("auto")]
+    [Arguments("medium")]
+    public async Task Dispatch_WhenTheModelIsNotSwapped_NeverRecordsAServedModel(string reasoningEffort)
+    {
+        // Both silent shapes: an `auto` turn the dispatcher chose not to swap, and an ordinary turn that never reaches
+        // the dispatcher at all. The seeded model is already correct on each, and a redundant report would rewrite the
+        // state on every turn for nothing.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3.5:0.8b", "low", ReasoningDispatchReasons.FastModelUnset));
+        var runner = CreateRunner(sender, agentUpdates: CreateUpdates("ok"), eventDispatcher: dispatcher, reasoningEffortDispatcherFactory: _ => stub);
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort(reasoningEffort).Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.DidNotReceive().ReportServedModelAsync(Arg.Any<Guid>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public async Task Dispatch_WhenTheFallbackRerunsOnTheOriginalModel_NeverRecordsTheFastModelAsServed()
+    {
+        // The other half of the rule: the fast model did not serve this turn, the original one did, and the seeded
+        // state already names it. Reporting the fast model here would put a model that produced nothing on the row.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var observed = new List<InvocationAgentDefinition>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
+            eventDispatcher: dispatcher,
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
+
+        AssertEx.Equal(expected: 2, observed.Count, "the re-run must have happened, or this proves nothing");
+        await dispatcher.DidNotReceive().ReportServedModelAsync(Arg.Any<Guid>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public async Task Dispatch_WhenSwappedSendFailsAfterFirstToken_StillEmitsExactlyOneEffortDispatchedNotice()
+    {
+        // A swapped turn withholds its notice until the send resolves, precisely so a fallback cannot leave the reader
+        // with two contradictory rows. When the send streams and THEN fails there is no fallback to announce — and the
+        // turn used to end with no effort notice at all, which is the one outcome the ruling forbids. The notice names
+        // the model that actually served; the failure itself is reported as on any other turn.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var observed = new List<InvocationAgentDefinition>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed, emitATokenBeforeFailing: true),
+            eventDispatcher: dispatcher,
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
+
+        AssertEx.Equal(expected: 1, observed.Count, "a turn that has already streamed must not be re-run");
+        AssertEx.True(sender.SentEncryptedFailures.Count > 0, "the turn still fails");
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.EffortDispatched
+            && payload.Detail == ReasoningDispatchReasons.ShortTurn
+            && payload.Message.Contains("qwen3-1.7b", StringComparison.Ordinal)));
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.EffortDispatched));
+    }
+
+    [Test]
     public async Task Dispatch_WhenSwapAdmitted_DisposesTheReservationBeforeTheScope()
     {
         // Declaration order is load-bearing: `using` disposes in REVERSE order, so the scope is declared first and

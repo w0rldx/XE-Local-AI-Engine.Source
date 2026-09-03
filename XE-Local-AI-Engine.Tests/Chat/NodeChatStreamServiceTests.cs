@@ -5005,6 +5005,16 @@ public sealed class NodeChatStreamServiceTests
             return Task.CompletedTask;
         }
 
+        public Task ReportServedModelAsync(Guid invocationId, string modelUsed)
+        {
+            if (CurrentInvocation is not null)
+            {
+                CurrentInvocation.ModelUsed = modelUsed;
+            }
+
+            return Task.CompletedTask;
+        }
+
         public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory)
         {
             if (CurrentInvocation is not null)

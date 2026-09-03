@@ -248,7 +248,7 @@ public sealed class NodeAdminMcpTools(
             _nodeSettingsAdministrationService.GetAgenticViewAsync(cancellationToken));
 
     [McpServerTool(Name = "update_node_settings")]
-    [Description("Apply a partial update to the exact restricted 16-field agentic node-settings whitelist.")]
+    [Description("Apply a partial update to the exact restricted 17-field agentic node-settings whitelist.")]
 #pragma warning disable IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public async Task<McpNodeSettingsUpdateResponse> UpdateNodeSettingsAsync(CancellationToken cancellationToken,
         string? default_model_name = null,

@@ -135,6 +135,18 @@ public interface IWorkerEventDispatcher
     /// <param name="authoredEffort">The effort the turn was authored with (<c>auto</c>).</param>
     Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort);
 
+    /// <summary>
+    ///     Records the model that ACTUALLY served the turn, when it is not the one the runtime package named. Reported
+    ///     by the runner only once an admitted <c>auto</c> model swap has run its send, because
+    ///     <see cref="Events.InvocationState.ModelUsed" /> is seeded from the package and is what BOTH the persisted
+    ///     message row and the run envelope's provider attribution are read from — without this a swapped turn is
+    ///     recorded against a model that never saw it, and the measurement queries attribute the fast model's tokens
+    ///     and latency to the big one. A turn that falls back to the original model never reports, so its seeded value
+    ///     stands.
+    /// </summary>
+    /// <param name="modelUsed">The served model id.</param>
+    Task ReportServedModelAsync(Guid invocationId, string modelUsed);
+
     Task ReportToolCallRequestedAsync(ToolCallRequestPayload payload);
 
     Task ReportApprovalRequestedAsync(ApprovalRequestPayload payload);

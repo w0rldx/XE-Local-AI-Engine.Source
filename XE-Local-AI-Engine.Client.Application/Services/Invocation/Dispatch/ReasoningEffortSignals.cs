@@ -213,10 +213,8 @@ public static class ReasoningEffortSignals
             var index = 0;
             while ((index = upperText.IndexOf(phrase, index, StringComparison.Ordinal)) >= 0)
             {
-                var startsAtBoundary = index == 0 || !char.IsLetterOrDigit(upperText[index - 1]);
                 var endIndex = index + phrase.Length;
-                var endsAtBoundary = endIndex == upperText.Length || !char.IsLetterOrDigit(upperText[endIndex]);
-                if (startsAtBoundary && endsAtBoundary)
+                if (IsBoundaryBefore(upperText, index) && IsBoundaryAfter(upperText, endIndex))
                 {
                     return true;
                 }
@@ -226,6 +224,34 @@ public static class ReasoningEffortSignals
         }
 
         return false;
+    }
+
+    // The neighbouring CHARACTER, not the neighbouring UTF-16 code unit. A letter outside the BMP (Deseret, Gothic,
+    // the mathematical alphanumerics) occupies a surrogate PAIR, and char.IsLetterOrDigit is false for either half —
+    // so reading one code unit called every supplementary-plane letter a word boundary, and "kurz" fired on
+    // "\U00010400KURZ". Rune decoding reads the whole scalar. An unpaired surrogate decodes to the replacement
+    // character, which is not a letter or digit and so still counts as a boundary: the safe answer for broken text.
+
+    private static bool IsBoundaryBefore(string text, int index)
+    {
+        if (index == 0)
+        {
+            return true;
+        }
+
+        _ = Rune.DecodeLastFromUtf16(text.AsSpan(start: 0, index), out var rune, out _);
+        return !Rune.IsLetterOrDigit(rune);
+    }
+
+    private static bool IsBoundaryAfter(string text, int endIndex)
+    {
+        if (endIndex == text.Length)
+        {
+            return true;
+        }
+
+        _ = Rune.DecodeFromUtf16(text.AsSpan(endIndex), out var rune, out _);
+        return !Rune.IsLetterOrDigit(rune);
     }
 
     private static string[] ToUpper(string[] phrases)

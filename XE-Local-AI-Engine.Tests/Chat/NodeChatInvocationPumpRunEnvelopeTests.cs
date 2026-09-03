@@ -4,6 +4,8 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -327,6 +329,45 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
 
         AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, result.TerminalStatus);
         AssertEx.Equal(ChatStreamEventTypes.AssistantCancelled, result.EventType);
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_WhenAnAutoSwapServedTheTurn_AttributesBothTheModelAndTheProviderToTheServedModel()
+    {
+        // The runner records the served model on the invocation state after an admitted `auto` model swap. Everything
+        // downstream has to follow it: the persisted message row's model, and the provider the envelope is attributed
+        // to — which is looked up FROM that same model id, not from the model the request asked for. Attributing the
+        // fast model's tokens to the big model's provider is exactly what makes the measurement queries lie.
+        var persistence = CreatePersistence();
+        var resolver = Substitute.For<IUsageProviderResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                .Returns(callInfo => Task.FromResult(string.Equals(callInfo.Arg<string?>(), "qwen3-1.7b", StringComparison.Ordinal)
+                    ? AgentUsageProviders.Local
+                    : AgentUsageProviders.Unknown));
+        var pump = new NodeChatInvocationPump(persistence, resolver, TimeProvider.System);
+
+        var conversationId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversationId, Guid.NewGuid(), Guid.NewGuid());
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            Status = InvocationStatus.Completed,
+            ModelUsed = "qwen3-1.7b",
+            DispatchedTier = "fast",
+            AuthoredEffort = "auto",
+            StartedAt = DateTimeOffset.FromUnixTimeMilliseconds(7000)
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, "qwen3.8-27b");
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Model == "qwen3-1.7b"
+                && request.Envelope != null
+                && request.Envelope.Provider == AgentUsageProviders.Local
+                && request.Envelope.DispatchedTier == "fast"
+                && request.Envelope.AuthoredEffort == "auto"),
+            Arg.Any<CancellationToken>());
     }
 
     private static INodeChatPersistenceService CreatePersistence()

@@ -107,6 +107,21 @@ public sealed partial class WorkerEventDispatcher
         return Task.CompletedTask;
     }
 
+    public Task ReportServedModelAsync(Guid invocationId, string modelUsed)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelUsed);
+
+        // A no-op when the id is not the current invocation, exactly like the reports above.
+        UpdateInvocation(invocationId,
+            state =>
+            {
+                state.ModelUsed = modelUsed;
+                return state;
+            });
+
+        return Task.CompletedTask;
+    }
+
     public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(failureMessage);

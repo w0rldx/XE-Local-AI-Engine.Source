@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Mcp;
 
+using System.ComponentModel;
 using System.Reflection;
 using System.Security.Claims;
 using System.Text.Json;
@@ -91,7 +92,7 @@ public sealed class NodeAdminMcpToolsTests
     }
 
     [Test]
-    public void UpdateNodeSettings_ExposesOnlyTheExactSixteenFieldWhitelist()
+    public void UpdateNodeSettings_ExposesOnlyTheExactSeventeenFieldWhitelist()
     {
         var method = AssertEx.NotNull(typeof(NodeAdminMcpTools).GetMethod(nameof(NodeAdminMcpTools.UpdateNodeSettingsAsync)));
         var names = method.GetParameters()
@@ -99,6 +100,14 @@ public sealed class NodeAdminMcpToolsTests
                           .Select(static parameter => parameter.Name!)
                           .OrderBy(static name => name, StringComparer.Ordinal)
                           .ToArray();
+
+        // The tool DESCRIPTION states the field count, and an agent reads that description as the contract. It had
+        // already drifted once — a seventeenth field was whitelisted while the sentence still promised sixteen — so
+        // the number is DERIVED from the parameter list here rather than restated, and the next field added fails this
+        // test until the sentence is corrected too.
+        var description = AssertEx.NotNull(method.GetCustomAttribute<DescriptionAttribute>()).Description;
+        AssertEx.True(description.Contains($"{names.Length}-field", StringComparison.Ordinal),
+            $"update_node_settings advertises \"{description}\" but exposes {names.Length} fields.");
 
         AssertEx.Equal(string.Join('|', ExpectedSettingsParameters), string.Join('|', names));
         AssertEx.False(names.Any(static name => name.Contains("custom", StringComparison.OrdinalIgnoreCase)
@@ -287,7 +296,7 @@ public sealed class NodeAdminMcpToolsTests
     }
 
     [Test]
-    public void AgenticSettings_AllSixteenPropertiesHaveStableSnakeCaseWireNames()
+    public void AgenticSettings_AllSeventeenPropertiesHaveStableSnakeCaseWireNames()
     {
         var mapped = typeof(NodeSettingsAgenticPatch).GetProperties()
                                                      .Select(static property => McpAdminWireNames.SettingsArgument(property.Name))

@@ -187,6 +187,32 @@ public sealed class ReasoningEffortDispatcherTests
     }
 
     [Test]
+    public async Task Dispatch_WhenAPhraseAdjoinsASupplementaryPlaneLetter_IsStillEmbeddedAndDoesNotFire()
+    {
+        // A letter outside the BMP is a UTF-16 surrogate PAIR, and neither half is a letter on its own — so a
+        // per-code-unit boundary check called every such letter a word boundary and let the vocabulary fire mid-word.
+        // U+10400 is DESERET CAPITAL LETTER LONG I: a cased letter whose upper-case folding is itself, so the phrase
+        // survives the fold and only the boundary rule decides the outcome. Both sides of the phrase are checked.
+        //
+        // These texts sit one point below Deep on the deep-conversation bonus alone, so a phrase that wrongly fires
+        // adds its +2 and pushes the tier over — which is what makes the tier, not the reason, the observable here.
+        const string Tail = " the power supply on the bench keeps resetting whenever the second fan spins up and nobody on the team can explain it yet";
+
+        var leading = await DispatchAsync(Request($"\U00010400carefully{Tail}", conversationDepth: 12));
+        var trailing = await DispatchAsync(Request($"carefully\U00010400{Tail}", conversationDepth: 12));
+
+        AssertEx.Equal(ReasoningTier.Normal, leading.Tier, "the phrase is inside a longer word and must not score");
+        AssertEx.Equal(ReasoningTier.Normal, trailing.Tier, "the phrase is inside a longer word and must not score");
+
+        // The control: the same phrase, same text, standing as its own word still fires — so the fix cannot pass by
+        // simply never matching anything.
+        var standalone = await DispatchAsync(Request($"carefully{Tail}", conversationDepth: 12));
+
+        AssertEx.Equal(ReasoningTier.Deep, standalone.Tier);
+        AssertEx.Equal(ReasoningDispatchReasons.DeepPhrase, standalone.ReasonCode);
+    }
+
+    [Test]
     [Arguments("Please think it through before you answer, because the ordering of the two disposals is what actually matters here and I keep getting it wrong.")]
     [Arguments("Walk me through the root cause of the lease refusal, because I have read the supervisor twice and still cannot see which guard fires first.")]
     // The German half of the same vocabulary.
@@ -599,6 +625,70 @@ public sealed class ReasoningEffortDispatcherTests
     }
 
     [Test]
+    public async Task Fast_WhenTheResolvedModelsTrustLookupThrows_FallsBackToSameModelLowAndNeverFailsTheTurn()
+    {
+        // The FIRST swap gate is a node-side call like every other one, so it belongs inside the same fail-soft
+        // boundary. Sitting outside it, a trust store that was briefly unreachable failed an otherwise serviceable
+        // turn — the one thing this dispatcher's contract says it may never do.
+        var trustResolver = Substitute.For<IModelTrustResolver>();
+        trustResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                     .Returns<Task<ModelTrustLocality>>(static _ => throw new InvalidOperationException("trust store unavailable"));
+
+        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true), trustResolver);
+
+        AssertEx.Equal(ReasoningTier.Fast, decision.Tier);
+        AssertEx.Equal("low", decision.Effort);
+        AssertEx.Equal(ResolvedModel, decision.Model);
+        AssertEx.Equal(ReasoningDispatchReasons.FastModelUnavailable, decision.ReasonCode);
+        AssertEx.Null(decision.CapacityReservation);
+    }
+
+    [Test]
+    public async Task Fast_WhenTheFastModelsCapabilityLookupThrowsAfterAdmission_ReleasesTheReservationAndDegrades()
+    {
+        // Ownership of the reservation transfers ONLY with a returned decision. Admission has already booked the fast
+        // model's bytes and a loaded-process slot, and the capability re-resolution is the last node-side call before
+        // the runner receives it — so a failure there must release the booking rather than strand it for the process's
+        // lifetime, and must still not fail the turn.
+        using var reservation = new StubDisposable();
+        var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        capabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                          .Returns<Task<ModelCapabilitySnapshot>>(static _ => throw new InvalidOperationException("capability probe failed"));
+
+        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
+            fastModelName: FastModel,
+            fastModelLocality: ModelTrustLocality.Local,
+            capacityDecision: new CapacityDecision(CapacityVerdict.Allow, "ok", OllamaEvictionWarning: false, reservation),
+            capabilityResolver: capabilityResolver);
+
+        AssertEx.Equal(ReasoningTier.Fast, decision.Tier);
+        AssertEx.Equal("low", decision.Effort);
+        AssertEx.Equal(ResolvedModel, decision.Model, "the turn degrades onto the model it was authorised for");
+        AssertEx.Equal(ReasoningDispatchReasons.FastModelUnavailable, decision.ReasonCode);
+        AssertEx.Null(decision.CapacityReservation, "a degraded decision owns nothing");
+        AssertEx.Equal(expected: 1, reservation.DisposeCount, "released exactly once — never leaked, never double-released");
+    }
+
+    [Test]
+    public async Task Fast_WhenTheFastModelsCapabilityLookupIsCancelledAfterAdmission_ReleasesTheReservationAndPropagates()
+    {
+        // A cancellation means the TURN is terminating, so it propagates exactly as it does out of the swap ladder
+        // rather than degrading into a decision nobody will send. The booking is still ours to release on the way out.
+        using var reservation = new StubDisposable();
+        var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        capabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                          .Returns<Task<ModelCapabilitySnapshot>>(static _ => throw new OperationCanceledException());
+
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
+            fastModelName: FastModel,
+            fastModelLocality: ModelTrustLocality.Local,
+            capacityDecision: new CapacityDecision(CapacityVerdict.Allow, "ok", OllamaEvictionWarning: false, reservation),
+            capabilityResolver: capabilityResolver));
+
+        AssertEx.Equal(expected: 1, reservation.DisposeCount, "released exactly once — never leaked, never double-released");
+    }
+
+    [Test]
     public async Task Dispatch_CarriesTheResolvedModelsCapabilityFlagsThroughWhenNothingIsSwapped()
     {
         var decision = await DispatchAsync(Request("thanks, noted", reasoningBudgetEnforceable: false));
@@ -656,7 +746,8 @@ public sealed class ReasoningEffortDispatcherTests
         CapacityDecision? capacityDecision = null,
         LlamaServerLeaseAcquisition? leaseAcquisition = null,
         ModelCapabilitySnapshot? fastModelCapabilities = null,
-        INodeRuntimeSettings? runtimeSettings = null)
+        INodeRuntimeSettings? runtimeSettings = null,
+        IModelCapabilityResolver? capabilityResolver = null)
     {
         // The resolved model is Local unless a test says otherwise. The FAST model's locality/provider default to the
         // same answer, so a test names only the gate it is exercising.
@@ -684,13 +775,16 @@ public sealed class ReasoningEffortDispatcherTests
         supervisor.TryAcquireInferenceLease(Arg.Any<string>(), Arg.Any<ModelRole>())
                   .Returns(leaseAcquisition ?? LlamaServerLeaseAcquisition.NotRunning);
 
-        var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
-        capabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                          .Returns(Task.FromResult(fastModelCapabilities
-                                                   ?? new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false)
-                                                   {
-                                                       ReasoningBudgetEnforceable = true
-                                                   }));
+        if (capabilityResolver is null)
+        {
+            capabilityResolver = Substitute.For<IModelCapabilityResolver>();
+            capabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                              .Returns(Task.FromResult(fastModelCapabilities
+                                                       ?? new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false)
+                                                       {
+                                                           ReasoningBudgetEnforceable = true
+                                                       }));
+        }
 
         var sut = new DefaultReasoningEffortDispatcher(trustResolver,
             runtimeSettings,
@@ -706,9 +800,12 @@ public sealed class ReasoningEffortDispatcherTests
 
     private sealed class StubDisposable : IDisposable
     {
-        public bool Disposed { get; private set; }
+        /// <summary>Counted, not flagged: "released exactly once" is the assertion a leak fix has to make.</summary>
+        public int DisposeCount { get; private set; }
 
-        public void Dispose() => Disposed = true;
+        public bool Disposed => DisposeCount > 0;
+
+        public void Dispose() => DisposeCount++;
     }
 
     private sealed class StubInferenceLease : ILlamaServerInferenceLease

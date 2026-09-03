@@ -466,6 +466,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     // turn already emitted its notice (or is a silent NORMAL one) before the send.
                     if (modelWasSwapped && dispatchDecision is { } served)
                     {
+                        // The invocation state was seeded with the model the PACKAGE named, and both the persisted
+                        // message row and the envelope's provider attribution read it from there — so a swapped turn
+                        // that does not correct it is recorded, and measured, against a model that never saw it.
+                        await dispatcher.ReportServedModelAsync(package.InvocationId, resolvedModel).ConfigureAwait(false);
                         await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
                                            BuildEffortDispatchedNoticeMessage(served.Tier, served.Effort, resolvedModel, swapped: true),
                                            served.ReasonCode)
@@ -508,6 +512,22 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
                     // Exactly once. A second failure is a real failure and fails the turn normally.
                     await RunSingleAgentAsync(package, resolvedModel, transport, stream, retryPolicy, retryContextTokens, invocationToken).ConfigureAwait(false);
+                }
+                catch (Exception) when (modelWasSwapped && dispatchDecision is { } failedSwap)
+                {
+                    // The swapped send failed with no fallback available — it had already streamed, or the turn offers
+                    // tools, or the turn is being cancelled. The ruling is exactly ONE effort notice per turn and the
+                    // pre-send announcement was deliberately withheld for swapped turns, so without this the reader is
+                    // told nothing at all about a turn whose model was silently replaced. The notice names the model
+                    // that actually served; the FAILURE is reported by the outer handler, as for any other turn.
+                    //
+                    // No served-model report here: the turn produced no answer to attribute, and the fast model may
+                    // have died before its first token. The seeded (authorised) model stays on the failed row.
+                    await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
+                                       BuildEffortDispatchedNoticeMessage(failedSwap.Tier, failedSwap.Effort, resolvedModel, swapped: true),
+                                       failedSwap.ReasonCode)
+                                   .ConfigureAwait(false);
+                    throw;
                 }
             }
 
