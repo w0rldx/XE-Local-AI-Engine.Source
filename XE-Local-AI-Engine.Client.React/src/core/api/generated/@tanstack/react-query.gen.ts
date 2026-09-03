@@ -33,6 +33,7 @@ import {
 	cancelGgufImport,
 	cancelImageJob,
 	cancelImageModelDownload,
+	cancelIntegrationExecution,
 	cancelLlamaCppSourceBuild,
 	cancelNodeBinding,
 	cancelNodeChatMessage,
@@ -69,6 +70,7 @@ import {
 	createEvaluation,
 	createGoldenConversation,
 	createImageJob,
+	createIntegrationTrigger,
 	createMcpServer,
 	createNodeChatConversation,
 	createNodeChatMessageRevision,
@@ -98,6 +100,7 @@ import {
 	deleteExternalProviderConnection,
 	deleteGoldenConversation,
 	deleteImageModel,
+	deleteIntegrationTrigger,
 	deleteKnowledgeDocument,
 	deleteLocalModel,
 	deleteMcpServer,
@@ -140,6 +143,7 @@ import {
 	exportBenchmarkProjectCsv,
 	exportTrainingDataset,
 	freezeInferenceProfile,
+	generateIntegrationApiKey,
 	generateLocalModelProxyApiKey,
 	generateMcpServerApiKey,
 	generateTrainingDataset,
@@ -184,6 +188,8 @@ import {
 	getImageJob,
 	getImageModelCatalog,
 	getImageRuntimeStatus,
+	getIntegrationExecution,
+	getIntegrationTrigger,
 	getInvocationMonitor,
 	getKnowledgeDocument,
 	getLatestRecommendations,
@@ -264,6 +270,9 @@ import {
 	listImageModelDownloads,
 	listImageModels,
 	listInferenceProfiles,
+	listIntegrationApiKeys,
+	listIntegrationExecutions,
+	listIntegrationTriggers,
 	listKnowledgeDocuments,
 	listLocalModels,
 	listMcpServers,
@@ -338,6 +347,7 @@ import {
 	resumeWorkSession,
 	retrieveImage,
 	reviewTrainingSample,
+	revokeIntegrationApiKey,
 	revokeLocalModelProxyApiKey,
 	revokeMcpServerApiKey,
 	runPlaybookActionEval,
@@ -382,6 +392,7 @@ import {
 	updateDevWorkflowDefinition,
 	updateDevWorkflowRuleSet,
 	updateDevWorkflowWorkItem,
+	updateIntegrationTrigger,
 	updateLlamaCppRuntime,
 	updateMcpServer,
 	updatePlaybookAction,
@@ -451,6 +462,8 @@ import type {
 	CancelImageJobResponse,
 	CancelImageModelDownloadData,
 	CancelImageModelDownloadResponse,
+	CancelIntegrationExecutionData,
+	CancelIntegrationExecutionResponse,
 	CancelLlamaCppSourceBuildData,
 	CancelLlamaCppSourceBuildResponse,
 	CancelNodeBindingData,
@@ -544,6 +557,9 @@ import type {
 	CreateImageJobData,
 	CreateImageJobError,
 	CreateImageJobResponse,
+	CreateIntegrationTriggerData,
+	CreateIntegrationTriggerError,
+	CreateIntegrationTriggerResponse,
 	CreateMcpServerData,
 	CreateMcpServerResponse,
 	CreateNodeChatConversationData,
@@ -619,6 +635,8 @@ import type {
 	DeleteImageModelData,
 	DeleteImageModelError,
 	DeleteImageModelResponse,
+	DeleteIntegrationTriggerData,
+	DeleteIntegrationTriggerResponse,
 	DeleteKnowledgeDocumentData,
 	DeleteKnowledgeDocumentResponse,
 	DeleteLocalModelData,
@@ -719,6 +737,9 @@ import type {
 	ExportTrainingDatasetResponse,
 	FreezeInferenceProfileData,
 	FreezeInferenceProfileResponse,
+	GenerateIntegrationApiKeyData,
+	GenerateIntegrationApiKeyError,
+	GenerateIntegrationApiKeyResponse,
 	GenerateLocalModelProxyApiKeyData,
 	GenerateLocalModelProxyApiKeyResponse,
 	GenerateMcpServerApiKeyData,
@@ -815,6 +836,10 @@ import type {
 	GetImageModelCatalogResponse,
 	GetImageRuntimeStatusData,
 	GetImageRuntimeStatusResponse,
+	GetIntegrationExecutionData,
+	GetIntegrationExecutionResponse,
+	GetIntegrationTriggerData,
+	GetIntegrationTriggerResponse,
 	GetInvocationMonitorData,
 	GetInvocationMonitorResponse,
 	GetKnowledgeDocumentData,
@@ -993,6 +1018,13 @@ import type {
 	ListImageModelsResponse,
 	ListInferenceProfilesData,
 	ListInferenceProfilesResponse,
+	ListIntegrationApiKeysData,
+	ListIntegrationApiKeysResponse,
+	ListIntegrationExecutionsData,
+	ListIntegrationExecutionsError,
+	ListIntegrationExecutionsResponse,
+	ListIntegrationTriggersData,
+	ListIntegrationTriggersResponse,
 	ListKnowledgeDocumentsData,
 	ListKnowledgeDocumentsResponse,
 	ListLocalModelsData,
@@ -1170,6 +1202,8 @@ import type {
 	RetrieveImageResponse,
 	ReviewTrainingSampleData,
 	ReviewTrainingSampleResponse,
+	RevokeIntegrationApiKeyData,
+	RevokeIntegrationApiKeyResponse,
 	RevokeLocalModelProxyApiKeyData,
 	RevokeLocalModelProxyApiKeyResponse,
 	RevokeMcpServerApiKeyData,
@@ -1288,6 +1322,9 @@ import type {
 	UpdateDevWorkflowWorkItemData,
 	UpdateDevWorkflowWorkItemError,
 	UpdateDevWorkflowWorkItemResponse,
+	UpdateIntegrationTriggerData,
+	UpdateIntegrationTriggerError,
+	UpdateIntegrationTriggerResponse,
 	UpdateLlamaCppRuntimeData,
 	UpdateLlamaCppRuntimeError,
 	UpdateLlamaCppRuntimeResponse,
@@ -5874,6 +5911,287 @@ export const getInvocationMonitorOptions = (options?: Options<GetInvocationMonit
 		},
 		queryKey: getInvocationMonitorQueryKey(options),
 	});
+
+export const cancelIntegrationExecutionMutation = (
+	options?: Partial<Options<CancelIntegrationExecutionData>>,
+): UseMutationOptions<CancelIntegrationExecutionResponse, AxiosError<DefaultError>, Options<CancelIntegrationExecutionData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelIntegrationExecutionResponse,
+		AxiosError<DefaultError>,
+		Options<CancelIntegrationExecutionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelIntegrationExecution({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listIntegrationTriggersQueryKey = (options?: Options<ListIntegrationTriggersData>) =>
+	createQueryKey("listIntegrationTriggers", options);
+
+export const listIntegrationTriggersOptions = (options?: Options<ListIntegrationTriggersData>) =>
+	queryOptions<
+		ListIntegrationTriggersResponse,
+		AxiosError<DefaultError>,
+		ListIntegrationTriggersResponse,
+		ReturnType<typeof listIntegrationTriggersQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listIntegrationTriggers({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listIntegrationTriggersQueryKey(options),
+	});
+
+export const createIntegrationTriggerMutation = (
+	options?: Partial<Options<CreateIntegrationTriggerData>>,
+): UseMutationOptions<
+	CreateIntegrationTriggerResponse,
+	AxiosError<CreateIntegrationTriggerError>,
+	Options<CreateIntegrationTriggerData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		CreateIntegrationTriggerResponse,
+		AxiosError<CreateIntegrationTriggerError>,
+		Options<CreateIntegrationTriggerData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createIntegrationTrigger({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteIntegrationTriggerMutation = (
+	options?: Partial<Options<DeleteIntegrationTriggerData>>,
+): UseMutationOptions<DeleteIntegrationTriggerResponse, AxiosError<DefaultError>, Options<DeleteIntegrationTriggerData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteIntegrationTriggerResponse,
+		AxiosError<DefaultError>,
+		Options<DeleteIntegrationTriggerData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteIntegrationTrigger({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getIntegrationTriggerQueryKey = (options: Options<GetIntegrationTriggerData>) =>
+	createQueryKey("getIntegrationTrigger", options);
+
+export const getIntegrationTriggerOptions = (options: Options<GetIntegrationTriggerData>) =>
+	queryOptions<
+		GetIntegrationTriggerResponse,
+		AxiosError<DefaultError>,
+		GetIntegrationTriggerResponse,
+		ReturnType<typeof getIntegrationTriggerQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getIntegrationTrigger({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getIntegrationTriggerQueryKey(options),
+	});
+
+export const updateIntegrationTriggerMutation = (
+	options?: Partial<Options<UpdateIntegrationTriggerData>>,
+): UseMutationOptions<
+	UpdateIntegrationTriggerResponse,
+	AxiosError<UpdateIntegrationTriggerError>,
+	Options<UpdateIntegrationTriggerData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		UpdateIntegrationTriggerResponse,
+		AxiosError<UpdateIntegrationTriggerError>,
+		Options<UpdateIntegrationTriggerData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateIntegrationTrigger({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listIntegrationApiKeysQueryKey = (options?: Options<ListIntegrationApiKeysData>) =>
+	createQueryKey("listIntegrationApiKeys", options);
+
+export const listIntegrationApiKeysOptions = (options?: Options<ListIntegrationApiKeysData>) =>
+	queryOptions<
+		ListIntegrationApiKeysResponse,
+		AxiosError<DefaultError>,
+		ListIntegrationApiKeysResponse,
+		ReturnType<typeof listIntegrationApiKeysQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listIntegrationApiKeys({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listIntegrationApiKeysQueryKey(options),
+	});
+
+export const generateIntegrationApiKeyMutation = (
+	options?: Partial<Options<GenerateIntegrationApiKeyData>>,
+): UseMutationOptions<
+	GenerateIntegrationApiKeyResponse,
+	AxiosError<GenerateIntegrationApiKeyError>,
+	Options<GenerateIntegrationApiKeyData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		GenerateIntegrationApiKeyResponse,
+		AxiosError<GenerateIntegrationApiKeyError>,
+		Options<GenerateIntegrationApiKeyData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await generateIntegrationApiKey({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getIntegrationExecutionQueryKey = (options: Options<GetIntegrationExecutionData>) =>
+	createQueryKey("getIntegrationExecution", options);
+
+export const getIntegrationExecutionOptions = (options: Options<GetIntegrationExecutionData>) =>
+	queryOptions<
+		GetIntegrationExecutionResponse,
+		AxiosError<DefaultError>,
+		GetIntegrationExecutionResponse,
+		ReturnType<typeof getIntegrationExecutionQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getIntegrationExecution({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getIntegrationExecutionQueryKey(options),
+	});
+
+export const listIntegrationExecutionsQueryKey = (options?: Options<ListIntegrationExecutionsData>) =>
+	createQueryKey("listIntegrationExecutions", options);
+
+export const listIntegrationExecutionsOptions = (options?: Options<ListIntegrationExecutionsData>) =>
+	queryOptions<
+		ListIntegrationExecutionsResponse,
+		AxiosError<ListIntegrationExecutionsError>,
+		ListIntegrationExecutionsResponse,
+		ReturnType<typeof listIntegrationExecutionsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listIntegrationExecutions({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listIntegrationExecutionsQueryKey(options),
+	});
+
+export const listIntegrationExecutionsInfiniteQueryKey = (
+	options?: Options<ListIntegrationExecutionsData>,
+): QueryKey<Options<ListIntegrationExecutionsData>> => createQueryKey("listIntegrationExecutions", options, true);
+
+export const listIntegrationExecutionsInfiniteOptions = (options?: Options<ListIntegrationExecutionsData>) => {
+	const opts = infiniteQueryOptions<
+		ListIntegrationExecutionsResponse,
+		AxiosError<ListIntegrationExecutionsError>,
+		InfiniteData<ListIntegrationExecutionsResponse>,
+		QueryKey<Options<ListIntegrationExecutionsData>>,
+		number | null | Pick<QueryKey<Options<ListIntegrationExecutionsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListIntegrationExecutionsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									offset: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listIntegrationExecutions({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listIntegrationExecutionsInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
+
+export const revokeIntegrationApiKeyMutation = (
+	options?: Partial<Options<RevokeIntegrationApiKeyData>>,
+): UseMutationOptions<RevokeIntegrationApiKeyResponse, AxiosError<DefaultError>, Options<RevokeIntegrationApiKeyData>> => {
+	const mutationOptions: UseMutationOptions<
+		RevokeIntegrationApiKeyResponse,
+		AxiosError<DefaultError>,
+		Options<RevokeIntegrationApiKeyData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await revokeIntegrationApiKey({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const browseImageRepositoriesQueryKey = (options?: Options<BrowseImageRepositoriesData>) =>
 	createQueryKey("browseImageRepositories", options);
