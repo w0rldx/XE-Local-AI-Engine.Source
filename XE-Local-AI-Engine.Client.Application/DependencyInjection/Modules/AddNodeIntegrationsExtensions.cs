@@ -34,6 +34,11 @@ internal static class AddNodeIntegrationsExtensions
         builder.Services.AddScoped<IIntegrationTriggerService, IntegrationTriggerService>();
         builder.Services.AddScoped<IIntegrationApiKeyService, IntegrationApiKeyService>();
 
+        // ONE ring per node, and the only minter of an event sequence — a second instance would hand two readers of
+        // the same execution different numbering. Singleton, and disposed with the container because it owns a
+        // PeriodicTimer.
+        builder.Services.AddSingleton<IIntegrationExecutionEventBuffer, IntegrationExecutionEventBuffer>();
+
         return builder;
     }
 }
