@@ -13,6 +13,7 @@ using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -41,6 +42,7 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Interaction;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
@@ -3072,6 +3074,217 @@ public sealed class InvocationRunnerTests
             && payload.Message.Contains("qwen3.5:0.8b", StringComparison.Ordinal)));
     }
 
+    // ---- reasoning effort `auto` -------------------------------------------------------------------------------
+
+    /// <summary>
+    ///     THE byte-identical-default proof. The dispatcher is registered through a factory that THROWS, so a turn
+    ///     whose effort is anything but <c>auto</c> proves it was never RESOLVED — not merely never invoked — because
+    ///     the runner opens no scope on that path at all. Registered scoped, exactly as the composition root does.
+    /// </summary>
+    [Test]
+    [Arguments(null)]
+    [Arguments("")]
+    [Arguments("none")]
+    [Arguments("on")]
+    [Arguments("minimal")]
+    [Arguments("low")]
+    [Arguments("medium")]
+    [Arguments("high")]
+    [Arguments("xhigh")]
+    public async Task Dispatch_WhenEffortIsNotAuto_DispatcherIsNeverResolvedOrInvoked(string? reasoningEffort)
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        InvocationAgentDefinition? built = null;
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
+            eventDispatcher: dispatcher,
+            reasoningEffortDispatcherFactory: static _ => throw new InvalidOperationException("The dispatcher must never be resolved on a non-auto turn."));
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort(reasoningEffort).Build();
+
+        await RunAsync(runner, package);
+
+        // No throw means no resolve. The definition must also be exactly what it was before this feature existed:
+        // the authored effort, the resolved model, and no dispatched output budget.
+        var definitionBuilt = AssertEx.NotNull(built);
+        AssertEx.True(string.Equals(reasoningEffort, definitionBuilt.ReasoningEffort, StringComparison.Ordinal),
+            "the authored effort must reach the definition untouched");
+        AssertEx.Equal("qwen3.5:0.8b", definitionBuilt.ModelId);
+        AssertEx.Null(definitionBuilt.Sampling?.MaxOutputTokens);
+        await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.EffortDispatched));
+    }
+
+    /// <summary>
+    ///     The other half of the proof: the same throwing factory IS reached on an <c>auto</c> turn, so the test above
+    ///     cannot pass by simply never wiring the dispatcher at all.
+    /// </summary>
+    [Test]
+    public async Task Dispatch_WhenEffortIsAuto_ResolvesTheDispatcherFromTheTurnScope()
+    {
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender,
+            agentUpdates: CreateUpdates("ok"),
+            reasoningEffortDispatcherFactory: static _ => throw new InvalidOperationException("resolved-on-auto"));
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").Build();
+
+        // The resolution failure surfaces as the turn's failure, which is what proves the resolve happened.
+        await RunAsync(runner, package);
+
+        AssertEx.True(sender.SentEncryptedFailures.Count > 0, "an auto turn must reach the dispatcher registration");
+    }
+
+    [Test]
+    public async Task Dispatch_WhenTierIsNormalAndNoSwap_EmitsNoNotice()
+    {
+        // The common case. A notice on every ordinary turn would be noise, so NORMAL with the model unchanged is
+        // silent — the effort still changes, it is just not worth interrupting the reader for.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        InvocationAgentDefinition? built = null;
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Normal, "qwen3.5:0.8b", "medium", ReasoningDispatchReasons.Balanced));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
+            eventDispatcher: dispatcher,
+            reasoningEffortDispatcherFactory: _ => stub);
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").Build();
+
+        await RunAsync(runner, package);
+
+        AssertEx.Equal(expected: 1, stub.Invocations);
+        AssertEx.Equal("medium", AssertEx.NotNull(built).ReasoningEffort, "the dispatched effort replaces `auto` before the definition is built");
+        await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.EffortDispatched));
+    }
+
+    [Test]
+    public async Task Dispatch_WhenModelSwapped_EmitsEffortDispatchedNotice()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        InvocationAgentDefinition? built = null;
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn, maxOutputTokens: 4096));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
+            eventDispatcher: dispatcher,
+            reasoningEffortDispatcherFactory: _ => stub);
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build();
+
+        await RunAsync(runner, package);
+
+        var definitionBuilt = AssertEx.NotNull(built);
+        AssertEx.Equal("qwen3-1.7b", definitionBuilt.ModelId, "the turn runs on the model the dispatcher chose");
+        AssertEx.Equal("low", definitionBuilt.ReasoningEffort);
+        AssertEx.Equal(expected: 4096, definitionBuilt.Sampling?.MaxOutputTokens);
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.InvocationId == package.InvocationId
+            && payload.Kind == TurnNoticeKind.EffortDispatched
+            && payload.Detail == ReasoningDispatchReasons.ShortTurn
+            && payload.Message.Contains("qwen3-1.7b", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task Dispatch_WhenSwapAdmitted_DisposesTheReservationBeforeTheScope()
+    {
+        // Declaration order is load-bearing: `using` disposes in REVERSE order, so the scope is declared first and
+        // released LAST — after the ledger reservation produced by the CapacityService that lives inside it. Reversing
+        // the two would tear down the scoped services while a live reservation still referred to them.
+        var sender = new MockHubMessageSender();
+        using var reservation = new SpyReservation();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn, reservation: reservation));
+        var runner = CreateRunner(sender, agentUpdates: CreateUpdates("ok"), reasoningEffortDispatcherFactory: _ => stub);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
+
+        AssertEx.True(reservation.DisposedAtTicks.HasValue, "the ledger reservation must be released");
+        AssertEx.True(stub.DisposedAtTicks.HasValue, "the per-turn scope must be torn down");
+        AssertEx.True(reservation.DisposedAtTicks!.Value <= stub.DisposedAtTicks!.Value,
+            "the ledger reservation must be released before the scope that produced it");
+    }
+
+    [Test]
+    public async Task Dispatch_WhenSwappedSendFailsBeforeFirstToken_RetriesOnOriginalModelAtLowAndEmitsFastModelUnavailable()
+    {
+        // The fast model went away between the capacity probe and the send. Nothing reached the client, so the turn
+        // re-runs once on the model it was authorised for — and COMPLETES. A failed turn here would break the
+        // dispatcher's "never fails a turn" contract.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var observed = new List<InvocationAgentDefinition>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn, maxOutputTokens: 4096));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
+            eventDispatcher: dispatcher,
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub);
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build();
+
+        await RunAsync(runner, package);
+
+        AssertEx.Equal(expected: 2, observed.Count, "exactly one re-run");
+        AssertEx.Equal("qwen3-1.7b", observed[0].ModelId);
+        AssertEx.Equal("qwen3.5:0.8b", observed[1].ModelId, "the re-run uses the model the turn was authorised for");
+        AssertEx.Equal("low", observed[1].ReasoningEffort, "the re-run keeps the tier the dispatcher chose and gives up only the model");
+        AssertEx.Empty(sender.SentEncryptedFailures);
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.EffortDispatched && payload.Detail == ReasoningDispatchReasons.FastModelUnavailable));
+    }
+
+    [Test]
+    public async Task Dispatch_WhenSwappedSendFailsAfterFirstToken_DoesNotRetry()
+    {
+        // Once a token has reached the client there is nothing to re-run into: the turn fails exactly as any other
+        // mid-stream failure does.
+        var sender = new MockHubMessageSender();
+        var observed = new List<InvocationAgentDefinition>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed, emitATokenBeforeFailing: true),
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
+
+        AssertEx.Equal(expected: 1, observed.Count, "a turn that has already streamed must not be re-run");
+        AssertEx.True(sender.SentEncryptedFailures.Count > 0);
+    }
+
+    [Test]
+    public async Task Dispatch_WhenFallbackRerunsOnOriginalModel_HoldsNoFastReservation()
+    {
+        // The fast reservation books the small model's bytes and one of the loaded-process slots. Carrying it into the
+        // re-run double-books the ledger against a model that is no longer being loaded, and can starve the original
+        // model's own spawn on a node at the process cap — the exact failure the re-run exists to avoid.
+        var sender = new MockHubMessageSender();
+        using var reservation = new SpyReservation();
+        var observed = new List<InvocationAgentDefinition>();
+        long? secondRunStartedAt = null;
+        var factory = CreateModelRoutedFactory("qwen3-1.7b", observed);
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn, reservation: reservation));
+        var spyFactory = Substitute.For<IInvocationAgentFactory>();
+        spyFactory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+                  .Returns(callInfo =>
+                  {
+                      if (observed.Count == 1)
+                      {
+                          secondRunStartedAt ??= Stopwatch.GetTimestamp();
+                      }
+
+                      return factory.CreateAsync(callInfo.Arg<InvocationAgentDefinition>(), callInfo.Arg<CancellationToken>());
+                  });
+
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: spyFactory,
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
+
+        AssertEx.True(reservation.DisposedAtTicks.HasValue, "the fast reservation must be released");
+        AssertEx.True(secondRunStartedAt.HasValue, "the re-run must have started");
+        AssertEx.True(reservation.DisposedAtTicks!.Value <= secondRunStartedAt!.Value, "the fast reservation must be released BEFORE the re-run begins");
+        // Dispose is idempotent at its source, so the `using` at turn end running a second time must not throw.
+        AssertEx.Equal(expected: 2, reservation.DisposeCount, "released in the catch, then again by the turn-end using");
+    }
+
     [Test]
     public async Task RunAsync_WhenAToolReturnsTheDisabledMarker_SurfacesAToolDisabledNoticeOncePerTool()
     {
@@ -3663,7 +3876,8 @@ public sealed class InvocationRunnerTests
         IToolApprovalAuditRecorder? approvalAuditRecorder = null,
         IToolApprovalPolicy? approvalPolicy = null,
         IInvocationAttachmentTracker? attachmentTracker = null,
-        ToolRelevanceOptions? toolRelevanceOptions = null)
+        ToolRelevanceOptions? toolRelevanceOptions = null,
+        Func<IServiceProvider, IReasoningEffortDispatcher>? reasoningEffortDispatcherFactory = null)
     {
         var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
@@ -3764,7 +3978,25 @@ public sealed class InvocationRunnerTests
                 runtimeSettings),
             new InvocationLifecycleTracker(attachmentTracker ?? CreateAttachmentTracker(), pendingToolCallRegistry, runtimeSettings),
             new FakeExternalProviderRegistry(),
+            // The runner opens ONE scope per `auto` turn and resolves the dispatcher from it. The default provider
+            // registers nothing, so a test that never sends `auto` proves — by not throwing — that no scope is used.
+            CreateScopeFactory(reasoningEffortDispatcherFactory),
             NullLogger<InvocationRunner>.Instance);
+    }
+
+    /// <summary>
+    ///     A real container holding only the reasoning-effort dispatcher, registered SCOPED exactly as the composition
+    ///     root registers it — so a test drives the same resolve-from-a-scope path the product does.
+    /// </summary>
+    private static IServiceScopeFactory CreateScopeFactory(Func<IServiceProvider, IReasoningEffortDispatcher>? dispatcherFactory)
+    {
+        var services = new ServiceCollection();
+        if (dispatcherFactory is not null)
+        {
+            services.AddScoped(dispatcherFactory);
+        }
+
+        return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
     }
 
     private static async Task RunAsync(InvocationRunner runner,
@@ -3845,6 +4077,101 @@ public sealed class InvocationRunnerTests
             var createdAtField = AssertEx.NotNull(pendingToolCall.GetType().GetField("<CreatedAt>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic));
             createdAtField.SetValue(pendingToolCall, DateTimeOffset.UtcNow - age);
         }
+    }
+
+    // ---- reasoning-effort dispatch helpers -----------------------------------------------------------------------
+
+    /// <summary>
+    ///     A dispatcher that answers with one fixed decision. Records how many times it was invoked so a test can
+    ///     assert both "never" and "exactly once".
+    /// </summary>
+    private sealed class StubReasoningEffortDispatcher(ReasoningDispatchDecision decision) : IReasoningEffortDispatcher, IDisposable
+    {
+        public int Invocations { get; private set; }
+
+        /// <summary>Set when the SCOPE that produced this instance is torn down — this is a scoped registration.</summary>
+        public long? DisposedAtTicks { get; private set; }
+
+        public Task<ReasoningDispatchDecision> DispatchAsync(ReasoningDispatchRequest request, CancellationToken cancellationToken)
+        {
+            Invocations++;
+            return Task.FromResult(decision);
+        }
+
+        public void Dispose()
+        {
+            DisposedAtTicks ??= Stopwatch.GetTimestamp();
+        }
+    }
+
+    /// <summary>A stand-in for the capacity ledger reservation, recording WHEN it was released.</summary>
+    private sealed class SpyReservation : IDisposable
+    {
+        public int DisposeCount { get; private set; }
+
+        public long? DisposedAtTicks { get; private set; }
+
+        public void Dispose()
+        {
+            DisposeCount++;
+            DisposedAtTicks ??= Stopwatch.GetTimestamp();
+        }
+    }
+
+    private static ReasoningDispatchDecision Decision(ReasoningTier tier,
+        string model,
+        string effort,
+        string reasonCode,
+        int? maxOutputTokens = null,
+        IDisposable? reservation = null)
+    {
+        return new ReasoningDispatchDecision(tier, model, effort, maxOutputTokens, SupportsThinking: true, ReasoningBudgetEnforceable: true, reasonCode, reservation);
+    }
+
+    /// <summary>
+    ///     A factory whose stream fails for ONE model and succeeds for every other, recording each definition it was
+    ///     asked to build. That is how a swapped send is made to fail while the original model's re-run completes.
+    /// </summary>
+    private static IInvocationAgentFactory CreateModelRoutedFactory(string failingModel, List<InvocationAgentDefinition> observed, bool emitATokenBeforeFailing = false)
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(callInfo =>
+               {
+                   var definition = callInfo.Arg<InvocationAgentDefinition>();
+                   observed.Add(definition);
+                   var fails = string.Equals(definition.ModelId, failingModel, StringComparison.Ordinal);
+                   Func<CancellationToken, IAsyncEnumerable<AgentResponseUpdate>> updates = fails
+                       ? _ => emitATokenBeforeFailing ? TokenThenThrowingUpdates() : ThrowingUpdates()
+                       : _ => CreateUpdates("ok");
+
+                   return Task.FromResult(new InvocationAgentContext
+                   {
+                       Agent = new FakeAIAgent(updates, onSessionObserved: null),
+                       Session = null,
+                       SeedMessages = definition.ConversationContext
+                                                .Prepend(new ChatMessage(ChatRole.System, definition.Instructions))
+                                                .ToList()
+                   });
+               });
+
+        return factory;
+    }
+
+    /// <summary>Streams one chunk and then fails, so the turn has recorded first output before the failure.</summary>
+    private static async IAsyncEnumerable<AgentResponseUpdate> TokenThenThrowingUpdates()
+    {
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "partial");
+        await Task.Yield();
+        yield return await Task.FromException<AgentResponseUpdate>(new InvalidOperationException("stream failed"));
+    }
+
+    /// <summary>Retry OFF, so a failing stream surfaces once and the test observes exactly the runner's own behaviour.</summary>
+    private static IProviderStreamResilience NoRetryResilience()
+    {
+        return new ProviderStreamResilience(Options.Create(new ProviderResilienceOptions { RetryEnabled = false }),
+            TimeProvider.System,
+            NullLogger<ProviderStreamResilience>.Instance);
     }
 
     private static IInvocationAgentFactory CreateFactory(IAsyncEnumerable<AgentResponseUpdate> updates, Action<InvocationAgentDefinition>? onCreate = null, Action<bool>? onSessionObserved = null)

@@ -27,6 +27,7 @@ using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
@@ -41,6 +42,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed partial class InvocationRunner : IInvocationRunner
 {
     private const string OrchestrationFailureMessage = "Orchestration run failed.";
+
+    // The effort a swapped turn falls back to when the fast model goes missing before its first token. It is the FAST
+    // tier's own graded level, so the re-run keeps the tier the dispatcher chose and only gives up the model.
+    private const string FallbackDispatchEffort = "low";
 
     // A new local turn admitted after shutdown drain has begun. Surfaced as a clean Cancelled-category
     // failure — the node is going away — rather than being run into a drain that has already stopped waiting for it.
@@ -82,6 +87,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly ProviderResilienceOptions _resilienceOptions;
     private readonly IRuntimePackageValidator _runtimePackageValidator;
+
+    // A SINGLETON service, so this runner may hold it. The reasoning-effort dispatcher it opens a scope for is SCOPED
+    // (two of its dependencies are), and a singleton may not capture that under any wrapper — Lazy<T> defers
+    // construction but never opens a scope, which is exactly the captive dependency ValidateScopes exists to catch.
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ToolApprovalCoordinator _toolApprovalCoordinator;
 
     private readonly SpawnOptions _spawnOptions;
@@ -115,6 +125,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ApiToolCallBridge apiToolCallBridge,
         InvocationLifecycleTracker lifecycleTracker,
         IExternalProviderRegistry externalProviderRegistry,
+        IServiceScopeFactory scopeFactory,
         ILogger<InvocationRunner> logger)
     {
         _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
@@ -150,6 +161,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ArgumentNullException.ThrowIfNull(spawnOptions);
         _spawnOptions = spawnOptions.Value;
         _externalProviderRegistry = externalProviderRegistry ?? throw new ArgumentNullException(nameof(externalProviderRegistry));
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         // The migrated default model + the response-size / pending-tool-call caps are read once at singleton
@@ -267,6 +279,57 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             var resolvedModel = modelResolution.Model;
 
+            // Reasoning effort `auto`: resolve it into a concrete {model, effort, output budget} for THIS turn, here,
+            // between model resolution and the local warm — so an admitted small-model swap is warmed instead of the
+            // resolved model, rather than being reacted to after a warm that silently swallows its failure.
+            //
+            // The single Normalize(...) is "auto" guard below is the whole byte-identical story for every other
+            // effort: no scope, no dispatcher resolution, no request allocation, no node-side lookup. The package
+            // builder has already normalised, so the comparison is exact.
+            //
+            // The scope is declared FIRST so `using`'s reverse-order disposal releases it LAST — after the ledger
+            // reservation produced by the CapacityService that lives inside it. A plain nullable IServiceScope (not
+            // AsyncServiceScope, whose `default` cannot be disposed safely) keeps the non-`auto` path a legal no-op.
+            using var dispatchScope = ReasoningEffortNormalizer.Normalize(package.ReasoningEffort) is "auto"
+                ? _scopeFactory.CreateScope()
+                : null;
+
+            ReasoningDispatchDecision? dispatchDecision = null;
+            if (dispatchScope is not null)
+            {
+                dispatchDecision = await dispatchScope.ServiceProvider
+                                                      .GetRequiredService<IReasoningEffortDispatcher>()
+                                                      .DispatchAsync(BuildDispatchRequest(package, resolvedModel), invocationToken)
+                                                      .ConfigureAwait(false);
+            }
+
+            // The model the turn was AUTHORISED for, and its capability flags, captured before the dispatch block can
+            // rewrite any of them. The send-boundary retry below restores exactly these.
+            var originalModel = resolvedModel;
+            var originalSupportsThinking = package.SupportsThinking;
+            var originalReasoningBudgetEnforceable = package.ReasoningBudgetEnforceable;
+            using var fastReservation = dispatchDecision?.CapacityReservation;
+            if (dispatchDecision is { } dispatched)
+            {
+                resolvedModel = dispatched.Model;
+                package = package with
+                {
+                    ReasoningEffort = dispatched.Effort,
+                    SupportsThinking = dispatched.SupportsThinking,
+                    ReasoningBudgetEnforceable = dispatched.ReasoningBudgetEnforceable,
+                    SamplingOptions = ApplyDispatchedOutputBudget(package.SamplingOptions, dispatched.MaxOutputTokens)
+                };
+
+                // Applied BEFORE WithEffectiveContext below, which clamps the reservation back down to the window the
+                // model was actually launched with. `package with { ... }` copies ConfigHash verbatim: the hash folds
+                // the AUTHORED effort, so two turns of one conversation that dispatch to different tiers still share
+                // one hash and a resume is never invalidated by a dispatch difference.
+                turnPolicy = turnPolicy.WithDispatchedOutputBudget(dispatched.MaxOutputTokens);
+            }
+
+            var modelWasSwapped = dispatchDecision is { } swapCandidate
+                                  && !string.Equals(swapCandidate.Model, originalModel, StringComparison.Ordinal);
+
             // Shared streaming state for both the single-agent and orchestration paths: the response/reasoning
             // accumulators, the byte caps, the monotonic sequence counters, and the terminal usage snapshot. Both
             // branches feed this through the same Emit* helpers so the transport, size cap, dispatcher reporting, and
@@ -289,6 +352,17 @@ public sealed partial class InvocationRunner : IInvocationRunner
             {
                 await transport.EmitNoticeAsync(TurnNoticeKind.ModelSubstituted,
                     BuildModelSubstitutedNoticeMessage(modelResolution.RequestedModel, resolvedModel)).ConfigureAwait(false);
+            }
+
+            // Surface what `auto` resolved to, for the same reason: a decision the user did not make must be visible.
+            // Deliberately silent on a NORMAL, no-swap turn — that is the common case and a notice on every ordinary
+            // turn is noise. The detail is the reason CODE only; no signal value ever reaches this seam.
+            if (dispatchDecision is { } announced && (announced.Tier != ReasoningTier.Normal || modelWasSwapped))
+            {
+                await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
+                                   BuildEffortDispatchedNoticeMessage(announced.Tier, announced.Effort, resolvedModel, modelWasSwapped),
+                                   announced.ReasonCode)
+                               .ConfigureAwait(false);
             }
 
             // Seed the per-root-invocation spawn context (Depth 0) for this turn so the spawn_subagent tool (when the
@@ -359,6 +433,43 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 // turnPolicy above. ORC-07: the turn's effective window is also threaded per participant so each
                 // participant's INNER provider-round budgeter sizes against the window ITS model was launched with.
                 await RunOrchestrationAsync(package, orchestrationSpec, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken).ConfigureAwait(false);
+            }
+            else if (modelWasSwapped)
+            {
+                try
+                {
+                    await RunSingleAgentAsync(package, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken).ConfigureAwait(false);
+                }
+                catch (Exception) when (!stream.FirstOutputRecorded && !invocationToken.IsCancellationRequested)
+                {
+                    // The fast model went away between the capacity probe and the send: profiling took its process, an
+                    // eject drained it, it was uninstalled, or it would not fit. Nothing has reached the client yet, so
+                    // re-run once on the model the turn was actually authorised for. Keyed on "nothing streamed"
+                    // rather than an exception type on purpose — one condition covers every way a swapped model can go
+                    // missing and cannot rot when a provider's messages change.
+                    //
+                    // RELEASE THE FAST RESERVATION FIRST. It books the small model's bytes and, on an Allow verdict,
+                    // holds a launch admission and one of the loaded-process slots. Carrying it into the re-run
+                    // double-books the ledger against a model that is no longer being loaded and can starve the
+                    // original model's own self-heal spawn on a node at the process cap — the exact failure this retry
+                    // exists to avoid. Dispose is idempotent, so the `using` at turn end is a no-op after this.
+                    fastReservation?.Dispose();
+                    resolvedModel = originalModel;
+                    package = package with
+                    {
+                        ReasoningEffort = FallbackDispatchEffort,
+                        SupportsThinking = originalSupportsThinking,
+                        ReasoningBudgetEnforceable = originalReasoningBudgetEnforceable
+                    };
+
+                    await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
+                                       BuildEffortDispatchedNoticeMessage(ReasoningTier.Fast, FallbackDispatchEffort, resolvedModel, swapped: false),
+                                       ReasoningDispatchReasons.FastModelUnavailable)
+                                   .ConfigureAwait(false);
+
+                    // Exactly once. A second failure is a real failure and fails the turn normally.
+                    await RunSingleAgentAsync(package, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken).ConfigureAwait(false);
+                }
             }
             else
             {

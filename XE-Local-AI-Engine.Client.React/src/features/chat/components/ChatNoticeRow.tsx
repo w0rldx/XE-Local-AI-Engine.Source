@@ -1,5 +1,5 @@
 import { Group, Text, ThemeIcon } from "@mantine/core";
-import { IconArrowsExchange, IconFilter, IconHistory, IconInfoCircle, IconToolsOff, IconUsersGroup } from "@tabler/icons-react";
+import { IconArrowsExchange, IconBolt, IconFilter, IconHistory, IconInfoCircle, IconToolsOff, IconUsersGroup } from "@tabler/icons-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -24,6 +24,8 @@ function noticeIcon(noticeKind: string) {
 		// stays callable are opposite outcomes, and sharing an icon reads the optimisation as a degradation.
 		case "ToolsFiltered":
 			return IconFilter;
+		case "EffortDispatched":
+			return IconBolt;
 		default:
 			return IconInfoCircle;
 	}
@@ -42,6 +44,8 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 			return "chat.notices.orchestrationDegraded";
 		case "ToolsFiltered":
 			return "chat.notices.toolsFiltered";
+		case "EffortDispatched":
+			return "chat.notices.effortDispatched";
 		default:
 			return undefined;
 	}

@@ -100,6 +100,24 @@ describe("ChatNoticeRow", () => {
 		expect(container.querySelector(".tabler-icon-tools-off")).toBeNull();
 	});
 
+	it("renders the effort-dispatched notice with its own kind tag and the server's sentence", () => {
+		// A reasoning depth the user did not choose has to be visible in the turn. The sentence carries the tier, the
+		// concrete effort and — only when the model was actually replaced — the model; never a signal value.
+		renderWithProviders(
+			<ChatNoticeRow
+				part={noticePart({
+					noticeKind: "EffortDispatched",
+					text: "Reasoning effort 'auto' resolved to Fast (low) for this turn. This turn ran on 'qwen3-1.7b'.",
+				})}
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("EffortDispatched");
+		expect(
+			screen.getByText("Reasoning effort 'auto' resolved to Fast (low) for this turn. This turn ran on 'qwen3-1.7b'."),
+		).toBeTruthy();
+	});
+
 	it("falls back gracefully for an unknown/forward-compat notice kind", () => {
 		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "SomethingNew", text: "A new kind of notice." })} />);
 
