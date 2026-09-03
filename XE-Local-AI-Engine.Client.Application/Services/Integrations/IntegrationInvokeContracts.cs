@@ -138,10 +138,11 @@ public sealed record IntegrationInvokeInput(string? Type, string? Text, string? 
 public sealed record IntegrationInvokeRequest(Guid? RequestId, Guid? SessionId, IReadOnlyList<IntegrationInvokeInput>? Inputs);
 
 /// <summary>
-///     Where a caller goes next. S1 carries <c>self</c>; S2 adds the persisted-events link to this same record and
-///     changes nothing else about it.
+///     Where a caller goes next. <see cref="Events" /> is the recovery route: it reads the database, so it still
+///     answers after a restart or after the live buffer dropped the run, which is what makes a 410 on the stream a
+///     detour rather than a dead end.
 /// </summary>
-public sealed record IntegrationExecutionLinks(string Self);
+public sealed record IntegrationExecutionLinks(string Self, string Events);
 
 /// <summary>The 202 body: enough to poll, and nothing about rows the caller does not own.</summary>
 public sealed record IntegrationAcceptResponse(Guid ExecutionId, Guid SessionId, string Status, IntegrationExecutionLinks Links);

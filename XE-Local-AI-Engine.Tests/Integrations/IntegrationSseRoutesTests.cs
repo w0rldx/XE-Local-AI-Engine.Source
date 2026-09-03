@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Endpoints.Integrations.V1;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Tests.Endpoints.Integrations.V1;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -182,6 +183,82 @@ public sealed class IntegrationSseRoutesTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, "Ownership is the principal, so a rotated or additional key keeps seeing its integrator's own runs.");
         AssertEx.NotEmpty(Sequences(await response.Content.ReadAsStringAsync()));
+    }
+
+    /// <summary>Test 36b — the persisted-rows shape, which is what a 410 sends a caller to.</summary>
+    [Test]
+    public async Task Events_WithAJsonAccept_ReturnTheCommittedRowsEvenWhenTheRingHasDroppedTheRun()
+    {
+        using var client = Factory.CreateClient();
+        var seeded = await SeedAsync(client, "events-json");
+        var executionId = await SeedExecutionAsync(seeded.TriggerId, seeded.PrincipalId, seeded.KeyPrefix, tracked: false, active: true);
+        for (var sequence = 2; sequence <= 6; sequence++)
+        {
+            await PersistEventAsync(executionId, sequence, IntegrationStreamEventTypes.ToolStarted, $$"""{"name":"tool{{sequence}}"}""");
+        }
+
+        // Not tracked at all, which is the exact state a restart or a TTL sweep leaves behind.
+        AssertEx.False(Factory.Services.GetRequiredService<IIntegrationExecutionEventBuffer>().IsTracked(executionId));
+
+        using var page = await SendAsync(client, HttpMethod.Get, $"{IntegrationApiRoutes.Events(executionId)}?sinceSeq=0&limit=5000", seeded.BroadKey, "application/json");
+
+        AssertEx.Equal(HttpStatusCode.OK, page.StatusCode, "The persisted shape reads the database, so it never answers 410.");
+        var rows = AssertEx.NotNull(await page.Content.ReadFromJsonAsync<EventBody[]>(IntegrationEndpointPayloads.Json));
+        AssertEx.True(rows.Length <= IntegrationEventPage.MaxLimit, "A limit of 5000 is clamped, because a bounded page is the point.");
+        AssertEx.True(rows.Select(static row => row.Sequence).SequenceEqual([1L, 2L, 3L, 4L, 5L, 6L]));
+        AssertEx.Empty(rows.Where(static row => row.EventType.StartsWith("assistant.", StringComparison.Ordinal)));
+        AssertEx.Equal("""{"name":"tool2"}""", rows[1].DetailJson, "detailJson crosses the wire as decrypted text.");
+
+        // Paging is by watermark: hand the last sequence back and get the next page with no repeat.
+        using var next = await SendAsync(client, HttpMethod.Get, $"{IntegrationApiRoutes.Events(executionId)}?sinceSeq=3", seeded.BroadKey, "application/json");
+        var tail = AssertEx.NotNull(await next.Content.ReadFromJsonAsync<EventBody[]>(IntegrationEndpointPayloads.Json));
+        AssertEx.True(tail.Select(static row => row.Sequence).SequenceEqual([4L, 5L, 6L]), "sinceSeq is exclusive.");
+    }
+
+    /// <summary>Test 36c — the link that makes the recovery route discoverable without reading the docs.</summary>
+    [Test]
+    public async Task GetExecution_CarriesTheEventsLink()
+    {
+        using var client = Factory.CreateClient();
+        var seeded = await SeedAsync(client, "events-link");
+        var executionId = await SeedExecutionAsync(seeded.TriggerId, seeded.PrincipalId, seeded.KeyPrefix, tracked: false);
+
+        using var response = await SendAsync(client, HttpMethod.Get, IntegrationApiRoutes.Execution(executionId), seeded.BroadKey, "application/json");
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<StatusLinksBody>(IntegrationEndpointPayloads.Json));
+        AssertEx.Equal(IntegrationApiRoutes.Events(executionId), body.Links.Events);
+        AssertEx.Equal(IntegrationApiRoutes.Execution(executionId), body.Links.Self);
+    }
+
+    /// <summary>Test 36d — a narrow key is masked out of all three external routes, and the key row is re-read per request.</summary>
+    [Test]
+    public async Task ExternalRoutes_MaskANarrowKeyOnEveryShapeAndRereadTheKeyPerRequest()
+    {
+        using var client = Factory.CreateClient();
+        var seeded = await SeedAsync(client, "events-narrow-all");
+        var executionId = await SeedExecutionAsync(seeded.TriggerId, seeded.PrincipalId, seeded.KeyPrefix, tracked: true);
+        AppendPhases(executionId, count: 1, terminal: true);
+
+        foreach (var (route, accept) in new[]
+                 {
+                     (IntegrationApiRoutes.Events(executionId), EventStream),
+                     (IntegrationApiRoutes.Events(executionId), "application/json"),
+                     (IntegrationApiRoutes.Execution(executionId), "application/json")
+                 })
+        {
+            using var masked = await SendAsync(client, HttpMethod.Get, route, seeded.NarrowKey, accept);
+            using var broad = await SendAsync(client, HttpMethod.Get, route, seeded.BroadKey, accept);
+
+            AssertEx.Equal(HttpStatusCode.NotFound, masked.StatusCode, $"{route} with accept '{accept}' must be masked for a key the trigger is out of scope for.");
+            AssertEx.Equal(HttpStatusCode.OK, broad.StatusCode, $"{route} with accept '{accept}' must still serve the broad key, or this is a blanket refusal rather than scoping.");
+        }
+
+        // Narrow the BROAD key and re-attach: the allowlist is not a claim, so it binds on the very next request.
+        var narrowed = await IntegrationEndpointPayloads.GenerateKeyAsync(Factory, client, "events-narrow-all-rotated", [Guid.NewGuid()], seeded.PrincipalId);
+        using var afterNarrowing = await SendAsync(client, HttpMethod.Get, IntegrationApiRoutes.Events(executionId), narrowed.Key, EventStream, lastEventId: "1");
+
+        AssertEx.Equal(HttpStatusCode.NotFound, afterNarrowing.StatusCode, "The key row is re-read per request, so a narrowed credential loses access at once.");
     }
 
     /// <summary>Test 37 — the operator's timeline reads the table, not the ring.</summary>
@@ -406,6 +483,10 @@ public sealed class IntegrationSseRoutesTests
     private sealed record EventListBody(IReadOnlyList<EventBody> Items);
 
     private sealed record EventBody(Guid ExecutionId, long Sequence, string EventType, string? DetailJson, long OccurredAtUtc);
+
+    private sealed record StatusLinksBody(Guid ExecutionId, LinksBody Links);
+
+    private sealed record LinksBody(string Self, string Events);
 }
 
 /// <summary>

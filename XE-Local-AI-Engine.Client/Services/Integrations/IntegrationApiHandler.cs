@@ -6,6 +6,8 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Http.Metadata;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Endpoints.Integrations.V1;
+using XE_Local_AI_Engine.Client.Endpoints.Integrations.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
@@ -179,8 +181,30 @@ internal sealed class IntegrationApiHandler
             return;
         }
 
-        await WriteStreamAsync(context, executionId, ReadLastEventId(context)).ConfigureAwait(false);
+        if (WantsEventStream(context))
+        {
+            await WriteStreamAsync(context, executionId, ReadLastEventId(context)).ConfigureAwait(false);
+            return;
+        }
+
+        // The persisted rows: the same route, the same masking, the database rather than the ring. It is what a caller
+        // answered 410 on the stream falls back to, so it never answers 410 itself — after a restart the ring is empty
+        // and the rows are not.
+        var rows = await _executions.ListEventsAsync(executionId,
+                                       Math.Max(ReadLong(context, "sinceSeq"), val2: 0),
+                                       IntegrationEventPage.ClampLimit(ReadLimit(context)),
+                                       context.RequestAborted)
+                                   .ConfigureAwait(false);
+
+        await context.Response.WriteAsJsonAsync(rows.Select(IntegrationMapper.ToEventDto).ToArray(), context.RequestAborted).ConfigureAwait(false);
     }
+
+    /// <summary>A query value as a long, or 0. Never arithmetic on a sequence — holes make counting meaningless.</summary>
+    private static long ReadLong(HttpContext context, string name) =>
+        long.TryParse(context.Request.Query[name], NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : 0;
+
+    private static int? ReadLimit(HttpContext context) =>
+        int.TryParse(context.Request.Query["limit"], NumberStyles.Integer, CultureInfo.InvariantCulture, out var limit) ? limit : null;
 
     /// <summary>
     ///     Hands the response to the writer and maps its answer. The writer refuses before any byte is written, which is
@@ -443,7 +467,7 @@ internal sealed class IntegrationApiHandler
     }
 
     private static IntegrationExecutionLinks Links(Guid executionId) =>
-        new(SelfPath(executionId));
+        new(SelfPath(executionId), EventsPath(executionId));
 
     private static string SelfPath(Guid executionId) =>
         Path(LocalApiRoutes.IntegrationApi.ExecutionById, executionId);
