@@ -126,7 +126,9 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
 
         try
         {
-            return JsonSerializer.Deserialize<Guid[]>(allowedTriggerIdsJson);
+            // A literal JSON `null` deserialises to null, which would widen the key to EVERY trigger. Only a SQL NULL
+            // column means "all triggers", and that is the early return above.
+            return JsonSerializer.Deserialize<Guid[]>(allowedTriggerIdsJson) ?? [];
         }
         catch (JsonException)
         {

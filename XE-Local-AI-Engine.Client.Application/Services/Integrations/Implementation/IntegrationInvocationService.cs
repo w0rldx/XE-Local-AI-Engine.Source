@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 
 using System.Security.Cryptography;
 using System.Threading.Channels;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -12,6 +13,9 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 internal sealed class IntegrationInvocationService : IIntegrationInvocationService
 {
     private const string TriggerNotFoundMessage = "No such trigger.";
+
+    /// <summary>SQLite's <c>SQLITE_CONSTRAINT</c>. The unique index is the only constraint this path can violate.</summary>
+    private const int SqliteConstraintErrorCode = 19;
 
     private readonly IIntegrationExecutionEventBuffer _buffer;
     private readonly IIntegrationExecutionStore _executions;
@@ -156,10 +160,14 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             {
                 return Rejected(IntegrationAcceptOutcome.QueueFull, "The node is at its concurrent execution limit.");
             }
-            catch (DbUpdateException)
+            catch (Exception exception) when (exception is DbUpdateException or SqliteException { SqliteErrorCode: SqliteConstraintErrorCode })
             {
                 // A concurrent accept from the same principal won the (PrincipalId, RequestId) race. Re-read the
                 // winner and answer it as a duplicate or a conflict rather than surfacing a 500.
+                //
+                // AcceptAsync is raw ADO under BEGIN IMMEDIATE with no SaveChanges anywhere, so the unique index
+                // surfaces as SqliteException, NOT as the EF-only DbUpdateException. Both are caught: the EF type
+                // stays for a future store that does go through a DbContext.
                 var raced = await ResolveDuplicateAsync(principalId, request.RequestId, fingerprint, cancellationToken).ConfigureAwait(false);
                 return raced ?? Rejected(IntegrationAcceptOutcome.RequestConflict, "That request id was used with a different body.");
             }
@@ -187,6 +195,9 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         //    service that opens its own scope, so they cannot join the transaction above and must not try to.
         try
         {
+            // CancellationToken.None on both: past the commit the work is no longer the caller's to cancel. A client
+            // that disconnects here would otherwise leave an Accepted row that was never enqueued, and the admission
+            // cap counts it against its principal until the next restart sweep.
             _ = await _persistence.CreateConversationAsync(new NodeChatCreateConversationRequest(trigger.DisplayName,
                                           UserId: null,
                                           receivedAtUtc,
@@ -194,15 +205,15 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
                                           trigger.TargetAgentDefinitionId,
                                           NodeConversationKind.Integration,
                                           conversationId),
-                                      cancellationToken)
+                                      CancellationToken.None)
                                   .ConfigureAwait(false);
 
             // The seed message id IS the execution id, so a continuation can address the seed turn with no lookup and
             // no extra column. One execution owns exactly one seed, so the ids cannot collide.
-            _ = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId, executionId, seed, receivedAtUtc), cancellationToken)
+            _ = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId, executionId, seed, receivedAtUtc), CancellationToken.None)
                                   .ConfigureAwait(false);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception)
         {
             // Runs FORWARD, never backward. The row is committed and Accepted; it is not compensated and not deleted.
             // Enqueue it anyway so the coordinator picks it up, finds no conversation, and terminalises it with a real
@@ -218,7 +229,17 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         //    accepting and silently discarding the id, which would strand an Accepted row nothing would ever drain.
         if (!_queue.Writer.TryWrite(executionId))
         {
-            await TerminalizeQueueFullAsync(executionId, sessionId, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await TerminalizeQueueFullAsync(executionId, sessionId).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                // The caller is getting its 503 either way. Letting this out instead would turn a refused admission
+                // into a 500 AND leave the row Accepted with no answer at all.
+                _logger.LogError(exception, "Integration execution {ExecutionId} could not be terminalized after the queue refused it.", executionId);
+            }
+
             return Rejected(IntegrationAcceptOutcome.QueueFull, "The node is at its concurrent execution limit.");
         }
 
@@ -231,7 +252,7 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
     ///     reservation if that transaction did not happen, so no reader is left parked at a barrier that never
     ///     resolves.
     /// </summary>
-    private async Task TerminalizeQueueFullAsync(Guid executionId, Guid sessionId, CancellationToken cancellationToken)
+    private async Task TerminalizeQueueFullAsync(Guid executionId, Guid sessionId)
     {
         var sequence = _buffer.Reserve(executionId);
         var endedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
@@ -251,7 +272,7 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
                                                     endedAtUtc,
                                                     IntegrationFailureCategories.QueueFull,
                                                     FailureSummary: "The execution queue refused the admitted request."),
-                                                cancellationToken)
+                                                CancellationToken.None)
                                                 .ConfigureAwait(false);
 
             if (terminalized)

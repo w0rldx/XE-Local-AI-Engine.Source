@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Integrations;
 
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -247,7 +248,11 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
         if (FailNextAcceptWithUniqueViolation)
         {
             FailNextAcceptWithUniqueViolation = false;
-            throw new DbUpdateException("UNIQUE constraint failed: integration_executions.principal_id, integration_executions.request_id");
+
+            // The real AcceptAsync is raw ADO under BEGIN IMMEDIATE with no SaveChanges anywhere, so the unique index
+            // surfaces as SqliteException with SQLITE_CONSTRAINT — never as the EF-only DbUpdateException.
+            throw new SqliteException("UNIQUE constraint failed: integration_executions.principal_id, integration_executions.request_id",
+                errorCode: 19);
         }
 
         var active = _rows.Where(static row => row.Status is IntegrationExecutionStatus.Accepted

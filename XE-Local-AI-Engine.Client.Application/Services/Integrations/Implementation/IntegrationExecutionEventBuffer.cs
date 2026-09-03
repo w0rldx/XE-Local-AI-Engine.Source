@@ -57,6 +57,18 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
         _sweepLoop = RunSweepLoopAsync();
     }
 
+    /// <summary>How many ids the eviction FIFO holds. Test-only seam.</summary>
+    internal int EvictionQueueDepth
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _terminal.Count;
+            }
+        }
+    }
+
     /// <summary>How many executions hold an entry. Test-only seam.</summary>
     internal int TrackedCount
     {
@@ -107,6 +119,7 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
             if (_entries.Remove(executionId, out var entry))
             {
                 entry.Queued = false;
+                DropFromEvictionQueue(executionId);
             }
         }
     }
@@ -215,7 +228,15 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
     {
         lock (_gate)
         {
-            return _entries.TryGetValue(executionId, out var entry) ? entry.Events.First?.Value.Event.Sequence ?? 0 : 0;
+            if (!_entries.TryGetValue(executionId, out var entry))
+            {
+                return 0;
+            }
+
+            // The DROPPED watermark, never just the surviving head: a single event larger than the byte cap empties the
+            // list outright, and reading the floor off an empty list reports 0 — which a reader's
+            // `sinceSequence + 1 < Floor` precheck takes for "no gap" and then silently misses every dropped event.
+            return entry.Events.First is { } head ? Math.Max(entry.Floor, head.Value.Event.Sequence) : entry.Floor;
         }
     }
 
@@ -258,6 +279,7 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
                 if (_entries.Remove(executionId, out var entry))
                 {
                     entry.Queued = false;
+                    DropFromEvictionQueue(executionId);
                 }
             }
 
@@ -337,7 +359,24 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
         {
             var first = entry.Events.First!;
             entry.Utf8Bytes -= first.Value.Utf8Bytes;
+            entry.Floor = Math.Max(entry.Floor, first.Value.Event.Sequence + 1);
             entry.Events.RemoveFirst();
+        }
+    }
+
+    /// <summary>
+    ///     Discards an id the eviction FIFO still names after its entry was removed. Without it the queue grows without
+    ///     bound on a node that never reaches <c>MaxTrackedExecutions</c>, because only an eviction scan drops stale ids.
+    /// </summary>
+    private void DropFromEvictionQueue(Guid executionId)
+    {
+        for (var remaining = _terminal.Count; remaining > 0; remaining--)
+        {
+            var candidate = _terminal.Dequeue();
+            if (candidate != executionId)
+            {
+                _terminal.Enqueue(candidate);
+            }
         }
     }
 
@@ -400,6 +439,9 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
         public TaskCompletionSource Appended { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public LinkedList<BufferedEvent> Events { get; } = [];
+
+        /// <summary>The highest sequence <see cref="Events" /> has dropped, plus one. Zero while nothing has been dropped.</summary>
+        public long Floor { get; set; }
 
         public long LastAppendAtUtc { get; set; }
 

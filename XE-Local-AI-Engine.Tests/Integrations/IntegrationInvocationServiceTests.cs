@@ -341,6 +341,47 @@ public sealed class IntegrationInvocationServiceTests
         AssertEx.True(harness.Buffer.IsTracked(row.Id), "The buffer entry must survive to carry the terminal event the coordinator will write.");
     }
 
+    [Test]
+    public async Task Accept_WhenTheCallerDisconnectsRightAfterTheCommit_StillEnqueuesTheAdmittedExecution()
+    {
+        // The admission cap counts Accepted rows, so a post-commit abort that skipped the enqueue would hold a slot
+        // against its principal until the next restart sweep — two aborts lock one integrator out.
+        var harness = new Harness();
+        var trigger = harness.SeedTrigger("sensor-feed");
+        using var aborted = new CancellationTokenSource();
+        _ = harness.Persistence.CreateConversationAsync(Arg.Any<NodeChatCreateConversationRequest>(), Arg.Any<CancellationToken>())
+                   .Returns(call =>
+                   {
+                       // The client goes away the instant the row is durable.
+                       aborted.Cancel();
+                       call.Arg<CancellationToken>().ThrowIfCancellationRequested();
+                       return (NodeChatConversationDto)null!;
+                   });
+
+        var result = await harness.AcceptAsync(trigger.Name, cancellationToken: aborted.Token).ConfigureAwait(false);
+
+        AssertEx.Equal(IntegrationAcceptOutcome.Accepted, result.Outcome, "Past the commit the work is no longer the caller's to cancel.");
+        var executionId = result.ExecutionId!.Value;
+        AssertEx.True(harness.Queue.Reader.TryRead(out var queued) && queued == executionId, "An aborted request must never strand an Accepted row off the queue.");
+        AssertEx.True(harness.Buffer.IsTracked(executionId), "The buffer entry has to survive to carry the terminal event the coordinator will write.");
+    }
+
+    [Test]
+    public async Task Accept_WhenTheQueueRefusesAndTheTerminalWriteThrows_StillAnswers503()
+    {
+        // Same leak class as the aborted-caller case, narrower trigger: letting the terminalize failure out would turn
+        // a refused admission into a 500 and tell the caller nothing.
+        var harness = new Harness(queueCapacity: 1);
+        var trigger = harness.SeedTrigger("sensor-feed");
+        _ = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
+        harness.Executions.ThrowOnNextTerminalize = true;
+
+        var refused = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
+
+        AssertEx.Equal(IntegrationAcceptOutcome.QueueFull, refused.Outcome);
+        AssertEx.Equal(expected: 2, harness.Executions.Rows.Count, "The row is committed; the failed terminalize leaves it for the restart sweep.");
+    }
+
     private static IntegrationInputDto Text(string text) =>
         new(IntegrationInputKinds.Text, text, Label: null, Json: null);
 
@@ -469,9 +510,10 @@ public sealed class IntegrationInvocationServiceTests
             byte[]? rawBody = null,
             Guid? sessionId = null,
             Guid? principalId = null,
-            string keyPrefix = KeyPrefix)
+            string keyPrefix = KeyPrefix,
+            CancellationToken cancellationToken = default)
         {
-            return Service.AcceptAsync(Request(triggerName, inputs, requestId, rawBody, sessionId, principalId, keyPrefix));
+            return Service.AcceptAsync(Request(triggerName, inputs, requestId, rawBody, sessionId, principalId, keyPrefix), cancellationToken);
         }
 
         private IntegrationAcceptRequest Request(string triggerName,

@@ -163,6 +163,14 @@ public sealed class AnnotatedOptionsBoundsTests
         AssertEx.Empty(Validate(new IntegrationOptions { MaxQueuedExecutions = 4, MaxQueuedExecutionsPerPrincipal = 4 })
             .Where(static error => error.MemberNames.Contains(nameof(IntegrationOptions.MaxQueuedExecutionsPerPrincipal), StringComparer.Ordinal)));
 
+        // The ring must be able to hold at least one whole output event, or a single one trims it to empty on arrival.
+        AssertEx.Contains(Validate(new IntegrationOptions { EventBufferMaxBytes = 65_536, MaxOutputBytes = 262_144 }),
+            error => error.MemberNames.Contains(nameof(IntegrationOptions.EventBufferMaxBytes), StringComparer.Ordinal),
+            "A 64 KiB ring with a 256 KiB per-output ceiling drops every event the moment a big one lands.");
+
+        AssertEx.Empty(Validate(new IntegrationOptions { EventBufferMaxBytes = 262_144, MaxOutputBytes = 262_144 })
+            .Where(static error => error.MemberNames.Contains(nameof(IntegrationOptions.EventBufferMaxBytes), StringComparer.Ordinal)));
+
         AssertEx.Contains(Validate(new IntegrationOptions { MaxOutputBytes = 262_144, MaxOutputBytesPerExecution = 131_072 }),
             error => error.MemberNames.Contains(nameof(IntegrationOptions.MaxOutputBytes), StringComparer.Ordinal),
             "A single emit_output larger than the whole execution's budget could never be accepted.");

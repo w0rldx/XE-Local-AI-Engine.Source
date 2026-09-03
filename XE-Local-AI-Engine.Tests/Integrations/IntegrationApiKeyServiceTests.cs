@@ -109,6 +109,16 @@ public sealed class IntegrationApiKeyServiceTests
     }
 
     [Test]
+    public void DeserializeAllowList_FailsClosedOnALiteralJsonNullAndOpenOnlyOnASqlNullColumn()
+    {
+        // Guid[] deserialised from the four characters `null` is a null reference, which read as "every trigger" and
+        // silently widened a scoped credential to the whole node.
+        AssertEx.Null(IntegrationApiKeyService.DeserializeAllowList(allowedTriggerIdsJson: null), "A SQL NULL column is the 'every trigger' credential.");
+        AssertEx.Empty(AssertEx.NotNull(IntegrationApiKeyService.DeserializeAllowList("null")));
+        AssertEx.Empty(AssertEx.NotNull(IntegrationApiKeyService.DeserializeAllowList("not json at all")));
+    }
+
+    [Test]
     public async Task ValidateAsync_AcceptsTheMintedKeyAndRejectsAWrongOneWithTheSamePrefix()
     {
         var service = CreateService(out _);

@@ -138,6 +138,15 @@ public sealed class IntegrationOptions : IValidatableObject
                 [nameof(MaxQueuedExecutionsPerPrincipal), nameof(MaxQueuedExecutions)]);
         }
 
+        // One output event larger than the whole ring's byte cap trims the ring to empty the moment it lands, which
+        // costs every event before it and hands the reader a gap for a run that is still producing.
+        if (EventBufferMaxBytes < MaxOutputBytes)
+        {
+            yield return new ValidationResult(
+                $"{Section}:{nameof(EventBufferMaxBytes)} must be at least {nameof(MaxOutputBytes)}.",
+                [nameof(EventBufferMaxBytes), nameof(MaxOutputBytes)]);
+        }
+
         // A single emit_output larger than the whole execution's budget can never be accepted, so the per-call ceiling
         // would silently be the aggregate one.
         if (MaxOutputBytes > MaxOutputBytesPerExecution)

@@ -113,6 +113,25 @@ public sealed class IntegrationExecutionEventBufferTests
     }
 
     [Test]
+    public void Append_OfAnEventLargerThanTheWholeByteCap_StillReportsTheGapItLeft()
+    {
+        // The configurable shape: EventBufferMaxBytes allows 64 KiB while one external.output may be 256 KiB. Trimming
+        // to EMPTY once read the floor off an absent head and answered 0, which a reader takes for "no gap" — so it
+        // would skip the 410 and silently miss every dropped event.
+        using var buffer = CreateBuffer(maxBytes: 10);
+        var executionId = Guid.NewGuid();
+        AssertEx.True(buffer.TryCreate(executionId));
+
+        for (var i = 0; i < 3; i++)
+        {
+            _ = Append(buffer, executionId);
+        }
+
+        AssertEx.Equal(expected: 4L, buffer.Floor(executionId), "Three dropped events leave the floor at the highest dropped sequence + 1.");
+        AssertEx.Equal(expected: 3L, buffer.LastSequence(executionId), "The minting watermark is untouched by trimming.");
+    }
+
+    [Test]
     public void Append_PastTheByteCap_TrimsEvenWhenTheCountIsFarBelowTheLimit()
     {
         using var buffer = CreateBuffer(capacity: 4096, maxBytes: 700);
@@ -207,6 +226,31 @@ public sealed class IntegrationExecutionEventBufferTests
 
         AssertEx.False(buffer.IsTracked(terminal));
         AssertEx.True(buffer.IsTracked(live), "The option's name is the contract: only a TERMINAL entry ages out.");
+    }
+
+    [Test]
+    public void RemoveAndSweep_DiscardTheEvictionQueueEntryAsWellAsTheEntry()
+    {
+        // The FIFO only shed stale ids when an eviction scan happened to run, so a node that never reaches
+        // MaxTrackedExecutions grew it without bound for the whole life of the process.
+        var clock = new ManualTimeProvider();
+        using var buffer = CreateBuffer(ttl: TimeSpan.FromMinutes(10), timeProvider: clock);
+
+        for (var i = 0; i < 20; i++)
+        {
+            var removed = Guid.NewGuid();
+            AssertEx.True(buffer.TryCreate(removed));
+            _ = Append(buffer, removed, IntegrationStreamEventTypes.ExecutionCompleted);
+            buffer.Remove(removed);
+        }
+
+        var swept = Guid.NewGuid();
+        AssertEx.True(buffer.TryCreate(swept));
+        _ = Append(buffer, swept, IntegrationStreamEventTypes.ExecutionCompleted);
+        clock.Advance(TimeSpan.FromMinutes(11));
+        _ = buffer.Sweep();
+
+        AssertEx.Equal(expected: 0, buffer.EvictionQueueDepth, "Every id the FIFO names must have an entry behind it.");
     }
 
     [Test]
