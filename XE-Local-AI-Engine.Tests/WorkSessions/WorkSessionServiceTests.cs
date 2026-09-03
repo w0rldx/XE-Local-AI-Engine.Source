@@ -39,6 +39,41 @@ public sealed class WorkSessionServiceTests
         AssertEx.Contains(await service.ListAsync().ConfigureAwait(false), summary => summary.Id == created.Id);
     }
 
+    /// <summary>
+    ///     FU-5: the caller's own model pin BEATS the bound agent's, and is what the tool gate judges — in both
+    ///     directions, because an override that only ever loosened or only ever tightened would not be a pin.
+    /// </summary>
+    [Test]
+    public async Task Create_WithAModelOverride_JudgesTheOverrideRatherThanTheAgentsOwnPin()
+    {
+        var factory = Host.Factory;
+        var listed = await SeedAgentAsync(factory, "tool-capable-model").ConfigureAwait(false);
+        var unlisted = await SeedAgentAsync(factory, "a-model-nobody-listed").ConfigureAwait(false);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
+
+        var rejection = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
+                                          service.CreateAsync(new CreateWorkSessionRequestModel("t",
+                                              "o",
+                                              AgentWorkSessionKind.General,
+                                              listed,
+                                              new WorkSessionRuntimeOverride("a-model-nobody-listed", ReasoningEffort: null))))
+                                      .ConfigureAwait(false);
+
+        // The refusal names the model the session would have run on, not the agent's own.
+        AssertEx.Contains(rejection.Message, "a-model-nobody-listed");
+
+        var created = await service.CreateAsync(new CreateWorkSessionRequestModel("t",
+                                       "o",
+                                       AgentWorkSessionKind.General,
+                                       unlisted,
+                                       new WorkSessionRuntimeOverride("tool-capable-model", "high")))
+                                   .ConfigureAwait(false);
+
+        AssertEx.Equal(AgentWorkSessionStatus.Draft, created.Status, "an override onto a listed model admits a session the agent's own pin would have been refused for.");
+    }
+
     [Test]
     public async Task Create_WhenTheAgentIsUnknown_IsRejected()
     {

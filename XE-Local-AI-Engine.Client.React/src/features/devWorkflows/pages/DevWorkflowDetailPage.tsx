@@ -439,13 +439,19 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 				) : (
 					<div
 						data-testid="dev-workflow-detail-grid"
+						// The centre track carries a floor like the two beside it. TWO_PANE_BREAKPOINT (1024) asks
+						// "do two panes fit at all", not "does 320 + 380 plus this page's chrome fit", so a viewport
+						// just above it left `minmax(0, 1fr)` at ~120px and clipped the tab header to "Gra"/"Nod".
+						// `overflowX: auto` is the other half: FullHeightPage clips the X axis on purpose, so without
+						// its own scroller the grid would go on hiding the overflow the floor makes honest.
 						style={{
 							display: "grid",
-							gridTemplateColumns: "320px minmax(0, 1fr) minmax(380px, 420px)",
+							gridTemplateColumns: "320px minmax(240px, 1fr) minmax(380px, 420px)",
 							gridTemplateRows: "minmax(0, 1fr)",
 							gap: "var(--mantine-spacing-md)",
 							flex: 1,
 							minHeight: 0,
+							overflowX: "auto",
 						}}
 					>
 						{summaryPanel}

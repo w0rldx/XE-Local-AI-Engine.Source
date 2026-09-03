@@ -47,8 +47,8 @@ public sealed class DevWorkflowWorkspaceSecretsSinkTests : IDisposable
     /// <summary>
     ///     The blocker the seam exists for, asserted against the real store so it cannot be argued away. Dev Mode's sink
     ///     resolves the project from a task row before it does anything else, so a node-run's own ids — which name no
-    ///     such row — never get past that <c>SingleAsync</c>. Everything else in <c>PrepareAsync</c> already reads the
-    ///     snapshot as a value bag.
+    ///     such row — never get past that lookup. Everything else in <c>PrepareAsync</c> already reads the snapshot as
+    ///     a value bag.
     /// </summary>
     [Test]
     public async Task DevModeSink_ForIdsThatNameNoTaskOrAttempt_IsRefusedByTheStore()
@@ -57,8 +57,9 @@ public sealed class DevWorkflowWorkspaceSecretsSinkTests : IDisposable
         await using var scope = factory.Services.CreateAsyncScope();
         var sink = new DevelopmentStoreWorkspaceSecretsSink(scope.ServiceProvider.GetRequiredService<IDevelopmentStore>());
 
-        // The TYPE is the contract; the message is the framework's and could be reworded by any runtime update.
-        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => sink.RecordAsync(Guid.NewGuid(), Guid.NewGuid(), [".env"]))
+        // The TYPE is the contract: the store's own KeyNotFoundException for a row that is not there, which is what
+        // every other missing-row path in it throws and what a caller can answer for.
+        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => sink.RecordAsync(Guid.NewGuid(), Guid.NewGuid(), [".env"]))
                           .ConfigureAwait(false);
     }
 

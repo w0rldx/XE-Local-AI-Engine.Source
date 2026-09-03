@@ -91,6 +91,9 @@ internal sealed class WorkSessionStepContextBound(
             return;
         }
 
+        // The FOLD runs on the node's default chat model, not on the one the step itself uses — true for a session's
+        // caller pin exactly as it already is for a bound agent's own. Summarizing is not the session's work, and
+        // routing it to a pinned model would make a fold contend for that model's load slot mid-session.
         var result = await _compaction.CompactAsync(conversationId, requestedModel: null, SessionKeepVerbatim, cancellationToken).ConfigureAwait(false);
         _logger.LogInformation(
             "Work session conversation {ConversationId} projected ~{Projected} replayed token(s) against a step budget of {Budget} (effective {EffectiveBudget} after this model's observed correction); forced compaction reported {Outcome} after folding {Folded} message(s).",

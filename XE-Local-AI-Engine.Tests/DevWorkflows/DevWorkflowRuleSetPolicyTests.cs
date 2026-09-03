@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
@@ -28,6 +29,15 @@ public sealed class DevWorkflowRuleSetPolicyTests
                                          "edges": []
                                        }
                                        """;
+
+    /// <summary>One implementation node, so an assertion is about the policy rather than about routing.</summary>
+    private const string SingleDevTask = """
+                                         {
+                                           "schemaVersion": 1,
+                                           "nodes": [{ "nodeKey": "implement", "nodeType": "DevTask", "label": "Implement" }],
+                                           "edges": []
+                                         }
+                                         """;
 
     /// <summary>
     ///     Y2's predicate, stated as a table: an EMPTY axis matches everything, a populated one is exact and
@@ -232,13 +242,13 @@ public sealed class DevWorkflowRuleSetPolicyTests
 
     /// <summary>
     ///     Only the node types that INJECT policy text carry a copy of it. Every node type still records WHICH rule
-    ///     sets applied — a Tool or DevTask row that snapshotted bodies would be storing, encrypting and decrypting a
+    ///     sets applied — a Tool or HumanGate row that snapshotted bodies would be storing, encrypting and decrypting a
     ///     document nothing ever reads, on every node-run list.
     /// </summary>
     [Test]
     [Arguments(DevWorkflowNodeType.Agent, true)]
     [Arguments(DevWorkflowNodeType.Tool, false)]
-    [Arguments(DevWorkflowNodeType.DevTask, false)]
+    [Arguments(DevWorkflowNodeType.DevTask, true)]
     [Arguments(DevWorkflowNodeType.HumanGate, false)]
     public void Compose_SnapshotsTheBodyOnlyForNodeTypesThatInjectIt(DevWorkflowNodeType nodeType, bool expectsBody)
     {
@@ -263,6 +273,43 @@ public sealed class DevWorkflowRuleSetPolicyTests
         AssertEx.Equal(expected: 1, recorded.Count);
         AssertEx.Null(recorded[0].Body, "a row written before the body was snapshotted reads as having none, not as having empty text.");
         AssertEx.Equal("content-hash", recorded[0].ContentSha256, "and the audit half of it is untouched.");
+    }
+
+    /// <summary>
+    ///     The DevTask lane end to end: a rule set scoped to DevTask nodes is snapshotted on the node run, and once the
+    ///     executor has bound the node run to a task the text is on the execution snapshot Dev Mode composes its coder
+    ///     and reviewer prompts from. Without this half a DevTask node would record a policy it never obeyed.
+    /// </summary>
+    [Test]
+    public async Task ADevTaskNodeRun_SnapshotsItsPolicyAndPutsItOnTheExecutionSnapshotDevModeComposesFrom()
+    {
+        await using var harness = DevWorkflowHarness.WithAScriptedChain();
+        var (projectId, taskId) = await harness.SeedDevelopmentProjectAsync().ConfigureAwait(false);
+        var applies = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":["DevTask"]}""").ConfigureAwait(false);
+        _ = await harness.CreateRuleSetAsync("Agent rules", "Ignore the tests.", """{"projectIds":[],"nodeTypes":["Agent"]}""").ConfigureAwait(false);
+
+        // Held rather than walked on, so a real attempt row exists to read the execution snapshot off — which is the
+        // row Dev Mode's coder and reviewer runners are handed.
+        harness.Chain.HoldNextAttempt();
+
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var recorded = DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson);
+        AssertEx.Equal(expected: 1, recorded.Count, "only the rule set whose node-type axis names DevTask applied.");
+        AssertEx.Equal(applies.Id, recorded[0].Id);
+        AssertEx.Equal(HouseRules, recorded[0].Body, "a DevTask node run snapshots the body now, because it is a lane that injects one.");
+
+        await using var scope = harness.Services.CreateAsyncScope();
+        var development = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var attempt = (await development.ListAttemptsAsync(taskId).ConfigureAwait(false)).Single();
+        var policy = AssertEx.NotNull((await development.GetExecutionSnapshotAsync(attempt.Id).ConfigureAwait(false)).WorkflowPolicyText,
+            "the task the node run bound carries the policy the run resolved for it.");
+
+        AssertEx.Contains(policy, "## Policy: House rules", message: "the rule set is rendered as its own section, exactly as the agent lane renders it.");
+        AssertEx.Contains(policy, HouseRules, message: "and its body travels with it — a heading alone governs nothing.");
+        AssertEx.False(policy.Contains("Ignore the tests.", StringComparison.Ordinal), "a rule set scoped to Agent nodes must not reach an implementation node.");
     }
 
     private static DevWorkflowRuleSetSnapshot Summary(string name, string scopeJson) =>

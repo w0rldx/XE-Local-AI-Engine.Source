@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -62,15 +63,21 @@ internal sealed class DevWorkflowRetryPolicy
     /// </summary>
     private readonly ConcurrentDictionary<Guid, ScheduledRetry> _notBefore = new();
 
+    private readonly ILogger<DevWorkflowRetryPolicy> _logger;
+
     private readonly DevWorkflowOptions _options;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
 
-    public DevWorkflowRetryPolicy(IServiceScopeFactory scopeFactory, IOptions<DevWorkflowOptions> options, TimeProvider timeProvider)
+    public DevWorkflowRetryPolicy(IServiceScopeFactory scopeFactory,
+        IOptions<DevWorkflowOptions> options,
+        TimeProvider timeProvider,
+        ILogger<DevWorkflowRetryPolicy> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
     }
 
@@ -220,6 +227,13 @@ internal sealed class DevWorkflowRetryPolicy
         // The next attempt is told what the last one came to (§7.2), or the agent composes a byte-identical objective
         // and does the same thing again. Read off the failure in hand rather than the row, which the Pending write is
         // about to clear; the helper strips any earlier priorFailure, so rounds replace rather than nest.
+        //
+        // NO priorFailureNode: that key names the OTHER node whose verdict sent the run back here, and only RouteAsync
+        // has one. Writing this node's own key into it made a same-node retry indistinguishable from a cross-node
+        // rejection — measured live on 2026-09-02, a transient reviewer failure on a DevTask node then had the
+        // executor ask an ALREADY-APPROVED task to be implemented again, quoting a verdict nothing had reached, until
+        // the task's review rounds ran out and its approved patch was discarded. An earlier genuine route's key is left
+        // in place: a transient retry in the middle of a fix loop must not lose the rework the loop asked for.
         return await ReAttemptAsync(store,
                 run,
                 nodeRun,
@@ -227,7 +241,7 @@ internal sealed class DevWorkflowRetryPolicy
                 DetailFor(nodeRun, failure),
                 failure.Outcome ?? DevWorkflowOutcomes.Failed,
                 cancellationToken,
-                PriorFailure(nodeRun.InputJson, nodeRun.NodeKey, failure.OutputJson))
+                PriorFailure(nodeRun.InputJson, fromNodeKey: null, fromAttempt: null, failure.OutputJson))
             .ConfigureAwait(false);
     }
 
@@ -302,40 +316,17 @@ internal sealed class DevWorkflowRetryPolicy
                 .ConfigureAwait(false);
         }
 
-        _ = await store.AppendEventAsync(new AppendDevWorkflowEventCommand(run.Id,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowEventTypes.NodeRetryRouted,
-                               nodeRun.Id,
-                               DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "retry-routed"),
-                               failure.Outcome ?? DevWorkflowOutcomes.Failed,
-                               JsonSerializer.Serialize(new RoutedDetail(nodeRun.NodeKey, retryTarget, failure.FailureClass, failure.SanitizedReason), JsonOptions)),
-                           cancellationToken)
-                       .ConfigureAwait(false);
-
-        // The target is reset LAST, deliberately. A crash part-way through leaves descendants at the new attempt and the
-        // target still terminal, which the next round re-derives in one pass; target-first would leave the target
-        // running again while descendants still carry the answers it is about to replace.
-        var written = 1;
+        // Composed before anything is touched, so an illegal move is refused while the run still stands where it did.
+        // The target is built LAST so the event log reads decision, then the answers being discarded, then the node
+        // being re-run — the order a person reconstructs the round in.
+        var moves = new List<(TransitionDevWorkflowNodeRunCommand Command, Guid NodeRunId, DateTimeOffset? DelayUntil)>(reset.Count + 1);
         foreach (var row in reset)
         {
             // Only the node that failed ended failed. The rest are being re-run because the answer they gave is about
             // to describe something that no longer exists, and stamping their event "failed" would say they broke.
-            if (row.Id == nodeRun.Id)
-            {
-                written += await ReAttemptAsync(store,
-                        run,
-                        row,
-                        delaySeconds: 0,
-                        DetailFor(row, failure),
-                        failure.Outcome ?? DevWorkflowOutcomes.Failed,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-                continue;
-            }
-
-            await QuiesceAsync(row, cancellationToken).ConfigureAwait(false);
-            written += await ReAttemptAsync(store,
-                    run,
+            var (command, delayUntil) = row.Id == nodeRun.Id
+                ? ReAttempt(run, row, delaySeconds: 0, DetailFor(row, failure), failure.Outcome ?? DevWorkflowOutcomes.Failed, inputJson: null)
+                : ReAttempt(run,
                     row,
                     delaySeconds: 0,
                     new RetryDetail(row.Attempt,
@@ -343,28 +334,116 @@ internal sealed class DevWorkflowRetryPolicy
                         $"Node '{retryTarget}' is being re-attempted because '{nodeRun.NodeKey}' failed, so this node run's result no longer describes it.",
                         DelayUntil: null),
                     outcome: null,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    inputJson: null);
+            moves.Add((command, row.Id, delayUntil));
         }
 
-        // The target is almost always Succeeded by the time anything downstream of it can fail, so this is almost
+        var (targetCommand, targetDelay) = ReAttempt(run,
+            target,
+            node.RetryDelaySeconds,
+            new RetryDetail(target.Attempt, failure.FailureClass, $"Re-attempted because '{nodeRun.NodeKey}' failed.", DelayUntil: null),
+            outcome: null,
+            PriorFailure(target.InputJson, nodeRun.NodeKey, nodeRun.Attempt, failure.OutputJson));
+        moves.Add((targetCommand, target.Id, targetDelay));
+
+        // Quiesce EVERY row the route supersedes before the transaction opens. Stopping a live session is not something
+        // a rollback can undo, so it cannot sit inside the write — and a lane still driving a row the reset is about to
+        // take would otherwise settle it back off the answer being discarded.
+        //
+        // The target is almost always Succeeded by the time anything downstream of it can fail, so its pass is almost
         // always a no-op — but an Any join lets a descendant run on a sibling branch while the target is still working,
         // and that target is as live as any other row the reset moves.
+        foreach (var row in reset.Where(row => row.Id != nodeRun.Id))
+        {
+            await QuiesceAsync(row, cancellationToken).ConfigureAwait(false);
+        }
+
         await QuiesceAsync(target, cancellationToken).ConfigureAwait(false);
-        written += await ReAttemptAsync(store,
-                run,
-                target,
-                node.RetryDelaySeconds,
-                new RetryDetail(target.Attempt, failure.FailureClass, $"Re-attempted because '{nodeRun.NodeKey}' failed.", DelayUntil: null),
-                outcome: null,
-                cancellationToken,
-                PriorFailure(target.InputJson, nodeRun.NodeKey, failure.OutputJson))
-            .ConfigureAwait(false);
-        return written;
+
+        // ONE transaction for the routing event and every reset under it. Committing them a row at a time left a crash
+        // window in which the failed check was Pending again while the verification and gate approval beside it still
+        // read Succeeded — and nothing reconciles that, because startup recovery only judges rows left Queued or
+        // Running. The run would then repeat the check and complete on evidence and an approval about an implementation
+        // that no longer existed. All or nothing means a crash leaves the failure still recorded, which the next sweep
+        // re-derives and re-routes.
+        var route = new RouteDevWorkflowRetryCommand(new AppendDevWorkflowEventCommand(run.Id,
+                DevWorkflowVersions.Any,
+                DevWorkflowEventTypes.NodeRetryRouted,
+                nodeRun.Id,
+                DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "retry-routed"),
+                failure.Outcome ?? DevWorkflowOutcomes.Failed,
+                JsonSerializer.Serialize(new RoutedDetail(nodeRun.NodeKey, retryTarget, failure.FailureClass, failure.SanitizedReason), JsonOptions)),
+            [.. moves.Select(static move => move.Command)]);
+        await RouteOnceMoreOnAClashAsync(store, run, nodeRun, retryTarget, route, cancellationToken).ConfigureAwait(false);
+
+        // After the commit: a cushion for a re-attempt that did not commit would hold back a row nothing reset.
+        foreach (var (_, nodeRunId, delayUntil) in moves)
+        {
+            Cushion(run.Id, nodeRunId, delayUntil);
+        }
+
+        return moves.Count + 1;
     }
 
     /// <summary>
-    ///     Stops the lane work a node run is about to lose, immediately before the reset takes away the only row that
+    ///     Writes the route, and on a lost race asks EXACTLY once more before giving up on this tick.
+    ///     <para>
+    ///         The immediate re-ask exists because the lanes this route supersedes are already stopped by the time the
+    ///         write is attempted, and a clash rolls that write back whole. Leaving it to the next sweep would leave
+    ///         cancelled attempts with nothing reset — and a cancelled DevTask attempt is read by that lane as a
+    ///         cancellation rather than as a round to redo, so the fix loop would come back as a cancelled run.
+    ///     </para>
+    ///     <para>
+    ///         The SAME command, deliberately, rather than one re-derived from re-read rows. Every part of it already
+    ///         carries <see cref="DevWorkflowVersions.Any" />, so a re-read cannot change a single field; it could only
+    ///         change which rows are in the reset set, and a row that moved into that set after the snapshot was taken
+    ///         is the same race the first attempt runs anyway. Re-sending it unchanged also makes the operation id do
+    ///         its job: if the first attempt did commit and only its answer was lost, this is a replay, not a second
+    ///         route.
+    ///     </para>
+    ///     <para>
+    ///         Twice and no further. A third ask is a writer that is not going away, and the honest answer is the one
+    ///         that was there before: the failure is still recorded, so the next sweep re-derives it and routes again.
+    ///     </para>
+    /// </summary>
+    private async Task RouteOnceMoreOnAClashAsync(IDevWorkflowStore store,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        string retryTarget,
+        RouteDevWorkflowRetryCommand route,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            _ = await store.RouteRetryAsync(route, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+        catch (DevWorkflowConcurrencyException clash)
+        {
+            _logger.LogDebug(clash,
+                "Development workflow run {RunId} lost a race routing '{NodeKey}' back to '{RetryTarget}', so the route is being asked once more.",
+                run.Id,
+                nodeRun.NodeKey,
+                retryTarget);
+        }
+
+        try
+        {
+            _ = await store.RouteRetryAsync(route, cancellationToken).ConfigureAwait(false);
+        }
+        catch (DevWorkflowConcurrencyException persistent)
+        {
+            _logger.LogWarning(persistent,
+                "Development workflow run {RunId} lost the race routing '{NodeKey}' back to '{RetryTarget}' twice, so the lanes it stopped are left for the next sweep to re-derive and route again.",
+                run.Id,
+                nodeRun.NodeKey,
+                retryTarget);
+            throw;
+        }
+    }
+
+    /// <summary>
+    ///     Stops the lane work a node run is about to lose, before the transaction that takes away the only row that
     ///     could ever have settled it.
     ///     <para>
     ///         Without this a fix loop orphans live work rather than replacing it. An agent row's re-attempt clears its
@@ -435,36 +514,55 @@ internal sealed class DevWorkflowRetryPolicy
         CancellationToken cancellationToken,
         string? inputJson = null)
     {
+        var (command, delayUntil) = ReAttempt(run, nodeRun, delaySeconds, detail, outcome, inputJson);
+        _ = await store.TransitionNodeRunAsync(command, cancellationToken).ConfigureAwait(false);
+        Cushion(run.Id, nodeRun.Id, delayUntil);
+        return 1;
+    }
+
+    /// <summary>
+    ///     The one re-attempt move, composed but not written: the fix loop needs every move it makes in hand before it
+    ///     writes any of them, because they go to the store as one transaction.
+    /// </summary>
+    private (TransitionDevWorkflowNodeRunCommand Command, DateTimeOffset? DelayUntil) ReAttempt(DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        int delaySeconds,
+        RetryDetail detail,
+        string? outcome,
+        string? inputJson)
+    {
         var delayUntil = delaySeconds > 0 ? _timeProvider.GetUtcNow().AddSeconds(delaySeconds) : (DateTimeOffset?)null;
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Pending, nodeRun.NodeKey);
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                               nodeRun.Id,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowNodeRunStatus.Pending,
-                               InputJson: inputJson,
-                               DetailJson: JsonSerializer.Serialize(detail with
-                               {
-                                   DelayUntil = delayUntil?.ToUnixTimeMilliseconds()
-                               }, JsonOptions),
-                               IncrementAttempt: true,
-                               ClearWorkSession: true,
-                               Outcome: outcome),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+        return (new TransitionDevWorkflowNodeRunCommand(run.Id,
+            nodeRun.Id,
+            DevWorkflowVersions.Any,
+            DevWorkflowNodeRunStatus.Pending,
+            InputJson: inputJson,
+            DetailJson: JsonSerializer.Serialize(detail with
+            {
+                DelayUntil = delayUntil?.ToUnixTimeMilliseconds()
+            }, JsonOptions),
+            IncrementAttempt: true,
+            ClearWorkSession: true,
+            Outcome: outcome), delayUntil);
+    }
 
-        // Written on EVERY re-attempt, including the ones that ask for no delay: a fix-loop reset of a row that was
-        // already waiting on a clock must not inherit the previous attempt's, and the removal is also what keeps the
-        // map from accumulating an entry per delayed retry for the life of the process.
+    /// <summary>
+    ///     Records or clears when a re-attempt may be admitted. Written for EVERY re-attempt, including the ones that
+    ///     ask for no delay: a fix-loop reset of a row that was already waiting on a clock must not inherit the previous
+    ///     attempt's, and the removal is also what keeps the map from accumulating an entry per delayed retry for the
+    ///     life of the process.
+    /// </summary>
+    private void Cushion(Guid runId, Guid nodeRunId, DateTimeOffset? delayUntil)
+    {
         if (delayUntil is { } notBefore)
         {
-            _notBefore[nodeRun.Id] = new ScheduledRetry(run.Id, notBefore);
+            _notBefore[nodeRunId] = new ScheduledRetry(runId, notBefore);
         }
         else
         {
-            _ = _notBefore.TryRemove(nodeRun.Id, out _);
+            _ = _notBefore.TryRemove(nodeRunId, out _);
         }
-
-        return 1;
     }
 
     /// <summary>Stands the node run down for a human, blocking its work item in the same transaction.</summary>
@@ -536,11 +634,33 @@ internal sealed class DevWorkflowRetryPolicy
     }
 
     /// <summary>
-    ///     The target's inputs with the failure that sent the run back to it, as two flat members so the objective
-    ///     renders them as the lines it renders every other input as.
+    ///     The target's inputs with the failure that sent the run back to it, as flat members so the objective renders
+    ///     them as the lines it renders every other input as.
+    ///     <para>
+    ///         <paramref name="fromNodeKey" /> is the node whose verdict routed the run back, and it is
+    ///         <see langword="null" /> for a same-node retry, which has no such node. The DevTask lane reads
+    ///         <c>priorFailureNode</c> as "a downstream node rejected this implementation", so a retry that wrote its
+    ///         own key there was read as a rejection; a null leaves whatever an earlier genuine route put there
+    ///         untouched, and adds none.
+    ///     </para>
+    ///     <para>
+    ///         <paramref name="fromAttempt" /> is that node run's attempt — the one that produced this verdict and
+    ///         wrote the report behind it. Together with the key it is the ROUTE's identity, and it is what makes the
+    ///         route answerable exactly once: the DevTask lane keys its one change request on it rather than on its own
+    ///         attempt, which a same-node retry moves while the very same rejection is still outstanding, and it
+    ///         accepts a validation report only from the attempt that actually refused.
+    ///     </para>
     /// </summary>
-    private static string PriorFailure(string? inputJson, string fromNodeKey, string outputJson)
+    private static string PriorFailure(string? inputJson, string? fromNodeKey, int? fromAttempt, string outputJson)
     {
+        if (fromNodeKey is null && CarriesRoutedFailure(inputJson))
+        {
+            // A transient retry landing in the MIDDLE of a genuine fix loop. Overwriting priorFailure here would leave
+            // the routed node's name with this node's own count-less output under it, so the rework request that
+            // follows quotes a verdict it can no longer evidence. Both members stay as the route wrote them.
+            return inputJson!;
+        }
+
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
         {
@@ -550,14 +670,24 @@ internal sealed class DevWorkflowRetryPolicy
                 if (existing is not null)
                 {
                     foreach (var property in existing.RootElement.EnumerateObject()
-                                                     .Where(static property => property.Name is not ("priorFailure" or "priorFailureNode")))
+                                                     .Where(property => property.Name != "priorFailure"
+                                                                        && (fromNodeKey is null
+                                                                            || property.Name is not ("priorFailureNode" or "priorFailureAttempt"))))
                     {
                         property.WriteTo(writer);
                     }
                 }
             }
 
-            writer.WriteString("priorFailureNode", fromNodeKey);
+            if (fromNodeKey is not null)
+            {
+                writer.WriteString("priorFailureNode", fromNodeKey);
+                if (fromAttempt is { } attempt)
+                {
+                    writer.WriteNumber("priorFailureAttempt", attempt);
+                }
+            }
+
             writer.WritePropertyName("priorFailure");
             using (var output = Parse(outputJson))
             {
@@ -575,6 +705,13 @@ internal sealed class DevWorkflowRetryPolicy
         }
 
         return Encoding.UTF8.GetString(buffer.ToArray());
+    }
+
+    /// <summary>Whether these inputs already name the node whose verdict routed the run back to them.</summary>
+    private static bool CarriesRoutedFailure(string? inputJson)
+    {
+        using var existing = Parse(inputJson);
+        return existing is not null && existing.RootElement.TryGetProperty("priorFailureNode", out _);
     }
 
     /// <summary>A JSON object, or null when there is none or the text is not one this can carry through.</summary>

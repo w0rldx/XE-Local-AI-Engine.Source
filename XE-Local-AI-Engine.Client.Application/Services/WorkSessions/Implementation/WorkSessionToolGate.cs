@@ -23,7 +23,26 @@ internal readonly record struct WorkSessionToolGateVerdict(
     string AgentName,
     string? EffectiveModel,
     bool? SupportsTools,
-    bool IsAllowListed);
+    bool IsAllowListed,
+    bool ModelIsCallerPinned = false)
+{
+    /// <summary>
+    ///     How a refusal names the model, which has to name the thing the operator would go and change. A caller pin —
+    ///     a development-workflow node's <c>modelProfile</c> — is not something the agent "runs on": the agent may be
+    ///     pinned to something else entirely, and sending the operator to the agent's settings would send them to the
+    ///     wrong screen.
+    /// </summary>
+    public string Subject =>
+        ModelIsCallerPinned
+            ? $"This work session is pinned to '{EffectiveModel}'"
+            : $"'{AgentName}' runs on '{EffectiveModel}'";
+
+    /// <summary>Where the model that was refused can be changed, which follows from the same distinction.</summary>
+    public string Remedy =>
+        ModelIsCallerPinned
+            ? "pin a listed model instead"
+            : "pick an agent on a listed model";
+}
 
 /// <summary>
 ///     Answers, for one agent definition, whether a work session could actually call its four state tools.
@@ -74,12 +93,13 @@ internal sealed class WorkSessionToolGate
     ///     message that blamed the model would send the operator looking for a different agent when adding one line to
     ///     Node Settings is what they need.
     /// </summary>
-    public static string AllowListRefusal(string agentName, string? effectiveModel) =>
-        $"'{agentName}' runs on '{effectiveModel}', which is not in this node's tool-capable model list (Node Settings → Tools), so work-session tools such as update_work_plan would silently be withheld. Add the model to the list, or pick an agent on a listed model.";
+    public static string AllowListRefusal(WorkSessionToolGateVerdict verdict) =>
+        $"{verdict.Subject}, which is not in this node's tool-capable model list (Node Settings → Tools), so work-session tools such as update_work_plan would silently be withheld. "
+        + $"Add the model to the list, or {verdict.Remedy}.";
 
     /// <summary>
-    ///     Resolves the agent and reports BOTH gates against the model the session would actually run on: the agent's
-    ///     pin, or the node's default chat model when it has none. For the create and repoint boundary, which has to
+    ///     Resolves the agent and reports BOTH gates against the model the session would actually run on: the caller's
+    ///     own pin when it has one, else the agent's, else the node's default chat model. For the create and repoint boundary, which has to
     ///     tell the two failures apart to say which one the operator should fix.
     ///     <para>
     ///         A missing definition answers <c>AgentExists: false</c> rather than throwing — the create path turns that
@@ -87,9 +107,9 @@ internal sealed class WorkSessionToolGate
     ///         underneath it and must not stop the step for it.
     ///     </para>
     /// </summary>
-    public async Task<WorkSessionToolGateVerdict> InspectAsync(Guid agentDefinitionId, CancellationToken cancellationToken)
+    public async Task<WorkSessionToolGateVerdict> InspectAsync(Guid agentDefinitionId, string? pinnedModelOverride, CancellationToken cancellationToken)
     {
-        var resolved = await ResolveAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var resolved = await ResolveAsync(agentDefinitionId, pinnedModelOverride, cancellationToken).ConfigureAwait(false);
         if (resolved.EffectiveModel is not { } effectiveModel)
         {
             return resolved;
@@ -114,14 +134,14 @@ internal sealed class WorkSessionToolGate
     ///         reads, and one more thing that can throw inside a loop whose failure mode is terminalizing the session.
     ///     </para>
     /// </summary>
-    public async Task<WorkSessionToolGateVerdict> InspectAllowListAsync(Guid agentDefinitionId, CancellationToken cancellationToken) =>
-        await ResolveAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+    public async Task<WorkSessionToolGateVerdict> InspectAllowListAsync(Guid agentDefinitionId, string? pinnedModelOverride, CancellationToken cancellationToken) =>
+        await ResolveAsync(agentDefinitionId, pinnedModelOverride, cancellationToken).ConfigureAwait(false);
 
     /// <summary>
     ///     The half both entry points share: the agent, its effective model, and the allow-list answer. Reports
     ///     <c>SupportsTools: null</c> — the probe is the caller's decision.
     /// </summary>
-    private async Task<WorkSessionToolGateVerdict> ResolveAsync(Guid agentDefinitionId, CancellationToken cancellationToken)
+    private async Task<WorkSessionToolGateVerdict> ResolveAsync(Guid agentDefinitionId, string? pinnedModelOverride, CancellationToken cancellationToken)
     {
         var definition = await _agentDefinitionStore.GetByIdAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
         if (definition is null)
@@ -129,7 +149,9 @@ internal sealed class WorkSessionToolGate
             return new WorkSessionToolGateVerdict(AgentExists: false, string.Empty, EffectiveModel: null, SupportsTools: null, IsAllowListed: false);
         }
 
-        var effectiveModel = await ResolveEffectiveModelAsync(definition.ModelProfile, cancellationToken).ConfigureAwait(false);
+        // The caller's pin first, then the definition's, then the node default. Same order the model itself is applied
+        // in, so what this gate judges is always the model the session's turns will actually run on.
+        var effectiveModel = await ResolveEffectiveModelAsync(Pin(pinnedModelOverride) ?? definition.ModelProfile, cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(effectiveModel))
         {
             return new WorkSessionToolGateVerdict(AgentExists: true, definition.Name, EffectiveModel: null, SupportsTools: null, IsAllowListed: false);
@@ -139,8 +161,12 @@ internal sealed class WorkSessionToolGate
             definition.Name,
             effectiveModel,
             SupportsTools: null,
-            _toolOffer.IsToolCapable(effectiveModel));
+            _toolOffer.IsToolCapable(effectiveModel),
+            ModelIsCallerPinned: Pin(pinnedModelOverride) is not null);
     }
+
+    private static string? Pin(string? candidate) =>
+        string.IsNullOrWhiteSpace(candidate) ? null : candidate;
 
     private async Task<string?> ResolveEffectiveModelAsync(string? pinnedModel, CancellationToken cancellationToken)
     {

@@ -92,6 +92,11 @@ public sealed class PublishingDevWorkflowStoreTests
         new(nameof(IDevWorkflowStore.TransitionNodeRunAsync),
             DevWorkflowChangeKind.Gate,
             store => store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked))),
+        new(nameof(IDevWorkflowStore.RouteRetryAsync),
+            DevWorkflowChangeKind.Node,
+            store => store.RouteRetryAsync(new RouteDevWorkflowRetryCommand(
+                new AppendDevWorkflowEventCommand(RunId, DevWorkflowVersions.Any, DevWorkflowEventTypes.NodeRetryRouted, NodeRunId),
+                [NodeRunTransition(DevWorkflowNodeRunStatus.Pending)]))),
         new(nameof(IDevWorkflowStore.AttachWorkSessionAsync),
             DevWorkflowChangeKind.Node,
             store => store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand(RunId, NodeRunId, DevWorkflowVersions.Any, Guid.NewGuid()))),
@@ -139,6 +144,7 @@ public sealed class PublishingDevWorkflowStoreTests
         inner.AppendEventAsync(Arg.Any<AppendDevWorkflowEventCommand>(), Arg.Any<CancellationToken>()).Returns(result);
         inner.MaterializeNodeRunsAsync(Arg.Any<MaterializeDevWorkflowNodesCommand>(), Arg.Any<CancellationToken>()).Returns(result);
         inner.TransitionNodeRunAsync(Arg.Any<TransitionDevWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>()).Returns(result);
+        inner.RouteRetryAsync(Arg.Any<RouteDevWorkflowRetryCommand>(), Arg.Any<CancellationToken>()).Returns(result);
         inner.AttachWorkSessionAsync(Arg.Any<AttachDevWorkflowWorkSessionCommand>(), Arg.Any<CancellationToken>()).Returns(result);
         inner.AppendArtifactAsync(Arg.Any<AppendDevWorkflowArtifactCommand>(), Arg.Any<CancellationToken>()).Returns(result);
         inner.RecordArtifactUsesAsync(Arg.Any<RecordDevWorkflowArtifactUsesCommand>(), Arg.Any<CancellationToken>()).Returns(result);

@@ -87,6 +87,24 @@ public sealed class DevWorkflowDevTaskTests
                                           "completedAtUtc":0}
                                          """;
 
+    /// <summary>
+    ///     The same X9 shape with an extra attempt on the implementation node, so a transient failure can be retried
+    ///     WITHOUT ending the fix loop the route started.
+    /// </summary>
+    private const string PatientDevTaskFixLoop = """
+                                                 {
+                                                   "schemaVersion": 1,
+                                                   "nodes": [
+                                                     { "nodeKey": "implement", "nodeType": "DevTask", "label": "Implement", "maxAttempts": 4 },
+                                                     { "nodeKey": "validate", "nodeType": "Tool", "label": "Validate", "retryTarget": "implement" }
+                                                   ],
+                                                   "edges": [{ "from": "implement", "to": "validate" }]
+                                                 }
+                                                 """;
+
+    /// <summary>The rule set a workflow injects, so an assertion can name the text rather than a hash.</summary>
+    private const string HouseRules = "Never touch production without an approved plan.";
+
     /// <summary>One implementation node with one re-attempt in hand.</summary>
     private const string SingleDevTask = """
                                          {
@@ -459,6 +477,209 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>
+    ///     L8: a node's OWN transient failure must not read as a downstream node rejecting the work.
+    ///     <para>
+    ///         A same-node retry used to write <c>priorFailureNode = &lt;itself&gt;</c> onto the next attempt's input —
+    ///         the identical carrier the cross-node fix loop uses for a real validation verdict — so the executor met an
+    ///         approved, <c>AwaitingApply</c> task carrying what looked like a rejection and asked Dev Mode to implement
+    ///         it again. Measured live on 2026-09-02: three transient reviewer failures on <c>add-negate-method</c> spent
+    ///         the task's last review round that way, and the node ended <c>Blocked / BudgetExhausted</c> while a coder
+    ///         attempt that had SUCCEEDED and a reviewer attempt that had APPROVED it sat unapplied.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ATransientFailureOnTheNodeItselfDoesNotAskAnApprovedTaskToBeImplementedAgain()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        harness.Chain.FailNextAttempts(1);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
+        AssertEx.Equal(expected: 2, implemented.Attempt, "the transient failure cost the node one of its own attempts, which is the only budget it should touch.");
+        AssertEx.False(AssertEx.NotNull(implemented.InputJson).Contains("priorFailureNode", StringComparison.Ordinal),
+            $"a same-node retry names no rejecting node, because there is none: {implemented.InputJson}");
+
+        var task = await ReadTaskAsync(harness, taskId).ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, task.Status);
+        AssertEx.Equal(expected: 1,
+            task.CurrentReviewRound,
+            "the approved work went through review exactly once; a retry that spends a review round is spending the wrong budget.");
+        AssertEx.False(harness.Chain.Actions.Contains(nameof(DevelopmentTaskStatus.ChangesRequested), StringComparer.Ordinal),
+            $"nothing judged this implementation, so nothing may ask for it to be done again: {string.Join(", ", harness.Chain.Actions)}");
+    }
+
+    /// <summary>
+    ///     L4: a rework reason has to be backed by something that actually ran. A routed failure carrying no readable
+    ///     validation report and no command or test counts produced the sentence "0 of 0 commands failed, 0 tests
+    ///     failed" — a measurement of nothing — and spent a coder round on it.
+    ///     <para>
+    ///         Stood down rather than succeeded: succeeding would send the run straight back round the loop to re-fail
+    ///         the same check and spend the whole budget having tried nothing, so the node ends where an operator can
+    ///         read why and Retry it, with the approved task untouched behind it.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ARoutedFailureWithNoReportAndNoCountsStandsTheNodeDownInsteadOfAskingForARound()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        await DriveToAwaitingApplyAsync(harness, projectId, taskId).ConfigureAwait(false);
+        var drivenBefore = harness.Chain.Actions.Count;
+        harness.Tools.Answer("validate",
+            FakeDevWorkflowToolCommands.Refusing(DevWorkflowFailureClasses.ToolCommandFailed, "The gate stopped before it ran anything."),
+            FakeDevWorkflowToolCommands.Passing());
+        var runId = await harness.StartRunAsync(DevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var task = await ReadTaskAsync(harness, taskId).ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, task.Status, "a verdict nobody reached does not move an approved task.");
+        AssertEx.Equal(expected: 1, task.CurrentReviewRound, "and it spends none of the rounds a real rejection would.");
+        AssertEx.False(harness.Chain.Actions.Skip(drivenBefore).Contains(nameof(DevelopmentTaskStatus.ChangesRequested), StringComparer.Ordinal),
+            $"no change was requested: {string.Join(", ", harness.Chain.Actions.Skip(drivenBefore))}");
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, implemented.Status, "the node ends rather than polling forever on an ask it will not make.");
+        AssertEx.Equal(DevWorkflowFailureClasses.Configuration, implemented.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(implemented.TerminalReason), "left no validation report or failing counts");
+        AssertEx.Equal(DevWorkflowDecisionKind.Abandon, implemented.PendingDecisionKind, "a human is asked, which is what makes the dead end recoverable.");
+        AssertEx.Contains(await harness.ReadEventTrailAsync(runId).ConfigureAwait(false),
+            "node.intervention.required",
+            message: "the stand-down reaches the feed, so the operator is told rather than left reading a stalled row.");
+    }
+
+    /// <summary>
+    ///     The interaction the two L8 fixes could have broken between them: a transient same-node failure landing in the
+    ///     MIDDLE of a genuine fix loop. The routed verdict's own evidence has to survive it — keeping the routed node's
+    ///     name while overwriting its counts with this node's count-less output would hand the L4 gate a rejection it
+    ///     could no longer evidence, and stand a genuinely rejected implementation down as unactionable.
+    /// </summary>
+    [Test]
+    public async Task ATransientFailureInsideAFixLoopKeepsTheRoutedVerdictAndItsEvidence()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        await DriveToAwaitingApplyAsync(harness, projectId, taskId).ConfigureAwait(false);
+        harness.Tools.Answer("validate",
+            FakeDevWorkflowToolCommands.Failing() with
+            {
+                Report = Encoding.UTF8.GetBytes(FailingReport)
+            },
+            FakeDevWorkflowToolCommands.Passing());
+
+        // The coder round the route asks for fails transiently, which is what sends the node round its OWN retry while
+        // the routed failure is still outstanding on its inputs.
+        harness.Chain.FailNextAttempts(1);
+        var runId = await harness.StartRunAsync(PatientDevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var input = AssertEx.NotNull(implemented.InputJson);
+        AssertEx.Contains(input, "\"priorFailureNode\":\"validate\"", message: "the transient retry must not drop the node whose verdict routed the run back.");
+        AssertEx.Contains(input, "\"testsFailed\":3", message: "nor overwrite that verdict's counts with its own count-less output.");
+        AssertEx.Contains(harness.Chain.Actions,
+            static action => action == nameof(DevelopmentTaskStatus.ChangesRequested),
+            $"the rejection still asks for a new round: {string.Join(", ", harness.Chain.Actions)}");
+
+        var feedback = AssertEx.NotNull((await ReadCoderSnapshotAsync(harness, taskId).ConfigureAwait(false)).PreviousRoundFeedback);
+        AssertEx.Contains(feedback, "dotnet_test_release_no_build", StringComparison.Ordinal, "and still quotes the report rather than a generic sentence.");
+        AssertEx.Contains(feedback, "3 of 15 tests failed");
+    }
+
+    /// <summary>
+    ///     The rejection is answered ONCE, however many of its own attempts the node spends getting there.
+    ///     <para>
+    ///         The one ask used to be keyed on the target's own attempt, and a transient failure between the change
+    ///         request and the round it asked for moves that attempt while the same rejection is still on the input. So
+    ///         the rework round arrived back at <c>AwaitingApply</c> under a key nothing had written, and the node asked
+    ///         for the SAME rejection to be implemented again — a second coder round against work a reviewer had just
+    ///         approved, spending a review round each time until the task ran out of them and its approved patch was
+    ///         discarded.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ATransientFailureAfterTheChangeRequest_DoesNotAskForTheSameRejectionTwice()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        await DriveToAwaitingApplyAsync(harness, projectId, taskId).ConfigureAwait(false);
+        harness.Tools.Answer("validate",
+            FakeDevWorkflowToolCommands.Failing() with
+            {
+                Report = Encoding.UTF8.GetBytes(FailingReport)
+            },
+            FakeDevWorkflowToolCommands.Passing());
+
+        // The coder round the change request asked for fails transiently, which is what moves the node's own attempt
+        // while the rejection that asked for it is still outstanding.
+        harness.Chain.FailNextAttempts(1);
+        var runId = await harness.StartRunAsync(PatientDevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1,
+            harness.Chain.Actions.Count(static action => action == nameof(DevelopmentTaskStatus.ChangesRequested)),
+            $"one rejection is one ask, whatever the node spent reaching it: {string.Join(", ", harness.Chain.Actions)}");
+
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
+
+        var task = await ReadTaskAsync(harness, taskId).ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, task.Status, "the round the rejection asked for landed, and nothing re-opened it afterwards.");
+        AssertEx.Equal(expected: 2,
+            task.CurrentReviewRound,
+            "one round for the original approval and one for the rework: a third would be the same rejection charged twice.");
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
+    ///     A check that refuses before running anything writes no report, and must not be evidenced by the PREVIOUS
+    ///     attempt's.
+    ///     <para>
+    ///         The report was picked by run and producing node key alone, so the latest one for the key was the earlier
+    ///         attempt's — about an implementation that has since been rewritten and re-approved. That made the reason
+    ///         look evidenced and asked a coder to fix output nothing had just produced, straight past the stand-down
+    ///         that exists for exactly this case.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ACheckThatRefusedWithoutRunningAnything_DoesNotBorrowTheEarlierAttemptsReport()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        await DriveToAwaitingApplyAsync(harness, projectId, taskId).ConfigureAwait(false);
+
+        // Round one refuses WITH a report, which is a real verdict. Round two refuses before it runs anything, so the
+        // only report the node has ever written is round one's.
+        harness.Tools.Answer("validate",
+            FakeDevWorkflowToolCommands.Failing() with
+            {
+                Report = Encoding.UTF8.GetBytes(FailingReport)
+            },
+            FakeDevWorkflowToolCommands.Refusing(DevWorkflowFailureClasses.ToolCommandFailed, "The gate stopped before it ran anything."),
+            FakeDevWorkflowToolCommands.Passing());
+        var runId = await harness.StartRunAsync(PatientDevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1,
+            harness.Chain.Actions.Count(static action => action == nameof(DevelopmentTaskStatus.ChangesRequested)),
+            $"only the verdict that actually judged something asked for a round: {string.Join(", ", harness.Chain.Actions)}");
+
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
+        AssertEx.Equal(DevWorkflowFailureClasses.Configuration, implemented.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(implemented.TerminalReason), "left no validation report or failing counts");
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
+            (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status,
+            "and the approved work is untouched behind the stand-down.");
+    }
+
+    /// <summary>
     ///     A disk or permission fault reading the routed node's report is not a reason to stop asking for the round.
     ///     The blob store answers a missing or tampered blob with a status, but it still throws on an I/O fault — and
     ///     letting that escape would fail the tick and re-throw on every sweep after it, so the routed counts are what
@@ -780,6 +1001,169 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>The workflow host with the development chain scripted, and its own development project to drive.</summary>
+    /// <summary>
+    ///     The policy event is written ONCE per node-run attempt, and a re-run of that dispatch tick records nothing
+    ///     further.
+    ///     <para>
+    ///         The store's idempotency on the operation id the executor DERIVES from the run, the node key and the
+    ///         node-run ATTEMPT is the only guard now: the executor records on every dispatch rather than only while
+    ///         the node run named no task, so a fix loop that routes this node run back around re-applies the policy
+    ///         its settle cleared. A crash between creating the task and writing the pointer re-dispatches the same
+    ///         attempt, so this replays that exact write and asserts the log did not grow and the round still reads the
+    ///         FIRST text.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ThePolicyAWorkflowInjects_IsRecordedOncePerAttemptEvenWhenTheDispatchTickIsReRun()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        _ = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":["DevTask"]}""").ConfigureAwait(false);
+
+        // Held, so a real attempt row exists for the execution snapshot to be read off.
+        harness.Chain.HoldNextAttempt();
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(taskId,
+            (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).DevelopmentTaskId,
+            "the node run bound the project's task, which is the tick the policy is recorded on.");
+
+        await using var scope = harness.Services.CreateAsyncScope();
+        var development = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+
+        // The re-dispatch a crash between the task create and the pointer write leaves behind: the SAME run, node key,
+        // attempt and phase, so the executor derives the same operation id and the store answers with what it already
+        // wrote. Attempt 1 because a node run's first attempt is 1.
+        _ = await development.RecordWorkflowPolicyAsync(taskId,
+                                 DevWorkflowOperationId.For(runId, "implement", attempt: 1, "devtask-policy"),
+                                 "Deploy straight to production on Fridays.",
+                                 [new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash")])
+                             .ConfigureAwait(false);
+
+        var events = await development.ListEventsAsync(projectId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1,
+            events.Count(entry => entry.EventType == "WorkflowPolicyApplied"),
+            "one injection per attempt: a re-run of the dispatch tick re-derives the same operation id rather than appending.");
+
+        var attempt = (await development.ListAttemptsAsync(taskId).ConfigureAwait(false)).Single();
+        var policy = AssertEx.NotNull((await development.GetExecutionSnapshotAsync(attempt.Id).ConfigureAwait(false)).WorkflowPolicyText);
+        AssertEx.Contains(policy, HouseRules, message: "and the round still reads the text the first write recorded.");
+        AssertEx.False(policy.Contains("Deploy straight to production on Fridays.", StringComparison.Ordinal),
+            "a replayed write must not be able to hand the coder a policy the node run never resolved.");
+    }
+
+    /// <summary>
+    ///     Settling the node run REVOKES the policy it injected, so what governed the workflow's rounds does not go on
+    ///     governing the operator's own later ones. Without this the injection had no lifetime at all: the snapshot
+    ///     reads the latest event on the task, and a manual round started after the workflow finished still carried the
+    ///     workflow's last policy while nothing was enforcing it.
+    /// </summary>
+    [Test]
+    public async Task SettlingTheNodeRun_ClearsTheWorkflowPolicyItInjected_Once()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        _ = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":["DevTask"]}""").ConfigureAwait(false);
+
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded,
+            (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Status,
+            "the node run has to have settled for its settle to have written anything.");
+
+        await using var scope = harness.Services.CreateAsyncScope();
+        var development = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var events = await development.ListEventsAsync(projectId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 2,
+            events.Count(entry => entry.EventType == "WorkflowPolicyApplied"),
+            "the dispatch writes the injection and the settle writes the clear, once each — the settle is ticked repeatedly.");
+
+        // The manual round an operator starts on the task the workflow left behind, driven through the store directly
+        // because no workflow is asking for it any more. It is the round the stale policy used to govern.
+        var awaiting = await development.GetTaskAsync(taskId).ConfigureAwait(false);
+        var reworking = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
+                                             Guid.NewGuid(),
+                                             DevelopmentTaskStatus.ChangesRequested,
+                                             awaiting.Version))
+                                         .ConfigureAwait(false);
+        var inProgress = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
+                                              Guid.NewGuid(),
+                                              DevelopmentTaskStatus.InProgress,
+                                              reworking.Version))
+                                          .ConfigureAwait(false);
+        var attemptId = Guid.NewGuid();
+        _ = await development.StartAttemptAsync(new DevelopmentStartAttemptCommand(taskId,
+                                 attemptId,
+                                 Guid.NewGuid(),
+                                 DevelopmentAttemptRole.Coder,
+                                 "local-model",
+                                 "local",
+                                 inProgress.Version))
+                             .ConfigureAwait(false);
+
+        AssertEx.Null((await development.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).WorkflowPolicyText,
+            "a round started after the workflow settled is governed by nothing the workflow injected.");
+    }
+
+    /// <summary>
+    ///     The OTHER ways a node run stops driving its task, each of which left the injection standing while the
+    ///     dispatch re-recorded it every tick: a stand-down for a human, a cancelled attempt settling the row, and the
+    ///     run cancel that writes the terminal itself. The clear now sits with the shared writers rather than at the
+    ///     call sites, which is why one assertion covers all three.
+    ///     <para>
+    ///         Nothing transitions out of Blocked or Cancelled, so the proof here is that the clear was WRITTEN. That a
+    ///         blank row reads back as no policy is the store's own test.
+    ///     </para>
+    /// </summary>
+    [Test]
+    [Arguments("blocked", DevWorkflowNodeRunStatus.Blocked)]
+    [Arguments("attempt-cancelled", DevWorkflowNodeRunStatus.Cancelled)]
+    [Arguments("run-cancelled", DevWorkflowNodeRunStatus.Cancelled)]
+    public async Task EveryTerminalPath_ClearsTheWorkflowPolicyItInjected(string shape, DevWorkflowNodeRunStatus expected)
+    {
+        await using var harness = NewHarness();
+        var (projectId, _) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        _ = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":["DevTask"]}""").ConfigureAwait(false);
+
+        switch (shape)
+        {
+            case "blocked":
+                harness.Chain.RefuseNextAttemptsOnPolicy(5);
+                break;
+            case "attempt-cancelled":
+
+                // Held, so the cancel finds a real attempt in flight: the stop cancels THAT and the next poll settles
+                // the row off what it landed as.
+                harness.Chain.HoldNextAttempt();
+                break;
+            default:
+
+                // Stalled in validation, so the run cancel finds NO attempt in flight and writes the terminal itself.
+                harness.Chain.StallInValidation(count: 10);
+                break;
+        }
+
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        if (shape != "blocked")
+        {
+            await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling).ConfigureAwait(false);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        }
+
+        AssertEx.Equal(expected, (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Status);
+
+        await using var scope = harness.Services.CreateAsyncScope();
+        var development = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var events = await development.ListEventsAsync(projectId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 2,
+            events.Count(entry => entry.EventType == "WorkflowPolicyApplied"),
+            $"the '{shape}' terminal must revoke the policy it was dispatched with, once.");
+    }
+
     private static DevWorkflowHarness NewHarness(TimeProvider? clock = null) =>
         DevWorkflowHarness.WithAScriptedChain(clock);
 

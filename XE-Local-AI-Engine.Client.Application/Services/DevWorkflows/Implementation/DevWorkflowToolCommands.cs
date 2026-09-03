@@ -243,12 +243,12 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
     }
 
     /// <summary>
-    ///     Puts the child's OWN work into the freshly prepared workspace before anything judges it.
+    ///     Puts the implementation's OWN work into the freshly prepared workspace before anything judges it.
     ///     <para>
-    ///         A materialized child implements through Dev Mode, which leaves its work as a STAGED patch in the
-    ///         attempt's own worktree and never touches the base branch — so a validation node that cloned
+    ///         An implementation node runs through Dev Mode, which leaves its work as a STAGED patch in the attempt's
+    ///         own worktree and never touches the base branch — so a validation node that cloned
     ///         <c>refs/heads/{baseBranch}</c> and ran the commands was judging the committed base and reporting green
-    ///         about a tree the child's change is not in. That voids the per-slice quality gate and makes the
+    ///         about a tree that change is not in. That voids the per-slice quality gate and makes the
     ///         <c>retryTarget</c> fix loop unable to fire on a real implementation failure.
     ///     </para>
     ///     <para>
@@ -261,10 +261,11 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
     ///     </para>
     ///     <para>
     ///         Every anomaly on this path REFUSES rather than falling back to the base. A validation node runs only
-    ///         after its implementation succeeded, so a sibling with no approved patch, a task carrying no approved
-    ///         subject, or a group offering more than one implementation are all states this node cannot judge — and a
-    ///         green report over the base is exactly the silent lie the overlay exists to remove. The honest
-    ///         base-validation path is the one that has no sibling at all: a Tool node that is not a materialized clone.
+    ///         after its implementation succeeded, so an upstream implementation with no approved patch, a task carrying
+    ///         no approved subject, or a graph offering more than one implementation are all states this node cannot
+    ///         judge — and a green report over the base is exactly the silent lie the overlay exists to remove. The
+    ///         honest base-validation path is the one with no upstream implementation to judge: a Tool node whose branch
+    ///         reaches no <c>DevTask</c>, or one past an apply, whose base already IS the applied work.
     ///     </para>
     /// </summary>
     internal async Task<DevWorkflowOverlay> OverlayAsync(DevWorkflowRunSnapshot run,
@@ -274,22 +275,23 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
     {
         ArgumentNullException.ThrowIfNull(session);
 
-        var siblings = await SiblingImplementationsAsync(run, nodeRun, cancellationToken).ConfigureAwait(false);
-        if (siblings.Count == 0)
+        var clone = nodeRun.MaterializedFromNodeRunId is not null && nodeRun.MaterializationIndex is not null;
+        var implementations = await UpstreamImplementationsAsync(run, nodeRun, clone, cancellationToken).ConfigureAwait(false);
+        if (implementations.Count == 0)
         {
             return default;
         }
 
-        if (siblings.Count > 1)
+        if (implementations.Count > 1)
         {
             // No alphabetical pick: which implementation this validation judges decides what the quality gate is ABOUT,
-            // and a group offering two of them is an authoring or materialization fault a human has to look at.
-            return Refuse($"This validation follows more than one implementation in its materialization group "
-                          + $"({string.Join(", ", siblings.Select(static row => $"'{row.NodeKey}'"))}), so which work it should judge is "
+            // and a graph offering two of them is an authoring or materialization fault a human has to look at.
+            return Refuse($"This validation follows more than one implementation {(clone ? "in its materialization group" : "in this run's graph")} "
+                          + $"({string.Join(", ", implementations.Select(static row => $"'{row.NodeKey}'"))}), so which work it should judge is "
                           + "ambiguous. Nothing was applied to this workspace.");
         }
 
-        var taskId = siblings[0].DevelopmentTaskId!.Value;
+        var taskId = implementations[0].DevelopmentTaskId!.Value;
         var task = await _development.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
         if (task.Status is not (DevelopmentTaskStatus.AwaitingApply or DevelopmentTaskStatus.Completed))
         {
@@ -347,38 +349,92 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         new(BasedOn: null, sanitizedReason);
 
     /// <summary>
-    ///     The implementations this validation node could be judging: the <c>DevTask</c> rows of the SAME materialization
-    ///     clone group — same origin node run, same 1-based index — that this node sits downstream of.
+    ///     The implementations this validation node exists to judge, resolved from the GRAPH rather than from whether the
+    ///     node run happens to be a materialization clone.
     ///     <para>
-    ///         Derived from the graph and the rows rather than from node keys: a clone's key is the template's key with
-    ///         a suffix the decomposing agent chose, so ancestry in the rewritten graph is the only thing that says which
-    ///         implementation this validation follows. Answers the whole set rather than a first match, because a group
-    ///         holding two of them is a fault to refuse rather than something to pick alphabetically. A node run that is
-    ///         not a clone has none, and validates the base — the v1 ceiling recorded for <c>fullvalidate</c>.
+    ///         For a clone that is the <c>DevTask</c> rows of the same clone group — same origin node run, same 1-based
+    ///         index — that this node sits downstream of. Derived from the graph and the rows rather than from node keys:
+    ///         a clone's key is the template's key with a suffix the decomposing agent chose, so ancestry in the
+    ///         rewritten graph is the only thing that says which implementation the validation follows.
+    ///     </para>
+    ///     <para>
+    ///         For a node run that is NOT a clone it is the nearest <c>DevTask</c> ancestors by graph edges, which is the
+    ///         same question asked of an UNDECOMPOSED graph: a plain <c>implement → validate</c> pair belongs to no clone
+    ///         group, and answering "no implementation" there made the one node whose job is to judge the patch judge the
+    ///         committed base instead and report green about a tree the change was not in.
+    ///     </para>
+    ///     <para>
+    ///         The walk stops at an <see cref="DevWorkflowToolMode.Apply" /> Tool node and never looks past one. Past an
+    ///         apply the work IS the committed base, so <c>fullvalidate</c> after <c>integrate</c> keeps validating that
+    ///         base — the v1 ceiling recorded for it — instead of re-overlaying patches the apply already landed.
+    ///     </para>
+    ///     <para>
+    ///         Answers the whole set rather than a first match, because more than one implementation feeding one
+    ///         validation is a fault to refuse rather than something to pick alphabetically. Merging a multi-child
+    ///         fan-out into one workspace stays the v1 ceiling it was ruled to be.
     ///     </para>
     /// </summary>
-    private async Task<IReadOnlyList<DevWorkflowNodeRunSnapshot>> SiblingImplementationsAsync(DevWorkflowRunSnapshot run,
+    private async Task<IReadOnlyList<DevWorkflowNodeRunSnapshot>> UpstreamImplementationsAsync(DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
+        bool clone,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(nodeRun);
-        if (nodeRun.MaterializedFromNodeRunId is not { } origin || nodeRun.MaterializationIndex is not { } index)
-        {
-            return [];
-        }
 
         var graph = _graphs.Resolve(run);
         var rows = await _workflows.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+        if (clone)
+        {
+            return
+            [
+                .. rows.Where(row => row.MaterializedFromNodeRunId == nodeRun.MaterializedFromNodeRunId
+                                     && row.MaterializationIndex == nodeRun.MaterializationIndex
+                                     && row.NodeType == DevWorkflowNodeType.DevTask
+                                     && row.DevelopmentTaskId is not null
+                                     && graph.Descendants(row.NodeKey).Contains(nodeRun.NodeKey, StringComparer.Ordinal))
+                       .OrderBy(static row => row.NodeKey, StringComparer.Ordinal)
+            ];
+        }
+
+        var nearest = NearestImplementationKeys(graph, nodeRun.NodeKey);
         return
         [
-            .. rows.Where(row => row.MaterializedFromNodeRunId == origin
-                                 && row.MaterializationIndex == index
-                                 && row.NodeType == DevWorkflowNodeType.DevTask
+            .. rows.Where(row => row.NodeType == DevWorkflowNodeType.DevTask
                                  && row.DevelopmentTaskId is not null
-                                 && graph.Descendants(row.NodeKey).Contains(nodeRun.NodeKey, StringComparer.Ordinal))
+                                 && nearest.Contains(row.NodeKey))
                    .OrderBy(static row => row.NodeKey, StringComparer.Ordinal)
         ];
+    }
+
+    /// <summary>
+    ///     The <c>DevTask</c> node keys a walk back up the in-edges reaches FIRST: a DevTask ends its branch, so an
+    ///     implementation further upstream of another implementation is that one's business rather than this node's, and
+    ///     an <see cref="DevWorkflowToolMode.Apply" /> node ends its branch too, because what it applied is the base
+    ///     everything past it already validates.
+    /// </summary>
+    private static HashSet<string> NearestImplementationKeys(DevWorkflowGraph graph, string from)
+    {
+        var nearest = new HashSet<string>(StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var pending = new Stack<string>();
+        pending.Push(from);
+        while (pending.Count > 0)
+        {
+            foreach (var key in graph.InboundEdges(pending.Pop()).Select(static edge => edge.From).Where(seen.Add))
+            {
+                if (graph.Nodes[key].NodeType == DevWorkflowNodeType.DevTask)
+                {
+                    _ = nearest.Add(key);
+                }
+                else if (graph.Nodes[key] is not { NodeType: DevWorkflowNodeType.Tool, ToolMode: DevWorkflowToolMode.Apply })
+                {
+                    pending.Push(key);
+                }
+            }
+        }
+
+        return nearest;
     }
 
     /// <summary>
@@ -550,8 +606,8 @@ internal sealed record DevWorkflowValidationReport(
 internal readonly record struct DevWorkflowOverlay(DevWorkflowValidationBasedOn? BasedOn, string? Refusal);
 
 /// <summary>
-///     What the commands were run against, when the node is a materialized child's validation and the base commit alone
-///     would not say it: the sibling implementation task whose approved patch was overlaid onto the workspace first.
-///     Absent means nothing was overlaid — either this node has no sibling implementation, or the pass was refused.
+///     What the commands were run against, when the base commit alone would not say it: the upstream implementation task
+///     whose approved patch was overlaid onto the workspace first. Absent means nothing was overlaid — either this node
+///     has no upstream implementation to judge, or the pass was refused.
 /// </summary>
 internal sealed record DevWorkflowValidationBasedOn(Guid DevelopmentTaskId, string PatchHash, string Detail);

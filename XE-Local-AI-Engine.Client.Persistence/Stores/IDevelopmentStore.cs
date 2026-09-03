@@ -201,7 +201,27 @@ public sealed record DevelopmentExecutionSnapshot(
     ///     Resolved from the task's own event log rather than from a column, so it costs no migration and reads the same
     ///     sentence a reviewer wrote and a workflow's fix loop wrote.
     /// </summary>
-    string? PreviousRoundFeedback = null);
+    string? PreviousRoundFeedback = null,
+
+    /// <summary>
+    ///     The rule-set text a Development workflow injected onto this task, or nothing when no workflow drives it.
+    ///     Resolved from the task's own event log rather than from a column, exactly as
+    ///     <see cref="PreviousRoundFeedback" /> is, so it costs no migration and reaches the coder and the reviewer
+    ///     through the one channel both already read.
+    ///     <para>
+    ///         Bounded by the node run that applied it, not by the task: the workflow records its resolution on every
+    ///         dispatch — an EMPTY one included — and records an empty one again when it settles the node run. So a
+    ///         later workflow that resolves no policy, and a manual Dev Mode round after the workflow has finished,
+    ///         both answer nothing rather than replaying a snapshot nothing is enforcing any more.
+    ///     </para>
+    /// </summary>
+    string? WorkflowPolicyText = null);
+
+/// <summary>
+///     One rule set as a workflow's policy event names it. The hash is what lets the Dev Mode audit and the workflow's
+///     own node-run resolution be checked against each other; the text itself lives in the event's <c>policyText</c>.
+/// </summary>
+public sealed record DevelopmentWorkflowRuleSetReference(Guid Id, string Name, string ContentSha256);
 
 public sealed record DevelopmentProjectSnapshot(
     Guid Id,
@@ -324,6 +344,31 @@ public interface IDevelopmentStore
     Task<DevelopmentOperationResult> RecordWorkspaceSecretsAsync(Guid taskId,
         Guid attemptId,
         IReadOnlyList<string> repositoryRelativePaths,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Records the rule-set text a Development workflow resolved for the node run that drives
+    ///     <paramref name="taskId" />, as the channel the coder and reviewer prompts read it back through.
+    ///     <para>
+    ///         Idempotent per <paramref name="operationId" />, which the caller derives deterministically from its run
+    ///         and node — so a node run re-bound to the same task after a crash returns the first result rather than
+    ///         appending a second injection of the same policy.
+    ///     </para>
+    ///     <para>
+    ///         The text goes into the event's encrypted detail. It is a SNAPSHOT the node run already made: this store
+    ///         never reads a rule set, and what it is handed is what the workflow's audit permanently names by hash.
+    ///     </para>
+    ///     <para>
+    ///         A BLANK <paramref name="policyText" /> with no rule sets is the clear, and the snapshot reads the latest
+    ///         row — so recording one revokes the policy for every round after it. That is how the injection is bounded
+    ///         in time without a second event type: a workflow that resolves nothing, and one that has settled its node
+    ///         run, both say so on the same log the injection was written to.
+    ///     </para>
+    /// </summary>
+    Task<DevelopmentOperationResult> RecordWorkflowPolicyAsync(Guid taskId,
+        Guid operationId,
+        string policyText,
+        IReadOnlyList<DevelopmentWorkflowRuleSetReference> ruleSets,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<DevelopmentEventSnapshot>> ListEventsAsync(Guid projectId, CancellationToken cancellationToken = default);

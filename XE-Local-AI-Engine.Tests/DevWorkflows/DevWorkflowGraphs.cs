@@ -207,6 +207,60 @@ internal static class DevWorkflowGraphs
                                                        }
                                                        """;
 
+    /// <summary>
+    ///     A producer and the tool node whose commands judge what it made. The smallest shape in which a Tool node has
+    ///     anything upstream to record consuming — until it did, the sandbox lane consumed everything and recorded
+    ///     nothing.
+    /// </summary>
+    public const string ToolAfterAProducer = """
+                                             {
+                                               "schemaVersion": 1,
+                                               "nodes": [
+                                                 { "nodeKey": "specify", "nodeType": "Agent", "label": "Specify",
+                                                   "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                                 { "nodeKey": "check", "nodeType": "Tool", "label": "Check" }
+                                               ],
+                                               "edges": [
+                                                 { "from": "specify", "to": "check" }
+                                               ]
+                                             }
+                                             """;
+
+    /// <summary>
+    ///     The shipped template's own shape: a materialized DevTask subtree, the verification the join feeds, the
+    ///     integration gate, the apply, and a full check past it whose <c>retryTarget</c> reaches back to
+    ///     <c>verify</c>. The fix loop that fires once a consumer already exists, which is the only kind whose
+    ///     supersessions have anything to flag — and the only shape that can catch a retry target naming a node no run
+    ///     instantiates, since <c>implement</c> here is a template key exactly as it is in the seed.
+    /// </summary>
+    public const string ShippedTailFixLoop = """
+                                             {
+                                               "schemaVersion": 1,
+                                               "nodes": [
+                                                 { "nodeKey": "decompose", "nodeType": "Agent", "label": "Decompose",
+                                                   "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b",
+                                                   "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                                 { "nodeKey": "implement", "nodeType": "DevTask", "label": "Implement", "nodeTimeoutSeconds": 900 },
+                                                 { "nodeKey": "validate", "nodeType": "Tool", "retryTarget": "implement" },
+                                                 { "nodeKey": "join", "nodeType": "Join" },
+                                                 { "nodeKey": "verify", "nodeType": "Agent", "label": "Verify",
+                                                   "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                                 { "nodeKey": "integrationapproval", "nodeType": "HumanGate", "label": "Approve integration" },
+                                                 { "nodeKey": "integrate", "nodeType": "Tool", "toolMode": "Apply", "label": "Apply the approved patches" },
+                                                 { "nodeKey": "fullvalidate", "nodeType": "Tool", "label": "Validate the integrated result", "retryTarget": "verify" }
+                                               ],
+                                               "edges": [
+                                                 { "from": "decompose", "to": "join" },
+                                                 { "from": "implement", "to": "validate" },
+                                                 { "from": "validate", "to": "join" },
+                                                 { "from": "join", "to": "verify" },
+                                                 { "from": "verify", "to": "integrationapproval" },
+                                                 { "from": "integrationapproval", "to": "integrate", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                 { "from": "integrate", "to": "fullvalidate" }
+                                               ]
+                                             }
+                                             """;
+
     /// <summary>A decomposing node whose template is unreachable on purpose.</summary>
     public const string Decomposition = """
                                         {

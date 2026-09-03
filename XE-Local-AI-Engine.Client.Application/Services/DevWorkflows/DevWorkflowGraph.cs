@@ -26,9 +26,15 @@ internal sealed record DevWorkflowMaterialization(string TemplateNodeKey, DevWor
 
 /// <summary>
 ///     One node of the parsed graph. Only what the runtime reads: the JSON schema also carries authoring fields
-///     (<c>modelProfile</c>, <c>reasoningEffort</c>, <c>requiredCapabilities</c>) that nothing dispatches on in v1, and
-///     parsing them into properties no code reads would be shape without meaning. Unknown properties survive in the
-///     stored blob either way — this projection is not a re-serialization of it.
+///     (<c>requiredCapabilities</c>) that nothing dispatches on in v1, and parsing them into properties no code reads
+///     would be shape without meaning. Unknown properties survive in the stored blob either way — this projection is
+///     not a re-serialization of it.
+///     <para>
+///         <see cref="ModelProfile" /> and <see cref="ReasoningEffort" /> ARE read: an agent node's work session is
+///         created with them as its own pins, beating the bound agent definition's. Only their SHAPE is checked here —
+///         a model name is matched against this node's catalog at dispatch, exactly as an agent definition's pin is,
+///         so a graph does not become unsaveable because a model was uninstalled after it was authored.
+///     </para>
 /// </summary>
 internal sealed record DevWorkflowGraphNode(
     string NodeKey,
@@ -44,7 +50,9 @@ internal sealed record DevWorkflowGraphNode(
     int? NodeTimeoutSeconds,
     string? RetryTarget,
     DevWorkflowMaterialization? Materialization,
-    DevWorkflowToolMode ToolMode);
+    DevWorkflowToolMode ToolMode,
+    string? ModelProfile,
+    string? ReasoningEffort);
 
 internal sealed record DevWorkflowGraphEdge(string From, string To, DevWorkflowCondition? Condition)
 {
@@ -60,6 +68,13 @@ internal sealed record DevWorkflowGraphEdge(string From, string To, DevWorkflowC
 internal sealed class DevWorkflowGraph
 {
     private const int SupportedSchemaVersion = 1;
+
+    /// <summary>
+    ///     The reasoning efforts a node may name, which are the ones an agent definition may pin
+    ///     (<c>AgentDefinitionService</c>'s own list) — the override has to be sayable in the same vocabulary as the
+    ///     pin it replaces. Not an enum: this travels to the provider as the string it is written as.
+    /// </summary>
+    private static readonly string[] ReasoningEfforts = ["none", "low", "medium", "high"];
 
     /// <summary>Defaults for a node that names none. Human waits and inline decisions get one try; work gets three.</summary>
     private const int DefaultWorkNodeMaxAttempts = 3;
@@ -299,7 +314,25 @@ internal sealed class DevWorkflowGraph
             OptionalPositiveInt(element, "nodeTimeoutSeconds", nodeKey),
             OptionalString(element, "retryTarget"),
             ParseMaterialization(element, nodeKey),
-            toolMode);
+            toolMode,
+            TrimmedOptionalString(element, "modelProfile"),
+            ParseReasoningEffort(element, nodeKey));
+    }
+
+    /// <summary>
+    ///     The node's reasoning-effort override, checked against the four the agent surface itself accepts
+    ///     (<c>AgentDefinitionService</c>'s own set). An unknown token is refused here rather than dropped at dispatch:
+    ///     unlike a model name, this vocabulary is closed and cannot go stale between authoring and a run.
+    /// </summary>
+    private static string? ParseReasoningEffort(JsonElement element, string nodeKey)
+    {
+        var effort = TrimmedOptionalString(element, "reasoningEffort");
+        if (effort is null || ReasoningEfforts.Contains(effort, StringComparer.OrdinalIgnoreCase))
+        {
+            return effort;
+        }
+
+        throw new DevWorkflowValidationException($"Node '{nodeKey}' has an unknown 'reasoningEffort' of '{effort}'; expected one of {string.Join(", ", ReasoningEfforts)}.");
     }
 
     /// <summary>
@@ -459,6 +492,18 @@ internal sealed class DevWorkflowGraph
             {
                 throw new DevWorkflowValidationException($"Node '{node.NodeKey}' declares retryTarget '{node.RetryTarget}', which is not one of its ancestors. "
                                                          + "Routing a failure to a node that does not lead back here would livelock the run.");
+            }
+
+            // A template node is never instantiated under its own key — the seeding skips it and the materializer gives
+            // each clone a key of its own, rewriting a retryTarget only for the clones INSIDE the subtree. So a node
+            // outside one naming a template key names a node run no run ever has, and the route would block on
+            // Configuration rather than re-attempt anything: a fix loop that reads correctly and cannot fire. The
+            // clone-internal case is the one this is for, and it stays legal because both keys are rewritten together.
+            if (TemplateKeys.Contains(node.RetryTarget!) && !TemplateKeys.Contains(node.NodeKey))
+            {
+                throw new DevWorkflowValidationException($"Node '{node.NodeKey}' declares retryTarget '{node.RetryTarget}', which is a materialization template node. "
+                                                         + $"'{node.RetryTarget}' is cloned once per task and never runs under that key, so no run would have a node "
+                                                         + $"run to route to. Name a node outside the template subtree, or move '{node.NodeKey}' into it.");
             }
         }
     }
@@ -620,6 +665,14 @@ internal sealed class DevWorkflowGraph
 
     private static string? OptionalString(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    /// <summary>
+    ///     An optional string, trimmed, with a blank one read as ABSENT rather than refused. A cleared picker sends
+    ///     <c>""</c> and older documents already hold one, and a run that cannot be routed because a field says nothing
+    ///     is a worse answer than the field simply not applying.
+    /// </summary>
+    private static string? TrimmedOptionalString(JsonElement element, string name) =>
+        OptionalString(element, name)?.Trim() is { Length: > 0 } value ? value : null;
 
     private static TEnum RequiredEnum<TEnum>(JsonElement element, string name, string owner)
         where TEnum : struct, Enum =>

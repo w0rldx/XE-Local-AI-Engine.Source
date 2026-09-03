@@ -37,10 +37,28 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
-    private async Task<DevWorkflowMutationResult> ExecuteMutationAsync(Guid runId,
+    /// <summary>One decision, one event, one transaction: what almost every command on this store is.</summary>
+    private Task<DevWorkflowMutationResult> ExecuteMutationAsync(Guid runId,
         long expectedVersion,
         Guid? operationId,
         Func<DevWorkflowRun, Task<MutationOutcome>> mutate,
+        CancellationToken cancellationToken) =>
+        ExecuteMutationAsync(runId,
+            expectedVersion,
+            operationId,
+            async run => (IReadOnlyList<MutationOutcome>)[await mutate(run).ConfigureAwait(false)],
+            cancellationToken);
+
+    /// <summary>
+    ///     One transaction covering SEVERAL events, for a decision that is not one row's. The operation id goes on the
+    ///     FIRST event and the result names its sequence, so a replay answers exactly what the first call answered and
+    ///     every later row the same decision wrote sits after that watermark, where a subscriber replaying from it
+    ///     still sees them.
+    /// </summary>
+    private async Task<DevWorkflowMutationResult> ExecuteMutationAsync(Guid runId,
+        long expectedVersion,
+        Guid? operationId,
+        Func<DevWorkflowRun, Task<IReadOnlyList<MutationOutcome>>> mutate,
         CancellationToken cancellationToken)
     {
         // Query-first, never insert-then-catch: a caught unique-index violation leaves an Added entity in the change
@@ -63,13 +81,23 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
                       ?? throw new DevWorkflowNotFoundException($"Development workflow run '{runId}' was not found.");
             EnsureVersion(run, expectedVersion);
 
-            var outcome = await mutate(run).ConfigureAwait(false);
-            var sequence = AddEvent(run, outcome.EventType, outcome.NodeRunId, outcome.Outcome, operationId, outcome.DetailJson);
-            run.Version++;
+            var outcomes = await mutate(run).ConfigureAwait(false);
+            var sequence = 0L;
+            for (var index = 0; index < outcomes.Count; index++)
+            {
+                var written = AddEvent(run, outcomes[index].EventType, outcomes[index].NodeRunId, outcomes[index].Outcome, index == 0 ? operationId : null, outcomes[index].DetailJson);
+                if (index == 0)
+                {
+                    sequence = written;
+                }
+
+                run.Version++;
+            }
+
             run.UpdatedAtUtc = Now();
             await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return new DevWorkflowMutationResult(runId, sequence, run.Version, run.Status, run.GraphRevision, outcome.SupersededArtifactId);
+            return new DevWorkflowMutationResult(runId, sequence, run.Version, run.Status, run.GraphRevision, outcomes[0].SupersededArtifactId);
         }
         catch (DbUpdateException exception)
         {

@@ -5,8 +5,12 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -464,7 +468,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         using var chat = new ThrowingChatClient();
         var cloud = Substitute.For<IActiveCloudChatClientFactory>();
         cloud.IsCloudProviderSelected("unknown-model").Returns(false);
-        var model = new DevelopmentCoderModel(chat, cloud, LocalModelResolver(), new FakeModelTrustResolver());
+        var model = new DevelopmentCoderModel(chat, cloud, LocalModelResolver(), new FakeModelTrustResolver(), NullLogger<DevelopmentCoderModel>.Instance);
 
         await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => model.RunAsync("unknown-model",
             "prompt",
@@ -472,6 +476,98 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             maxOutputTokens: 100,
             maxToolCalls: 2));
         AssertEx.Equal(expected: 0, chat.CallCount);
+    }
+
+    /// <summary>
+    ///     L1: the round is budgeted against the window the model is REALLY serving, and reserves a quarter of it.
+    ///     <para>
+    ///         The window used to be invented as <c>2 × maxOutputTokens</c> with <c>maxOutputTokens</c> reserved out of
+    ///         it, which left exactly <c>0.7 × maxOutputTokens</c> of input budget for every model alive. Measured live
+    ///         on 2026-09-02 against <c>unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_XL</c> served with <c>-c 65536</c>: a routed
+    ///         rework round of ~24,267 estimated input tokens was refused before the provider was called, against an
+    ///         "effective window" of 22,937. Nothing in that number came from the running server.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task CoderModel_BudgetsTheRoundAgainstTheWindowTheRuntimeIsServing()
+    {
+        const int Served = 65_536;
+        const int MaxOutput = 32_768;
+        var cloud = Substitute.For<IActiveCloudChatClientFactory>();
+        cloud.IsCloudProviderSelected("local-model").Returns(false);
+        using var chat = new BudgetCapturingChatClient();
+        var model = new DevelopmentCoderModel(chat,
+            cloud,
+            LocalModelResolver(Served, LocalModel("local-model")),
+            new FakeModelTrustResolver(),
+            NullLogger<DevelopmentCoderModel>.Instance);
+
+        _ = await model.RunAsync("local-model", "prompt", new NullWorkspaceTools(), MaxOutput, maxToolCalls: 8).ConfigureAwait(false);
+
+        var options = AssertEx.NotNull(chat.Options);
+        AssertEx.True(AssertEx.NotNull(options.AdditionalProperties).TryGetValue<int>(SamplingOptionKeys.NumCtx, out var numCtx),
+            "the served window has to reach the request, because that key is what the provider-round budgeter prefers over its default.");
+        AssertEx.Equal(Served, numCtx);
+
+        var budget = AssertEx.NotNull(chat.Budget);
+        AssertEx.Equal(Served, budget.DefaultContextTokens, "and the scope's own default names the same window, so the two cannot disagree.");
+        AssertEx.Equal(Served / 4, budget.ReservedOutputTokenFloor, "a quarter of the window is reserved for the answer, not the whole configured maximum.");
+        AssertEx.Equal<int?>(Served / 4, options.MaxOutputTokens, "the reserve and the round's own output ceiling are the same number by construction.");
+
+        // What the fix is FOR, in the terms the budgeter computes: window x 0.85 (the estimator's safety factor,
+        // uncalibrated) less the reserve. 39,321 tokens of input budget against the 22,937 that refused the live round.
+        AssertEx.True((int)(Served * 0.85) - budget.ReservedOutputTokenFloor > 24_267,
+            "the live rework round that was refused must now fit: brief + policy + routed feedback + tool schemas.");
+    }
+
+    /// <summary>
+    ///     Nothing bounds a project's maximum-tokens budget below, so zero reaches here — and a reserve clamped into
+    ///     the range [1, 0] throws rather than budgeting anything.
+    /// </summary>
+    [Test]
+    public async Task CoderModel_WithAZeroOutputBudget_StillResolvesAWindow()
+    {
+        var cloud = Substitute.For<IActiveCloudChatClientFactory>();
+        cloud.IsCloudProviderSelected("local-model").Returns(false);
+        using var chat = new BudgetCapturingChatClient();
+        var model = new DevelopmentCoderModel(chat,
+            cloud,
+            LocalModelResolver(servedContextTokens: 65_536, LocalModel("local-model")),
+            new FakeModelTrustResolver(),
+            NullLogger<DevelopmentCoderModel>.Instance);
+
+        _ = await model.RunAsync("local-model", "prompt", new NullWorkspaceTools(), maxOutputTokens: 0, maxToolCalls: 8).ConfigureAwait(false);
+
+        var budget = AssertEx.NotNull(chat.Budget);
+        AssertEx.Equal(expected: 65_536, budget.DefaultContextTokens);
+        AssertEx.Equal(expected: 1, budget.ReservedOutputTokenFloor, "a zero budget reserves the floor, not a range Math.Clamp refuses.");
+    }
+
+    /// <summary>
+    ///     A runtime that reports no window keeps the conservative synthetic budget — and SAYS SO, because the number it
+    ///     falls back to has no connection to the process and a round refused against it is otherwise unexplainable.
+    ///     No <c>num_ctx</c> override is sent: that key is what the llama.cpp reasoning-budget clamp sizes against, and
+    ///     a window nothing promised would widen the clamp rather than tighten it.
+    /// </summary>
+    [Test]
+    public async Task CoderModel_WithNoServedWindow_FallsBackAndWarnsWhichFallbackItUsed()
+    {
+        const int MaxOutput = 4096;
+        var cloud = Substitute.For<IActiveCloudChatClientFactory>();
+        cloud.IsCloudProviderSelected("local-model").Returns(false);
+        using var chat = new BudgetCapturingChatClient();
+        var logger = new RecordingLogger<DevelopmentCoderModel>();
+        var model = new DevelopmentCoderModel(chat, cloud, LocalModelResolver(LocalModel("local-model")), new FakeModelTrustResolver(), logger);
+
+        _ = await model.RunAsync("local-model", "prompt", new NullWorkspaceTools(), MaxOutput, maxToolCalls: 8).ConfigureAwait(false);
+
+        var budget = AssertEx.NotNull(chat.Budget);
+        AssertEx.Equal(MaxOutput * 2, budget.DefaultContextTokens, "the fallback is the pre-existing synthetic window, unchanged.");
+        AssertEx.Equal(MaxOutput, budget.ReservedOutputTokenFloor, "and a fictional window does not also hand out a smaller reserve.");
+        AssertEx.False(AssertEx.NotNull(chat.Options).AdditionalProperties?.ContainsKey(SamplingOptionKeys.NumCtx) ?? false,
+            "a window nothing reported must not be asserted onto the request.");
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, "no served context window"),
+            $"the operator has to be told which window the attempt was budgeted against: {string.Join(" | ", logger.Entries.Select(static entry => entry.Message))}");
     }
 
     /// <summary>
@@ -510,19 +606,19 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         AssertEx.Equal(Ceiling, DevelopmentAttemptOutputBudget.Cumulative(PerCall, MaxToolCalls + 1));
 
         using var exactChat = new SubmittingChatClient(inputTokens: 40_000, outputTokens: (int)Ceiling);
-        var exact = new DevelopmentCoderModel(exactChat, cloud, resolver, new FakeModelTrustResolver());
+        var exact = new DevelopmentCoderModel(exactChat, cloud, resolver, new FakeModelTrustResolver(), NullLogger<DevelopmentCoderModel>.Instance);
         var result = await exact.RunAsync("local-model", "prompt", tools, PerCall, MaxToolCalls).ConfigureAwait(false);
         AssertEx.Equal<long?>(40_000, result.InputTokens);
         AssertEx.Equal<long?>(Ceiling, result.OutputTokens);
 
         // The regression the old expectation inverted: more than ONE call's budget is normal for a tool loop.
         using var multiRoundChat = new SubmittingChatClient(inputTokens: 40_000, outputTokens: PerCall + 1);
-        var multiRound = new DevelopmentCoderModel(multiRoundChat, cloud, resolver, new FakeModelTrustResolver());
+        var multiRound = new DevelopmentCoderModel(multiRoundChat, cloud, resolver, new FakeModelTrustResolver(), NullLogger<DevelopmentCoderModel>.Instance);
         var accepted = await multiRound.RunAsync("local-model", "prompt", tools, PerCall, MaxToolCalls).ConfigureAwait(false);
         AssertEx.Equal<long?>(PerCall + 1, accepted.OutputTokens);
 
         using var overChat = new SubmittingChatClient(inputTokens: 40_000, outputTokens: (int)Ceiling + 1);
-        var over = new DevelopmentCoderModel(overChat, cloud, resolver, new FakeModelTrustResolver());
+        var over = new DevelopmentCoderModel(overChat, cloud, resolver, new FakeModelTrustResolver(), NullLogger<DevelopmentCoderModel>.Instance);
         var failure = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() => over.RunAsync("local-model",
             "prompt",
             tools,
@@ -1179,14 +1275,43 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
     private sealed record CommandResult(int ExitCode, string StandardOutput, string StandardError);
 
-    private static ILocalModelProviderResolver LocalModelResolver(params LocalModelDescriptor[] models)
+    private static ILocalModelProviderResolver LocalModelResolver(params LocalModelDescriptor[] models) =>
+        LocalModelResolver(servedContextTokens: null, models);
+
+    /// <summary>
+    ///     A resolver whose runtime reports <paramref name="servedContextTokens" /> as the window it launched with, or
+    ///     nothing — which is the runtime that has no fixed window, and the one that has not started yet.
+    ///     <para>
+    ///         The window is reported only AFTER the model has been warmed, exactly as the real runtime behaves: it
+    ///         knows the launched context of a process it is running and nothing about one it has not started. Delete
+    ///         the warm from the budget resolver and every served-window test falls back instead.
+    ///     </para>
+    /// </summary>
+    private static ILocalModelProviderResolver LocalModelResolver(int? servedContextTokens, params LocalModelDescriptor[] models)
     {
+        var warmed = false;
         var provider = Substitute.For<ILocalModelProvider>();
         provider.ListModelsAsync(Arg.Any<CancellationToken>()).Returns(models);
+        provider.When(runtime => runtime.WarmModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())).Do(_ => warmed = true);
+        provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(_ => servedContextTokens is { } served && warmed ? new LocalModelRuntimeInfo(served) : null);
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(provider);
         return resolver;
     }
+
+    /// <summary>One local model that is available and tool-capable, which is all these budget tests need of it.</summary>
+    private static LocalModelDescriptor LocalModel(string modelName) =>
+        new()
+        {
+            ModelName = modelName,
+            ProviderName = "local",
+            IsAvailable = true,
+            SizeBytes = null,
+            ModifiedAt = null,
+            MaxContextTokens = 4096,
+            IsToolCapable = true
+        };
 
     /// <summary>A coder that takes the shortest path to green: it rewrites a test that existed at the base commit.</summary>
     private sealed class TestDeletingCoderModel : IDevelopmentCoderModel
@@ -1312,6 +1437,58 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         public Task<string> RunCommandAsync(string commandId, CancellationToken cancellationToken = default) =>
             Task.FromResult(string.Empty);
+    }
+
+    /// <summary>
+    ///     A coder chat client that records the round's options and the ambient provider-call budget the attempt opened
+    ///     around it — the two numbers the window fix is about, read where the real budgeting client reads them.
+    /// </summary>
+    private sealed class BudgetCapturingChatClient : IChatClient
+    {
+        public ChatOptions? Options { get; private set; }
+
+        public ProviderCallBudgetOptions? Budget { get; private set; }
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            Options = options;
+            Budget = ProviderCallBudget.Current?.Options;
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "done"))
+            {
+                Usage = new UsageDetails
+                {
+                    InputTokenCount = 1,
+                    OutputTokenCount = 1,
+                    TotalTokenCount = 2
+                }
+            });
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
+        {
+            var response = await GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            var submit = AssertEx.NotNull(options?.Tools?.OfType<AIFunction>().SingleOrDefault(static tool => tool.Name == "submit_implementation"));
+            _ = await submit.InvokeAsync(new AIFunctionArguments
+            {
+                ["summary"] = "done",
+                ["changedFiles"] = Array.Empty<string>(),
+                ["commandIds"] = Array.Empty<string>()
+            }, cancellationToken).ConfigureAwait(false);
+            foreach (var update in response.ToChatResponseUpdates())
+            {
+                yield return update;
+            }
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) =>
+            null;
+
+        public void Dispose() { }
     }
 
     private sealed class SubmittingChatClient(long inputTokens, long outputTokens) : IChatClient

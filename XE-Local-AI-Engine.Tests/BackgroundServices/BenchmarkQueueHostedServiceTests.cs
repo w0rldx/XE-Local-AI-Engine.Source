@@ -115,6 +115,87 @@ public sealed class BenchmarkQueueHostedServiceTests
             "The queue must report the escaped executor failure rather than dying silently.");
     }
 
+    /// <summary>
+    ///     Startup recovery runs BEFORE the first claim and outside the loop's guard, so a database failure there was
+    ///     the same StopHost kill by another door. It costs neither the host nor the work items: the loop survives AND
+    ///     claims nothing until recovery has succeeded once, because recovery is the only thing that terminalizes the
+    ///     rows the previous process left Running — claiming past it orphans them for this process's lifetime.
+    /// </summary>
+    [Test]
+    public async Task ExecuteAsync_WhenStartupRecoveryThrows_ClaimsNothingUntilARetrySucceeds()
+    {
+        using var harness = new Harness();
+        var work = Work(BenchmarkWorkKind.Primary);
+        harness.Enqueue(work);
+        var attempts = 0;
+        _ = harness.Store.RecoverRunsOnStartupAsync(Arg.Any<CancellationToken>())
+                   .Returns(_ => ++attempts == 1
+                       ? Task.FromException<IReadOnlyList<BenchmarkRunRecord>>(new InvalidOperationException("recovery failed"))
+                       : Task.FromResult<IReadOnlyList<BenchmarkRunRecord>>([]));
+        // The failed recovery parks on the poll interval; the loop must survive that park and recover again.
+        harness.Signal.CancelOnWaitNumber = 2;
+
+        await harness.RunToIdleAsync();
+
+        AssertEx.Equal(expected: 2, attempts, "A failed recovery is retried on the poll interval rather than abandoned.");
+        await harness.RunExecutor.Received(1).ExecuteAsync(work, Arg.Any<CancellationToken>());
+        AssertEx.True(harness.Logger.HasEntry(LogLevel.Error, "startup recovery failed"),
+            "A failed recovery must be reported, not swallowed.");
+    }
+
+    /// <summary>The half the guard alone never gave: nothing is claimed while recovery is still failing.</summary>
+    [Test]
+    public async Task ExecuteAsync_WhileStartupRecoveryKeepsFailing_NeverClaims()
+    {
+        using var harness = new Harness();
+        harness.Enqueue(Work(BenchmarkWorkKind.Primary));
+        _ = harness.Store.RecoverRunsOnStartupAsync(Arg.Any<CancellationToken>())
+                   .Returns(_ => Task.FromException<IReadOnlyList<BenchmarkRunRecord>>(new InvalidOperationException("recovery failed")));
+        harness.Signal.CancelOnWaitNumber = 3;
+
+        await harness.RunToIdleAsync();
+
+        AssertEx.Equal(expected: 0, harness.ClaimCount,
+            "Rows the previous process left Running stay orphaned for this process's lifetime if the queue claims past a failed recovery.");
+        await harness.RunExecutor.DidNotReceiveWithAnyArgs().ExecuteAsync(default!, default);
+    }
+
+    /// <summary>
+    ///     The CLAIM is the call that failed in the live incident (a transient SQLite error). It sits outside the
+    ///     executor's own guard, so an escaped exception ended <c>ExecuteAsync</c> and — the default
+    ///     <c>BackgroundServiceExceptionBehavior</c> being <c>StopHost</c> — took the whole node down with it.
+    /// </summary>
+    [Test]
+    public async Task ExecuteAsync_WhenClaimingThrows_LogsAndKeepsConsumingLaterWork()
+    {
+        using var harness = new Harness();
+        var following = Work(BenchmarkWorkKind.Primary);
+        harness.Enqueue(following);
+        harness.FirstClaimBehavior = () => Task.FromException<BenchmarkClaimedWork?>(new InvalidOperationException("claim failed"));
+        // The failed claim parks on the poll interval; the loop must survive that park and claim again.
+        harness.Signal.CancelOnWaitNumber = 2;
+
+        await harness.RunToIdleAsync();
+
+        AssertEx.True(harness.ClaimCount >= 2, "A failed claim must be retried after the poll interval, not end the loop.");
+        await harness.RunExecutor.Received(1).ExecuteAsync(following, Arg.Any<CancellationToken>());
+        AssertEx.True(harness.Logger.HasEntry(LogLevel.Error, "failed while claiming work"),
+            "The queue must report the failed claim rather than dying silently.");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenClaimingThrowsDuringShutdown_StopsWithoutLoggingAFailure()
+    {
+        using var harness = new Harness();
+        harness.FirstClaimBehavior = () => CancelThenThrowAsync<BenchmarkClaimedWork?>(harness.Cancellation);
+
+        await harness.RunToIdleAsync();
+
+        AssertEx.Equal(expected: 1, harness.ClaimCount);
+        AssertEx.False(harness.Logger.HasEntry(LogLevel.Error, "failed while claiming work"),
+            "A cancellation during shutdown is not a claim failure.");
+    }
+
     [Test]
     public async Task ExecuteAsync_WhenCancelledWhileExecuting_StopsWithoutClaimingAgain()
     {
@@ -133,6 +214,12 @@ public sealed class BenchmarkQueueHostedServiceTests
     }
 
     private static async Task CancelThenThrowAsync(CancellationTokenSource cancellation)
+    {
+        await cancellation.CancelAsync();
+        throw new OperationCanceledException();
+    }
+
+    private static async Task<T> CancelThenThrowAsync<T>(CancellationTokenSource cancellation)
     {
         await cancellation.CancelAsync();
         throw new OperationCanceledException();
@@ -169,6 +256,50 @@ public sealed class BenchmarkQueueHostedServiceTests
         await planner.Received(1).ReconcilePairwiseAsync(Arg.Any<CancellationToken>());
         AssertEx.False(harness.Logger.HasEntry(LogLevel.Warning, "pairwise reconciliation"),
             "A registered planner must not report a skip.");
+    }
+
+    /// <summary>
+    ///     Pairwise reconciliation gates NOTHING. It re-enqueues one cohort's missing comparisons; folding it into the
+    ///     claim gate let a persistently failing planner starve every primary, judge and fidelity run for the whole
+    ///     process lifetime — the exact starvation the recovery gate exists to prevent, reintroduced beside it.
+    /// </summary>
+    [Test]
+    public async Task ExecuteAsync_WhenPairwiseReconciliationKeepsThrowing_StillClaimsOtherWork()
+    {
+        var planner = Substitute.For<IBenchmarkPairwisePlanner>();
+        _ = planner.ReconcilePairwiseAsync(Arg.Any<CancellationToken>())
+                   .Returns(_ => Task.FromException(new InvalidOperationException("pairwise planning failed")));
+        using var harness = new Harness(planner);
+        var work = Work(BenchmarkWorkKind.Primary);
+        harness.Enqueue(work);
+
+        await harness.RunToIdleAsync();
+
+        await harness.RunExecutor.Received(1).ExecuteAsync(work, Arg.Any<CancellationToken>());
+        AssertEx.True(harness.Logger.HasEntry(LogLevel.Error, "Pairwise benchmark reconciliation failed"),
+            "A failed reconciliation must be reported rather than swallowed or promoted into a claim gate.");
+        AssertEx.False(harness.Logger.HasEntry(LogLevel.Error, "startup recovery failed"),
+            "A pairwise fault is not a recovery failure.");
+    }
+
+    /// <summary>And once it lands it stops being retried, so the success is reported exactly once.</summary>
+    [Test]
+    public async Task ExecuteAsync_WhenPairwiseReconciliationRecovers_LogsTheSuccessOnce()
+    {
+        var planner = Substitute.For<IBenchmarkPairwisePlanner>();
+        var attempts = 0;
+        _ = planner.ReconcilePairwiseAsync(Arg.Any<CancellationToken>())
+                   .Returns(_ => ++attempts == 1 ? Task.FromException(new InvalidOperationException("pairwise planning failed")) : Task.CompletedTask);
+        using var harness = new Harness(planner);
+        harness.Signal.CancelOnWaitNumber = 3;
+
+        await harness.RunToIdleAsync();
+
+        AssertEx.Equal(expected: 2, attempts, "A failed reconciliation is retried on the poll interval, then stops once it lands.");
+        AssertEx.Equal(expected: 1,
+            harness.Logger.Entries.Count(entry => entry.Level == LogLevel.Information
+                                                  && entry.Message.Contains("Reconciled missing pairwise", StringComparison.Ordinal)),
+            "The success is reported once, not on every poll.");
     }
 
     private static BenchmarkClaimedWork Work(BenchmarkWorkKind kind)
@@ -215,6 +346,12 @@ public sealed class BenchmarkQueueHostedServiceTests
                  .Returns(_ =>
                  {
                      ClaimCount++;
+                     if (FirstClaimBehavior is { } behavior)
+                     {
+                         FirstClaimBehavior = null;
+                         return behavior();
+                     }
+
                      return Task.FromResult(_queued.Count > 0 ? _queued.Dequeue() : null);
                  });
 
@@ -239,6 +376,9 @@ public sealed class BenchmarkQueueHostedServiceTests
         public CancellationTokenSource Cancellation { get; } = new();
         public IReadOnlyList<BenchmarkRunRecord> Recovered { get; set; } = [];
         public int ClaimCount { get; private set; }
+
+        /// <summary>Scripts the FIRST claim only; every later claim falls back to the queue.</summary>
+        public Func<Task<BenchmarkClaimedWork?>>? FirstClaimBehavior { get; set; }
 
         public void Enqueue(params BenchmarkClaimedWork[] work)
         {
@@ -284,6 +424,9 @@ public sealed class BenchmarkQueueHostedServiceTests
 
         public CancellationTokenSource? Cancellation { get; set; }
 
+        /// <summary>Which park stops the loop. Raised when a test needs the consumer to survive an idle poll first.</summary>
+        public int CancelOnWaitNumber { get; set; } = 1;
+
         public void Wake()
         {
         }
@@ -291,7 +434,7 @@ public sealed class BenchmarkQueueHostedServiceTests
         public async Task WaitAsync(TimeSpan pollInterval, CancellationToken cancellationToken)
         {
             WaitCount++;
-            if (Cancellation is { } cancellation)
+            if (Cancellation is { } cancellation && WaitCount >= CancelOnWaitNumber)
             {
                 await cancellation.CancelAsync();
             }

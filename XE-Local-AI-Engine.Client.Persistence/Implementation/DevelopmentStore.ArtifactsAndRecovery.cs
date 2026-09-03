@@ -88,6 +88,49 @@ public sealed partial class DevelopmentStore
             cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<DevelopmentOperationResult> RecordWorkflowPolicyAsync(Guid taskId,
+        Guid operationId,
+        string policyText,
+        IReadOnlyList<DevelopmentWorkflowRuleSetReference> ruleSets,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(policyText);
+        ArgumentNullException.ThrowIfNull(ruleSets);
+
+        // Blank text is the CLEAR, and it is the whole event vocabulary this needs: the snapshot query answers off the
+        // LATEST row, so a row saying "nothing applies" is exactly a row that revokes the one before it. A second event
+        // type would have to be understood by that query, by the docs catalog and by every reader of the log to say the
+        // same thing. What a clear must NOT do is name rule sets it is not applying.
+        var cleared = string.IsNullOrWhiteSpace(policyText);
+        if (cleared ? ruleSets.Count != 0 : ruleSets.Count == 0)
+        {
+            throw new ArgumentException("A workflow-policy event must name at least one rule set, and a cleared one must name none.",
+                nameof(ruleSets));
+        }
+
+        var projectId = await ProjectIdForTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+
+        // Keyed on the caller's own deterministic operation id, which is what makes it idempotent: a workflow re-binds
+        // its node run to the same task after a crash, and the same policy recorded twice would read as two separate
+        // injections and be replayed to the coder as the later one.
+        return await ExecuteOperationAsync(projectId,
+            operationId,
+            WorkflowPolicyOperationPhase,
+            async () => await AddEventAsync(projectId,
+                    taskId,
+                    attemptId: null,
+                    operationId,
+                    WorkflowPolicyOperationPhase,
+                    "WorkflowPolicyApplied",
+                    cleared ? "Cleared" : "Applied",
+                    ruleSets.Count.ToString(CultureInfo.InvariantCulture),
+                    version: 1,
+                    artifactId: null,
+                    JsonSerializer.SerializeToUtf8Bytes(new WorkflowPolicyDetail(policyText, ruleSets), JsonOptions),
+                    cancellationToken).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<int> ReconcileRunningAttemptsAsync(string sanitizedReason, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sanitizedReason);

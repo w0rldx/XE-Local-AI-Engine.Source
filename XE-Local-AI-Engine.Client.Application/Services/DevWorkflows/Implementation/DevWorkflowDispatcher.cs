@@ -884,6 +884,19 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
         if (node.NodeType == DevWorkflowNodeType.Tool)
         {
+            if (nodeRun.Status == DevWorkflowNodeRunStatus.Pending)
+            {
+                // These commands judge what the steps before them produced, so a later version of any of it makes this
+                // node run's report describe something that no longer exists. Recorded here because the lane cannot:
+                // it reads its inputs through a prepared workspace and through Dev Mode, neither of which the store can
+                // see, so without this a Tool node consumes everything and records nothing — and the whole "stale
+                // because" link is dead on every graph whose fix loop reaches past a check.
+                //
+                // Once per attempt, on the first tick that admits it: a re-attempt is a new use of whatever version is
+                // current, and the tick that only finds the lane full must not record a second.
+                _ = await DevWorkflowUpstreamArtifacts.RecordAsync(store, graph, run, nodeRun, cancellationToken).ConfigureAwait(false);
+            }
+
             return await _tools.DispatchAsync(store, run, node, nodeRun, cancellationToken).ConfigureAwait(false);
         }
 

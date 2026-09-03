@@ -398,6 +398,20 @@ public sealed class DevWorkflowIntegrationApplyTests
         AssertEx.True(graph.Nodes["implement"].NodeTimeoutSeconds > 0, "every DevTask node in a shipped template declares its own bound.");
         AssertEx.Equal("implement", graph.Nodes["validate"].RetryTarget);
 
+        // FU-6. The per-slice loop fires BEFORE anything downstream of it exists, so its supersessions never have a
+        // recorded consumer to flag and the template reported zero staleness on every run. This second target is what
+        // makes the link reachable: by the time the integrated result is judged, the gate has been handed the
+        // verification as its evidence and the apply node has consumed it too.
+        //
+        // It names `verify` and NOT `implement`: `implement` is the materialization template key, which no run ever
+        // instantiates under that name, so routing there would block the run on Configuration instead of re-attempting
+        // anything. Pinned here because the seed is the one definition an operator does not author.
+        AssertEx.Equal("verify", graph.Nodes["fullvalidate"].RetryTarget);
+        AssertEx.False(graph.TemplateKeys.Contains("verify"), "a retry target has to be a node the run actually seeds.");
+        AssertEx.Equal("fullvalidate, integrate, integrationapproval, verify",
+            string.Join(", ", graph.Descendants("verify").Append("verify").OrderBy(static key => key, StringComparer.Ordinal)),
+            "what a failure of the integrated result re-attempts: the verification and everything that acted on it.");
+
         // The gate in front of the apply carries the approval and nothing else, asked the way the tick asks it. Parsing
         // at all already proves this — the rule is a parse rule — but the shipped template is the one definition an
         // operator does not author, so what it routes on is pinned here rather than left implied by the absence of a throw.
@@ -495,6 +509,267 @@ public sealed class DevWorkflowIntegrationApplyTests
                            DevWorkflowNodeRunStatus.Succeeded,
                            DevelopmentTaskId: taskId))
                        .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     The shipped fix loop, driven on the shipped SHAPE: a materialized DevTask subtree behind the join, so
+    ///     <c>implement</c> is a template key here exactly as it is in the seed. A failed full validation re-attempts
+    ///     the verification rather than blocking the run, and the verification it replaces was consumed — by the gate as
+    ///     its evidence and by the apply node — so the apply report and the full check's own report are flagged.
+    ///     <para>
+    ///         The shape is the point. Routed to <c>implement</c> this run would have blocked on Configuration at the
+    ///         first failure, because run seeding never writes a node run under a template key; a synthetic graph whose
+    ///         <c>implement</c> is an ordinary node cannot show that.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AFailedFullValidationReAttemptsTheVerificationAndFlagsWhatConsumedIt()
+    {
+        await using var harness = DevWorkflowHarness.WithAScriptedChain();
+        harness.Tools.Answer("fullvalidate", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
+
+        var (projectId, _) = await harness.SeedDevelopmentProjectAsync().ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.ShippedTailFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "decompose", "tasks.json", TwoIndependentTasks).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        // Round one: the verification lands, the gate approves it, the patches apply, the full check fails.
+        _ = await harness.SaveAgentArtifactAsync(runId, "verify", "verification.md", "round one").ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "verify").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "integrationapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var routed = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Single(static entry => entry.EventType == "node.retry.routed");
+        AssertEx.Contains(AssertEx.NotNull(routed.DetailJson), "\"to\":\"verify\"");
+        var fullvalidate = await harness.ReadNodeRunAsync(runId, "fullvalidate").ConfigureAwait(false);
+        AssertEx.NotEqual(DevWorkflowNodeRunStatus.Blocked,
+            fullvalidate.Status,
+            $"the route found its target instead of blocking the run: {fullvalidate.FailureClass} {fullvalidate.TerminalReason}");
+        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunAsync(runId, "verify").ConfigureAwait(false)).Attempt);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending,
+            (await harness.ReadNodeRunAsync(runId, "integrationapproval").ConfigureAwait(false)).Status,
+            "the gate approved a verification that is being replaced, so it is asked again.");
+        AssertEx.Equal(DevelopmentTaskStatus.Completed,
+            (await harness.ReadDevelopmentTaskAsync(await TaskIdAsync(harness, runId, "implement#alpha").ConfigureAwait(false)).ConfigureAwait(false)).Status,
+            "and the implementations are NOT reset: nothing re-opens a task whose patch is already in the repository.");
+
+        // Round two: the new verification supersedes the one the gate and the apply node consumed.
+        _ = await harness.SaveAgentArtifactAsync(runId, "verify", "verification.md", "round two").ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "verify").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "integrationapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var artifacts = await harness.ReadArtifactsAsync(runId).ConfigureAwait(false);
+        var verifications = artifacts.Where(static artifact => artifact.Name == "verification.md").OrderBy(static artifact => artifact.Version).ToList();
+        AssertEx.Equal(expected: 2, verifications.Count, "the re-run versioned the same lineage rather than starting a new one.");
+
+        var applyReport = artifacts.Where(artifact => artifact.ProducingNodeKey == "integrate").OrderBy(static artifact => artifact.Version).First();
+        AssertEx.True(applyReport.IsStale, "the apply node consumed the verification that has since been replaced.");
+        AssertEx.Equal(verifications[1].Id, applyReport.StaleBecauseArtifactId, "and the row names the version that replaced it.");
+        AssertEx.Equal("superseded-input", applyReport.StaleReason);
+
+        var fullReport = artifacts.Where(artifact => artifact.ProducingNodeKey == "fullvalidate").OrderBy(static artifact => artifact.Version).First();
+        AssertEx.True(fullReport.IsStale, "and the full check's own first report was written from an apply report that has since been replaced.");
+
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
+    ///     The route survives the host dying the instant after it. It commits as ONE transaction, so the restart finds
+    ///     the whole subtree under the re-run node uniformly <c>Pending</c> — never the failed check back at
+    ///     <c>Pending</c> while the verification, the answered gate and the executed apply beside it still read
+    ///     <c>Succeeded</c>. Startup recovery reconciles neither shape: it only judges rows left <c>Queued</c> or
+    ///     <c>Running</c>, so a lone <c>Pending</c> row under succeeded ancestors is re-dispatched as if fresh and the
+    ///     run completes on evidence and an approval about an implementation that no longer exists.
+    /// </summary>
+    [Test]
+    public async Task ARoutedRetryThatCommitted_SurvivesARestartWithItsWholeSubtreeReset()
+    {
+        await using var harness = DevWorkflowHarness.WithAScriptedChain();
+        harness.Tools.Answer("fullvalidate", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
+
+        var (projectId, _) = await harness.SeedDevelopmentProjectAsync().ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.ShippedTailFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "decompose", "tasks.json", TwoIndependentTasks).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        // Round one, through the gate and the apply, to the full check that fails and routes back to the verification.
+        _ = await harness.SaveAgentArtifactAsync(runId, "verify", "verification.md", "round one").ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "verify").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "integrationapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        await harness.RestartAsync().ConfigureAwait(false);
+
+        foreach (var nodeKey in new[] { "verify", "integrationapproval", "integrate", "fullvalidate" })
+        {
+            AssertEx.Equal(DevWorkflowNodeRunStatus.Pending,
+                (await harness.ReadNodeRunAsync(runId, nodeKey).ConfigureAwait(false)).Status,
+                $"'{nodeKey}' is under the node being re-run, so a restart must find it reset with the rest of the subtree.");
+        }
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "verify", "verification.md", "round two").ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "verify").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "integrationapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 2,
+            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "gate.decided"),
+            "the gate was asked again after the route, so the approval the run completed on is about the verification it finished with.");
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
+    ///     A seeded row nobody has touched follows the template this build ships. Insert-if-absent alone left every
+    ///     installation that already had the slug on the graph it was first seeded with, so a template fix reached only
+    ///     brand-new databases — and the run started before the upgrade still renders from the graph IT pinned, which is
+    ///     what makes rewriting the definition safe at all.
+    /// </summary>
+    [Test]
+    public async Task AnUntouchedSeededDefinitionIsBroughtUpToTheShippedTemplate()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var (definitionId, runId) = await PlantOldSeedAndRunAsync(harness, DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug).ConfigureAwait(false);
+
+        // Renamed first, by a name-only PUT: the label is the operator's, the graph is still one of ours, so the row
+        // still qualifies for the catch-up — and the catch-up must not take the name back.
+        await using (var renaming = harness.Services.CreateAsyncScope())
+        {
+            _ = await renaming.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
+                              .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(definitionId, ExpectedVersion: 1, "The team's feature flow"))
+                              .ConfigureAwait(false);
+        }
+
+        await SeedAsync(harness).ConfigureAwait(false);
+
+        await using var scope = harness.Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
+        var definition = await store.GetDefinitionAsync(definitionId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 3, definition.Version, "the upgrade goes through the same update the definition PUT uses, so it versions the row.");
+        AssertEx.Equal("The team's feature flow", definition.Name, "the graph is ours to fix; the name is the operator's to keep.");
+        AssertEx.Equal(DevWorkflowDefinitionSource.Seeded, definition.Source, "and it is still the seeded row, not a replacement.");
+        AssertEx.Equal("verify",
+            DevWorkflowGraph.Parse(definition.GraphJson).Nodes["fullvalidate"].RetryTarget,
+            "and the row now carries the retry edge the shipped template declares.");
+        AssertEx.Equal(expected: 1,
+            (await store.ListDefinitionsAsync(includeArchived: true).ConfigureAwait(false))
+            .Count(entry => string.Equals(entry.SeedSlug, DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug, StringComparison.Ordinal)),
+            "one row for the slug, rewritten rather than duplicated.");
+
+        AssertEx.Equal(OldSeedGraph,
+            (await store.GetRunAsync(runId).ConfigureAwait(false)).GraphJson,
+            "the run pinned its graph at start, so rewriting the definition underneath it changes nothing about what it is running.");
+    }
+
+    /// <summary>
+    ///     The catch-up is repeatable, which is the whole reason the signal is the row's CONTENT rather than its
+    ///     version: the seeder's own upgrade writes a version, so a version-based rule would buy one catch-up per
+    ///     installation and read every later template change as an operator's edit.
+    /// </summary>
+    [Test]
+    public async Task ARowAlreadyUpgradedOnceIsUpgradedAgainByTheNextRevision()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var (definitionId, _) = await PlantOldSeedAndRunAsync(harness, DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug).ConfigureAwait(false);
+
+        await SeedAsync(harness).ConfigureAwait(false);
+
+        // Back to a prior revision at version 2 — the state a previous release's catch-up leaves, which a version-based
+        // rule would refuse to touch ever again.
+        await using (var rewinding = harness.Services.CreateAsyncScope())
+        {
+            var store = rewinding.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
+            var current = await store.GetDefinitionAsync(definitionId).ConfigureAwait(false);
+            _ = await store.UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(definitionId, current.Version, GraphJson: OldSeedGraph, NodeCount: 11))
+                           .ConfigureAwait(false);
+        }
+
+        await SeedAsync(harness).ConfigureAwait(false);
+
+        await using var scope = harness.Services.CreateAsyncScope();
+        var definition = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().GetDefinitionAsync(definitionId).ConfigureAwait(false);
+        AssertEx.Equal("verify",
+            DevWorkflowGraph.Parse(definition.GraphJson).Nodes["fullvalidate"].RetryTarget,
+            "a row holding a revision this build knows it shipped follows the shipped template, whatever its version says.");
+        AssertEx.Equal(expected: 4, definition.Version);
+    }
+
+    /// <summary>
+    ///     And a row an operator has edited is never rewritten, however far it has drifted from the shipped template:
+    ///     the edit is the answer, and a startup that silently reverted it would be the one bug this whole path must
+    ///     not have. Untouched means the version a create wrote, since the definition PUT is the only thing that moves
+    ///     it.
+    /// </summary>
+    [Test]
+    public async Task AnOperatorEditedSeededDefinitionIsLeftExactlyAsItWas()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var (definitionId, _) = await PlantOldSeedAndRunAsync(harness, DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug).ConfigureAwait(false);
+
+        const string Edited = """
+                              {
+                                "schemaVersion": 1,
+                                "nodes": [{ "nodeKey": "approve", "nodeType": "HumanGate", "label": "Approve" }],
+                                "edges": []
+                              }
+                              """;
+
+        await using (var editing = harness.Services.CreateAsyncScope())
+        {
+            _ = await editing.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
+                             .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(definitionId, ExpectedVersion: 1, "The operator's own", Edited, NodeCount: 1))
+                             .ConfigureAwait(false);
+        }
+
+        await SeedAsync(harness).ConfigureAwait(false);
+
+        // A scope of its OWN: the one that wrote the row still tracks it, and would answer this from memory whether or
+        // not the seeding had rewritten the database underneath it.
+        await using var scope = harness.Services.CreateAsyncScope();
+        var definition = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().GetDefinitionAsync(definitionId).ConfigureAwait(false);
+        AssertEx.Equal(Edited, definition.GraphJson, "an edited template is the operator's answer, not a row to revert.");
+        AssertEx.Equal(expected: 2, definition.Version, "and nothing wrote it again.");
+    }
+
+    /// <summary>
+    ///     What a previous build actually shipped, taken from the seeder's own kept revision rather than written out
+    ///     again here: a hand-copied stand-in would hash to something no installation has and the upgrade would be
+    ///     tested against a case that cannot occur.
+    /// </summary>
+    private const string OldSeedGraph = DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision1;
+
+    /// <summary>A seeded row at the version a create wrote, and a run already pinned to the graph it holds.</summary>
+    private static async Task<(Guid DefinitionId, Guid RunId)> PlantOldSeedAndRunAsync(DevWorkflowHarness harness, string seedSlug)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
+        var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(),
+                                        "An older Feature Development v1",
+                                        OldSeedGraph,
+                                        NodeCount: 11,
+                                        DevWorkflowDefinitionSource.Seeded,
+                                        seedSlug))
+                                    .ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, definition.Version, "the signal this whole path reads: a create writes version 1.");
+
+        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), "Seeded work item", "Explain the inference path.")).ConfigureAwait(false);
+        var run = await store.StartRunAsync(new StartDevWorkflowRunCommand(Guid.NewGuid(),
+                                 workItem.Id,
+                                 definition.Id,
+                                 definition.Version,
+                                 definition.GraphHash,
+                                 definition.GraphJson))
+                             .ConfigureAwait(false);
+        return (definition.Id, run.Id);
     }
 
     /// <summary>Runs one apply node through the production pass and answers with its report.</summary>

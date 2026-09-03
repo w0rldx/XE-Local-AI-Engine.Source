@@ -47,13 +47,6 @@ internal sealed class DevWorkflowAgentExecutor
     internal const int MaxObjectiveCharacters = 7000;
 
     /// <summary>
-    ///     Room set aside from an artifact's share for the truncation marker that may follow its body. Comfortably over
-    ///     the marker's own worst case; the append guard is what actually enforces the bound, so this only has to stop
-    ///     the common case from being dropped for the sake of forty characters.
-    /// </summary>
-    private const int TruncationMarkerReserve = 64;
-
-    /// <summary>
     ///     The largest artifact whose bytes are worth reading to fill an objective, in bytes.
     ///     <para>
     ///         Two orders of magnitude above anything <see cref="MaxObjectiveCharacters" /> could use, and two below the
@@ -174,7 +167,7 @@ internal sealed class DevWorkflowAgentExecutor
                 .ConfigureAwait(false);
         }
 
-        if (!await TryDriveAsync(session, cancellationToken).ConfigureAwait(false))
+        if (!await TryDriveAsync(session, node, cancellationToken).ConfigureAwait(false))
         {
             // Lost the admission race between the capacity read and the start. The row stays Queued with its reason and
             // keeps the session it already owns, so the next tick starts that one rather than creating a second.
@@ -272,7 +265,7 @@ internal sealed class DevWorkflowAgentExecutor
                 // resuming it here would undo the operator's command with the run still reading Pausing.
                 return run.Status is DevWorkflowRunStatus.Pausing or DevWorkflowRunStatus.Cancelling
                     ? 0
-                    : await ResumeAsync(store, run, nodeRun, session, cancellationToken).ConfigureAwait(false);
+                    : await ResumeAsync(store, run, graph.Nodes.GetValueOrDefault(nodeRun.NodeKey), nodeRun, session, cancellationToken).ConfigureAwait(false);
 
             default:
                 // Running, or parked on a question it asked. Still working; nothing to write.
@@ -322,7 +315,7 @@ internal sealed class DevWorkflowAgentExecutor
 
         var agentDefinitionId = await ResolveAgentAsync(node, cancellationToken).ConfigureAwait(false);
         var objective = await ComposeObjectiveAsync(store, graph, run, node, nodeRun, cancellationToken).ConfigureAwait(false);
-        var created = await _sessions.CreateAsync(node.Label, objective, agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var created = await _sessions.CreateAsync(node.Label, objective, agentDefinitionId, RuntimeOf(node), cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -382,15 +375,22 @@ internal sealed class DevWorkflowAgentExecutor
     /// <summary>
     ///     Starts or resumes the session, whichever its status calls for. Answers <see langword="false" /> when the node
     ///     refused the admission — which is a queue, not a failure.
+    ///     <para>
+    ///         The graph node's model and effort travel on EVERY drive, not only the create: the work-session layer
+    ///         holds them for the run it is driving rather than storing them, so a resume after a restart is what puts
+    ///         them back. The run's pinned graph is the durable copy, which is also why a definition edited mid-run
+    ///         cannot change what a running node dispatches on.
+    ///     </para>
     /// </summary>
-    private async Task<bool> TryDriveAsync(WorkSessionDetail session, CancellationToken cancellationToken)
+    private async Task<bool> TryDriveAsync(WorkSessionDetail session, DevWorkflowGraphNode? node, CancellationToken cancellationToken)
     {
         try
         {
+            var runtime = RuntimeOf(node);
             _ = session.Status switch
             {
-                AgentWorkSessionStatus.Draft => await _sessions.StartAsync(session.Id, cancellationToken).ConfigureAwait(false),
-                AgentWorkSessionStatus.Paused or AgentWorkSessionStatus.Interrupted => await _sessions.ResumeAsync(session.Id, cancellationToken).ConfigureAwait(false),
+                AgentWorkSessionStatus.Draft => await _sessions.StartAsync(session.Id, runtime, cancellationToken).ConfigureAwait(false),
+                AgentWorkSessionStatus.Paused or AgentWorkSessionStatus.Interrupted => await _sessions.ResumeAsync(session.Id, runtime, cancellationToken).ConfigureAwait(false),
 
                 // Already being driven — the crash window between the start and the node run's own Running write.
                 _ => session
@@ -403,6 +403,16 @@ internal sealed class DevWorkflowAgentExecutor
             return false;
         }
     }
+
+    /// <summary>
+    ///     What the node authored for its session to run on, or null when it authored neither and the bound agent's own
+    ///     configuration is the whole answer. A node run whose key is not in the run's graph — nothing produces one, but
+    ///     the lookup is a dictionary miss away — reads as "no override" rather than failing a resume over a label.
+    /// </summary>
+    private static WorkSessionRuntimeOverride? RuntimeOf(DevWorkflowGraphNode? node) =>
+        node is { } present && (present.ModelProfile is not null || present.ReasoningEffort is not null)
+            ? new WorkSessionRuntimeOverride(present.ModelProfile, present.ReasoningEffort)
+            : null;
 
     private async Task<Guid> ResolveAgentAsync(DevWorkflowGraphNode node, CancellationToken cancellationToken)
     {
@@ -462,73 +472,14 @@ internal sealed class DevWorkflowAgentExecutor
             }
         }
 
+        // The fair share, the visible truncation marker and the dropped-with-a-warning are DevWorkflowPolicyText's,
+        // shared with the DevTask lane so the two cannot drift into rendering the same recorded rule sets differently.
         var policyCeiling = MaxObjectiveCharacters - inputSection.Length;
-        var applied = DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson);
-        for (var index = 0; index < applied.Count; index++)
-        {
-            var entry = applied[index];
-
-            // Rows written before the body was snapshotted alongside the hash. None exist today, and the reader stays
-            // honest about them rather than re-reading the rule set and injecting whatever it says NOW — which is the
-            // exact divergence the snapshot exists to close.
-            if (entry.Body is not { Length: > 0 })
-            {
-                _logger.LogWarning("Development workflow node run {NodeRunId} recorded rule set {RuleSetId} without its text, so nothing was injected for it. "
-                                   + "The recorded content hash {RecordedHash} still names what applied.",
-                    nodeRun.Id,
-                    entry.Id,
-                    entry.ContentSha256);
-                continue;
-            }
-
-            // The name is the one RECORDED at materialization, not the one the row carries now: it is what the audit
-            // says applied, and rendering a since-renamed heading would put a second story in the objective.
-            var header = string.Create(CultureInfo.InvariantCulture, $"{Environment.NewLine}## Policy: {entry.Name}{Environment.NewLine}");
-
-            // The same fair share the upstream artifacts get: everything still to be written splits the room left
-            // equally, so a long first policy cannot crowd out the ones after it and a short one hands its slack on.
-            var share = (policyCeiling - objective.Length) / (applied.Count - index);
-            var budget = share - header.Length - TruncationMarkerReserve;
-            if (budget <= 0)
-            {
-                _logger.LogWarning("Development workflow rule set {RuleSetId} was dropped from node run {NodeRunId}'s objective: the {Limit}-character "
-                                   + "budget was already spent by the node's instructions and the request before its section could be written.",
-                    entry.Id,
-                    nodeRun.Id,
-                    MaxObjectiveCharacters);
-                continue;
-            }
-
-            var body = entry.Body;
-            if (body.Length > budget)
-            {
-                // Truncated rather than dropped, and VISIBLY: an agent handed the first half of a policy has to be able
-                // to tell that the rest exists, or it will act as though the rules it was given were all of them.
-                var cut = CutAt(body, budget);
-                _logger.LogWarning("Development workflow rule set {RuleSetId} was truncated in node run {NodeRunId}'s objective: {Kept} of {Total} characters.",
-                    entry.Id,
-                    nodeRun.Id,
-                    cut,
-                    body.Length);
-                body = string.Create(CultureInfo.InvariantCulture, $"{body[..cut]}{Environment.NewLine}[policy text truncated: {cut} of {body.Length} characters]");
-            }
-
-            // Enforced HERE, on the FINISHED block, exactly as the artifact phase does it: nothing reaches the
-            // objective except through this check, so no marker or rounding can push it past the limit.
-            var policy = header + body + Environment.NewLine;
-            if (objective.Length + policy.Length <= policyCeiling)
-            {
-                _ = objective.Append(policy);
-            }
-            else
-            {
-                _logger.LogWarning("Development workflow rule set {RuleSetId} was dropped from node run {NodeRunId}'s objective: its section did not fit the "
-                                   + "{Limit}-character budget.",
-                    entry.Id,
-                    nodeRun.Id,
-                    MaxObjectiveCharacters);
-            }
-        }
+        _ = objective.Append(DevWorkflowPolicyText.Render(DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson),
+            policyCeiling,
+            objective.Length,
+            nodeRun.Id,
+            _logger));
 
         _ = objective.Append(inputSection);
 
@@ -547,7 +498,7 @@ internal sealed class DevWorkflowAgentExecutor
                 // out the ones after it and a short one hands its slack on. The share has to cover this artifact's own
                 // header and marker as well as its body, which is why both come off it before the body is asked for.
                 var share = (MaxObjectiveCharacters - objective.Length) / (upstream.Count - index);
-                var body = await RenderArtifactAsync(run.Id, artifact, share - header.Length - TruncationMarkerReserve, cancellationToken).ConfigureAwait(false);
+                var body = await RenderArtifactAsync(run.Id, artifact, share - header.Length - DevWorkflowPolicyText.TruncationMarkerReserve, cancellationToken).ConfigureAwait(false);
 
                 // The bound is enforced HERE, on the FINISHED block, with the header, the body, whichever marker was
                 // rendered and the newlines all counted. Nothing reaches the objective except through this check, so
@@ -619,21 +570,9 @@ internal sealed class DevWorkflowAgentExecutor
             return content;
         }
 
-        var cut = CutAt(content, budget);
+        var cut = DevWorkflowPolicyText.CutAt(content, budget);
         return $"{content[..cut]}{Environment.NewLine}(Truncated: the first {cut} of {content.Length} characters.)";
     }
-
-    /// <summary>
-    ///     Where to cut <paramref name="text" /> to fit <paramref name="budget" /> UTF-16 code units.
-    ///     <para>
-    ///         Never BETWEEN a surrogate pair. The budget counts code units and an astral character — an emoji, most
-    ///         CJK extensions — is two of them: keeping only the high half leaves an unpaired surrogate that becomes
-    ///         U+FFFD the moment the objective is persisted as UTF-8, so the agent would be handed a corrupted
-    ///         character rather than one fewer.
-    ///     </para>
-    /// </summary>
-    private static int CutAt(string text, int budget) =>
-        char.IsHighSurrogate(text[budget - 1]) ? budget - 1 : budget;
 
     /// <summary>
     ///     The node run's input document as flat name/value lines. Nested and array values are rendered as their raw
@@ -711,6 +650,7 @@ internal sealed class DevWorkflowAgentExecutor
     /// </summary>
     private async Task<int> ResumeAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
+        DevWorkflowGraphNode? node,
         DevWorkflowNodeRunSnapshot nodeRun,
         WorkSessionDetail session,
         CancellationToken cancellationToken)
@@ -726,7 +666,7 @@ internal sealed class DevWorkflowAgentExecutor
                 .ConfigureAwait(false);
         }
 
-        if (!_sessions.HasCapacity || !await TryDriveAsync(session, cancellationToken).ConfigureAwait(false))
+        if (!_sessions.HasCapacity || !await TryDriveAsync(session, node, cancellationToken).ConfigureAwait(false))
         {
             // The slot is held by another session. The row stays Running — it has not stopped working, it is waiting for
             // its own continuation — and the next tick asks again.

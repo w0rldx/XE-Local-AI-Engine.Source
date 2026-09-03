@@ -17,6 +17,13 @@ public sealed partial class DevelopmentStore(NodeChatDbContext dbContext, TimePr
     private const string WorkspaceSecretsOperationPhase = "WorkspaceSecretsDetected";
 
     /// <summary>
+    ///     The operation phase of a workflow's policy injection, for the same reason as the one above: the operation id
+    ///     is the workflow's own deterministic one, and sharing a phase with a state transition would make one of them
+    ///     silently return the other's result.
+    /// </summary>
+    private const string WorkflowPolicyOperationPhase = "WorkflowPolicyApplied";
+
+    /// <summary>
     ///     camelCase, matching every other document this product puts on a wire, and read back with the same options so
     ///     the rows an earlier build wrote in PascalCase still deserialize — <c>JsonSerializerDefaults.Web</c> reads
     ///     case-insensitively, which is what makes re-casing the writes safe on an append-only log.

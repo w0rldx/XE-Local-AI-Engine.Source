@@ -139,13 +139,19 @@ public sealed partial class DevelopmentStore
         return result;
     }
 
+    /// <summary>
+    ///     The project a task belongs to. <c>KeyNotFoundException</c> rather than the <c>InvalidOperationException</c>
+    ///     a <c>SingleAsync</c> would throw for a task deleted underneath a caller: that is the type every caller of
+    ///     this store already answers for, and an untyped escape from a recording path leaves its row unresolvable.
+    /// </summary>
     private async Task<Guid> ProjectIdForTaskAsync(Guid taskId, CancellationToken cancellationToken)
     {
         return await _dbContext.DevelopmentTasks.AsNoTracking()
                                .Where(entity => entity.Id == taskId)
-                               .Select(entity => entity.ProjectId)
-                               .SingleAsync(cancellationToken)
-                               .ConfigureAwait(false);
+                               .Select(entity => (Guid?)entity.ProjectId)
+                               .SingleOrDefaultAsync(cancellationToken)
+                               .ConfigureAwait(false)
+               ?? throw new KeyNotFoundException($"Development task '{taskId}' was not found.");
     }
 
     private async Task<AttemptOwnership> OwnershipForAttemptAsync(Guid attemptId, CancellationToken cancellationToken)

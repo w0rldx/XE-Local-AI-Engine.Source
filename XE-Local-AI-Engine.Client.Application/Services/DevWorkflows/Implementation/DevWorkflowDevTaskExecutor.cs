@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -54,6 +55,17 @@ internal sealed class DevWorkflowDevTaskExecutor
     ///     model can both take in — and small enough that it cannot become the whole prompt.
     /// </summary>
     private const int MaxChangeRequestReason = 4096;
+
+    /// <summary>
+    ///     How much rule-set text a DevTask node run may put in front of Dev Mode's coder and reviewer, in characters.
+    ///     <para>
+    ///         The same 4096 as <see cref="MaxChangeRequestReason" /> and as a rule set's own body cap, and for the same
+    ///         reason: the prompt these sections land in already carries the task's title, requirements and acceptance
+    ///         criteria uncapped, so policy gets a bounded share of it rather than the room it would like. Past this the
+    ///         sections are truncated visibly, never silently dropped.
+    ///     </para>
+    /// </summary>
+    private const int MaxPolicyCharacters = 4096;
 
     /// <summary>How much of one failing command's captured output the change request quotes, from the END of it.</summary>
     private const int MaxQuotedCommandOutput = 800;
@@ -151,6 +163,13 @@ internal sealed class DevWorkflowDevTaskExecutor
             }
 
             taskId = resolved;
+
+            // The rule sets this node run RECORDED, put where Dev Mode's own prompts read them. On EVERY dispatch, not
+            // only the first bind: the operation id is keyed to this node-run ATTEMPT, so a replayed tick meets the
+            // store's idempotency, while a fix loop that routes the node run back around re-applies the policy the
+            // settle below cleared. INSIDE the try, because a task deleted between the resolve and this write is the
+            // same decided fact the catch below stands the node down for.
+            await RecordPolicyAsync(development, run, nodeRun, taskId, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is ArgumentException or KeyNotFoundException)
         {
@@ -257,6 +276,87 @@ internal sealed class DevWorkflowDevTaskExecutor
                                            cancellationToken)
                                        .ConfigureAwait(false);
         return created.TaskId;
+    }
+
+    /// <summary>
+    ///     Puts the node run's recorded rule-set text on the task it drives, as the one channel Dev Mode's coder and
+    ///     reviewer prompts read policy through — the same event-derived route <c>PreviousRoundFeedback</c> travels, so
+    ///     it costs no column and no migration.
+    ///     <para>
+    ///         Nothing applied records an EMPTY resolution rather than nothing at all — and so does a resolution whose
+    ///         bodies are all missing or all too long to fit, the render being what decides and what logs each section
+    ///         it dropped. Writing nothing was the leak: the snapshot answers off the latest row, so a workflow that
+    ///         resolved no policy would leave the PREVIOUS one governing rounds it never applied to.
+    ///     </para>
+    /// </summary>
+    private async Task RecordPolicyAsync(IDevelopmentStore development,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        Guid taskId,
+        CancellationToken cancellationToken)
+    {
+        var applied = DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson);
+        var policyText = applied.Count == 0
+            ? string.Empty
+            : DevWorkflowPolicyText.Render(applied, MaxPolicyCharacters, occupied: 0, nodeRun.Id, _logger).Trim();
+        await WritePolicyAsync(development,
+                run,
+                nodeRun,
+                taskId,
+                policyText,
+                policyText.Length == 0
+                    ? []
+                    : [.. applied.Select(entry => new DevelopmentWorkflowRuleSetReference(entry.Id, entry.Name, entry.ContentSha256))],
+                "devtask-policy",
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Revokes the injection when this node run stops driving the task, so what governed the workflow's rounds does
+    ///     not go on governing the operator's own later ones. Called from the shared writers that settle, block and
+    ///     cancel a node run rather than from their call sites — every terminal path has to revoke, and naming them one
+    ///     by one is how the attempt-cancelled settle, the stand-downs and the run cancel were missed.
+    ///     <para>
+    ///         Deliberately OVER-EAGER: a failure the retry policy re-attempts increments the node run's attempt, so the
+    ///         re-dispatch derives a new operation id and records the policy again. A PAUSE is the one stop that does
+    ///         not — it parks the row at the same attempt, whose operation id is already written — which is why only the
+    ///         cancelling half of the stop clears.
+    ///     </para>
+    ///     <para>
+    ///         Best-effort by construction: a node run that never bound a task, and a node whose Development Mode is
+    ///         switched off, have no injection to revoke.
+    ///     </para>
+    /// </summary>
+    private async Task ClearPolicyAsync(DevWorkflowRunSnapshot run, DevWorkflowNodeRunSnapshot nodeRun, CancellationToken cancellationToken)
+    {
+        if (nodeRun.DevelopmentTaskId is not { } taskId || Resolve().Development is not { } development)
+        {
+            return;
+        }
+
+        await WritePolicyAsync(development, run, nodeRun, taskId, string.Empty, [], "devtask-policy-clear", cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     One policy write, keyed to this node-run ATTEMPT and phase: a replayed tick meets the store's idempotency and
+    ///     appends nothing, while the next attempt of the same node run writes its own row.
+    /// </summary>
+    private static async Task WritePolicyAsync(IDevelopmentStore development,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        Guid taskId,
+        string policyText,
+        IReadOnlyList<DevelopmentWorkflowRuleSetReference> ruleSets,
+        string phase,
+        CancellationToken cancellationToken)
+    {
+        _ = await development.RecordWorkflowPolicyAsync(taskId,
+                                 DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, phase),
+                                 policyText,
+                                 ruleSets,
+                                 cancellationToken)
+                             .ConfigureAwait(false);
     }
 
     /// <summary>A brief's field, or nothing — a present-but-blank string is an absent one, not a value to pass on.</summary>
@@ -376,6 +476,14 @@ internal sealed class DevWorkflowDevTaskExecutor
         }
 
         var target = cancel ? DevWorkflowNodeRunStatus.Cancelled : DevWorkflowNodeRunStatus.Pending;
+        if (cancel)
+        {
+            // Only the cancel. A pause parks the row at the SAME attempt, so the resume's re-dispatch re-derives an
+            // operation id the store has already written and would record nothing — clearing here would leave the
+            // resumed round ungoverned.
+            await ClearPolicyAsync(run, nodeRun, cancellationToken).ConfigureAwait(false);
+        }
+
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, target, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
                                nodeRun.Id,
@@ -447,13 +555,13 @@ internal sealed class DevWorkflowDevTaskExecutor
 
         switch (task.Status)
         {
-            case DevelopmentTaskStatus.AwaitingApply when rework is { } failingNodeKey:
+            case DevelopmentTaskStatus.AwaitingApply when rework is { } routed:
 
                 // The fix loop landed on an already-approved task. Settling it Succeeded here is what made a routed
                 // re-attempt a no-op: the loop would route, re-succeed in the same tick, and spend the target's whole
                 // attempt budget in seconds without ever asking for a different patch. So the node asks Dev Mode for
                 // rework instead, with the routed node's own validation report as the review evidence.
-                return await RequestChangesAsync(store, graph, run, nodeRun, nodeRuns, development, task, failingNodeKey, cancellationToken).ConfigureAwait(false);
+                return await RequestChangesAsync(store, graph, run, nodeRun, nodeRuns, development, task, routed, cancellationToken).ConfigureAwait(false);
 
             case DevelopmentTaskStatus.AwaitingApply or DevelopmentTaskStatus.Completed:
 
@@ -492,16 +600,16 @@ internal sealed class DevWorkflowDevTaskExecutor
                 // The chain gave up on its own terms — its review rounds ran out, or an operator stood it down. Another
                 // node-run attempt would re-drive a task that is not going anywhere, so this is the class that goes
                 // straight to a human.
-                return await _retries.SettleFailureAsync(store,
-                                         graph,
-                                         run,
-                                         nodeRun,
-                                         nodeRuns,
-                                         new DevWorkflowFailure(DevWorkflowFailureClasses.BudgetExhausted,
-                                             task.BlockedReason ?? "The development task this node run was implementing was blocked.",
-                                             Output(nodeRun, task, taskId, DevWorkflowFailureClasses.BudgetExhausted)),
-                                         cancellationToken)
-                                     .ConfigureAwait(false);
+                return await SettleFailureAsync(store,
+                        graph,
+                        run,
+                        nodeRun,
+                        nodeRuns,
+                        new DevWorkflowFailure(DevWorkflowFailureClasses.BudgetExhausted,
+                            task.BlockedReason ?? "The development task this node run was implementing was blocked.",
+                            Output(nodeRun, task, taskId, DevWorkflowFailureClasses.BudgetExhausted)),
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
             default:
                 break;
@@ -536,14 +644,14 @@ internal sealed class DevWorkflowDevTaskExecutor
                         Output(nodeRun, task, taskId, DevWorkflowFailureClasses.Cancelled),
                         cancellationToken)
                     .ConfigureAwait(false)
-                : await _retries.SettleFailureAsync(store,
-                                    graph,
-                                    run,
-                                    nodeRun,
-                                    nodeRuns,
-                                    Failure(landed, nodeRun, task, taskId),
-                                    cancellationToken)
-                                .ConfigureAwait(false);
+                : await SettleFailureAsync(store,
+                        graph,
+                        run,
+                        nodeRun,
+                        nodeRuns,
+                        Failure(landed, nodeRun, task, taskId),
+                        cancellationToken)
+                    .ConfigureAwait(false);
         }
 
         if (run.Status is DevWorkflowRunStatus.Pausing or DevWorkflowRunStatus.Cancelling)
@@ -641,16 +749,16 @@ internal sealed class DevWorkflowDevTaskExecutor
             // The message is NOT surfaced: an unexpected exception's text is the one string on this path nothing has
             // sanitized, and it can carry a host path or a fragment of a prompt.
             _logger.LogError(exception, "Development workflow dev-task node run {NodeRunId} of run {RunId} could not be advanced.", nodeRun.Id, run.Id);
-            return await _retries.SettleFailureAsync(store,
-                                     graph,
-                                     run,
-                                     nodeRun,
-                                     nodeRuns,
-                                     new DevWorkflowFailure(DevWorkflowFailureClasses.Internal,
-                                         "This node run's development task stopped on an unexpected error. The engine log has the detail.",
-                                         Output(nodeRun, task, taskId, DevWorkflowFailureClasses.Internal)),
-                                     cancellationToken)
-                                 .ConfigureAwait(false);
+            return await SettleFailureAsync(store,
+                    graph,
+                    run,
+                    nodeRun,
+                    nodeRuns,
+                    new DevWorkflowFailure(DevWorkflowFailureClasses.Internal,
+                        "This node run's development task stopped on an unexpected error. The engine log has the detail.",
+                        Output(nodeRun, task, taskId, DevWorkflowFailureClasses.Internal)),
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
     }
 
@@ -660,10 +768,11 @@ internal sealed class DevWorkflowDevTaskExecutor
     ///     the next poll finds the task at <c>ChangesRequested</c>, where the ordinary next-action path starts the new
     ///     coder attempt with no special casing at all.
     ///     <para>
-    ///         One ask per attempt, and the ledger is what enforces it: the transition is written under an operation id
-    ///         keyed on <c>(run, node key, attempt)</c>, which <see cref="UnconsumedPriorFailureAsync" /> reads before
-    ///         the branch is taken. That matters because the routed failure stays on the input for the life of the
-    ///         attempt, so the SECOND round's arrival back at <c>AwaitingApply</c> would otherwise ask again forever.
+    ///         One ask per ROUTE, and the ledger is what enforces it: the transition is written under an operation id
+    ///         keyed on the route rather than on this node run's own attempt, which
+    ///         <see cref="UnconsumedPriorFailureAsync" /> reads before the branch is taken. That matters because the
+    ///         routed failure stays on the input for the life of the attempt AND across the node's own retries, so the
+    ///         SECOND round's arrival back at <c>AwaitingApply</c> would otherwise ask again forever.
     ///     </para>
     /// </summary>
     private async Task<int> RequestChangesAsync(IDevWorkflowStore store,
@@ -673,9 +782,10 @@ internal sealed class DevWorkflowDevTaskExecutor
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
         IDevelopmentStore development,
         DevelopmentTaskSnapshot task,
-        string failingNodeKey,
+        RoutedFailure routed,
         CancellationToken cancellationToken)
     {
+        var failingNodeKey = routed.NodeKey;
         // A workflow-driven change request does NOT consume a review round. Rounds are spent ENTERING review — both
         // TransitionTaskAsync and FinalizeValidationAsync bump CurrentReviewRound only on the InReview hop, and refuse
         // it past the maximum — and this transition never enters review, so charging it one would take a round away
@@ -684,29 +794,51 @@ internal sealed class DevWorkflowDevTaskExecutor
         // for a reason nobody can act on. So the node stands down here instead, while the reason is still legible.
         if (task.CurrentReviewRound >= task.MaxReviewRounds)
         {
-            return await _retries.SettleFailureAsync(store,
-                                     graph,
-                                     run,
-                                     nodeRun,
-                                     nodeRuns,
-                                     new DevWorkflowFailure(DevWorkflowFailureClasses.BudgetExhausted,
-                                         string.Create(CultureInfo.InvariantCulture,
-                                             $"Node run '{failingNodeKey}' asked this task to be implemented again, and it has already used all {task.MaxReviewRounds} of its review rounds."),
-                                         Output(nodeRun, task, task.Id, DevWorkflowFailureClasses.BudgetExhausted)),
-                                     cancellationToken)
-                                 .ConfigureAwait(false);
+            return await SettleFailureAsync(store,
+                    graph,
+                    run,
+                    nodeRun,
+                    nodeRuns,
+                    new DevWorkflowFailure(DevWorkflowFailureClasses.BudgetExhausted,
+                        string.Create(CultureInfo.InvariantCulture,
+                            $"Node run '{failingNodeKey}' asked this task to be implemented again, and it has already used all {task.MaxReviewRounds} of its review rounds."),
+                        Output(nodeRun, task, task.Id, DevWorkflowFailureClasses.BudgetExhausted)),
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
 
-        var reason = await DescribePriorFailureAsync(store, run, nodeRun, failingNodeKey, cancellationToken).ConfigureAwait(false);
+        var reason = await DescribePriorFailureAsync(store, run, nodeRun, routed, cancellationToken).ConfigureAwait(false);
+        if (!reason.Evidenced)
+        {
+            // No readable validation report and no command or test that actually ran. Asking for a round on that is
+            // how a coder is told to redo approved work for no stated reason; SUCCEEDING on it instead would send the
+            // run straight back round the loop to re-fail the same check, spending the budget on having tried nothing.
+            // So it stands the node down where a human can read why, with the approved task untouched behind it.
+            _logger.LogWarning(
+                "Development workflow node run {NodeRunId} carries a routed failure from node '{NodeKey}' with no validation report and no command counts behind it, so the node is stood down instead of asking for another round.",
+                nodeRun.Id,
+                failingNodeKey);
+            return await SettleFailureAsync(store,
+                    graph,
+                    run,
+                    nodeRun,
+                    nodeRuns,
+                    new DevWorkflowFailure(DevWorkflowFailureClasses.Configuration,
+                        $"Node '{failingNodeKey}' routed a failure here but left no validation report or failing counts to act on, so there is nothing to ask for a new round about.",
+                        Output(nodeRun, task, task.Id, DevWorkflowFailureClasses.Configuration)),
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         try
         {
             _ = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(task.Id,
-                                         DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "devtask-request-changes"),
-                                         DevelopmentTaskStatus.ChangesRequested,
-                                         task.Version,
-                                         reason),
-                                     cancellationToken)
-                                 .ConfigureAwait(false);
+                                     ChangeRequestOperationId(run, nodeRun, routed),
+                                     DevelopmentTaskStatus.ChangesRequested,
+                                     task.Version,
+                                     reason.Reason),
+                                 cancellationToken)
+                             .ConfigureAwait(false);
             return 1;
         }
         catch (Exception exception) when (exception is DevelopmentConcurrencyException or DevelopmentInvalidTransitionException)
@@ -718,45 +850,72 @@ internal sealed class DevWorkflowDevTaskExecutor
     }
 
     /// <summary>
-    ///     The routed failure this node-run attempt has not answered yet, or nothing.
+    ///     The routed failure this node run has not answered yet, or nothing.
     ///     <para>
     ///         The routed failure stays on <c>InputJson</c> for the life of the attempt — nothing clears it — so
-    ///         whether this attempt has already asked for rework cannot be read off the input. It is read off the
-    ///         LEDGER: the change request is written under an operation keyed on <c>(run, node key, attempt)</c>, so
-    ///         that operation existing IS the record that this attempt has spent its one ask. Without this the second
-    ///         round's arrival back at <c>AwaitingApply</c> would ask again, be answered by the memoized operation,
-    ///         move nothing, and leave the node run Running for as long as the dispatcher keeps polling it.
+    ///         whether it has already been answered cannot be read off the input. It is read off the LEDGER: the change
+    ///         request is written under an operation keyed on the ROUTE, so that operation existing IS the record that
+    ///         this rejection has had its one ask. Without it the second round's arrival back at
+    ///         <c>AwaitingApply</c> would ask again, be answered by the memoized operation, move nothing, and leave the
+    ///         node run Running for as long as the dispatcher keeps polling it.
     ///     </para>
     /// </summary>
-    private static async Task<string?> UnconsumedPriorFailureAsync(IDevelopmentStore development,
+    private static async Task<RoutedFailure?> UnconsumedPriorFailureAsync(IDevelopmentStore development,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         Guid projectId,
         CancellationToken cancellationToken)
     {
-        if (PriorFailureNode(nodeRun.InputJson) is not { } failingNodeKey)
+        if (RoutedFailureOf(nodeRun.InputJson) is not { } routed)
         {
             return null;
         }
 
         return await development.FindOperationAsync(projectId,
-                                    DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "devtask-request-changes"),
-                                    DevelopmentOperationPhases.Completed,
-                                    cancellationToken)
-                                .ConfigureAwait(false) is null
-            ? failingNodeKey
+                       ChangeRequestOperationId(run, nodeRun, routed),
+                       DevelopmentOperationPhases.Completed,
+                       cancellationToken)
+                   .ConfigureAwait(false) is null
+            ? routed
             : null;
     }
 
     /// <summary>
-    ///     The node key of the routed failure this dispatch is carrying, or nothing when there is none.
+    ///     The ledger id for this route's one change request, keyed on the ROUTE — the node that refused and the
+    ///     attempt of it that did — rather than on the target's own attempt.
+    ///     <para>
+    ///         The target's attempt is the wrong key because it MOVES while the same rejection is still outstanding: a
+    ///         transient failure between the change request and the round it asked for spends one of the target's
+    ///         attempts, and the next arrival back at <c>AwaitingApply</c> then looked for an id nothing had written.
+    ///         The rejection was answered twice — a second coder round against work a reviewer had already approved,
+    ///         which is how an approved patch is discarded and the task's review rounds run out.
+    ///     </para>
+    ///     <para>
+    ///         The failing node's key rides in the phase, so two checks that both route here are two routes and get one
+    ///         ask each. A payload from before this shipped carries no attempt: it keeps the id it was written under,
+    ///         because changing the key of a route already in flight would ask for its round a second time.
+    ///     </para>
+    /// </summary>
+    private static Guid ChangeRequestOperationId(DevWorkflowRunSnapshot run, DevWorkflowNodeRunSnapshot nodeRun, RoutedFailure routed) =>
+        routed.Attempt is { } attempt
+            ? DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, attempt, $"devtask-request-changes:{routed.NodeKey}")
+            : DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "devtask-request-changes");
+
+    /// <summary>One routed rejection: the node whose verdict sent the run back, and the attempt of it that reached that verdict.</summary>
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct RoutedFailure(string NodeKey, int? Attempt);
+
+    /// <summary>
+    ///     The routed failure this dispatch is carrying — the node that refused and the attempt of it that did — or
+    ///     nothing when there is none.
     ///     <para>
     ///         Best-effort by design, like <see cref="Brief" />: an input this cannot read is an input with no routed
     ///         failure in it, which falls through to the branch that was there before rather than throwing on a
-    ///         document nobody promised the shape of.
+    ///         document nobody promised the shape of. The attempt is optional for the same reason plus one more — a
+    ///         payload written before it existed has none, and is answered exactly as it used to be.
     ///     </para>
     /// </summary>
-    private static string? PriorFailureNode(string? inputJson)
+    private static RoutedFailure? RoutedFailureOf(string? inputJson)
     {
         if (string.IsNullOrWhiteSpace(inputJson))
         {
@@ -766,12 +925,21 @@ internal sealed class DevWorkflowDevTaskExecutor
         try
         {
             using var document = JsonDocument.Parse(inputJson);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                   && document.RootElement.TryGetProperty("priorFailureNode", out var node)
-                   && node.ValueKind == JsonValueKind.String
-                   && !string.IsNullOrWhiteSpace(node.GetString())
-                ? node.GetString()
-                : null;
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("priorFailureNode", out var node)
+                || node.ValueKind != JsonValueKind.String
+                || node.GetString() is not { } nodeKey
+                || string.IsNullOrWhiteSpace(nodeKey))
+            {
+                return null;
+            }
+
+            return new RoutedFailure(nodeKey,
+                document.RootElement.TryGetProperty("priorFailureAttempt", out var attempt)
+                && attempt.ValueKind == JsonValueKind.Number
+                && attempt.TryGetInt32(out var number)
+                    ? number
+                    : null);
         }
         catch (JsonException)
         {
@@ -788,20 +956,22 @@ internal sealed class DevWorkflowDevTaskExecutor
     ///         or carries material the sanitizer refuses, the counts are what is left and they are still true.
     ///     </para>
     /// </summary>
-    private async Task<string> DescribePriorFailureAsync(IDevWorkflowStore store,
+    private async Task<PriorFailureReason> DescribePriorFailureAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
-        string failingNodeKey,
+        RoutedFailure routed,
         CancellationToken cancellationToken)
     {
+        var failingNodeKey = routed.NodeKey;
         // The counts go through the same bound and the same sanitizer as the report does: the node key interpolated
         // into them comes from a stored graph definition, which is authored text like any other.
-        var counts = Bounded(DescribeCounts(nodeRun.InputJson, failingNodeKey), GenericChangeRequest);
+        var (countsText, hasCounts) = DescribeCounts(nodeRun.InputJson, failingNodeKey);
+        var counts = Bounded(countsText, GenericChangeRequest);
         try
         {
-            return await ReadValidationReportAsync(store, run, failingNodeKey, cancellationToken).ConfigureAwait(false) is { } report
-                ? Bounded(Describe(report, failingNodeKey, counts), counts)
-                : counts;
+            return await ReadValidationReportAsync(store, run, routed, cancellationToken).ConfigureAwait(false) is { } report
+                ? new PriorFailureReason(Bounded(Describe(report, failingNodeKey, counts), counts), Evidenced: true)
+                : new PriorFailureReason(counts, hasCounts);
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or IOException or UnauthorizedAccessException)
         {
@@ -810,9 +980,17 @@ internal sealed class DevWorkflowDevTaskExecutor
             // letting it escape would fail the tick and re-throw on every sweep after it. The counts are authored here
             // from numbers, so they are always the safe answer.
             _logger.LogDebug(exception, "Development workflow node run {NodeRunId} could not quote node '{NodeKey}' validation report.", nodeRun.Id, failingNodeKey);
-            return counts;
+            return new PriorFailureReason(counts, hasCounts);
         }
     }
+
+    /// <summary>
+    ///     One rework reason and whether anything actually judged the work behind it — a readable validation report, or
+    ///     a routed payload carrying a command or test that really ran. A reason with neither is a sentence, not a
+    ///     verdict, and nothing may spend a coder round on it.
+    /// </summary>
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct PriorFailureReason(string Reason, bool Evidenced);
 
     /// <summary>
     ///     One reason, sanitized and bounded, or <paramref name="fallback" /> when the sanitizer refuses it. Every
@@ -832,24 +1010,40 @@ internal sealed class DevWorkflowDevTaskExecutor
         }
     }
 
-    /// <summary>The failing node's latest validation report, or nothing when there is none this build can read.</summary>
+    /// <summary>
+    ///     The report the ROUTED attempt wrote, or nothing when there is none this build can read.
+    ///     <para>
+    ///         Correlated to the attempt, not merely to the node key. A later attempt of that node can refuse before it
+    ///         runs anything — a missing command profile, a workspace it could not prepare — and write no report at
+    ///         all; the latest report for the key is then the PREVIOUS attempt's, about an implementation that has
+    ///         since been rewritten. Quoting it makes the reason look evidenced and asks a coder to fix output nothing
+    ///         just produced. Refusing it drops through to the counts, which for a check that ran nothing say so, and
+    ///         the node stands down where a human can read why.
+    ///     </para>
+    /// </summary>
     private async Task<DevWorkflowValidationReport?> ReadValidationReportAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
-        string failingNodeKey,
+        RoutedFailure routed,
         CancellationToken cancellationToken)
     {
         if ((await store.ListArtifactsAsync(run.Id, cancellationToken: cancellationToken).ConfigureAwait(false))
             .Where(artifact => artifact is { IsValid: true, Kind: DevWorkflowArtifactKind.ValidationReport }
-                               && string.Equals(artifact.ProducingNodeKey, failingNodeKey, StringComparison.Ordinal))
+                               && string.Equals(artifact.ProducingNodeKey, routed.NodeKey, StringComparison.Ordinal))
             .MaxBy(static artifact => artifact.Sequence) is not { } latest)
         {
             return null;
         }
 
         var read = await _blobs.ReadAsync(run.Id, latest.Id, latest.ContentSha256, latest.SizeBytes, cancellationToken).ConfigureAwait(false);
-        return read.Status == DevWorkflowArtifactReadStatus.Found
-            ? JsonSerializer.Deserialize<DevWorkflowValidationReport>(read.Content.Span, JsonOptions)
-            : null;
+        if (read.Status != DevWorkflowArtifactReadStatus.Found)
+        {
+            return null;
+        }
+
+        var report = JsonSerializer.Deserialize<DevWorkflowValidationReport>(read.Content.Span, JsonOptions);
+
+        // A route from before the attempt travelled on the payload names no attempt, and is answered as it used to be.
+        return routed.Attempt is not { } attempt || report?.Attempt == attempt ? report : null;
     }
 
     /// <summary>The report as a rework brief: the gate's own verdict, then each failing command and the tail it left.</summary>
@@ -889,11 +1083,12 @@ internal sealed class DevWorkflowDevTaskExecutor
 
     /// <summary>
     ///     What the ROUTED payload says, which is only counts — the fallback when the report itself cannot be quoted.
-    ///     Authored from numbers this engine wrote, so there is nothing in it to sanitize.
+    ///     Authored from numbers this engine wrote, so there is nothing in it to sanitize. <c>HasCounts</c> is false
+    ///     when nothing ran, which is the difference between a verdict and a sentence that sounds like one.
     /// </summary>
-    private static string DescribeCounts(string? inputJson, string failingNodeKey)
+    private static (string Text, bool HasCounts) DescribeCounts(string? inputJson, string failingNodeKey)
     {
-        var generic = $"Node '{failingNodeKey}' rejected this implementation and asked for it to be done again.";
+        (string Text, bool HasCounts) generic = ($"Node '{failingNodeKey}' rejected this implementation and asked for it to be done again.", false);
         if (string.IsNullOrWhiteSpace(inputJson))
         {
             return generic;
@@ -912,8 +1107,14 @@ internal sealed class DevWorkflowDevTaskExecutor
             var commandsFailed = Number(failure, "commandsFailed");
             var commandsRun = Number(failure, "commandsRun");
             var testsFailed = Number(failure, "testsFailed");
-            return string.Create(CultureInfo.InvariantCulture,
-                $"{generic} {commandsFailed} of {commandsRun} commands failed, {testsFailed} tests failed.");
+
+            // Nothing ran, so there is nothing to count. The sentence this used to author — "0 of 0 commands failed, 0
+            // tests failed" — was read live on 2026-09-02 by a coder being asked to redo approved work, and it says
+            // less than the generic line does while sounding like a measurement.
+            return commandsRun <= 0 && commandsFailed <= 0 && testsFailed <= 0
+                ? generic
+                : (string.Create(CultureInfo.InvariantCulture,
+                    $"{generic.Text} {commandsFailed} of {commandsRun} commands failed, {testsFailed} tests failed."), true);
         }
         catch (JsonException)
         {
@@ -956,16 +1157,32 @@ internal sealed class DevWorkflowDevTaskExecutor
         string failureClass,
         string sanitizedReason,
         CancellationToken cancellationToken) =>
-        await _retries.SettleFailureAsync(store,
-                          graph,
-                          run,
-                          nodeRun,
-                          nodeRuns,
-                          new DevWorkflowFailure(failureClass, sanitizedReason, Output(nodeRun, task: null, nodeRun.DevelopmentTaskId, failureClass)),
-                          cancellationToken)
-                      .ConfigureAwait(false);
+        await SettleFailureAsync(store,
+                graph,
+                run,
+                nodeRun,
+                nodeRuns,
+                new DevWorkflowFailure(failureClass, sanitizedReason, Output(nodeRun, task: null, nodeRun.DevelopmentTaskId, failureClass)),
+                cancellationToken)
+            .ConfigureAwait(false);
 
-    private static async Task<int> SettleAsync(IDevWorkflowStore store,
+    /// <summary>
+    ///     The one door this executor hands a failing node run to the retry policy through, so the policy revocation
+    ///     sits with the write instead of being remembered at each of the six call sites.
+    /// </summary>
+    private async Task<int> SettleFailureAsync(IDevWorkflowStore store,
+        DevWorkflowGraph graph,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
+        DevWorkflowFailure failure,
+        CancellationToken cancellationToken)
+    {
+        await ClearPolicyAsync(run, nodeRun, cancellationToken).ConfigureAwait(false);
+        return await _retries.SettleFailureAsync(store, graph, run, nodeRun, nodeRuns, failure, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<int> SettleAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
@@ -975,6 +1192,7 @@ internal sealed class DevWorkflowDevTaskExecutor
         string outputJson,
         CancellationToken cancellationToken)
     {
+        await ClearPolicyAsync(run, nodeRun, cancellationToken).ConfigureAwait(false);
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, target, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
                                nodeRun.Id,

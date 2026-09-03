@@ -308,7 +308,14 @@ public sealed partial class DevelopmentStore
                 task.Status = command.TargetStatus;
                 task.UpdatedAtUtc = now;
                 task.Version++;
-                task.BlockedReason = command.TargetStatus == DevelopmentTaskStatus.Blocked ? command.Reason : null;
+                // A task asked for rework carries WHY it was asked, the same way a stood-down one carries why it was
+                // stood down: the caller computes a real sentence for both (DevWorkflowDevTaskExecutor.RequestChangesAsync
+                // for the rework), and gating this on Blocked alone discarded it into the event log only. The column is
+                // named for the case that came first; every reader of it is gated on Status, so the widening reaches the
+                // UI field and nothing that means "blocked". BlockedAtUtc stays Blocked-only — it times a stand-down.
+                task.BlockedReason = command.TargetStatus is DevelopmentTaskStatus.Blocked or DevelopmentTaskStatus.ChangesRequested
+                    ? command.Reason
+                    : null;
                 task.BlockedAtUtc = command.TargetStatus == DevelopmentTaskStatus.Blocked ? now : null;
                 task.ApprovedSubjectHash = command.ApprovedSubjectHash ?? task.ApprovedSubjectHash;
 

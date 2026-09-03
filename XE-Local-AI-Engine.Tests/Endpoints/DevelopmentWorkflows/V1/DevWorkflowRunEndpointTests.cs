@@ -179,10 +179,10 @@ public sealed class DevWorkflowRunEndpointTests
 
         var research = root.GetProperty("nodes").EnumerateArray().Single(node => node.GetProperty("nodeKey").GetString() == "research");
         AssertEx.Equal("researcher", research.GetProperty("agentDisplayName").GetString(), "a slug-bound node names its slug: there is no agent id on the row.");
-        AssertEx.Equal(JsonValueKind.Null,
-            research.GetProperty("modelLabel").ValueKind,
-            "the node authors modelProfile 'qwen', but the runtime's parser never reads it and this node is bound by slug, so there is no agent to take a "
-            + "model from either. Naming the authored value would label the node with a model the run will not load.");
+        AssertEx.Equal("qwen",
+            research.GetProperty("modelLabel").GetString(),
+            "the node's own modelProfile is the pin its work session is created and resumed with, so it is the model the run actually loads — and it wins "
+            + "over the bound agent's, which is why it is read off the RUN's pinned graph rather than the definition as it stands now.");
     }
 
     /// <summary>

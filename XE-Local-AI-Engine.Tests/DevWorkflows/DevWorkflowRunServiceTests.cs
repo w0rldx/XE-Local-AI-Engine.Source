@@ -782,19 +782,23 @@ public sealed class DevWorkflowRunServiceTests
             return Task.CompletedTask;
         }
 
-        public Task<WorkSessionDetail> CreateAsync(string title, string objective, Guid agentDefinitionId, CancellationToken cancellationToken = default) =>
+        public Task<WorkSessionDetail> CreateAsync(string title,
+            string objective,
+            Guid agentDefinitionId,
+            WorkSessionRuntimeOverride? runtime = null,
+            CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public Task<WorkSessionDetail> GetAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<WorkSessionDetail> StartAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        public Task<WorkSessionDetail> StartAsync(Guid sessionId, WorkSessionRuntimeOverride? runtime = null, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public Task<WorkSessionDetail> PauseAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<WorkSessionDetail> ResumeAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        public Task<WorkSessionDetail> ResumeAsync(Guid sessionId, WorkSessionRuntimeOverride? runtime = null, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public Task<WorkSessionDetail> CancelAsync(Guid sessionId, CancellationToken cancellationToken = default) =>

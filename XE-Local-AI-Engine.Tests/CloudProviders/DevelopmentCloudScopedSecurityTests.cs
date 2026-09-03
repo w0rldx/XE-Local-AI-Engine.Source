@@ -157,7 +157,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
         var cloud = new FixedCloudFactory(chat, route.ProviderName);
         var localResolver = Substitute.For<ILocalModelProviderResolver>();
         var workspace = new CapturingWorkspaceTools();
-        var model = new DevelopmentCoderModel(chat, cloud, localResolver, new FakeModelTrustResolver());
+        var model = new DevelopmentCoderModel(chat, cloud, localResolver, new FakeModelTrustResolver(), NullLogger<DevelopmentCoderModel>.Instance);
 
         var result = await model.RunAsync(route.ModelId,
             "must not be sent to cloud",
@@ -182,7 +182,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
         using var chat = new RoleSubmittingChatClient(isReviewer: true);
         var cloud = new FixedCloudFactory(chat, route.ProviderName);
         var localResolver = Substitute.For<ILocalModelProviderResolver>();
-        var model = new DevelopmentReviewerModel(chat, cloud, localResolver, new FakeModelTrustResolver());
+        var model = new DevelopmentReviewerModel(chat, cloud, localResolver, new FakeModelTrustResolver(), NullLogger<DevelopmentReviewerModel>.Instance);
 
         var result = await model.RunAsync(route.ModelId,
             "must not be sent to cloud",
@@ -202,12 +202,84 @@ public sealed class DevelopmentCloudScopedSecurityTests
     [Test]
     public async Task AttemptContext_WhenCloudScoped_PersistsTheExactBundleBeforeCreatingRoute()
     {
-        var projectId = Guid.NewGuid();
-        var taskId = Guid.NewGuid();
-        var attemptId = Guid.NewGuid();
-        var snapshot = new DevelopmentExecutionSnapshot(projectId,
-            taskId,
-            attemptId,
+        var snapshot = CloudSnapshot(DevelopmentAttemptRole.Coder);
+        var created = await CreateContextAsync(snapshot).ConfigureAwait(false);
+
+        AssertEx.Equal("fake-cloud", created.Context.Route.ProviderName);
+        AssertEx.Equal("cloud-model", created.Context.Route.ModelId);
+        _ = await created.Store.Received(1).AttachArtifactAsync(Arg.Is<DevelopmentAttachArtifactCommand>(command =>
+                command.ArtifactId == created.Context.ArtifactId
+                && command.ProjectId == snapshot.ProjectId
+                && command.TaskId == snapshot.TaskId
+                && command.AttemptId == snapshot.AttemptId
+                && command.Kind == DevelopmentArtifactKind.CloudContextBundle
+                && command.ManagedReference == "opaque/context"),
+            Arg.Any<CancellationToken>());
+        AssertEx.Equal(expected: 1, created.Context.Route.Options.Tools?.Count ?? 0);
+    }
+
+    /// <summary>
+    ///     A CloudScoped attempt is sent ONLY this bundle — the local prompt's policy section never leaves the node —
+    ///     so the workflow's snapshotted rule text has to be in it. Until it was, a cloud-routed coder or reviewer ran
+    ///     unconstrained while the task's <c>WorkflowPolicyApplied</c> event and its applied rule sets both claimed the
+    ///     attempt had been governed by it. Asserted for both roles because one seam serves both runners.
+    /// </summary>
+    [Test]
+    [Arguments(DevelopmentAttemptRole.Coder)]
+    [Arguments(DevelopmentAttemptRole.Reviewer)]
+    public async Task AttemptContext_WhenAWorkflowPolicyIsSnapshotted_CarriesItInTheProviderVisibleBundle(DevelopmentAttemptRole role)
+    {
+        var governed = await CreateContextAsync(CloudSnapshot(role, WorkflowPolicy)).ConfigureAwait(false);
+        var ungoverned = await CreateContextAsync(CloudSnapshot(role)).ConfigureAwait(false);
+        var governedBundle = AssertEx.NotNull(governed.Bundle);
+        var ungovernedBundle = AssertEx.NotNull(ungoverned.Bundle);
+
+        AssertEx.True(governedBundle.PolicyText.Contains(WorkflowPolicy, StringComparison.Ordinal),
+            "The bundle a cloud role reads must carry the workflow's own policy text, not only the CloudScoped authorization sentence.");
+        AssertEx.Equal(governedBundle.PolicyText, governedBundle.ReadResource("policy"));
+        AssertEx.True(governedBundle.PolicyText.Contains("CloudScoped Development execution", StringComparison.Ordinal),
+            "The CloudScoped authorization sentence must survive alongside the workflow's policy.");
+
+        AssertEx.False(ungovernedBundle.PolicyText.Contains("House rules", StringComparison.Ordinal),
+            "A task no workflow governs must carry no workflow policy.");
+        AssertEx.True(ungovernedBundle.PolicyText.Contains("CloudScoped Development execution", StringComparison.Ordinal),
+            "The CloudScoped authorization sentence is on every bundle.");
+
+        // The egress authorizer binds the content hash, so this is what makes the policy tamper-evident rather than
+        // decorative: the same attempt with and without it cannot present the same approved bundle.
+        AssertEx.False(string.Equals(governedBundle.ContentHash, ungovernedBundle.ContentHash, StringComparison.Ordinal),
+            "The bundle's content hash must cover the policy text.");
+    }
+
+    /// <summary>What a workflow renders onto the task: a heading its audit names and the body it snapshotted.</summary>
+    private const string WorkflowPolicy = "## Policy: House rules\nNever touch production without an approved plan.";
+
+    private static async Task<CreatedContext> CreateContextAsync(DevelopmentExecutionSnapshot snapshot)
+    {
+        var store = Substitute.For<IDevelopmentStore>();
+        var blob = Substitute.For<IDevelopmentArtifactBlobStore>();
+        blob.WriteAsync(snapshot.ProjectId, Arg.Any<Guid>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>())
+            .Returns(call => new DevelopmentArtifactBlobWriteResult("opaque/context", "BLOB-HASH", call.ArgAt<ReadOnlyMemory<byte>>(2).Length));
+        var builder = new CapturingContextBuilder(new DevelopmentCloudContextBuilder(new FixedTimeProvider(Now)));
+        var service = new DevelopmentCloudAttemptContextService(builder,
+            new DevelopmentCloudRoleRouteFactory(new DevelopmentCloudContextCatalog()),
+            blob,
+            store,
+            Options.Create(new DevelopmentOptions
+            {
+                MaxAttemptDurationSeconds = 120
+            }),
+            new FixedTimeProvider(Now));
+
+        var context = await service.CreateAsync(snapshot,
+            [new DevelopmentCloudContextExcerpt("src/Feature.cs", "sealed class Feature { }")]).ConfigureAwait(false);
+        return new CreatedContext(context, builder.Built, store);
+    }
+
+    private static DevelopmentExecutionSnapshot CloudSnapshot(DevelopmentAttemptRole role, string? workflowPolicyText = null) =>
+        new(Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
             Guid.NewGuid(),
             "repository-hash",
             "main",
@@ -223,43 +295,28 @@ public sealed class DevelopmentCloudScopedSecurityTests
             "[\"semantic tests pass\"]",
             DevelopmentTaskStatus.InProgress,
             TaskVersion: 2,
-            DevelopmentAttemptRole.Coder,
+            role,
             DevelopmentAttemptStatus.Running,
             "cloud-model",
             "fake-cloud",
             AttemptVersion: 1,
             Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog
                                     .Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null)
-                                    .ToCanonicalUtf8()));
-        var store = Substitute.For<IDevelopmentStore>();
-        var blob = Substitute.For<IDevelopmentArtifactBlobStore>();
-        blob.WriteAsync(projectId, Arg.Any<Guid>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>())
-            .Returns(call => new DevelopmentArtifactBlobWriteResult("opaque/context", "BLOB-HASH", call.ArgAt<ReadOnlyMemory<byte>>(2).Length));
-        var catalog = new DevelopmentCloudContextCatalog();
-        var service = new DevelopmentCloudAttemptContextService(new DevelopmentCloudContextBuilder(new FixedTimeProvider(Now)),
-            new DevelopmentCloudRoleRouteFactory(catalog),
-            blob,
-            store,
-            Options.Create(new DevelopmentOptions
-            {
-                MaxAttemptDurationSeconds = 120
-            }),
-            new FixedTimeProvider(Now));
+                                    .ToCanonicalUtf8()),
+            PreviousRoundFeedback: null,
+            workflowPolicyText);
 
-        var result = await service.CreateAsync(snapshot,
-            [new DevelopmentCloudContextExcerpt("src/Feature.cs", "sealed class Feature { }")]).ConfigureAwait(false);
+    private sealed record CreatedContext(
+        DevelopmentCloudAttemptContext Context,
+        DevelopmentCloudContextBundle? Bundle,
+        IDevelopmentStore Store);
 
-        AssertEx.Equal("fake-cloud", result.Route.ProviderName);
-        AssertEx.Equal("cloud-model", result.Route.ModelId);
-        _ = await store.Received(1).AttachArtifactAsync(Arg.Is<DevelopmentAttachArtifactCommand>(command =>
-                command.ArtifactId == result.ArtifactId
-                && command.ProjectId == projectId
-                && command.TaskId == taskId
-                && command.AttemptId == attemptId
-                && command.Kind == DevelopmentArtifactKind.CloudContextBundle
-                && command.ManagedReference == "opaque/context"),
-            Arg.Any<CancellationToken>());
-        AssertEx.Equal(expected: 1, result.Route.Options.Tools?.Count ?? 0);
+    /// <summary>Hands back the REAL bundle the service built, which is the only thing a cloud role can read.</summary>
+    private sealed class CapturingContextBuilder(IDevelopmentCloudContextBuilder inner) : IDevelopmentCloudContextBuilder
+    {
+        public DevelopmentCloudContextBundle? Built { get; private set; }
+
+        public DevelopmentCloudContextBundle Build(DevelopmentCloudContextBuildRequest request) => Built = inner.Build(request);
     }
 
     private static DevelopmentCloudContextBundle BuildBundle() =>

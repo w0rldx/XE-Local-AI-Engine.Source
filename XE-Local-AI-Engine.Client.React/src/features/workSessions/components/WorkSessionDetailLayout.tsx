@@ -125,13 +125,18 @@ export function WorkSessionDetailLayout(props: WorkSessionDetailLayoutProps) {
 				) : (
 					<div
 						data-testid="work-session-detail-grid"
+						// Same three-column template, same floor, for the same reason as the dev-workflow run page:
+						// between 1024 and roughly 1180 the unfloored centre track was squeezed under its own chrome.
+						// A message thread degrades more gracefully than a tab header, so it read as cramped rather
+						// than broken — the geometry was identical either way.
 						style={{
 							display: "grid",
-							gridTemplateColumns: "320px minmax(0, 1fr) minmax(380px, 420px)",
+							gridTemplateColumns: "320px minmax(240px, 1fr) minmax(380px, 420px)",
 							gridTemplateRows: "minmax(0, 1fr)",
 							gap: "var(--mantine-spacing-md)",
 							flex: 1,
 							minHeight: 0,
+							overflowX: "auto",
 						}}
 					>
 						{props.planPanel}

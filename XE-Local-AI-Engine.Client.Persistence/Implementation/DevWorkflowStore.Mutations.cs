@@ -194,6 +194,40 @@ internal sealed partial class DevWorkflowStore
             nodeRun.Id);
     }
 
+    public Task<DevWorkflowMutationResult> RouteRetryAsync(RouteDevWorkflowRetryCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        EnsureNotBlank(command.Route.EventType, nameof(command));
+        if (command.Resets.Any(reset => reset.RunId != command.Route.RunId))
+        {
+            // A reset naming another run would be written against THIS run's row and version, which is the one thing
+            // this method's atomicity cannot span.
+            throw new ArgumentException("Every reset in a retry route must belong to the run the route names.", nameof(command));
+        }
+
+        return ExecuteMutationAsync(command.Route.RunId,
+            command.Route.ExpectedVersion,
+            command.Route.OperationId,
+            async run =>
+            {
+                var outcomes = new List<MutationOutcome>(command.Resets.Count + 1)
+                {
+                    // FIRST, so a reader of the log sees the decision before the rows it moved, and so the operation
+                    // id that makes the whole command a replay lands on the event that records the decision.
+                    new(command.Route.EventType, command.Route.Outcome, Utf8OrNull(command.Route.DetailJson), command.Route.NodeRunId)
+                };
+
+                foreach (var reset in command.Resets)
+                {
+                    EnsureVersion(run, reset.ExpectedVersion);
+                    outcomes.Add(await ApplyNodeRunTransitionAsync(run, reset, cancellationToken).ConfigureAwait(false));
+                }
+
+                return (IReadOnlyList<MutationOutcome>)outcomes;
+            },
+            cancellationToken);
+    }
+
     public Task<DevWorkflowMutationResult> AttachWorkSessionAsync(AttachDevWorkflowWorkSessionCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);

@@ -62,8 +62,30 @@ function definitionRoute(overrides: { version?: number; graph?: DevWorkflowGraph
 	});
 }
 
+/** One row of the model list, filled out enough to survive the generated client's own response validation. */
+function localModel(modelName: string, displayLabel: string, kind: string) {
+	return {
+		modelName,
+		displayLabel,
+		kind,
+		detectedKind: kind,
+		provider: "llamacpp",
+		capabilities: [],
+		isSelected: false,
+		isReasoningCapable: false,
+		isToolCapable: true,
+		isOverridden: false,
+	};
+}
+
 function optionRoutes() {
-	return [jsonRoute("get", "agents", { items: [] })];
+	return [
+		jsonRoute("get", "agents", { items: [] }),
+		jsonRoute("get", "models", {
+			isAvailable: true,
+			items: [localModel("qwen3-30b", "Qwen3 30B", "Chat"), localModel("nomic-embed", "Nomic Embed", "Embedding")],
+		}),
+	];
 }
 
 function renderPanel() {
@@ -144,8 +166,8 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 		await waitFor(() => expect(sent).toBeDefined());
 		expect(sent?.version).toBe(3);
 		expect(sent?.graph?.nodes?.[0]?.label).toBe("Investigate");
-		// Everything the form does not author must come back exactly as it arrived — including the two the runtime
-		// ignores, which have no control precisely because setting them would change nothing about the run.
+		// Everything the form does not author must come back exactly as it arrived — the Tool node's model and effort
+		// included, which this form shows no control for precisely because that lane dispatches on neither.
 		expect(sent?.graph?.nodes?.[1]?.toolMode).toBe("Apply");
 		expect(sent?.graph?.nodes?.[1]?.requiredCapabilities).toEqual({ gpu: "true" });
 		expect(sent?.graph?.nodes?.[1]?.materialization?.maxChildren).toBe(5);
@@ -162,15 +184,48 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 		expect(badges.textContent).toContain("implement");
 	});
 
-	it("offers no model or reasoning-effort control, because the runtime reads neither", async () => {
-		// `ParseNode` does not read them and the agent executor never sees them, so a picker there let an operator set
-		// a model the run then ignored — the node still went to the agent's own.
+	it("offers only this node's CHAT models as a per-node model, because a non-chat one is a run that fails at dispatch", async () => {
 		server.use(...optionRoutes(), definitionRoute());
 		renderPanel();
-		await screen.findByTestId("dev-workflow-definition-node-0");
 
+		expect(await screen.findByText("Qwen3 30B")).toBeDefined();
+		expect(screen.queryByText("Nomic Embed")).toBeNull();
+	});
+
+	it("offers the model and effort pins on an Agent node only, because no other lane dispatches on them", async () => {
+		// Node 0 is the Agent; node 1 is a Tool and node 2 a DevTask, which run commands and Dev Mode's own coder.
+		server.use(...optionRoutes(), definitionRoute());
+		renderPanel();
+
+		expect(await screen.findByTestId("dev-workflow-definition-node-model-0")).toBeDefined();
+		expect(screen.getByTestId("dev-workflow-definition-node-effort-0")).toBeDefined();
 		expect(screen.queryByTestId("dev-workflow-definition-node-model-1")).toBeNull();
 		expect(screen.queryByTestId("dev-workflow-definition-node-effort-1")).toBeNull();
+		expect(screen.queryByTestId("dev-workflow-definition-node-model-2")).toBeNull();
+		expect(screen.queryByTestId("dev-workflow-definition-node-effort-2")).toBeNull();
+	});
+
+	it("sends the per-node model and reasoning effort an operator picked, which is what that node's session runs on", async () => {
+		let sent: { graph?: DevWorkflowGraph } | undefined;
+		server.use(
+			...optionRoutes(),
+			definitionRoute(),
+			http.put(localApiPath(`development-workflows/definitions/${definitionId}`), async ({ request }) => {
+				sent = (await request.json()) as typeof sent;
+				return HttpResponse.json({ id: definitionId, name: "Research → Plan → Approval", version: 4 });
+			}),
+		);
+		renderPanel();
+
+		fireEvent.click(await screen.findByTestId("dev-workflow-definition-node-model-0"));
+		fireEvent.click(await screen.findByText("Qwen3 30B"));
+		fireEvent.click(screen.getByTestId("dev-workflow-definition-node-effort-0"));
+		fireEvent.click(screen.getByText("medium"));
+		fireEvent.click(screen.getByTestId("dev-workflow-definition-save"));
+
+		await waitFor(() => expect(sent).toBeDefined());
+		expect(sent?.graph?.nodes?.[0]?.modelProfile).toBe("qwen3-30b");
+		expect(sent?.graph?.nodes?.[0]?.reasoningEffort).toBe("medium");
 	});
 
 	it("refuses to save a graph the server would reject, naming the node instead of waiting for a 400", async () => {

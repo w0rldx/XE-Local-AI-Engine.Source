@@ -61,10 +61,15 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
         try
         {
             await _dbContext.Database.OpenConnectionAsync(probeToken).ConfigureAwait(false);
+            var connection = (SqliteConnection)_dbContext.Database.GetDbConnection();
+
+            // The write probe's transaction must be rolled back on EVERY exit — the DDL failing, the 2s probe timeout,
+            // or the caller cancelling — because Microsoft.Data.Sqlite pools native handles: "closing" the connection
+            // returns a handle SQLite still considers mid-transaction to the pool, and the next consumer to draw it
+            // fails with "cannot start a transaction within a transaction". The finally below owns that.
+            var transactionOpen = false;
             try
             {
-                var connection = (SqliteConnection)_dbContext.Database.GetDbConnection();
-
                 // 1. Readable.
                 await using (var readCommand = connection.CreateCommand())
                 {
@@ -99,6 +104,7 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
                     {
                         beginCommand.CommandText = "BEGIN IMMEDIATE;";
                         _ = await beginCommand.ExecuteNonQueryAsync(probeToken).ConfigureAwait(false);
+                        transactionOpen = true;
                     }
 
                     await using (var writeCommand = connection.CreateCommand())
@@ -110,15 +116,15 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
                     await using var rollbackCommand = connection.CreateCommand();
                     rollbackCommand.CommandText = "ROLLBACK;";
                     _ = await rollbackCommand.ExecuteNonQueryAsync(probeToken).ConfigureAwait(false);
+                    transactionOpen = false;
                 }
                 catch (Exception writeException) when (writeException is not OperationCanceledException)
                 {
-                    // The write probe left an open transaction if BEGIN succeeded but the DDL failed; closing the
-                    // connection below rolls it back, so the scratch table is never persisted either way. The raw
-                    // provider message is NOT interpolated into the description: /health/ready is anonymous and, on a
-                    // non-loopback/proxied deployment, would otherwise leak internal error text (including filesystem
-                    // paths) to remote callers. The structured "unwritable" reason and the
-                    // exception (for server-side health logging) are preserved.
+                    // The transaction BEGIN opened is rolled back by the finally below. The raw provider message is NOT
+                    // interpolated into the description: /health/ready is anonymous and, on a non-loopback/proxied
+                    // deployment, would otherwise leak internal error text (including filesystem paths) to remote
+                    // callers. The structured "unwritable" reason and the exception (for server-side health logging)
+                    // are preserved.
                     return Unhealthy(stopwatch, reason: "unwritable",
                         "Node SQLite database is not writable.", writeException);
                 }
@@ -129,6 +135,22 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
             }
             finally
             {
+                if (transactionOpen)
+                {
+                    try
+                    {
+                        // No token: a rollback must still run when the probe token is what expired. A rollback failure
+                        // must never mask the original error either, hence the best-effort catch.
+                        await using var rollbackCommand = connection.CreateCommand();
+                        rollbackCommand.CommandText = "ROLLBACK;";
+                        _ = await rollbackCommand.ExecuteNonQueryAsync(CancellationToken.None).ConfigureAwait(false);
+                    }
+                    catch (Exception)
+                    {
+                        // Best effort: the connection is already gone, or the transaction is no longer open.
+                    }
+                }
+
                 await _dbContext.Database.CloseConnectionAsync().ConfigureAwait(false);
             }
         }

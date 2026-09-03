@@ -24,9 +24,33 @@ public sealed class BenchmarkQueueHostedService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await RecoverAsync(stoppingToken).ConfigureAwait(false);
+        var recovered = false;
+        var reconciled = false;
         while (!stoppingToken.IsCancellationRequested)
         {
+            // Nothing is CLAIMED until recovery has succeeded once. Guarding the throw kept the host up, but the loop
+            // then ran on regardless and the rows the previous process left Running — which only recovery
+            // terminalizes — stayed orphaned for this process's whole lifetime, stalling the single consumer behind
+            // them. The poll interval is the backoff.
+            if (!recovered)
+            {
+                recovered = await RecoverAsync(stoppingToken).ConfigureAwait(false);
+                if (!recovered)
+                {
+                    await signal.WaitAsync(_pollInterval, stoppingToken).ConfigureAwait(false);
+                    continue;
+                }
+            }
+
+            // Pairwise reconciliation is BEST-EFFORT and gates nothing. It re-enqueues comparisons a crash left
+            // missing, which is a cohort's problem and not this consumer's: blocking the claim on it would let one
+            // persistently failing planner starve every primary, judge and fidelity run for the process's lifetime.
+            // Retried on the same poll interval until it lands once.
+            if (!reconciled)
+            {
+                reconciled = await ReconcilePairwiseAsync(stoppingToken).ConfigureAwait(false);
+            }
+
             BenchmarkClaimedWork? work = null;
             // The gate is taken BEFORE the claim and held through execution. Refusing at the CLAIM rather than at the
             // executor keeps queued benchmark work queued: it resumes on the next poll once the exclusive holder
@@ -44,45 +68,52 @@ public sealed class BenchmarkQueueHostedService(
                 if (work is not null)
                 {
                     await using var executionScope = scopeFactory.CreateAsyncScope();
-                    try
+                    switch (work.Kind)
                     {
-                        switch (work.Kind)
-                        {
-                            case BenchmarkWorkKind.Primary:
-                                await executionScope.ServiceProvider.GetRequiredService<IBenchmarkRunExecutor>()
-                                                    .ExecuteAsync(work, stoppingToken)
-                                                    .ConfigureAwait(false);
-                                break;
-                            case BenchmarkWorkKind.Judge:
-                                await executionScope.ServiceProvider.GetRequiredService<IBenchmarkJudgeExecutor>()
-                                                    .ExecuteAsync(work, stoppingToken)
-                                                    .ConfigureAwait(false);
-                                break;
-                            case BenchmarkWorkKind.Fidelity:
-                                await executionScope.ServiceProvider.GetRequiredService<IBenchmarkFidelityExecutor>()
-                                                    .ExecuteAsync(work, stoppingToken)
-                                                    .ConfigureAwait(false);
-                                break;
-                            case BenchmarkWorkKind.Comparison:
-                                await executionScope.ServiceProvider.GetRequiredService<IBenchmarkComparisonExecutor>()
-                                                    .ExecuteAsync(work, stoppingToken)
-                                                    .ConfigureAwait(false);
-                                break;
-                            default:
-                                await TerminalizeUnsupportedAsync(executionScope.ServiceProvider, work, stoppingToken).ConfigureAwait(false);
-                                break;
-                        }
+                        case BenchmarkWorkKind.Primary:
+                            await executionScope.ServiceProvider.GetRequiredService<IBenchmarkRunExecutor>()
+                                                .ExecuteAsync(work, stoppingToken)
+                                                .ConfigureAwait(false);
+                            break;
+                        case BenchmarkWorkKind.Judge:
+                            await executionScope.ServiceProvider.GetRequiredService<IBenchmarkJudgeExecutor>()
+                                                .ExecuteAsync(work, stoppingToken)
+                                                .ConfigureAwait(false);
+                            break;
+                        case BenchmarkWorkKind.Fidelity:
+                            await executionScope.ServiceProvider.GetRequiredService<IBenchmarkFidelityExecutor>()
+                                                .ExecuteAsync(work, stoppingToken)
+                                                .ConfigureAwait(false);
+                            break;
+                        case BenchmarkWorkKind.Comparison:
+                            await executionScope.ServiceProvider.GetRequiredService<IBenchmarkComparisonExecutor>()
+                                                .ExecuteAsync(work, stoppingToken)
+                                                .ConfigureAwait(false);
+                            break;
+                        default:
+                            await TerminalizeUnsupportedAsync(executionScope.ServiceProvider, work, stoppingToken).ConfigureAwait(false);
+                            break;
                     }
-                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                    {
-                        return;
-                    }
-                    catch (Exception exception)
-                    {
-                        // Executors own durable terminalization. Reaching this guard means their failure handling itself
-                        // failed; keep the single consumer alive so later durable work is not starved.
-                        logger.LogError(exception, "Benchmark queue failed while executing {Kind} work for run {RunId}.", work.Kind, work.RunId);
-                    }
+                }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception exception)
+            {
+                if (work is null)
+                {
+                    // The CLAIM failed. An exception escaping here would end ExecuteAsync and, under the default
+                    // BackgroundServiceExceptionBehavior.StopHost, take the whole node down over a transient database
+                    // failure. work stays null, so the poll wait below is already the backoff.
+                    logger.LogError(exception, "Benchmark queue failed while claiming work; retrying after the poll interval.");
+                }
+                else
+                {
+                    // Executors own durable terminalization. Reaching this guard means their failure handling itself
+                    // failed; keep the single consumer alive so later durable work is not starved.
+                    logger.LogError(exception, "Benchmark queue failed while executing {Kind} work for run {RunId}.", work.Kind, work.RunId);
                 }
             }
             finally
@@ -120,32 +151,71 @@ public sealed class BenchmarkQueueHostedService(
         _ = await store.MarkFidelityFailedAsync(work.RunId, work.Version, reason, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task RecoverAsync(CancellationToken cancellationToken)
+    /// <summary>
+    ///     Guarded like the loop below and like both sibling queues: this runs BEFORE the first claim, so a throw here
+    ///     ends ExecuteAsync and, under the default BackgroundServiceExceptionBehavior.StopHost, takes the node down —
+    ///     a transient database failure at startup must cost unrecovered work items, not the host.
+    ///     <para>
+    ///         Answers whether it SUCCEEDED, because a failure must not cost the work items either: the caller retries
+    ///         on the poll interval and claims nothing until this returns true.
+    ///     </para>
+    /// </summary>
+    private async Task<bool> RecoverAsync(CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var store = scope.ServiceProvider.GetRequiredService<IBenchmarkStore>();
-        var recovered = await store.RecoverRunsOnStartupAsync(cancellationToken).ConfigureAwait(false);
-        foreach (var run in recovered)
+        try
         {
-            events.EvictPlaintext(run.Id);
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var store = scope.ServiceProvider.GetRequiredService<IBenchmarkStore>();
+            var recovered = await store.RecoverRunsOnStartupAsync(cancellationToken).ConfigureAwait(false);
+            foreach (var run in recovered)
+            {
+                events.EvictPlaintext(run.Id);
+            }
+
+            logger.LogInformation("Recovered {RunCount} interrupted benchmark runs.", recovered.Count);
+            return true;
         }
-
-        logger.LogInformation("Recovered {RunCount} interrupted benchmark runs.", recovered.Count);
-
-        // The sweep above terminalizes what the kill interrupted; this re-enqueues what it left missing. A crash
-        // between a primary succeeding and its pairs being enqueued would otherwise leave a cohort permanently one
-        // comparison short, with every run in it stuck pending and nothing that would ever notice.
-        //
-        // Resolved optionally, unlike the executors in the loop: this runs BEFORE the first claim, so a host that
-        // composed the queue without a planner would die here at startup and starve EVERY kind of benchmark work over
-        // a leg that had nothing to do — a host with no planner cannot have enqueued pairwise work either.
-        var planner = scope.ServiceProvider.GetService<IBenchmarkPairwisePlanner>();
-        if (planner is null)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.LogWarning("No pairwise planner is registered; skipping pairwise reconciliation on startup.");
-            return;
+            logger.LogError(exception, "Benchmark startup recovery failed; retrying after the poll interval before any work is claimed.");
+            return false;
         }
+    }
 
-        await planner.ReconcilePairwiseAsync(cancellationToken).ConfigureAwait(false);
+    /// <summary>
+    ///     Re-enqueues the comparisons a crash left missing: a kill between a primary succeeding and its pairs being
+    ///     enqueued leaves a cohort permanently one comparison short, with every run in it stuck pending and nothing
+    ///     that would ever notice.
+    ///     <para>
+    ///         Separate from <c>RecoverAsync</c> and gating NOTHING. It is one cohort's problem, and a planner that
+    ///         keeps throwing must not starve every primary, judge and fidelity run for the process's lifetime — which
+    ///         is what folding it into the claim gate did. Answers whether it landed, so the loop stops retrying it.
+    ///     </para>
+    ///     <para>
+    ///         The planner is resolved optionally: a host that composed the queue without one cannot have enqueued
+    ///         pairwise work either, so there is nothing to reconcile and nothing to retry.
+    ///     </para>
+    /// </summary>
+    private async Task<bool> ReconcilePairwiseAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var planner = scope.ServiceProvider.GetService<IBenchmarkPairwisePlanner>();
+            if (planner is null)
+            {
+                logger.LogWarning("No pairwise planner is registered; skipping pairwise reconciliation on startup.");
+                return true;
+            }
+
+            await planner.ReconcilePairwiseAsync(cancellationToken).ConfigureAwait(false);
+            logger.LogInformation("Reconciled missing pairwise benchmark comparisons.");
+            return true;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogError(exception, "Pairwise benchmark reconciliation failed; retrying after the poll interval. Other benchmark work is unaffected.");
+            return false;
+        }
     }
 }

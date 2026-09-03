@@ -341,6 +341,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         return string.Concat("Task: ", snapshot.Title,
             "\nRequirements:\n", snapshot.Requirements,
             "\nAcceptance criteria:\n", snapshot.AcceptanceCriteriaJson,
+            Policy(snapshot.WorkflowPolicyText),
             Feedback(snapshot.PreviousRoundFeedback),
             "\nBase commit: ", session.BaseCommit,
             "\nCommand profile: ", profile.ProfileId,
@@ -369,6 +370,16 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         string.IsNullOrWhiteSpace(previousRound)
             ? string.Empty
             : string.Concat("\nFeedback from the previous round:\n", previousRound);
+
+    /// <summary>
+    ///     The rule sets a Development workflow resolved for the node run driving this task, when one does. Rendered and
+    ///     bounded by the workflow before it ever reached the task, so this only decides whether there is a section at
+    ///     all: an empty heading governs nothing and would read as a policy that said nothing.
+    /// </summary>
+    private static string Policy(string? workflowPolicy) =>
+        string.IsNullOrWhiteSpace(workflowPolicy)
+            ? string.Empty
+            : string.Concat("\nPolicy (rule sets applied by the workflow):\n", workflowPolicy);
 
     /// <summary>The workspace policy's message, or the generic line when it cannot be shown safely.</summary>
     private static string PolicyReason(DevelopmentWorkspaceSecurityException exception)
