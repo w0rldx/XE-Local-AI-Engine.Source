@@ -97,6 +97,7 @@ public sealed partial class BenchmarkStore
             FlashAttentionMode = launchIntent?.FlashAttentionMode,
             IntendedLaunchIdentity = launchIntent?.IntendedLaunchIdentity,
             IntendedExecutableSha256 = launchIntent?.IntendedExecutableSha256,
+            LaunchIdentityScheme = launchIntent?.LaunchIdentityScheme,
             EnqueuedAtUtc = now,
             CompletedAtUtc = unresolved ? now : null,
             Version = 1

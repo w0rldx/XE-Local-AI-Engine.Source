@@ -135,6 +135,38 @@ public sealed class SupervisorSpawnArgsTests
     }
 
     [Test]
+    public async Task EnsureRunning_GpuExploreWithExpertOffloadPlacement_EmitsCpuMoeBesideAutoFit()
+    {
+        var launcher = new FakeProcessLauncher();
+        var allocation = new ProcessContextAllocation(ProcessContextTokens: 8192,
+            ModelTrainContextTokens: null,
+            ProcessContextAllocationSource.HardwareTier,
+            ProcessPlacementMode.ExpertOffload,
+            ResourceFootprint.Zero,
+            ContentIdentity: "moe-model:0",
+            CacheKey: "moe-cache");
+        var allocationResolver = Substitute.For<IProcessContextAllocationResolver>();
+        allocationResolver.ResolveAsync(Arg.Any<string>(),
+                              Arg.Any<ModelRole>(),
+                              Arg.Any<GpuVariant>(),
+                              Arg.Any<ResolvedLaunchArguments>(),
+                              Arg.Any<CancellationToken>())
+                          .Returns(_ => Task.FromResult<ProcessContextAllocation?>(allocation));
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            allocationResolver: allocationResolver);
+
+        await supervisor.EnsureRunningAsync("moe-model", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.Contains(spec!.Arguments, "--cpu-moe");
+        // --fit adjusts only UNSET arguments, so auto-fit sizes placement around the flag rather than overriding it.
+        AssertEx.Contains(spec.Arguments, "--fit");
+        AssertEx.False(spec.Arguments.Contains("-ot"), "an explore spawn never emits a frozen -ot beside --cpu-moe.");
+        AssertEx.False(spec.Arguments.Contains("--n-cpu-moe"), "the estimator offloads the whole expert share, so no partial N is derived.");
+    }
+
+    [Test]
     public async Task EnsureRunning_UsesAdmissionAdjustedAllocationContext()
     {
         var launcher = new FakeProcessLauncher();

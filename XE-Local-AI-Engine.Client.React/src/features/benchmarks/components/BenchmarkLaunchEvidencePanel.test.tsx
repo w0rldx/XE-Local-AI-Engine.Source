@@ -39,6 +39,49 @@ describe("BenchmarkLaunchEvidencePanel", () => {
 		expect(screen.getByTestId("benchmark-intended-effective-differs")).toBeTruthy();
 	});
 
+	// A row frozen under a superseded launch-identity scheme holds two hashes that were never meant to be compared, so
+	// the panel says so once instead of raising a drift alert about a launch that in fact matched.
+	it("renders the not-comparable line instead of a drift alert for a superseded identity scheme", () => {
+		renderWithProviders(
+			<BenchmarkLaunchEvidencePanel
+				run={detail({
+					primaryLaunch: {
+						...noBenchmarkLaunchFacts,
+						launchIdentitySchemeOutdated: true,
+						intendedLaunchIdentity: "identity-1",
+						effectiveLaunchIdentity: "identity-2",
+						intendedExecutableSha256: "a".repeat(64),
+						executableSha256: "b".repeat(64),
+					},
+				})}
+			/>,
+		);
+
+		expect(screen.getByTestId("benchmark-intended-effective-differs-scheme-outdated")).toBeTruthy();
+		expect(screen.queryByTestId("benchmark-intended-effective-differs")).toBeNull();
+	});
+
+	// A row under the CURRENT scheme keeps today's behaviour exactly: the flag is inert unless it is true.
+	it("still reports drift when the identity scheme is current", () => {
+		renderWithProviders(
+			<BenchmarkLaunchEvidencePanel
+				run={detail({
+					primaryLaunch: {
+						...noBenchmarkLaunchFacts,
+						launchIdentitySchemeOutdated: false,
+						intendedLaunchIdentity: "identity-1",
+						effectiveLaunchIdentity: "identity-2",
+						intendedExecutableSha256: "a".repeat(64),
+						executableSha256: "b".repeat(64),
+					},
+				})}
+			/>,
+		);
+
+		expect(screen.getByTestId("benchmark-intended-effective-differs")).toBeTruthy();
+		expect(screen.queryByTestId("benchmark-intended-effective-differs-scheme-outdated")).toBeNull();
+	});
+
 	// A row with only one end recorded is a gap in the evidence, not a difference between two observed values.
 	it("stays silent when one side of every row was never recorded", () => {
 		renderWithProviders(

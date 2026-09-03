@@ -2376,6 +2376,9 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResp
 	kvQuantHeadroomGb: z.number().nullish(),
 	kvQuantFits: z.boolean().nullish(),
 	kvQuantRequiresFlashAttention: z.boolean().nullish(),
+	kvBytesPerToken: z.int().nullish(),
+	kvBytesPerTokenQuant: z.string().nullish(),
+	attentionArch: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse = z.object({
@@ -5296,6 +5299,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespo
 	primaryFlashAttentionMode: z.string().nullish(),
 	primaryIntendedLaunchIdentity: z.string().nullish(),
 	primaryIntendedExecutableSha256: z.string().nullish(),
+	primaryLaunchIdentitySchemeOutdated: z.boolean().nullish(),
 	primaryEffectiveLaunchIdentity: z.string().nullish(),
 	primaryEffectiveBackend: z.string().nullish(),
 	primaryPlacementOffloaded: z

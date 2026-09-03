@@ -371,7 +371,7 @@ public static class TrainingLifecycleE2ETestDoubles
 
         private static LlamaServerLaunchReceipt LaunchReceipt()
         {
-            var projection = new LlamaServerLaunchProjection(false, true, 4096, null, null, null, null, null,
+            var projection = new LlamaServerLaunchProjection(false, true, 4096, null, null, null, false, null, null,
                 LlamaServerLaunchProjection.FlashAttentionAuto, 4, 4, 512, 512, 1, null, 0, true, null);
             var exactBinaryIdentity = new string('e', 64);
             return new LlamaServerLaunchReceipt(LlamaServerLaunchReceipt.CurrentVersion, GpuVariant.Cpu, "linux", "e2e",

@@ -53,6 +53,10 @@ public sealed class BenchmarkRunExecutor(
         try
         {
             var snapshot = snapshots.Deserialize(work.Run.RuntimeSnapshotJson.Span);
+
+            // D14: a row frozen under a different launch-identity scheme is failed BEFORE anything is leased or
+            // spawned, so it never writes an effective identity that could not be compared to its intended one.
+            BenchmarkLaunchIdentityScheme.RequireCurrent(work.Run.PrimaryLaunchIntent);
             await using var modelLease = await installedModels.AcquireAsync(snapshot.PrimaryModel.ModelName, token).ConfigureAwait(false);
             if (!BenchmarkSnapshotModelComparer.Matches(snapshot.PrimaryModel, modelLease.Snapshot))
             {

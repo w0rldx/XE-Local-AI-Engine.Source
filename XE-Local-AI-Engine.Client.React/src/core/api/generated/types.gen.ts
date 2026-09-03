@@ -1919,6 +1919,9 @@ export type XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationRespon
 	kvQuantHeadroomGb?: number | null;
 	kvQuantFits?: boolean | null;
 	kvQuantRequiresFlashAttention?: boolean | null;
+	kvBytesPerToken?: number | null;
+	kvBytesPerTokenQuant?: string | null;
+	attentionArch?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRequest = {
@@ -4320,6 +4323,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespons
 	primaryFlashAttentionMode?: string | null;
 	primaryIntendedLaunchIdentity?: string | null;
 	primaryIntendedExecutableSha256?: string | null;
+	primaryLaunchIdentitySchemeOutdated?: boolean | null;
 	primaryEffectiveLaunchIdentity?: string | null;
 	primaryEffectiveBackend?: string | null;
 	primaryPlacementOffloaded?: number | null;

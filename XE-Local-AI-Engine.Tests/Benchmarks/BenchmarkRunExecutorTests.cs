@@ -79,6 +79,76 @@ public sealed class BenchmarkRunExecutorTests
     }
 
     [Test]
+    public async Task Execute_QueuedUnderAnOlderIdentityScheme_FailsWithTheSupersededReason()
+    {
+        // D14: the run froze its intended identity at enqueue and would write its effective identity now. A scheme
+        // change between the two makes them incomparable, so the row is failed BEFORE it leases or spawns anything —
+        // which is what stops it writing an effective identity the compare UI would render as drift.
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2) with
+        {
+            PrimaryLaunchIntent = Intent(launchIdentityScheme: null)
+        };
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        string? failureMessage = null;
+        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(),
+                 Arg.Any<string?>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                 PrimaryErrorMessage = call.ArgAt<string>(2),
+                 Version = run.Version + 1
+             });
+        var capacity = new RecordingCapacityService();
+        var runner = Substitute.For<IInvocationRunner>();
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, Snapshot(installed), lease, capacity, Substitute.For<IWorkerEventDispatcher>(), runner,
+            new BenchmarkCancellationRegistry());
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+
+        AssertEx.Contains(AssertEx.NotNull(failureMessage), BenchmarkLaunchIdentityScheme.SupersededReason);
+        AssertEx.Equal(0, capacity.DecisionCount);
+        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
+        AssertEx.False(lease.Disposed, "the row is failed before a model lease is ever acquired.");
+    }
+
+    [Test]
+    public async Task Execute_CurrentIdentityScheme_ExecutesNormally_AndNoRecordedIntentIsNotDrained()
+    {
+        // The guard must be a no-op for current work AND for a row that recorded no intent at all. Both reach the
+        // model-fingerprint check below it and fail there instead, which is the reach the guard must not shorten.
+        foreach (var intent in new[] { Intent(LlamaServerLaunchProjection.IdentitySchemeVersion), null })
+        {
+            var run = Run(BenchmarkPrimaryStatus.Running, version: 2) with
+            {
+                PrimaryLaunchIntent = intent
+            };
+            var store = Substitute.For<IBenchmarkStore>();
+            store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+            string? failureMessage = null;
+            store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(),
+                     Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                 .Returns(call => run with
+                 {
+                     PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                     PrimaryErrorMessage = call.ArgAt<string>(2),
+                     Version = run.Version + 1
+                 });
+            await using var lease = new FakeLease(Installed("model.gguf", 'b'));
+            var executor = Executor(store, Snapshot(Installed("model.gguf", 'a')), lease, new RecordingCapacityService(),
+                Substitute.For<IWorkerEventDispatcher>(), Substitute.For<IInvocationRunner>(), new BenchmarkCancellationRegistry());
+
+            await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+
+            AssertEx.Contains(AssertEx.NotNull(failureMessage), "installed model changed");
+            AssertEx.False(failureMessage!.Contains(BenchmarkLaunchIdentityScheme.SupersededReason, StringComparison.Ordinal),
+                "the cutover guard must not fire for current work or for a row with no recorded intent.");
+        }
+    }
+
+    [Test]
     public async Task Execute_SuccessUsesFrozenContextPersistsCanonicalPartsAndDisposesOwnedResources()
     {
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
@@ -698,7 +768,8 @@ public sealed class BenchmarkRunExecutorTests
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2) with
         {
             PrimaryLaunchIntent = new BenchmarkRunLaunchIntent("cuda", BenchmarkKvCacheType.Q8_0, BenchmarkKvCacheType.SourceAuto,
-                null, LlamaServerLaunchProjection.FlashAttentionOn, "intended", "manifest-sha")
+                null, LlamaServerLaunchProjection.FlashAttentionOn, "intended", "manifest-sha",
+                LlamaServerLaunchProjection.IdentitySchemeVersion)
         };
         var installed = Installed("model.gguf", 'a');
         var store = Substitute.For<IBenchmarkStore>();
@@ -1139,6 +1210,9 @@ public sealed class BenchmarkRunExecutorTests
         {
             InvocationTimeoutSeconds = invocationTimeoutSeconds
         };
+
+    private static BenchmarkRunLaunchIntent Intent(int? launchIdentityScheme) =>
+        new("cuda", "q8_0", "auto", null, LlamaServerLaunchProjection.FlashAttentionOn, new string('a', 64), null, launchIdentityScheme);
 
     private static BenchmarkRunExecutor Executor(IBenchmarkStore store,
         BenchmarkRuntimeSnapshotV1 snapshot,

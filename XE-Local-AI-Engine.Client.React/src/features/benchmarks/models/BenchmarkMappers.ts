@@ -292,6 +292,7 @@ function launchFacts(value: RunSummaryResponse): BenchmarkLaunchFacts {
 		kvAutoReason: text(at("KvAutoReason")),
 		flashAttentionMode: flashAttention(at("FlashAttentionMode")),
 		intendedLaunchIdentity: text(at("IntendedLaunchIdentity")),
+		launchIdentitySchemeOutdated: flag(at("LaunchIdentitySchemeOutdated")),
 		intendedExecutableSha256: text(at("IntendedExecutableSha256")),
 		effectiveLaunchIdentity: text(at("EffectiveLaunchIdentity")),
 		effectiveBackend: text(at("EffectiveBackend")),

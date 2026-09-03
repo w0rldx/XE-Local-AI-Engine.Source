@@ -82,6 +82,8 @@ public sealed class BenchmarkJudgeExecutor(
             events.BeginActivePhase(work.RunId, work.Run.LastStreamSequence);
             attempt = await store.GetJudgeAttemptAsync(attemptId, token).ConfigureAwait(false)
                       ?? throw new BenchmarkExecutionException("The judge attempt is no longer available.");
+            // D14: an attempt frozen under a different launch-identity scheme is failed before it launches.
+            BenchmarkLaunchIdentityScheme.RequireCurrent(attempt.LaunchIntent);
             var revision = await store.GetJudgePolicyRevisionAsync(attempt.PolicyRevisionId, token).ConfigureAwait(false)
                            ?? throw new BenchmarkExecutionException("The judge policy revision is no longer available.");
             policyHash = revision.PolicyHash;

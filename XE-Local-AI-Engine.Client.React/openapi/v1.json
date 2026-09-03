@@ -26923,6 +26923,18 @@
           "kvQuantRequiresFlashAttention": {
             "type": "boolean",
             "nullable": true
+          },
+          "kvBytesPerToken": {
+            "type": "integer",
+            "nullable": true
+          },
+          "kvBytesPerTokenQuant": {
+            "type": "string",
+            "nullable": true
+          },
+          "attentionArch": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -35083,6 +35095,10 @@
           },
           "primaryIntendedExecutableSha256": {
             "type": "string",
+            "nullable": true
+          },
+          "primaryLaunchIdentitySchemeOutdated": {
+            "type": "boolean",
             "nullable": true
           },
           "primaryEffectiveLaunchIdentity": {

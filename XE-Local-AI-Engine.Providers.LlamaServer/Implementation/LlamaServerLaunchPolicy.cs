@@ -66,11 +66,15 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
         var useKvQuant = _options.EnableGpuKvCacheQuantization
                          && !await _fallbackStore.IsOptimizedConfigDisabledAsync(variant, _options.KvCacheType, ct).ConfigureAwait(false);
 
+        // --cpu-moe is emitted from the ADMITTED placement, never from an architecture name: only
+        // MoeFitVerdict.FitsWithExpertOffload produces ExpertOffload, and that needs a positive expert_count in the
+        // GGUF header. The flag makes the placement the ledger already booked true — see LlamaServerLaunchPlan.CpuMoe.
         return new LlamaServerLaunchPlan(allocation.ProcessContextTokens,
             useKvQuant,
             _options.KvCacheType,
             CpuThreads: null,
-            CpuThreadsBatch: null);
+            CpuThreadsBatch: null,
+            allocation.Placement == ProcessPlacementMode.ExpertOffload);
     }
 
     /// <inheritdoc />

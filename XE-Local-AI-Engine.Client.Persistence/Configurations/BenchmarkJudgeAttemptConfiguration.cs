@@ -36,6 +36,7 @@ internal sealed class BenchmarkJudgeAttemptConfiguration : IEntityTypeConfigurat
         builder.Property(entity => entity.KvAutoReason).HasColumnName("kv_auto_reason").HasMaxLength(64);
         builder.Property(entity => entity.FlashAttentionMode).HasColumnName("flash_attention_mode").HasMaxLength(16);
         builder.Property(entity => entity.IntendedLaunchIdentity).HasColumnName("intended_launch_identity").HasMaxLength(64);
+        builder.Property(entity => entity.LaunchIdentityScheme).HasColumnName("launch_identity_scheme");
         builder.Property(entity => entity.IntendedExecutableSha256).HasColumnName("intended_executable_sha256").HasMaxLength(64);
         builder.Property(entity => entity.ReceiptHash).HasColumnName("receipt_hash").HasMaxLength(64);
         builder.Property(entity => entity.EnvironmentFactsHash).HasColumnName("environment_facts_hash").HasMaxLength(64);

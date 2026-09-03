@@ -668,6 +668,7 @@ public sealed class EvaluationRunExecutorTests : IDisposable
             GpuLayers: null,
             TensorSplit: null,
             OverrideTensor: null,
+            CpuMoe: false,
             KvCacheTypeK: null,
             KvCacheTypeV: null,
             LlamaServerLaunchProjection.FlashAttentionAuto,

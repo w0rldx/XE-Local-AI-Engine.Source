@@ -1,4 +1,4 @@
-import { Accordion, Alert, Stack } from "@mantine/core";
+import { Accordion, Alert, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -23,6 +23,20 @@ interface IntendedEffectiveAlertProps {
 // row with a missing end is not a difference.
 function IntendedEffectiveAlert({ launch, message, testId }: IntendedEffectiveAlertProps) {
 	const { t } = useTranslation();
+	// A row frozen under a superseded launch-identity scheme carries two hashes that were never meant to be compared,
+	// so the panel says so in one line instead of raising a drift alert about a launch that in fact matched. By
+	// construction this state is unreachable — such work is failed at cutover before it can write an effective
+	// identity — but defending it costs five lines and a false drift warning costs an operator an investigation.
+	if (launch.launchIdentitySchemeOutdated === true) {
+		return (
+			<Text size="sm" c="dimmed" data-testid={`${testId}-scheme-outdated`}>
+				{t(
+					"pages.benchmarks.launch.identitySchemeOutdated",
+					"Frozen under an earlier launch-identity scheme, so the two identities are not comparable.",
+				)}
+			</Text>
+		);
+	}
 	const rows: BenchmarkEvidenceDiffRow[] = [
 		{
 			key: "launch.launchIdentity",

@@ -31,6 +31,7 @@ using System.Text.Json.Serialization;
 /// <param name="GpuLayers">The replayed <c>--n-gpu-layers</c> value, or <see langword="null" />.</param>
 /// <param name="TensorSplit">The replayed <c>-ts</c> expression, or <see langword="null" />.</param>
 /// <param name="OverrideTensor">The replayed <c>-ot</c> expression, or <see langword="null" />.</param>
+/// <param name="CpuMoe">Whether every Mixture-of-Experts weight is pinned to system RAM (<c>--cpu-moe</c>); GPU explore only, and never together with <see cref="OverrideTensor" />.</param>
 /// <param name="KvCacheTypeK">The <c>-ctk</c> element type, or <see langword="null" /> when KV stays at the f16 default.</param>
 /// <param name="KvCacheTypeV">The <c>-ctv</c> element type; always equal to <see cref="KvCacheTypeK" /> or null with it.</param>
 /// <param name="FlashAttentionMode"><c>on</c> when the fused flash-attention path is pinned, otherwise <c>auto</c> (no flag emitted).</param>
@@ -50,6 +51,7 @@ public sealed record LlamaServerLaunchProjection(
     int? GpuLayers,
     string? TensorSplit,
     string? OverrideTensor,
+    bool CpuMoe,
     string? KvCacheTypeK,
     string? KvCacheTypeV,
     string FlashAttentionMode,
@@ -63,6 +65,14 @@ public sealed record LlamaServerLaunchProjection(
     bool Jinja,
     string? Pooling)
 {
+    /// <summary>
+    ///     The version of the identity SCHEME this type computes. Governed by the same contract as the member list
+    ///     above: <strong>the two move together</strong>. A hash computed under one scheme says nothing about a hash
+    ///     computed under another, so persisted intents record the scheme they were frozen under and work that
+    ///     straddles a change is failed rather than compared. A persisted <see langword="null" /> reads as <c>1</c>.
+    /// </summary>
+    public const int IdentitySchemeVersion = 2;
+
     /// <summary>Flash-attention left to llama.cpp (no <c>-fa</c> flag emitted) — the f16 KV default.</summary>
     public const string FlashAttentionAuto = "auto";
 
@@ -137,6 +147,7 @@ public sealed record LlamaServerLaunchProjection(
             isGpuReplay ? resolved.NGpuLayers : null,
             isGpuReplay ? NullIfBlank(resolved.TensorSplit) : null,
             isGpuReplay ? NullIfBlank(resolved.OverrideTensor) : null,
+            isGpuExplore && plan?.CpuMoe == true,
             kvCacheTypeK,
             kvCacheTypeV,
             kvCacheTypeK is null ? FlashAttentionAuto : FlashAttentionOn,
@@ -182,6 +193,7 @@ public sealed record LlamaServerLaunchProjection(
         var autoFit = false;
         var metrics = false;
         var jinja = false;
+        var cpuMoe = false;
         int? contextTokens = null;
         int? gpuLayers = null;
         string? tensorSplit = null;
@@ -210,6 +222,9 @@ public sealed record LlamaServerLaunchProjection(
                     continue;
                 case "--metrics":
                     metrics = true;
+                    continue;
+                case "--cpu-moe" or "-cmoe":
+                    cpuMoe = true;
                     continue;
             }
 
@@ -331,6 +346,7 @@ public sealed record LlamaServerLaunchProjection(
             gpuLayers,
             tensorSplit,
             overrideTensor,
+            cpuMoe,
             kvCacheTypeK,
             kvCacheTypeV,
             flashAttention ?? FlashAttentionAuto,

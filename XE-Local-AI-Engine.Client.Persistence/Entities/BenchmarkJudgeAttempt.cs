@@ -64,6 +64,12 @@ internal sealed record class BenchmarkJudgeAttempt
     public string? FlashAttentionMode { get; set; }
     public string? IntendedLaunchIdentity { get; set; }
     public string? IntendedExecutableSha256 { get; set; }
+
+    /// <summary>
+    ///     The launch-identity SCHEME <see cref="IntendedLaunchIdentity" /> was computed under. NULL on a row frozen
+    ///     before the scheme was recorded, which reads as scheme 1.
+    /// </summary>
+    public int? LaunchIdentityScheme { get; set; }
     public string? ReceiptHash { get; set; }
     public string? EnvironmentFactsHash { get; set; }
     public string? EffectiveLaunchIdentity { get; set; }

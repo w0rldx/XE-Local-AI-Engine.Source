@@ -212,6 +212,7 @@ public sealed partial class BenchmarkStore
                     FlashAttentionMode = launchIntent?.FlashAttentionMode,
                     IntendedLaunchIdentity = launchIntent?.IntendedLaunchIdentity,
                     IntendedExecutableSha256 = launchIntent?.IntendedExecutableSha256,
+                    LaunchIdentityScheme = launchIntent?.LaunchIdentityScheme,
                     EnqueuedAtUtc = now,
                     Version = 1
                 };
@@ -486,5 +487,10 @@ public sealed partial class BenchmarkStore
             entity.EnqueuedAtUtc,
             entity.StartedAtUtc,
             entity.CompletedAtUtc,
-            entity.Version);
+            entity.Version,
+            // Only the single-comparison read carries the intent: it is what the executor needs, and the verdict
+            // matrix must not pay for a value no row in it reads.
+            ToIntent(entity.Variant, entity.KvCacheType, entity.KvCacheTypeSource, entity.KvAutoReason,
+                entity.FlashAttentionMode, entity.IntendedLaunchIdentity, entity.IntendedExecutableSha256,
+                entity.LaunchIdentityScheme));
 }

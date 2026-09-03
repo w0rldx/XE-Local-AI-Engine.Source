@@ -3177,6 +3177,16 @@
 					"hint": "≈ {{gb}} GB with {{quant}} KV cache",
 					"tooltip": "Advisory estimate only — the fit shown uses the default fp16 KV cache. A quantized KV cache requires flash attention and matching launch flags; the savings are an estimate, not guaranteed compatibility."
 				},
+				"kvPerToken": {
+					"hint": "{{kb}} KB/token ({{quant}} KV)",
+					"tooltip": "KV-cache cost of one token at {{context}} context, computed with a {{quant}} KV cache (the chat launch default) rather than the fp16 cache the required-memory figures above use."
+				},
+				"attentionArch": {
+					"mla": "MLA",
+					"swa": "SWA",
+					"gqa": "GQA",
+					"mha": "MHA"
+				},
 				"catalog": {
 					"version": "Catalog v{{version}}",
 					"source": {
@@ -4350,6 +4360,7 @@
 				"intended": "Intended",
 				"effective": "Effective",
 				"intendedDiffers": "The intended launch and the effective launch differ.",
+				"identitySchemeOutdated": "Frozen under an earlier launch-identity scheme, so the two identities are not comparable.",
 				"primaryDiffers": "Launch differs: {{fields}}",
 				"copy": "Copy",
 				"copied": "Copied",

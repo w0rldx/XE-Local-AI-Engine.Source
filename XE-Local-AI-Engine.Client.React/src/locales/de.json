@@ -3177,6 +3177,16 @@
 					"hint": "≈ {{gb}} GB mit {{quant}} KV-Cache",
 					"tooltip": "Nur eine Schätzung – die angezeigte Passung nutzt den Standard-fp16-KV-Cache. Ein quantisierter KV-Cache erfordert Flash Attention und passende Startparameter; die Ersparnis ist eine Schätzung, keine garantierte Kompatibilität."
 				},
+				"kvPerToken": {
+					"hint": "{{kb}} KB/Token ({{quant}} KV)",
+					"tooltip": "KV-Cache-Kosten eines Tokens bei {{context}} Kontext, berechnet mit einem {{quant}}-KV-Cache (Standard beim Chat-Start) statt mit dem fp16-Cache, den die Speicherangaben oben verwenden."
+				},
+				"attentionArch": {
+					"mla": "MLA",
+					"swa": "SWA",
+					"gqa": "GQA",
+					"mha": "MHA"
+				},
 				"catalog": {
 					"version": "Katalog v{{version}}",
 					"source": {
@@ -4350,6 +4360,7 @@
 				"intended": "Beabsichtigt",
 				"effective": "Tatsächlich",
 				"intendedDiffers": "Der beabsichtigte und der tatsächliche Start unterscheiden sich.",
+				"identitySchemeOutdated": "Unter einem früheren Launch-Identitätsschema eingefroren; die beiden Identitäten sind nicht vergleichbar.",
 				"primaryDiffers": "Start unterscheidet sich: {{fields}}",
 				"copy": "Kopieren",
 				"copied": "Kopiert",

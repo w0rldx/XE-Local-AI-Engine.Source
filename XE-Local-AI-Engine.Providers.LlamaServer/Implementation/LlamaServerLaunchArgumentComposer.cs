@@ -211,6 +211,15 @@ internal static class LlamaServerLaunchArgumentComposer
             args.Add(overrideTensor);
         }
 
+        // Every expert to system RAM. Emitted only when the admitted allocation placed them there, so this is the flag
+        // that MAKES the reserved footprint true rather than an optimization. --fit adjusts only UNSET arguments, so
+        // auto-fit sizes ngl/batch around it instead of putting the experts back on the GPU; the projection sets it on
+        // explore only, so it can never appear beside a frozen replay's -ot.
+        if (projection.CpuMoe)
+        {
+            args.Add("--cpu-moe");
+        }
+
         // Matching-type rule + flash-attention invariant (enforced upstream in ResolvedLaunchArguments.Replay and in the
         // launch policy): the fused FA path needs equal K/V types and flash attention on.
         if (projection.KvCacheTypeK is { } kvCacheTypeK && projection.KvCacheTypeV is { } kvCacheTypeV)
@@ -369,7 +378,7 @@ internal static class LlamaServerLaunchArgumentComposer
             return string.Empty;
         }
 
-        var parts = new List<string>(capacity: 3);
+        var parts = new List<string>(capacity: 4);
         if (resolvedPlan.RequestedContextTokens is { } ctx)
         {
             parts.Add($"ctx={ctx.ToString(CultureInfo.InvariantCulture)}");
@@ -378,6 +387,11 @@ internal static class LlamaServerLaunchArgumentComposer
         if (resolvedPlan.UseKvCacheQuantization)
         {
             parts.Add($"kv={resolvedPlan.KvCacheType}+fa");
+        }
+
+        if (resolvedPlan.CpuMoe)
+        {
+            parts.Add("cpu-moe");
         }
 
         if (resolvedPlan.CpuThreads is { } threads)
