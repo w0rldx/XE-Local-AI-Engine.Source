@@ -61,24 +61,8 @@ public sealed class LexicalToolRelevanceSelector : IToolRelevanceSelector
                               .Select(static scored => scored.Index)
                               .ToHashSet();
 
-        // Re-impose the INPUT order over the union, so a fixed selected set always serialises to the same tools array
-        // (stable prompt prefix, one GBNF compilation) regardless of the ranker's internal ordering.
-        var offered = new List<string>(candidates.Count);
-        var hidden = new List<string>();
-        for (var index = 0; index < candidates.Count; index++)
-        {
-            var candidate = candidates[index];
-            if (candidate.IsCore || selectedNonCore.Contains(index))
-            {
-                offered.Add(candidate.Name);
-            }
-            else
-            {
-                hidden.Add(candidate.Name);
-            }
-        }
-
-        return Task.FromResult(new ToolRelevanceSelection(offered, hidden));
+        // Re-impose the INPUT order over the union (the shared step, so the embedding selector cannot diverge from it).
+        return Task.FromResult(ToolRelevanceSelection.Compose(candidates, selectedNonCore));
     }
 
     private static int ScoreOverlap(IReadOnlySet<string> queryTokens, IReadOnlySet<string> candidateTokens)

@@ -19,7 +19,39 @@ public sealed record ToolRelevanceCandidate(string Name, string? Description, bo
 ///     candidate order, so a fixed selected set always serialises to the same <c>tools</c> array — which is what keeps
 ///     the llama.cpp prompt prefix and its compiled GBNF grammar stable across the rounds of one turn.
 /// </summary>
-public sealed record ToolRelevanceSelection(IReadOnlyList<string> OfferedNames, IReadOnlyList<string> HiddenNames);
+public sealed record ToolRelevanceSelection(IReadOnlyList<string> OfferedNames, IReadOnlyList<string> HiddenNames)
+{
+    /// <summary>
+    ///     Builds the selection from the ranked non-core picks by re-imposing the INPUT order over
+    ///     <c>core union selected</c>. Every selector shares this step: it is what makes a fixed selected set serialise to
+    ///     the same array whatever order the ranker produced it in, and neither the lexical nor the embedding selector
+    ///     gets to have its own opinion about it.
+    /// </summary>
+    /// <param name="candidates">The candidates, in the outbound array's own order.</param>
+    /// <param name="selectedNonCore">Indices into <paramref name="candidates" /> the ranker picked; core is implicit.</param>
+    public static ToolRelevanceSelection Compose(IReadOnlyList<ToolRelevanceCandidate> candidates, IReadOnlySet<int> selectedNonCore)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        ArgumentNullException.ThrowIfNull(selectedNonCore);
+
+        var offered = new List<string>(candidates.Count);
+        var hidden = new List<string>();
+        for (var index = 0; index < candidates.Count; index++)
+        {
+            var candidate = candidates[index];
+            if (candidate.IsCore || selectedNonCore.Contains(index))
+            {
+                offered.Add(candidate.Name);
+            }
+            else
+            {
+                hidden.Add(candidate.Name);
+            }
+        }
+
+        return new ToolRelevanceSelection(offered, hidden);
+    }
+}
 
 /// <summary>
 ///     Chooses the subset of an agent's tools to put in front of the model for one turn. Implementations are
