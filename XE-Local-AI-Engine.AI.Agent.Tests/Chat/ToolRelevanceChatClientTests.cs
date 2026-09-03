@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.AI.Agent.Tests.Chat;
 using System.Runtime.CompilerServices;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
@@ -313,9 +314,24 @@ public sealed class ToolRelevanceChatClientTests
         using (ToolRelevanceScope.BeginScope(active: true, Core()))
         {
             var state = AssertEx.NotNull(ToolRelevanceScope.Current);
-            var first = sut.GetResponseAsync(Conversation(), OptionsFor(tools));
-            var second = sut.GetResponseAsync(Conversation(), OptionsFor(tools));
 
+            // Released TOGETHER off the thread pool, so both rounds really do arrive at the single-flight store at
+            // once. Started sequentially on one thread the second caller could only ever find a published entry, and
+            // the test would pass against a plain GetOrAdd that runs its factory more than once.
+            var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var first = Task.Run(async () =>
+            {
+                await start.Task;
+                return await sut.GetResponseAsync(Conversation(), OptionsFor(tools));
+            });
+            var second = Task.Run(async () =>
+            {
+                await start.Task;
+                return await sut.GetResponseAsync(Conversation(), OptionsFor(tools));
+            });
+
+            start.SetResult();
+            await selector.Entered.Task;
             selector.Gate.SetResult();
             _ = await Task.WhenAll(first, second);
 
@@ -323,6 +339,46 @@ public sealed class ToolRelevanceChatClientTests
             AssertEx.Equal(expected: 19, Volatile.Read(ref state.PendingNoticeHiddenCount), "The notice counts are added inside the single-flight factory, so a racing round adds nothing.");
             AssertEx.True(NamesOf(inner.ReceivedOptions[0]).SequenceEqual(NamesOf(inner.ReceivedOptions[1]), StringComparer.Ordinal));
         }
+    }
+
+    [Test]
+    public async Task GetResponseAsync_WhenTheSelectorThrows_SendsTheUnfilteredOptionsInstance()
+    {
+        // IToolRelevanceSelector is public, so a node-side selector can throw anything at all. The filter is a
+        // context-budget optimisation, never an authorisation boundary: a failure costs the saving, not the turn.
+        var (tools, _) = BuildArray(FillerNames(30));
+        using var inner = new CapturingChatClient();
+        using var sut = BuildSut(inner, new ThrowingSelector());
+        var options = OptionsFor(tools);
+
+        using (ToolRelevanceScope.BeginScope(active: true, Core()))
+        {
+            _ = await sut.GetResponseAsync(Conversation(), options);
+        }
+
+        AssertEx.True(ReferenceEquals(options, inner.ReceivedOptions.Single()),
+            "A selector failure falls back to the caller's own options instance, byte-identical.");
+    }
+
+    [Test]
+    public async Task GetResponseAsync_WhenTheCallerCancelsDuringSelection_Throws()
+    {
+        var (tools, _) = BuildArray(FillerNames(30));
+        var selector = new CountingSelector { Gate = new TaskCompletionSource() };
+        using var inner = new CapturingChatClient();
+        using var sut = BuildSut(inner, selector);
+        using var caller = new CancellationTokenSource();
+
+        using (ToolRelevanceScope.BeginScope(active: true, Core()))
+        {
+            var send = sut.GetResponseAsync(Conversation(), OptionsFor(tools), caller.Token);
+            await selector.Entered.Task;
+            await caller.CancelAsync();
+
+            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(async () => await send);
+        }
+
+        AssertEx.Equal(expected: 0, inner.ReceivedOptions.Count, "A cancelled send never reaches the provider.");
     }
 
     [Test]
@@ -481,7 +537,10 @@ public sealed class ToolRelevanceChatClientTests
 
     private static ToolRelevanceChatClient BuildSut(IChatClient inner, IToolRelevanceSelector? selector = null)
     {
-        return new ToolRelevanceChatClient(inner, selector ?? new LexicalToolRelevanceSelector(), new ToolRelevanceOptions());
+        return new ToolRelevanceChatClient(inner,
+            selector ?? new LexicalToolRelevanceSelector(),
+            new ToolRelevanceOptions(),
+            NullLogger<ToolRelevanceChatClient>.Instance);
     }
 
     private static async Task<SentArray> SendAsync(IList<AITool> tools,
@@ -551,6 +610,18 @@ public sealed class ToolRelevanceChatClientTests
 
     private sealed record SentArray(bool PassedThrough, List<string> Names);
 
+    // Stands in for a node-side selector that breaks in a way the hop cannot anticipate.
+    private sealed class ThrowingSelector : IToolRelevanceSelector
+    {
+        public Task<ToolRelevanceSelection> SelectAsync(string? query,
+            IReadOnlyList<ToolRelevanceCandidate> candidates,
+            int threshold,
+            CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException("the selector broke");
+        }
+    }
+
     // Counts selections and, when gated, blocks every caller inside the shared factory so a race is observable.
     private sealed class CountingSelector : IToolRelevanceSelector
     {
@@ -558,6 +629,9 @@ public sealed class ToolRelevanceChatClientTests
         private int _invocations;
 
         public TaskCompletionSource? Gate { get; init; }
+
+        /// <summary>Signals that the shared computation is in flight, so a racing test can release its gate without a sleep.</summary>
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public int Invocations => Volatile.Read(ref _invocations);
 
@@ -567,6 +641,7 @@ public sealed class ToolRelevanceChatClientTests
             CancellationToken cancellationToken)
         {
             _ = Interlocked.Increment(ref _invocations);
+            _ = Entered.TrySetResult();
             if (Gate is not null)
             {
                 await Gate.Task;

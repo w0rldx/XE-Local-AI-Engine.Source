@@ -4,6 +4,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
@@ -37,10 +38,11 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 
     // The MAF skill-discovery tools an agent WITH skills also carries. They reach the model through AIContextProviders
     // rather than the resolver, so the factory has to count them by hand to measure the same array the send-time hop
-    // will. The constant fails SAFE: a package bump adding a fourth would make this undercount, the append be skipped,
-    // and the hop then refuse to filter for lack of list_tools — a missed optimisation on one agent shape, never a
-    // hidden tool the model cannot recover. Update the constant; never relax the hop's gate.
-    private const int MafSkillToolCount = 3;
+    // will. Counted off ToolRelevanceChatClient's own list rather than a second constant here, so the count and the
+    // core-name list cannot drift apart. It fails SAFE either way: an undercount skips the append, the hop then
+    // refuses to filter for lack of list_tools, and the cost is a missed optimisation on one agent shape, never a
+    // hidden tool the model cannot recover. Never relax the hop's gate.
+    private static readonly int MafSkillToolCount = ToolRelevanceChatClient.SkillToolNames.Length;
 
     private readonly IChatClient _chatClient;
     private readonly IClientLocalToolRegistry _clientLocalToolRegistry;

@@ -171,7 +171,10 @@ public static class AgentServiceCollectionExtensions
                         // tool is immediately callable), and ABOVE the budgeter so its EstimateTools measures the array
                         // actually sent. Gated on an ambient ToolRelevanceScope the invocation runner seeds; without
                         // one — or with the feature off — it returns the caller's options instance unchanged.
-                        .Use(chatClient => new ToolRelevanceChatClient(chatClient, toolRelevanceSelector, toolRelevanceOptions))
+                        .Use(chatClient => new ToolRelevanceChatClient(chatClient,
+                            toolRelevanceSelector,
+                            toolRelevanceOptions,
+                            serviceProvider.GetRequiredService<ILogger<ToolRelevanceChatClient>>()))
                         // Below UseFunctionInvocation so it re-budgets EVERY inner tool-loop round (and MAF participant
                         // round), and above UseOpenTelemetry so the recorded gen_ai span reflects the budgeted message
                         // set actually sent. Gated on an ambient ProviderCallBudget scope the invocation runner seeds.

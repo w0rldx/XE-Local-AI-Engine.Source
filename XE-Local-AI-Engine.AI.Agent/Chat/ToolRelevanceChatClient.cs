@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.AI.Agent.Chat;
 using System.Runtime.CompilerServices;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -38,7 +39,12 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
     // are named here the way ToolApprovalCoordinator names them. Always core: a skills agent that cannot see
     // load_skill cannot use its skills at all.
 #pragma warning disable MAAI001 // Agent Skills is [Experimental] in Microsoft.Agents.AI; the same scoped suppression the provider call sites use.
-    private static readonly string[] SkillToolNames =
+    /// <summary>
+    ///     The MAF skill tools, in one place. <c>InvocationAgentFactory</c> counts them by <c>Length</c> rather than
+    ///     keeping its own constant, so a package bump that adds a fourth is a one-line edit here and cannot leave the
+    ///     factory's threshold count and this core list disagreeing.
+    /// </summary>
+    internal static readonly string[] SkillToolNames =
     [
         AgentSkillsProvider.LoadSkillToolName,
         AgentSkillsProvider.ReadSkillResourceToolName,
@@ -46,20 +52,32 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
     ];
 #pragma warning restore MAAI001
 
+    private readonly ILogger<ToolRelevanceChatClient> _logger;
     private readonly ToolRelevanceOptions _options;
     private readonly IToolRelevanceSelector _selector;
 
-    public ToolRelevanceChatClient(IChatClient innerClient, IToolRelevanceSelector selector, ToolRelevanceOptions options)
+    public ToolRelevanceChatClient(IChatClient innerClient,
+        IToolRelevanceSelector selector,
+        ToolRelevanceOptions options,
+        ILogger<ToolRelevanceChatClient> logger)
         : base(innerClient)
     {
         _selector = selector ?? throw new ArgumentNullException(nameof(selector));
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public override async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
+        // The shipped default (no scope, or an inactive one) is a straight delegation: the caller's own message
+        // sequence and options instance go downstream, so the disabled path allocates nothing at all.
+        if (ToolRelevanceScope.Current is not { Active: true })
+        {
+            return await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+        }
+
         var materialized = messages as IReadOnlyList<ChatMessage> ?? [.. messages];
         var resolved = await ResolveOptionsAsync(materialized, options, cancellationToken).ConfigureAwait(false);
         return await base.GetResponseAsync(materialized, resolved, cancellationToken).ConfigureAwait(false);
@@ -70,6 +88,16 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
+        if (ToolRelevanceScope.Current is not { Active: true })
+        {
+            await foreach (var update in base.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
+            {
+                yield return update;
+            }
+
+            yield break;
+        }
+
         var materialized = messages as IReadOnlyList<ChatMessage> ?? [.. messages];
         var resolved = await ResolveOptionsAsync(materialized, options, cancellationToken).ConfigureAwait(false);
 
@@ -114,10 +142,27 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
         }
 
         var key = new ArrayKey(names);
-        var decision = await scope.GetOrComputeAsync(key,
-                                      () => SelectAsync(scope, tools, query, options, messages),
-                                      cancellationToken)
-                                  .ConfigureAwait(false);
+
+        ArrayDecision decision;
+        try
+        {
+            decision = await scope.GetOrComputeAsync(key,
+                                       () => SelectAsync(scope, tools, query, options, messages),
+                                       cancellationToken)
+                                   .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // An optimisation must never be able to fail a turn. IToolRelevanceSelector is a PUBLIC interface, so a
+            // node-side or future selector can throw anything at all; whatever it is costs the saving and nothing
+            // else, and the caller's own options instance goes downstream byte-identical. Counts only in the log:
+            // no tool name, description or query text (trajectory policy). A cancel of the CALLER's own token is not
+            // caught - the send really is going away.
+            _logger.LogWarning(exception,
+                "Tool-relevance selection failed for an array of {ToolCount} tools; sending the unfiltered offer.",
+                tools.Count);
+            return options;
+        }
 
         // Bind the object FunctionInvokingChatClient itself resolves against — the one in the INCOMING array, not a
         // substitute in the clone below, which nothing would ever invoke.
@@ -152,10 +197,13 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
 
         var selection = await _selector.SelectAsync(query, candidates, _options.Threshold, CancellationToken.None).ConfigureAwait(false);
 
-        // Added from INSIDE the single-flight factory, so a racing second caller on the same array awaits the same task
-        // and adds nothing: the counts are per array, not per round.
-        _ = Interlocked.Add(ref scope.PendingNoticeHiddenCount, selection.HiddenNames.Count);
-        _ = Interlocked.Add(ref scope.PendingNoticeTotalCount, candidates.Count);
+        // Written from INSIDE the single-flight factory, so a racing second caller on the same array awaits the same
+        // task and writes nothing: the counts are per ARRAY, not per round. EXCHANGED rather than added, so the turn's
+        // notice reports the counts of one real decision. A turn that rebinds mid-turn (a changed array shape, §3.4a)
+        // therefore reports the array the model ended on rather than a sum that double-counts the tools both arrays
+        // held — a sum would overstate the "of M" the notice claims.
+        _ = Interlocked.Exchange(ref scope.PendingNoticeHiddenCount, selection.HiddenNames.Count);
+        _ = Interlocked.Exchange(ref scope.PendingNoticeTotalCount, candidates.Count);
 
         return new ArrayDecision
         {
@@ -177,6 +225,10 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
             return true;
         }
 
+        // Deliberately an UNANCHORED substring test (plan §3.5), not a word-boundary match: a short built-in name
+        // would over-pin on any instruction that merely contains that word. Acceptable today because every name in
+        // the space is multi-word snake_case or prefix-qualified, and over-pinning only costs the saving - it can
+        // never hide a tool that should have been shown, because core is never trimmed.
         return instructionText is not null && instructionText.Contains(name, StringComparison.Ordinal);
     }
 

@@ -92,19 +92,31 @@ public sealed class ToolRelevanceScopeTests
         {
             var state = AssertEx.NotNull(ToolRelevanceScope.Current);
             var gate = new TaskCompletionSource();
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var invocations = 0;
 
+            // Released TOGETHER off the thread pool. Created sequentially on one thread, callers 2..10 could only ever
+            // find an already-published entry, and the test would still pass against a plain GetOrAdd that runs its
+            // factory more than once — the exact defect the single-flight store exists to rule out.
             var callers = Enumerable.Range(0, 10)
-                                    .Select(_ => state.GetOrComputeAsync(Key("a", "b"),
-                                        async () =>
-                                        {
-                                            _ = Interlocked.Increment(ref invocations);
-                                            await gate.Task;
-                                            return Decision(["a"], ["b"]);
-                                        },
-                                        CancellationToken.None))
+                                    .Select(caller => Task.Run(async () =>
+                                    {
+                                        await start.Task;
+                                        return await state.GetOrComputeAsync(Key("a", "b"),
+                                            async () =>
+                                            {
+                                                _ = Interlocked.Increment(ref invocations);
+                                                _ = entered.TrySetResult();
+                                                await gate.Task;
+                                                return Decision(["a"], ["b"]);
+                                            },
+                                            CancellationToken.None);
+                                    }))
                                     .ToList();
 
+            start.SetResult();
+            await entered.Task;
             gate.SetResult();
             _ = await Task.WhenAll(callers);
 
@@ -119,17 +131,26 @@ public sealed class ToolRelevanceScopeTests
         {
             var state = AssertEx.NotNull(ToolRelevanceScope.Current);
             var gate = new TaskCompletionSource();
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
             var callers = Enumerable.Range(0, 10)
-                                    .Select(_ => state.GetOrComputeAsync(Key("a", "b"),
-                                        async () =>
-                                        {
-                                            await gate.Task;
-                                            return Decision(["a"], ["b"]);
-                                        },
-                                        CancellationToken.None))
+                                    .Select(caller => Task.Run(async () =>
+                                    {
+                                        await start.Task;
+                                        return await state.GetOrComputeAsync(Key("a", "b"),
+                                            async () =>
+                                            {
+                                                _ = entered.TrySetResult();
+                                                await gate.Task;
+                                                return Decision(["a"], ["b"]);
+                                            },
+                                            CancellationToken.None);
+                                    }))
                                     .ToList();
 
+            start.SetResult();
+            await entered.Task;
             gate.SetResult();
             var decisions = await Task.WhenAll(callers);
 
@@ -223,6 +244,31 @@ public sealed class ToolRelevanceScopeTests
             var recovered = await state.GetOrComputeAsync(Key("a", "b"), () => Task.FromResult(Decision(["a"], ["b"])), CancellationToken.None);
 
             AssertEx.Contains(recovered.OfferedNames, "a", "A faulted shared computation must not poison the entry for the rest of the turn.");
+        }
+    }
+
+    [Test]
+    public async Task GetOrComputeAsync_WhenTheSharedComputationIsCancelled_EvictsTheEntryAndRecomputesOnTheNextCall()
+    {
+        using (ToolRelevanceScope.BeginScope(active: true, CoreNames()))
+        {
+            var state = AssertEx.NotNull(ToolRelevanceScope.Current);
+
+            // The factory cancels itself — an OperationCanceledException escaping the selector, which is what an
+            // HttpClient timeout inside the embedding path looks like. The callers' own tokens are untouched, so this
+            // is a terminal state of the SHARED task and it must not be cached: a cached cancellation would rethrow
+            // out of every later round, including the pre-first-token retry.
+            using var factoryToken = new CancellationTokenSource();
+            await factoryToken.CancelAsync();
+
+            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(async () =>
+                await state.GetOrComputeAsync(Key("a", "b"),
+                    () => Task.FromCanceled<ArrayDecision>(factoryToken.Token),
+                    CancellationToken.None));
+
+            var recovered = await state.GetOrComputeAsync(Key("a", "b"), () => Task.FromResult(Decision(["a"], ["b"])), CancellationToken.None);
+
+            AssertEx.Contains(recovered.OfferedNames, "a", "A cancelled shared computation must not poison the entry for the rest of the turn.");
         }
     }
 

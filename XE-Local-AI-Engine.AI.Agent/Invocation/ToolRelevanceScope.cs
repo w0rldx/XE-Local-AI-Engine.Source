@@ -178,10 +178,16 @@ internal sealed class ToolRelevanceState
 {
     private readonly ConcurrentDictionary<ArrayKey, Lazy<Task<ArrayDecision>>> _byArray = new();
 
-    /// <summary>Hidden-tool count awaiting the runner's notice drain; <see cref="Interlocked" />-added inside the factory.</summary>
+    /// <summary>
+    ///     Hidden-tool count awaiting the runner's notice drain, from the most recently computed decision.
+    ///     <see cref="Interlocked" />-exchanged inside the single-flight factory, so it always describes ONE array.
+    /// </summary>
     public int PendingNoticeHiddenCount;
 
-    /// <summary>Eligible-tool total awaiting the runner's notice drain; <see cref="Interlocked" />-added inside the factory.</summary>
+    /// <summary>
+    ///     Eligible-tool total for the same decision as <see cref="PendingNoticeHiddenCount" />, so the drained pair is
+    ///     always the "N of M" of a single array rather than a sum across two.
+    /// </summary>
     public int PendingNoticeTotalCount;
 
     public required bool Active { get; init; }
@@ -201,9 +207,10 @@ internal sealed class ToolRelevanceState
     ///         running for the others, bounded by whatever bound the selector applies to itself.
     ///     </para>
     ///     <para>
-    ///         Eviction is likewise keyed to the SHARED task's own fault, never to a caller's cancelled wait: the entry
-    ///         is still valid, and the next caller (including the pre-first-token retry re-invoking the whole send
-    ///         factory) must reuse it rather than pay a second selection.
+    ///         Eviction is likewise keyed to the SHARED task's own terminal state - faulted OR cancelled - and never
+    ///         to a caller's cancelled wait: after a caller's own wait aborts the shared task is still running, so the
+    ///         entry is still valid and the next caller (including the pre-first-token retry re-invoking the whole
+    ///         send factory) must reuse it rather than pay a second selection.
     ///     </para>
     /// </summary>
     public async Task<ArrayDecision> GetOrComputeAsync(ArrayKey key, Func<Task<ArrayDecision>> factory, CancellationToken callerToken)
@@ -221,7 +228,11 @@ internal sealed class ToolRelevanceState
         }
         finally
         {
-            if (shared.IsFaulted)
+            // TERMINAL-but-unsuccessful, not merely faulted: a shared computation that ends Canceled (an
+            // OperationCanceledException escaping the selector - an HttpClient timeout throws TaskCanceledException,
+            // a subclass) is not IsFaulted, and caching it would poison the key for the rest of the turn. An
+            // INCOMPLETE task fails IsCompleted, so a caller's own cancelled wait still evicts nothing.
+            if (shared.IsCompleted && !shared.IsCompletedSuccessfully)
             {
                 // Value-comparing overload, so a racing recompute that already replaced this entry is not clobbered.
                 _ = _byArray.TryRemove(KeyValuePair.Create(key, lazy));

@@ -68,7 +68,10 @@ public sealed class ToolRelevanceNonRootArrayTests
     private static async Task<ChatOptions?> SendAsync(ChatOptions options)
     {
         using var inner = new CapturingChatClient();
-        using var sut = new ToolRelevanceChatClient(inner, new LexicalToolRelevanceSelector(), new ToolRelevanceOptions());
+        using var sut = new ToolRelevanceChatClient(inner,
+            new LexicalToolRelevanceSelector(),
+            new ToolRelevanceOptions(),
+            NullLogger<ToolRelevanceChatClient>.Instance);
 
         using (ToolRelevanceScope.BeginScope(active: true, new HashSet<string>(StringComparer.Ordinal)))
         {
