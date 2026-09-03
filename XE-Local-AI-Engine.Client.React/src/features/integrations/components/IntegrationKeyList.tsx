@@ -3,7 +3,7 @@ import { IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
-import { shortPrincipalId } from "@/features/integrations/components/IntegrationFormatters";
+import { formatIntegrationTimestamp, shortPrincipalId } from "@/features/integrations/components/IntegrationFormatters";
 import type { IntegrationApiKey, IntegrationTrigger } from "@/features/integrations/models/IntegrationModels";
 
 interface IntegrationKeyListProps {
@@ -83,13 +83,13 @@ export function IntegrationKeyList({ keys, triggers, isMutating, onRevoke }: Int
 								)}
 							</Table.Td>
 							<Table.Td>
-								<Text size="sm">{new Date(key.createdAtUtc).toLocaleString()}</Text>
+								<Text size="sm">{formatIntegrationTimestamp(key.createdAtUtc)}</Text>
 							</Table.Td>
 							<Table.Td>
 								<Text size="sm" c={key.lastUsedAtUtc === null ? "dimmed" : undefined}>
 									{key.lastUsedAtUtc === null
 										? t("pages.integrations.keys.list.neverUsed", "Never used yet")
-										: new Date(key.lastUsedAtUtc).toLocaleString()}
+										: formatIntegrationTimestamp(key.lastUsedAtUtc)}
 								</Text>
 							</Table.Td>
 							<Table.Td>

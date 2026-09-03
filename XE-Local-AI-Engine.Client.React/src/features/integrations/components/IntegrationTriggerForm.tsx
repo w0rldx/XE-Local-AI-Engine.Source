@@ -26,6 +26,8 @@ interface IntegrationTriggerFormProps {
 	toolsByName: ReadonlyMap<string, IntegrationToolFacts>;
 	isEditing: boolean;
 	submitError?: string;
+	/** Says why `toolsByName` is empty (still loading, or the catalog read failed) so the fail-closed banner is explicable. */
+	toolCatalogNotice?: string;
 	onSubmit: (values: IntegrationTriggerFormValues) => void;
 	onDirtyChange?: (isDirty: boolean) => void;
 	ref?: Ref<IntegrationTriggerFormHandle>;
@@ -44,6 +46,7 @@ export function IntegrationTriggerForm({
 	toolsByName,
 	isEditing,
 	submitError,
+	toolCatalogNotice,
 	onSubmit,
 	onDirtyChange,
 	ref,
@@ -155,6 +158,7 @@ export function IntegrationTriggerForm({
 				value={values.description}
 				autosize={true}
 				minRows={2}
+				error={fieldError("description", "The description is longer than the 1024-character limit.")}
 				onChange={(event) => {
 					const value = event.currentTarget.value;
 					setValues((current) => ({ ...current, description: value }));
@@ -195,6 +199,12 @@ export function IntegrationTriggerForm({
 				}}
 				data-testid="integration-trigger-form-agent"
 			/>
+
+			{toolCatalogNotice ? (
+				<Alert color="gray" variant="light" data-testid="integration-trigger-form-catalog-notice">
+					{toolCatalogNotice}
+				</Alert>
+			) : null}
 
 			{selectedAgent ? (
 				<IntegrationApprovalWarning

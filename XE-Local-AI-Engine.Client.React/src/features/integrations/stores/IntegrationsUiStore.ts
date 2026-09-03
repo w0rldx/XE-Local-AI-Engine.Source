@@ -2,8 +2,8 @@ import { create } from "zustand";
 
 // Transient UI state for the External Integrations pages: which editor or dialog is open. Server state lives in
 // TanStack Query. The revealed plaintext API key deliberately does NOT live here — it is held in component state
-// inside IntegrationKeyRevealPanel so unmounting or navigating away drops it, which is the honest lifetime for a
-// value the node can never supply again.
+// inside IntegrationKeysPage so unmounting or navigating away drops it, which is the honest lifetime for a value the
+// node can never supply again.
 export type IntegrationEditorTarget = { mode: "create" } | { mode: "edit"; id: string } | null;
 
 interface IntegrationsUiStore {

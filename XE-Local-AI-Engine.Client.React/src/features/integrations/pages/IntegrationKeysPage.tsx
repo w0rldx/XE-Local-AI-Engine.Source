@@ -1,5 +1,5 @@
 import { Alert, Button, Group, Loader, Text } from "@mantine/core";
-import { IconAlertTriangle, IconKey, IconPlus } from "@tabler/icons-react";
+import { IconAlertTriangle, IconPlug, IconPlus } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -104,11 +104,23 @@ export function IntegrationKeysPage() {
 		? apiErrorMessage(generateMutation.error, t("pages.integrations.keys.errors.generate", "Could not generate the key."))
 		: undefined;
 
+	// Without the trigger list the allowlist multiselect is empty, so Generate is blocked by triggersRequired with
+	// nothing on screen to explain it. Say the read failed rather than leaving the operator with an empty control.
+	const triggersLoadError = triggersQuery.error
+		? apiErrorMessage(
+				triggersQuery.error,
+				t(
+					"pages.integrations.keys.errors.triggersLoad",
+					"Could not load the trigger list, so the allowed-triggers picker is empty.",
+				),
+			)
+		: undefined;
+
 	return (
 		<PageShell>
 			<PageHeader
 				title={t("pages.integrations.keys.title", "Integration API keys")}
-				icon={<IconKey size={24} />}
+				icon={<IconPlug size={24} />}
 				subtitle={t(
 					"pages.integrations.keys.subtitle",
 					"Credentials an integrator presents to the loopback integration API. Only a one-way hash is stored, so a key is shown once when you generate it.",
@@ -119,6 +131,12 @@ export function IntegrationKeysPage() {
 					</Button>
 				}
 			/>
+
+			{triggersLoadError ? (
+				<Alert color="yellow" icon={<IconAlertTriangle size={16} />} data-testid="integration-keys-triggers-error">
+					{triggersLoadError}
+				</Alert>
+			) : null}
 
 			<IntegrationKeyGenerateDialog
 				opened={keyDialogOpen}

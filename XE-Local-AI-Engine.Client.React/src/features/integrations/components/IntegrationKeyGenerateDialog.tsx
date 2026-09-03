@@ -1,6 +1,6 @@
 import { Alert, Button, MultiSelect, Select, Stack, Switch, TextInput } from "@mantine/core";
 import { IconDeviceFloppy, IconX } from "@tabler/icons-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
@@ -42,6 +42,17 @@ export function IntegrationKeyGenerateDialog({
 	const { t } = useTranslation();
 	const [values, setValues] = useState<IntegrationKeyFormValues>(emptyIntegrationKeyFormValues);
 	const [errors, setErrors] = useState<Record<string, string>>({});
+
+	// This component is mounted unconditionally by the page (it is the wrapper, not the Modal child), so Mantine's
+	// unmount-on-close never reaches its state, and the success path closes the dialog without going through
+	// handleClose. Reset on every OPEN instead: the wide "Allow all triggers" grant has to be a deliberate switch
+	// each time, never a leftover from the previous key.
+	useEffect(() => {
+		if (opened) {
+			setValues(emptyIntegrationKeyFormValues);
+			setErrors({});
+		}
+	}, [opened]);
 
 	// One option per DISTINCT principal in the key list, including revoked keys' principals: rotating a credential
 	// after a revocation is exactly the case this control exists for.

@@ -5417,11 +5417,17 @@
 							"Text": "Text",
 							"Json": "JSON"
 						}
+					},
+					"toolCatalog": {
+						"loading": "Loading the tool catalog. Tool facts are unknown until it arrives.",
+						"failed": "The tool catalog could not be loaded. Every tool counts as approval-requiring and side-effecting until it can be read."
 					}
 				},
 				"validation": {
 					"nameFormat": "Use 2-64 lowercase letters, digits or hyphens, starting with a letter or digit.",
 					"displayNameRequired": "A display name is required.",
+					"displayNameTooLong": "The display name is longer than the 128-character limit.",
+					"descriptionTooLong": "The description is longer than the 1024-character limit.",
 					"targetRequired": "A target agent is required.",
 					"inputKindRequired": "Select at least one accepted input kind.",
 					"sessionPolicyTools": "A caller-managed session is not allowed for an agent that can call side-effecting tools: {{tools}}. Choose a new session per call, or remove those tools from the agent."
@@ -5438,7 +5444,8 @@
 				"errors": {
 					"load": "Could not load integration triggers.",
 					"save": "Could not save the trigger.",
-					"delete": "Could not delete the trigger."
+					"delete": "Could not delete the trigger.",
+					"missing": "This trigger no longer exists. Close the editor and reload the list."
 				}
 			},
 			"keys": {
@@ -5481,6 +5488,7 @@
 					},
 					"validation": {
 						"labelRequired": "A label is required.",
+						"labelTooLong": "The label is longer than the 128-character limit.",
 						"triggersRequired": "Select at least one trigger, or turn on Allow all triggers."
 					}
 				},
@@ -5497,7 +5505,8 @@
 				"errors": {
 					"load": "Could not load integration API keys.",
 					"generate": "Could not generate the key.",
-					"revoke": "Could not revoke the key."
+					"revoke": "Could not revoke the key.",
+					"triggersLoad": "Could not load the trigger list, so the allowed-triggers picker is empty."
 				}
 			}
 		}

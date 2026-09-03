@@ -80,8 +80,10 @@ const sessionPolicySchema = z.enum(["PerInvocation", "CallerManaged"]);
 export const integrationTriggerFormSchema = z
 	.object({
 		name: z.string().regex(integrationTriggerNamePattern, "nameFormat"),
-		displayName: z.string().trim().min(1, "displayNameRequired"),
-		description: z.string().max(2000),
+		// The two length caps restate IntegrationTriggerValidationRules.MaxDisplayNameLength/MaxDescriptionLength: a
+		// client maximum above the server's turns a fixable form error into a late 400.
+		displayName: z.string().trim().min(1, "displayNameRequired").max(128, "displayNameTooLong"),
+		description: z.string().max(1024, "descriptionTooLong"),
 		enabled: z.boolean(),
 		targetAgentDefinitionId: z.string().trim().min(1, "targetRequired"),
 		sessionPolicy: sessionPolicySchema,
@@ -113,7 +115,8 @@ export const emptyIntegrationKeyFormValues: IntegrationKeyFormValues = {
 // and an untouched multiselect is a validation error rather than a silent grant of every trigger on the node.
 export const integrationKeyFormSchema = z
 	.object({
-		label: z.string().trim().min(1, "labelRequired"),
+		// 128 is the backend's MaxDisplayNameLength, which GenerateIntegrationApiKeyRequestValidator applies to the label.
+		label: z.string().trim().min(1, "labelRequired").max(128, "labelTooLong"),
 		principalId: z.string(),
 		allowAllTriggers: z.boolean(),
 		allowedTriggerIds: z.array(z.string()),

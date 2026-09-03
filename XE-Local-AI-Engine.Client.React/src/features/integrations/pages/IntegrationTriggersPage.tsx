@@ -59,7 +59,12 @@ export function IntegrationTriggersPage() {
 	const formRef = useRef<IntegrationTriggerFormHandle>(null);
 
 	const triggersQuery = useIntegrationTriggers();
-	const { options: agents, toolsByName } = useIntegrationAgentOptions();
+	const {
+		options: agents,
+		toolsByName,
+		isLoading: isCatalogLoading,
+		isError: isCatalogError,
+	} = useIntegrationAgentOptions();
 
 	const createMutation = useCreateIntegrationTrigger();
 	const updateMutation = useUpdateIntegrationTrigger();
@@ -76,6 +81,27 @@ export function IntegrationTriggersPage() {
 
 	const isMutating = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 	const isSubmitting = createMutation.isPending || updateMutation.isPending;
+
+	// A trigger the list no longer carries has no version to send, so an edit save cannot become a create with the
+	// same click — the verb would change silently. Block the save and say why.
+	const missingTriggerError =
+		editorTarget?.mode === "edit" && editingTrigger === undefined
+			? t(
+					"pages.integrations.triggers.errors.missing",
+					"This trigger no longer exists. Close the editor and reload the list.",
+				)
+			: undefined;
+
+	// An empty tool catalog reads as "every tool needs approval" because the resolution is fail-closed. That is the
+	// right direction, but the operator has to be told the catalog is why.
+	const toolCatalogNotice = isCatalogLoading
+		? t("pages.integrations.triggers.form.toolCatalog.loading", "Loading the tool catalog. Tool facts are unknown until it arrives.")
+		: isCatalogError
+			? t(
+					"pages.integrations.triggers.form.toolCatalog.failed",
+					"The tool catalog could not be loaded. Every tool counts as approval-requiring and side-effecting until it can be read.",
+				)
+			: undefined;
 
 	// The local CallerManaged check is a preflight, not the authorization: a save the server rejects anyway (a stale
 	// catalog, a tool added to the agent between the read and the submit) surfaces the server's message here.
@@ -94,7 +120,10 @@ export function IntegrationTriggersPage() {
 
 	const handleSubmit = useCallback(
 		(values: IntegrationTriggerFormValues) => {
-			if (editorTarget?.mode === "edit" && editingTrigger) {
+			if (editorTarget?.mode === "edit") {
+				if (editingTrigger === undefined) {
+					return;
+				}
 				updateMutation.mutate(
 					{
 						path: { triggerId: editingTrigger.id },
@@ -218,8 +247,11 @@ export function IntegrationTriggersPage() {
 						: t("pages.integrations.triggers.editor.createTitle", "Create trigger")
 				}
 				opened={editorTarget !== null}
+				// The page owns the single confirm-on-dirty path (requestCloseEditor, wired to onClose AND footer Cancel),
+				// so DialogShell's own confirmCloseWhen stays off — with both on, a dirty close prompts twice.
 				onClose={requestCloseEditor}
-				confirmCloseWhen={isFormDirty}
+				closeOnClickOutside={!isFormDirty}
+				closeOnEscape={!isFormDirty}
 				footer={editorFooter}
 				zIndex={300}
 				data-testid="integration-trigger-editor"
@@ -231,7 +263,8 @@ export function IntegrationTriggersPage() {
 					agents={agents}
 					toolsByName={toolsByName}
 					isEditing={editorTarget?.mode === "edit"}
-					submitError={submitError}
+					submitError={missingTriggerError ?? submitError}
+					toolCatalogNotice={toolCatalogNotice}
 					onSubmit={handleSubmit}
 					onDirtyChange={setIsFormDirty}
 				/>

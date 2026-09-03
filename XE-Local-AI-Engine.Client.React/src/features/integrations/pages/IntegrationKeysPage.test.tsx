@@ -332,6 +332,33 @@ describe("IntegrationKeysPage", () => {
 		expect(screen.queryByTestId("integration-key-reveal-value")).toBeNull();
 	});
 
+	it("clears the generate form after a key is issued", async () => {
+		// The point of this case: the wide "all triggers" grant must be a deliberate switch for EVERY key, never a
+		// leftover from the previous one.
+		const generateMutation = makeMutation();
+		keyHooksMock.useGenerateIntegrationApiKey.mockReturnValue(generateMutation);
+		renderPage();
+		await openGenerateDialog();
+
+		fireEvent.click(screen.getByTestId("integration-key-generate-all-triggers"));
+		fireEvent.click(screen.getByTestId("integration-key-generate-submit"));
+		const onSuccess = generateMutation.mutate.mock.calls[0]?.[1]?.onSuccess as (data: { key: string }) => void;
+		onSuccess({ key: "xeint_plaintext_value" });
+
+		await waitFor(() => {
+			expect(screen.queryByTestId("integration-key-generate-submit")).toBeNull();
+		});
+
+		fireEvent.click(screen.getByTestId("integration-key-generate-button"));
+		await waitFor(() => {
+			expect(screen.getByTestId("integration-key-generate-label")).toBeTruthy();
+		});
+
+		expect((screen.getByTestId("integration-key-generate-label") as HTMLInputElement).value).toBe("");
+		expect((screen.getByTestId("integration-key-generate-all-triggers") as HTMLInputElement).checked).toBe(false);
+		expect(screen.getByTestId("integration-key-generate-triggers")).toBeTruthy();
+	});
+
 	it("asks for confirmation before revoking and offers no action on a revoked row", async () => {
 		confirmMock.mockResolvedValueOnce(false);
 		renderPage();

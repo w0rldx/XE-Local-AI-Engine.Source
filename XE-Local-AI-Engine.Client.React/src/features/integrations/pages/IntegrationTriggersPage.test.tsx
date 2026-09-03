@@ -128,17 +128,28 @@ function installJsdomEnvironmentMocks(): void {
 	window.HTMLElement.prototype.scrollIntoView = vi.fn();
 }
 
-function renderPage() {
+function pageElement() {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-	return render(
+	return (
 		<MantineProvider>
 			<ConfirmProvider>
 				<QueryClientProvider client={queryClient}>
 					<IntegrationTriggersPage />
 				</QueryClientProvider>
 			</ConfirmProvider>
-		</MantineProvider>,
+		</MantineProvider>
 	);
+}
+
+function renderPage() {
+	return render(pageElement());
+}
+
+async function openEditEditor(): Promise<void> {
+	fireEvent.click(screen.getByTestId("integration-trigger-edit-trigger-1"));
+	await waitFor(() => {
+		expect(screen.getByTestId("integration-trigger-form")).toBeTruthy();
+	});
 }
 
 async function openCreateEditor(): Promise<void> {
@@ -322,6 +333,109 @@ describe("IntegrationTriggersPage", () => {
 		fireEvent.click(screen.getByTestId("integration-trigger-form-submit"));
 
 		expect(createMutation.mutate).not.toHaveBeenCalled();
+	});
+
+	it("confirms exactly once when a dirty editor is closed from the title bar", async () => {
+		// The page owns the confirm path. With DialogShell's own confirmCloseWhen also on, the X prompted twice and
+		// answering Discard then Keep editing left the dialog open.
+		confirmMock.mockResolvedValue(true);
+		renderPage();
+		await openCreateEditor();
+
+		fireEvent.change(screen.getByTestId("integration-trigger-form-display-name"), { target: { value: "Dirty" } });
+		fireEvent.click(screen.getByLabelText("close"));
+
+		await waitFor(() => {
+			expect(confirmMock).toHaveBeenCalledTimes(1);
+		});
+		await waitFor(() => {
+			expect(screen.queryByTestId("integration-trigger-form")).toBeNull();
+		});
+		expect(confirmMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("blocks Save and shows the field error for a description above the backend limit", async () => {
+		const createMutation = makeMutation();
+		triggerHooksMock.useCreateIntegrationTrigger.mockReturnValue(createMutation);
+		renderPage();
+		await openCreateEditor();
+
+		await fillRequiredFields("Reader");
+		fireEvent.change(screen.getByTestId("integration-trigger-form-description"), { target: { value: "x".repeat(1025) } });
+		fireEvent.click(screen.getByTestId("integration-trigger-form-submit"));
+
+		expect(screen.getByText("The description is longer than the 1024-character limit.")).toBeTruthy();
+		expect(createMutation.mutate).not.toHaveBeenCalled();
+	});
+
+	it("blocks Save when the edited trigger has left the list", async () => {
+		// The point of this case: an edit whose row is gone must NOT fall through to create with the same click.
+		const createMutation = makeMutation();
+		const updateMutation = makeMutation();
+		triggerHooksMock.useCreateIntegrationTrigger.mockReturnValue(createMutation);
+		triggerHooksMock.useUpdateIntegrationTrigger.mockReturnValue(updateMutation);
+		const view = renderPage();
+		await openEditEditor();
+
+		triggerHooksMock.useIntegrationTriggers.mockReturnValue(makeQuery([]));
+		view.rerender(pageElement());
+
+		expect(screen.getByText("This trigger no longer exists. Close the editor and reload the list.")).toBeTruthy();
+
+		fireEvent.click(screen.getByTestId("integration-trigger-form-submit"));
+
+		expect(updateMutation.mutate).not.toHaveBeenCalled();
+		expect(createMutation.mutate).not.toHaveBeenCalled();
+	});
+
+	it("sends the row's expectedVersion when an edit is saved", async () => {
+		const updateMutation = makeMutation();
+		triggerHooksMock.useUpdateIntegrationTrigger.mockReturnValue(updateMutation);
+		renderPage();
+		await openEditEditor();
+
+		fireEvent.change(screen.getByTestId("integration-trigger-form-display-name"), { target: { value: "Sensor hub v2" } });
+		fireEvent.click(screen.getByTestId("integration-trigger-form-submit"));
+
+		expect(updateMutation.mutate).toHaveBeenCalledWith(
+			{
+				path: { triggerId: "trigger-1" },
+				body: {
+					displayName: "Sensor hub v2",
+					description: "Ingests sensor payloads",
+					enabled: true,
+					targetAgentDefinitionId: "agent-read",
+					sessionPolicy: "PerInvocation",
+					acceptedInputKinds: ["text"],
+					expectedVersion: 3,
+				},
+			},
+			{ onSuccess: expect.any(Function) },
+		);
+	});
+
+	it("sends the row's own expectedVersion and the inverted flag from the enable switch", () => {
+		const updateMutation = makeMutation();
+		triggerHooksMock.useUpdateIntegrationTrigger.mockReturnValue(updateMutation);
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("integration-trigger-enabled-trigger-1"));
+
+		expect(updateMutation.mutate).toHaveBeenCalledWith(
+			{
+				path: { triggerId: "trigger-1" },
+				body: {
+					displayName: "Sensor hub",
+					description: "Ingests sensor payloads",
+					enabled: false,
+					targetAgentDefinitionId: "agent-read",
+					sessionPolicy: "PerInvocation",
+					acceptedInputKinds: ["text"],
+					expectedVersion: 3,
+				},
+			},
+			{ onError: expect.any(Function) },
+		);
 	});
 
 	it("resets the editor target on unmount", () => {

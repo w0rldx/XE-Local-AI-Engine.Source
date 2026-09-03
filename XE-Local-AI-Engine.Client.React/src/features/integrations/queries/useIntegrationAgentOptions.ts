@@ -16,6 +16,8 @@ interface IntegrationAgentOptionsResult {
 	readonly options: readonly IntegrationAgentOption[];
 	readonly toolsByName: ReadonlyMap<string, IntegrationToolFacts>;
 	readonly isLoading: boolean;
+	/** True when a read failed. An empty `toolsByName` then means "unknown", not "no tools", and the UI must say so. */
+	readonly isError: boolean;
 }
 
 export function useIntegrationAgentOptions(): IntegrationAgentOptionsResult {
@@ -47,5 +49,10 @@ export function useIntegrationAgentOptions(): IntegrationAgentOptionsResult {
 		[catalogQuery.data],
 	);
 
-	return { options, toolsByName, isLoading: agentsQuery.isPending || catalogQuery.isPending };
+	return {
+		options,
+		toolsByName,
+		isLoading: agentsQuery.isPending || catalogQuery.isPending,
+		isError: agentsQuery.isError || catalogQuery.isError,
+	};
 }

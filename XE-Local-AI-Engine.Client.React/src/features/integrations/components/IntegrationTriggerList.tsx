@@ -82,7 +82,11 @@ export function IntegrationTriggerList({
 								<Group gap={4}>
 									{trigger.acceptedInputKinds.map((kind) => (
 										<Badge key={kind} variant="outline" color="grape">
-											{kind}
+											{/* The same two labels the editor's checkboxes use, so the row and the form never disagree. */}
+											{t(
+												`pages.integrations.triggers.form.acceptedInputs.options.${kind === "json" ? "Json" : "Text"}`,
+												kind,
+											)}
 										</Badge>
 									))}
 								</Group>

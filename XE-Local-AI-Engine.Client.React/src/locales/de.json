@@ -5417,11 +5417,17 @@
 							"Text": "Text",
 							"Json": "JSON"
 						}
+					},
+					"toolCatalog": {
+						"loading": "Der Werkzeugkatalog wird geladen. Bis dahin sind die Werkzeugangaben unbekannt.",
+						"failed": "Der Werkzeugkatalog konnte nicht geladen werden. Bis er gelesen werden kann, gilt jedes Werkzeug als freigabepflichtig und mit Nebenwirkungen."
 					}
 				},
 				"validation": {
 					"nameFormat": "Verwenden Sie 2-64 Kleinbuchstaben, Ziffern oder Bindestriche, beginnend mit einem Buchstaben oder einer Ziffer.",
 					"displayNameRequired": "Ein Anzeigename ist erforderlich.",
+					"displayNameTooLong": "Der Anzeigename überschreitet die Grenze von 128 Zeichen.",
+					"descriptionTooLong": "Die Beschreibung überschreitet die Grenze von 1024 Zeichen.",
 					"targetRequired": "Ein Ziel-Agent ist erforderlich.",
 					"inputKindRequired": "Wählen Sie mindestens eine akzeptierte Eingabeart aus.",
 					"sessionPolicyTools": "Eine vom Aufrufer verwaltete Sitzung ist für einen Agenten mit Werkzeugen mit Nebenwirkungen nicht zulässig: {{tools}}. Wählen Sie „Neue Sitzung pro Aufruf“ oder entfernen Sie diese Werkzeuge aus dem Agenten."
@@ -5438,7 +5444,8 @@
 				"errors": {
 					"load": "Integrations-Trigger konnten nicht geladen werden.",
 					"save": "Der Trigger konnte nicht gespeichert werden.",
-					"delete": "Der Trigger konnte nicht gelöscht werden."
+					"delete": "Der Trigger konnte nicht gelöscht werden.",
+					"missing": "Dieser Trigger existiert nicht mehr. Schließen Sie den Editor und laden Sie die Liste neu."
 				}
 			},
 			"keys": {
@@ -5481,6 +5488,7 @@
 					},
 					"validation": {
 						"labelRequired": "Eine Bezeichnung ist erforderlich.",
+						"labelTooLong": "Die Bezeichnung überschreitet die Grenze von 128 Zeichen.",
 						"triggersRequired": "Wählen Sie mindestens einen Trigger aus oder aktivieren Sie „Alle Trigger erlauben“."
 					}
 				},
@@ -5497,7 +5505,8 @@
 				"errors": {
 					"load": "Integrations-API-Schlüssel konnten nicht geladen werden.",
 					"generate": "Der Schlüssel konnte nicht erstellt werden.",
-					"revoke": "Der Schlüssel konnte nicht widerrufen werden."
+					"revoke": "Der Schlüssel konnte nicht widerrufen werden.",
+					"triggersLoad": "Die Trigger-Liste konnte nicht geladen werden, daher ist die Auswahl der erlaubten Trigger leer."
 				}
 			}
 		}
