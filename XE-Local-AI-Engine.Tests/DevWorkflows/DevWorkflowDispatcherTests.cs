@@ -911,4 +911,46 @@ public sealed class DevWorkflowDispatcherTests
             "and with nothing left pending, the one satisfied branch carries the join.");
         AssertEx.Equal(runStatus, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
     }
+
+    /// <summary>
+    ///     C1, end to end: an <c>All</c> join whose one blocked branch an operator Skips carries the branch that
+    ///     succeeded, and the tail behind it runs. Live, this shape ended <c>Cancelled</c> with fourteen Skipped rows
+    ///     behind a join whose siblings had all done their work — the skip read as indistinguishable from a failure.
+    ///     <para>
+    ///         The operator's comment travels onto the row it settles. It is the only account of why the work the
+    ///         downstream node expected is not there, and the objective composition quotes it verbatim.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AnAllJoinCarriesOnWhenAnOperatorSkipsOneBranchAndItsSiblingSucceeded()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.AllJoinOverASkippedBranch, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "allsurvivor").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked,
+            (await harness.ReadNodeRunAsync(runId, "alldoomed").ConfigureAwait(false)).Status,
+            "an agent bound to nothing stands down for a human rather than settling.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "allmerge").ConfigureAwait(false)).Status);
+
+        await harness.DecideAsync(runId, "alldoomed", DevWorkflowDecisionKind.Skip, comment: "This slice names a file the repository does not have.")
+                     .ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var skipped = await harness.ReadNodeRunAsync(runId, "alldoomed").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Skipped, skipped.Status);
+        AssertEx.Equal("Skipped by an operator: This slice names a file the repository does not have.",
+            AssertEx.NotNull(skipped.TerminalReason),
+            "the operator's own words are the whole account of why the work downstream expected is not there.");
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded,
+            (await harness.ReadNodeRunAsync(runId, "allmerge").ConfigureAwait(false)).Status,
+            "the excused branch does not take the join with it.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded,
+            (await harness.ReadNodeRunAsync(runId, "alltail").ConfigureAwait(false)).Status,
+            "and the tail behind the join runs, which is what the live run lost.");
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
 }

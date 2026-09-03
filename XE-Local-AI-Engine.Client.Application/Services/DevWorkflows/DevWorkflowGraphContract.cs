@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     The three questions the API layer asks about a stored graph, answered by the SAME parser, condition evaluator
@@ -76,6 +77,33 @@ public static class DevWorkflowGraphContract
         catch (DevWorkflowValidationException)
         {
             return new HashSet<string>(StringComparer.Ordinal);
+        }
+    }
+
+    /// <summary>
+    ///     Which of a run's skipped node runs the state machine WAIVES, so the API can send the verdict instead of the
+    ///     browser guessing it: a skip an operator chose is excused and a downstream <c>All</c> join carries on past it,
+    ///     while a skip that cascaded off a Failed ancestor or a branch nothing routed down is dead and the join will
+    ///     skip. Status alone cannot tell the two apart, and the ancestor that decides it need not be anywhere near the
+    ///     join the client is drawing.
+    ///     <para>
+    ///         Answers <c>null</c> — unknown, not "none" — for a graph that cannot be routed, and for the same reason
+    ///         <see cref="TemplateNodeKeys" /> answers empty there: a run whose pinned graph is unroutable is one an
+    ///         operator most needs to open, so this read path must not throw, and claiming every skip on it is dead
+    ///         would be a verdict about a run nothing can route.
+    ///     </para>
+    /// </summary>
+    public static IReadOnlySet<string>? WaivedSkipNodeKeys(string graphJson, IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> nodeRunsByKey)
+    {
+        ArgumentNullException.ThrowIfNull(nodeRunsByKey);
+
+        try
+        {
+            return DevWorkflowStateMachine.WaivedSkipNodeKeys(DevWorkflowGraph.Parse(graphJson), nodeRunsByKey);
+        }
+        catch (DevWorkflowValidationException)
+        {
+            return null;
         }
     }
 
