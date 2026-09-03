@@ -150,3 +150,88 @@ public sealed class GenerateIntegrationApiKeyResponse
 
     public required IntegrationApiKeyView View { get; init; }
 }
+
+/// <summary>
+///     One execution as the operator list renders it: what happened, to which trigger and session, and when. The
+///     attribution and accounting columns live on <see cref="IntegrationExecutionDetailDto" /> instead, because a list
+///     that carried them would ship a credential prefix into every table row for no rendering.
+/// </summary>
+public sealed class IntegrationExecutionSummaryDto
+{
+    public required Guid Id { get; init; }
+
+    public required Guid TriggerId { get; init; }
+
+    public required Guid SessionId { get; init; }
+
+    public required IntegrationExecutionStatus Status { get; init; }
+
+    public required long ReceivedAtUtc { get; init; }
+
+    public long? StartedAtUtc { get; init; }
+
+    public long? EndedAtUtc { get; init; }
+
+    /// <summary>Non-null only on a failed row, and always one of the closed, content-free category constants.</summary>
+    public string? FailureCategory { get; init; }
+
+    /// <summary>A short operator-safe label. Never provider text and never any part of the caller's request.</summary>
+    public string? FailureSummary { get; init; }
+
+    /// <summary>How many <c>external.output</c> payloads the run committed. The row's own counter, never a buffer read.</summary>
+    public required int OutputCount { get; init; }
+}
+
+/// <summary>
+///     One execution in full: the summary plus the attribution and accounting an operator needs on a detail pane.
+///     <see cref="PrincipalId" /> is the integrator identity; <see cref="KeyPrefix" /> only names which of that
+///     integrator's credentials sent the request, and answers no ownership question.
+/// </summary>
+public sealed class IntegrationExecutionDetailDto
+{
+    public required IntegrationExecutionSummaryDto Execution { get; init; }
+
+    public required Guid PrincipalId { get; init; }
+
+    public required string KeyPrefix { get; init; }
+
+    public required Guid RequestId { get; init; }
+
+    /// <summary><see cref="Guid.Empty" /> until the run actually reaches the invocation runner.</summary>
+    public required Guid InvocationId { get; init; }
+
+    /// <summary>Plaintext UTF-8 bytes of the committed output payloads, so an operator can see a run approaching its cap.</summary>
+    public required long OutputBytes { get; init; }
+
+    /// <summary>The highest event sequence persisted for this execution.</summary>
+    public required long LastSequence { get; init; }
+
+    public required long Version { get; init; }
+
+    /// <summary>Non-null once a cancel has been requested, whether or not the run had already started.</summary>
+    public long? StopRequestedAtUtc { get; init; }
+}
+
+/// <summary>
+///     Query for <c>GET integrations/executions</c>. Paging is SERVER-side through <see cref="Limit" /> and
+///     <see cref="Offset" /> — the same two names the store's filter uses — so the history page can reach older rows
+///     rather than slicing a bounded result client-side.
+/// </summary>
+public sealed class ListIntegrationExecutionsRequest
+{
+    public Guid? TriggerId { get; init; }
+
+    public Guid? SessionId { get; init; }
+
+    public IntegrationExecutionStatus? Status { get; init; }
+
+    public int? Limit { get; init; }
+
+    public int? Offset { get; init; }
+}
+
+/// <summary>Response envelope for <c>GET integrations/executions</c>, ordered newest first by the store.</summary>
+public sealed class ListIntegrationExecutionsResponse
+{
+    public required IReadOnlyList<IntegrationExecutionSummaryDto> Items { get; init; }
+}

@@ -54,6 +54,43 @@ internal static class IntegrationMapper
         };
     }
 
+    public static IntegrationExecutionSummaryDto ToSummary(IntegrationExecutionSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        return new IntegrationExecutionSummaryDto
+        {
+            Id = snapshot.Id,
+            TriggerId = snapshot.TriggerId,
+            SessionId = snapshot.SessionId,
+            Status = snapshot.Status,
+            ReceivedAtUtc = snapshot.ReceivedAtUtc,
+            StartedAtUtc = snapshot.StartedAtUtc,
+            EndedAtUtc = snapshot.EndedAtUtc,
+            FailureCategory = snapshot.FailureCategory,
+            FailureSummary = snapshot.FailureSummary,
+            OutputCount = snapshot.OutputCount
+        };
+    }
+
+    public static IntegrationExecutionDetailDto ToDetail(IntegrationExecutionSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        return new IntegrationExecutionDetailDto
+        {
+            Execution = ToSummary(snapshot),
+            PrincipalId = snapshot.PrincipalId,
+            KeyPrefix = snapshot.KeyPrefix,
+            RequestId = snapshot.RequestId,
+            InvocationId = snapshot.InvocationId,
+            OutputBytes = snapshot.OutputBytes,
+            LastSequence = snapshot.LastSequence,
+            Version = snapshot.Version,
+            StopRequestedAtUtc = snapshot.StopRequestedAtUtc
+        };
+    }
+
     /// <summary>The wire member names of a flags value, in declaration order.</summary>
     public static IReadOnlyList<string> ToWireInputKinds(IntegrationInputKinds kinds)
     {

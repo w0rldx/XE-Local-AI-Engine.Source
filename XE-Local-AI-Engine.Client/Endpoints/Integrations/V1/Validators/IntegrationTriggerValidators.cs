@@ -116,3 +116,30 @@ public sealed class GenerateIntegrationApiKeyRequestValidator : Validator<Genera
                   .WithMessage("Select at least one trigger, or omit the allowlist to allow every trigger."));
     }
 }
+
+/// <summary>
+///     Shape rules for the executions query. The paging bounds are here rather than clamped silently in the service: a
+///     caller asking for 5,000 rows has misunderstood the endpoint, and answering 400 says so.
+/// </summary>
+public sealed class ListIntegrationExecutionsRequestValidator : Validator<ListIntegrationExecutionsRequest>
+{
+    public const int MaxLimit = 200;
+
+    public ListIntegrationExecutionsRequestValidator()
+    {
+        When(static request => request.Status is not null,
+            () => RuleFor(static request => request.Status)
+                  .IsInEnum()
+                  .WithMessage("Filter on a known execution status."));
+
+        When(static request => request.Limit is not null,
+            () => RuleFor(static request => request.Limit)
+                  .InclusiveBetween(from: 1, MaxLimit)
+                  .WithMessage($"Ask for between 1 and {MaxLimit} executions."));
+
+        When(static request => request.Offset is not null,
+            () => RuleFor(static request => request.Offset)
+                  .GreaterThanOrEqualTo(valueToCompare: 0)
+                  .WithMessage("The offset cannot be negative."));
+    }
+}

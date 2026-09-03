@@ -119,6 +119,21 @@ internal static class IntegrationEndpointPayloads
     }
 
     /// <summary>
+    ///     Mints a credential through the real POST endpoint. The plaintext exists only in this response, and the
+    ///     resolved principal is what every ownership rule downstream keys on.
+    /// </summary>
+    public static async Task<GeneratedIntegrationApiKeyBody> GenerateKeyAsync(TestServerWebAppFactory factory,
+        HttpClient client,
+        string label,
+        Guid[]? allowedTriggerIds = null,
+        Guid? principalId = null)
+    {
+        using var response = await SendAsOperatorAsync(factory, client, HttpMethod.Post, KeysRoute, KeyBody(label, allowedTriggerIds, principalId)).ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, $"Seeding the credential '{label}' must succeed.");
+        return AssertEx.NotNull(await response.Content.ReadFromJsonAsync<GeneratedIntegrationApiKeyBody>(Json).ConfigureAwait(false));
+    }
+
+    /// <summary>
     ///     Seeds a real agent definition, because the trigger service PROBES the target agent rather than trusting the
     ///     id — a stubbed store would test a different code path than the one that ships.
     /// </summary>
