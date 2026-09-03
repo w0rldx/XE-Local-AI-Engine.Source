@@ -189,6 +189,7 @@ import {
 	getImageModelCatalog,
 	getImageRuntimeStatus,
 	getIntegrationExecution,
+	getIntegrationExecutionEvents,
 	getIntegrationTrigger,
 	getInvocationMonitor,
 	getKnowledgeDocument,
@@ -837,6 +838,9 @@ import type {
 	GetImageRuntimeStatusData,
 	GetImageRuntimeStatusResponse,
 	GetIntegrationExecutionData,
+	GetIntegrationExecutionEventsData,
+	GetIntegrationExecutionEventsError,
+	GetIntegrationExecutionEventsResponse,
 	GetIntegrationExecutionResponse,
 	GetIntegrationTriggerData,
 	GetIntegrationTriggerResponse,
@@ -6110,6 +6114,28 @@ export const getIntegrationExecutionOptions = (options: Options<GetIntegrationEx
 			return data;
 		},
 		queryKey: getIntegrationExecutionQueryKey(options),
+	});
+
+export const getIntegrationExecutionEventsQueryKey = (options: Options<GetIntegrationExecutionEventsData>) =>
+	createQueryKey("getIntegrationExecutionEvents", options);
+
+export const getIntegrationExecutionEventsOptions = (options: Options<GetIntegrationExecutionEventsData>) =>
+	queryOptions<
+		GetIntegrationExecutionEventsResponse,
+		AxiosError<GetIntegrationExecutionEventsError>,
+		GetIntegrationExecutionEventsResponse,
+		ReturnType<typeof getIntegrationExecutionEventsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getIntegrationExecutionEvents({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getIntegrationExecutionEventsQueryKey(options),
 	});
 
 export const listIntegrationExecutionsQueryKey = (options?: Options<ListIntegrationExecutionsData>) =>

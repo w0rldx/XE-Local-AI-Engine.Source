@@ -235,3 +235,65 @@ public sealed class ListIntegrationExecutionsResponse
 {
     public required IReadOnlyList<IntegrationExecutionSummaryDto> Items { get; init; }
 }
+
+/// <summary>
+///     One persisted event on an execution's timeline. <b>One record, two routes:</b> the operator's
+///     <c>GET integrations/executions/{id}/events</c> and the external
+///     <c>GET integration-api/executions/{id}/events?sinceSeq=</c> return exactly this shape under two different
+///     policies, so a caller recovering from a 410 and an operator reading the timeline see the same thing.
+///     <para>
+///         It holds the PERSISTED set only — the phase boundaries, the terminal, <c>tool.*</c> and the output events.
+///         Neither assistant type is ever here: per-token deltas are stream-only, and the final text lives on the
+///         owned conversation as an assistant message.
+///     </para>
+/// </summary>
+public sealed class IntegrationExecutionEventDto
+{
+    public required Guid ExecutionId { get; init; }
+
+    /// <summary>Ascending, but NOT contiguous: a durable write that failed leaves a permanent hole.</summary>
+    public required long Sequence { get; init; }
+
+    public required string EventType { get; init; }
+
+    /// <summary>Already-decrypted JSON text, or null for the events that carry no payload.</summary>
+    public string? DetailJson { get; init; }
+
+    public required long OccurredAtUtc { get; init; }
+}
+
+/// <summary>
+///     Query for <c>GET integrations/executions/{executionId}/events</c>. Paging is by WATERMARK, not by page number:
+///     pass the last <c>sequence</c> you received back as <see cref="SinceSeq" />. A short page means "caught up"; a
+///     full one means "call again". No offset exists, because holes make one meaningless.
+/// </summary>
+public sealed class ListIntegrationExecutionEventsRequest
+{
+    /// <summary>Exclusive, the same meaning <c>Last-Event-ID</c> has on the stream.</summary>
+    public long? SinceSeq { get; init; }
+
+    public int? Limit { get; init; }
+}
+
+/// <summary>Response envelope for <c>GET integrations/executions/{executionId}/events</c>, ascending by sequence.</summary>
+public sealed class ListIntegrationExecutionEventsResponse
+{
+    public required IReadOnlyList<IntegrationExecutionEventDto> Items { get; init; }
+}
+
+/// <summary>
+///     The one page bound both event routes share. It lives here rather than in either route because the operator's
+///     timeline and the external recovery poll must page identically: a caller that learns the page size from one and
+///     uses it against the other would otherwise silently skip rows.
+/// </summary>
+public static class IntegrationEventPage
+{
+    /// <summary>What a caller that names no limit gets.</summary>
+    public const int DefaultLimit = 200;
+
+    /// <summary>The ceiling. A bounded page is the point: an execution's timeline is unbounded in principle.</summary>
+    public const int MaxLimit = 500;
+
+    public static int ClampLimit(int? limit) =>
+        Math.Clamp(limit ?? DefaultLimit, min: 1, MaxLimit);
+}

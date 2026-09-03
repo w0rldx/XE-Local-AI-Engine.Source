@@ -2931,6 +2931,22 @@ export type XeLocalAiEngineClientPersistenceEntitiesIntegrationExecutionStatus =
 	| "Failed"
 	| "Cancelled";
 
+export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecutionEventsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionEventDto>;
+};
+
+export type XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionEventDto = {
+	executionId: string;
+	sequence: number;
+	eventType: string;
+	detailJson?: string | null;
+	occurredAtUtc: number;
+};
+
+export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecutionEventsRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationApiKeysResponse = {
 	items: Array<XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationApiKeyView>;
 };
@@ -12297,6 +12313,45 @@ export type GetIntegrationExecutionResponses = {
 };
 
 export type GetIntegrationExecutionResponse = GetIntegrationExecutionResponses[keyof GetIntegrationExecutionResponses];
+
+export type GetIntegrationExecutionEventsData = {
+	body?: never;
+	path: {
+		executionId: string;
+	};
+	query?: {
+		sinceSeq?: number | null;
+		limit?: number | null;
+	};
+	url: "/api/local/v1/integrations/executions/{executionId}/events";
+};
+
+export type GetIntegrationExecutionEventsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetIntegrationExecutionEventsError = GetIntegrationExecutionEventsErrors[keyof GetIntegrationExecutionEventsErrors];
+
+export type GetIntegrationExecutionEventsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecutionEventsResponse;
+};
+
+export type GetIntegrationExecutionEventsResponse =
+	GetIntegrationExecutionEventsResponses[keyof GetIntegrationExecutionEventsResponses];
 
 export type ListIntegrationExecutionsData = {
 	body?: never;

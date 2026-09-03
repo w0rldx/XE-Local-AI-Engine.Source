@@ -37,6 +37,21 @@ internal static class IntegrationMapper
         };
     }
 
+    public static IntegrationExecutionEventDto ToEventDto(IntegrationExecutionEventSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        return new IntegrationExecutionEventDto
+        {
+            ExecutionId = snapshot.ExecutionId,
+            Sequence = snapshot.Sequence,
+            // The store decrypted it; nothing downstream ever sees the stored byte[].
+            EventType = snapshot.EventType,
+            DetailJson = snapshot.DetailJson,
+            OccurredAtUtc = snapshot.OccurredAtUtc
+        };
+    }
+
     public static IntegrationApiKeyView ToView(ServiceIntegrationApiKeyView view)
     {
         ArgumentNullException.ThrowIfNull(view);

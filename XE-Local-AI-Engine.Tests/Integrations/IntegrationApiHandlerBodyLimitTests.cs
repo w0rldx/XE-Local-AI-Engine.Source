@@ -8,6 +8,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -240,10 +241,12 @@ public sealed class IntegrationApiHandlerBodyLimitTests
     {
         private readonly Guid _principalId = Guid.NewGuid();
         private readonly IntegrationPrincipalRateLimiter _rateLimiter;
+        private readonly IntegrationSseWriter _writer;
 
         public Fixture(int permitLimit = 100)
         {
             _rateLimiter = new IntegrationPrincipalRateLimiter(permitLimit);
+            _writer = new IntegrationSseWriter(Substitute.For<IIntegrationExecutionEventBuffer>(), Options.Create(new IntegrationOptions()), TimeProvider.System);
             Invocations.AcceptAsync(Arg.Any<IntegrationAcceptRequest>(), Arg.Any<CancellationToken>())
                        .Returns(new IntegrationAcceptResult(IntegrationAcceptOutcome.TriggerNotFound, ExecutionId: null, SessionId: null, Status: null, "No such trigger."));
 
@@ -260,11 +263,15 @@ public sealed class IntegrationApiHandlerBodyLimitTests
                     Substitute.For<IAgentExecutionLogStore>(),
                     TimeProvider.System,
                     NullLogger<IntegrationExecutionQueryService>.Instance),
+                _writer,
                 _rateLimiter);
         }
 
-        public void Dispose() =>
+        public void Dispose()
+        {
             _rateLimiter.Dispose();
+            _writer.Dispose();
+        }
 
         public IntegrationApiHandler Handler { get; }
 

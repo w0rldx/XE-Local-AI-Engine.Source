@@ -3517,6 +3517,20 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionDe
 	stopRequestedAtUtc: z.int().nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionEventDto = z.object({
+	executionId: z.guid(),
+	sequence: z.int(),
+	eventType: z.string(),
+	detailJson: z.string().nullish(),
+	occurredAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecutionEventsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionEventDto),
+});
+
+export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecutionEventsRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationApiKeysResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationApiKeyView),
 });
@@ -8681,6 +8695,25 @@ export const zGetIntegrationExecutionPath = z.object({
  * Success
  */
 export const zGetIntegrationExecutionResponse = zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionDetailDto;
+
+export const zGetIntegrationExecutionEventsPath = z.object({
+	executionId: z.string(),
+});
+
+export const zGetIntegrationExecutionEventsQuery = z.object({
+	sinceSeq: z.int().nullish(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+/**
+ * Success
+ */
+export const zGetIntegrationExecutionEventsResponse =
+	zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecutionEventsResponse;
 
 export const zListIntegrationExecutionsQuery = z.object({
 	triggerId: z.guid().nullish(),

@@ -545,6 +545,9 @@ import type {
 	GetImageRuntimeStatusResponses,
 	GetIntegrationExecutionData,
 	GetIntegrationExecutionErrors,
+	GetIntegrationExecutionEventsData,
+	GetIntegrationExecutionEventsErrors,
+	GetIntegrationExecutionEventsResponses,
 	GetIntegrationExecutionResponses,
 	GetIntegrationTriggerData,
 	GetIntegrationTriggerErrors,
@@ -1555,6 +1558,9 @@ import {
 	zGetImageJobResponse,
 	zGetImageModelCatalogResponse,
 	zGetImageRuntimeStatusResponse,
+	zGetIntegrationExecutionEventsPath,
+	zGetIntegrationExecutionEventsQuery,
+	zGetIntegrationExecutionEventsResponse,
 	zGetIntegrationExecutionPath,
 	zGetIntegrationExecutionResponse,
 	zGetIntegrationTriggerPath,
@@ -8988,6 +8994,36 @@ export const getIntegrationExecution = <ThrowOnError extends boolean = false>(
 			},
 		],
 		url: "/api/local/v1/integrations/executions/{executionId}",
+		...options,
+	});
+
+export const getIntegrationExecutionEvents = <ThrowOnError extends boolean = false>(
+	options: Options<GetIntegrationExecutionEventsData, ThrowOnError>,
+): RequestResult<GetIntegrationExecutionEventsResponses, GetIntegrationExecutionEventsErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetIntegrationExecutionEventsResponses, GetIntegrationExecutionEventsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetIntegrationExecutionEventsPath,
+					query: zGetIntegrationExecutionEventsQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetIntegrationExecutionEventsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/executions/{executionId}/events",
 		...options,
 	});
 

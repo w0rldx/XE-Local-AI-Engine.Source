@@ -143,3 +143,23 @@ public sealed class ListIntegrationExecutionsRequestValidator : Validator<ListIn
                   .WithMessage("The offset cannot be negative."));
     }
 }
+
+/// <summary>
+///     Bounds on the event page. The limit shares its ceiling with the external recovery route, which reads
+///     <see cref="IntegrationEventPage" /> too, so the two pages cannot drift.
+/// </summary>
+public sealed class ListIntegrationExecutionEventsRequestValidator : Validator<ListIntegrationExecutionEventsRequest>
+{
+    public ListIntegrationExecutionEventsRequestValidator()
+    {
+        When(static request => request.SinceSeq is not null,
+            () => RuleFor(static request => request.SinceSeq)
+                  .GreaterThanOrEqualTo(valueToCompare: 0)
+                  .WithMessage("A sequence watermark cannot be negative."));
+
+        When(static request => request.Limit is not null,
+            () => RuleFor(static request => request.Limit)
+                  .InclusiveBetween(from: 1, IntegrationEventPage.MaxLimit)
+                  .WithMessage($"Ask for between 1 and {IntegrationEventPage.MaxLimit} events."));
+    }
+}

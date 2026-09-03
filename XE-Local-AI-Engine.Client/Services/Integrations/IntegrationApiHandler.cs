@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Integrations;
 
 using System.Buffers;
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Http.Metadata;
@@ -31,15 +32,18 @@ internal sealed class IntegrationApiHandler
     private readonly IIntegrationInvocationService _invocations;
     private readonly IntegrationPrincipalRateLimiter _rateLimiter;
     private readonly IntegrationExecutionQueryService _executions;
+    private readonly IntegrationSseWriter _writer;
 
     public IntegrationApiHandler(IIntegrationInvocationService invocations,
         IntegrationExternalAccess access,
         IntegrationExecutionQueryService executions,
+        IntegrationSseWriter writer,
         IntegrationPrincipalRateLimiter rateLimiter)
     {
         _invocations = invocations ?? throw new ArgumentNullException(nameof(invocations));
         _access = access ?? throw new ArgumentNullException(nameof(access));
         _executions = executions ?? throw new ArgumentNullException(nameof(executions));
+        _writer = writer ?? throw new ArgumentNullException(nameof(writer));
         _rateLimiter = rateLimiter ?? throw new ArgumentNullException(nameof(rateLimiter));
     }
 
@@ -133,8 +137,89 @@ internal sealed class IntegrationApiHandler
                                            context.RequestAborted)
                                        .ConfigureAwait(false);
 
+        // The stream is offered only for an admitted execution. Every rejection above answered with a real status on a
+        // response that has not started, which is the property that lets a 503 or a 409 still be JSON even when the
+        // caller asked for a stream.
+        if (result.Outcome is IntegrationAcceptOutcome.Accepted or IntegrationAcceptOutcome.Duplicate
+            && WantsEventStream(context)
+            && result.ExecutionId is { } admitted)
+        {
+            await WriteStreamAsync(context, admitted, sinceSequence: 0).ConfigureAwait(false);
+            return;
+        }
+
         await WriteAcceptOutcomeAsync(context, result).ConfigureAwait(false);
     }
+
+    /// <summary>
+    ///     The live stream, resumable through <c>Last-Event-ID</c>. Authorisation runs FIRST and in full — principal and
+    ///     the current key's trigger allowlist, through the one shared helper — so a caller that may not see this
+    ///     execution gets the masked 404 before any header is written, and never a partially written stream.
+    /// </summary>
+    public async Task GetExecutionEventsAsync(HttpContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var caller = await AuthorizeAsync(context).ConfigureAwait(false);
+        if (caller is null)
+        {
+            return;
+        }
+
+        if (!TryReadExecutionId(context, out var executionId))
+        {
+            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedExecutionMessage).ConfigureAwait(false);
+            return;
+        }
+
+        var access = await _access.ResolveExecutionAsync(executionId, caller, context.RequestAborted).ConfigureAwait(false);
+        if (access.Outcome == IntegrationAccessOutcome.Masked)
+        {
+            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedExecutionMessage).ConfigureAwait(false);
+            return;
+        }
+
+        await WriteStreamAsync(context, executionId, ReadLastEventId(context)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Hands the response to the writer and maps its answer. The writer refuses before any byte is written, which is
+    ///     what keeps 410 and 503 real statuses rather than a reset connection.
+    /// </summary>
+    private async Task WriteStreamAsync(HttpContext context, Guid executionId, long sinceSequence)
+    {
+        var outcome = await _writer.WriteAsync(context, executionId, sinceSequence, context.RequestAborted).ConfigureAwait(false);
+        switch (outcome)
+        {
+            case IntegrationSseWriteOutcome.Gone:
+                await WriteMessageAsync(context,
+                        StatusCodes.Status410Gone,
+                        $"The live stream no longer holds this position. Read the committed events from {EventsPath(executionId)} and the status from {SelfPath(executionId)}.")
+                    .ConfigureAwait(false);
+                return;
+            case IntegrationSseWriteOutcome.Busy:
+                context.Response.Headers.RetryAfter = "5";
+                await WriteMessageAsync(context, StatusCodes.Status503ServiceUnavailable, "Too many streams are open on this node. Try again shortly.").ConfigureAwait(false);
+                return;
+            default:
+                // Streamed: the 200, the headers and every frame are already on the wire.
+                return;
+        }
+    }
+
+    /// <summary>
+    ///     <c>Last-Event-ID</c> as a WATERMARK: a non-negative long, and anything else is a fresh attach from zero. It
+    ///     is never arithmetic — holes are legal, so the value is only ever compared.
+    /// </summary>
+    private static long ReadLastEventId(HttpContext context) =>
+        context.Request.Headers.TryGetValue("Last-Event-ID", out var raw)
+        && long.TryParse(raw.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var sequence)
+        && sequence >= 0
+            ? sequence
+            : 0;
+
+    private static bool WantsEventStream(HttpContext context) =>
+        context.Request.Headers.Accept.Any(static value => value?.Contains("text/event-stream", StringComparison.OrdinalIgnoreCase) == true);
 
     public async Task GetExecutionAsync(HttpContext context)
     {
@@ -358,7 +443,16 @@ internal sealed class IntegrationApiHandler
     }
 
     private static IntegrationExecutionLinks Links(Guid executionId) =>
-        new($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.IntegrationApi.ExecutionById.Replace("{executionId}", executionId.ToString("D"), StringComparison.Ordinal)}");
+        new(SelfPath(executionId));
+
+    private static string SelfPath(Guid executionId) =>
+        Path(LocalApiRoutes.IntegrationApi.ExecutionById, executionId);
+
+    private static string EventsPath(Guid executionId) =>
+        Path(LocalApiRoutes.IntegrationApi.ExecutionEvents, executionId);
+
+    private static string Path(string route, Guid executionId) =>
+        $"/{LocalApiRoutes.Prefix}/{route.Replace("{executionId}", executionId.ToString("D"), StringComparison.Ordinal)}";
 
     /// <summary>
     ///     The wire spelling of a status. An explicit map rather than a lower-cased <c>ToString</c>: the strings are the

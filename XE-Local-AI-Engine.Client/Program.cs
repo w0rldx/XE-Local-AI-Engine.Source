@@ -723,6 +723,10 @@ namespace XE_Local_AI_Engine.Client
                    static (HttpContext context, IntegrationApiHandler handler) => handler.GetExecutionAsync(context))
                .RequireAuthorization(NodeAuthorizationPolicies.IntegrationApi)
                .RequireRateLimiting(NodeAuthRateLimits.IntegrationApiPolicy);
+            app.MapGet(integrationRoutePrefix + LocalApiRoutes.IntegrationApi.ExecutionEvents,
+                   static (HttpContext context, IntegrationApiHandler handler) => handler.GetExecutionEventsAsync(context))
+               .RequireAuthorization(NodeAuthorizationPolicies.IntegrationApi)
+               .RequireRateLimiting(NodeAuthRateLimits.IntegrationApiPolicy);
             app.MapPost(integrationRoutePrefix + LocalApiRoutes.IntegrationApi.ExecutionCancel,
                    static (HttpContext context, IntegrationApiHandler handler) => handler.CancelExecutionAsync(context))
                .RequireAuthorization(NodeAuthorizationPolicies.IntegrationApi)

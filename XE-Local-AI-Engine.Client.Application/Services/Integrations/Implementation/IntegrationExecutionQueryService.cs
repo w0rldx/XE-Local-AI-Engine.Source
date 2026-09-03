@@ -53,6 +53,16 @@ public sealed class IntegrationExecutionQueryService
         _executions.GetByIdAsync(executionId, cancellationToken);
 
     /// <summary>
+    ///     A page of an execution's PERSISTED events, ascending by sequence and never from the ring: the ring is
+    ///     evictable and empty after a restart, so a timeline read from it would lose history a caller still needs.
+    /// </summary>
+    public Task<IReadOnlyList<IntegrationExecutionEventSnapshot>> ListEventsAsync(Guid executionId,
+        long sinceSequence,
+        int limit,
+        CancellationToken cancellationToken = default) =>
+        _executions.ListEventsAsync(executionId, sinceSequence, limit, cancellationToken);
+
+    /// <summary>
     ///     Requests cancellation, in the fixed order the transition table needs.
     ///     <list type="number">
     ///         <item>Stamp the durable stop marker, so a restart cannot resurrect the run.</item>

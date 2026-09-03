@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.RateLimiting;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -212,6 +213,59 @@ public sealed class RateLimitPolicyTests
         {
             rejected?.Dispose();
         }
+    }
+
+    /// <summary>
+    ///     Test 42 / §9(a): an open SSE response consumes exactly ONE permit, and holding it consumes nothing further.
+    ///     <para>
+    ///         Two halves, because neither alone is the claim. First, the stream routes really do keep
+    ///         <c>.RequireRateLimiting</c> — D5 stands and R2-11 forbids removing it to make anything pass. Second, the
+    ///         policy is a FIXED WINDOW, and a fixed-window lease returns nothing on disposal: holding one for a
+    ///         response's whole lifetime is therefore indistinguishable from releasing it at once, which is exactly the
+    ///         premise D5 rests on. A concurrency limiter is what would have made an open stream cost a slot.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public void IntegrationApiPolicy_IsFixedWindow_SoAnOpenStreamCostsOnePermitAndHoldsNothing()
+    {
+        var streamRoutes = Host.Factory.Services.GetRequiredService<EndpointDataSource>()
+                               .Endpoints
+                               .OfType<RouteEndpoint>()
+                               .Where(static endpoint => endpoint.RoutePattern.RawText?.Contains("integration-api/executions/{executionId}/events", StringComparison.Ordinal) == true)
+                               .ToArray();
+
+        AssertEx.NotEmpty(streamRoutes, "The external events route must be mapped, or there is no stream to rate-limit.");
+        foreach (var route in streamRoutes)
+        {
+            AssertEx.Contains(route.Metadata.OfType<EnableRateLimitingAttribute>().Select(static attribute => attribute.PolicyName),
+                NodeAuthRateLimits.IntegrationApiPolicy,
+                $"{route.RoutePattern.RawText} must keep its rate-limiting policy: R2-11 forbids removing it from a stream route.");
+        }
+
+        using var limiter = new FixedWindowRateLimiter(new FixedWindowRateLimiterOptions
+        {
+            AutoReplenishment = false,
+            PermitLimit = 2,
+            QueueLimit = 0,
+            Window = TimeSpan.FromMinutes(1)
+        });
+
+        var streamLease = limiter.AttemptAcquire();
+        AssertEx.True(streamLease.IsAcquired, "The stream's own request takes the first permit.");
+        using (var second = limiter.AttemptAcquire())
+        {
+            AssertEx.True(second.IsAcquired, "A second request is served while the stream is still open, so the stream took ONE permit and not the window.");
+        }
+
+        using (var third = limiter.AttemptAcquire())
+        {
+            AssertEx.False(third.IsAcquired, "The window is spent after two requests, stream included — the ceiling still binds.");
+        }
+
+        streamLease.Dispose();
+        using var afterRelease = limiter.AttemptAcquire();
+        AssertEx.False(afterRelease.IsAcquired,
+            "A fixed window returns nothing on lease disposal, so when the lease is released cannot matter — which is why an open response body is safe to rate-limit.");
     }
 
     private static Task<HttpResponseMessage> PostInvokeAsync(HttpClient client)

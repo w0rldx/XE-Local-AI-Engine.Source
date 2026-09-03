@@ -263,6 +263,9 @@ internal static class IntegrationApiRoutes
     public static string Execution(Guid executionId) =>
         $"/api/local/v1/integration-api/executions/{executionId:D}";
 
+    public static string Events(Guid executionId) =>
+        $"/api/local/v1/integration-api/executions/{executionId:D}/events";
+
     public static string Cancel(Guid executionId) =>
         $"/api/local/v1/integration-api/executions/{executionId:D}/cancel";
 }
