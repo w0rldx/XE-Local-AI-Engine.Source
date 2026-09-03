@@ -33,6 +33,7 @@ export interface NodeSettingsFieldsCardProps {
 	readonly draftModelOptions: readonly DraftModelOption[];
 	// Installed llama.cpp chat models eligible for the supervised keep-warm loop.
 	readonly keepWarmModelOptions: readonly DraftModelOption[];
+	readonly autoEffortFastModelOptions: readonly DraftModelOption[];
 	// All installed models offered as the knowledge-base reranker (reranker GGUFs are not a chat kind, so this list is
 	// not filtered to chat-capable models).
 	readonly rerankerModelOptions: readonly DraftModelOption[];
@@ -62,6 +63,7 @@ export function NodeSettingsFieldsCard({
 	showDeveloperFields,
 	draftModelOptions,
 	keepWarmModelOptions,
+	autoEffortFastModelOptions,
 	rerankerModelOptions,
 	onDownloadRecommendedReranker,
 	isDownloadRecommendedRerankerPending,
@@ -137,6 +139,7 @@ export function NodeSettingsFieldsCard({
 				onChange={onChange}
 				draftModelOptions={draftModelOptions}
 				keepWarmModelOptions={keepWarmModelOptions}
+				autoEffortFastModelOptions={autoEffortFastModelOptions}
 			/>
 
 			<NodeSettingsKnowledgeModelsCard

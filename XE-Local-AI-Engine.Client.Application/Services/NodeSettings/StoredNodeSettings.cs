@@ -288,6 +288,15 @@ public sealed partial record StoredNodeSettings
     public string? RerankerModelName { get; init; }
 
     /// <summary>
+    ///     Installed node-local chat model the reasoning-effort dispatcher moves a FAST <c>auto</c> turn onto.
+    ///     <see langword="null" />/blank (default) leaves the swap OFF — an <c>auto</c> turn then keeps its model and
+    ///     only lowers the effort. It is validated at save to be an installed llama.cpp model (never a cloud id, an
+    ///     external id, or an Ollama name) and to leave a second loaded-process slot, and re-validated per turn.
+    ///     NOT restart-gated: it is read per send, so a save applies to the next turn.
+    /// </summary>
+    public string? AutoEffortFastModelName { get; init; }
+
+    /// <summary>
     ///     Node-level master flag for the client voice (TTS) feature. <see langword="null" /> (absent) reads as
     ///     <see cref="DefaultVoiceFeatureEnabled" /> (off).
     /// </summary>

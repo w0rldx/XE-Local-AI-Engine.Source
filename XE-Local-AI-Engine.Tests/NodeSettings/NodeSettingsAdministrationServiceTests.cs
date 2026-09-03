@@ -9,8 +9,11 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Validation;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class NodeSettingsAdministrationServiceTests
@@ -66,14 +69,100 @@ public sealed class NodeSettingsAdministrationServiceTests
             "LlamaMaxLoadedProcesses", "LlamaIdleTimeToLiveSeconds", "KeepModelWarmEnabled",
             "KeepModelWarmModelName", "KeepModelWarmIntervalSeconds", "MaxMessageRequestTimeoutSeconds",
             "ChatCacheReuse", "SpeculativeMode", "SpeculativeDraftModelName", "SpeculativeDraftMaxTokens",
-            "SpeculativeDraftGpuLayers", "RerankerModelName"
+            "SpeculativeDraftGpuLayers", "RerankerModelName", "AutoEffortFastModelName"
         ];
 
         AssertEx.Equal(approved.Length, names.Count);
-        AssertEx.True(names.SetEquals(approved), "the agentic patch must expose exactly the approved 16 fields.");
+        AssertEx.True(names.SetEquals(approved), "the agentic patch must expose exactly the approved 17 fields.");
         AssertEx.False(names.Contains(nameof(StoredNodeSettings.CustomToolsEnabled)));
         AssertEx.False(names.Contains(nameof(StoredNodeSettings.ToolApprovalPolicy)));
         AssertEx.False(names.Contains(nameof(StoredNodeSettings.OllamaEndpoint)));
+    }
+
+    [Test]
+    public async Task Save_WhenAutoEffortFastModelIsExternal_IsRejected()
+    {
+        // The fast model may be moved a turn's whole context onto, and that context was admitted upstream against a
+        // node-local model. An external server is a process this node does not own, so the setting is refused before
+        // it can ever be stored — the same pair the dispatcher re-checks per turn.
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                        .Returns(Task.FromResult("external"));
+        var service = CreateService(store, localModelProviderResolver: providerResolver);
+
+        var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            AutoEffortFastModelName = "ext:studio/qwen3-1.7b"
+        }).ConfigureAwait(false);
+
+        AssertEx.False(result.Updated);
+        AssertEx.Equal(1, result.ValidationErrors.Count);
+        AssertEx.Equal(NodeSettingsField.AutoEffortFastModelName, result.ValidationErrors[0].Field);
+        await store.DidNotReceive().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task Save_WhenAutoEffortFastModelIsCloud_IsRejected()
+    {
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        var trustResolver = Substitute.For<IModelTrustResolver>();
+        trustResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(ModelTrustLocality.Cloud));
+        var service = CreateService(store, modelTrustResolver: trustResolver);
+
+        var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            AutoEffortFastModelName = "gpt-5.6-terra"
+        }).ConfigureAwait(false);
+
+        AssertEx.False(result.Updated);
+        AssertEx.Equal(NodeSettingsField.AutoEffortFastModelName, result.ValidationErrors[0].Field);
+    }
+
+    [Test]
+    public async Task Save_WhenMaxLoadedProcessesIsOne_IsRejected()
+    {
+        // The fast model is a SECOND chat process alongside the conversation's own, so a node capped at one slot could
+        // never admit it: the setting would look configured and silently never apply.
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        var service = CreateService(store);
+
+        var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            AutoEffortFastModelName = "qwen3-1.7b",
+            LlamaMaxLoadedProcesses = 1
+        }).ConfigureAwait(false);
+
+        AssertEx.False(result.Updated);
+        AssertEx.Equal(1, result.ValidationErrors.Count);
+        AssertEx.Equal(NodeSettingsField.LlamaMaxLoadedProcesses, result.ValidationErrors[0].Field);
+        await store.DidNotReceive().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task Save_WhenAutoEffortFastModelNotProvided_LeavesStoredSettingsUnchanged()
+    {
+        // The shipped default. A patch that never mentions the setting must neither set it nor pay for the locality
+        // lookup that guards it.
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
+        {
+            AutoEffortFastModelName = "qwen3-1.7b"
+        });
+        var trustResolver = Substitute.For<IModelTrustResolver>();
+        trustResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(ModelTrustLocality.Local));
+        var service = CreateService(store, modelTrustResolver: trustResolver);
+
+        var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            ChatCacheReuse = 512
+        }).ConfigureAwait(false);
+
+        AssertEx.True(result.Updated);
+        AssertEx.Equal("qwen3-1.7b", result.Settings.AutoEffortFastModelName);
     }
 
     [Test]
@@ -157,9 +246,24 @@ public sealed class NodeSettingsAdministrationServiceTests
     private static NodeSettingsAdministrationService CreateService(INodeSettingsStore store,
         ICapabilityReporter? reporter = null,
         ICloudModelResolver? cloudResolver = null,
-        IActiveCloudChatClientFactory? cloudFactory = null)
+        IActiveCloudChatClientFactory? cloudFactory = null,
+        INodeRuntimeSettings? runtimeSettings = null,
+        IModelTrustResolver? modelTrustResolver = null,
+        ILocalModelProviderResolver? localModelProviderResolver = null)
     {
-        var runtime = Substitute.For<INodeRuntimeSettings>();
+        var runtime = runtimeSettings ?? Substitute.For<INodeRuntimeSettings>();
+        runtime.GetLlamaMaxLoadedProcessesAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(StoredNodeSettings.DefaultLlamaMaxLoadedProcesses));
+
+        // Default to an installed node-local llama.cpp model so the fast-model locality gate is transparent to every
+        // test that does not set the setting at all.
+        modelTrustResolver ??= Substitute.For<IModelTrustResolver>();
+        if (localModelProviderResolver is null)
+        {
+            localModelProviderResolver = Substitute.For<ILocalModelProviderResolver>();
+            localModelProviderResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                                      .Returns(Task.FromResult(LlamaServerProviderConstants.ProviderName));
+        }
+
         reporter ??= Substitute.For<ICapabilityReporter>();
         reporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
         cloudResolver ??= Substitute.For<ICloudModelResolver>();
@@ -172,6 +276,8 @@ public sealed class NodeSettingsAdministrationServiceTests
             runtime,
             reporter,
             selectionPolicy,
+            modelTrustResolver,
+            localModelProviderResolver,
             NullLogger<NodeSettingsAdministrationService>.Instance);
     }
 }

@@ -417,6 +417,24 @@ describe("buildNodeSettingsRequest", () => {
 		expect(body.rerankerModelName).toBe("");
 	});
 
+	it("sends a changed fast model for automatic reasoning effort, and an empty string for Off", () => {
+		const form = { ...baseline, autoEffortFastModelName: "  qwen3-1.7b  " };
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+		expect(errors).toEqual({});
+		expect(body.autoEffortFastModelName).toBe("qwen3-1.7b");
+
+		const withModel = { ...baseline, autoEffortFastModelName: "qwen3-1.7b" };
+		const off = { ...withModel, autoEffortFastModelName: "" };
+		expect(buildNodeSettingsRequest(off, withModel, bounds, false).body.autoEffortFastModelName).toBe("");
+	});
+
+	it("does not restart-gate the fast model for automatic reasoning effort", () => {
+		// The dispatcher reads it per send, so a save applies to the very next turn — telling the operator to restart
+		// would be wrong, and would train them to ignore the hint on the fields that do need one.
+		expect(restartGatedNodeSettingsFields.has("autoEffortFastModelName")).toBe(false);
+		expect(restartGatedNodeSettingsFields.has("rerankerModelName")).toBe(true);
+	});
+
 	it("sends the usage-rate map when a rate row is added (no developer gate)", () => {
 		const form = { ...baseline, usageRates: [rateRow({ id: "a", modelName: "gpt-5", inputPer1M: 1.25, outputPer1M: 10 })] };
 		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);

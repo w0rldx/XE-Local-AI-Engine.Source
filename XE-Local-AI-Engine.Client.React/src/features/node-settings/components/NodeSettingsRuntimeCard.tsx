@@ -27,9 +27,30 @@ interface Props {
 	readonly onChange: <K extends keyof NodeSettingsFieldsForm>(field: K, value: NodeSettingsFieldsForm[K]) => void;
 	readonly draftModelOptions: readonly NodeSettingsModelOption[];
 	readonly keepWarmModelOptions: readonly NodeSettingsModelOption[];
+	readonly autoEffortFastModelOptions: readonly NodeSettingsModelOption[];
 }
-export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftModelOptions, keepWarmModelOptions }: Props) {
+export function NodeSettingsRuntimeCard({
+	form,
+	bounds,
+	errors,
+	onChange,
+	draftModelOptions,
+	keepWarmModelOptions,
+	autoEffortFastModelOptions,
+}: Props) {
 	const { t } = useTranslation();
+	const autoEffortFastOptions = useMemo(() => {
+		const options = [
+			{ value: "", label: t("pages.nodeSettings.fields.autoEffortFastModel.off", "Off") },
+			...autoEffortFastModelOptions,
+		];
+		// A model that was uninstalled after the setting was saved still has to be selectable, or the select would
+		// silently show "Off" for a node that is still configured.
+		if (form.autoEffortFastModelName !== "" && !options.some((option) => option.value === form.autoEffortFastModelName)) {
+			options.push({ value: form.autoEffortFastModelName, label: form.autoEffortFastModelName });
+		}
+		return options;
+	}, [autoEffortFastModelOptions, form.autoEffortFastModelName, t]);
 	const speculativeModeOptions = useMemo(
 		() =>
 			speculativeModeSelectValues.map((mode) => ({
@@ -212,6 +233,21 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 						data-testid="node-settings-speculative-draft-max-tokens"
 					/>
 				) : null}
+				<Select
+					label={t("pages.nodeSettings.fields.autoEffortFastModel.label", "Fast model for automatic reasoning effort")}
+					description={t(
+						"pages.nodeSettings.fields.autoEffortFastModel.description",
+						"When a chat turn uses the automatic reasoning effort and the turn looks trivial, run it on this small llama.cpp model instead. Leave off to keep the conversation's own model and only lower the effort. Needs a second loaded-process slot; changes apply to the next message.",
+					)}
+					data={autoEffortFastOptions}
+					value={form.autoEffortFastModelName}
+					onChange={(value) => onChange("autoEffortFastModelName", value ?? "")}
+					allowDeselect={false}
+					searchable={true}
+					nothingFoundMessage={t("pages.nodeSettings.fields.autoEffortFastModel.empty", "No installed llama.cpp chat models")}
+					error={nodeSettingsFieldError(t, errors, "autoEffortFastModelName")}
+					data-testid="node-settings-auto-effort-fast-model"
+				/>
 				<NumberInput
 					label={t("pages.nodeSettings.fields.chatCacheReuse.label", "Prompt cache reuse")}
 					description={

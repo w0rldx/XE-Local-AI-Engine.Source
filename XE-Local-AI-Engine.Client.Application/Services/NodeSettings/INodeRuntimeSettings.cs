@@ -93,6 +93,13 @@ public interface INodeRuntimeSettings
     Task<string?> GetRerankerModelNameAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     The node-local chat model a FAST <c>auto</c> turn may be moved onto (stored &gt; off), or
+    ///     <see langword="null" /> when this node names none. Read per send rather than at host build, so a save
+    ///     applies to the next turn without a restart.
+    /// </summary>
+    Task<string?> GetAutoEffortFastModelNameAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Whether the user-defined custom tools feature is enabled at the node level (stored &gt; off). Default is
     ///     <see langword="false" /> — a host-execution feature is opt-in. When off, custom tools are neither offered nor
     ///     resolvable.

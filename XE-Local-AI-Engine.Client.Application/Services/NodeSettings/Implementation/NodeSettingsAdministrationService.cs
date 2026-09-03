@@ -1,17 +1,28 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.Capabilities;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 
 internal sealed class NodeSettingsAdministrationService(
     INodeSettingsStore store,
     INodeRuntimeSettings runtimeSettings,
     ICapabilityReporter capabilityReporter,
     DefaultModelSelectionPolicy defaultModelSelectionPolicy,
+    IModelTrustResolver modelTrustResolver,
+    ILocalModelProviderResolver localModelProviderResolver,
     ILogger<NodeSettingsAdministrationService> logger) : INodeSettingsAdministrationService
 {
+    private const string AutoEffortFastModelNotLocalMessage =
+        "The fast model for automatic reasoning effort must be an installed node-local model.";
+
     private readonly ICapabilityReporter _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
     private readonly DefaultModelSelectionPolicy _defaultModelSelectionPolicy = defaultModelSelectionPolicy ?? throw new ArgumentNullException(nameof(defaultModelSelectionPolicy));
+    private readonly ILocalModelProviderResolver _localModelProviderResolver = localModelProviderResolver ?? throw new ArgumentNullException(nameof(localModelProviderResolver));
+    private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
     private readonly ILogger<NodeSettingsAdministrationService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly INodeRuntimeSettings _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     private readonly INodeSettingsStore _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -71,7 +82,8 @@ internal sealed class NodeSettingsAdministrationService(
             SpeculativeDraftModelName = TrimWhenProvided(patch.SpeculativeDraftModelName, current.SpeculativeDraftModelName),
             SpeculativeDraftMaxTokens = patch.SpeculativeDraftMaxTokens ?? current.SpeculativeDraftMaxTokens,
             SpeculativeDraftGpuLayers = patch.SpeculativeDraftGpuLayers ?? current.SpeculativeDraftGpuLayers,
-            RerankerModelName = TrimWhenProvided(patch.RerankerModelName, current.RerankerModelName)
+            RerankerModelName = TrimWhenProvided(patch.RerankerModelName, current.RerankerModelName),
+            AutoEffortFastModelName = TrimWhenProvided(patch.AutoEffortFastModelName, current.AutoEffortFastModelName)
         };
 
         var result = await ValidateAndSaveAsync(merged, cancellationToken).ConfigureAwait(false);
@@ -88,6 +100,19 @@ internal sealed class NodeSettingsAdministrationService(
     private async Task<NodeSettingsAdministrationResult> ValidateAndSaveAsync(StoredNodeSettings settings,
         CancellationToken cancellationToken)
     {
+        // Enforcement point 1 of the node-locality gate, on BOTH save paths (the endpoint's merged save and the MCP
+        // patch) rather than only the patch: the runner's dispatcher may move an `auto` turn onto this model, and the
+        // turn's data was admitted upstream against a node-local one. A cloud id, an `ext:` id or an Ollama name would
+        // carry that data somewhere no egress gate authorised, so it is refused before it can ever be stored.
+        if (!string.IsNullOrWhiteSpace(settings.AutoEffortFastModelName)
+            && !await IsInstalledNodeLocalModelAsync(settings.AutoEffortFastModelName, cancellationToken).ConfigureAwait(false))
+        {
+            return NodeSettingsAdministrationResult.Rejected(settings,
+            [
+                new NodeSettingsValidationError(NodeSettingsField.AutoEffortFastModelName, AutoEffortFastModelNotLocalMessage)
+            ]);
+        }
+
         var errors = await NodeSettingsPolicy.ValidateMergedAsync(settings, _runtimeSettings, cancellationToken).ConfigureAwait(false);
         if (errors.Count > 0)
         {
@@ -111,6 +136,17 @@ internal sealed class NodeSettingsAdministrationService(
         }
     }
 
+    private async Task<bool> IsInstalledNodeLocalModelAsync(string modelName, CancellationToken cancellationToken)
+    {
+        if (await _modelTrustResolver.ResolveAsync(modelName, cancellationToken).ConfigureAwait(false) != ModelTrustLocality.Local)
+        {
+            return false;
+        }
+
+        var providerName = await _localModelProviderResolver.ResolveProviderNameForModelAsync(modelName, cancellationToken).ConfigureAwait(false);
+        return string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string? TrimWhenProvided(string? value, string? current) =>
         value is null ? current : value.Trim();
 
@@ -130,5 +166,6 @@ internal sealed class NodeSettingsAdministrationService(
             settings.SpeculativeDraftModelName,
             settings.SpeculativeDraftMaxTokens,
             settings.SpeculativeDraftGpuLayers,
-            settings.RerankerModelName);
+            settings.RerankerModelName,
+            settings.AutoEffortFastModelName);
 }

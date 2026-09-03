@@ -3021,6 +3021,28 @@ public sealed class InvocationRunnerTests
         return resolver;
     }
 
+    /// <summary>
+    ///     A llama.cpp resolver whose launched per-slot window DIFFERS per model, so a turn that runs two models can
+    ///     assert each send was sized against the window of the model that actually served it.
+    /// </summary>
+    private static ILocalModelProviderResolver CreatePerModelLlamaCppResolver(IReadOnlyDictionary<string, int> windowsByModel)
+    {
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ProviderName.Returns(LlamaServerProviderConstants.ProviderName);
+        provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(callInfo => Task.FromResult(windowsByModel.TryGetValue(callInfo.Arg<string>(), out var window)
+                    ? new LocalModelRuntimeInfo(window)
+                    : null));
+
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(LlamaServerProviderConstants.ProviderName));
+        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(provider));
+
+        return resolver;
+    }
+
     [Test]
     public async Task RunAsync_WhenModelRoutesToCloud_DoesNotWarmALocalProvider()
     {
@@ -3173,7 +3195,8 @@ public sealed class InvocationRunnerTests
         var definitionBuilt = AssertEx.NotNull(built);
         AssertEx.Equal("qwen3-1.7b", definitionBuilt.ModelId, "the turn runs on the model the dispatcher chose");
         AssertEx.Equal("low", definitionBuilt.ReasoningEffort);
-        AssertEx.Equal(expected: 4096, definitionBuilt.Sampling?.MaxOutputTokens);
+        AssertEx.Null(definitionBuilt.Sampling?.MaxOutputTokens,
+            "the 8192 default window cannot afford a 4096 output reservation, so the dispatched cap is refused");
         await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
             payload.InvocationId == package.InvocationId
             && payload.Kind == TurnNoticeKind.EffortDispatched
@@ -3226,6 +3249,10 @@ public sealed class InvocationRunnerTests
         AssertEx.Empty(sender.SentEncryptedFailures);
         await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
             payload.Kind == TurnNoticeKind.EffortDispatched && payload.Detail == ReasoningDispatchReasons.FastModelUnavailable));
+        // ONE notice for the turn. A swapped turn stays silent until the send has resolved precisely so a fallback
+        // does not leave the reader with two contradictory "reasoning effort resolved" rows for one answer.
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.EffortDispatched));
     }
 
     [Test]
@@ -4077,6 +4104,115 @@ public sealed class InvocationRunnerTests
             var createdAtField = AssertEx.NotNull(pendingToolCall.GetType().GetField("<CreatedAt>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic));
             createdAtField.SetValue(pendingToolCall, DateTimeOffset.UtcNow - age);
         }
+    }
+
+    [Test]
+    public async Task Dispatch_WhenTheWindowAffordsIt_TheDispatchedBudgetCapsSamplingOnly()
+    {
+        // The cap is a CEILING on the answer, and it is only worth paying for when the window can spare the room the
+        // two budgeters then reserve for it. A 32k window can.
+        var sender = new MockHubMessageSender();
+        InvocationAgentDefinition? built = null;
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3.5:0.8b", "low", ReasoningDispatchReasons.ShortTurn, maxOutputTokens: 4096));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
+            providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 32768),
+            reasoningEffortDispatcherFactory: _ => stub);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").Build());
+
+        AssertEx.Equal(expected: 4096, AssertEx.NotNull(built).Sampling?.MaxOutputTokens);
+    }
+
+    [Test]
+    [Arguments(4096)]
+    [Arguments(2048)]
+    public async Task Dispatch_WhenTheWindowCannotAffordTheDispatchedBudget_LeavesTheTurnAsANonAutoOneWouldBe(int effectiveContextTokens)
+    {
+        // The defect this pins: reserving 4096 output tokens of a 4096-token window leaves ZERO history budget, so an
+        // `auto` turn failed with ContextBudgetExceeded exactly where a non-`auto` turn served the same conversation.
+        // A window that cannot afford the cap simply does not get it.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        InvocationAgentDefinition? built = null;
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3.5:0.8b", "low", ReasoningDispatchReasons.ShortTurn, maxOutputTokens: 4096));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
+            eventDispatcher: dispatcher,
+            providerResolver: CreateLlamaCppResolver(effectiveContextTokens),
+            reasoningEffortDispatcherFactory: _ => stub);
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").Build();
+
+        await RunAsync(runner, package);
+
+        AssertEx.Null(AssertEx.NotNull(built).Sampling?.MaxOutputTokens);
+        AssertEx.Empty(sender.SentEncryptedFailures);
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.ContextWindowExceeded);
+    }
+
+    [Test]
+    public async Task Dispatch_WhenTheWindowIsTheConfiguredDefault_LeavesTheTurnAsANonAutoOneWouldBe()
+    {
+        // The Ollama shape: the warm is a no-op, the launched window is unknown, and the budgeters fall back to the
+        // configured 8192 default. Reserving 4096 of it would halve the usable history of every FAST turn.
+        var sender = new MockHubMessageSender();
+        InvocationAgentDefinition? built = null;
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3.5:0.8b", "low", ReasoningDispatchReasons.ShortTurn, maxOutputTokens: 4096));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
+            reasoningEffortDispatcherFactory: _ => stub);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").Build());
+
+        AssertEx.Null(AssertEx.NotNull(built).Sampling?.MaxOutputTokens);
+    }
+
+    [Test]
+    public async Task Dispatch_WhenTheFallbackRerunsOnTheOriginalModel_UsesTheOriginalModelsWindow()
+    {
+        // The swapped model was warmed at 4096 and the turn policy was sized against THAT window. Re-running the
+        // original model on it would measure a long conversation against the fast model's window and drop history the
+        // authorised model would have kept — and would thread 4096 as the num_ctx of a process launched at 32768.
+        var sender = new MockHubMessageSender();
+        var observed = new List<InvocationAgentDefinition>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn, maxOutputTokens: 4096));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
+            providerResolver: CreatePerModelLlamaCppResolver(new Dictionary<string, int>(StringComparer.Ordinal)
+            {
+                ["qwen3-1.7b"] = 4096,
+                ["qwen3.5:0.8b"] = 32768
+            }),
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
+
+        AssertEx.Equal(expected: 2, observed.Count, "exactly one re-run");
+        AssertEx.Equal(expected: 4096, observed[0].EffectiveContextTokens, "the swapped send is sized against the fast model's window");
+        AssertEx.Equal(expected: 32768, observed[1].EffectiveContextTokens, "the re-run is sized against the window of the model it actually runs on");
+        AssertEx.Null(observed[1].Sampling?.MaxOutputTokens, "the fallback gives up the dispatched cap along with the model");
+        AssertEx.Empty(sender.SentEncryptedFailures);
+    }
+
+    [Test]
+    public async Task Dispatch_WhenASwappedTurnWouldOfferTools_DoesNotRetry()
+    {
+        // The re-run re-enters RunSingleAgentAsync, which owns the tool-relevance drain and its ToolsFiltered notice.
+        // The dispatcher's own gate refuses a swap on any tool-bearing turn, so this shape is unreachable through the
+        // real dispatcher; the guard makes that dependency explicit rather than load-bearing by coincidence.
+        var sender = new MockHubMessageSender();
+        var observed = new List<InvocationAgentDefinition>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().WithAllowedTool("test-tool").Build());
+
+        AssertEx.Equal(expected: 1, observed.Count, "a tool-bearing turn must not be re-run");
+        AssertEx.True(sender.SentEncryptedFailures.Count > 0);
     }
 
     // ---- reasoning-effort dispatch helpers -----------------------------------------------------------------------

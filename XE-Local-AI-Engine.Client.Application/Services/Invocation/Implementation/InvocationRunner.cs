@@ -308,27 +308,33 @@ public sealed partial class InvocationRunner : IInvocationRunner
             var originalModel = resolvedModel;
             var originalSupportsThinking = package.SupportsThinking;
             var originalReasoningBudgetEnforceable = package.ReasoningBudgetEnforceable;
+            var originalSamplingOptions = package.SamplingOptions;
             using var fastReservation = dispatchDecision?.CapacityReservation;
             if (dispatchDecision is { } dispatched)
             {
                 resolvedModel = dispatched.Model;
+
+                // `package with { ... }` copies ConfigHash verbatim: the hash folds the AUTHORED effort, so two turns
+                // of one conversation that dispatch to different tiers still share one hash and a resume is never
+                // invalidated by a dispatch difference. The dispatched OUTPUT budget is deliberately NOT applied here
+                // — it needs the window the model actually launched with, so it is folded in after the warm below.
                 package = package with
                 {
                     ReasoningEffort = dispatched.Effort,
                     SupportsThinking = dispatched.SupportsThinking,
-                    ReasoningBudgetEnforceable = dispatched.ReasoningBudgetEnforceable,
-                    SamplingOptions = ApplyDispatchedOutputBudget(package.SamplingOptions, dispatched.MaxOutputTokens)
+                    ReasoningBudgetEnforceable = dispatched.ReasoningBudgetEnforceable
                 };
-
-                // Applied BEFORE WithEffectiveContext below, which clamps the reservation back down to the window the
-                // model was actually launched with. `package with { ... }` copies ConfigHash verbatim: the hash folds
-                // the AUTHORED effort, so two turns of one conversation that dispatch to different tiers still share
-                // one hash and a resume is never invalidated by a dispatch difference.
-                turnPolicy = turnPolicy.WithDispatchedOutputBudget(dispatched.MaxOutputTokens);
             }
 
             var modelWasSwapped = dispatchDecision is { } swapCandidate
                                   && !string.Equals(swapCandidate.Model, originalModel, StringComparison.Ordinal);
+
+            // The retry below re-enters RunSingleAgentAsync, which owns the tool-relevance drain and its ToolsFiltered
+            // notice — running it twice would emit that notice twice. A swap requires OfferedToolCount == 0, so a
+            // swapped turn offers no tools and the drain is a no-op; this makes that dependency explicit instead of
+            // load-bearing-by-coincidence. If a future gate ever admits a swap on a tool-bearing turn, the retry
+            // switches itself off rather than double-emitting.
+            var swapRetryEligible = modelWasSwapped && package.AllowedTools.Count == 0;
 
             // Shared streaming state for both the single-agent and orchestration paths: the response/reasoning
             // accumulators, the byte caps, the monotonic sequence counters, and the terminal usage snapshot. Both
@@ -357,10 +363,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // Surface what `auto` resolved to, for the same reason: a decision the user did not make must be visible.
             // Deliberately silent on a NORMAL, no-swap turn — that is the common case and a notice on every ordinary
             // turn is noise. The detail is the reason CODE only; no signal value ever reaches this seam.
-            if (dispatchDecision is { } announced && (announced.Tier != ReasoningTier.Normal || modelWasSwapped))
+            // A SWAPPED turn is deliberately silent here: it may still fall back to the original model at the send
+            // boundary below, and a turn must carry exactly ONE effort notice. Its notice is emitted once the send has
+            // resolved — either naming the model that actually served, or naming the fallback.
+            if (dispatchDecision is { } announced && announced.Tier != ReasoningTier.Normal && !modelWasSwapped)
             {
                 await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
-                                   BuildEffortDispatchedNoticeMessage(announced.Tier, announced.Effort, resolvedModel, modelWasSwapped),
+                                   BuildEffortDispatchedNoticeMessage(announced.Tier, announced.Effort, resolvedModel, swapped: false),
                                    announced.ReasonCode)
                                .ConfigureAwait(false);
             }
@@ -398,7 +407,26 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // budgeter sizes history against the real window rather than the configured default (see
             // TurnPolicy.WithEffectiveContext for the precedence). The same value is threaded into the agent definition
             // below so the INNER provider-round budgeter (num_ctx side channel) resolves the identical window.
+            // Captured BEFORE the fold so the send-boundary retry can re-derive the ORIGINAL model's policy from the
+            // ORIGINAL model's own warm. Reusing the swapped model's policy would measure a 20k conversation against a
+            // 4k fast-model window and drop history the authorised model would have kept.
+            var preWarmPolicy = turnPolicy;
             turnPolicy = turnPolicy.WithEffectiveContext(effectiveContextTokens);
+
+            // The dispatched FAST output budget, folded in only now that the launched window is known, and ONLY onto
+            // the send's sampling options — never onto TurnPolicy.ReservedOutputTokens. Both budgeters derive their
+            // output reservation from the requested max-output-tokens, so a 4096 cap on a small window reserves the
+            // whole window and starves (or fails) a turn that a non-`auto` turn would have served. Applying it only
+            // when it fits in a quarter of the real window keeps every small-window turn byte-identical to a non-auto
+            // one, and keeps the cap where it earns its keep: a large window, where the answer is what is being bounded.
+            if (dispatchDecision?.MaxOutputTokens is { } dispatchedOutputTokens
+                && dispatchedOutputTokens * 4 <= turnPolicy.ContextCapacityTokens)
+            {
+                package = package with
+                {
+                    SamplingOptions = ApplyDispatchedOutputBudget(package.SamplingOptions, dispatchedOutputTokens)
+                };
+            }
 
             if (context.GenerationAdmissionPolicy is { } admissionPolicy)
             {
@@ -434,13 +462,23 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 // participant's INNER provider-round budgeter sizes against the window ITS model was launched with.
                 await RunOrchestrationAsync(package, orchestrationSpec, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken).ConfigureAwait(false);
             }
-            else if (modelWasSwapped)
+            else
             {
                 try
                 {
                     await RunSingleAgentAsync(package, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken).ConfigureAwait(false);
+
+                    // A swap served the turn. Announce it now, once, naming the model that actually ran. Every other
+                    // turn already emitted its notice (or is a silent NORMAL one) before the send.
+                    if (modelWasSwapped && dispatchDecision is { } served)
+                    {
+                        await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
+                                           BuildEffortDispatchedNoticeMessage(served.Tier, served.Effort, resolvedModel, swapped: true),
+                                           served.ReasonCode)
+                                       .ConfigureAwait(false);
+                    }
                 }
-                catch (Exception) when (!stream.FirstOutputRecorded && !invocationToken.IsCancellationRequested)
+                catch (Exception) when (swapRetryEligible && !stream.FirstOutputRecorded && !invocationToken.IsCancellationRequested)
                 {
                     // The fast model went away between the capacity probe and the send: profiling took its process, an
                     // eject drained it, it was uninstalled, or it would not fit. Nothing has reached the client yet, so
@@ -459,8 +497,16 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     {
                         ReasoningEffort = FallbackDispatchEffort,
                         SupportsThinking = originalSupportsThinking,
-                        ReasoningBudgetEnforceable = originalReasoningBudgetEnforceable
+                        ReasoningBudgetEnforceable = originalReasoningBudgetEnforceable,
+                        SamplingOptions = originalSamplingOptions
                     };
+
+                    // Re-warm the ORIGINAL model and re-derive its window. The policy and effective-context above were
+                    // both measured against the fast model's launched window; carrying them into the re-run would size
+                    // this turn's history — and the agent definition's num_ctx — against a window this model never had.
+                    var retryRuntime = await _localRuntimeWarmer.PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken).ConfigureAwait(false);
+                    var retryContextTokens = retryRuntime.EffectiveContextTokens;
+                    var retryPolicy = preWarmPolicy.WithEffectiveContext(retryContextTokens);
 
                     await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
                                        BuildEffortDispatchedNoticeMessage(ReasoningTier.Fast, FallbackDispatchEffort, resolvedModel, swapped: false),
@@ -468,12 +514,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                    .ConfigureAwait(false);
 
                     // Exactly once. A second failure is a real failure and fails the turn normally.
-                    await RunSingleAgentAsync(package, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken).ConfigureAwait(false);
+                    await RunSingleAgentAsync(package, resolvedModel, transport, stream, retryPolicy, retryContextTokens, invocationToken).ConfigureAwait(false);
                 }
-            }
-            else
-            {
-                await RunSingleAgentAsync(package, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken).ConfigureAwait(false);
             }
 
             // Read the whole-turn wall-clock duration once. The same value rides every completion transport (encrypted

@@ -92,6 +92,8 @@ public sealed record NodeSettingsResponse
     /// </summary>
     public string? RerankerModelName { get; init; }
 
+    public string? AutoEffortFastModelName { get; init; }
+
     public long? HuggingFaceDiskMarginBytes { get; init; }
 
     public int? OrchestrationIdleTimeoutSeconds { get; init; }
@@ -193,6 +195,8 @@ public sealed record SaveNodeSettingsRequest
 
     /// <summary>Installed cross-encoder reranker model name for knowledge-base search rerank. Empty/blank disables reranking.</summary>
     public string? RerankerModelName { get; init; }
+
+    public string? AutoEffortFastModelName { get; init; }
 
     public long? HuggingFaceDiskMarginBytes { get; init; }
 

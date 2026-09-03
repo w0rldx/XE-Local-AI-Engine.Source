@@ -534,6 +534,32 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
+    public void NodeSettings_AutoEffortFastModelName_RoundTripsThroughMapper()
+    {
+        // Same shape as the reranker select: a trimmed value round-trips, omitting the field keeps the stored value,
+        // and the "Off" option sends an empty string that clears it.
+        var request = new SaveNodeSettingsRequest
+        {
+            AutoEffortFastModelName = "  qwen3-1.7b  "
+        };
+
+        var stored = request.ToStoredSettings(new StoredNodeSettings());
+        AssertEx.Equal("qwen3-1.7b", stored.AutoEffortFastModelName);
+
+        var response = stored.ToResponse();
+        AssertEx.Equal("qwen3-1.7b", response.AutoEffortFastModelName);
+
+        var merged = new SaveNodeSettingsRequest().ToStoredSettings(stored);
+        AssertEx.Equal("qwen3-1.7b", merged.AutoEffortFastModelName);
+
+        var cleared = new SaveNodeSettingsRequest
+        {
+            AutoEffortFastModelName = string.Empty
+        }.ToStoredSettings(stored);
+        AssertEx.Equal(string.Empty, cleared.AutoEffortFastModelName);
+    }
+
+    [Test]
     public void NodeSettings_UsageRates_RoundTripThroughMapper()
     {
         // A supplied rate map is wrapped into the stored shape and surfaced flat on GET; omitting the field on a later

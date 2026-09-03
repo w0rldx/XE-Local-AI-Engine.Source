@@ -25436,6 +25436,10 @@
             "type": "string",
             "nullable": true
           },
+          "autoEffortFastModelName": {
+            "type": "string",
+            "nullable": true
+          },
           "huggingFaceDiskMarginBytes": {
             "type": "integer",
             "nullable": true
@@ -25628,6 +25632,10 @@
             "nullable": true
           },
           "rerankerModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "autoEffortFastModelName": {
             "type": "string",
             "nullable": true
           },

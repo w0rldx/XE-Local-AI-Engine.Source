@@ -59,6 +59,7 @@ public sealed class NodeAdminMcpToolsTests
 
     private static readonly string[] ExpectedSettingsParameters =
     [
+        "auto_effort_fast_model_name",
         "chat_cache_reuse",
         "default_model_name",
         "enable_tools",
@@ -999,7 +1000,7 @@ public sealed class NodeAdminMcpToolsTests
             10);
 
     private static NodeSettingsAgenticView SettingsView(string model) =>
-        new(model, null, null, null, null, null, null, null, null, 600, null, null, null, null, null, null);
+        new(model, null, null, null, null, null, null, null, null, 600, null, null, null, null, null, null, null);
 
     private static IEnumerable<(MethodInfo Method, McpServerToolAttribute? Attribute)> ToolMethods() =>
         typeof(NodeAdminMcpTools).GetMethods(BindingFlags.Instance | BindingFlags.Public)

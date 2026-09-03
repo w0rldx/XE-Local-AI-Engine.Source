@@ -42,6 +42,22 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
+    public async Task Normalize_WhenAutoEffortFastModelIsBlank_IsNull()
+    {
+        // Blank is the "Off" signal the select sends, and null is what the dispatcher reads as "this node names no
+        // fast model". Whitespace must not survive as a model name nothing can resolve.
+        await WriteSettingsJsonAsync("{ \"autoEffortFastModelName\": \"   \" }");
+        var blank = await LoadAsync();
+
+        AssertEx.Null(blank.AutoEffortFastModelName);
+
+        await WriteSettingsJsonAsync("{ \"autoEffortFastModelName\": \"  qwen3-1.7b  \" }");
+        var trimmed = await LoadAsync();
+
+        AssertEx.Equal("qwen3-1.7b", trimmed.AutoEffortFastModelName);
+    }
+
+    [Test]
     public async Task OldFileWithRemovedKeys_LoadsWithoutThrowing_AndKeepsTheSurvivingFields()
     {
         // samplingDefaults (never read at runtime) and allowedVoiceModels (a neural-voice leftover the Web Speech-only

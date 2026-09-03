@@ -1,10 +1,16 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -15,6 +21,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class ReasoningEffortDispatcherTests
 {
     private const string ResolvedModel = "qwen3.8-27b";
+
+    private const string FastModel = "qwen3-1.7b";
 
     // 700 characters: past the long-message threshold but short of the very-long one.
     private static readonly string LongText = new('a', 700);
@@ -133,6 +141,34 @@ public sealed class ReasoningEffortDispatcherTests
         var decision = await DispatchAsync(Request(text));
 
         AssertEx.Equal(ReasoningTier.Fast, decision.Tier);
+    }
+
+    [Test]
+    public async Task Dispatch_WhenAFastPhraseAppearsOnlyInsideAFence_DoesNotFire()
+    {
+        // A pasted snippet is code the user wants looked at, not an instruction about how hard to think about it.
+        // Both phrase lists therefore read the PROSE only. The message is long AND fenced, so it scores Deep; a
+        // `briefly` read out of the snippet would subtract 2 and silently pull the same turn down to Normal.
+        var fencedPhrase = await DispatchAsync(Request(LongText + "\n```\nlogger.LogDebug(\"briefly\");\n```\n"));
+
+        AssertEx.Equal(ReasoningTier.Deep, fencedPhrase.Tier, "a fast phrase inside a snippet must not move the score");
+        AssertEx.Equal(ReasoningDispatchReasons.CodeFence, fencedPhrase.ReasonCode);
+
+        // The control: the same phrase in the PROSE around the same fence still counts.
+        var prosePhrase = await DispatchAsync(Request(LongText + "\n```\nlogger.LogDebug(1);\n```\nAnswer briefly."));
+
+        AssertEx.Equal(ReasoningTier.Normal, prosePhrase.Tier);
+    }
+
+    [Test]
+    public async Task Dispatch_WhenAFenceIsNeverClosed_TreatsTheRestAsCode()
+    {
+        // An unclosed fence swallows the remainder, which is the safe direction: everything after an opener is code
+        // until proven otherwise, so a phrase inside a truncated paste cannot move the score either.
+        var decision = await DispatchAsync(Request(LongText + "\n```\nassert(quick answer == 1);"));
+
+        AssertEx.Equal(ReasoningTier.Deep, decision.Tier);
+        AssertEx.Equal(ReasoningDispatchReasons.CodeFence, decision.ReasonCode);
     }
 
     [Test]
@@ -350,6 +386,216 @@ public sealed class ReasoningEffortDispatcherTests
     }
 
     [Test]
+    public async Task Fast_WhenFastModelIsExternal_NeverSwaps()
+    {
+        // Enforcement point 2 of the node-locality gate. A model can be uninstalled, or an external connection
+        // re-declared, between the save that validated the setting and this turn — so the pair is checked again here.
+        // An external server is a process the node does not own: sending this turn there is egress the upstream gate
+        // never authorised.
+        // Even an external connection the operator DECLARED local resolves node-local on trust alone, which is why the
+        // provider is the second half of the pair: no llama.cpp process backs it, so neither the capacity gate nor the
+        // liveness probe could reason about it.
+        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
+            fastModelName: "ext:studio/qwen3-1.7b",
+            fastModelLocality: ModelTrustLocality.Local,
+            fastModelProviderName: "external");
+
+        AssertEx.Equal(ResolvedModel, decision.Model);
+        AssertEx.Equal(ReasoningDispatchReasons.FastModelNotLocal, decision.ReasonCode);
+        AssertEx.Null(decision.CapacityReservation);
+    }
+
+    [Test]
+    public async Task Fast_WhenFastModelIsCloud_NeverSwaps()
+    {
+        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
+            fastModelName: "gpt-5.6-terra",
+            fastModelLocality: ModelTrustLocality.Cloud);
+
+        AssertEx.Equal(ResolvedModel, decision.Model);
+        AssertEx.Equal(ReasoningDispatchReasons.FastModelNotLocal, decision.ReasonCode);
+    }
+
+    [Test]
+    public async Task Fast_WhenFastModelIsNotServedByLlamaCpp_NeverSwaps()
+    {
+        // Node-local is not enough: an Ollama-served model is local but the swap targets a llama.cpp process, which is
+        // the only provider the capacity gate and the liveness probe can reason about.
+        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
+            fastModelName: "qwen3:1.7b",
+            fastModelLocality: ModelTrustLocality.Local,
+            fastModelProviderName: "ollama");
+
+        AssertEx.Equal(ResolvedModel, decision.Model);
+        AssertEx.Equal(ReasoningDispatchReasons.FastModelNotLocal, decision.ReasonCode);
+    }
+
+    [Test]
+    public async Task Fast_WhenTheFastModelIsTheResolvedModel_NeverSwaps()
+    {
+        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
+            fastModelName: ResolvedModel,
+            fastModelLocality: ModelTrustLocality.Local);
+
+        AssertEx.Equal(ResolvedModel, decision.Model);
+        AssertEx.Equal(ReasoningDispatchReasons.FastModelIsActiveModel, decision.ReasonCode);
+    }
+
+    [Test]
+    public async Task Fast_WhenCapacityRejects_FallsBackToSameModelLow()
+    {
+        // The dispatcher never fails a turn. A node with no room for a second chat process serves the FAST tier with
+        // the model it already has, and the notice says why the swap did not happen.
+        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
+            fastModelName: FastModel,
+            fastModelLocality: ModelTrustLocality.Local,
+            capacityDecision: new CapacityDecision(CapacityVerdict.RejectInsufficient, "no room", OllamaEvictionWarning: false));
+
+        AssertEx.Equal(ReasoningTier.Fast, decision.Tier);
+        AssertEx.Equal("low", decision.Effort);
+        AssertEx.Equal(ResolvedModel, decision.Model);
+        AssertEx.Equal(ReasoningDispatchReasons.FastModelNoCapacity, decision.ReasonCode);
+        AssertEx.Null(decision.CapacityReservation);
+    }
+
+    [Test]
+    [Arguments(false, true, ReasoningDispatchReasons.ModelPinned)]
+    [Arguments(true, false, ReasoningDispatchReasons.ModelPinned)]
+    public async Task Fast_WhenAllowAutoModelSwapIsFalse_NeverSwaps(bool userPicked, bool agentPinned, string expectedReason)
+    {
+        // Both shapes the provenance covers — an explicit user pick and an honoured agent pin — arrive here as the
+        // same single false flag, because the runtime package keeps the EFFECTIVE model and not how it was chosen.
+        // The gate must refuse before any node-side lookup, so a configured fast model changes nothing.
+        AssertEx.True(userPicked || agentPinned, "each argument set is one of the two pinned shapes");
+
+        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: false),
+            fastModelName: FastModel,
+            fastModelLocality: ModelTrustLocality.Local);
+
+        AssertEx.Equal(ResolvedModel, decision.Model);
+        AssertEx.Equal(expectedReason, decision.ReasonCode);
+    }
+
+    [Test]
+    public async Task Fast_WhenSwapAdmitted_CarriesTheReservationAndTheFastModelsOwnCapabilities()
+    {
+        // An Allow verdict books the fast model's bytes and one loaded-process slot; the RUNNER owns releasing that
+        // reservation at turn end (InvocationRunnerTests pins the disposal order). The capability flags are re-resolved
+        // for the REPLACEMENT: a stale ReasoningBudgetEnforceable sends a budget the new model 400s on.
+        using var reservation = new StubDisposable();
+        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
+            fastModelName: FastModel,
+            fastModelLocality: ModelTrustLocality.Local,
+            capacityDecision: new CapacityDecision(CapacityVerdict.Allow, "ok", OllamaEvictionWarning: false, reservation),
+            fastModelCapabilities: new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: false, IsCloud: false)
+            {
+                ReasoningBudgetEnforceable = false
+            });
+
+        AssertEx.Equal(ReasoningTier.Fast, decision.Tier);
+        AssertEx.Equal(FastModel, decision.Model);
+        AssertEx.Equal("low", decision.Effort);
+        AssertEx.Equal(expected: 4096, decision.MaxOutputTokens);
+        AssertEx.True(decision.SupportsThinking);
+        AssertEx.False(decision.ReasoningBudgetEnforceable, "the replacement's own flag, not the resolved model's");
+        AssertEx.Equal(ReasoningDispatchReasons.ShortTurn, decision.ReasonCode, "every gate passed, so the reason names the tier signal");
+        AssertEx.Equal(reservation, decision.CapacityReservation);
+        AssertEx.False(reservation.Disposed, "the dispatcher hands the reservation over; the runner releases it");
+    }
+
+    [Test]
+    public async Task Fast_WhenTheSwappedModelIsBinary_SendsTheBinaryEffortAndBudget()
+    {
+        // The replacement's ladder, not the resolved model's: a fast model with no graded thinking gets `none` and the
+        // smaller all-answer budget.
+        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
+            fastModelName: FastModel,
+            fastModelLocality: ModelTrustLocality.Local,
+            fastModelCapabilities: new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: false, IsCloud: false));
+
+        AssertEx.Equal(FastModel, decision.Model);
+        AssertEx.Equal("none", decision.Effort);
+        AssertEx.Equal(expected: 2048, decision.MaxOutputTokens);
+    }
+
+    [Test]
+    public async Task Fast_WhenQueueSameModelAndLeaseIsProfilingOwned_NeverSwaps()
+    {
+        // Capacity short-circuits to QueueSameModel off a running-process snapshot that does NOT filter
+        // profiling-owned processes, so "already running" is not yet "can serve this turn". The lease is the interlock
+        // that answers that, and a profiling-owned process would contaminate a measurement and then be torn down.
+        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
+            fastModelName: FastModel,
+            fastModelLocality: ModelTrustLocality.Local,
+            capacityDecision: QueueSameModel(),
+            leaseAcquisition: LlamaServerLeaseAcquisition.ProfilingOwned);
+
+        AssertEx.Equal(ResolvedModel, decision.Model);
+        AssertEx.Equal(ReasoningDispatchReasons.FastModelUnavailable, decision.ReasonCode);
+    }
+
+    [Test]
+    public async Task Fast_WhenQueueSameModelAndLeaseIsEvicting_NeverSwaps()
+    {
+        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
+            fastModelName: FastModel,
+            fastModelLocality: ModelTrustLocality.Local,
+            capacityDecision: QueueSameModel(),
+            leaseAcquisition: LlamaServerLeaseAcquisition.Evicting);
+
+        AssertEx.Equal(ResolvedModel, decision.Model);
+        AssertEx.Equal(ReasoningDispatchReasons.FastModelUnavailable, decision.ReasonCode);
+    }
+
+    [Test]
+    public async Task Fast_WhenQueueSameModelAndTheProcessIsGone_NeverSwaps()
+    {
+        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
+            fastModelName: FastModel,
+            fastModelLocality: ModelTrustLocality.Local,
+            capacityDecision: QueueSameModel(),
+            leaseAcquisition: LlamaServerLeaseAcquisition.NotRunning);
+
+        AssertEx.Equal(ResolvedModel, decision.Model);
+        AssertEx.Equal(ReasoningDispatchReasons.FastModelUnavailable, decision.ReasonCode);
+    }
+
+    [Test]
+    public async Task Fast_WhenQueueSameModelAndLeaseIsGranted_SwapsAndDisposesTheProbeLease()
+    {
+        // The probe lease is a refcount over the running process; the send takes its own, so this one is released the
+        // moment its shape has been read. Holding it would keep an operator eject draining for the whole turn.
+        using var probeLease = new StubInferenceLease();
+        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
+            fastModelName: FastModel,
+            fastModelLocality: ModelTrustLocality.Local,
+            capacityDecision: QueueSameModel(),
+            leaseAcquisition: LlamaServerLeaseAcquisition.Granted(probeLease));
+
+        AssertEx.Equal(FastModel, decision.Model);
+        AssertEx.Equal(ReasoningDispatchReasons.ShortTurn, decision.ReasonCode);
+        AssertEx.True(probeLease.Disposed, "the probe lease must be released immediately");
+        AssertEx.Null(decision.CapacityReservation, "a queued swap loads nothing, so there is nothing to book");
+    }
+
+    [Test]
+    public async Task Fast_WhenANodeSideLookupThrows_FallsBackToSameModelLow()
+    {
+        // The dispatcher's contract is that it never fails a turn. A settings read, a provider lookup or a capacity
+        // probe that throws means "this node cannot serve a swap right now", which is what the reason says.
+        var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
+        runtimeSettings.GetAutoEffortFastModelNameAsync(Arg.Any<CancellationToken>())
+                       .Returns<Task<string?>>(_ => throw new InvalidOperationException("settings unavailable"));
+
+        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true), runtimeSettings: runtimeSettings);
+
+        AssertEx.Equal(ReasoningTier.Fast, decision.Tier);
+        AssertEx.Equal("low", decision.Effort);
+        AssertEx.Equal(ResolvedModel, decision.Model);
+        AssertEx.Equal(ReasoningDispatchReasons.FastModelUnavailable, decision.ReasonCode);
+    }
+
+    [Test]
     public async Task Fast_WhenTheSendPinsItsOwnOutputBudget_KeepsItAndSaysSo()
     {
         // A developer-gated per-send max-output-tokens is an explicit ceiling; the dispatcher's is a default, so the
@@ -423,10 +669,76 @@ public sealed class ReasoningEffortDispatcherTests
             isUnattended);
     }
 
-    private static Task<ReasoningDispatchDecision> DispatchAsync(ReasoningDispatchRequest request, IModelTrustResolver? trustResolver = null)
+    private static Task<ReasoningDispatchDecision> DispatchAsync(ReasoningDispatchRequest request,
+        IModelTrustResolver? trustResolver = null,
+        string? fastModelName = null,
+        string? fastModelProviderName = null,
+        ModelTrustLocality? fastModelLocality = null,
+        CapacityDecision? capacityDecision = null,
+        LlamaServerLeaseAcquisition? leaseAcquisition = null,
+        ModelCapabilitySnapshot? fastModelCapabilities = null,
+        INodeRuntimeSettings? runtimeSettings = null)
     {
-        var sut = new DefaultReasoningEffortDispatcher(trustResolver ?? CreateTrustResolver(ModelTrustLocality.Local));
+        // The resolved model is Local unless a test says otherwise. The FAST model's locality/provider default to the
+        // same answer, so a test names only the gate it is exercising.
+        trustResolver ??= CreateTrustResolver(ModelTrustLocality.Local);
+        if (fastModelName is not null && fastModelLocality is { } fastLocality)
+        {
+            trustResolver.ResolveAsync(fastModelName, Arg.Any<CancellationToken>()).Returns(Task.FromResult(fastLocality));
+        }
+
+        if (runtimeSettings is null)
+        {
+            runtimeSettings = Substitute.For<INodeRuntimeSettings>();
+            runtimeSettings.GetAutoEffortFastModelNameAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(fastModelName));
+        }
+
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                        .Returns(Task.FromResult(fastModelProviderName ?? LlamaServerProviderConstants.ProviderName));
+
+        var capacityService = Substitute.For<ICapacityService>();
+        capacityService.DecideAsync(Arg.Any<CapacityRequest>(), Arg.Any<CancellationToken>())
+                       .Returns(Task.FromResult(capacityDecision ?? new CapacityDecision(CapacityVerdict.Allow, "ok", OllamaEvictionWarning: false)));
+
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.TryAcquireInferenceLease(Arg.Any<string>(), Arg.Any<ModelRole>())
+                  .Returns(leaseAcquisition ?? LlamaServerLeaseAcquisition.NotRunning);
+
+        var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        capabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                          .Returns(Task.FromResult(fastModelCapabilities
+                                                   ?? new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false)
+                                                   {
+                                                       ReasoningBudgetEnforceable = true
+                                                   }));
+
+        var sut = new DefaultReasoningEffortDispatcher(trustResolver,
+            runtimeSettings,
+            providerResolver,
+            capacityService,
+            capabilityResolver,
+            supervisor);
         return sut.DispatchAsync(request, CancellationToken.None);
+    }
+
+    private static CapacityDecision QueueSameModel() =>
+        new(CapacityVerdict.QueueSameModel, "already running", OllamaEvictionWarning: false);
+
+    private sealed class StubDisposable : IDisposable
+    {
+        public bool Disposed { get; private set; }
+
+        public void Dispose() => Disposed = true;
+    }
+
+    private sealed class StubInferenceLease : ILlamaServerInferenceLease
+    {
+        public bool Disposed { get; private set; }
+
+        public bool WasEjected => false;
+
+        public void Dispose() => Disposed = true;
     }
 
     private static IModelTrustResolver CreateTrustResolver(ModelTrustLocality locality)
