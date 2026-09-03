@@ -134,7 +134,10 @@
 		"trainingDatasets": "Datensätze",
 		"trainingComparisons": "Vergleiche",
 		"workSessions": "Arbeitssitzungen",
-		"devWorkflows": "Workflow-Läufe"
+		"devWorkflows": "Workflow-Läufe",
+		"integrationsGroup": "Integrationen",
+		"integrationTriggers": "Trigger",
+		"integrationKeys": "API-Schlüssel"
 	},
 	"chat": {
 		"thoughts": "Gedanken",

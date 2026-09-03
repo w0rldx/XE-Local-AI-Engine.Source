@@ -63,6 +63,10 @@ describe("nodeCapabilities", () => {
 		expect(nodeCapabilities.devWorkflows).toBe(true);
 	});
 
+	it("enables the External Integrations surface by default", () => {
+		expect(nodeCapabilities.integrations).toBe(true);
+	});
+
 	it("defines the route paths targeted by the node shell", () => {
 		expect(nodeRoutePaths).toEqual({
 			home: "/",
@@ -94,6 +98,10 @@ describe("nodeCapabilities", () => {
 			loadedModels: "/loaded-models",
 			preview: "/preview",
 			images: "/images",
+			integrationTriggers: "/integrations/triggers",
+			integrationSessions: "/integrations/sessions",
+			integrationExecutions: "/integrations/executions",
+			integrationKeys: "/integrations/keys",
 			diagnostics: "/diagnostics",
 		});
 	});
