@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
@@ -21,10 +24,38 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     writes one or two; a parallel stage would want a debounce here, keyed by run id, before the client turns each
 ///     ping into a refetch.
 /// </remarks>
-internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner, IDevWorkflowEventPublisher publisher) : IDevWorkflowStore
+internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
+    IDevWorkflowEventPublisher publisher,
+    IDevWorkflowNodeTelemetrySource telemetry,
+    DevWorkflowGraphCache graphs,
+    ILogger<PublishingDevWorkflowStore> logger) : IDevWorkflowStore
 {
+    /// <summary>
+    ///     How long the whole cost collection may take before the settle goes ahead without it. It runs on a dispatcher
+    ///     tick, and a measurement that delays a run is worse than a measurement that is missing.
+    /// </summary>
+    private static readonly TimeSpan CollectionTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    ///     The telemetry members that are NOT additive across attempts. A route belongs to one settle, a served model
+    ///     is a name rather than a quantity, and a set of tool names does not sum — so the retry snapshot carries
+    ///     everything else and only these three are dropped.
+    /// </summary>
+    private static readonly HashSet<string> NonAdditiveTelemetryMembers = new(StringComparer.Ordinal)
+    {
+        "routeJson",
+        "servedModelName",
+        "toolNamesJson"
+    };
+
     private readonly IDevWorkflowStore _inner = inner ?? throw new ArgumentNullException(nameof(inner));
     private readonly IDevWorkflowEventPublisher _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
+    private readonly IDevWorkflowNodeTelemetrySource _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
+    private readonly DevWorkflowGraphCache _graphs = graphs ?? throw new ArgumentNullException(nameof(graphs));
+    private readonly ILogger<PublishingDevWorkflowStore> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public Task<DevWorkflowWorkItemSnapshot> CreateWorkItemAsync(CreateDevWorkflowWorkItemCommand command, CancellationToken cancellationToken = default) =>
         _inner.CreateWorkItemAsync(command, cancellationToken);
@@ -115,7 +146,7 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner, IDevWo
     public Task<DevWorkflowMutationResult> MaterializeNodeRunsAsync(MaterializeDevWorkflowNodesCommand command, CancellationToken cancellationToken = default) =>
         PublishAsync(_inner.MaterializeNodeRunsAsync(command, cancellationToken), DevWorkflowChangeKind.Node, cancellationToken);
 
-    public Task<DevWorkflowMutationResult> TransitionNodeRunAsync(TransitionDevWorkflowNodeRunCommand command, CancellationToken cancellationToken = default)
+    public async Task<DevWorkflowMutationResult> TransitionNodeRunAsync(TransitionDevWorkflowNodeRunCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
 
@@ -123,15 +154,33 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner, IDevWo
         var kind = command.TargetStatus is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked
             ? DevWorkflowChangeKind.Gate
             : DevWorkflowChangeKind.Node;
-        return PublishAsync(_inner.TransitionNodeRunAsync(command, cancellationToken), kind, cancellationToken);
+        var enriched = await EnrichAsync(command, cancellationToken).ConfigureAwait(false);
+        return await PublishAsync(_inner.TransitionNodeRunAsync(enriched, cancellationToken), kind, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
     ///     ONE announcement for the whole route, because it is one commit. Its watermark names the routing event, and
     ///     every reset the same transaction wrote sits after it, so a subscriber replaying from there still sees them.
+    ///     <para>
+    ///         Each reset is enriched exactly as a same-node re-attempt is: this is the OTHER write path into the store's
+    ///         node-run transition, and a cross-node retry that skipped it would lose an attempt from every cost total.
+    ///         The enrichment is re-derived on every ask and never cached, because the fix loop re-sends the same command
+    ///         object after a lost concurrency race — reading the rows again is what keeps the second pass correct.
+    ///     </para>
     /// </summary>
-    public Task<DevWorkflowMutationResult> RouteRetryAsync(RouteDevWorkflowRetryCommand command, CancellationToken cancellationToken = default) =>
-        PublishAsync(_inner.RouteRetryAsync(command, cancellationToken), DevWorkflowChangeKind.Node, cancellationToken);
+    public async Task<DevWorkflowMutationResult> RouteRetryAsync(RouteDevWorkflowRetryCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var resets = new List<TransitionDevWorkflowNodeRunCommand>(command.Resets.Count);
+        foreach (var reset in command.Resets)
+        {
+            resets.Add(await EnrichAsync(reset, cancellationToken).ConfigureAwait(false));
+        }
+
+        return await PublishAsync(_inner.RouteRetryAsync(command with { Resets = resets }, cancellationToken), DevWorkflowChangeKind.Node, cancellationToken)
+            .ConfigureAwait(false);
+    }
 
     public Task<DevWorkflowMutationResult> AttachWorkSessionAsync(AttachDevWorkflowWorkSessionCommand command, CancellationToken cancellationToken = default) =>
         PublishAsync(_inner.AttachWorkSessionAsync(command, cancellationToken), DevWorkflowChangeKind.Node, cancellationToken);
@@ -191,6 +240,174 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner, IDevWo
         int limit = 200,
         CancellationToken cancellationToken = default) =>
         _inner.ListEventsAsync(runId, sinceSequence, limit, cancellationToken);
+
+    /// <summary>
+    ///     Attaches what the settling attempt cost, or forwards the command untouched. The gate is the target STATUS,
+    ///     not the caller: a terminal, <c>Blocked</c> or <c>WaitingForApproval</c> move is where an attempt's spend
+    ///     stops changing, and a call site added later crosses this method whether or not anyone remembers it.
+    ///     <para>
+    ///         <c>Blocked</c> and <c>WaitingForApproval</c> are in the set deliberately. They are LIVE statuses, yet
+    ///         they are where the most expensive node runs land — retry-exhausted, budget-exhausted, resume-exhausted,
+    ///         session-less — and gating on terminality alone would leave every abandoned node run reporting nothing.
+    ///     </para>
+    ///     <para>
+    ///         The whole enrichment is contained: any throw, any timeout, and the ORIGINAL command goes through. It
+    ///         runs before the inner store call and never inside its transaction, so a crash mid-collect loses a
+    ///         measurement and nothing else.
+    ///     </para>
+    /// </summary>
+    private async Task<TransitionDevWorkflowNodeRunCommand> EnrichAsync(TransitionDevWorkflowNodeRunCommand command, CancellationToken cancellationToken)
+    {
+        if (IsReAttempt(command))
+        {
+            return await EnrichReAttemptAsync(command, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (!WritesTelemetry(command.TargetStatus))
+        {
+            return command;
+        }
+
+        try
+        {
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(CollectionTimeout);
+
+            // The PRE-write row, and it is read for four things only: the work session, the development task, the
+            // attempt's start and the row's node type. Its Status and OutputJson are the previous attempt's and must
+            // never be the ones a route question is asked about.
+            var snapshot = await _inner.GetNodeRunAsync(command.NodeRunId, deadline.Token).ConfigureAwait(false);
+            var routeJson = await RouteJsonAsync(command, snapshot, deadline.Token).ConfigureAwait(false);
+            var collected = await _telemetry.CollectAsync(snapshot, command.TargetStatus, deadline.Token).ConfigureAwait(false);
+
+            if (collected is null && routeJson is null)
+            {
+                return command;
+            }
+
+            return command with { Telemetry = (collected ?? new DevWorkflowNodeTelemetry()) with { RouteJson = routeJson } };
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning(exception,
+                "Cost telemetry could not be collected for node run {NodeRunId}; it settles without it.",
+                command.NodeRunId);
+            return command;
+        }
+    }
+
+    /// <summary>
+    ///     The route this settle took, or null when the move is not terminal — a node run that is <c>Blocked</c> or
+    ///     waiting on a human has not finished, so it has routed nowhere yet, and saying so with a null is honest where
+    ///     an empty document would not be.
+    ///     <para>
+    ///         The command's own target status and output are projected onto the pre-write row FIRST. Asked of the row
+    ///         as it stands, every edge would answer <c>Pending</c> — the row still reads <c>Running</c>, carrying the
+    ///         previous attempt's output — and the route document would be empty in every real run.
+    ///     </para>
+    /// </summary>
+    private async Task<string?> RouteJsonAsync(TransitionDevWorkflowNodeRunCommand command,
+        DevWorkflowNodeRunSnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        if (!DevWorkflowStateMachine.IsTerminal(command.TargetStatus))
+        {
+            return null;
+        }
+
+        var routeSource = snapshot with
+        {
+            Status = command.TargetStatus,
+            OutputJson = command.OutputJson ?? snapshot.OutputJson
+        };
+
+        var run = await _inner.GetRunAsync(command.RunId, cancellationToken).ConfigureAwait(false);
+        var decision = routeSource.NodeType == DevWorkflowNodeType.HumanGate
+            ? DevWorkflowStateMachine.GateDecisionFrom(routeSource.OutputJson)
+            : null;
+
+        return DevWorkflowStateMachine.RouteJson(DevWorkflowStateMachine.RouteTaken(_graphs.Resolve(run), routeSource, decision));
+    }
+
+    /// <summary>
+    ///     Arm B: the failing attempt's cost, captured onto the retry event BEFORE the reset that empties the row.
+    ///     <para>
+    ///         The node-run row keeps the LAST attempt only, so without this a node that failed twice and succeeded on
+    ///         the third try would report one attempt of three, and every total that summed the rows would silently
+    ///         under-report. The event log is where the per-attempt history already lives, and the retry event's own
+    ///         detail is the place the event catalog names for it — so no event type is added and the retry policy,
+    ///         which is a singleton and cannot hold a scoped collector, is not touched at all.
+    ///     </para>
+    ///     <para>
+    ///         The pre-write row is also the last place the failing attempt's work session still exists: the command
+    ///         clears it, but downstream, inside the store's own transition.
+    ///     </para>
+    /// </summary>
+    private async Task<TransitionDevWorkflowNodeRunCommand> EnrichReAttemptAsync(TransitionDevWorkflowNodeRunCommand command,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(CollectionTimeout);
+
+            var snapshot = await _inner.GetNodeRunAsync(command.NodeRunId, deadline.Token).ConfigureAwait(false);
+
+            // Collected as the FAILED attempt it is. The row itself may still read Running — a re-attempt is written
+            // straight over a live row — but what this cost vector describes is an attempt that is over.
+            var collected = await _telemetry.CollectAsync(snapshot, DevWorkflowNodeRunStatus.Failed, deadline.Token).ConfigureAwait(false);
+            if (collected is null)
+            {
+                return command;
+            }
+
+            return MergeAttemptCost(command.DetailJson!, collected) is { } merged ? command with { DetailJson = merged } : command;
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning(exception,
+                "The failing attempt's cost could not be captured onto node run {NodeRunId}'s retry event; it re-attempts without it.",
+                command.NodeRunId);
+            return command;
+        }
+    }
+
+    /// <summary>
+    ///     Merges the COMPLETE additive cost vector into an existing retry detail, or answers null when the payload is
+    ///     not a JSON object and must be forwarded verbatim.
+    ///     <para>
+    ///         The members come from the telemetry record itself minus the three that cannot be added up — the route,
+    ///         the served model and the tool names. A column added to that record later therefore rides here
+    ///         automatically, or it is not additive; nothing enumerates the nine by hand.
+    ///     </para>
+    /// </summary>
+    private static string? MergeAttemptCost(string detailJson, DevWorkflowNodeTelemetry telemetry)
+    {
+        if (JsonNode.Parse(detailJson) is not JsonObject detail || JsonSerializer.SerializeToNode(telemetry, JsonOptions) is not JsonObject cost)
+        {
+            return null;
+        }
+
+        foreach (var member in cost.Where(member => !NonAdditiveTelemetryMembers.Contains(member.Key)))
+        {
+            detail[member.Key] = member.Value?.DeepClone();
+        }
+
+        return detail.ToJsonString(JsonOptions);
+    }
+
+    /// <summary>
+    ///     The re-attempt write, recognised from the command alone — target <c>Pending</c>, the attempt incremented, a
+    ///     detail to merge into. Both re-attempt write paths build exactly this shape from the same composer, which is
+    ///     why one predicate covers them.
+    /// </summary>
+    private static bool IsReAttempt(TransitionDevWorkflowNodeRunCommand command) =>
+        command.TargetStatus == DevWorkflowNodeRunStatus.Pending && command.IncrementAttempt && command.DetailJson is not null;
+
+    /// <summary>Where an attempt's spend stops changing: it has settled, been abandoned, or stopped to ask a human.</summary>
+    private static bool WritesTelemetry(DevWorkflowNodeRunStatus status) =>
+        DevWorkflowStateMachine.IsTerminal(status)
+        || status is DevWorkflowNodeRunStatus.Blocked or DevWorkflowNodeRunStatus.WaitingForApproval;
 
     private async Task<DevWorkflowMutationResult> PublishAsync(Task<DevWorkflowMutationResult> mutation,
         DevWorkflowChangeKind kind,

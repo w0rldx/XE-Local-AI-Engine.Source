@@ -35,8 +35,15 @@ internal static class AddNodeDevWorkflowsExtensions
         // The store is resolved through the publishing decorator, so no caller can commit a change without announcing
         // it. Registering the concrete type separately is what lets the decorator take it as its inner store.
         builder.Services.AddScoped<DevWorkflowStore>();
+
+        // Scoped beside the executors: it reads the work-session and execution-log stores, which are scoped, and it is
+        // resolved inside the per-tick scope the dispatcher already opens.
+        builder.Services.AddScoped<IDevWorkflowNodeTelemetrySource, DevWorkflowNodeTelemetrySource>();
         builder.Services.AddScoped<IDevWorkflowStore>(services => new PublishingDevWorkflowStore(services.GetRequiredService<DevWorkflowStore>(),
-            services.GetRequiredService<IDevWorkflowEventPublisher>()));
+            services.GetRequiredService<IDevWorkflowEventPublisher>(),
+            services.GetRequiredService<IDevWorkflowNodeTelemetrySource>(),
+            services.GetRequiredService<DevWorkflowGraphCache>(),
+            services.GetRequiredService<ILogger<PublishingDevWorkflowStore>>()));
         builder.Services.TryAddSingleton<IDevWorkflowEventPublisher, NoOpDevWorkflowEventPublisher>();
         builder.Services.AddSingleton<IDevWorkflowArtifactBlobStore, ManagedDevWorkflowArtifactBlobStore>();
 

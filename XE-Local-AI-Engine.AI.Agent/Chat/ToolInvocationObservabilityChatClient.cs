@@ -86,7 +86,7 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
             return;
         }
 
-        ProviderCallBudget.Current?.RecordToolCallRequested();
+        ProviderCallBudget.Current?.RecordToolCallRequested(functionCall.Name);
 
         // Names the model's REQUEST to call a tool (a FunctionCallContent observed on the response), NOT the tool's
         // execution: this hop sits above UseFunctionInvocation, so the delegate has not run yet and this span's

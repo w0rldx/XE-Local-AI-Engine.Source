@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -153,7 +154,11 @@ public sealed class PublishingDevWorkflowStoreTests
         inner.ListNodeRunsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns([]);
 
         var publisher = Substitute.For<IDevWorkflowEventPublisher>();
-        return (new PublishingDevWorkflowStore(inner, publisher), publisher);
+
+        // A telemetry source that answers nothing: this suite is about the announcement, and a collector that returned
+        // something would only add a second read to every probe.
+        var telemetry = new StubDevWorkflowNodeTelemetrySource();
+        return (new PublishingDevWorkflowStore(inner, publisher, telemetry, new DevWorkflowGraphCache(), NullLogger<PublishingDevWorkflowStore>.Instance), publisher);
     }
 
     private sealed record Probe(string Method, DevWorkflowChangeKind Kind, Func<IDevWorkflowStore, Task> Invoke);
