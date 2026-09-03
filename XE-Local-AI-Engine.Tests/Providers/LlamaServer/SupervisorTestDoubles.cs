@@ -59,7 +59,7 @@ internal sealed class FakeProcessLauncher : ILlamaServerProcessLauncher
 }
 
 /// <summary>An in-memory process handle whose exit + tree-kill are directly controllable by the test.</summary>
-internal sealed class FakeProcessHandle(int pid, bool exitOnTreeKill = true) : ILlamaServerProcessHandle
+internal sealed class FakeProcessHandle(int pid, bool exitOnTreeKill = true, Action? onTreeKill = null) : ILlamaServerProcessHandle
 {
     private readonly TaskCompletionSource _exitSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _exited;
@@ -75,6 +75,9 @@ internal sealed class FakeProcessHandle(int pid, bool exitOnTreeKill = true) : I
 
     public void TreeKill()
     {
+        // Runs BEFORE the exit is signalled, so a test can hold a teardown open and observe the supervisor's state
+        // mid-removal.
+        onTreeKill?.Invoke();
         Interlocked.Exchange(ref _killed, value: 1);
         if (exitOnTreeKill)
         {
@@ -303,8 +306,29 @@ internal sealed class FakeProcessSupervisor(params LlamaServerProcessHealth[] ru
     /// </summary>
     public LlamaServerLeaseAcquisition LeaseAcquisition { get; set; } = LlamaServerLeaseAcquisition.NotRunning;
 
+    /// <summary>
+    ///     Acquisitions handed out in order, one per call, before falling back to <see cref="LeaseAcquisition" />. Lets a
+    ///     test replay a transient refusal followed by the state that clears it.
+    /// </summary>
+    public Queue<LlamaServerLeaseAcquisition> LeaseSequence { get; } = new();
+
+    /// <summary>Endpoints handed out in order, one per ensure, before falling back to <see cref="EnsureEndpoint" />.</summary>
+    public Queue<Uri> EnsureEndpointSequence { get; } = new();
+
+    /// <summary>How many times <see cref="EnsureRunningAsync" /> was called — the re-ensure witness.</summary>
+    public int EnsureCalls { get; private set; }
+
+    /// <summary>The roles <see cref="TryAcquireInferenceLease" /> was asked for, in order.</summary>
+    public List<ModelRole> LeasedRoles { get; } = [];
+
     public Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct)
     {
+        EnsureCalls++;
+        if (EnsureEndpointSequence.Count > 0)
+        {
+            return Task.FromResult(new LlamaServerEndpoint(modelName, role, EnsureEndpointSequence.Dequeue()));
+        }
+
         if (EnsureEndpoint is { } endpoint)
         {
             return Task.FromResult(new LlamaServerEndpoint(modelName, role, endpoint));
@@ -325,7 +349,8 @@ internal sealed class FakeProcessSupervisor(params LlamaServerProcessHealth[] ru
 
     public LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role)
     {
-        return LeaseAcquisition;
+        LeasedRoles.Add(role);
+        return LeaseSequence.Count > 0 ? LeaseSequence.Dequeue() : LeaseAcquisition;
     }
 
     public Task<T> RunExclusiveProfilingAsync<T>(string modelName,
@@ -358,6 +383,19 @@ internal sealed class FakeProcessSupervisor(params LlamaServerProcessHealth[] ru
     public static LlamaServerProcessHealth RunningChat(string modelName = "demo-model")
     {
         return new LlamaServerProcessHealth(modelName, ModelRole.Chat, IsResponsive: true, Detail: "running");
+    }
+}
+
+/// <summary>An inference lease whose disposal is observable, so a test can assert it spans the whole request.</summary>
+internal sealed class RecordingInferenceLease : ILlamaServerInferenceLease
+{
+    public bool Disposed { get; private set; }
+
+    public bool WasEjected => false;
+
+    public void Dispose()
+    {
+        Disposed = true;
     }
 }
 

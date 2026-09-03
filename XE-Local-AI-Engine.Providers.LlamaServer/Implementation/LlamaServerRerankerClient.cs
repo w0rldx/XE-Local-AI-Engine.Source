@@ -21,6 +21,12 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </remarks>
 public sealed class LlamaServerRerankerClient : IRerankerClient
 {
+    /// <summary>
+    ///     How many times a rerank re-ensures around a profiling spawn before degrading to fusion order. Profiling
+    ///     holds the per-key single-flight gate through its own teardown, so one re-ensure normally suffices.
+    /// </summary>
+    private const int MaxProfilingReEnsures = 3;
+
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
@@ -93,7 +99,37 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
 
         try
         {
-            var endpoint = await _supervisor.EnsureRunningAsync(modelName, ModelRole.Reranker, cancellationToken).ConfigureAwait(false);
+            // Hold an inference lease for the scoring round-trip, exactly as the chat path does. Without it this role's
+            // ActiveLeases stayed 0, so a profiling pre-spawn eviction claimed the process and tree-killed the rerank
+            // mid-flight — and an operator eject drained past it for the same reason. A key a measurement spawn owns is
+            // re-ensured rather than scored against: its endpoint may be the freed port the measurement now answers on.
+            LlamaServerEndpoint endpoint;
+            ILlamaServerInferenceLease? acquired;
+            var attempt = 0;
+            while (true)
+            {
+                endpoint = await _supervisor.EnsureRunningAsync(modelName, ModelRole.Reranker, cancellationToken).ConfigureAwait(false);
+                var acquisition = _supervisor.TryAcquireInferenceLease(modelName, ModelRole.Reranker);
+                if (acquisition.ProcessEvicting)
+                {
+                    LogDegrade("ejecting", documents.Count, requestTimeout, nameof(LlamaServerLeaseAcquisition.Evicting));
+                    return null;
+                }
+
+                if (!acquisition.ProcessProfiling)
+                {
+                    acquired = acquisition.Lease;
+                    break;
+                }
+
+                if (attempt++ >= MaxProfilingReEnsures)
+                {
+                    LogDegrade("profiling", documents.Count, requestTimeout, nameof(LlamaServerLeaseAcquisition.ProfilingOwned));
+                    return null;
+                }
+            }
+
+            using var lease = acquired;
 
             // BaseAddress is the OpenAI-compatible ".../v1" base (no trailing slash); the raw rerank route is ".../v1/rerank".
             var requestUri = new Uri($"{endpoint.BaseAddress.AbsoluteUri}/rerank");

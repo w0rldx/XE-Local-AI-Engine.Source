@@ -626,7 +626,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 continue;
             }
 
-            if (!running.TryBeginEvict(out var claim, out var alreadyEvicting))
+            if (!running.TryBeginEvict(forProfiling: true, out var claim, out var alreadyEvicting))
             {
                 foreach (var (_, claimedProcess, claimedToken) in claimed)
                 {
@@ -736,36 +736,55 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         var key = new ProcessKey(modelName, role);
 
-        // A profiling-owned process is invisible to inference: chat paths ensure first and look the lease up by key
-        // afterwards, so without this a chat whose own process was replaced in between would lease the transient
-        // profiling process and be killed by its teardown. NotRunning rather than Evicting — there is nothing to drain,
-        // and the caller should treat it exactly as it treats an un-warm key.
-        if (!_processes.TryGetValue(key, out var running) || running.Handle.HasExited || running.IsProfilingOwned)
+        if (!_processes.TryGetValue(key, out var running) || running.Handle.HasExited)
         {
             return LlamaServerLeaseAcquisition.NotRunning;
+        }
+
+        // A profiling-owned process is invisible to inference: callers ensure first and look the lease up by key
+        // afterwards, so without this a chat whose own process was replaced in between would lease the transient
+        // profiling process and be killed by its teardown. Reported as its OWN refusal rather than as NotRunning:
+        // "not running" licenses the caller to proceed leaseless against the endpoint it already resolved, and the
+        // port allocator commonly hands the measurement spawn the port the replaced process just freed — so that
+        // caller would reach the profiling process anyway. The caller must re-ensure instead.
+        if (running.IsProfilingOwned)
+        {
+            return LlamaServerLeaseAcquisition.ProfilingOwned;
         }
 
         // A draining eject refuses new leases — and the refusal REASON is surfaced so the caller fails the request as
         // operator-ejected instead of running it leaseless under the drain (untracked by the drain, killed mid-flight
         // by the teardown, and then self-heal-respawning the just-ejected model).
-        if (running.IsEvicting)
+        var eviction = running.EvictionOwner;
+        if (eviction != 0)
         {
-            return LlamaServerLeaseAcquisition.Evicting;
+            return Refusal(eviction);
         }
 
         // Acquire, then RE-CHECK evicting/exited: an eject that flipped the flag between the guard above and here must
         // not gain a lease that would extend its drain — release and refuse, classifying the refusal at this instant.
         running.AcquireLease();
-        if (running.IsEvicting || running.Handle.HasExited)
+        eviction = running.EvictionOwner;
+        if (eviction != 0 || running.Handle.HasExited)
         {
             running.ReleaseLease();
-            return running.IsEvicting ? LlamaServerLeaseAcquisition.Evicting : LlamaServerLeaseAcquisition.NotRunning;
+            return eviction != 0 ? Refusal(eviction) : LlamaServerLeaseAcquisition.NotRunning;
         }
 
 #pragma warning disable CA2000 // Ownership of the lease transfers to the caller inside the returned acquisition; the interface contract obliges the caller to dispose it.
         return LlamaServerLeaseAcquisition.Granted(new InferenceLease(running));
 #pragma warning restore CA2000
     }
+
+    /// <summary>
+    ///     Classifies a refusal against a process whose teardown has begun. A profiling pre-spawn eviction is a
+    ///     transient benchmark spawn, not an operator eject: reported as the latter, a chat fails terminally with
+    ///     "the model is being ejected by the operator" for something that clears itself in seconds, and embedding and
+    ///     rerank misreport the same way. Reported as its own refusal the caller lands in the bounded re-ensure arm.
+    ///     Takes the owning claim the caller already read, so the classification cannot straddle two reads.
+    /// </summary>
+    private static LlamaServerLeaseAcquisition Refusal(long evictionOwner) =>
+        evictionOwner < 0 ? LlamaServerLeaseAcquisition.ProfilingOwned : LlamaServerLeaseAcquisition.Evicting;
 
     /// <summary>
     ///     Waits (bounded by <see cref="LlamaServerSupervisorOptions.EjectDrainTimeout" />) for a process's active
@@ -2024,8 +2043,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     /// <summary>A live, registered process and its last-used timestamp (drives idle-TTL + LRU eviction).</summary>
     internal sealed class RunningProcess(ILlamaServerProcessHandle handle, LlamaServerEndpoint endpoint, int port, DateTimeOffset startedUtc)
     {
-        // Process-wide source of eviction claim ids. Only ever compared for equality, so wraparound after 2^63 claims
-        // is not a real concern; 0 is reserved for "no teardown owns this process".
+        // Process-wide source of eviction claim ids: always positive, negated by the claimant when it is profiling.
+        // Only ever compared for equality, so wraparound is not a real concern; 0 means "no teardown owns this".
         private static long s_nextEvictionClaim;
 
         private long _lastUsedTicks = startedUtc.UtcTicks;
@@ -2038,6 +2057,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         // WHICH teardown owns this process, not merely THAT one does: two claimants can hold the mark in sequence, and
         // a rollback that cleared it unconditionally erased the mark the other one was still relying on.
+        // The SIGN carries the origin: negative for a profiling pre-spawn eviction, positive for an operator eject or
+        // a cap-admission reap. One field, so a reader classifies from a single read and can never see the owner and
+        // the origin out of step — which would report a live eject as a transient benchmark spawn.
         private long _evictionOwner;
         private int _ejected;
 
@@ -2085,8 +2107,15 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         /// <summary>Number of in-flight inference requests currently leasing this process (drives graceful-eject drain).</summary>
         public int ActiveLeases => Volatile.Read(ref _activeLeases);
 
-        /// <summary><see langword="true" /> once an operator eject has begun for this process — new leases are refused.</summary>
-        public bool IsEvicting => Volatile.Read(ref _evictionOwner) != 0;
+        /// <summary><see langword="true" /> once a teardown has begun for this process — new leases are refused.</summary>
+        public bool IsEvicting => EvictionOwner != 0;
+
+        /// <summary>
+        ///     The claim currently owning this process's teardown: 0 when none, negative when it was taken by a
+        ///     profiling pre-spawn eviction, positive otherwise. One read answers both "is a teardown running" and
+        ///     "whose", which is what lets a refusal be classified atomically.
+        /// </summary>
+        public long EvictionOwner => Volatile.Read(ref _evictionOwner);
 
         /// <summary><see langword="true" /> once this process was force-ejected while in-flight work still held a lease.</summary>
         public bool WasEjected => Volatile.Read(ref _ejected) != 0;
@@ -2111,7 +2140,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         /// </summary>
         public long MarkEvicting()
         {
-            var claim = NextEvictionClaim();
+            var claim = NextEvictionClaim(forProfiling: false);
             Interlocked.Exchange(ref _evictionOwner, claim);
             return claim;
         }
@@ -2124,23 +2153,23 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ///     inference. <paramref name="claim" /> is the token to pass to <see cref="ReleaseEvictionClaim" />, and is
         ///     0 on any failure.
         /// </summary>
-        public bool TryBeginEvict(out long claim) => TryBeginEvict(out claim, out _);
+        public bool TryBeginEvict(bool forProfiling, out long claim) => TryBeginEvict(forProfiling, out claim, out _);
 
         /// <summary>
-        ///     As <see cref="TryBeginEvict(out long)" />, additionally reporting WHICH failure occurred:
+        ///     As <see cref="TryBeginEvict(bool, out long)" />, additionally reporting WHICH failure occurred:
         ///     <paramref name="alreadyEvicting" /> is <see langword="true" /> when another teardown already owned this
         ///     process (the compare-exchange lost) and <see langword="false" /> when an in-flight lease won the race.
         ///     A caller that reports the refusal needs the distinction — the lost-exchange case has no lease count.
         /// </summary>
-        public bool TryBeginEvict(out long claim, out bool alreadyEvicting)
+        public bool TryBeginEvict(bool forProfiling, out long claim, out bool alreadyEvicting)
         {
             alreadyEvicting = false;
-            claim = NextEvictionClaim();
+            claim = NextEvictionClaim(forProfiling);
             if (Interlocked.CompareExchange(ref _evictionOwner, claim, comparand: 0) != 0)
             {
                 claim = 0;
                 alreadyEvicting = true;
-                return false; // An operator eject already owns this process's teardown.
+                return false; // A teardown already owns this process.
             }
 
             if (ActiveLeases > 0)
@@ -2167,7 +2196,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             }
         }
 
-        private static long NextEvictionClaim() => Interlocked.Increment(ref s_nextEvictionClaim);
+        /// <summary>A fresh claim, negated when the claimant is a profiling pre-spawn eviction — see <see cref="EvictionOwner" />.</summary>
+        private static long NextEvictionClaim(bool forProfiling)
+        {
+            var claim = Interlocked.Increment(ref s_nextEvictionClaim);
+            return forProfiling ? -claim : claim;
+        }
 
         /// <summary>Records a force-eject with in-flight work so the leaseholder classifies the drop as an operator eject.</summary>
         public void MarkEjected()

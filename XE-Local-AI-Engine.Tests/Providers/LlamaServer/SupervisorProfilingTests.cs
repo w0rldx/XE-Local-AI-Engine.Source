@@ -618,7 +618,9 @@ public sealed class SupervisorProfilingTests
             CancellationToken.None);
 
         AssertEx.Null(acquisition.Lease, "Inference must never lease the transient profiling process.");
-        AssertEx.False(acquisition.ProcessEvicting, "The refusal is 'not running', not a draining eject.");
+        AssertEx.False(acquisition.ProcessEvicting, "The refusal is profiling ownership, not a draining eject.");
+        AssertEx.True(acquisition.ProcessProfiling,
+            "Reported as its own refusal: 'not running' would license the caller to proceed leaseless on its cached endpoint.");
     }
 
     [Test]
@@ -761,7 +763,7 @@ public sealed class SupervisorProfilingTests
         await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
         var chat = AssertEx.NotNull(supervisor.GetRegisteredProcess("llama3", ModelRole.Chat));
 
-        AssertEx.True(chat.TryBeginEvict(out var profilingClaim));
+        AssertEx.True(chat.TryBeginEvict(forProfiling: true, out var profilingClaim));
         var ejectClaim = chat.MarkEvicting();
         chat.ReleaseEvictionClaim(profilingClaim);
 
@@ -773,6 +775,84 @@ public sealed class SupervisorProfilingTests
         chat.ReleaseEvictionClaim(ejectClaim);
         AssertEx.False(chat.IsEvicting);
         AssertEx.NotNull(supervisor.TryAcquireInferenceLease("llama3", ModelRole.Chat).Lease).Dispose();
+    }
+
+    [Test]
+    public async Task EvictionClaim_TakenByProfiling_RefusesLeasesAsProfilingRatherThanAsAnOperatorEject()
+    {
+        // The claim-to-remove window. Reported as a plain eject, a chat here fails terminally with "the model is being
+        // ejected by the operator" for a benchmark spawn that clears itself in seconds.
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher);
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+        var chat = AssertEx.NotNull(supervisor.GetRegisteredProcess("llama3", ModelRole.Chat));
+
+        AssertEx.True(chat.TryBeginEvict(forProfiling: true, out var claim));
+
+        var refused = supervisor.TryAcquireInferenceLease("llama3", ModelRole.Chat);
+        AssertEx.Null(refused.Lease);
+        AssertEx.True(refused.ProcessProfiling, "A profiling claim must refuse as profiling, not as an operator eject.");
+        AssertEx.False(refused.ProcessEvicting);
+
+        // Releasing the profiling claim restores normal leasing.
+        chat.ReleaseEvictionClaim(claim);
+        AssertEx.NotNull(supervisor.TryAcquireInferenceLease("llama3", ModelRole.Chat).Lease).Dispose();
+    }
+
+    [Test]
+    public async Task Profiling_MidRemoval_RefusesAStillClaimedRoleAsProfilingRatherThanAsAnOperatorEject()
+    {
+        // The real claim-to-remove window, through TryEvictAllRolesForProfilingAsync: it claims EVERY role first, then
+        // removes them one at a time. While the first removal is held open, the second role is still registered and
+        // still claimed — and a chat landing there must be told a benchmark is spawning, not that the operator is
+        // ejecting the model (which is terminal and never retried).
+        using var firstKillReached = new ManualResetEventSlim(initialState: false);
+        using var releaseFirstKill = new ManualResetEventSlim(initialState: false);
+        var launches = 0;
+        var launcher = new FakeProcessLauncher(_ => Interlocked.Increment(ref launches) == 1
+            ? new FakeProcessHandle(pid: 5000, exitOnTreeKill: true, () =>
+            {
+                firstKillReached.Set();
+                releaseFirstKill.Wait(TimeSpan.FromSeconds(10));
+            })
+            : new FakeProcessHandle(pid: 5000 + launches));
+        await using var supervisor = SupervisorFactory.Create(launcher);
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Embedding, CancellationToken.None);
+
+        var profiling = Task.Run(() => supervisor.RunExclusiveProfilingAsync("llama3",
+            ModelRole.Chat,
+            ResolvedLaunchArguments.Explore(),
+            enableMetrics: false,
+            (_, _) => Task.FromResult(result: true),
+            CancellationToken.None));
+
+        AssertEx.True(firstKillReached.Wait(TimeSpan.FromSeconds(10)), "The first role's teardown must be reached.");
+
+        // Chat is already detached; Embedding is claimed and still registered — the window under test.
+        var refused = supervisor.TryAcquireInferenceLease("llama3", ModelRole.Embedding);
+        releaseFirstKill.Set();
+        await profiling;
+
+        AssertEx.Null(refused.Lease);
+        AssertEx.True(refused.ProcessProfiling, "A role claimed by profiling must refuse as profiling, not as an operator eject.");
+        AssertEx.False(refused.ProcessEvicting);
+        AssertEx.Null(supervisor.GetRegisteredProcess("llama3", ModelRole.Embedding), "Every claimed role is torn down.");
+    }
+
+    [Test]
+    public async Task EvictionClaim_TakenByAnOperatorEject_StillRefusesLeasesAsEvicting()
+    {
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher);
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+        var chat = AssertEx.NotNull(supervisor.GetRegisteredProcess("llama3", ModelRole.Chat));
+
+        _ = chat.MarkEvicting();
+
+        var refused = supervisor.TryAcquireInferenceLease("llama3", ModelRole.Chat);
+        AssertEx.True(refused.ProcessEvicting, "An operator eject must still be reported as one.");
+        AssertEx.False(refused.ProcessProfiling);
     }
 
     private static void AssertArgumentValue(IReadOnlyList<string> arguments, string argument, string expectedValue)

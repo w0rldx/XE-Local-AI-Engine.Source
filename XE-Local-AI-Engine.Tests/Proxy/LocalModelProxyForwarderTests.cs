@@ -143,6 +143,38 @@ public sealed class LocalModelProxyForwarderTests
     }
 
     [Test]
+    public async Task ForwardChatCompletions_WhenProfilingOwnsTheKey_ReEnsuresAndForwardsAfterProfilingEnds()
+    {
+        // Profiling replaced the process between EnsureRunning and the lease lookup. Forwarding on the endpoint we
+        // already resolved would reach the measurement process, whose port the spawn commonly inherits.
+        using var upstream = new CapturingHandler(HttpStatusCode.OK, "application/json", "{}");
+        var forwarder = CreateForwarder(out _, out var supervisor, upstream);
+        supervisor.TryAcquireInferenceLease(InstalledModel, ModelRole.Chat)
+                  .Returns(LlamaServerLeaseAcquisition.ProfilingOwned, LlamaServerLeaseAcquisition.NotRunning);
+        var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out _);
+
+        await forwarder.ForwardChatCompletionsAsync(context).ConfigureAwait(false);
+
+        _ = supervisor.Received(2).EnsureRunningAsync(InstalledModel, ModelRole.Chat, Arg.Any<CancellationToken>());
+        AssertEx.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+        AssertEx.NotNull(upstream.LastRequest);
+    }
+
+    [Test]
+    public async Task ForwardChatCompletions_WhenProfilingNeverReleasesTheKey_Returns503WithoutForwarding()
+    {
+        using var upstream = Idle();
+        var forwarder = CreateForwarder(out _, out var supervisor, upstream);
+        supervisor.TryAcquireInferenceLease(InstalledModel, ModelRole.Chat).Returns(LlamaServerLeaseAcquisition.ProfilingOwned);
+        var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out _);
+
+        await forwarder.ForwardChatCompletionsAsync(context).ConfigureAwait(false);
+
+        AssertEx.Equal(StatusCodes.Status503ServiceUnavailable, context.Response.StatusCode);
+        AssertEx.Null(upstream.LastRequest, "Nothing may be forwarded to the measurement process.");
+    }
+
+    [Test]
     public async Task ForwardEmbeddings_TargetsTheEmbeddingRoleAndTheEmbeddingsSubpath()
     {
         using var upstream = new CapturingHandler(HttpStatusCode.OK, "application/json", "{\"data\":[]}");

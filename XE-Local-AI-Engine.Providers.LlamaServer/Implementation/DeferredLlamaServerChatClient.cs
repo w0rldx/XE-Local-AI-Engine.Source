@@ -37,6 +37,16 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     // request is refused up front (never started) instead of running untracked under the drain.
     private const string ModelEjectingMessage = "The model is being ejected by the operator; this request was not started.";
 
+    // User-safe terminal message when back-to-back measurement spawns keep owning this model's key past the bounded
+    // re-ensure. Retryable by nature — the measurement ends on its own.
+    private const string ModelProfilingMessage = "The model is being profiled by a benchmark right now; this request was not started. Try again shortly.";
+
+    // How many times a request re-ensures around a profiling spawn before giving up. Profiling holds the per-key
+    // single-flight gate through its own teardown, so ONE re-ensure normally suffices: the re-ensure parks on that gate
+    // and returns a process of our own. The extra rounds cover back-to-back measurements; the bound is what stops an
+    // unbroken benchmark queue from parking an interactive request indefinitely.
+    private const int MaxProfilingReEnsures = 3;
+
     // In-process marker (duplicated from InvocationAgentFactory.LlamaDisableThinkingMarkerKey — AI.Agent does not
     // reference this assembly). When present+true, reasoning is OFF on a thinking-capable model and the outbound
     // llama-server request must carry chat_template_kwargs.enable_thinking=false so a Qwen3-class chat template stops
@@ -85,6 +95,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     {
         options = ApplyToolSchemaCompatibility(ApplySamplingPassthrough(ApplyReasoningBudget(ApplyThinkingSwitch(options))));
         var healed = false;
+        var profilingReEnsures = 0;
         while (true)
         {
             var resolved = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
@@ -94,15 +105,35 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             // operator-ejected (running it leaseless would slip under the eject drain, be killed mid-flight by the
             // teardown, and then self-heal-respawn the just-ejected model — so eject would never stick); only a
             // genuinely absent/exited process proceeds leaseless, relying on the self-heal below.
-            var acquisition = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
-            if (acquisition.ProcessEvicting)
+            ILlamaServerInferenceLease? lease = null;
+            if (!resolved.Bound)
             {
-                _calibrationScheduler.Invalidate(_modelName);
-                throw new LlamaServerModelEjectedException(ModelEjectingMessage);
+                var acquisition = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
+                if (acquisition.ProcessEvicting)
+                {
+                    _calibrationScheduler.Invalidate(_modelName);
+                    throw new LlamaServerModelEjectedException(ModelEjectingMessage);
+                }
+
+                if (acquisition.ProcessProfiling)
+                {
+                    if (!TryBeginProfilingReEnsure(ref profilingReEnsures))
+                    {
+                        throw new LlamaRuntimeException(ModelProfilingMessage);
+                    }
+
+                    continue;
+                }
+
+                lease = acquisition.Lease;
             }
 
-            _calibrationScheduler.Schedule(_modelName, resolved.BaseAddress);
-            var lease = acquisition.Lease;
+            // Never from a bound endpoint: that is the benchmark's transient profiling port, and seeding the
+            // calibration target with it queues a probe against a process that is about to be torn down.
+            if (!resolved.Bound)
+            {
+                _calibrationScheduler.Schedule(_modelName, resolved.BaseAddress);
+            }
             try
             {
                 return await resolved.Client.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
@@ -141,21 +172,42 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     {
         options = ApplyToolSchemaCompatibility(ApplySamplingPassthrough(ApplyReasoningBudget(ApplyThinkingSwitch(options))));
         var healed = false;
+        var profilingReEnsures = 0;
         while (true)
         {
             var resolved = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
 
             // Same refusal classification as the non-streaming path: an eject-in-progress fails the request before the
             // stream opens; only an absent/exited process streams leaseless and relies on the pre-first-chunk self-heal.
-            var acquisition = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
-            if (acquisition.ProcessEvicting)
+            ILlamaServerInferenceLease? lease = null;
+            if (!resolved.Bound)
             {
-                _calibrationScheduler.Invalidate(_modelName);
-                throw new LlamaServerModelEjectedException(ModelEjectingMessage);
+                var acquisition = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
+                if (acquisition.ProcessEvicting)
+                {
+                    _calibrationScheduler.Invalidate(_modelName);
+                    throw new LlamaServerModelEjectedException(ModelEjectingMessage);
+                }
+
+                if (acquisition.ProcessProfiling)
+                {
+                    if (!TryBeginProfilingReEnsure(ref profilingReEnsures))
+                    {
+                        throw new LlamaRuntimeException(ModelProfilingMessage);
+                    }
+
+                    continue;
+                }
+
+                lease = acquisition.Lease;
             }
 
-            _calibrationScheduler.Schedule(_modelName, resolved.BaseAddress);
-            var lease = acquisition.Lease;
+            // Never from a bound endpoint: that is the benchmark's transient profiling port, and seeding the
+            // calibration target with it queues a probe against a process that is about to be torn down.
+            if (!resolved.Bound)
+            {
+                _calibrationScheduler.Schedule(_modelName, resolved.BaseAddress);
+            }
             var enumerator =
                 resolved.Client.GetStreamingResponseAsync(messages, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
             var retry = false;
@@ -472,7 +524,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     {
         // Resolve the CURRENT endpoint for every real request. Besides allowing the supervisor to cheaply confirm the
         // process is live, this is the request-triggered due check for calibration; no timer ever polls a cached target.
-        var endpoint = await ResolveEndpointAsync(ct).ConfigureAwait(false);
+        var (endpoint, bound) = await ResolveEndpointCoreAsync(ct).ConfigureAwait(false);
 
         await _initGate.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -480,7 +532,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             var current = Volatile.Read(ref _inner);
             if (current is not null && _innerEndpoint == endpoint.BaseAddress)
             {
-                return new ResolvedChatClient(current, endpoint.BaseAddress);
+                return new ResolvedChatClient(current, endpoint.BaseAddress, bound);
             }
 
             if (current is not null)
@@ -496,7 +548,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 #pragma warning restore CA2000
             _innerEndpoint = endpoint.BaseAddress;
             Volatile.Write(ref _inner, built);
-            return new ResolvedChatClient(built, endpoint.BaseAddress);
+            return new ResolvedChatClient(built, endpoint.BaseAddress, bound);
         }
         finally
         {
@@ -504,12 +556,45 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         }
     }
 
-    internal Task<LlamaServerEndpoint> ResolveEndpointAsync(CancellationToken ct)
+    internal async Task<LlamaServerEndpoint> ResolveEndpointAsync(CancellationToken ct)
     {
-        var bound = _endpointBinding?.GetBoundEndpoint(_modelName, ModelRole.Chat);
-        return bound is not null
-            ? Task.FromResult(bound)
-            : _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, ct);
+        return (await ResolveEndpointCoreAsync(ct).ConfigureAwait(false)).Endpoint;
+    }
+
+    /// <summary>
+    ///     The endpoint to talk to, and whether it came from the endpoint BINDING rather than from the supervisor.
+    ///     <para>
+    ///         The distinction decides whether this request takes an inference lease at all. A bound endpoint is a
+    ///         benchmark's own profiling process, handed to it by <c>RunExclusiveBenchmarkAsync</c> for the duration of
+    ///         the measurement: that caller owns the process, so there is nothing to drain and nothing to protect the
+    ///         request from — and asking for a lease would be answered <c>ProfilingOwned</c> and refuse the
+    ///         measurement's own requests. Re-ensuring instead would be worse still: it parks on the per-key gate the
+    ///         benchmark itself is holding.
+    ///     </para>
+    /// </summary>
+    private async Task<(LlamaServerEndpoint Endpoint, bool Bound)> ResolveEndpointCoreAsync(CancellationToken ct)
+    {
+        if (_endpointBinding?.GetBoundEndpoint(_modelName, ModelRole.Chat) is { } bound)
+        {
+            return (bound, true);
+        }
+
+        return (await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, ct).ConfigureAwait(false), false);
+    }
+
+    /// <summary>
+    ///     Prepares one more attempt around a profiling spawn that owns this model's key, or reports that the bounded
+    ///     budget is spent. The cached adapter is dropped either way: it is bound to the endpoint the measurement
+    ///     process now answers on — the port allocator commonly re-uses the one the replaced process just freed — so
+    ///     reusing it would send this request INTO the measurement, contaminating it and dying to its teardown. The
+    ///     next EnsureInnerAsync parks on the per-key gate profiling holds through teardown and comes back with a
+    ///     process of our own.
+    /// </summary>
+    private bool TryBeginProfilingReEnsure(ref int attempts)
+    {
+        // InvalidateInner already invalidates the calibration target.
+        InvalidateInner();
+        return ++attempts <= MaxProfilingReEnsures;
     }
 
     // Drops the cached adapter so the next EnsureInnerAsync re-resolves the endpoint and re-spawns the server via the
@@ -522,7 +607,8 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         stale?.Dispose();
     }
 
-    private readonly record struct ResolvedChatClient(IChatClient Client, Uri BaseAddress);
+    /// <summary><see cref="Bound" /> marks an endpoint that came from the endpoint binding — see ResolveEndpointCoreAsync.</summary>
+    private readonly record struct ResolvedChatClient(IChatClient Client, Uri BaseAddress, bool Bound);
 
     // True when the exception chain indicates the target llama-server is unreachable (refused / connection error) — i.e.
     // the process is gone — rather than a model/runtime error. Walks the full chain (including AggregateException fan-out

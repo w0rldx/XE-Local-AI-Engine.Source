@@ -126,6 +126,145 @@ public sealed class DeferredLlamaServerChatClientServerGoneTests
         AssertEx.Equal(0, scheduler.Scheduled);
     }
 
+    // A profiling spawn replaces the chat process between the endpoint resolve and the lease lookup. Reported as
+    // "not running" this used to license the request to go out leaseless — against a CACHED endpoint whose port the
+    // measurement spawn commonly inherits, contaminating the measurement and then dying to its teardown.
+
+    [Test]
+    public async Task GetResponse_WhenProfilingOwnsTheKey_ReEnsuresAndNeverEngagesTheProfilingEndpoint()
+    {
+        var scheduler = new RecordingCalibrationScheduler();
+        var supervisor = ProfilingThenOwnSupervisor();
+        using var client = new DeferredLlamaServerChatClient(supervisor, "model-a", TimeSpan.FromSeconds(5), scheduler);
+
+        // Nothing listens on either port, so the eventual transport failure is expected; the endpoint the request was
+        // cleared against is what this pins.
+        await AssertEx.ThrowsAsync<Exception>(() => client.GetResponseAsync([new ChatMessage(ChatRole.User, "hello")]));
+
+        AssertEx.True(supervisor.EnsureCalls >= 2, "The refusal must re-ensure, not proceed on the cached endpoint.");
+        AssertEx.Empty(scheduler.Addresses.Where(address => address == ProfilingEndpoint),
+            "No request may be cleared against the profiling process.");
+        AssertEx.Contains(scheduler.Addresses, OwnEndpoint);
+    }
+
+    [Test]
+    public async Task GetStreamingResponse_WhenProfilingOwnsTheKey_ReEnsuresAndNeverEngagesTheProfilingEndpoint()
+    {
+        var scheduler = new RecordingCalibrationScheduler();
+        var supervisor = ProfilingThenOwnSupervisor();
+        using var client = new DeferredLlamaServerChatClient(supervisor, "model-a", TimeSpan.FromSeconds(5), scheduler);
+
+        await AssertEx.ThrowsAsync<Exception>(async () =>
+        {
+            await foreach (var update in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
+            {
+                AssertEx.NotNull(update);
+            }
+        });
+
+        AssertEx.True(supervisor.EnsureCalls >= 2, "The refusal must re-ensure, not proceed on the cached endpoint.");
+        AssertEx.Empty(scheduler.Addresses.Where(address => address == ProfilingEndpoint),
+            "No stream may be opened against the profiling process.");
+        AssertEx.Contains(scheduler.Addresses, OwnEndpoint);
+    }
+
+    [Test]
+    public async Task GetResponse_WhenProfilingNeverReleasesTheKey_FailsAsRetryableRatherThanRunningUnleased()
+    {
+        // Back-to-back measurements: the retry is bounded, and what comes out is a sanitized runtime failure the
+        // caller can retry — never a request that went out against the measurement process.
+        var scheduler = new RecordingCalibrationScheduler();
+        var supervisor = new FakeProcessSupervisor
+        {
+            EnsureEndpoint = ProfilingEndpoint,
+            LeaseAcquisition = LlamaServerLeaseAcquisition.ProfilingOwned
+        };
+        using var client = new DeferredLlamaServerChatClient(supervisor, "model-a", TimeSpan.FromSeconds(5), scheduler);
+
+        var failure = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hello")]));
+
+        AssertEx.Contains(failure.Message, "being profiled", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Equal(expected: 0, scheduler.Scheduled, "No request may be cleared while profiling owns the key.");
+    }
+
+    [Test]
+    public async Task GetResponse_OnABoundBenchmarkEndpoint_TakesNoLeaseAndNeverReEnsures()
+    {
+        // The benchmark's OWN requests: RunExclusiveBenchmarkAsync binds its profiling endpoint and the body chats
+        // over it. Asking for a lease here is answered ProfilingOwned — refusing the measurement's own request — and
+        // re-ensuring would park on the per-key gate the benchmark itself holds.
+        var scheduler = new RecordingCalibrationScheduler();
+        var supervisor = new FakeProcessSupervisor
+        {
+            EnsureEndpoint = new Uri("http://127.0.0.1:11/"),
+            LeaseAcquisition = LlamaServerLeaseAcquisition.ProfilingOwned
+        };
+        var binding = Substitute.For<ILlamaServerEndpointBinding>();
+        var boundEndpoint = new LlamaServerEndpoint("model-a", ModelRole.Chat, ProfilingEndpoint);
+        binding.GetBoundEndpoint("model-a", ModelRole.Chat).Returns(boundEndpoint);
+        using var client = new DeferredLlamaServerChatClient(supervisor, "model-a", TimeSpan.FromSeconds(5), scheduler, binding);
+
+        // Nothing listens on the bound port, so the request fails at transport — that it was CLEARED to go out at all,
+        // rather than refused as profiling-owned, is the point.
+        var failure = await AssertEx.ThrowsAsync<Exception>(() => client.GetResponseAsync([new ChatMessage(ChatRole.User, "hello")]));
+
+        AssertEx.False(failure is LlamaRuntimeException, "The benchmark's own request must not be refused as profiling-owned.");
+        AssertEx.Empty(supervisor.LeasedRoles, "A bound endpoint is the caller's own process; no lease may be attempted.");
+        AssertEx.Equal(expected: 0, supervisor.EnsureCalls, "Re-ensuring would park on the gate the benchmark holds.");
+        AssertEx.Equal(expected: 0, scheduler.Scheduled,
+            "The bound endpoint is a transient profiling port; seeding calibration with it probes a process about to be torn down.");
+    }
+
+    [Test]
+    public async Task GetStreamingResponse_OnABoundBenchmarkEndpoint_TakesNoLeaseAndNeverReEnsures()
+    {
+        var scheduler = new RecordingCalibrationScheduler();
+        var supervisor = new FakeProcessSupervisor
+        {
+            EnsureEndpoint = new Uri("http://127.0.0.1:11/"),
+            LeaseAcquisition = LlamaServerLeaseAcquisition.ProfilingOwned
+        };
+        var binding = Substitute.For<ILlamaServerEndpointBinding>();
+        binding.GetBoundEndpoint("model-a", ModelRole.Chat)
+               .Returns(new LlamaServerEndpoint("model-a", ModelRole.Chat, ProfilingEndpoint));
+        using var client = new DeferredLlamaServerChatClient(supervisor, "model-a", TimeSpan.FromSeconds(5), scheduler, binding);
+
+        await AssertEx.ThrowsAsync<Exception>(async () =>
+        {
+            await foreach (var update in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
+            {
+                AssertEx.NotNull(update);
+            }
+        });
+
+        AssertEx.Empty(supervisor.LeasedRoles, "A bound endpoint is the caller's own process; no lease may be attempted.");
+        AssertEx.Equal(expected: 0, supervisor.EnsureCalls, "Re-ensuring would park on the gate the benchmark holds.");
+        AssertEx.Equal(expected: 0, scheduler.Scheduled, "A bound endpoint must not seed the calibration target.");
+    }
+
+    private static readonly Uri ProfilingEndpoint = new("http://127.0.0.1:9/");
+    private static readonly Uri OwnEndpoint = new("http://127.0.0.1:10/");
+
+    /// <summary>
+    ///     A supervisor whose first ensure hands back the port a profiling spawn now owns (and refuses the lease as
+    ///     such), and whose second hands back a process of the caller's own.
+    /// </summary>
+    private static FakeProcessSupervisor ProfilingThenOwnSupervisor()
+    {
+        var supervisor = new FakeProcessSupervisor
+        {
+            // The transport failure against the dead port triggers ONE self-heal round, which ensures again; it must
+            // keep landing on the caller's own endpoint, never back on the profiling one.
+            EnsureEndpoint = OwnEndpoint
+        };
+        supervisor.EnsureEndpointSequence.Enqueue(ProfilingEndpoint);
+        supervisor.EnsureEndpointSequence.Enqueue(OwnEndpoint);
+        supervisor.LeaseSequence.Enqueue(LlamaServerLeaseAcquisition.ProfilingOwned);
+        supervisor.LeaseSequence.Enqueue(LlamaServerLeaseAcquisition.NotRunning);
+        return supervisor;
+    }
+
     /// <summary>A supervisor whose (never-contacted) endpoint resolves but whose lease is refused as eject-in-progress.</summary>
     private static FakeProcessSupervisor EvictingSupervisor()
     {
@@ -140,9 +279,16 @@ public sealed class DeferredLlamaServerChatClientServerGoneTests
     {
         public int Scheduled { get; private set; }
 
+        /// <summary>
+        ///     Every base address the request path actually engaged. Scheduling happens only once a request is cleared
+        ///     to go out, so this is the witness for WHICH endpoint a request would have been sent to.
+        /// </summary>
+        public List<Uri> Addresses { get; } = [];
+
         public void Schedule(string modelName, Uri llamaServerBaseAddress)
         {
             Scheduled++;
+            Addresses.Add(llamaServerBaseAddress);
         }
 
         public void Invalidate(string modelName)
