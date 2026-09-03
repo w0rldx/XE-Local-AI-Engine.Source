@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -451,7 +452,20 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
             }
         }
 
+        // The stream mapper rides THIS subscription rather than opening a second one: two lifetimes could not both be
+        // closed after the drain and before the terminal, which is the ordering the reader's completion rule needs.
+        await using var mapper = new IntegrationStreamEventMapper(_buffer,
+            context.Store,
+            context.ExecutionId,
+            session.Id,
+            package.InvocationId,
+            _options.MaxOutputBytes,
+            TimeSpan.FromMilliseconds(services.GetRequiredService<IOptions<ChatStreamBudgetOptions>>().Value.EmitDebounceMs),
+            _timeProvider);
+
         dispatcher.InvocationStateChanged += OnInvocationStateChanged;
+        dispatcher.InvocationStateChanged += mapper.OnInvocationStateChanged;
+        dispatcher.ToolCallLifecycleChanged += mapper.OnToolCallLifecycleChanged;
         try
         {
             await RunLeasedAsync(services,
@@ -462,6 +476,7 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                     effectiveModel,
                     terminalState,
                     dispatcher,
+                    mapper,
                     persistence,
                     runToken,
                     cancelToken,
@@ -470,6 +485,8 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         }
         finally
         {
+            dispatcher.ToolCallLifecycleChanged -= mapper.OnToolCallLifecycleChanged;
+            dispatcher.InvocationStateChanged -= mapper.OnInvocationStateChanged;
             dispatcher.InvocationStateChanged -= OnInvocationStateChanged;
         }
     }
@@ -482,6 +499,7 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         string effectiveModel,
         StrongBox<InvocationState?> terminalState,
         IWorkerEventDispatcher dispatcher,
+        IntegrationStreamEventMapper mapper,
         INodeChatPersistenceService persistence,
         CancellationToken runToken,
         CancellationToken cancelToken,
@@ -692,7 +710,7 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                 failureSummary = approvalUnavailable.Message;
             }
 
-            await FinishAsync(services, context, correlation, terminalState.Value, effectiveModel, failureCategory, failureSummary).ConfigureAwait(false);
+            await FinishAsync(services, context, correlation, terminalState.Value, effectiveModel, mapper, failureCategory, failureSummary).ConfigureAwait(false);
         }
         finally
         {
@@ -715,6 +733,7 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         NodeChatMessageCorrelation correlation,
         InvocationState? state,
         string effectiveModel,
+        IntegrationStreamEventMapper mapper,
         string? failureCategory,
         string? failureSummary)
     {
@@ -806,13 +825,24 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                               .ConfigureAwait(false);
         }
 
-        // 9b. THE DRAIN SEAM. S2's mapper persists tool.* rows off a channel, and without an awaited drain here one of
-        //     them can land AFTER the terminal event — which a reader that stops on the terminal would never see.
-        //     `await mapper.DrainAsync(cancellationToken)` goes on this line and nowhere else, so the terminal append
-        //     below is provably the highest sequence for the execution. In S1 there is nothing to drain: the
-        //     coordinator is the only event producer. A no-op stub interface here would be scaffolding for a consumer
-        //     that does not exist, so S2 adds the mapper, the interface and this one call together — without moving
-        //     the terminal append or the unsubscribe.
+        // 9b. THE DRAIN SEAM. The mapper persists tool.* rows off a channel, and without an awaited drain here one of
+        //     them can land AFTER the terminal event — which a reader that stops on the terminal would never see. The
+        //     drain latches the handlers shut too, so the terminal appended below is provably the highest sequence for
+        //     the execution. CancellationToken.None: past the run, these rows carry sequences the ring has already
+        //     published, so abandoning the write would leave a visible event with no durable row behind it.
+        try
+        {
+            await mapper.DrainAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            // An incomplete transcript is not a completed run, whatever the model did: the terminal is still written,
+            // but it says internal-failure rather than the run's own status.
+            _logger.LogError(exception, "Integration execution {ExecutionId} could not persist its tool events.", context.ExecutionId);
+            status = IntegrationExecutionStatus.Failed;
+            failureCategory = IntegrationFailureCategories.InternalFailure;
+            failureSummary = "The execution's tool events could not be persisted.";
+        }
 
         // 10. One transaction: the status CAS, the terminal event at the reserved sequence, and both watermarks. Never
         //     Append for a terminal event (that publishes before the row exists), and never a status CAS followed by a

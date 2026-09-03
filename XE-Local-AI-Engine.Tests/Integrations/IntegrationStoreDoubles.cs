@@ -529,8 +529,23 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
         }
     }
 
+    /// <summary>Runs on the WRITER's thread before each append, so a suite can observe where the write actually happens.</summary>
+    public Action<IntegrationEventAppend>? OnAppendEvent { get; set; }
+
+    /// <summary>
+    ///     Decides which event appends throw. A predicate rather than a flag because the coordinator writes its own
+    ///     phase rows through this method too, and a test about the DRAIN must not break the run before it starts.
+    /// </summary>
+    public Func<IntegrationEventAppend, bool>? FailAppendEventWhen { get; set; }
+
     public Task AppendEventAsync(IntegrationEventAppend command, CancellationToken cancellationToken = default)
     {
+        OnAppendEvent?.Invoke(command);
+        if (FailAppendEventWhen?.Invoke(command) == true)
+        {
+            throw new DbUpdateException("The event row could not be written.");
+        }
+
         lock (_gate)
         {
             AddEvent(command);
