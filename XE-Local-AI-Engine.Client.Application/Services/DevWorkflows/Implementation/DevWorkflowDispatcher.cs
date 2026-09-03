@@ -1040,15 +1040,35 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     }
 
     /// <summary>
-    ///     <c>GRAPH-C4-3</c>, asked of the rows a run actually landed rather than of every structural ancestor: does the
-    ///     apply node's SATISFIED provenance contain a <c>Tool</c>/<c>Validate</c> node whose row succeeded?
+    ///     The edge states <see cref="AValidationSucceededOnThePathTaken" /> walks THROUGH: the ones in which the run
+    ///     really came this way. One name today, and it is a set rather than an equality test because the set is what
+    ///     the rule is about.
     ///     <para>
-    ///         One backward walk over inbound edges the state machine itself calls <c>Satisfied</c>, which is what makes
-    ///         the rule the smaller one. A branch that did not run drops out with no special case — a <c>Skipped</c>,
-    ///         <c>Failed</c> or <c>Cancelled</c> source kills every out-edge — so an <c>Any</c> convergence whose other
-    ///         branch carried its own validation does not block the apply on work that was correctly not done. By the
-    ///         same token no "and all of them succeeded" companion is needed: a validation that did not succeed cannot
-    ///         be on a satisfied path at all, because its own out-edges would be dead.
+    ///         <c>Dead</c> and <c>Pending</c> are the two that must never be in it — a branch that did not run, or has
+    ///         not run yet, carries no provenance. Every OTHER state the state machine grows belongs here, and
+    ///         <c>DevWorkflowMaterializationTests.TheProvenanceWalkCrossesEveryEdgeStateThatIsNotDeadOrPending</c>
+    ///         asserts exactly that, so a new one cannot be added to <see cref="DevWorkflowEdgeState" /> without this
+    ///         walk being told about it.
+    ///     </para>
+    /// </summary>
+    private static readonly DevWorkflowEdgeState[] ProvenanceEdgeStates = [DevWorkflowEdgeState.Satisfied];
+
+    /// <summary>
+    ///     <c>GRAPH-C4-3</c>, asked of the rows a run actually landed rather than of every structural ancestor: does the
+    ///     apply node's provenance contain a <c>Tool</c>/<c>Validate</c> node whose row succeeded?
+    ///     <para>
+    ///         One backward walk over the inbound edges whose state is in <see cref="ProvenanceEdgeStates" />, which is
+    ///         what makes the rule the smaller one. A branch that did not run drops out with no special case — a
+    ///         <c>Skipped</c>, <c>Failed</c> or <c>Cancelled</c> source kills every out-edge — so an <c>Any</c>
+    ///         convergence whose other branch carried its own validation does not block the apply on work that was
+    ///         correctly not done.
+    ///     </para>
+    ///     <para>
+    ///         The candidate row is tested for <c>Succeeded</c> separately, and that test is NOT redundant with the edge
+    ///         state even though it looks it today: a <c>Satisfied</c> edge does imply a succeeded source, but a state
+    ///         that means "this branch was waived and the run carried on past it" does not — the rows BEHIND such an
+    ///         edge succeeded while the waived node itself did not. Crossing the edge and still refusing to count a
+    ///         non-succeeded validation is the pair that stays correct either way.
     ///     </para>
     ///     <para>
     ///         An unmaterialized template key reads <c>Pending</c> and falls out exactly as admission's own template
@@ -1071,7 +1091,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             foreach (var edge in graph.InboundEdges(pending.Pop()))
             {
                 var source = byKey.GetValueOrDefault(edge.From);
-                if (DevWorkflowStateMachine.EdgeState(edge, source) != DevWorkflowEdgeState.Satisfied || !seen.Add(edge.From))
+                if (!ProvenanceEdgeStates.Contains(DevWorkflowStateMachine.EdgeState(edge, source)) || !seen.Add(edge.From))
                 {
                     continue;
                 }

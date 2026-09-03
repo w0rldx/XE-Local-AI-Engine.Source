@@ -194,7 +194,11 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             HasStaleInputs: hasStaleInputs,
             StartedAtUtc: nodeRun.StartedAtUtc,
             CompletedAtUtc: nodeRun.EndedAtUtc,
-            Sequence: nodeRun.Sequence);
+            Sequence: nodeRun.Sequence,
+
+            // Asked of the contract, not of a spelling of the token repeated here: the same verdict decides the
+            // drill-down's note, this row's badge and whether the run header counts the row as work.
+            ValidationNotApplicable: DevWorkflowGraphContract.ValidationWasNotApplicable(nodeRun.OutputJson));
 
     /// <summary>
     ///     Which upstream nodes a <c>Pending</c> node run is still waiting on, computed here rather than left to the

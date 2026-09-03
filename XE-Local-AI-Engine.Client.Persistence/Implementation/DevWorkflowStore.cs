@@ -138,6 +138,15 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
                 throw new ArgumentOutOfRangeException(parameterName, "A node run must allow at least one attempt.");
             }
 
+            // A seed lands a row either waiting to be dispatched or already finished, and nothing between: a live status
+            // is a lane's own claim that it holds the row, and creating one with no lane behind it writes a Running row
+            // with no start time that nobody is coming back for.
+            if (seed.Status != DevWorkflowNodeRunStatus.Pending && !IsTerminal(seed.Status))
+            {
+                throw new ArgumentException($"Node run seed '{seed.NodeKey}' is seeded {seed.Status}, which is a live status no lane has taken. "
+                                            + "A seed lands Pending or terminal.", parameterName);
+            }
+
             // An output document describes what a node run PRODUCED, so a row that has not ended cannot have one: a
             // seed carrying both is a caller saying the row is finished while asking for it to be run.
             if (seed.OutputJson is not null && !IsTerminal(seed.Status))

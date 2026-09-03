@@ -325,7 +325,7 @@ internal sealed class DevWorkflowRetryPolicy
                         run,
                         nodeRun,
                         DevWorkflowFailureClasses.BudgetExhausted,
-                        $"{failure.SanitizedReason} This node's fix loop has been re-run {loops} times, which is as many as it allows.",
+                        $"{failure.SanitizedReason} This node's fix loop has been re-run {loops} {(loops == 1 ? "time" : "times")}, which is as many as it allows.",
                         failure.OutputJson,
                         cancellationToken)
                     .ConfigureAwait(false);

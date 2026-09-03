@@ -761,7 +761,7 @@ internal sealed class DevWorkflowGraph
                  .FirstOrDefault() is { } stranded)
         {
             throw new DevWorkflowValidationException(culprits.Contains(stranded.NodeKey)
-                ? $"Node '{stranded.NodeKey}' is a human gate whose only out-edge can never fire, so nothing after it would run and the run could not complete "
+                ? $"Node '{stranded.NodeKey}' is a human gate with an out-edge that can never fire, and nothing it still reaches leads to an end of the run "
                   + "(invariant GRAPH-C4-1)."
                 : $"Node '{stranded.NodeKey}' cannot reach an end of the run, because every path out of it passes through a gate edge that can never fire "
                   + "(invariant GRAPH-C4-1).");

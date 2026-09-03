@@ -309,7 +309,7 @@ public sealed class DevWorkflowFixLoopTests
         var failing = await harness.ReadNodeRunAsync(runId, "test").ConfigureAwait(false);
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, failing.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, failing.FailureClass);
-        AssertEx.Contains(AssertEx.NotNull(failing.TerminalReason), "fix loop has been re-run 1 times, which is as many as it allows");
+        AssertEx.Contains(AssertEx.NotNull(failing.TerminalReason), "fix loop has been re-run 1 time, which is as many as it allows");
         AssertEx.Equal(expected: 2,
             (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Attempt,
             "and the target is left exactly where the one allowed re-run left it, with attempts of its own to spare.");
@@ -343,7 +343,7 @@ public sealed class DevWorkflowFixLoopTests
         var failing = await harness.ReadNodeRunAsync(runId, "test").ConfigureAwait(false);
         AssertEx.Equal(expected: 3, failing.Attempt, "the person's retry really did spend an attempt on the row.");
         AssertEx.Contains(AssertEx.NotNull(failing.TerminalReason),
-            "fix loop has been re-run 1 times",
+            "fix loop has been re-run 1 time",
             message: "and the count is still ONE: the loop ran once, and the operator's attempt is not one of its iterations.");
     }
 

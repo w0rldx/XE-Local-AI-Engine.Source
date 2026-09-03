@@ -159,7 +159,12 @@ export function DevWorkflowToolNodePanel({ nodeRun, onShowArtifacts }: DevWorkfl
 /**
  * Whether the row says it validated nothing because there was nothing to validate — the verdict a zero-task
  * decomposition writes onto its template's validation nodes. Read off the row's own output document, which is the only
- * place that fact lives; an unreadable body is simply not that verdict.
+ * place that fact lives on the DETAIL response; an unreadable body is simply not that verdict.
+ *
+ * The token is `DevWorkflowNodeOutputVerdicts.ValidationNotApplicable`, and the server answers the same question with
+ * `DevWorkflowGraphContract.ValidationWasNotApplicable` — which is what the node-run SUMMARY carries as
+ * `validationNotApplicable`, for the run table and the progress counts. Spelled out here because there is no generated
+ * enum for a verdict inside an output document.
  */
 function validationNotApplicable(outputJson: string | null | undefined): boolean {
 	if (!outputJson) {

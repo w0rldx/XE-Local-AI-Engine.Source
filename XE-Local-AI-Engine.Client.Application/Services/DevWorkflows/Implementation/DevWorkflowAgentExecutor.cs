@@ -466,6 +466,13 @@ internal sealed class DevWorkflowAgentExecutor
     ///         A node that already declares <c>WriteExecute</c> is not asked at all: its declaration has dragged it
     ///         into the structural rule's gate requirement at save, which is the stronger answer and the earlier one.
     ///     </para>
+    ///     <para>
+    ///         ponytail: this runs a COMPLETE <see cref="IAgentDefinitionResolver.ResolveAsync" /> — persona composition
+    ///         and the playbook read included — to read tool categories, and the session's own first turn resolves the
+    ///         same definition again. Bounded: once per session creation rather than per tick, and every read is
+    ///         read-only. The upgrade path is a projection-only overload on that resolver returning
+    ///         <c>AllowedTools</c> alone; worth it only if a profile ever shows this resolve mattering.
+    ///     </para>
     /// </summary>
     private async Task EnsureDeclaredWhatItCanWriteAsync(DevWorkflowGraph graph, DevWorkflowGraphNode node, Guid agentDefinitionId, CancellationToken cancellationToken)
     {

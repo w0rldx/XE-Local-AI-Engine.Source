@@ -1023,6 +1023,31 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, research.Status, $"{research.FailureClass} — {research.TerminalReason}");
     }
 
+    /// <summary>
+    ///     The narrowing, asserted where it has teeth: the offer really does carry <c>run_python</c>, and the agent this
+    ///     node binds allows only <c>record_finding</c>. The judgement is over what the RESOLVER answers, so the write
+    ///     tool is not in the effective projection at all and the node runs.
+    ///     <para>
+    ///         The counterpart to the Default-Assistant case above. That one proves an empty allowed set is not an empty
+    ///         offer; this one proves a narrow allowed set really does narrow, so a future change that judged the whole
+    ///         offer for every definition would fail here rather than blocking every workflow agent there is.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AnAgentNodeWhoseProjectionExcludesTheWriteTool_IsNotBlocked()
+    {
+        await using var harness = OfferingAWriteTool();
+        var agentId = await AllowingAsync(harness, "record_finding").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(BoundAgent(agentId)).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
+            research.Status,
+            $"a tool the effective projection does not contain is not this node's to declare: {research.FailureClass} — {research.TerminalReason}");
+    }
+
     /// <summary>One agent node bound to a definition this test created, which is what makes the resolver answer at all.</summary>
     private static string BoundAgent(Guid agentDefinitionId) =>
         $$"""

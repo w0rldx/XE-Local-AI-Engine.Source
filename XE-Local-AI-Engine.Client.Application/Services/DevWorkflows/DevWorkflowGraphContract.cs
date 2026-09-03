@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
@@ -124,5 +125,36 @@ public static class DevWorkflowGraphContract
 
         var graph = DevWorkflowGraph.Parse(graphJson);
         return graph.OutboundEdges(nodeKey).Any(static edge => DevWorkflowStateMachine.GateEdgeFires(edge, DevWorkflowDecisionKind.Reject));
+    }
+
+    /// <summary>
+    ///     Whether a node run's output document says it validated nothing because there was nothing to validate — the
+    ///     verdict the zero-task decomposition seeds onto its template's checks (ruling D12).
+    ///     <para>
+    ///         Asked here so the API and the runtime read ONE spelling of the token. The row is a real
+    ///         <c>Succeeded</c> row and has to be, or the join behind it would never let the apply through — but it
+    ///         stands for work that did not happen, so every count and every badge that says "done" has to be able to
+    ///         tell the two apart. An unreadable document is simply not this verdict.
+    ///     </para>
+    /// </summary>
+    public static bool ValidationWasNotApplicable(string? outputJson)
+    {
+        if (string.IsNullOrWhiteSpace(outputJson))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(outputJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.TryGetProperty("verdict", out var verdict)
+                   && verdict.ValueKind == JsonValueKind.String
+                   && string.Equals(verdict.GetString(), DevWorkflowNodeOutputVerdicts.ValidationNotApplicable, StringComparison.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 }

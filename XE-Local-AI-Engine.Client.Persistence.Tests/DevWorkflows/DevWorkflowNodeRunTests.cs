@@ -360,6 +360,27 @@ public sealed class DevWorkflowNodeRunTests
                       .ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     And the same rule from the other side: a seed may land waiting or finished, never live. A <c>Running</c> seed
+    ///     with no output document slips past the rule above and writes a row with no start time and no lane behind it,
+    ///     which nothing would ever come back to transition.
+    /// </summary>
+    [Test]
+    public async Task Materialize_RefusesASeedInALiveStatus()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        _ = await AssertEx.ThrowsAsync<ArgumentException>(() => store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(seed.RunId,
+                              seed.RunVersion,
+                              Guid.NewGuid(),
+                              [new DevWorkflowNodeRunSeed(Guid.NewGuid(), "validate", DevWorkflowNodeType.Tool, Status: DevWorkflowNodeRunStatus.Running)])),
+                          "A row created Running is a row no lane ever took.")
+                      .ConfigureAwait(false);
+    }
+
     /// <summary>Materializing the same node key twice is a transition error, not a raw constraint violation.</summary>
     [Test]
     public async Task Materialize_RejectsANodeKeyTheRunAlreadyCarries()

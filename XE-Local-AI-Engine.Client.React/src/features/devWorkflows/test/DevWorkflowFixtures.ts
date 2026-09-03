@@ -109,6 +109,7 @@ export function devWorkflowNodeRunSummary(overrides: Partial<NodeRunSummaryRespo
 		startedAtUtc: 1_700_000_000_000,
 		completedAtUtc: null,
 		sequence: 2,
+		validationNotApplicable: false,
 		...overrides,
 	};
 }

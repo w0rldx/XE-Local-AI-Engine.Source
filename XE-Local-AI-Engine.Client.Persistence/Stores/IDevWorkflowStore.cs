@@ -372,6 +372,11 @@ public sealed record TransitionDevWorkflowRunCommand(
 ///         tool lane would really run the template's validation commands, and a crash between a create and a follow-up
 ///         transition would do exactly that. Omitting both is today's behaviour for every other caller.
 ///     </para>
+///     <para>
+///         The store refuses both halves of the same rule: a seed lands <c>Pending</c> or terminal and nothing between,
+///         because a live status is a lane's claim on a row no lane has taken; and only a terminal seed may carry an
+///         output document, because that document says what the row PRODUCED.
+///     </para>
 /// </summary>
 public sealed record DevWorkflowNodeRunSeed(
     Guid NodeRunId,

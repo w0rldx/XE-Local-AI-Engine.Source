@@ -229,7 +229,7 @@ public sealed class DevWorkflowGraphTests
 
         var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(StrandedBranch)).Message;
 
-        AssertEx.Contains(refusal, "Node 'planapproval' is a human gate whose only out-edge can never fire");
+        AssertEx.Contains(refusal, "Node 'planapproval' is a human gate with an out-edge that can never fire");
         AssertEx.Contains(refusal, "GRAPH-C4-1", StringComparison.Ordinal, "the id is what the operator quotes and what the client mirrors.");
     }
 
@@ -259,7 +259,7 @@ public sealed class DevWorkflowGraphTests
 
     /// <summary>
     ///     Chain two gates and strand the downstream one, and every gate above it is stranded too. The sentence that
-    ///     says "whose only out-edge can never fire" is only true of the gate that OWNS the dead edge, so an ordinal
+    ///     says "with an out-edge that can never fire" is only true of the gate that OWNS the dead edge, so an ordinal
     ///     tie-break naming 'alpha' would send the operator to fix an edge that is fine.
     /// </summary>
     [Test]
@@ -276,7 +276,7 @@ public sealed class DevWorkflowGraphTests
 
         var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(ChainedGates)).Message;
 
-        AssertEx.Contains(refusal, "Node 'beta' is a human gate whose only out-edge can never fire");
+        AssertEx.Contains(refusal, "Node 'beta' is a human gate with an out-edge that can never fire");
         AssertEx.Contains(refusal, "GRAPH-C4-1", StringComparison.Ordinal);
     }
 

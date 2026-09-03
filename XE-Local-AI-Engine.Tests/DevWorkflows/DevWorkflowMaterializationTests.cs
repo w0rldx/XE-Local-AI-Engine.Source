@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using System.Reflection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -306,6 +308,33 @@ public sealed class DevWorkflowMaterializationTests
             integrate.FailureClass,
             "a policy refusal needs a person; calling it a configuration fault sends them to fix a definition that is fine.");
         AssertEx.Contains(AssertEx.NotNull(integrate.TerminalReason), "GRAPH-C4-3", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     The pre-check's walk crosses an edge in every state EXCEPT <c>Dead</c> and <c>Pending</c> — the two that mean
+    ///     the run did not come this way, or has not yet.
+    ///     <para>
+    ///         Asserted over the enum rather than over today's one-name list, because the failure this guards against
+    ///         cannot be written as a run yet: a branch in flight adds a state for an operator's skip whose own
+    ///         dependencies all succeeded, and the rows BEHIND such an edge are <c>Succeeded</c>. A walk that refused to
+    ///         cross it would block an apply whose validation really did pass. This test goes red the moment that state
+    ///         exists and the walk has not been told about it, which is the one line the merge has to add.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public void TheProvenanceWalkCrossesEveryEdgeStateThatIsNotDeadOrPending()
+    {
+        var field = AssertEx.NotNull(typeof(DevWorkflowDispatcher).GetField("ProvenanceEdgeStates", BindingFlags.NonPublic | BindingFlags.Static),
+            "the walk's edge-state set is gone or renamed.");
+        var crossed = (DevWorkflowEdgeState[])AssertEx.NotNull(field.GetValue(null));
+        var expected = Enum.GetValues<DevWorkflowEdgeState>()
+                           .Where(static state => state is not (DevWorkflowEdgeState.Dead or DevWorkflowEdgeState.Pending))
+                           .Order()
+                           .ToArray();
+
+        AssertEx.True(expected.SequenceEqual(crossed.Order()),
+            $"a state that says the run took this edge has to be walked through, and Dead and Pending never may be. "
+            + $"Expected [{string.Join(", ", expected)}], walked [{string.Join(", ", crossed)}].");
     }
 
     /// <summary>The shipped integration shape, decomposed into no work at all and standing at its integration gate.</summary>

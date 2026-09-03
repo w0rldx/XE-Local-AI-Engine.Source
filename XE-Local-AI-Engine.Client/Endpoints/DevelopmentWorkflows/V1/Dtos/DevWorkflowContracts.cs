@@ -407,7 +407,14 @@ public sealed record DevWorkflowNodeRunSummaryResponse(
     bool HasStaleInputs,
     long? StartedAtUtc,
     long? CompletedAtUtc,
-    long Sequence);
+    long Sequence,
+    /// <summary>
+    ///     The row is a <c>Succeeded</c> check that had nothing to check — the verdict a zero-task decomposition seeds
+    ///     onto its template's validations (D12). Carried on the SUMMARY rather than left to the drill-down because the
+    ///     run header counts these rows and the node table renders them: without it a run that decomposed into no work
+    ///     reports its template check as completed work, which is the one thing that row does not stand for.
+    /// </summary>
+    bool ValidationNotApplicable);
 
 /// <summary>
 ///     The drill-down. <see cref="WorkSessionId" /> is the whole of the agent view: it links out to the EXISTING
