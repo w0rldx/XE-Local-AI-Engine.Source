@@ -10,14 +10,12 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// </summary>
 public sealed record NodeSettingsResponse
 {
-    // ── Chat request timeout (original) ──
     public int MaxMessageRequestTimeoutSeconds { get; init; }
 
     public int MinMessageRequestTimeoutSeconds { get; init; }
 
     public int MaxAllowedMessageRequestTimeoutSeconds { get; init; }
 
-    // ── General (always shown) ──
     public string? DefaultModelName { get; init; }
 
     public bool? EnableTools { get; init; }
@@ -66,7 +64,6 @@ public sealed record NodeSettingsResponse
 
     public string? RecommendedLlamaCppTag { get; init; }
 
-    // ── Chat launch tuning (speculative decoding + prompt-cache reuse; always shown) ──
     public int? ChatCacheReuse { get; init; }
 
     public int MinChatCacheReuse { get; init; }
@@ -95,7 +92,6 @@ public sealed record NodeSettingsResponse
     /// </summary>
     public string? RerankerModelName { get; init; }
 
-    // ── Advanced / developer-only ──
     public long? HuggingFaceDiskMarginBytes { get; init; }
 
     public int? OrchestrationIdleTimeoutSeconds { get; init; }
@@ -129,15 +125,11 @@ public sealed record NodeSettingsResponse
 
     public int MaxAllowedDetachedGraceSeconds { get; init; }
 
-    // ── Client voice (TTS) feature ──
-
     /// <summary>Node-level master flag for the client voice feature. <see langword="null" /> reads as off.</summary>
     public bool? VoiceFeatureEnabled { get; init; }
 
     /// <summary>Preferred browser voice identifier; unmatched legacy values safely fall back to a browser voice.</summary>
     public string? DefaultVoiceProfile { get; init; }
-
-    // ── Usage cost rates ──
 
     /// <summary>
     ///     Operator override of usage cost rates, keyed by model NAME → its USD-per-1M input/output rate. Flattened from
@@ -157,7 +149,6 @@ public sealed record SaveNodeSettingsRequest
 {
     public int? MaxMessageRequestTimeoutSeconds { get; init; }
 
-    // ── General (always shown) ──
     public string? DefaultModelName { get; init; }
 
     public bool? EnableTools { get; init; }
@@ -190,7 +181,6 @@ public sealed record SaveNodeSettingsRequest
 
     public string? RecommendedLlamaCppTag { get; init; }
 
-    // ── Chat launch tuning (speculative decoding + prompt-cache reuse) ──
     public int? ChatCacheReuse { get; init; }
 
     public string? SpeculativeMode { get; init; }
@@ -204,7 +194,6 @@ public sealed record SaveNodeSettingsRequest
     /// <summary>Installed cross-encoder reranker model name for knowledge-base search rerank. Empty/blank disables reranking.</summary>
     public string? RerankerModelName { get; init; }
 
-    // ── Advanced / developer-only ──
     public long? HuggingFaceDiskMarginBytes { get; init; }
 
     public int? OrchestrationIdleTimeoutSeconds { get; init; }
@@ -222,12 +211,9 @@ public sealed record SaveNodeSettingsRequest
     /// <summary>Seconds a run with no attached client keeps going before it is cancelled. <c>0</c> never cancels.</summary>
     public int? DetachedGraceSeconds { get; init; }
 
-    // ── Client voice (TTS) feature ──
     public bool? VoiceFeatureEnabled { get; init; }
 
     public string? DefaultVoiceProfile { get; init; }
-
-    // ── Usage cost rates ──
 
     /// <summary>
     ///     Operator override of usage cost rates, keyed by model NAME → its USD-per-1M input/output rate. <see langword="null" />

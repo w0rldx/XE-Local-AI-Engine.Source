@@ -20,16 +20,8 @@ import type {
 	SaveSuggestedActionRequestDto,
 } from "@/features/agents/models/PlaybookActionModels";
 
-// Maps the generated (OpenAPI) playbook-action response types to the stricter domain view-models the governance
-// panel depends on. The generated types are the single source of truth for the wire shape; their fields are all
-// optional (`x?: T`), so each mapper coalesces every field to a required value with a safe default. Boundary
-// validation and ApiError convergence are owned by the generated zod validator (`validator: true`) + the
-// withResponseValidation bridge at the hook — these mappers only project the already-validated wire shape into the
-// immutable domain shape (they no longer re-validate, replacing the feature's former hand-zod safeParse). The
-// generated enums (state / source) are string unions with the SAME values as the domain unions, so an enum maps
-// through unchanged when present and falls back to a safe default when omitted. Redaction is the backend's: the
-// mapper surfaces only what the response carries (eval results are plaintext-but-scoped; SourceFeedbackIds ride
-// the response as-is) and never reconstructs a dropped field.
+// Maps optional generated wire fields into required domain values; validation remains at the API boundary.
+// Backend redaction remains authoritative; generated and domain enum values stay aligned.
 
 // The known wire values, mirrored from the domain unions, so a string-widened field can be narrowed with a guard.
 const KNOWN_STATES: readonly PlaybookActionState[] = ["Suggested", "Enabled", "Disabled", "Archived"];

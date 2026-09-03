@@ -119,7 +119,6 @@ public sealed class PreviewWorkflowExecutionServiceTests
 
         var runId = await service.StartAsync(PreviewGraphBuilder.Linear(), "conn-1").ConfigureAwait(false);
 
-        // Wait until the run reaches Paused (run.paused published).
         await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunPaused), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
         var outcome = await service.CancelAsync(runId).ConfigureAwait(false);

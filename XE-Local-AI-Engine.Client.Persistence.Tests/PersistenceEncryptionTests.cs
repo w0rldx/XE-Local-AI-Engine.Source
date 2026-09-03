@@ -138,7 +138,6 @@ public sealed class PersistenceEncryptionTests : IDisposable
     [Test]
     public async Task ConversationTitle_WhenSavedViaEfInterceptor_IsNotPlaintextAtRest()
     {
-        // Arrange — write a conversation with a known title via EF (the interceptor path).
         var databasePath = GetDatabasePath("title-ef.sqlite");
         var conversationId = Guid.NewGuid();
         const string titleText = "ef-path-title-sentinel";
@@ -163,12 +162,10 @@ public sealed class PersistenceEncryptionTests : IDisposable
             await context.SaveChangesAsync();
         }
 
-        // Assert — raw file bytes must not contain the plaintext title sentinel.
         var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(titleText)),
             "The SQLite file should not contain the plaintext conversation title (EF interceptor path).");
 
-        // Assert — reading back via the materialization interceptor must decrypt correctly.
         await using var readContext = CreateContext(databasePath, keyHolder);
         var saved = await readContext.Conversations.SingleAsync();
         AssertEx.NotNull(saved.Title, "Title should not be null after round-trip.");
@@ -179,8 +176,6 @@ public sealed class PersistenceEncryptionTests : IDisposable
     [Test]
     public async Task ConversationTitle_WhenSavedViaRawSql_IsNotPlaintextAtRest()
     {
-        // Arrange — write a conversation title via the raw-SQL path (NodeChatDbContext.EncryptConversationTitle),
-        // then assert the file bytes do not contain the plaintext sentinel.
         var databasePath = GetDatabasePath("title-rawsql.sqlite");
         var conversationId = Guid.NewGuid();
         const string titleText = "raw-sql-path-title-sentinel";
@@ -192,22 +187,18 @@ public sealed class PersistenceEncryptionTests : IDisposable
             await context.Database.EnsureDeletedAsync();
             await context.Database.EnsureCreatedAsync();
 
-            // Insert the conversation row first (no title).
             await context.Database.ExecuteSqlRawAsync("INSERT INTO conversations (conversation_id, user_id, created_at_utc, last_seen_utc, purged, origin) VALUES ({0}, {1}, {2}, {3}, 0, {4});",
                 conversationId, "worker-node", 1L, 2L, "local");
 
-            // Encrypt the title exactly as the raw-SQL write path does.
             var encryptedTitle = context.EncryptConversationTitle(titleText, conversationId);
 
             await context.Database.ExecuteSqlRawAsync("UPDATE conversations SET title = {0} WHERE conversation_id = {1};", encryptedTitle is null ? DBNull.Value : encryptedTitle, conversationId);
         }
 
-        // Assert — raw file bytes must not contain the plaintext title sentinel.
         var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(titleText)),
             "The SQLite file should not contain the plaintext conversation title (raw-SQL path).");
 
-        // Assert — reading back via DecryptConversationTitle must decrypt correctly.
         // Use raw ADO.NET to read the BLOB column — EF's SqlQueryRaw cannot materialize scalar byte[] values.
         await using var readContext = CreateContext(databasePath, keyHolder);
         await readContext.Database.OpenConnectionAsync();
@@ -232,7 +223,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
     [Test]
     public async Task GenerationMetadata_WhenSavedViaEfInterceptor_IsCiphertextAtRestAndDecryptsOnRead()
     {
-        // Arrange — an AI-drafted definition and skill both carry generation provenance. It quotes the operator's brief
+        // AI-drafted generation provenance quotes the operator's brief
         // back, so it belongs on the encrypted surface exactly like the instructions it was drafted from.
         var databasePath = GetDatabasePath("generation-metadata.sqlite");
         var definitionMetadata = Encoding.UTF8.GetBytes("{\"mode\":\"create\",\"userBrief\":\"definition-provenance-sentinel\"}");
@@ -271,8 +262,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
             await context.SaveChangesAsync();
         }
 
-        // Assert — the stored column is ciphertext, not the plaintext JSON the entity carried. A context without the
-        // materialization interceptor hands back the bytes exactly as SQLite holds them.
+        // The context without the materialization interceptor exposes the bytes exactly as SQLite stores them.
         await using (var rawContext = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder))
         {
             var storedDefinitionMetadata = AssertEx.NotNull((await rawContext.AgentDefinitions.SingleAsync()).GenerationMetadataJson, "The definition column should hold a payload.");
@@ -282,7 +272,6 @@ public sealed class PersistenceEncryptionTests : IDisposable
             AssertEx.False(storedSkillMetadata.SequenceEqual(skillMetadata), "Skill generation metadata should be encrypted at rest.");
         }
 
-        // Assert — reading back through the materialization interceptor decrypts both columns.
         await using var readContext = CreateContext(databasePath, keyHolder);
         var definition = await readContext.AgentDefinitions.SingleAsync();
         var skill = await readContext.AgentSkills.SingleAsync();

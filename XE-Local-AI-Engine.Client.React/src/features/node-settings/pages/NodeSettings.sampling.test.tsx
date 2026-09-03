@@ -163,7 +163,6 @@ describe("NodeSettings developer-mode switch", () => {
 
 		fireEvent.click(checkbox);
 
-		// Store state flipped
 		expect(useDeveloperModeStore.getState().developerMode).toBe(true);
 		// Persisted
 		expect(localStorage.getItem("xe-developer-mode")).toBe("true");

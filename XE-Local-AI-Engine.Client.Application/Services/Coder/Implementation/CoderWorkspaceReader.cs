@@ -274,8 +274,6 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
               + UntrustedContentFraming.WrapDocument(string.Join('\n', matches), []);
     }
 
-    // ---- attach ----
-
     private async Task<CoderWorkspaceAccess> TryOpenAsync(CancellationToken cancellationToken)
     {
         var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
@@ -312,8 +310,6 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
             throw;
         }
     }
-
-    // ---- survey (provider-confined) ----
 
     /// <summary>
     ///     Runs one provider survey, translating every failure into a model-facing sentence.
@@ -369,8 +365,6 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
     }
 
     private sealed record SurveyOutcome(IReadOnlyList<string>? Lines, string? ErrorMessage);
-
-    // ---- post-filter / rendering ----
 
     private bool IsExcludedRelativePath(string relativePath)
     {

@@ -12,6 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEPENDABOT = REPO_ROOT / ".github" / "dependabot.yml"
 PACKAGE_MANIFEST = REPO_ROOT / "XE-Local-AI-Engine.Client.React" / "package.json"
 PNPM_WORKSPACE = REPO_ROOT / "XE-Local-AI-Engine.Client.React" / "pnpm-workspace.yaml"
+TRAINING_MANIFEST = REPO_ROOT / "tools" / "training" / "pyproject.toml"
 
 EXPECTED_GROUPS = {
     "frontend-runtime",
@@ -129,6 +130,14 @@ class DependabotGroupContractTests(unittest.TestCase):
             raise AssertionError("expected exactly one frontend npm Dependabot configuration")
         cls.npm_update = npm_updates[0]
         cls.groups = cls.npm_update.get("groups", {})
+        uv_updates = [
+            update
+            for update in updates
+            if update.get("package-ecosystem") == "uv" and update.get("directory") == "/tools/training"
+        ]
+        if len(uv_updates) != 1:
+            raise AssertionError("expected exactly one training-runtime uv Dependabot configuration")
+        cls.uv_update = uv_updates[0]
         cls.package_manifest = json.loads(PACKAGE_MANIFEST.read_text(encoding="utf-8"))
         cls.pnpm_workspace = load_yaml(PNPM_WORKSPACE)
 
@@ -139,6 +148,20 @@ class DependabotGroupContractTests(unittest.TestCase):
             {"interval": "weekly", "day": "monday", "time": "06:30", "timezone": "Europe/Berlin"},
             self.npm_update["schedule"],
         )
+
+    def test_training_runtime_schedule_and_scope_are_preserved(self) -> None:
+        self.assertTrue(TRAINING_MANIFEST.is_file(), f"uv directory does not hold a manifest: {TRAINING_MANIFEST}")
+        self.assertEqual("develop", self.uv_update["target-branch"])
+        self.assertEqual(
+            {"interval": "weekly", "day": "monday", "time": "06:00", "timezone": "Europe/Berlin"},
+            self.uv_update["schedule"],
+        )
+
+    def test_training_runtime_updates_stay_one_at_a_time_and_ungrouped(self) -> None:
+        # Every unsloth-capped bump needs its own `uv lock` verification, so the runtime is
+        # deliberately not batched: one open PR, no groups.
+        self.assertEqual(1, self.uv_update["open-pull-requests-limit"])
+        self.assertNotIn("groups", self.uv_update)
 
     def test_release_age_policy_is_compatible_with_dependabot(self) -> None:
         self.assertEqual(10080, self.pnpm_workspace["minimumReleaseAge"])

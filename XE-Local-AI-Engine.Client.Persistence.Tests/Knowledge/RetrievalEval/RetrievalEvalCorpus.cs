@@ -101,7 +101,6 @@ internal static class RetrievalEvalCorpus
         new("q-vehicle", "automobile", "vehicle", "car safety collision", IsVectorOnly: true)
     ];
 
-    // ── Discriminating scenario: where score-agnostic RRF mis-orders and score-aware fusion recovers ──
 
     /// <summary>
     ///     An empty synonym map: the score-fusion scenario needs no semantic aliasing — it engineers the two arms purely

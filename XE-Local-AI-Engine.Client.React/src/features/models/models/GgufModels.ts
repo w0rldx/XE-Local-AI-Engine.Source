@@ -1,7 +1,4 @@
-// Domain view-models for the Hugging Face GGUF browse + download flow on the Model Management page. Relocated from
-// the model-fit advisor: the GGUF browse/download surface lives alongside the existing "Pull model" flow because it
-// is a model-acquisition action, not hardware advice. The generated types are the single source of truth for the
-// wire shape; the mappers coalesce their optional fields into these stricter shapes.
+// Domain models for GGUF acquisition; GgufMappers normalizes optional generated wire fields.
 
 // Default quant the download flow requests when the operator does not pick a specific file (HF policy, Q4_K_M).
 export const defaultGgufQuant = "Q4_K_M";

@@ -173,7 +173,7 @@ public sealed class BenchmarkFidelityExecutor(
                                                                BenchmarkFidelityPolicy.ContextTokens,
                                                                snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
                                                                CapacityRejectedMessage),
-                                                           admissionRetry,
+                                                           new BenchmarkWaitBudget(admissionRetry),
                                                            logger,
                                                            token)
                                                        .ConfigureAwait(false);
@@ -273,7 +273,7 @@ public sealed class BenchmarkFidelityExecutor(
                                                                BenchmarkFidelityPolicy.ContextTokens,
                                                                snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
                                                                CapacityRejectedMessage),
-                                                           admissionRetry,
+                                                           new BenchmarkWaitBudget(admissionRetry),
                                                            logger,
                                                            token)
                                                        .ConfigureAwait(false);

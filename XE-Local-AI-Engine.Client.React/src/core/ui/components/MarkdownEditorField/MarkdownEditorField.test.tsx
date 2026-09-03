@@ -57,7 +57,6 @@ describe("MarkdownEditorField", () => {
 
 	it("switches to preview pane when Preview segment is clicked", () => {
 		renderWithProviders(<MarkdownEditorField value="**bold**" onChange={vi.fn()} data-testid="mef" />);
-		// Click the Preview segment button
 		fireEvent.click(screen.getByText("Preview"));
 		expect(screen.getByTestId("mef-preview")).toBeTruthy();
 		// Textarea should no longer be in the DOM
@@ -74,7 +73,6 @@ describe("MarkdownEditorField", () => {
 
 	it("switches back to edit mode when Edit segment is clicked", () => {
 		renderWithProviders(<MarkdownEditorField value="text" onChange={vi.fn()} data-testid="mef" />);
-		// Go to preview then back
 		fireEvent.click(screen.getByText("Preview"));
 		fireEvent.click(screen.getByText("Edit"));
 		expect(screen.getByTestId("mef-textarea")).toBeTruthy();

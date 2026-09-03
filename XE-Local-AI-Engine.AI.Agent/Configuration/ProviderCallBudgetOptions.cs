@@ -28,7 +28,6 @@ using System.ComponentModel.DataAnnotations;
 /// </summary>
 public sealed class ProviderCallBudgetOptions
 {
-    /// <summary>The configuration section these options bind from.</summary>
     public const string Section = "Agent:ProviderCallBudget";
 
     /// <summary>

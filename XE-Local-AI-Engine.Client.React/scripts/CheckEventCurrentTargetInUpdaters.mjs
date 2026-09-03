@@ -129,7 +129,7 @@ function findViolations(src) {
 				hi = mid - 1;
 			}
 		}
-		return lo + 1; // 1-based
+		return lo + 1;
 	}
 
 	// Reset lastIndex before each file scan.
@@ -164,7 +164,6 @@ function findViolations(src) {
 	return violations;
 }
 
-// ── Main ────────────────────────────────────────────────────────────────────
 
 let totalViolations = 0;
 const allMessages = [];

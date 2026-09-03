@@ -28,7 +28,6 @@ export interface IDialogShellProps extends Omit<ModalProps, "title" | "withClose
 	 * the Modal's `content` section instead of its root — see the destructuring comment below for why that matters.
 	 */
 	"data-testid"?: string;
-	/** Modal content. */
 	children: ReactNode;
 }
 

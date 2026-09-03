@@ -112,7 +112,7 @@ describe("UsageDashboardModel formatting", () => {
 });
 
 describe("UsageDashboardModel date range", () => {
-	const now = DAY_2 + 12 * 3_600_000; // midday on DAY_2
+	const now = DAY_2 + 12 * 3_600_000;
 
 	it("defaultDateRange spans 30 days by default, ending today", () => {
 		const range = defaultDateRange(now);

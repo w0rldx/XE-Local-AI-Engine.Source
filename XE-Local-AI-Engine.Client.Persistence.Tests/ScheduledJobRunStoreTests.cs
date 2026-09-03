@@ -20,9 +20,6 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         }
     }
 
-    // -------------------------------------------------------------------------
-    // ScheduledJobRunStore — Add / GetById
-    // -------------------------------------------------------------------------
 
     [Test]
     public async Task AddAsync_ThenGetById_RoundTripsAllFields()
@@ -69,9 +66,6 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         AssertEx.Null(result, "Unknown id should return null.");
     }
 
-    // -------------------------------------------------------------------------
-    // ListByJobAsync — ordering
-    // -------------------------------------------------------------------------
 
     [Test]
     public async Task ListByJobAsync_OrdersByActualFireTimeDescending()
@@ -98,7 +92,6 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         {
             ActualFireTimeUtc = 200
         });
-        // A run for a different job must be excluded.
         _ = await store.AddAsync(CreateRunInput(otherJobId, ScheduledRunStatus.Succeeded) with
         {
             ActualFireTimeUtc = 300
@@ -107,14 +100,10 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         var runs = await store.ListByJobAsync(jobId);
 
         AssertEx.Equal(expected: 2, runs.Count);
-        // Most recent first.
         AssertEx.Equal(second.Id, runs[0].Id);
         AssertEx.Equal(first.Id, runs[1].Id);
     }
 
-    // -------------------------------------------------------------------------
-    // ListAsync — status / date / job filters
-    // -------------------------------------------------------------------------
 
     [Test]
     public async Task ListAsync_FiltersByStatus()
@@ -194,9 +183,6 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         AssertEx.Equal(owned.Id, result[0].Id);
     }
 
-    // -------------------------------------------------------------------------
-    // UpsertByFireInstanceAsync — idempotency
-    // -------------------------------------------------------------------------
 
     [Test]
     public async Task UpsertByFireInstanceAsync_WhenCalledTwiceWithSameFireInstanceId_DoesNotDuplicate()
@@ -250,9 +236,6 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         AssertEx.Equal(expected: 2, allRuns.Count);
     }
 
-    // -------------------------------------------------------------------------
-    // UpdateLifecycleAsync — partial update
-    // -------------------------------------------------------------------------
 
     [Test]
     public async Task UpdateLifecycleAsync_SetsStatusAndStampedFields_LeavesUnspecifiedFieldsIntact()
@@ -328,9 +311,6 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         AssertEx.Null(result, "UpdateLifecycle on unknown id should return null.");
     }
 
-    // -------------------------------------------------------------------------
-    // RequestCancellationAsync — stamps timestamp, leaves status
-    // -------------------------------------------------------------------------
 
     [Test]
     public async Task RequestCancellationAsync_StampsCancellationRequestedAtUtc_WithoutChangingStatus()
@@ -375,9 +355,6 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         AssertEx.Null(result, "RequestCancellation on unknown id should return null.");
     }
 
-    // -------------------------------------------------------------------------
-    // MarkStaleActiveRunsAsync
-    // -------------------------------------------------------------------------
 
     [Test]
     public async Task MarkStaleActiveRunsAsync_TransitionsQueuedAndRunningToTerminal()
@@ -431,9 +408,6 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         AssertEx.Equal(expected: 0, reconciled);
     }
 
-    // -------------------------------------------------------------------------
-    // SweepOlderThanAsync — retention
-    // -------------------------------------------------------------------------
 
     [Test]
     public async Task SweepOlderThanAsync_DeletesOldRunsAndTheirEvents_KeepsNewerOnes()
@@ -494,9 +468,6 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         AssertEx.Equal(expected: 0, deleted);
     }
 
-    // -------------------------------------------------------------------------
-    // DetailsJson encryption round-trip
-    // -------------------------------------------------------------------------
 
     [Test]
     public async Task AddAsync_WithDetailsJson_DecryptsOnRead()
@@ -556,9 +527,6 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
             "details_json column should be encrypted at rest, not plaintext.");
     }
 
-    // -------------------------------------------------------------------------
-    // ScheduledJobRunEventStore — Add / ListByRun / DataJson encryption
-    // -------------------------------------------------------------------------
 
     [Test]
     public async Task EventStore_AddAsync_ThenListByRun_RoundTripsAndOrdersBySequence()
@@ -679,9 +647,6 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         AssertEx.Null(added.DataJson, "Null DataJson should round-trip as null.");
     }
 
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
 
     private static async Task<byte[]> ReadRawDetailsJsonAsync(string databasePath)
     {

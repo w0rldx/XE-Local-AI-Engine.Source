@@ -166,8 +166,6 @@ public sealed class EmbeddingModelResolverTests
         AssertEx.False(resolution.IsConfident, "A request timeout is a degrade, not a real resolution.");
     }
 
-    // ── helpers ─────────────────────────────────────────────────────────────────────────────────────
-
     private static EmbeddingModelResolver CreateResolver()
     {
         return new EmbeddingModelResolver(Options.Create(new KnowledgeBaseOptions

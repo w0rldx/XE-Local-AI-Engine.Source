@@ -37,13 +37,8 @@ export function throughputEvidenceEntries(throughput: BenchmarkRunThroughput): B
 	return Object.entries(throughput).map(([key, value]) => ({ key: `throughput.${key}`, value }));
 }
 
-// ---------------------------------------------------------------------------
-// Repeat statistics
-//
-// Repeats exist to answer "how much does this number move between launches", which one reading cannot. The spread is
-// computed CLIENT-SIDE over the runs already in hand: the node returns every run of the project, so a server-side
-// aggregate would be a second source of truth for arithmetic the table can do for free — and it would have to be
-// re-derived on every score, delete or re-judge. Still display only: nothing here ranks a run.
+// Repeat statistics stay client-side over loaded runs, avoiding a second arithmetic source of truth.
+// They are display-only and never affect ranking.
 
 /** One measurement's central tendency and spread. `stdDev` is the SAMPLE deviation (n-1), which needs n >= 2. */
 export interface BenchmarkStatSummary {

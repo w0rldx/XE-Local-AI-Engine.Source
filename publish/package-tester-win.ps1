@@ -321,7 +321,7 @@ function Assert-VelopackChannelIndex {
         $byName[[string]$file.Name] = $file
     }
 
-    # --- releases.win.json: the feed the Velopack client reads ---------------------------
+    # releases.win.json: the feed the Velopack client reads
     $feedFile = $byName['releases.win.json']
     if ($null -eq $feedFile) {
         throw "Velopack feed 'releases.win.json' is missing from the downloaded asset set."
@@ -362,7 +362,7 @@ function Assert-VelopackChannelIndex {
     }
     Write-Host ">> Velopack feed verified: $($feedEntries.Count) entries for $ExpectedVersion, each matching an attached package by SHA-256 and size."
 
-    # --- RELEASES: the legacy index, one '<SHA1> <filename> <size>' line per package ------
+    # RELEASES: the legacy index, one '<SHA1> <filename> <size>' line per package
     $legacyFile = $byName['RELEASES']
     if ($null -eq $legacyFile) {
         throw "Velopack legacy index 'RELEASES' is missing from the downloaded asset set."
@@ -465,7 +465,7 @@ if ($TesterRepo.TrimEnd('/') -ne $canonicalTesterRepo) {
 $TesterRepo = $TesterRepo.TrimEnd('/')
 $repoSlug = ($TesterRepo -replace '^https://github.com/', '')
 
-# --- Version: single source of truth is eng/ReleaseVersion.props --------------------
+# Version: single source of truth is eng/ReleaseVersion.props
 $projectVersion = Get-ProjectVersion
 if ($Version -and $Version -ne $projectVersion) {
     throw "Requested version '$Version' does not match eng/ReleaseVersion.props version '$projectVersion'."
@@ -589,7 +589,7 @@ if ($isRehearsalPackage) {
     Write-Warning "No GitHub App client ID supplied: building a REHEARSAL package. Its in-app updater is inert and it carries a $rehearsalMarkerName marker. Do not distribute it."
 }
 
-# --- 1. Release validation + SPA build -----------------------------------------------
+# 1. Release validation + SPA build
 Push-Location XE-Local-AI-Engine.Client.React
 $createdReleaseEnv = $false
 try {
@@ -699,7 +699,7 @@ finally {
     Remove-Item $testOutputPath -Force -ErrorAction SilentlyContinue
 }
 
-# --- 2. Publish (single-file self-contained win-x64, tester update flavor) ----------
+# 2. Publish (single-file self-contained win-x64, tester update flavor)
 # The publish directory is wiped FIRST because `dotnet publish` never removes stale files from it, and the app
 # writes runtime state next to its own executable. Running the published exe straight out of this directory —
 # a manual smoke test — leaves artifacts behind that the next pack silently ships:
@@ -858,7 +858,7 @@ elseif (Test-Path $rehearsalMarkerPath -PathType Leaf) {
     Write-Host ">> Removed a stale $rehearsalMarkerName left by an earlier rehearsal."
 }
 
-# --- 3. Release notes (pinned git-cliff) ---------------------------------------------
+# 3. Release notes (pinned git-cliff)
 $gcVersion = "2.13.1"
 $gcSha = "3AE3A5549E85C7AD5B20192EBCFEE4371269DECA51255F6F2F2E051C6541F5CA"  # x86_64-pc-windows-msvc.zip
 $gcZip = "git-cliff-$gcVersion-x86_64-pc-windows-msvc.zip"
@@ -888,7 +888,7 @@ if (-not (Select-String -Path RELEASE_NOTES.md -Pattern '^### ' -Quiet)) {
 Write-Host ">> Release notes:"
 Get-Content RELEASE_NOTES.md
 
-# --- 4. Pack -------------------------------------------------------------------------
+# 4. Pack
 # Velopack's documented delta flow is download -> pack -> upload. Download into an isolated seed directory,
 # validate exactly one prior full package, then copy only that delta base into a clean pack directory. This
 # keeps downloaded feed metadata or stale local files from being mistaken for assets produced by this run.
@@ -958,7 +958,7 @@ if ($SkipUpload) {
     exit 0
 }
 
-# --- 5. Upload as draft + notes safety net -------------------------------------------
+# 5. Upload as draft + notes safety net
 $existingRelease = Find-GitHubRelease -ReleaseVersion $Version -RepositorySlug $repoSlug
 if ($null -ne $existingRelease -and -not $existingRelease.isDraft) {
     throw "Release '$($existingRelease.tagName)' for version '$Version' is already published. Refusing to merge untested assets into the live update feed."

@@ -468,7 +468,6 @@ public sealed class ToolApprovalCoordinator
 
         if (key is not null)
         {
-            // Add returns false when the key was already present → a duplicate.
             return !seenKeys.Add(key);
         }
 

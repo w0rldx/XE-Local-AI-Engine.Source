@@ -7,7 +7,6 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Options;
 /// </summary>
 public sealed class ImageModelStoreOptions
 {
-    /// <summary>Configuration section name.</summary>
     public const string SectionName = "HuggingFaceImageModels";
 
     /// <summary>

@@ -150,9 +150,6 @@ def require_mapping(payload: object, what: str) -> dict:
     return payload
 
 
-# ---------------------------------------------------------------------------
-# auth
-# ---------------------------------------------------------------------------
 def command_auth(args: argparse.Namespace) -> int:
     """Obtain a bearer token, running first-run setup when the node has no operator yet.
 
@@ -186,9 +183,6 @@ def command_auth(args: argparse.Namespace) -> int:
     return 0
 
 
-# ---------------------------------------------------------------------------
-# runtime identity / device audit
-# ---------------------------------------------------------------------------
 def command_runtime(args: argparse.Namespace) -> int:
     client = NodeClient(args.base_url, args.token, args.timeout)
     payload = require_mapping(client.get_json(f"{API}/model-fit/llamacpp/runtime"), "llamacpp/runtime")
@@ -233,9 +227,6 @@ def command_audit(args: argparse.Namespace) -> int:
     return 0
 
 
-# ---------------------------------------------------------------------------
-# models / tools / running
-# ---------------------------------------------------------------------------
 def command_models(args: argparse.Namespace) -> int:
     client = NodeClient(args.base_url, args.token, args.timeout)
     payload = require_mapping(client.get_json(f"{API}/models"), "models")
@@ -314,9 +305,6 @@ def command_eject_images(args: argparse.Namespace) -> int:
     return 0
 
 
-# ---------------------------------------------------------------------------
-# chat over the SignalR hub
-# ---------------------------------------------------------------------------
 class HubStream:
     """A minimal SignalR long-polling client, scoped to one streamed hub invocation."""
 
@@ -457,9 +445,6 @@ def command_chat(args: argparse.Namespace) -> int:
     return 0
 
 
-# ---------------------------------------------------------------------------
-# image generation
-# ---------------------------------------------------------------------------
 def command_image_models(args: argparse.Namespace) -> int:
     client = NodeClient(args.base_url, args.token, args.timeout)
     payload = require_mapping(client.get_json(f"{API}/images/models"), "images/models")
@@ -532,7 +517,6 @@ def command_image(args: argparse.Namespace) -> int:
     return 0
 
 
-# ---------------------------------------------------------------------------
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", required=True)

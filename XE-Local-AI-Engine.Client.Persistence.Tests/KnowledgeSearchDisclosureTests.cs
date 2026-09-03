@@ -83,7 +83,6 @@ public sealed class KnowledgeSearchDisclosureTests : IDisposable
         AssertEx.False(hit.ServingLastKnownGood);
     }
 
-    // ── service factory ──────────────────────────────────────────────────────────────────────────────
 
     private static KnowledgeSearchService CreateSearchService(NodeChatDbContext context, IReadOnlyList<FtsSearchHit> ftsHits)
     {
@@ -120,7 +119,6 @@ public sealed class KnowledgeSearchDisclosureTests : IDisposable
             NullLogger<KnowledgeSearchService>.Instance);
     }
 
-    // ── seed helpers ─────────────────────────────────────────────────────────────────────────────────
 
     private async Task MigrateAsync(string databasePath)
     {

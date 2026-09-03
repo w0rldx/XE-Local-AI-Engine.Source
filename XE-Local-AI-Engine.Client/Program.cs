@@ -316,7 +316,6 @@ namespace XE_Local_AI_Engine.Client
                                 + "them to a local OTLP collector; see docs/runbooks/otel-export-operator-runbook.md.");
             }
 
-            // Add services to the container.
             var isDevelopmentModeEnabled = builder.Configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true);
             var areWorkSessionsEnabled = builder.Configuration.GetValue($"{WorkSessionOptions.Section}:Enabled", defaultValue: false);
             var areDevWorkflowsEnabled = builder.Configuration.GetValue($"{DevWorkflowOptions.Section}:Enabled", defaultValue: false);

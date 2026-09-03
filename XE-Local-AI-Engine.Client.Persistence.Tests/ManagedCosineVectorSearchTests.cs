@@ -291,7 +291,6 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
         AssertEx.True(threw, "A pre-cancelled token must abort the search with OperationCanceledException.");
     }
 
-    // ---- helpers ----
 
     private async Task<IReadOnlyList<VectorSearchHit>> RunSearchAsync(string databasePath, bool normalized, float[] query, int limit)
     {

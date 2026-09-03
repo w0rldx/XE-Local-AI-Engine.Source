@@ -20,19 +20,15 @@ public sealed record ImageGenerationRequest
     /// <summary>Random seed; <c>-1</c> requests a server-chosen random seed (the actual seed is returned in the result).</summary>
     public long Seed { get; init; } = -1;
 
-    /// <summary>Output width in pixels.</summary>
     public int Width { get; init; } = 512;
 
-    /// <summary>Output height in pixels.</summary>
     public int Height { get; init; } = 512;
 
-    /// <summary>Number of diffusion steps.</summary>
     public int Steps { get; init; } = 20;
 
     /// <summary>Sampling method name (for example <c>euler_a</c>); <see langword="null" /> uses the runtime default.</summary>
     public string? Sampler { get; init; }
 
-    /// <summary>Classifier-free-guidance scale.</summary>
     public double CfgScale { get; init; } = 7.0;
 
     /// <summary>How many images to generate in the batch; the current runtime supports single-image jobs.</summary>
@@ -64,13 +60,11 @@ public enum ImageGenPhase
     /// <summary>Actively generating (not interruptible over HTTP — cancellation tree-kills + restarts the daemon).</summary>
     Generating = 1,
 
-    /// <summary>Finished successfully; the decoded image is available.</summary>
     Completed = 2,
 
     /// <summary>Failed; a sanitized error is surfaced.</summary>
     Failed = 3,
 
-    /// <summary>Cancelled at the caller's request.</summary>
     Cancelled = 4,
 
     /// <summary>Fine phase: the runtime is reading model weights for this generation. No step count, no countdown.</summary>
@@ -94,13 +88,11 @@ public enum ImageGenPhase
 /// </summary>
 public sealed record ImageGenProgress
 {
-    /// <summary>The phase this observation reports.</summary>
     public required ImageGenPhase Phase { get; init; }
 
     /// <summary>Queue position while <see cref="ImageGenPhase.Queued" /> (1-based), when the runtime reports one; otherwise <see langword="null" />.</summary>
     public int? QueuePosition { get; init; }
 
-    /// <summary>Wall-clock elapsed time since generation started.</summary>
     public TimeSpan Elapsed { get; init; }
 
     /// <summary>Completed sampling steps, when observed. Only ever set while <see cref="Phase" /> is <see cref="ImageGenPhase.Sampling" />.</summary>
@@ -145,6 +137,5 @@ public sealed record ImageGenerationResult
     /// <summary>The image format; currently always <c>png</c>.</summary>
     public string Format { get; init; } = "png";
 
-    /// <summary>Total wall-clock time the generation took.</summary>
     public TimeSpan Duration { get; init; }
 }

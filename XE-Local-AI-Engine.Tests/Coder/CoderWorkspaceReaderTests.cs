@@ -638,8 +638,6 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
             "coderreadersentinel");
     }
 
-    // ---- harness ----
-
     private static ProcessSandboxRuntimeProvider CreateProvider()
     {
         var options = Options.Create(new LocalContainerOptions

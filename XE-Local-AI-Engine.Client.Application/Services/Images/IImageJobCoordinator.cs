@@ -58,13 +58,10 @@ public sealed record CreateImageJobInput
     /// <summary>Random seed; <c>-1</c> requests a runtime-chosen random seed.</summary>
     public long Seed { get; init; } = -1;
 
-    /// <summary>Output width in pixels.</summary>
     public int Width { get; init; } = 512;
 
-    /// <summary>Output height in pixels.</summary>
     public int Height { get; init; } = 512;
 
-    /// <summary>Number of diffusion steps.</summary>
     public int Steps { get; init; } = 20;
 
     /// <summary>Sampling method name; <see langword="null" /> uses the runtime default.</summary>

@@ -780,10 +780,7 @@ export function useDeleteBenchmarkRun() {
 	});
 }
 
-// --- Task items -----------------------------------------------------------------------------------------------
-// A project holds 1..N of them. Every mutation below moves the project's item-set hash, which resets the ranked
-// cohort and unranks the cells that answered the old set — so all of them invalidate the runs and the cells too, and
-// the caller is expected to say so BEFORE the operator clicks.
+// Task-item writes change the item-set hash; invalidate runs/cells and warn the operator before mutation.
 
 /** One project's task items, in index order, with the set hash the node currently computes over them. */
 export interface BenchmarkTaskItemList {
@@ -905,7 +902,6 @@ export function useReorderBenchmarkTaskItems() {
 	});
 }
 
-// --- Cells ----------------------------------------------------------------------------------------------------
 
 /** The ranked cell table: one row per (model, KV, repeat group), each holding its per-item answers. */
 export interface BenchmarkCellList {

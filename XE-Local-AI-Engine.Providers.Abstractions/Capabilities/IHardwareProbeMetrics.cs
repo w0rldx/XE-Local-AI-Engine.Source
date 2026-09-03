@@ -18,12 +18,10 @@ public interface IHardwareProbeMetrics
 /// <summary>No-op <see cref="IHardwareProbeMetrics" /> — the default when no metrics sink is wired.</summary>
 public sealed class NullHardwareProbeMetrics : IHardwareProbeMetrics
 {
-    /// <summary>The shared no-op instance.</summary>
     public static NullHardwareProbeMetrics Instance { get; } = new();
 
     /// <inheritdoc />
     public void RecordProbeTimeout(string probe)
     {
-        // Intentionally does nothing — the null-object default.
     }
 }

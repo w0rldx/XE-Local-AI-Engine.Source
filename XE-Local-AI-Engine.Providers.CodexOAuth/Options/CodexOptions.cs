@@ -10,7 +10,6 @@ using System.Reflection;
 /// </summary>
 public sealed class CodexOptions
 {
-    /// <summary>Configuration section name.</summary>
     public const string SectionName = "CodexOAuth";
 
     /// <summary>Honest product originator identifying this client to OpenAI. See <see cref="Originator" />.</summary>

@@ -139,7 +139,6 @@ describe("DialogShell", () => {
 		});
 		expect(onClose).not.toHaveBeenCalled();
 
-		// Confirming the discard closes the dialog.
 		fireEvent.click(screen.getByRole("button", { name: "Discard" }));
 		await waitFor(() => {
 			expect(onClose).toHaveBeenCalledTimes(1);

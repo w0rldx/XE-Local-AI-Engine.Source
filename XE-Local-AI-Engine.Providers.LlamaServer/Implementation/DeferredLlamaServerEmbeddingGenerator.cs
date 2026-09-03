@@ -35,6 +35,12 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
     /// <summary>Cap on how much of a llama-server error body is carried into the failure message (and therefore the log).</summary>
     private const int MaxDetailLength = 512;
 
+    /// <summary>
+    ///     How many times a request re-ensures around a profiling spawn before degrading. Profiling holds the per-key
+    ///     single-flight gate through its own teardown, so one re-ensure normally suffices.
+    /// </summary>
+    private const int MaxProfilingReEnsures = 3;
+
     private readonly SemaphoreSlim _initGate = new(initialCount: 1, maxCount: 1);
     private readonly string _modelName;
     private readonly TimeSpan _networkTimeout;
@@ -54,7 +60,11 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
         EmbeddingGenerationOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        var inner = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
+        // Hold an inference lease for the request's lifetime, exactly as the chat path does. Without it this role's
+        // ActiveLeases stayed 0, so a profiling pre-spawn eviction claimed the process and tree-killed the embedding
+        // mid-flight — and an operator eject drained past it for the same reason.
+        var (inner, lease) = await EnsureLeasedInnerAsync(cancellationToken).ConfigureAwait(false);
+        using var held = lease;
         try
         {
             return await inner.GenerateAsync(values, options, cancellationToken).ConfigureAwait(false);
@@ -89,6 +99,51 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
                 > 0 and var status => (HttpStatusCode)status,
                 _ => null
             });
+        }
+    }
+
+    /// <summary>
+    ///     The adapter to embed through, together with the request-lifetime lease over its process.
+    ///     <para>
+    ///         A profiling/benchmark spawn owning this key is refused and RETRIED rather than embedded around: the
+    ///         cached adapter is bound to an endpoint the measurement process may now answer on (the port allocator
+    ///         commonly re-uses the freed one), so proceeding would contaminate the measurement and then die to its
+    ///         teardown. A draining operator eject is refused outright. Both give up as <see cref="IOException" /> —
+    ///         the transport-failure set every caller of this generator already handles — once the bounded retry is
+    ///         spent, so retrieval degrades to its lexical fallback instead of failing unclassified.
+    ///     </para>
+    /// </summary>
+    private async Task<(IEmbeddingGenerator<string, Embedding<float>> Inner, ILlamaServerInferenceLease? Lease)> EnsureLeasedInnerAsync(
+        CancellationToken ct)
+    {
+        var attempt = 0;
+        while (true)
+        {
+            var (inner, fromCache) = await EnsureInnerAsync(ct).ConfigureAwait(false);
+            var acquisition = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Embedding);
+            if (acquisition.ProcessEvicting)
+            {
+                throw new IOException("The embedding model is being ejected by the operator; this request was not started.");
+            }
+
+            // "Not running" read against a CACHED adapter is ambiguous: unlike the chat client, this one can serve a
+            // request without ensuring anything, and "not running" is exactly what profiling's remove-then-register
+            // window looks like from here — with the freed port commonly re-handed to the measurement spawn. Drop the
+            // adapter and take the answer from a process this call actually resolved. A second "not running", now
+            // after a real ensure, means genuinely absent and proceeds leaseless as before.
+            var unresolved = acquisition.Lease is null && !acquisition.ProcessProfiling && fromCache;
+            if (!acquisition.ProcessProfiling && !unresolved)
+            {
+                return (inner, acquisition.Lease);
+            }
+
+            InvalidateInner();
+            if (attempt++ >= MaxProfilingReEnsures)
+            {
+                throw new IOException(acquisition.ProcessProfiling
+                    ? "The embedding model is being profiled by a benchmark right now; this request was not started."
+                    : "The embedding model could not be resolved to a running process; this request was not started.");
+            }
         }
     }
 
@@ -156,12 +211,12 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
         _initGate.Dispose();
     }
 
-    private async Task<IEmbeddingGenerator<string, Embedding<float>>> EnsureInnerAsync(CancellationToken ct)
+    private async Task<(IEmbeddingGenerator<string, Embedding<float>> Inner, bool FromCache)> EnsureInnerAsync(CancellationToken ct)
     {
         var existing = Volatile.Read(ref _inner);
         if (existing is not null)
         {
-            return existing;
+            return (existing, true);
         }
 
         await _initGate.WaitAsync(ct).ConfigureAwait(false);
@@ -169,7 +224,7 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
         {
             if (_inner is not null)
             {
-                return _inner;
+                return (_inner, true);
             }
 
             LlamaServerEndpoint endpoint;
@@ -186,7 +241,7 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
 
             var built = LlamaServerOpenAIAdapterFactory.CreateEmbeddingGenerator(endpoint.BaseAddress, _modelName, _networkTimeout);
             Volatile.Write(ref _inner, built);
-            return built;
+            return (built, false);
         }
         finally
         {

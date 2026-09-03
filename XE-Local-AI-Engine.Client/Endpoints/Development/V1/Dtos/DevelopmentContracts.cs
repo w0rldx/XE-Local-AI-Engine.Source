@@ -373,7 +373,6 @@ public sealed record DevelopmentEventResponse(
     Guid? OperationId,
     string? OperationPhase,
     string? Outcome,
-
     /// <summary>
     ///     Why, when the event says why: the blocked reason, the validation failure, the sentence a workflow's fix loop
     ///     sent an approved task back with. Additive and nullable — most events carry none.

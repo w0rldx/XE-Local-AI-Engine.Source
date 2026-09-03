@@ -94,7 +94,6 @@ describe("UsageDashboard (generated hey-api data layer)", () => {
 		expect(screen.getAllByText("Local (llama.cpp)").length).toBeGreaterThan(0);
 		expect(screen.getByText("Unknown")).toBeTruthy();
 
-		// Per-model table rows.
 		expect(screen.getByTestId("usage-model-row-qwen3:8b")).toBeTruthy();
 		expect(screen.getByTestId("usage-model-row-gpt-5")).toBeTruthy();
 

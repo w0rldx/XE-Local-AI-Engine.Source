@@ -40,9 +40,6 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         }
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Validation — rejects bad input before touching the store
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task CreateJobAsync_WithUnknownTemplateId_ThrowsValidation()
@@ -211,9 +208,6 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Create — persists definition AND schedules Quartz job+trigger
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task CreateJobAsync_ValidCronInput_PersistsDefinitionAndSchedulesQuartzJob()
@@ -307,9 +301,6 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Manual — durable on-demand job with NO trigger; fired only by TriggerNow
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task ValidateScheduleFields_AcceptsManualWithNoScheduleFields()
@@ -419,10 +410,8 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
     // Self-heal — a persisted JobDetail whose class name no longer resolves is
     // re-stamped with the current dispatch-job type so it loads/fires again.
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task TriggerNowAsync_WhenPersistedJobClassNameIsStale_HealsAndSucceeds()
@@ -519,9 +508,6 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Update — re-maps schedule; definition updated in store + Quartz
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task UpdateJobAsync_ChangesDisplayNameAndReschedulesQuartzJob()
@@ -574,9 +560,6 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // SetEnabled — toggles Quartz schedule and stamps DisabledAtUtc
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task SetEnabledAsync_WhenDisabling_UnschedulesQuartzJobAndStampsDisabledAtUtc()
@@ -593,7 +576,6 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var created = await service.CreateJobAsync(ValidCronInput()).ConfigureAwait(false);
         var jobKey = new JobKey(created.Id.ToString("N"), SchedulerJobKeys.Group);
 
-        // Verify scheduled initially.
         AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
             "Job must be scheduled before disabling.");
 
@@ -686,9 +668,6 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Delete — unschedules + soft-deletes; runs are preserved
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task DeleteJobAsync_UnschedulesAndSoftDeletesDefinition()
@@ -728,9 +707,6 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // TriggerNow — guards disabled / not-scheduled states
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task TriggerNowAsync_WhenJobIsDisabled_ThrowsValidation()
@@ -769,9 +745,6 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // ListTemplatesAsync — returns registered templates
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task ListTemplatesAsync_ReturnsRegisteredTemplates()
@@ -789,9 +762,6 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             "The test.echo template must be in the registry.");
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Auto-interrupt opt-in — UseJobAutoInterrupt actually applies
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task CreateJobAsync_OptsJobIntoAutoInterrupt()
@@ -938,9 +908,6 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // CancelRunAsync — best-effort cancellation outcomes
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task CancelRunAsync_WhenRunNotFound_ReturnsNotFound()
@@ -1013,9 +980,6 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Realtime — definition mutations publish jobDefinitionChanged
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task CreateJobAsync_PublishesJobDefinitionChanged()
@@ -1036,9 +1000,6 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             Arg.Any<CancellationToken>());
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ──────────────────────────────────────────────────────────────────────
 
     private string GetDatabasePath(string fileName)
     {

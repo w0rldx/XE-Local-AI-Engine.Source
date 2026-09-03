@@ -7,10 +7,8 @@ import type {
 // biome-ignore lint/suspicious/noControlCharactersInRegex: Node settings reject wire-unsafe control characters.
 const controlCharPattern = /[\u0000-\u001f]/;
 
-// --- Usage rate editor ----------------------------------------------------------------------------------------
-// An operator-editable per-model rate row (USD per 1M tokens). Numbers stay `number | string` for the same in-progress
-// edit reason as the other numeric fields; validation resolves them at save time. The stored map is keyed by model
-// name, so the editor works with an ordered array of rows and reduces it back into the map on save.
+// Per-model USD rates keep numeric inputs as `number | string` until save. Ordered editor rows reduce into the
+// model-keyed storage map.
 export interface UsageRateRow {
 	// Client-only stable key for the row editor (React list key + focus stability). Never sent to the backend — the
 	// build step reduces rows into the keyed rate map and drops this.

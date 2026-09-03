@@ -12,7 +12,6 @@ public enum ImageModelFamily
     /// <summary>Stable Diffusion 1.x — single-file weights, no external VAE/text-encoder parts required.</summary>
     Sd15 = 1,
 
-    /// <summary>Stable Diffusion XL.</summary>
     Sdxl = 2,
 
     /// <summary>Stable Diffusion 3 / 3.5 — diffusion + VAE + CLIP + T5 file-set.</summary>
@@ -35,7 +34,6 @@ public enum ImageModelFamily
 /// </summary>
 public enum ImageModelKind
 {
-    /// <summary>Text-to-image generation.</summary>
     Txt2Img = 0,
 
     /// <summary>Image editing for edit- or inpaint-capable models; not currently supported by the runtime.</summary>
@@ -51,10 +49,8 @@ public enum ImageModelPartRole
     /// <summary>The core diffusion (UNet/transformer) weights — always present.</summary>
     Diffusion = 0,
 
-    /// <summary>The variational auto-encoder weights.</summary>
     Vae = 1,
 
-    /// <summary>The CLIP-L text encoder.</summary>
     ClipL = 2,
 
     /// <summary>The CLIP-G text encoder (SDXL/SD3).</summary>
@@ -83,7 +79,6 @@ public enum ImageModelPartRole
 /// </summary>
 public sealed record ImageModelPartRequest
 {
-    /// <summary>The role this part fills in the file-set.</summary>
     public required ImageModelPartRole Role { get; init; }
 
     /// <summary>Repo-relative <c>.gguf</c>/<c>.safetensors</c> file name to download for this part.</summary>
@@ -130,13 +125,10 @@ public sealed record ImageModelRequest
     /// <summary>Registry key — the canonical model name (for example <c>leejet/FLUX.1-schnell-gguf</c>).</summary>
     public required string ModelName { get; init; }
 
-    /// <summary>Hugging Face repository id the parts are pulled from.</summary>
     public required string RepoId { get; init; }
 
-    /// <summary>The diffusion family (drives which parts are expected).</summary>
     public required ImageModelFamily Family { get; init; }
 
-    /// <summary>The generation kind the model supports.</summary>
     public ImageModelKind Kind { get; init; } = ImageModelKind.Txt2Img;
 
     /// <summary>The file-set to download — at least one <see cref="ImageModelPartRole.Diffusion" /> part.</summary>
@@ -152,16 +144,13 @@ public sealed record ImageModelRequest
 /// </summary>
 public sealed record ImageModelPart
 {
-    /// <summary>The role this part fills in the file-set.</summary>
     public required ImageModelPartRole Role { get; init; }
 
-    /// <summary>The downloaded source file name.</summary>
     public required string FileName { get; init; }
 
     /// <summary>Absolute path to the verified local file.</summary>
     public required string LocalPath { get; init; }
 
-    /// <summary>File size in bytes.</summary>
     public required long SizeBytes { get; init; }
 
     /// <summary>Verified sha256 (hash-pin) when the source exposed it; otherwise <see langword="null" />.</summary>
@@ -180,22 +169,18 @@ public sealed record ImageModelRegistryEntry
     /// <summary>Source Hugging Face repository id.</summary>
     public required string RepoId { get; init; }
 
-    /// <summary>The diffusion family.</summary>
     public required ImageModelFamily Family { get; init; }
 
-    /// <summary>The generation kind the model supports.</summary>
     public required ImageModelKind Kind { get; init; }
 
     /// <summary>The resolved weight parts that make up the model (all present on disk).</summary>
     public required IReadOnlyList<ImageModelPart> Parts { get; init; }
 
-    /// <summary>Total size of every part in bytes.</summary>
     public required long SizeBytes { get; init; }
 
     /// <summary>Resolved HF commit SHA the parts were pulled at (revision-pin).</summary>
     public required string SourceRevision { get; init; }
 
-    /// <summary>When the file-set completed downloading and verification.</summary>
     public required DateTimeOffset DownloadedAtUtc { get; init; }
 }
 

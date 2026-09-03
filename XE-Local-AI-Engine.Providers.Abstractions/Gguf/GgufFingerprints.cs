@@ -7,7 +7,6 @@ using System.Text;
 /// <summary>Physical role of an installed GGUF acquisition member.</summary>
 public enum InstalledModelPhysicalMemberRole
 {
-    /// <summary>Primary model weights.</summary>
     Weight = 0,
 
     /// <summary>Optional multimodal projector.</summary>

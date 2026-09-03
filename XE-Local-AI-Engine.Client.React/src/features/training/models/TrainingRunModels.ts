@@ -230,7 +230,3 @@ export function applyRunEvent(current: TrainingRunLiveProgress, event: TrainingR
 export function isRunActive(status: TrainingRunStatusValue): boolean {
 	return status !== "Succeeded" && status !== "Failed" && status !== "Cancelled";
 }
-
-// ---------------------------------------------------------------------------
-// Staged export artifacts.
-// ---------------------------------------------------------------------------

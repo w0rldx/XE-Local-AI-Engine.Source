@@ -70,7 +70,6 @@ public sealed record StoredExternalProviderModel
     /// <summary>The backing model id sent on the wire verbatim.</summary>
     public required string WireId { get; init; }
 
-    /// <summary>Optional friendly label.</summary>
     public string? DisplayName { get; init; }
 
     /// <summary>The declared context window in tokens, or <see langword="null" /> when the operator declared none.</summary>

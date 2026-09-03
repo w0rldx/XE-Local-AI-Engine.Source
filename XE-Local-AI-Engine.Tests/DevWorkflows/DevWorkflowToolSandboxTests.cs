@@ -8,6 +8,8 @@ using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Tests.Development;
 using XE_Local_AI_Engine.Tests.Testing;
+using DevelopmentArtifactKind = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentArtifactKind;
+using DevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
 /// <summary>
 ///     The Slice B1 gate, against a REAL sandbox: a tool node prepares a workspace for a node run that has no Dev Mode
@@ -166,8 +168,8 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
         AssertEx.Equal("ToolCommandFailed", broken.FailureClass, "a build that does not compile is a verdict, not an engine fault.");
         AssertEx.Contains(AssertEx.NotNull(broken.OutputJson), "\"failureCode\":\"command_failed\"");
         AssertEx.Contains(await harness.ReadArtifactTextAsync(failing,
-                    (await harness.ReadArtifactsAsync(failing).ConfigureAwait(false)).Single())
-                .ConfigureAwait(false),
+                                           (await harness.ReadArtifactsAsync(failing).ConfigureAwait(false)).Single())
+                                       .ConfigureAwait(false),
             "CS1002",
             message: "the report names the compiler error, which is the whole point of keeping it.");
     }
@@ -214,7 +216,6 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
     ///     Registers the repository and creates the Development project the tool node runs against, with the .NET
     ///     solution profile bound to the synthetic fixture's own solution file.
     /// </summary>
-
     /// <summary>
     ///     The overlay's refusal reaching the ROW, through the whole lane: a materialized child's validation prepares a
     ///     real workspace, finds that its sibling implementation's approved patch no longer applies to it, and refuses
@@ -281,17 +282,17 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
             if (next == DevelopmentTaskStatus.Validation)
             {
                 _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(taskId,
-                                       attemptId,
-                                       Guid.NewGuid(),
-                                       DevelopmentAttemptRole.Coder,
-                                       "scripted-model",
-                                       "local",
-                                       task.Version))
+                                   attemptId,
+                                   Guid.NewGuid(),
+                                   DevelopmentAttemptRole.Coder,
+                                   "scripted-model",
+                                   "local",
+                                   task.Version))
                                .ConfigureAwait(false);
                 _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attemptId,
-                                       Guid.NewGuid(),
-                                       XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus.Succeeded,
-                                       ExpectedAttemptVersion: 1))
+                                   Guid.NewGuid(),
+                                   DevelopmentAttemptStatus.Succeeded,
+                                   ExpectedAttemptVersion: 1))
                                .ConfigureAwait(false);
                 task = await store.GetTaskAsync(taskId).ConfigureAwait(false);
             }
@@ -314,17 +315,17 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
                                  .WriteAsync(projectId, artifactId, Encoding.UTF8.GetBytes(ChildPatch))
                                  .ConfigureAwait(false);
         _ = await store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand(artifactId,
-                               projectId,
-                               taskId,
-                               attemptId,
-                               Guid.NewGuid(),
-                               XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentArtifactKind.Patch,
-                               SchemaVersion: 1,
-                               written.ContentHash,
-                               written.ByteCount,
-                               ManagedReference: written.OpaqueReference,
-                               BaseCommit: "base",
-                               SubjectHash: "subject"))
+                           projectId,
+                           taskId,
+                           attemptId,
+                           Guid.NewGuid(),
+                           DevelopmentArtifactKind.Patch,
+                           SchemaVersion: 1,
+                           written.ContentHash,
+                           written.ByteCount,
+                           ManagedReference: written.OpaqueReference,
+                           BaseCommit: "base",
+                           SubjectHash: "subject"))
                        .ConfigureAwait(false);
         return taskId;
     }
@@ -340,33 +341,33 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
         await using var scope = harness.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
         _ = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(runId,
-                               DevWorkflowVersions.Any,
-                               Guid.NewGuid(),
-                               [
-                                   new DevWorkflowNodeRunSeed(implementId,
-                                       "implement#1",
-                                       DevWorkflowNodeType.DevTask,
-                                       MaxAttempts: 1,
-                                       DevelopmentProjectId: projectId,
-                                       MaterializedFromNodeRunId: gate.Id,
-                                       MaterializationIndex: 1),
-                                   new DevWorkflowNodeRunSeed(Guid.NewGuid(),
-                                       "validate#1",
-                                       DevWorkflowNodeType.Tool,
-                                       MaxAttempts: 1,
-                                       DevelopmentProjectId: projectId,
-                                       MaterializedFromNodeRunId: gate.Id,
-                                       MaterializationIndex: 1)
-                               ],
-                               GateThenCloneGroup))
+                           DevWorkflowVersions.Any,
+                           Guid.NewGuid(),
+                           [
+                               new DevWorkflowNodeRunSeed(implementId,
+                                   "implement#1",
+                                   DevWorkflowNodeType.DevTask,
+                                   MaxAttempts: 1,
+                                   DevelopmentProjectId: projectId,
+                                   MaterializedFromNodeRunId: gate.Id,
+                                   MaterializationIndex: 1),
+                               new DevWorkflowNodeRunSeed(Guid.NewGuid(),
+                                   "validate#1",
+                                   DevWorkflowNodeType.Tool,
+                                   MaxAttempts: 1,
+                                   DevelopmentProjectId: projectId,
+                                   MaterializedFromNodeRunId: gate.Id,
+                                   MaterializationIndex: 1)
+                           ],
+                           GateThenCloneGroup))
                        .ConfigureAwait(false);
 
         // The implementation is done and names its task, which is the state the validation node reads it in.
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(runId,
-                               implementId,
-                               DevWorkflowVersions.Any,
-                               DevWorkflowNodeRunStatus.Succeeded,
-                               DevelopmentTaskId: childTaskId))
+                           implementId,
+                           DevWorkflowVersions.Any,
+                           DevWorkflowNodeRunStatus.Succeeded,
+                           DevelopmentTaskId: childTaskId))
                        .ConfigureAwait(false);
     }
 

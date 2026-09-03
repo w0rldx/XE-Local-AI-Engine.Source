@@ -153,5 +153,4 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
             "repository",
             "repo",
             seed.RepositoryIdentityHash);
-
 }

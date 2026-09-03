@@ -38,7 +38,6 @@ public sealed class LinuxProcessGroupTreeKillTests
         var handle = launcher.Launch(spec);
         try
         {
-            // Wait for the grandchild PID to be recorded.
             await AssertEx.EventuallyAsync(() => File.Exists(markerFile) && new FileInfo(markerFile).Length > 0,
                 TimeSpan.FromSeconds(5), "Grandchild PID marker was not written.");
 

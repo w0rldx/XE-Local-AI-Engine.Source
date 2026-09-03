@@ -11,12 +11,7 @@ import type {
 } from "@/features/agents/models/AgentDefinitionModels";
 import { serializeOrchestrationTopology } from "@/features/agents/models/OrchestrationTopologyModels";
 
-// Maps the generated (OpenAPI) agent-definition responses to the stricter domain view-models the page depends on,
-// and projects the domain form values back onto the generated request body. The generated types are the single
-// source of truth for the wire shape; their fields are all optional (`x?: T`), so each response mapper coalesces
-// every field to a required value with a safe default. Boundary validation and ApiError convergence are owned by
-// the generated zod validator (`validator: true`) + the withResponseValidation bridge at the hook — these mappers
-// only project the already-validated wire shape into the immutable domain shape.
+// Maps optional generated wire fields into required domain values; validation remains at the API boundary.
 
 function normalizeReasoningEffort(value: string | null | undefined): ReasoningEffort | null {
 	if (value === "none" || value === "low" || value === "medium" || value === "high") {

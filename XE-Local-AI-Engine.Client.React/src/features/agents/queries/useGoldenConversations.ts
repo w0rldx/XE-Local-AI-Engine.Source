@@ -24,10 +24,7 @@ import type { CreateGoldenConversationRequestDto, GoldenHarvestResult } from "@/
 // an empty id. The harvest/approve POSTs are route-only — the generated client sends the empty body the backend
 // expects (the request bodies are `{ [key: string]: never }`).
 
-// The generated query keys are single-element arrays `[{ _id: "<operationId>", ... }]`. Invalidating with just the
-// `_id` partial object matches every cached variant of that endpoint (TanStack partial-object matching), so every
-// per-agent variant of the list refetches. The operationIds equal the generated SDK fn names. Centralized here so
-// the literal `_id` key — which trips biome's naming-convention rule — is constructed in exactly one place.
+// Generated keys are object arrays; TanStack partial matching on `_id` invalidates every endpoint variant.
 export const goldenConversationsQueryIds = {
 	list: "listGoldenConversations",
 } as const;

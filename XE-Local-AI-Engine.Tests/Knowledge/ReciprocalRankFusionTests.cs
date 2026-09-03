@@ -75,8 +75,6 @@ public sealed class ReciprocalRankFusionTests
         AssertEx.Equal(first, result[0].ChunkId);
     }
 
-    // ── FuseScored: strategy Rrf must be byte-identical to the classic score-agnostic Fuse ──
-
     [Test]
     public void FuseScored_WithRrfStrategy_IgnoresScores_AndMatchesClassicFuse()
     {
@@ -115,8 +113,6 @@ public sealed class ReciprocalRankFusionTests
         AssertEx.True(Math.Abs(scored[0].Score - (1d / 61d)) < 1e-12, "Zero-weight score-aware must equal pure RRF (rank-1).");
         AssertEx.True(Math.Abs(scored[1].Score - (1d / 62d)) < 1e-12, "Zero-weight score-aware must equal pure RRF (rank-2).");
     }
-
-    // ── FuseScored: score-aware tilt recovers a strong chunk that pure RRF leaves in a rank-only tie ──
 
     [Test]
     public void FuseScored_ScoreAware_BreaksAnRrfTie_TowardTheHigherMagnitudeChunk()

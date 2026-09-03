@@ -62,14 +62,12 @@ public sealed class AgentsPageE2ETests : XEPooledE2ETestBase
             WaitUntil = WaitUntilState.NetworkIdle
         });
 
-        // Page heading rendered unconditionally (i18n key "pages.agents.title" = "Agent definitions").
         await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
             {
                 Name = "Agent definitions"
             }))
             .ToBeVisibleAsync();
 
-        // Create button is visible when the editor is not open.
         await Expect(Page.GetByTestId("agent-create-button")).ToBeVisibleAsync();
     }
 
@@ -94,17 +92,13 @@ public sealed class AgentsPageE2ETests : XEPooledE2ETestBase
 
         await NavigateAndWaitForAgentsPageAsync();
 
-        // Open the "New agent" editor.
         await Page.GetByTestId("agent-create-button").ClickAsync();
 
-        // The editor card must appear.
         await Expect(Page.GetByTestId("agent-editor-card")).ToBeVisibleAsync();
 
-        // The form itself must be present — if it is absent after click the route already crashed.
         var form = Page.GetByTestId("agent-definition-form");
         await Expect(form).ToBeVisibleAsync();
 
-        // --- Fill Name (TextInput) by placeholder ---
         // Mantine 9 TextInput puts data-testid on the <input> element, but GetByPlaceholder is
         // the most reliable cross-version approach and matches the pattern used by ChatPageE2ETests.
         // The Name field also uses a functional updater; filling it exercises that same path and
@@ -116,7 +110,6 @@ public sealed class AgentsPageE2ETests : XEPooledE2ETestBase
             Delay = 20 // 20 ms between keystrokes — enough for React to batch and flush
         });
 
-        // --- Type into Instructions (autosize Textarea) via placeholder ---
         // GetByPlaceholder resolves the inner <textarea> directly (same as GetByPlaceholder on the
         // chat input, documented in ChatPageE2ETests). This is the primary crash site: each
         // keystroke fires onChange → setValues((c) => ({ ...c, instructions: event.currentTarget.value }))
@@ -129,15 +122,10 @@ public sealed class AgentsPageE2ETests : XEPooledE2ETestBase
                 Delay = 20
             });
 
-        // The form must still be alive — the error boundary replaces it with "Something went wrong"
-        // if any onChange handler threw during the typing sequence above.
         await Expect(form).ToBeVisibleAsync();
 
-        // No page-level JS error must have fired during typing.
         await Assert.That(pageErrors.Count == 0).IsTrue();
 
-        // --- Submit and assert the agent was created ---
-        // Wait for the POST /api/local/v1/agents response; 10 s is ample for an in-process call.
         var createResponse = await Page.RunAndWaitForResponseAsync(async () => await Page.GetByTestId("agent-form-submit").ClickAsync(),
             response => response.Url.Contains("/api/local/v1/agents", StringComparison.OrdinalIgnoreCase)
                         && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase),
@@ -146,11 +134,8 @@ public sealed class AgentsPageE2ETests : XEPooledE2ETestBase
                 Timeout = 10_000
             });
 
-        // The API must have accepted the create request (201 Created).
         await Assert.That(createResponse.Status).IsEqualTo(201);
 
-        // After a successful save the editor closes and the list re-renders.
-        // At least one agent row must appear in the table.
         await Expect(Page.Locator("[data-testid^='agent-definition-row-']").First)
             .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
             {

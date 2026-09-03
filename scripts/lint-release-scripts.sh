@@ -141,9 +141,6 @@ done
 
 FINDINGS=0
 
-# ---------------------------------------------------------------------------
-# ShellCheck pass
-# ---------------------------------------------------------------------------
 if [[ "${RUN_SHELL}" == "true" ]]; then
   command -v shellcheck >/dev/null 2>&1 || prereq_fail \
     "shellcheck not on PATH. Install it before releasing:
@@ -182,9 +179,6 @@ if [[ "${RUN_SHELL}" == "true" ]]; then
   fi
 fi
 
-# ---------------------------------------------------------------------------
-# PSScriptAnalyzer
-# ---------------------------------------------------------------------------
 if [[ "${RUN_PS}" == "true" ]]; then
   command -v pwsh >/dev/null 2>&1 || prereq_fail \
     "pwsh not on PATH — publish/package-tester-win.ps1 is the entire release gate and cannot be linted.
@@ -243,9 +237,7 @@ if [[ "${RUN_PS}" == "true" ]]; then
   done
 fi
 
-# ---------------------------------------------------------------------------
 # P0_SPIKE compile check — BUILD ONLY, the tests are never executed.
-# ---------------------------------------------------------------------------
 if [[ "${RUN_SPIKE}" == "true" ]]; then
   command -v dotnet >/dev/null 2>&1 || prereq_fail \
     "dotnet not on PATH — the ${SPIKE_CONSTANT} compile check could not run.
@@ -332,9 +324,7 @@ if [[ "${RUN_SPIKE}" == "true" ]]; then
   fi
 fi
 
-# ---------------------------------------------------------------------------
 # Behavioral shell tests — part of the default validation, never implicit.
-# ---------------------------------------------------------------------------
 if [[ "${RUN_BEHAVIOR}" == "true" ]]; then
   log "=== auto-enrolled release contract tests ==="
   behavior_output="$("${PROJECT_ROOT}/${RELEASE_CONTRACT_RUNNER}" 2>&1)"
@@ -349,11 +339,9 @@ if [[ "${RUN_BEHAVIOR}" == "true" ]]; then
   fi
 fi
 
-# ---------------------------------------------------------------------------
 # Pester — unit tests over package-tester-win.ps1's pure logic and the Windows VRAM capture
 # script's privacy contract. Both extract their subjects from the real .ps1 via the AST, so they
 # run anywhere pwsh does; neither needs Windows or a GPU.
-# ---------------------------------------------------------------------------
 if [[ "${RUN_PESTER}" == "true" ]]; then
   command -v pwsh >/dev/null 2>&1 || prereq_fail \
     "pwsh not on PATH — the Pester suite could not run. dotnet tool install --global PowerShell"

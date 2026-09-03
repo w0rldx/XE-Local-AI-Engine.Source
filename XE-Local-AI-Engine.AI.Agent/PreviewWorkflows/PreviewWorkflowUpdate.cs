@@ -1,10 +1,8 @@
 namespace XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
 
 /// <summary>
-///     Provider-agnostic event the session emits as it drains the MAF stream. The execution service adds the
-///     <c>runId</c> when it republishes these over the hub; the runner itself is run-agnostic (it maps ONE run's
-///     events). NO Microsoft.Agents.AI types leak through this DTO (invariant: MAF stays inside the runner/session).
-///     === EVENT SCHEMA (mirror in the execution service + Client) ===
+///     Provider-agnostic MAF stream event mirrored by the execution service and Client. The execution service adds the
+///     <c>runId</c>; MAF types stay inside the runner/session. Wire mappings:
 ///     <see cref="PreviewWorkflowUpdateKind" /> values map to the hub events:
 ///     NodeStarted   → preview.node.started   (NodeId set)
 ///     NodeOutput    → preview.node.output    (NodeId + Output set)
@@ -14,16 +12,14 @@ namespace XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
 ///     RequestId = the pause token to pass back to resume)
 ///     RunCompleted  → preview.run.completed  (Output = the terminal workflow output)
 ///     RunFailed     → preview.run.failed     (Error set)
-///     run.started/cancelled are owned by the execution service (lifecycle), not surfaced by the runner drain.
+///     The execution service owns run.started/cancelled lifecycle events.
 /// </summary>
 public sealed record PreviewWorkflowUpdate
 {
     public required PreviewWorkflowUpdateKind Kind { get; init; }
 
-    /// <summary>The node this update concerns; null for run-level updates that aren't node-scoped.</summary>
     public string? NodeId { get; init; }
 
-    /// <summary>Output/text payload (node output, debug tap payload, pause display, terminal output).</summary>
     public string? Output { get; init; }
 
     /// <summary>Sanitized failure message for NodeFailed/RunFailed.</summary>
@@ -104,7 +100,6 @@ public sealed record PreviewWorkflowUpdate
     }
 }
 
-/// <summary>Discriminator for <see cref="PreviewWorkflowUpdate" />.</summary>
 public enum PreviewWorkflowUpdateKind
 {
     NodeStarted,

@@ -7,12 +7,6 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using XE_Local_AI_Engine.AI.Contracts.Telemetry;
 
-// Adds common .NET Aspire services: service discovery, resilience, health checks, and OpenTelemetry.
-// This project should be referenced by each service project in your solution.
-// To learn more about using this project, see https://aka.ms/dotnet/aspire/service-defaults
-/// <summary>
-///     Represents extensions.
-/// </summary>
 public static class Extensions
 {
     extension<TBuilder>(TBuilder builder) where TBuilder : IHostApplicationBuilder
@@ -38,10 +32,8 @@ public static class Extensions
 
                 builder.Services.ConfigureHttpClientDefaults(http =>
                 {
-                    // Turn on resilience by default
                     http.AddStandardResilienceHandler();
 
-                    // Turn on service discovery by default
                     http.AddServiceDiscovery();
                 });
             }

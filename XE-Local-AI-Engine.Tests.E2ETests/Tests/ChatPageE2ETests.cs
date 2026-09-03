@@ -250,24 +250,20 @@ public sealed class ChatPageE2ETests : XESerialE2ETestBase
     {
         await NavigateAndWaitForChatAsync();
 
-        // Create a conversation so there is something in the list to select.
         var newConversationButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
         {
             Name = "New plain chat"
         });
         await newConversationButton.ClickAsync();
 
-        // Wait for at least one conversation item to appear.
         var firstItem = Page.Locator("[data-testid^='conversation-item-']").First;
         await Expect(firstItem).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
         {
             Timeout = 5000
         });
 
-        // Click it.
         await firstItem.ClickAsync();
 
-        // The window title element must be visible and non-empty.
         var windowTitle = Page.GetByTestId("chat-window-title");
         await Expect(windowTitle).ToBeVisibleAsync();
         await Expect(windowTitle).Not.ToBeEmptyAsync();

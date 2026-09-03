@@ -191,8 +191,6 @@ public sealed class ChatTurnResolverTests
         await capabilityResolver.Received(1).ResolveAsync(pinnedModel, Arg.Any<CancellationToken>());
     }
 
-    // ---- The reasoning budget is graded against the EFFECTIVE model, not the active one ----
-
     [Test]
     public async Task ResolveAsync_WhenTheBoundAgentPinsAnUnenforceableModel_ReportsTheBudgetUnenforceable()
     {

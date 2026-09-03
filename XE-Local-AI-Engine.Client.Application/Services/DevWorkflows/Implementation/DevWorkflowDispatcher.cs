@@ -252,11 +252,11 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         // The rows this tick already read, re-read ONLY if a decision moved one: the decomposition it is looking for
         // has to be Succeeded, and a tick that settled nothing cannot have changed which rows are.
         var materialized = await _materializer.MaterializeAsync(store,
-                graph,
-                run,
-                settledCount > 0 ? await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false) : nodeRuns,
-                cancellationToken)
-            .ConfigureAwait(false);
+                                                  graph,
+                                                  run,
+                                                  settledCount > 0 ? await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false) : nodeRuns,
+                                                  cancellationToken)
+                                              .ConfigureAwait(false);
         if (materialized > 0)
         {
             return written + materialized;
@@ -312,10 +312,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                 nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
             }
 
-            if (nodeRuns.FirstOrDefault(nodeRun => nodeRun.Id == candidate.Id) is not
-                {
-                    Status: DevWorkflowNodeRunStatus.Running or DevWorkflowNodeRunStatus.Queued
-                } current)
+            if (nodeRuns.FirstOrDefault(nodeRun => nodeRun.Id == candidate.Id) is not { Status: DevWorkflowNodeRunStatus.Running or DevWorkflowNodeRunStatus.Queued } current)
             {
                 continue;
             }
@@ -377,17 +374,17 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         }
 
         return await _retries.SettleFailureAsync(store,
-                graph,
-                run,
-                nodeRun,
-                nodeRuns,
-                new DevWorkflowFailure(DevWorkflowFailureClasses.Timeout,
-                    $"This node run did not finish within the {node.NodeTimeoutSeconds} seconds its node allows.",
-                    JsonSerializer.Serialize(new TimedOutOutput(DevWorkflowNodeOutputStatuses.Failed, nodeRun.Attempt, DevWorkflowFailureClasses.Timeout),
-                        JsonOptions),
-                    DevWorkflowOutcomes.Timeout),
-                cancellationToken)
-            .ConfigureAwait(false);
+                                 graph,
+                                 run,
+                                 nodeRun,
+                                 nodeRuns,
+                                 new DevWorkflowFailure(DevWorkflowFailureClasses.Timeout,
+                                     $"This node run did not finish within the {node.NodeTimeoutSeconds} seconds its node allows.",
+                                     JsonSerializer.Serialize(new TimedOutOutput(DevWorkflowNodeOutputStatuses.Failed, nodeRun.Attempt, DevWorkflowFailureClasses.Timeout),
+                                         JsonOptions),
+                                     DevWorkflowOutcomes.Timeout),
+                                 cancellationToken)
+                             .ConfigureAwait(false);
     }
 
     /// <summary>

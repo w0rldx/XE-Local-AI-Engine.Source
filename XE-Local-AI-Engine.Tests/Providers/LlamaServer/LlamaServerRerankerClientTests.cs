@@ -168,6 +168,71 @@ public sealed class LlamaServerRerankerClientTests
         await supervisor.DidNotReceive().EnsureRunningAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>());
     }
 
+    // A rerank request held no lease at all, so ActiveLeases stayed 0, profiling's pre-spawn claim succeeded and the
+    // removal tree-killed the live scoring round-trip.
+
+    [Test]
+    public async Task RerankAsync_HoldsAnInferenceLeaseForTheRerankerRole_ForTheWholeRoundTrip()
+    {
+        using var lease = new RecordingInferenceLease();
+        var supervisor = LeasingSupervisor(LlamaServerLeaseAcquisition.Granted(lease));
+        var heldDuringRequest = false;
+        using var handler = new CapturingHandler(_ =>
+        {
+            heldDuringRequest = !lease.Disposed;
+            return JsonOk("""{"results":[{"index":0,"relevance_score":0.5}]}""");
+        });
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var client = new LlamaServerRerankerClient(supervisor, http, NullLogger<LlamaServerRerankerClient>.Instance);
+
+        var scores = await client.RerankAsync(ModelName, "the query", ["a"], CancellationToken.None);
+
+        AssertEx.NotNull(scores);
+        AssertEx.Contains(supervisor.LeasedRoles, ModelRole.Reranker);
+        AssertEx.True(heldDuringRequest, "The lease must still be held while the scoring request is in flight.");
+        AssertEx.True(lease.Disposed, "The lease must be released once the round-trip ends.");
+    }
+
+    [Test]
+    public async Task RerankAsync_WhenProfilingOwnsTheKey_DoesNotScoreAgainstTheMeasurement_ThenSucceedsAfterItEnds()
+    {
+        var supervisor = LeasingSupervisor(LlamaServerLeaseAcquisition.NotRunning);
+        supervisor.LeaseSequence.Enqueue(LlamaServerLeaseAcquisition.ProfilingOwned);
+        supervisor.LeaseSequence.Enqueue(LlamaServerLeaseAcquisition.NotRunning);
+        using var handler = new CapturingHandler(_ => JsonOk("""{"results":[{"index":0,"relevance_score":0.5}]}"""));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var client = new LlamaServerRerankerClient(supervisor, http, NullLogger<LlamaServerRerankerClient>.Instance);
+
+        var scores = await client.RerankAsync(ModelName, "the query", ["a"], CancellationToken.None);
+
+        AssertEx.NotNull(scores);
+        AssertEx.Equal(expected: 2, supervisor.EnsureCalls, "The refusal must re-ensure rather than POST to the measurement process.");
+    }
+
+    [Test]
+    public async Task RerankAsync_WhenProfilingNeverReleasesTheKey_DegradesToFusionOrder()
+    {
+        var supervisor = LeasingSupervisor(LlamaServerLeaseAcquisition.ProfilingOwned);
+        using var handler = new CapturingHandler(_ => JsonOk("""{"results":[]}"""));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var client = new LlamaServerRerankerClient(supervisor, http, NullLogger<LlamaServerRerankerClient>.Instance);
+
+        var scores = await client.RerankAsync(ModelName, "the query", ["a", "b"], CancellationToken.None);
+
+        AssertEx.Null(scores, "Reranking is best-effort: an unavailable model degrades, it does not throw.");
+        AssertEx.Null(handler.LastRequestUri, "Nothing may be scored against the measurement process.");
+    }
+
+    /// <summary>A ready supervisor whose lease acquisition (and sequence) the test controls.</summary>
+    private static FakeProcessSupervisor LeasingSupervisor(LlamaServerLeaseAcquisition acquisition)
+    {
+        return new FakeProcessSupervisor
+        {
+            EnsureEndpoint = Endpoint,
+            LeaseAcquisition = acquisition
+        };
+    }
+
     private static ILlamaServerProcessSupervisor ReadySupervisor()
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();

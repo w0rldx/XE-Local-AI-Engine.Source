@@ -20,10 +20,8 @@ function localModelOrigin(value: LocalModelWire["origin"]): LocalModelOrigin | n
 	return null;
 }
 
-// Maps the generated (OpenAPI) local-model response types to the stricter domain view-models the page depends on.
-// The generated types are the single source of truth for the wire shape; their fields are all optional (`x?: T`),
-// so each mapper coalesces every field to a required value with a sensible default. Nothing the backend already
-// redacts is reconstructed here — only the fields the API returns surface.
+// Maps optional generated wire fields into required domain values; validation remains at the API boundary.
+// Only API-projected sanitized fields are exposed.
 
 /**
  * True for the models this node actually has INSTALLED — everything the catalog lists except the operator-registered

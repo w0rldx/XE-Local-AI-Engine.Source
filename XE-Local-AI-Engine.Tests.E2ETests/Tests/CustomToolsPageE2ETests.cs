@@ -100,7 +100,6 @@ public sealed class CustomToolsPageE2ETests : XEPooledE2ETestBase
         // Placed in a header marked SECRET: the read path must return the sentinel, never this value.
         var secretMarker = $"SUPER-SECRET-{Guid.NewGuid():N}";
 
-        // --- Create ---
         await Page.GetByTestId("custom-tool-create-button").ClickAsync();
         await Expect(Page.GetByTestId("custom-tool-editor-card")).ToBeVisibleAsync();
         await Expect(Page.GetByTestId("custom-tool-form")).ToBeVisibleAsync();
@@ -146,7 +145,6 @@ public sealed class CustomToolsPageE2ETests : XEPooledE2ETestBase
         var listBody = await Page.Locator("body").InnerTextAsync();
         await Assert.That(listBody.Contains(secretMarker, StringComparison.Ordinal)).IsFalse();
 
-        // --- Reopen: persisted values repopulate, the secret comes back masked ---
         await Page.GetByTestId($"custom-tool-edit-{toolId}").ClickAsync();
         await Expect(Page.GetByTestId("custom-tool-form")).ToBeVisibleAsync();
 
@@ -164,7 +162,6 @@ public sealed class CustomToolsPageE2ETests : XEPooledE2ETestBase
         var editorBody = await Page.Locator("body").InnerTextAsync();
         await Assert.That(editorBody.Contains(secretMarker, StringComparison.Ordinal)).IsFalse();
 
-        // --- Edit + enable + save ---
         await Page.GetByTestId("custom-tool-form-description").FillAsync(updatedDescription);
         await Page.GetByTestId("custom-tool-form-enabled").CheckAsync();
 
@@ -202,7 +199,6 @@ public sealed class CustomToolsPageE2ETests : XEPooledE2ETestBase
         await Page.GetByTestId("custom-tool-form-cancel").ClickAsync();
         await Expect(Page.GetByTestId("custom-tool-form")).ToHaveCountAsync(0);
 
-        // --- Delete ---
         var deleteResponse = await Page.RunAndWaitForResponseAsync(async () =>
             {
                 await Page.GetByTestId($"custom-tool-delete-{toolId}").ClickAsync();

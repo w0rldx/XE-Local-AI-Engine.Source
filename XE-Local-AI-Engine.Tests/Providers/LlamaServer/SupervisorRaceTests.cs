@@ -337,13 +337,12 @@ public sealed class SupervisorRaceTests
         var launcher = new FakeProcessLauncher();
         await using var supervisor = SupervisorFactory.Create(launcher);
 
-        // Fire many concurrent ensure-running calls for the same (model, role).
         var calls = Enumerable.Range(start: 0, count: 20)
                               .Select(_ => supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None))
                               .ToArray();
         var endpoints = await Task.WhenAll(calls);
 
-        AssertEx.Equal(expected: 1, launcher.LaunchCount); // single-flight: one spawn for the whole burst.
+        AssertEx.Equal(expected: 1, launcher.LaunchCount);
         var first = endpoints[0].BaseAddress.AbsoluteUri;
         AssertEx.True(endpoints.All(e => string.Equals(e.BaseAddress.AbsoluteUri, first, StringComparison.Ordinal)));
     }
@@ -356,15 +355,12 @@ public sealed class SupervisorRaceTests
 
         var first = await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
 
-        // Simulate the idle-reaper evicting the model out from under an in-flight tool call.
         await supervisor.EvictAsync("model-a", ModelRole.Chat, CancellationToken.None);
 
-        // The tool loop re-requests the same model — this must restart it, not surface a failure.
         var second = await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
 
-        AssertEx.Equal(expected: 2, launcher.LaunchCount); // original + restart.
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
         AssertEx.NotNull(second);
-        // Both endpoints are valid localhost /v1 URLs (a fresh port may be allocated on restart).
         AssertEx.True(second.BaseAddress.AbsoluteUri.EndsWith("/v1", StringComparison.Ordinal));
         AssertEx.Equal("127.0.0.1", first.BaseAddress.Host);
     }

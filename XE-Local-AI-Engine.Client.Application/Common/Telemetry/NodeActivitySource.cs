@@ -17,7 +17,6 @@ using XE_Local_AI_Engine.AI.Contracts.Telemetry;
 /// </summary>
 public static class NodeActivitySource
 {
-    /// <summary>The exported source name.</summary>
     public const string SourceName = TelemetrySourceNames.Node;
 
     /// <summary>The shared source. A span is created only when a listener is attached (exporter configured), so the

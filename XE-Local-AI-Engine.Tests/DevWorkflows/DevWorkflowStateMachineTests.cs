@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
@@ -265,7 +266,7 @@ public sealed class DevWorkflowStateMachineTests
     public void Recompute_WithAReasonPastTheColumnsBound_CutsBetweenRunesRatherThanInsideOne(string prefix)
     {
         var nodeKey = prefix + string.Concat(Enumerable.Repeat("\U0001F600", 400));
-        var graph = DevWorkflowGraph.Parse($$"""{ "schemaVersion": 1, "nodes": [{ "nodeKey": {{System.Text.Json.JsonSerializer.Serialize(nodeKey)}}, "nodeType": "Agent" }], "edges": [] }""");
+        var graph = DevWorkflowGraph.Parse($$"""{ "schemaVersion": 1, "nodes": [{ "nodeKey": {{JsonSerializer.Serialize(nodeKey)}}, "nodeType": "Agent" }], "edges": [] }""");
 
         var reason = AssertEx.NotNull(DevWorkflowStateMachine.Recompute(DevWorkflowRunStatus.Running, graph, [NodeRun(nodeKey, DevWorkflowNodeRunStatus.Skipped)]).TerminalReason);
 

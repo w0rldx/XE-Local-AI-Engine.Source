@@ -8,7 +8,6 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Context;
 /// </summary>
 public sealed class ConversationContextBudgetOptions
 {
-    /// <summary>The configuration section these options bind from.</summary>
     public const string SectionName = "Agent:ConversationContextBudget";
 
     /// <summary>

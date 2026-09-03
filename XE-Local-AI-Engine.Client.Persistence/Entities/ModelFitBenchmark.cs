@@ -45,10 +45,8 @@ internal sealed record class ModelFitBenchmark
     /// </summary>
     public byte[]? DiagnosticsJson { get; set; }
 
-    // -------------------------------------------------------------------------
     // Agent-loop benchmark metrics (additive, all nullable — legacy rows pre-date the agent-loop bench). Plaintext
     // numerics, same posture as tokens_per_second (no secrets).
-    // -------------------------------------------------------------------------
 
     /// <summary>Prompt-processing throughput (tokens/s), or null. Plaintext.</summary>
     public double? PpTokensPerSecond { get; set; }
@@ -81,9 +79,7 @@ internal sealed record class ModelFitBenchmark
 
     public bool ExternalPressureDetected { get; set; }
 
-    // -------------------------------------------------------------------------
     // Reproducibility key (today only in ephemeral job params).
-    // -------------------------------------------------------------------------
 
     /// <summary>llama.cpp binary tag/commit the bench ran on, or null. Plaintext.</summary>
     public string? LlamacppBuild { get; set; }
@@ -103,10 +99,8 @@ internal sealed record class ModelFitBenchmark
     /// <summary>Local-only machine key the bench ran on, or null. Never emitted in telemetry/aggregates. Plaintext.</summary>
     public string? MachineKey { get; set; }
 
-    // -------------------------------------------------------------------------
     // Placement args that dominate MoE tok/s — persisted on the row so a measurement reproduces itself without
     // joining back through inference_profiles.
-    // -------------------------------------------------------------------------
 
     /// <summary>GPU layer count (<c>-ngl</c>) the bench ran with, or null. Plaintext.</summary>
     public int? NGpuLayers { get; set; }
@@ -123,11 +117,9 @@ internal sealed record class ModelFitBenchmark
     /// <summary>Whether flash-attention (<c>-fa</c>) was enabled for the bench, or null for legacy rows. Plaintext.</summary>
     public bool? FlashAttn { get; set; }
 
-    // -------------------------------------------------------------------------
     // Profile revision binding (additive, nullable — legacy rows predate it). The freeze gate qualifies a benchmark
     // only when this matches the profile being frozen AND the row's launch args still match the profile's current
     // args, so a benchmark taken before a re-explore can never freeze the changed configuration.
-    // -------------------------------------------------------------------------
 
     /// <summary>The inference profile revision this benchmark measured, or null for legacy rows. Plaintext (structural).</summary>
     public Guid? ProfileId { get; set; }

@@ -32,6 +32,10 @@ import traceback
 
 from exportlib import CONTRACT_VERSION, ExportConfigError, protocol_line, read_config, validate_config
 
+# Shared with train.py, which is why the guard lives in trainlib rather than here: both scripts ship into the same
+# directory and both hand a Hub-derived tokenizer to a save_pretrained call.
+from trainlib import assert_safe_chat_template_names
+
 HEARTBEAT_SECONDS = 20
 
 
@@ -112,6 +116,10 @@ def main():
             load_in_4bit=False,
             local_files_only=True,
         )
+
+        # The tokenizer travels from the base checkpoint through the adapter directory, so its chat template names
+        # are still whatever the user's Hugging Face repo declared. Checked before the merge writes anything.
+        assert_safe_chat_template_names(tokenizer, adapter_dir)
 
         heartbeat.phase("merging")
         # The one supported merge call. save_pretrained_gguf is excluded on purpose (see the module docstring).

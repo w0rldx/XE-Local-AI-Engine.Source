@@ -79,16 +79,8 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 
         var seedMessages = BuildSeedMessages(definition);
 
-        // Ollama think option, by model capability:
-        //  - Thinking-capable model: honor the requested effort (false, low, medium, or high).
-        //  - Non-thinking model: omit the think field when reasoning is requested (the binary on, OR a graded level
-        //    carried onto it by an agent definition or a stale composer selection), and send think false only for
-        //    none or unspecified. Sending think true or a level is rejected by Ollama with HTTP 400 (does not support
-        //    thinking); think false is accepted but actively suppresses the reasoning some GGUF chat templates (e.g.
-        //    unsloth gemma-4-12b-it) emit by default, whereas omitting the field lets that template reasoning through
-        //    so the user sees a reasoning block. Verified live against gemma-4-12b-it on Ollama 0.30.5: think false
-        //    returns empty thinking, while omitting the field returns populated thinking. Cloud providers default
-        //    SupportsThinking to true and ignore the unknown property, so their option dictionary is unchanged.
+        // Ollama rejects think=true/levels on non-thinking models. Omitting the field preserves reasoning baked into
+        // some GGUF templates; think=false suppresses it. Verified with gemma-4-12b-it on Ollama 0.30.5.
         var additionalProperties = new AdditionalPropertiesDictionary();
         if (definition.SupportsThinking)
         {
@@ -97,30 +89,15 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             var think = ReasoningOptionsResolver.ResolveThinkOption(definition.ReasoningEffort);
             additionalProperties["think"] = think;
 
-            // Reasoning explicitly OFF on a thinking-capable model (ResolveThinkOption returned the bool false, which only
-            // happens for "none"): flag the turn so the llama.cpp chat client injects chat_template_kwargs.enable_thinking
-            // =false. The think:false above only silences reasoning on the Ollama wire; the llama.cpp OpenAI adapter drops
-            // the think key, so without this a Qwen3-class template would still stream a reasoning block. The
-            // marker is inert on the Ollama/Codex wires. Non-thinking models take the else branch below and get no marker
-            // (there is no default reasoning to disable).
+            // llama.cpp's OpenAI adapter drops think=false, so explicitly disable thinking through its template marker.
+            // The marker is inert on Ollama/Codex and unnecessary for non-thinking models.
             if (think is false)
             {
                 additionalProperties[LlamaDisableThinkingMarkerKey] = true;
             }
 
-            // Reasoning ON with an explicit graded effort: cap how long the model may think so it cannot spend the whole
-            // context window reasoning and return no answer. The budget rides its own marker for the llama.cpp client to
-            // patch onto the body as reasoning_budget_tokens; an unspecified effort resolves to null and sends nothing,
-            // keeping the no-effort request byte-identical.
-            //
-            // The cap is only real for a model llama.cpp can ENFORCE it on. llama-server writes the budget onto the
-            // sampler only when its chat-template classification produced a non-empty think-end-tag set; with an empty
-            // set it accepts the field and then ignores it, so the reasoning free-runs exactly as if nothing had been
-            // sent. For such a model the marker is omitted rather than sent — a field that does nothing is worse than
-            // no field, because everything upstream would read it as a cap that holds — and the skip is reported once
-            // per model so an operator learns why this model's thinking is uncapped.
-            // An explicit sampling budget beats the effort ladder: the ladder is a fixed ceiling picked without
-            // knowing the window, while a caller that pins a number (the benchmark freeze) has to replay exactly it.
+            // Only send a reasoning budget when llama.cpp can enforce it (a non-empty think-end-tag set); otherwise it
+            // silently ignores the field. An explicit sampling budget wins so benchmark replay remains exact.
             var pinnedBudget = definition.Sampling?.ReasoningBudgetTokens is { } pinned && pinned > 0 ? pinned : (int?)null;
             if ((pinnedBudget ?? ReasoningOptionsResolver.ResolveReasoningBudgetTokens(definition.ReasoningEffort)) is { } budgetTokens)
             {
@@ -134,20 +111,14 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
                 }
             }
 
-            // Codex-only side channel: when a graded/explicit effort is present, also carry the RAW normalized effort
-            // string so the Codex Responses boundary can map minimal/xhigh distinctly (the think key above cannot —
-            // it would 400 Ollama). Added only for a recognized non-blank effort so the no-effort/blank/on path keeps
-            // the single-think dictionary (byte-identical no-override guarantee). Inert on the Ollama wire: the
-            // OllamaSharp AbstractionMapper reads only its fixed option allowlist and ignores this unknown key.
+            // Codex needs the raw effort to distinguish minimal/xhigh; Ollama ignores this unknown side-channel key.
             var codexEffort = ReasoningOptionsResolver.ResolveCodexReasoningEffort(definition.ReasoningEffort);
             if (codexEffort is not null)
             {
                 additionalProperties[ReasoningOptionsResolver.CodexReasoningEffortKey] = codexEffort;
             }
 
-            // External-provider side channel, added only for an ext: model with a recognized effort. Its ABSENCE is
-            // meaningful — that is what lets the model's REGISTERED default effort apply — so an unspecified effort
-            // adds nothing and every other model's dictionary stays byte-identical.
+            // Absence preserves an external model's registered default effort.
             var externalEffort = ReasoningOptionsResolver.ResolveExternalReasoningEffort(definition.ModelId, definition.ReasoningEffort);
             if (externalEffort is not null)
             {
@@ -156,16 +127,11 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         }
         else if (ReasoningOptionsResolver.IsReasoningRequested(definition.ReasoningEffort))
         {
-            // Non-thinking model, reasoning requested (binary "on" OR a graded low/medium/high carried onto a model
-            // that cannot do graded thinking): OMIT the think field entirely so the model's default (chat-template-
-            // baked) reasoning is allowed through. We must NOT send think:true or a level — Ollama returns HTTP 400
-            // ("does not support thinking") for a model without the thinking capability; only omission lets the
-            // built-in reasoning run. The key is therefore intentionally left out here.
+            // Omit think: Ollama rejects true/levels, while omission permits chat-template reasoning.
         }
         else
         {
-            // Non-thinking model, reasoning OFF ("none") or unspecified (the safe default for agent/legacy paths):
-            // think:false actively suppresses the reasoning some GGUF templates emit by default.
+            // Explicitly suppress chat-template reasoning for none/unspecified.
             additionalProperties["think"] = false;
         }
 

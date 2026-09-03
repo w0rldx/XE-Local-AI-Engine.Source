@@ -194,7 +194,3 @@ export function formatBytes(bytes: number): string {
 	const value = bytes / 1024 ** exponent;
 	return `${value.toFixed(exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }
-
-// ---------------------------------------------------------------------------
-// Training run view models.
-// ---------------------------------------------------------------------------

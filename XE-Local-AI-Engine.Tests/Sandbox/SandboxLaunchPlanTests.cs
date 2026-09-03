@@ -221,8 +221,6 @@ public sealed class SandboxLaunchPlanTests
         await Task.CompletedTask;
     }
 
-    // ---- helpers ----
-
     private static SandboxContainment FullContainment()
     {
         return new SandboxContainment

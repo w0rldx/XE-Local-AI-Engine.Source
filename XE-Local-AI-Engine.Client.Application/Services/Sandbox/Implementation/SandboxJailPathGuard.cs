@@ -127,8 +127,6 @@ internal static class SandboxJailPathGuard
         }
     }
 
-    // ---- ported host-file no-follow / byte-cap guard (same pattern as the deleted LocalContainerSandboxProvider) ----
-
     /// <summary>
     ///     Reads the host file under the no-follow / byte-recheck guards. Throws <see cref="InvalidDataException" />
     ///     when the file exceeds the per-file cap on this re-read or grew after sizing. Throws

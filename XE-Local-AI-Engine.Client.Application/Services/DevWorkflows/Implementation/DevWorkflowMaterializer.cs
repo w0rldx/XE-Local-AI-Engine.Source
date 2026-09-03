@@ -193,19 +193,19 @@ internal sealed class DevWorkflowMaterializer
         string reason,
         CancellationToken cancellationToken) =>
         await _retries.SettleFailureAsync(store,
-                graph,
-                run,
-                producer,
-                nodeRuns,
-                new DevWorkflowFailure(DevWorkflowFailureClasses.Configuration,
-                    reason,
-                    JsonSerializer.Serialize(new RejectedOutput(DevWorkflowNodeOutputStatuses.Failed,
-                            producer.Attempt,
-                            DevWorkflowFailureClasses.Configuration,
-                            reason),
-                        JsonOptions)),
-                cancellationToken)
-            .ConfigureAwait(false);
+                          graph,
+                          run,
+                          producer,
+                          nodeRuns,
+                          new DevWorkflowFailure(DevWorkflowFailureClasses.Configuration,
+                              reason,
+                              JsonSerializer.Serialize(new RejectedOutput(DevWorkflowNodeOutputStatuses.Failed,
+                                      producer.Attempt,
+                                      DevWorkflowFailureClasses.Configuration,
+                                      reason),
+                                  JsonOptions)),
+                          cancellationToken)
+                      .ConfigureAwait(false);
 
     /// <summary>
     ///     The newest task package this node produced, parsed — or the sentence an operator and the next attempt are
@@ -534,7 +534,8 @@ internal sealed class DevWorkflowMaterializer
         acceptanceCriteria is { Count: > 0 } criteria ? JsonSerializer.Serialize(criteria, JsonOptions) : null;
 
     /// <summary>One task of the §5.9 package. Every member is optional at the parser; <see cref="Reject" /> says which are not.</summary>
-    private sealed record TaskPackageItem(string? Id,
+    private sealed record TaskPackageItem(
+        string? Id,
         string? Title,
         string? Goal,
         IReadOnlyList<string>? AllowedPaths,

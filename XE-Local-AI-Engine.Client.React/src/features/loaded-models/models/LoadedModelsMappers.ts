@@ -5,10 +5,8 @@ import type {
 } from "@/core/api/generated";
 import type { LoadedModel, LoadedModelsSnapshot, UnloadResult } from "@/features/loaded-models/models/LoadedModelsModels";
 
-// Maps the generated (OpenAPI) running-models response types to the stricter domain view-models the page depends
-// on. The generated types are the single source of truth for the wire shape; their fields are all optional
-// (`x?: T`), so each mapper coalesces every field to a required value with a safe default. The DTOs carry only
-// sanitized fields; the mapper only surfaces what the API returns and never reconstructs a dropped field.
+// Maps optional generated wire fields into required domain values; validation remains at the API boundary.
+// Only API-projected sanitized fields are exposed.
 
 function toLoadedModel(dto: XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse): LoadedModel {
 	return {

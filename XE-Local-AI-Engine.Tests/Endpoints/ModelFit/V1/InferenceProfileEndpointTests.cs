@@ -42,10 +42,6 @@ public sealed class InferenceProfileEndpointTests
         return $"{ApiPrefix}/model-fit/profiles/freeze";
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Operator gate — a route without a bearer token is rejected.
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task ExploreProfile_WhenNoBearerToken_ReturnsUnauthorized()
     {
@@ -65,10 +61,6 @@ public sealed class InferenceProfileEndpointTests
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Explore validation — an unknown role 400s before the service is invoked.
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task ExploreProfile_WhenRoleUnknown_ReturnsBadRequest()
@@ -95,10 +87,6 @@ public sealed class InferenceProfileEndpointTests
                      .ExploreAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>());
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Benchmark guard — an empty body-carried profile id 400s.
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task BenchmarkProfile_WhenProfileIdEmpty_ReturnsBadRequest()
     {
@@ -122,9 +110,35 @@ public sealed class InferenceProfileEndpointTests
                      .BenchmarkAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Domain failure — freeze without a justifying benchmark maps to a 400 with an error body.
-    // ──────────────────────────────────────────────────────────────────────
+    [Test]
+    public async Task ExploreProfile_WhenSkippedBecauseTheModelIsInUse_ReturnsTheRetryWording()
+    {
+        const string skipText =
+            "Skipped: some/model-GGUF (Chat) is serving 1 in-flight request(s); profiling did not run and nothing was evicted. Retry when the model is idle.";
+        var service = Substitute.For<IInferenceProfileService>();
+        service.ExploreAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
+               .Returns(ExploreResult.SkippedInUse(skipText));
+
+        await using var factory = CreateFactory(service);
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, ExploreRoute())
+        {
+            Content = JsonContent.Create(new
+            {
+                modelName = "some/model-GGUF",
+                role = "chat"
+            })
+        };
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        // Still a 400 (the response DTO carries no skip state — a 200-with-skip would change the OpenAPI contract),
+        // but the operator reads a retry instruction rather than a failure.
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        AssertEx.Contains(payload, skipText, StringComparison.Ordinal);
+    }
 
     [Test]
     public async Task FreezeProfile_WhenDomainFailure_ReturnsBadRequest()
@@ -151,10 +165,6 @@ public sealed class InferenceProfileEndpointTests
         var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
         AssertEx.True(payload.Length > 0, "A domain-failure freeze must return a non-empty error body.");
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // List projection — surfaces profiles but NEVER the local-only machine key.
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task ListProfiles_WhenAuthorized_ReturnsProfiles_OmitsMachineKey()

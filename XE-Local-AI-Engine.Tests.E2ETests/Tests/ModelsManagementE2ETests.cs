@@ -88,7 +88,6 @@ public sealed class ModelsManagementE2ETests : XESerialE2ETestBase
         // hey-api-encoded to %3A; the delete endpoint must decode it before validation (ModelRouteName.Decode).
         var modelName = $"{SeededModelPrefix}{Guid.NewGuid():N}:test";
 
-        // --- Register (replaces the removed browser-driven pull; see the class doc) ---
         // Seed BEFORE the first navigation so the page's initial list query already returns the row; that
         // keeps the assertion on a plain page load rather than on a refresh-button race.
         Factory.FakeOllamaState.Models = [.. Factory.FakeOllamaState.Models, modelName];
@@ -105,7 +104,6 @@ public sealed class ModelsManagementE2ETests : XESerialE2ETestBase
             Timeout = 15_000
         });
 
-        // --- Change kind via the details dialog ---
         // Open details (row "View {name} details" action). The dialog mounts a Type tab with an override Select.
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
         {
@@ -151,7 +149,6 @@ public sealed class ModelsManagementE2ETests : XESerialE2ETestBase
         await Page.Keyboard.PressAsync("Escape");
         await Expect(Page.GetByTestId("installed-models-table")).ToBeVisibleAsync();
 
-        // --- Delete (exercises the colon-decode path) ---
         var deleteResponse = await Page.RunAndWaitForResponseAsync(async () =>
             {
                 await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions

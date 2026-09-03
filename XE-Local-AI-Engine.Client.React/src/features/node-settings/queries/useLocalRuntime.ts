@@ -27,9 +27,7 @@ import { sourceBuildRequest } from "@/features/node-settings/models/SourceBuildM
 // zod response-shape failure surfaces as an ApiError. Mutations adapt the domain variables to the generated `{ body }`
 // envelope and invalidate the caches they affect; the HF token is write-only — only its boolean status is fetched.
 
-// The generated query keys are single-element arrays `[{ _id: "<operationId>", ... }]`. Invalidating with just the
-// `_id` partial object matches every cached variant of that endpoint. Centralized here so the literal `_id` key —
-// which trips biome's naming-convention rule — is constructed in exactly one place.
+// Generated keys are object arrays; TanStack partial matching on `_id` invalidates every endpoint variant.
 export const localRuntimeQueryIds = {
 	llamaCppRuntime: "getLlamaCppRuntime",
 	hfTokenStatus: "getHfTokenStatus",

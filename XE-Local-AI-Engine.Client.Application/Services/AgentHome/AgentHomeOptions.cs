@@ -6,7 +6,6 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 /// </summary>
 public sealed class AgentHomeOptions
 {
-    /// <summary>The configuration section this options type binds to.</summary>
     public const string SectionName = "AgentHome";
 
     /// <summary>

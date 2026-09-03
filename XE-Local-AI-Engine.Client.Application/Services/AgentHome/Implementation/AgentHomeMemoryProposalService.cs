@@ -151,7 +151,6 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
     {
         record = null;
 
-        // ── 1. Parse JSON ────────────────────────────────────────────────────
         JsonNode? node;
         try
         {
@@ -167,7 +166,6 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
             return Reject(fileName, lineIndex, "line is not a JSON object");
         }
 
-        // ── 2. Extract required fields ───────────────────────────────────────
         if (!TryGetString(obj, "type", out var type))
         {
             return Reject(fileName, lineIndex, "missing or non-string 'type' field");
@@ -194,7 +192,6 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
             return Reject(fileName, lineIndex, "missing or invalid 'evidence' field (must be a string array)");
         }
 
-        // ── 3. Closed-enum validation ────────────────────────────────────────
         if (!ValidTypes.Contains(type))
         {
             return Reject(fileName, lineIndex, $"unknown 'type' value '{type}'; expected node_memory_proposal or project_memory_proposal");
@@ -210,13 +207,11 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
             return Reject(fileName, lineIndex, $"unknown 'confidence' value '{confidence}'; expected low, medium, or high");
         }
 
-        // ── 4. Content length ────────────────────────────────────────────────
         if (content.Length < MinContentLength || content.Length > MaxContentLength)
         {
             return Reject(fileName, lineIndex, $"'content' length {content.Length} is outside the allowed range [{MinContentLength}, {MaxContentLength}]");
         }
 
-        // ── 5. Evidence path prefix validation: must reference sandbox paths, never host paths ──
         if (evidence.Any(path => path.Contains("..", StringComparison.Ordinal)))
         {
             return Reject(fileName, lineIndex, "evidence path contains a path-traversal segment '..'");
@@ -230,7 +225,6 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
             return Reject(fileName, lineIndex, "evidence path is an absolute host path; only sandbox-relative or workspace-rooted paths are allowed");
         }
 
-        // ── 6. Secret scan ───────────────────────────────────────────────────
         var scanResult = MemoryProposalSecretScanner.Scan(type, operation, content, evidence, confidence);
         if (scanResult.ShouldReject)
         {
@@ -283,8 +277,6 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
     {
         return path.Length >= 2 && char.IsLetter(path[0]) && path[1] == ':';
     }
-
-    // ── JSON helpers ──────────────────────────────────────────────────────
 
     private static bool TryGetString(JsonObject obj, string key, out string value)
     {

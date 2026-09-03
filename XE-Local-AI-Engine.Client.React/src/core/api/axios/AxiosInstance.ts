@@ -24,11 +24,9 @@ const axiosInstance = axios.create({
 	},
 });
 
-// Request interceptors
 addFormDataContentTypeInterceptor(axiosInstance);
 addAuthRequestInterceptor(axiosInstance);
 
-// Response interceptors
 addUnauthorizedErrorInterceptor(axiosInstance);
 addRateLimitingInterceptor(axiosInstance);
 addApiProblemDetailsInterceptor(axiosInstance);

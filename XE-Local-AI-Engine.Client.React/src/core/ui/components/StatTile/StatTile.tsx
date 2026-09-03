@@ -13,7 +13,6 @@ interface StatTileProps {
 	variant?: StatTileVariant;
 	/** Unabbreviated value, surfaced as a hover Tooltip and as the headline's aria-label. */
 	exactValue?: string;
-	/** Test id on the tile wrapper. */
 	"data-testid"?: string;
 	/**
 	 * Test id on the value text itself. Prefer it over the wrapper id wherever the number is the assertion: a test that

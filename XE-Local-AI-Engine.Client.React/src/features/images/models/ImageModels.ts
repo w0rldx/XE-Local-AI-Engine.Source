@@ -235,7 +235,6 @@ export function catalogEntryRepoCount(entry: ImageModelCatalogEntryView): number
 	return new Set([entry.repoId, ...entry.parts.map((part) => part.repoId ?? entry.repoId)]).size;
 }
 
-/** One discovered Hugging Face image repository. */
 export interface ImageRepositoryView {
 	repoId: string;
 	isGated: boolean;

@@ -132,7 +132,10 @@ public sealed class DevelopmentEndpointTests
     {
         var runId = Guid.Parse("55555555-5555-5555-5555-555555555555");
         var service = Substitute.For<IDevelopmentManagementService>();
-        service.GetTaskAsync(ProjectId, TaskId, Arg.Any<CancellationToken>()).Returns(TaskAggregate(ProjectId, TaskId, []) with { WorkflowRunId = runId });
+        service.GetTaskAsync(ProjectId, TaskId, Arg.Any<CancellationToken>()).Returns(TaskAggregate(ProjectId, TaskId, []) with
+        {
+            WorkflowRunId = runId
+        });
         await using var driven = EnabledFactory(service);
         using var drivenClient = driven.CreateClient();
         using var drivenRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/local/v1/development/projects/{ProjectId}/tasks/{TaskId}");

@@ -96,8 +96,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     }
 
     /// <summary>Completes once an apply has landed and the chain is holding, for a test that has to arrive mid-sequence.</summary>
-    public Task ApplyHeld =>
-        _applyHeld.Task;
+    public Task ApplyHeld => _applyHeld.Task;
 
     /// <summary>The attempts a cancelling run asked to stop.</summary>
     public IReadOnlyList<Guid> CancelledAttempts
@@ -218,10 +217,10 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
                 // The supervisor finishing BETWEEN the ask and the caller's re-read: the ask is still refused, but by
                 // the time anyone looks again the task has moved on and its version has bumped.
                 _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
-                                           operationId,
-                                           DevelopmentTaskStatus.InReview,
-                                           task.Version),
-                                       cancellationToken)
+                                       operationId,
+                                       DevelopmentTaskStatus.InReview,
+                                       task.Version),
+                                   cancellationToken)
                                .ConfigureAwait(false);
             }
 
@@ -250,11 +249,11 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
         }
 
         _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
-                                       operationId,
-                                       next,
-                                       task.Version,
-                                       ApprovedSubjectHash: next == DevelopmentTaskStatus.AwaitingApply ? "subject" : null),
-                                   cancellationToken)
+                               operationId,
+                               next,
+                               task.Version,
+                               ApprovedSubjectHash: next == DevelopmentTaskStatus.AwaitingApply ? "subject" : null),
+                           cancellationToken)
                        .ConfigureAwait(false);
         return new DevelopmentNextActionResult("Attempt", projectId, taskId, AttemptId: null, next, DevelopmentAttemptRole.Coder);
     }

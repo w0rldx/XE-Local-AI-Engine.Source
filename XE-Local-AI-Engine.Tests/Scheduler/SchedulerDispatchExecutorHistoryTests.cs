@@ -19,10 +19,6 @@ public sealed class SchedulerDispatchExecutorHistoryTests
     private static readonly Guid RunId = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private static readonly DateTimeOffset Now = new(year: 2026, month: 6, day: 1, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Success → Succeeded with completion + duration
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task DispatchAsync_WhenHandlerSucceeds_RecordsSucceededRun()
     {
@@ -62,10 +58,6 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             Arg.Any<CancellationToken>());
         AssertEx.Equal(ScheduledRunTrigger.Manual, observed!.Value);
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Success summary: the handler's own sentence is persisted; its absence keeps the generic constant
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task DispatchAsync_WhenHandlerRecordsSummary_PersistsThatSummaryOnTheRun()
@@ -116,10 +108,6 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             Arg.Any<CancellationToken>());
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Handler throws → Failed, sanitized (no secret leaks), not re-thrown
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task DispatchAsync_WhenHandlerThrows_RecordsFailedRunWithSanitizedErrorAndDoesNotRethrow()
     {
@@ -141,10 +129,6 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             Arg.Any<CancellationToken>());
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Handler throws the sanitized marker exception → its message is recorded verbatim
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task DispatchAsync_WhenHandlerThrowsScheduledJobExecutionException_RecordsSanitizedMessageVerbatim()
     {
@@ -165,10 +149,6 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             Arg.Any<CancellationToken>());
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Any other exception type → the generic constant is still recorded (no regression)
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task DispatchAsync_WhenHandlerThrowsGenericException_StillRecordsGenericMessage()
     {
@@ -187,10 +167,6 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             Arg.Any<string?>(),
             Arg.Any<CancellationToken>());
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Cancellation: token tripped + cancel was requested → Cancelled, re-thrown
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task DispatchAsync_WhenCancelledAndCancellationRequested_RecordsCancelledAndRethrows()
@@ -221,10 +197,6 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             Arg.Any<CancellationToken>());
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Cancellation token tripped without a cancel request → TimedOut (auto-interrupt)
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task DispatchAsync_WhenCancelledWithoutRequest_RecordsTimedOutAndRethrows()
     {
@@ -254,10 +226,6 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             Arg.Any<CancellationToken>());
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Progress callback → run event appended
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task DispatchAsync_WhenHandlerReportsProgress_AppendsProgressEvent()
     {
@@ -279,10 +247,6 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             Arg.Any<CancellationToken>());
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Idempotency: a re-fire whose run is already terminal skips re-execution
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task DispatchAsync_WhenFireInstanceAlreadyTerminal_SkipsHandlerAndDoesNotUpdate()
     {
@@ -302,10 +266,6 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             Arg.Any<string?>(),
             Arg.Any<CancellationToken>());
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Realtime: lifecycle transitions publish sanitized run events
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task DispatchAsync_WhenHandlerSucceeds_PublishesRunStartedThenRunCompleted()
@@ -336,10 +296,6 @@ public sealed class SchedulerDispatchExecutorHistoryTests
                 e.Percent == 25),
             Arg.Any<CancellationToken>());
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ──────────────────────────────────────────────────────────────────────
 
     private static (SchedulerDispatchExecutor Executor, IScheduledJobRunStore RunStore, IScheduledJobRunEventStore EventStore, ISchedulerEventPublisher Publisher)
         CreateExecutor(ConfigurableHandler handler, ScheduledRunStatus upsertStatus)

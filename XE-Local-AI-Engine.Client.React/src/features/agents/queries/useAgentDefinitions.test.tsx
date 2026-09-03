@@ -5,11 +5,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock the generated TanStack module so the hooks run against owned query/mutation fns (no network). The hooks still
-// compose the real withResponseValidation bridge + the real mappers, so the read path is exercised end-to-end and
-// each mutation's dispatched wire envelope can be asserted. listAgentDefinitionsOptions/getToolCapableModelsOptions
-// return a hey-api options object ({ queryKey, queryFn }); each *Mutation returns an object whose mutationFn the hook
-// dispatches into.
+// Mock generated query/mutation factories to isolate the hook while retaining validation and mapping.
 const { listMock, toolCapableMock, createMutationFn, updateMutationFn, deleteMutationFn } = vi.hoisted(() => ({
 	listMock: vi.fn(),
 	toolCapableMock: vi.fn(),
@@ -99,7 +95,6 @@ const saveRequest = {
 	memoryExtractionEnabled: true,
 };
 
-// Captures the queryKey of every invalidateQueries call so a test can assert which caches a mutation touched.
 const invalidatedKeys: unknown[] = [];
 
 function makeWrapper() {

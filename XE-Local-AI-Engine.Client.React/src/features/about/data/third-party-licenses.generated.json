@@ -82,49 +82,49 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/charts@9.5.1",
+			"id": "frontend:@mantine/charts@9.5.2",
 			"name": "@mantine/charts",
-			"version": "9.5.1",
+			"version": "9.5.2",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev/",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/colors-generator@9.5.1",
+			"id": "frontend:@mantine/colors-generator@9.5.2",
 			"name": "@mantine/colors-generator",
-			"version": "9.5.1",
+			"version": "9.5.2",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/core@9.5.1",
+			"id": "frontend:@mantine/core@9.5.2",
 			"name": "@mantine/core",
-			"version": "9.5.1",
+			"version": "9.5.2",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev/",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/hooks@9.5.1",
+			"id": "frontend:@mantine/hooks@9.5.2",
 			"name": "@mantine/hooks",
-			"version": "9.5.1",
+			"version": "9.5.2",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/notifications@9.5.1",
+			"id": "frontend:@mantine/notifications@9.5.2",
 			"name": "@mantine/notifications",
-			"version": "9.5.1",
+			"version": "9.5.2",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/store@9.5.1",
+			"id": "frontend:@mantine/store@9.5.2",
 			"name": "@mantine/store",
-			"version": "9.5.1",
+			"version": "9.5.2",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
@@ -210,25 +210,25 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/query-core@5.101.4",
+			"id": "frontend:@tanstack/query-core@5.102.6",
 			"name": "@tanstack/query-core",
-			"version": "5.101.4",
+			"version": "5.102.6",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/query",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-query@5.101.4",
+			"id": "frontend:@tanstack/react-query@5.102.6",
 			"name": "@tanstack/react-query",
-			"version": "5.101.4",
+			"version": "5.102.6",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/query",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-router@1.170.31",
+			"id": "frontend:@tanstack/react-router@1.170.32",
 			"name": "@tanstack/react-router",
-			"version": "1.170.31",
+			"version": "1.170.32",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/router",
 			"source": "frontend"
@@ -250,9 +250,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/router-core@1.171.26",
+			"id": "frontend:@tanstack/router-core@1.171.27",
 			"name": "@tanstack/router-core",
-			"version": "1.171.26",
+			"version": "1.171.27",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/router",
 			"source": "frontend"
@@ -450,9 +450,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@types/react-dom@19.2.4",
+			"id": "frontend:@types/react-dom@19.2.5",
 			"name": "@types/react-dom",
-			"version": "19.2.4",
+			"version": "19.2.5",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react-dom",
 			"source": "frontend"
@@ -506,17 +506,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@xyflow/react@12.11.3",
+			"id": "frontend:@xyflow/react@12.11.5",
 			"name": "@xyflow/react",
-			"version": "12.11.3",
+			"version": "12.11.5",
 			"license": "MIT",
 			"homepageUrl": "https://reactflow.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@xyflow/system@0.0.80",
+			"id": "frontend:@xyflow/system@0.0.81",
 			"name": "@xyflow/system",
-			"version": "0.0.80",
+			"version": "0.0.81",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/xyflow/xyflow#readme",
 			"source": "frontend"
@@ -546,9 +546,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:axios@1.19.0",
+			"id": "frontend:axios@1.20.0",
 			"name": "axios",
-			"version": "1.19.0",
+			"version": "1.20.0",
 			"license": "MIT",
 			"homepageUrl": "https://axios-http.com",
 			"source": "frontend"
@@ -698,9 +698,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:CommunityToolkit.Aspire.OllamaSharp@13.4.0",
+			"id": "backend:CommunityToolkit.Aspire.OllamaSharp@13.5.0",
 			"name": "CommunityToolkit.Aspire.OllamaSharp",
-			"version": "13.4.0",
+			"version": "13.5.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/CommunityToolkit/Aspire",
 			"source": "backend"
@@ -1202,9 +1202,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:framer-motion@13.1.0",
+			"id": "frontend:framer-motion@13.1.1",
 			"name": "framer-motion",
-			"version": "13.1.0",
+			"version": "13.1.1",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
@@ -1362,9 +1362,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:i18next@26.3.6",
+			"id": "frontend:i18next@26.4.0",
 			"name": "i18next",
-			"version": "26.3.6",
+			"version": "26.4.0",
 			"license": "MIT",
 			"homepageUrl": "https://www.i18next.com",
 			"source": "frontend"
@@ -1874,25 +1874,25 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI@1.17.0",
+			"id": "backend:Microsoft.Agents.AI@1.20.0",
 			"name": "Microsoft.Agents.AI",
-			"version": "1.17.0",
+			"version": "1.20.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.Abstractions@1.19.0",
+			"id": "backend:Microsoft.Agents.AI.Abstractions@1.20.0",
 			"name": "Microsoft.Agents.AI.Abstractions",
-			"version": "1.19.0",
+			"version": "1.20.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.Workflows@1.17.0",
+			"id": "backend:Microsoft.Agents.AI.Workflows@1.20.0",
 			"name": "Microsoft.Agents.AI.Workflows",
-			"version": "1.17.0",
+			"version": "1.20.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
@@ -2138,9 +2138,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.AI@10.8.3",
+			"id": "backend:Microsoft.Extensions.AI@10.9.0",
 			"name": "Microsoft.Extensions.AI",
-			"version": "10.8.3",
+			"version": "10.9.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2154,9 +2154,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.AI.Evaluation@10.7.0",
+			"id": "backend:Microsoft.Extensions.AI.Evaluation@10.9.0",
 			"name": "Microsoft.Extensions.AI.Evaluation",
-			"version": "10.7.0",
+			"version": "10.9.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2173,14 +2173,6 @@
 			"id": "backend:Microsoft.Extensions.AmbientMetadata.Application@10.9.0",
 			"name": "Microsoft.Extensions.AmbientMetadata.Application",
 			"version": "10.9.0",
-			"license": "MIT",
-			"homepageUrl": "https://dot.net/",
-			"source": "backend"
-		},
-		{
-			"id": "backend:Microsoft.Extensions.Caching.Abstractions@10.0.10",
-			"name": "Microsoft.Extensions.Caching.Abstractions",
-			"version": "10.0.10",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2330,17 +2322,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Diagnostics.HealthChecks@10.0.8",
+			"id": "backend:Microsoft.Extensions.Diagnostics.HealthChecks@10.0.11",
 			"name": "Microsoft.Extensions.Diagnostics.HealthChecks",
-			"version": "10.0.8",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions@10.0.8",
+			"id": "backend:Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions@10.0.11",
 			"name": "Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions",
-			"version": "10.0.8",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
@@ -2370,9 +2362,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.FileSystemGlobbing@10.0.6",
+			"id": "backend:Microsoft.Extensions.FileSystemGlobbing@10.0.11",
 			"name": "Microsoft.Extensions.FileSystemGlobbing",
-			"version": "10.0.6",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2506,14 +2498,6 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Primitives@10.0.10",
-			"name": "Microsoft.Extensions.Primitives",
-			"version": "10.0.10",
-			"license": "MIT",
-			"homepageUrl": "https://dot.net/",
-			"source": "backend"
-		},
-		{
 			"id": "backend:Microsoft.Extensions.Primitives@10.0.11",
 			"name": "Microsoft.Extensions.Primitives",
 			"version": "10.0.11",
@@ -2562,9 +2546,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.VectorData.Abstractions@10.7.0",
+			"id": "backend:Microsoft.Extensions.VectorData.Abstractions@10.8.2",
 			"name": "Microsoft.Extensions.VectorData.Abstractions",
-			"version": "10.7.0",
+			"version": "10.8.2",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/dotnet/ai/vector-stores/overview",
 			"source": "backend"
@@ -2714,9 +2698,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:motion-dom@13.0.0",
+			"id": "frontend:motion-dom@13.1.1",
 			"name": "motion-dom",
-			"version": "13.0.0",
+			"version": "13.1.1",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
@@ -3066,57 +3050,57 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:Quartz@3.19.1",
+			"id": "backend:Quartz@3.20.0",
 			"name": "Quartz",
-			"version": "3.19.1",
+			"version": "3.20.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Extensions.DependencyInjection@3.19.1",
+			"id": "backend:Quartz.Extensions.DependencyInjection@3.20.0",
 			"name": "Quartz.Extensions.DependencyInjection",
-			"version": "3.19.1",
+			"version": "3.20.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Extensions.Hosting@3.19.1",
+			"id": "backend:Quartz.Extensions.Hosting@3.20.0",
 			"name": "Quartz.Extensions.Hosting",
-			"version": "3.19.1",
+			"version": "3.20.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Jobs@3.19.1",
+			"id": "backend:Quartz.Jobs@3.20.0",
 			"name": "Quartz.Jobs",
-			"version": "3.19.1",
+			"version": "3.20.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Plugins@3.19.1",
+			"id": "backend:Quartz.Plugins@3.20.0",
 			"name": "Quartz.Plugins",
-			"version": "3.19.1",
+			"version": "3.20.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Plugins.TimeZoneConverter@3.19.1",
+			"id": "backend:Quartz.Plugins.TimeZoneConverter@3.20.0",
 			"name": "Quartz.Plugins.TimeZoneConverter",
-			"version": "3.19.1",
+			"version": "3.20.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Serialization.SystemTextJson@3.19.1",
+			"id": "backend:Quartz.Serialization.SystemTextJson@3.20.0",
 			"name": "Quartz.Serialization.SystemTextJson",
-			"version": "3.19.1",
+			"version": "3.20.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
@@ -3154,9 +3138,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:react-i18next@17.0.11",
+			"id": "frontend:react-i18next@17.0.12",
 			"name": "react-i18next",
-			"version": "17.0.11",
+			"version": "17.0.12",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/i18next/react-i18next",
 			"source": "frontend"
@@ -3370,9 +3354,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:Scalar.AspNetCore@2.16.10",
+			"id": "backend:Scalar.AspNetCore@2.17.2",
 			"name": "Scalar.AspNetCore",
-			"version": "2.16.10",
+			"version": "2.17.2",
 			"license": "MIT",
 			"homepageUrl": "https://scalar.com/",
 			"source": "backend"
@@ -3514,17 +3498,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:seroval@1.6.2",
+			"id": "frontend:seroval@1.6.3",
 			"name": "seroval",
-			"version": "1.6.2",
+			"version": "1.6.3",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/lxsmnsyc/seroval/tree/main/packages/seroval",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:seroval-plugins@1.6.2",
+			"id": "frontend:seroval-plugins@1.6.3",
 			"name": "seroval-plugins",
-			"version": "1.6.2",
+			"version": "1.6.3",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/lxsmnsyc/seroval/tree/main/packages/plugins",
 			"source": "frontend"
@@ -3714,9 +3698,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:System.Security.Cryptography.ProtectedData@10.0.9",
+			"id": "backend:System.Security.Cryptography.ProtectedData@10.0.11",
 			"name": "System.Security.Cryptography.ProtectedData",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"

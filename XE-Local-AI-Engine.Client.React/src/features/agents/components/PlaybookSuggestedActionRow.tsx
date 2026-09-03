@@ -30,7 +30,6 @@ import type {
 	PlaybookAction,
 } from "@/features/agents/models/PlaybookActionModels";
 
-// Render an analysis confidence fraction (0..1) as a whole-percent string for display.
 function toConfidencePercent(confidence: number): string {
 	return `${Math.round(confidence * 100)}%`;
 }

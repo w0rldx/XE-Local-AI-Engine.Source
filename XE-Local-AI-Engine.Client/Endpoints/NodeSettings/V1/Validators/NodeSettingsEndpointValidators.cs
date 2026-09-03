@@ -18,7 +18,6 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .InclusiveBetween(StoredNodeSettings.MinMaxMessageRequestTimeoutSeconds, StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds)
             .When(static request => request.MaxMessageRequestTimeoutSeconds is not null);
 
-        // ── General ──
         RuleFor(static request => request.OllamaEndpoint!)
             .Must(BeAbsoluteHttpUrl)
             .When(static request => !string.IsNullOrWhiteSpace(request.OllamaEndpoint))
@@ -50,7 +49,6 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .InclusiveBetween(StoredNodeSettings.MinMaxResponseSizeMb, StoredNodeSettings.MaxMaxResponseSizeMb)
             .When(static request => request.MaxResponseSizeMb is not null);
 
-        // ── Chat launch tuning (speculative decoding + prompt-cache reuse) ──
         RuleFor(static request => request.ChatCacheReuse!.Value)
             .InclusiveBetween(StoredNodeSettings.MinChatCacheReuse, StoredNodeSettings.MaxChatCacheReuse)
             .When(static request => request.ChatCacheReuse is not null);
@@ -77,7 +75,6 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .When(static request => StoredNodeSettings.SpeculativeModeRequiresDraftModel(request.SpeculativeMode))
             .WithMessage("Speculative decoding is set to a draft model mode, but no draft model was selected.");
 
-        // ── Advanced / developer-only ──
         RuleFor(static request => request.HuggingFaceDiskMarginBytes!.Value)
             .GreaterThan(0)
             .When(static request => request.HuggingFaceDiskMarginBytes is not null);
@@ -110,7 +107,6 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .InclusiveBetween(StoredNodeSettings.MinDetachedGraceSeconds, StoredNodeSettings.MaxDetachedGraceSeconds)
             .When(static request => request.DetachedGraceSeconds is not null);
 
-        // ── Usage cost rates ──
         // Every override entry must have a non-blank model name and finite, non-negative rates (HasValidRates is the one
         // shared predicate with the store's Normalize). Reject junk with an immediate 400; Normalize remains the
         // defense-in-depth second pass that also drops any entry that slips through.

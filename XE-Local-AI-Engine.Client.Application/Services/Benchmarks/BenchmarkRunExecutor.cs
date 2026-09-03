@@ -71,6 +71,9 @@ public sealed class BenchmarkRunExecutor(
             // admission published here is one nothing ever consumes — and the supervisor refuses to launch against it.
             // A rejection is transient by nature — it means something holds the bytes RIGHT NOW — so the phase waits
             // and re-decides on a cadence instead of terminalizing the run on the first no.
+            // ONE budget for the whole phase: the capacity wait below and the exclusive-spawn wait after it both draw
+            // from it, so a phase cannot hold the queue's shared GPU-work admission for two full budgets.
+            var waitBudget = new BenchmarkWaitBudget(admissionRetry);
             var decision = await BenchmarkCapacityAdmission.AdmitAsync(capacity,
                                                                new CapacityRequest(snapshot.PrimaryModel.ModelName,
                                                                    ModelRole.Chat,
@@ -82,7 +85,7 @@ public sealed class BenchmarkRunExecutor(
                                                                    snapshot.RequestedContextTokens,
                                                                    snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
                                                                    CapacityRejectedMessage),
-                                                               admissionRetry,
+                                                               waitBudget,
                                                                logger,
                                                                token)
                                                            .ConfigureAwait(false);
@@ -101,23 +104,31 @@ public sealed class BenchmarkRunExecutor(
                 throw new BenchmarkExecutionException("The selected llama.cpp runtime changed after the benchmark was created.");
             }
 
-            _ = await supervisor.RunExclusiveBenchmarkAsync(snapshot.PrimaryModel.ModelName,
-                                    ModelRole.Chat,
-                                    snapshot.PrimaryRuntime.ToResolvedLaunchArguments(),
-                                    snapshot.PrimaryRuntime.LaunchPolicy,
-                                    async (profiling, profilingToken) =>
-                                    {
-                                        // Durable BEFORE any token is generated: a run that reached readiness keeps
-                                        // its evidence no matter how the invocation ends.
-                                        await CheckpointAsync(work, profiling.LaunchReceipt, environment).ConfigureAwait(false);
-                                        using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
-                                        await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
-                                        using var context = InvocationExecutionContext.CreatePlain(package,
-                                            Guid.Empty,
-                                            generationAdmissionPolicy: admission);
-                                        await runner.RunAsync(context, profilingToken).ConfigureAwait(false);
-                                        return true;
-                                    },
+            // A model still serving a request refuses the pre-spawn eviction. That is a transient the request clears
+            // itself, so the spawn waits and retries rather than terminalizing this run — see BenchmarkExclusiveSpawn.
+            _ = await BenchmarkExclusiveSpawn.RunAsync(spawnToken =>
+                                    supervisor.RunExclusiveBenchmarkAsync(snapshot.PrimaryModel.ModelName,
+                                        ModelRole.Chat,
+                                        snapshot.PrimaryRuntime.ToResolvedLaunchArguments(),
+                                        snapshot.PrimaryRuntime.LaunchPolicy,
+                                        async (profiling, profilingToken) =>
+                                        {
+                                            // Durable BEFORE any token is generated: a run that reached readiness keeps
+                                            // its evidence no matter how the invocation ends.
+                                            await CheckpointAsync(work, profiling.LaunchReceipt, environment).ConfigureAwait(false);
+                                            using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
+                                            await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
+                                            using var context = InvocationExecutionContext.CreatePlain(package,
+                                                Guid.Empty,
+                                                generationAdmissionPolicy: admission);
+                                            await runner.RunAsync(context, profilingToken).ConfigureAwait(false);
+                                            return true;
+                                        },
+                                        spawnToken),
+                                    waitBudget,
+                                    work.RunId,
+                                    "primary",
+                                    logger,
                                     token)
                                 .ConfigureAwait(false);
             token.ThrowIfCancellationRequested();

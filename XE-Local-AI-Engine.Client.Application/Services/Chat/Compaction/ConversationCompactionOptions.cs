@@ -10,7 +10,6 @@ using System.ComponentModel.DataAnnotations;
 /// </summary>
 public sealed class ConversationCompactionOptions : IValidatableObject
 {
-    /// <summary>The configuration section these options bind from.</summary>
     public const string SectionName = "Agent:ConversationCompaction";
 
     /// <summary>Smallest useful synopsis cap.</summary>

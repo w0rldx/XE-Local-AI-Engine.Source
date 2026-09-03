@@ -73,14 +73,11 @@ const sampleBody = {
 	parameters: null,
 };
 
-// Generated query keys are single-element arrays `[{ _id: "<operationId>", ... }]`. The hooks invalidate by the
-// `_id` partial object, so these are the keys a test expects each mutation to have invalidated (built via the same
-// production helper the hooks use).
+// Generated keys are object arrays; tests assert invalidation through the production `_id` filter.
 const jobsKey = schedulerInvalidationKey(schedulerQueryIds.listJobs);
 const runsKey = schedulerInvalidationKey(schedulerQueryIds.listRuns);
 const runKey = schedulerInvalidationKey(schedulerQueryIds.getRun);
 
-// Captures the queryKey of every invalidateQueries call so a test can assert which caches a mutation touched.
 const invalidatedKeys: unknown[] = [];
 
 function makeWrapper() {

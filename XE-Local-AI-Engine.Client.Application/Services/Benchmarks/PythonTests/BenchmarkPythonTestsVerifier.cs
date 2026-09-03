@@ -26,7 +26,6 @@ public interface IBenchmarkPythonTestsVerifier
 /// <inheritdoc />
 internal sealed class BenchmarkPythonTestsVerifier : IBenchmarkPythonTestsVerifier
 {
-    /// <summary>How much of each stderr stream is kept as evidence.</summary>
     private const int EvidenceChars = 2048;
 
     private readonly IComputeToolGateway _gateway;

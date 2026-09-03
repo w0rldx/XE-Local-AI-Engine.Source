@@ -33,7 +33,6 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
     }
 
-    /// <summary>Releases the pull gate semaphore held by this provider instance.</summary>
     public void Dispose()
     {
         _pullSemaphore.Dispose();

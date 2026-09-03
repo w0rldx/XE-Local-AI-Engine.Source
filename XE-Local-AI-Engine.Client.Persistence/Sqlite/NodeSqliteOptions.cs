@@ -31,7 +31,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Sqlite;
 /// </remarks>
 public sealed class NodeSqliteOptions
 {
-    /// <summary>Configuration section these options bind from.</summary>
     public const string Section = "NodeSqlite";
 
     internal const int MaxBusyTimeoutMilliseconds = 120_000;

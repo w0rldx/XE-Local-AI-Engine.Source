@@ -20,10 +20,6 @@ public sealed class SchedulerEndpointTests
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
     public required TestServerWebAppFactory Factory { get; init; }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Route helpers
-    // ──────────────────────────────────────────────────────────────────────
-
     private const string ApiPrefix = "/api/local/v1";
 
     private static string TemplatesRoute()
@@ -70,10 +66,6 @@ public sealed class SchedulerEndpointTests
     {
         return $"{ApiPrefix}/scheduler/runs/{id}/cancel";
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // 401 — every route requires a bearer token
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task ListTemplates_WhenNoBearerToken_ReturnsUnauthorized()
@@ -244,10 +236,6 @@ public sealed class SchedulerEndpointTests
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Reachability with operator token
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task ListTemplates_WithOperatorToken_ReturnsOk()
     {
@@ -366,10 +354,6 @@ public sealed class SchedulerEndpointTests
         AssertEx.Equal("The run already reached a terminal state and cannot be cancelled.",
             document.RootElement.GetProperty("detail").GetString());
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Validation → 400 with error body (not 500)
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task CreateJob_WithInvalidCronExpression_ReturnsBadRequestWithErrorBody()

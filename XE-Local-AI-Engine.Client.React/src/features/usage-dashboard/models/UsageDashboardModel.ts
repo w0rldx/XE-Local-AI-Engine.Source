@@ -147,9 +147,7 @@ export function formatDayLabel(dayStartUtcMs: number): string {
 	return new Date(dayStartUtcMs).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
-// --- Date-range control helpers -------------------------------------------------------------------------------
-// The control drives fromEpochMs/toEpochMs on the query. We work in whole UTC days: the "from" is the start of a
-// day and the "to" is the start of the day AFTER the selected end date, matching the backend's half-open range.
+// Date controls use whole UTC days and the backend's half-open [from, to) range.
 
 const DEFAULT_RANGE_DAYS = 30;
 

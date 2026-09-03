@@ -6,7 +6,6 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Options;
 /// </summary>
 public sealed class HuggingFaceOptions
 {
-    /// <summary>Configuration section name.</summary>
     public const string SectionName = "HuggingFace";
 
     /// <summary>Base URL for the Hub REST API (model listing + tree).</summary>

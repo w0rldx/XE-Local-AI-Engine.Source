@@ -468,10 +468,8 @@ public sealed class BenchmarkJudgeExecutorTests
                  .MarkJudgeLaunchReadyAsync(AttemptId, 2, 2, Arg.Any<BenchmarkLaunchReceiptCommand>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
-    // ------------------------------------------------------------------------------------------------------------
     // Verifiable criteria. The run's stored transcript is a thinking model's: reasoning parts around the single
     // visible answer part "answer" (see Run below), so every fixture here verifies against exactly that text.
-    // ------------------------------------------------------------------------------------------------------------
 
     [Test]
     public async Task Execute_WhenEveryCriterionIsVerifiable_SpawnsNothingAndJoinsTheCohortOnTheSentinel()
@@ -702,6 +700,63 @@ public sealed class BenchmarkJudgeExecutorTests
             new BenchmarkJudgeRubricCriterionV1("exact_answer", "Exact", "The answer text is exact.", 60,
                 BenchmarkJudgeCriterionKinds.Exact, """{"expected":"answer"}""")
         ]);
+
+    [Test]
+    public async Task Execute_WhenTheExclusiveSpawnIsRefused_RetriesAndOnlyTerminalizesWithTheRefusalReason()
+    {
+        // The judge is dequeued by the same FIFO consumer as the primary, so a chat that took a lease in between makes
+        // profiling's pre-spawn eviction refuse. That is transient: it is waited out, and only an expired budget is
+        // terminal — with the refusal's own sentence, not the generic invocation-failed message.
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed);
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        string? failureMessage = null;
+        store.MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Failed),
+                 Version = 5
+             });
+        var supervisor = RefusingSupervisor();
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store,
+            snapshot,
+            lease,
+            new JudgeCapacityService(CapacityVerdict.Allow),
+            Substitute.For<IWorkerEventDispatcher>(),
+            Substitute.For<IInvocationRunner>(),
+            supervisor,
+            admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 2, TimeSpan.Zero));
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run, AttemptId), CancellationToken.None);
+
+        _ = supervisor.Received(3).RunExclusiveBenchmarkAsync(Arg.Any<string>(),
+            Arg.Any<ModelRole>(),
+            Arg.Any<ResolvedLaunchArguments>(),
+            Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
+            Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
+            Arg.Any<CancellationToken>());
+        AssertEx.Contains(AssertEx.NotNull(failureMessage), "was still in use after 0 s", StringComparison.Ordinal);
+        AssertEx.Contains(failureMessage!, "the benchmark did not run", StringComparison.Ordinal);
+    }
+
+    /// <summary>A supervisor whose exclusive spawn always refuses: a warm role for the model is serving inference.</summary>
+    private static ILlamaServerProcessSupervisor RefusingSupervisor()
+    {
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.RunExclusiveBenchmarkAsync(Arg.Any<string>(),
+                      Arg.Any<ModelRole>(),
+                      Arg.Any<ResolvedLaunchArguments>(),
+                      Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
+                      Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
+                      Arg.Any<CancellationToken>())
+                  .Returns<bool>(call => throw new LlamaServerProfilingRefusedException(call.ArgAt<string>(0), ModelRole.Chat, activeLeases: 1,
+                      LlamaServerProfilingRefusalReason.InUse));
+        return supervisor;
+    }
 
     private static BenchmarkJudgeExecutor Executor(IBenchmarkStore store,
         BenchmarkRuntimeSnapshotV1 snapshot,

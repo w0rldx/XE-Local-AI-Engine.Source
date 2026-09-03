@@ -44,7 +44,6 @@ public static class TrainingServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>Swallows status pushes for hosts with no transport (tests, provider-only composition).</summary>
     private sealed class NoOpTrainingRuntimeEventPublisher : ITrainingRuntimeEventPublisher
     {
         public Task PublishStatusAsync(TrainingRuntimeStatusHubEvent statusEvent, CancellationToken cancellationToken = default)

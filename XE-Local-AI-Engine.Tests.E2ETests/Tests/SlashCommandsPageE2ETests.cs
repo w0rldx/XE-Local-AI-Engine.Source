@@ -69,7 +69,6 @@ public sealed class SlashCommandsPageE2ETests : XEPooledE2ETestBase
         var prompt = $"E2E command prompt {Guid.NewGuid():N}.";
         var updatedPrompt = $"E2E command prompt UPDATED {Guid.NewGuid():N}.";
 
-        // --- Create ---
         await Page.GetByTestId("command-create-button").ClickAsync();
         await Expect(Page.GetByTestId("command-form")).ToBeVisibleAsync();
 
@@ -95,7 +94,6 @@ public sealed class SlashCommandsPageE2ETests : XEPooledE2ETestBase
         // The list renders the invocation form, not the bare name.
         await Expect(row).ToContainTextAsync($"/{commandName}");
 
-        // --- Reopen: the persisted prompt comes back ---
         await row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions
         {
             Name = "Edit",
@@ -109,7 +107,6 @@ public sealed class SlashCommandsPageE2ETests : XEPooledE2ETestBase
         });
         await Expect(Page.GetByTestId("command-form-name")).ToHaveValueAsync(commandName);
 
-        // --- Edit + save ---
         await Page.GetByTestId("command-form-prompt").FillAsync(updatedPrompt);
 
         var updateResponse = await Page.RunAndWaitForResponseAsync(async () => await Page.GetByTestId("command-form-submit").ClickAsync(),
@@ -135,7 +132,6 @@ public sealed class SlashCommandsPageE2ETests : XEPooledE2ETestBase
         await Page.GetByTestId("command-form-cancel").ClickAsync();
         await Expect(Page.GetByTestId("command-form")).ToHaveCountAsync(0);
 
-        // --- Delete ---
         var deleteResponse = await Page.RunAndWaitForResponseAsync(async () =>
             {
                 await row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions

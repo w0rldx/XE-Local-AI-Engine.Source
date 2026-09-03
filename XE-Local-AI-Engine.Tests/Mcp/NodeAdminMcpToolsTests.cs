@@ -6,20 +6,21 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.Agents.V1;
 using XE_Local_AI_Engine.Client.Endpoints.Agents.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.Drafting;
 using XE_Local_AI_Engine.Client.Services.Mcp.Server;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
@@ -818,7 +819,7 @@ public sealed class NodeAdminMcpToolsTests
                        "seeded",
                        "hash",
                        2,
-                       XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowDefinitionSource.Seeded,
+                       DevWorkflowDefinitionSource.Seeded,
                        "slug",
                        false,
                        1,
@@ -1026,7 +1027,10 @@ public sealed class NodeAdminMcpToolsTests
                 Agents,
                 WorkflowRuns,
                 WorkflowStore,
-                Options.Create(new DevWorkflowOptions { Enabled = devWorkflowsEnabled }),
+                Options.Create(new DevWorkflowOptions
+                {
+                    Enabled = devWorkflowsEnabled
+                }),
                 timeProvider ?? TimeProvider.System,
                 HttpContextAccessor,
                 logger ?? Logger);

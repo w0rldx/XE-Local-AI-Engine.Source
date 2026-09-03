@@ -245,8 +245,6 @@ public sealed class LocalDefaultChatModelResolverTests
         AssertEx.Equal("nomic-embed-chat:Q4_K_M", resolved);
     }
 
-    // ── helpers ─────────────────────────────────────────────────────────────────────────────────────
-
     private static LocalDefaultChatModelResolver CreateResolver(params LocalModelDescriptor[] installed)
     {
         return CreateResolver([], installed);

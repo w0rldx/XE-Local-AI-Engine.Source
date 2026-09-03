@@ -29,6 +29,7 @@ using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Client.Services.Validation.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 internal static class AddNodeInvocationExtensions
 {
@@ -66,6 +67,7 @@ internal static class AddNodeInvocationExtensions
         builder.Services.TryAddSingleton<ITokenEstimatorCalibrationStore, TokenEstimatorCalibrationStore>();
         builder.Services.AddSingleton(static sp => new LlamaTokenEstimatorCalibrationService(new HttpClient(LlamaTokenEstimatorCalibrationService.CreateProductionHandler(), disposeHandler: true),
             sp.GetRequiredService<ITokenEstimatorCalibrationStore>(),
+            sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
             sp.GetRequiredService<ILogger<LlamaTokenEstimatorCalibrationService>>()));
         builder.Services.AddSingleton<ITokenEstimatorCalibrationScheduler>(static sp =>
             sp.GetRequiredService<LlamaTokenEstimatorCalibrationService>());

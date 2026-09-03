@@ -1,9 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 
-// ---------------------------------------------------------------------------
-// HF token DTOs (Hugging Face token store — write-only value; never returned)
-// ---------------------------------------------------------------------------
-
 /// <summary>
 ///     Body for <c>POST model-fit/hf-token</c>. When <see cref="Token" /> is non-empty the token is stored encrypted at
 ///     rest; when it is null/empty the stored token is cleared (returns to anonymous access). The token is a secret: it is

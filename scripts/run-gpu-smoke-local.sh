@@ -130,14 +130,12 @@ log()  { echo "[gpu-smoke] $*"; }
 warn() { echo "[gpu-smoke] WARN: $*" >&2; }
 prereq_fail() { echo "[gpu-smoke] PREREQUISITE MISSING: $*" >&2; exit 2; }
 
-# ---------------------------------------------------------------------------
 # Step ledger — the anti-vacuous-pass mechanism.
 #
 # Every step declares itself expected BEFORE it runs and records a verdict when it finishes. The
 # final gate asserts that every expected step recorded PASS and that at least one step ran. A step
 # that dies, is skipped by accident, or silently returns early therefore fails the run instead of
 # leaving a green summary behind — the same rule run-e2e-local.sh applies to a zero-test run.
-# ---------------------------------------------------------------------------
 LEDGER_EXPECTED=()
 LEDGER_PASSED=()
 LEDGER_SKIPPED=()
@@ -217,9 +215,7 @@ ledger_finalize() {
   return "${status}"
 }
 
-# ---------------------------------------------------------------------------
 # Driver record helpers. The driver emits `key<TAB>value`; the shell does the judging.
-# ---------------------------------------------------------------------------
 record_value() {
   local key="$1" text="$2"
   awk -F'\t' -v k="${key}" '$1 == k { sub(/^[^\t]*\t/, ""); print; exit }' <<<"${text}"
@@ -247,10 +243,8 @@ as_int() {
   fi
 }
 
-# ---------------------------------------------------------------------------
 # Assertions. Kept as pure functions of their arguments so scripts/tests/gpu-smoke.test.sh can
 # drive every refuse-to-pass path with synthetic driver output and no GPU.
-# ---------------------------------------------------------------------------
 
 # Step 1. `installed` is NULLABLE and null does NOT mean "no runtime": a fresh node running the
 # pinned-floor binary has no installed-runtime.json record while having a perfectly working
@@ -490,9 +484,7 @@ assert_vram_released() {
   return 0
 }
 
-# ---------------------------------------------------------------------------
 # nvidia-smi sampling.
-# ---------------------------------------------------------------------------
 gpu_sample_once() {
   nvidia-smi --id="${GPU_INDEX}" --query-gpu=utilization.gpu,memory.used \
     --format=csv,noheader,nounits 2>/dev/null | head -n 1
@@ -566,9 +558,7 @@ if [[ -n "${XE_GPU_SMOKE_LIB_ONLY:-}" ]]; then
   return 0 2>/dev/null || exit 0
 fi
 
-# ---------------------------------------------------------------------------
 # From here down: the actual run.
-# ---------------------------------------------------------------------------
 
 # Serialize against any other build/test before anything is built. The wrapper closes the lock fd
 # in this child so MSBuild daemons cannot inherit it (see with-build-lock.sh).
@@ -746,7 +736,7 @@ log "base URL   ${BASE_URL}"
 
 drive() { python3 "${DRIVER}" --base-url "${BASE_URL}" "$@"; }
 
-# --- authentication ---------------------------------------------------------
+# authentication
 # Every node-local route is Operator-policy gated. A fresh node has NO seeded operator: it reports
 # setupRequired=true and a bare login 401s, which is why the driver runs first-run setup first.
 log "=== Authenticating ==="
@@ -760,7 +750,7 @@ TOKEN="$(record_value token "${AUTH_RECORDS}")"
 [[ -n "${TOKEN}" ]] || { echo "[gpu-smoke] auth produced no token." >&2; exit 5; }
 log "auth       ok (first-run setup performed: $(record_value setupPerformed "${AUTH_RECORDS}"))"
 
-# --- step 2 first: its verdict is an input to step 1 ------------------------
+# step 2 first: its verdict is an input to step 1
 log "=== Step 2: device audit ==="
 ledger_expect "2-device-audit"
 AUDIT_RECORDS="$(drive audit --token "${TOKEN}")" || AUDIT_RECORDS=""
@@ -780,7 +770,7 @@ elif assert_runtime_identity "${RUNTIME_RECORDS}" "${AUDIT_BACKEND}"; then
   ledger_pass "1-runtime-identity"
 fi
 
-# --- step 3 + 4: one generation, two assertions ------------------------------
+# step 3 + 4: one generation, two assertions
 log "=== Step 3: model load + chat  /  Step 4: GPU actually used ==="
 ledger_expect "3-chat"
 ledger_expect "4-gpu-used"
@@ -815,7 +805,6 @@ else
   fi
 fi
 
-# --- step 5: tool calling ----------------------------------------------------
 log "=== Step 5: tool calling ==="
 TOOL_RECORDS="$(drive tools --token "${TOKEN}")" || TOOL_RECORDS=""
 # Reported rather than asserted: which tools the catalog actually offers is a product question,
@@ -843,7 +832,6 @@ else
   fi
 fi
 
-# --- step 6: image generation (opt-in) ---------------------------------------
 if [[ "${RUN_IMAGES}" == "true" ]]; then
   log "=== Step 6: image generation ==="
   ledger_expect "6-image"
@@ -864,7 +852,6 @@ else
   ledger_skip "6-image"
 fi
 
-# --- step 7: eject -----------------------------------------------------------
 log "=== Step 7: eject releases VRAM ==="
 ledger_expect "7-eject"
 RUNNING_RECORDS="$(drive running --token "${TOKEN}")" || RUNNING_RECORDS=""
@@ -923,7 +910,6 @@ else
   fi
 fi
 
-# --- verdict -----------------------------------------------------------------
 if ledger_finalize; then
   echo
   log "RESULT: PASS — every expected step ran and passed."

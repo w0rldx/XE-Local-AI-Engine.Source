@@ -113,12 +113,12 @@ public sealed class DevWorkflowRunServiceTests
         // A private host, for the same reason: "no run at all" is an assertion about the whole database.
         await using var harness = new DevWorkflowHarness();
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync($$"""
-                                                                           {
-                                                                             "schemaVersion": 1,
-                                                                             "nodes": [{ "nodeKey": "validate", "nodeType": "{{nodeType}}" }],
-                                                                             "edges": []
-                                                                           }
-                                                                           """)
+                                                                             {
+                                                                               "schemaVersion": 1,
+                                                                               "nodes": [{ "nodeKey": "validate", "nodeType": "{{nodeType}}" }],
+                                                                               "edges": []
+                                                                             }
+                                                                             """)
                                                       .ConfigureAwait(false);
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowValidationException>(() =>

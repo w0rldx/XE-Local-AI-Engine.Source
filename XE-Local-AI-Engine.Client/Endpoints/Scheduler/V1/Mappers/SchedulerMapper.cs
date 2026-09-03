@@ -11,10 +11,6 @@ using PersistenceEntities = XE_Local_AI_Engine.Client.Persistence.Entities;
 /// </summary>
 internal static class SchedulerMapper
 {
-    // -----------------------------------------------------------------------
-    // Template → response
-    // -----------------------------------------------------------------------
-
     public static ScheduledJobTemplateResponse ToResponse(this ScheduledJobTemplateDescriptor descriptor)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
@@ -35,10 +31,6 @@ internal static class SchedulerMapper
             HistoryDetailLevel = descriptor.HistoryDetailLevel.ToString()
         };
     }
-
-    // -----------------------------------------------------------------------
-    // Job definition record → response
-    // -----------------------------------------------------------------------
 
     public static ScheduledJobResponse ToResponse(this ScheduledJobDefinitionRecord record)
     {
@@ -70,10 +62,6 @@ internal static class SchedulerMapper
             DeletedAtUtc = record.DeletedAtUtc
         };
     }
-
-    // -----------------------------------------------------------------------
-    // Create/Update request → management input
-    // -----------------------------------------------------------------------
 
     public static ScheduledJobManagementInput ToInput(this CreateScheduledJobRequest request)
     {
@@ -115,10 +103,6 @@ internal static class SchedulerMapper
             request.Parameters);
     }
 
-    // -----------------------------------------------------------------------
-    // Run record → response
-    // -----------------------------------------------------------------------
-
     public static ScheduledJobRunResponse ToResponse(this ScheduledJobRunRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);
@@ -142,14 +126,12 @@ internal static class SchedulerMapper
         };
     }
 
-    // -----------------------------------------------------------------------
     // Enum mapping: persistence <-> wire
     //
     // The wire enums (Endpoints.Scheduler.V1) mirror the persistence enums
     // member-for-member; this is the single point that translates between them,
     // isolating the wire contract from a persistence-side rename. Member names
     // are kept byte-identical so the JSON form (serialized by name) is unchanged.
-    // -----------------------------------------------------------------------
 
     public static ScheduleKind ToWire(this PersistenceEntities.ScheduleKind value) =>
         value switch

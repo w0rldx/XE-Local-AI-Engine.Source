@@ -954,6 +954,169 @@ public sealed class BenchmarkRunExecutorTests
             Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task Execute_WhenTheExclusiveSpawnIsRefused_WaitsAndRetriesInsteadOfFailingTheRun()
+    {
+        // A chat that took a lease after the run was claimed makes profiling's pre-spawn eviction refuse. That is a
+        // transient the chat clears itself, exactly like a capacity rejection — terminalizing here would fail durable
+        // queued work whose attempt pins to 1, so the operator loses the measurement to a request that was ending.
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        store.MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                 LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
+                 Version = 3
+             });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
+        var runner = CompletingRunner(dispatcher);
+        await using var lease = new FakeLease(installed);
+        var supervisor = RefusingSupervisor(refusals: 1);
+        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
+            new BenchmarkCancellationRegistry(), supervisor,
+            admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 2, TimeSpan.Zero));
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+
+        _ = supervisor.Received(2).RunExclusiveBenchmarkAsync(Arg.Any<string>(),
+            Arg.Any<ModelRole>(),
+            Arg.Any<ResolvedLaunchArguments>(),
+            Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
+            Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
+            Arg.Any<CancellationToken>());
+        _ = store.Received(1).MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>());
+        _ = store.DidNotReceiveWithAnyArgs().MarkPrimaryFailedAsync(Guid.Empty, default, default!, default, default, default);
+    }
+
+    [Test]
+    public async Task Execute_WhenTheExclusiveSpawnStaysRefused_FailsWithTheRefusalReasonRatherThanTheGenericMessage()
+    {
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        string? failure = null;
+        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failure = message), Arg.Any<long>(), Arg.Any<string?>(),
+                 Arg.Any<CancellationToken>())
+             .Returns(run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                 Version = 3
+             });
+        await using var lease = new FakeLease(installed);
+        var supervisor = RefusingSupervisor(refusals: int.MaxValue);
+        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), Substitute.For<IWorkerEventDispatcher>(),
+            Substitute.For<IInvocationRunner>(), new BenchmarkCancellationRegistry(), supervisor,
+            admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 2, TimeSpan.Zero));
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+
+        _ = supervisor.Received(3).RunExclusiveBenchmarkAsync(Arg.Any<string>(),
+            Arg.Any<ModelRole>(),
+            Arg.Any<ResolvedLaunchArguments>(),
+            Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
+            Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
+            Arg.Any<CancellationToken>());
+        AssertEx.Contains(AssertEx.NotNull(failure), "model.gguf (Chat) was still in use after 0 s", StringComparison.Ordinal);
+        AssertEx.Contains(failure!, "the benchmark did not run", StringComparison.Ordinal);
+        AssertEx.False(failure!.Contains("Retry when the model is idle", StringComparison.Ordinal),
+            "A terminal row must not carry the SKIP sentence's advice to retry.");
+    }
+
+    [Test]
+    public async Task Execute_WhenCapacityAlreadyWaited_LeavesTheSpawnWaitOnlyWhatTheBudgetHasLeft()
+    {
+        // Both waits are sequential and both hold the queue's shared GPU-work admission, so they draw from ONE phase
+        // budget. Two capacity retries out of three leave the spawn exactly one: two calls, not four.
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+             .Returns(run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Failed,
+                 Version = 3
+             });
+        var capacity = new SequencedCapacityService(CapacityVerdict.RejectInsufficient,
+            CapacityVerdict.RejectInsufficient,
+            CapacityVerdict.Allow);
+        await using var lease = new FakeLease(installed);
+        var supervisor = RefusingSupervisor(refusals: int.MaxValue);
+        var executor = Executor(store, Snapshot(installed), lease, capacity, Substitute.For<IWorkerEventDispatcher>(),
+            Substitute.For<IInvocationRunner>(), new BenchmarkCancellationRegistry(), supervisor,
+            admissionRetry: new BenchmarkAdmissionRetry(MaxRetries: 3, TimeSpan.Zero));
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+
+        AssertEx.Equal(expected: 3, capacity.DecisionCount, "Two of the phase's three retries went to capacity.");
+        _ = supervisor.Received(2).RunExclusiveBenchmarkAsync(Arg.Any<string>(),
+            Arg.Any<ModelRole>(),
+            Arg.Any<ResolvedLaunchArguments>(),
+            Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
+            Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>A runner that completes the invocation, so a test can assert on the primary's success path.</summary>
+    private static IInvocationRunner CompletingRunner(IWorkerEventDispatcher dispatcher)
+    {
+        var runner = Substitute.For<IInvocationRunner>();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(async call =>
+              {
+                  var execution = call.Arg<InvocationExecutionContext>();
+                  var invocationId = execution.Package.InvocationId;
+
+                  // The effective context is only known once the admission policy has been evaluated, and the run
+                  // cannot succeed without it.
+                  _ = await AssertEx.NotNull(execution.GenerationAdmissionPolicy).EvaluateAsync(new InvocationGenerationAdmissionContext
+                  {
+                      InvocationId = invocationId,
+                      RequestedContextTokens = 8192,
+                      EffectiveContextTokens = 8192,
+                      ModelId = "model.gguf",
+                      ProviderName = "llamacpp"
+                  });
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
+                      new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Completed, "answer", 20, 100, "stop")));
+              });
+        return runner;
+    }
+
+    /// <summary>
+    ///     A supervisor whose exclusive spawn refuses the first <paramref name="refusals" /> times — the pre-spawn
+    ///     eviction found the model serving inference — and then runs the body like <see cref="PassthroughSupervisor" />.
+    /// </summary>
+    private static ILlamaServerProcessSupervisor RefusingSupervisor(int refusals)
+    {
+        var remaining = refusals;
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.RunExclusiveBenchmarkAsync(Arg.Any<string>(),
+                      Arg.Any<ModelRole>(),
+                      Arg.Any<ResolvedLaunchArguments>(),
+                      Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
+                      Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
+                      Arg.Any<CancellationToken>())
+                  .Returns(call =>
+                  {
+                      var modelName = call.ArgAt<string>(0);
+                      if (remaining-- > 0)
+                      {
+                          throw new LlamaServerProfilingRefusedException(modelName, ModelRole.Chat, activeLeases: 1,
+                              LlamaServerProfilingRefusalReason.InUse);
+                      }
+
+                      var context = new LlamaServerProfilingContext(new LlamaServerEndpoint(modelName, ModelRole.Chat, new Uri("http://127.0.0.1:19000")), []);
+                      return call.ArgAt<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(4)(context, call.ArgAt<CancellationToken>(5));
+                  });
+        return supervisor;
+    }
+
     private static LlamaServerLaunchReceipt Receipt() =>
         new(LlamaServerLaunchReceipt.CurrentVersion,
             GpuVariant.Cuda,

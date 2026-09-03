@@ -93,7 +93,6 @@ public interface ITrainingRuntimeService
     string? ResolveInterpreterPath();
 }
 
-/// <summary>The SignalR event names the runtime hub broadcasts under.</summary>
 public static class TrainingRuntimeHubEvents
 {
     public const string StatusChanged = "trainingRuntime.statusChanged";

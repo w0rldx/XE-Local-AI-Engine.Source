@@ -6,8 +6,6 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class NodeChatPartAccumulatorTests
 {
-    // ── (a) reasoning → tool → reasoning ────────────────────────────────────
-
     [Test]
     public void AppendReasoning_ThenToolRequested_ThenAppendReasoning_ProducesThreePartsInOrder()
     {
@@ -66,8 +64,6 @@ public sealed class NodeChatPartAccumulatorTests
         AssertEx.Equal(expected: 2, parts[2].Sequence); // stamped when 2nd segment opened
     }
 
-    // ── (b) #6342 dup guard — duplicate Requested for same toolCallId ────────
-
     [Test]
     public void AppendToolRequested_DuplicateCallId_DoesNotAddSecondToolPart()
     {
@@ -82,8 +78,6 @@ public sealed class NodeChatPartAccumulatorTests
         AssertEx.Equal("call-1", parts[0].ToolCallId);
         AssertEx.Equal(expected: 0, parts[0].Sequence); // first open wins
     }
-
-    // ── (c) Completed collapses onto Requested by toolCallId ─────────────────
 
     [Test]
     public void CompleteToolCall_WhenPriorRequested_CollapsesSetsResultAndReceivedState()
@@ -119,8 +113,6 @@ public sealed class NodeChatPartAccumulatorTests
         AssertEx.Equal(NodeChatToolPartStates.Failed, parts[0].State);
         AssertEx.Equal("permission denied", parts[0].Result);
     }
-
-    // ── (d) result-without-prior-call defensive add ──────────────────────────
 
     [Test]
     public void CompleteToolCall_WithoutPriorRequested_AddsDefensiveToolPart()
@@ -158,8 +150,6 @@ public sealed class NodeChatPartAccumulatorTests
         AssertEx.Equal("second result", parts[0].Result);
     }
 
-    // ── (e) Snapshot() sorts by Sequence despite insertion order ─────────────
-
     [Test]
     public void Snapshot_SortsBySequence_EvenWhenHigherSequenceToolAddedBeforeLowerSequenceReasoning()
     {
@@ -196,8 +186,6 @@ public sealed class NodeChatPartAccumulatorTests
         AssertEx.Equal(first[0].Kind, second[0].Kind);
         AssertEx.Equal<string?>(first[1].State, second[1].State);
     }
-
-    // ── HasParts ─────────────────────────────────────────────────────────────
 
     [Test]
     public void HasParts_WhenEmpty_ReturnsFalse()

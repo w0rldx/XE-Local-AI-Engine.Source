@@ -11,10 +11,6 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class ScheduledJobTemplateRegistryTests
 {
-    // ──────────────────────────────────────────────────────────────────────
-    // ListTemplates
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public void ListTemplates_WhenMultipleHandlersRegistered_ReturnsAllDescriptors()
     {
@@ -52,10 +48,6 @@ public sealed class ScheduledJobTemplateRegistryTests
         AssertEx.False(d.AllowAgentCreation, "test.echo declares AllowAgentCreation=false.");
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // GetTemplate
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public void GetTemplate_WhenTemplateIdKnown_ReturnsDescriptor()
     {
@@ -77,10 +69,6 @@ public sealed class ScheduledJobTemplateRegistryTests
 
         AssertEx.Null(descriptor, "Unknown template id should return null.");
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // TryGetHandler
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public void TryGetHandler_WhenTemplateIdKnown_ReturnsTrueWithNonNullHandler()
@@ -106,10 +94,6 @@ public sealed class ScheduledJobTemplateRegistryTests
         AssertEx.Null(resolved, "Out parameter must be null when TryGetHandler returns false.");
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Duplicate TemplateId → InvalidOperationException at construction
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public void Constructor_WhenDuplicateTemplateId_ThrowsInvalidOperationException()
     {
@@ -130,10 +114,6 @@ public sealed class ScheduledJobTemplateRegistryTests
         AssertEx.Contains(caught!.Message, "dupe", StringComparison.OrdinalIgnoreCase,
             "Exception message should name the duplicate template id.");
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Minimal stub handler
-    // ──────────────────────────────────────────────────────────────────────
 
     private sealed class StubHandler(string templateId, string displayName) : IScheduledJobHandler
     {

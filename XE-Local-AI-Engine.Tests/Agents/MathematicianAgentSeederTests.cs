@@ -30,7 +30,6 @@ public sealed class MathematicianAgentSeederTests
         var scopeFactory = factory.Services.GetRequiredService<IServiceScopeFactory>();
         var seeder = CreateSeeder(scopeFactory, computeEnabled: true);
 
-        // First boot seeds the Mathematician; the second boot must NOT duplicate it.
         await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
         await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
 

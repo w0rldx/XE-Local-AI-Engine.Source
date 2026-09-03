@@ -267,14 +267,14 @@ internal sealed class DevWorkflowDevTaskExecutor
                            ?? throw new ArgumentException($"Node run '{nodeRun.NodeKey}' is a materialized development task whose input names no 'requirements' to implement.",
                                nameof(nodeRun));
         var created = await development.CreateTaskAsync(new DevelopmentCreateTaskCommand(projectId,
-                                           Guid.NewGuid(),
-                                           DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, ChildTaskAttempt, "devtask-create"),
-                                           Present(brief?.Title) ?? Label(graph, nodeRun.NodeKey),
-                                           requirements,
-                                           Present(brief?.AcceptanceCriteriaJson) ?? tasks[0].AcceptanceCriteriaJson,
-                                           tasks[0].MaxReviewRounds),
-                                       cancellationToken)
-                                   .ConfigureAwait(false);
+                                               Guid.NewGuid(),
+                                               DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, ChildTaskAttempt, "devtask-create"),
+                                               Present(brief?.Title) ?? Label(graph, nodeRun.NodeKey),
+                                               requirements,
+                                               Present(brief?.AcceptanceCriteriaJson) ?? tasks[0].AcceptanceCriteriaJson,
+                                               tasks[0].MaxReviewRounds),
+                                           cancellationToken)
+                                       .ConfigureAwait(false);
         return created.TaskId;
     }
 
@@ -1214,13 +1214,13 @@ internal sealed class DevWorkflowDevTaskExecutor
     /// </summary>
     private static string Output(DevWorkflowNodeRunSnapshot nodeRun, DevelopmentTaskSnapshot? task, Guid? taskId, string? failureClass) =>
         JsonSerializer.Serialize(new DevTaskOutput(task is { Status: DevelopmentTaskStatus.AwaitingApply or DevelopmentTaskStatus.Completed }
-                ? DevWorkflowNodeOutputStatuses.Succeeded
-                : DevWorkflowNodeOutputStatuses.Failed,
-            nodeRun.Attempt,
-            failureClass,
-            taskId,
-            task?.Status.ToString(),
-            task?.CurrentReviewRound),
+                    ? DevWorkflowNodeOutputStatuses.Succeeded
+                    : DevWorkflowNodeOutputStatuses.Failed,
+                nodeRun.Attempt,
+                failureClass,
+                taskId,
+                task?.Status.ToString(),
+                task?.CurrentReviewRound),
             JsonOptions);
 
     /// <summary>

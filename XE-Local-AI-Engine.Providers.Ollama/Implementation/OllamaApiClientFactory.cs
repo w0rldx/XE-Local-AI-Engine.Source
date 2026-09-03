@@ -21,7 +21,6 @@ public sealed class OllamaApiClientFactory : IDisposable
     private readonly HttpClient _httpClient;
     private readonly bool _ownsHttpClient;
 
-    /// <summary>Wraps a hardened <see cref="HttpClient" /> whose transport every minted client will share.</summary>
     /// <param name="httpClient">The hardened client (its <see cref="HttpClient.BaseAddress" /> pins the Ollama endpoint).</param>
     /// <param name="ownsHttpClient">
     ///     When <see langword="true" /> this factory disposes <paramref name="httpClient" /> on <see cref="Dispose" />.
@@ -45,7 +44,6 @@ public sealed class OllamaApiClientFactory : IDisposable
         };
     }
 
-    /// <summary>Disposes the shared transport when this factory owns it.</summary>
     public void Dispose()
     {
         if (_ownsHttpClient)

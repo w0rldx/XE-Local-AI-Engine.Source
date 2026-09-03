@@ -1,9 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
-using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -81,7 +79,7 @@ public sealed class DevWorkflowMaterializationTests
             "the decomposition KEEPS its own edge into the join: the clones' fresh edges are what hold the join, and this one is the "
             + "only path back from it that reaches the task package the children were cut from.");
         AssertEx.Equal("decompose→implement#alpha, decompose→join, implement#alpha→validate#alpha, implement#beta→validate#beta, implement→validate, "
-            + "validate#alpha→implement#beta, validate#alpha→join, validate#beta→join, validate→join",
+                       + "validate#alpha→implement#beta, validate#alpha→join, validate#beta→join, validate→join",
             string.Join(", ", graph.Edges.Select(static edge => $"{edge.From}→{edge.To}").OrderBy(static edge => edge, StringComparer.Ordinal)),
             "roots hang off the decomposition, dependsOn chains one task behind another, and every leaf reaches the join — while the "
             + "template keeps the edges it was authored with, which admission ignores because nothing will ever have a row for them.");

@@ -23,8 +23,6 @@ public sealed class SupervisorLifecycleTests
         };
     }
 
-    // ---- detached load (caller cancel abandons the wait; the load continues) -----------------------------
-
     [Test]
     public async Task EnsureRunning_CallerCancelledDuringReadiness_LoadContinuesDetached_SecondEnsureReuses()
     {
@@ -69,7 +67,7 @@ public sealed class SupervisorLifecycleTests
                               .ToArray();
 
         await AssertEx.EventuallyAsync(() => probe.Waiting == 1, TimeSpan.FromSeconds(5), "The single-flight spawn never parked.");
-        AssertEx.Equal(expected: 1, launcher.LaunchCount); // single-flight: one spawn for the whole burst.
+        AssertEx.Equal(expected: 1, launcher.LaunchCount);
 
         probe.Release();
         var endpoints = await Task.WhenAll(calls);
@@ -78,8 +76,6 @@ public sealed class SupervisorLifecycleTests
         var first = endpoints[0].BaseAddress.AbsoluteUri;
         AssertEx.True(endpoints.All(e => string.Equals(e.BaseAddress.AbsoluteUri, first, StringComparison.Ordinal)));
     }
-
-    // ---- readiness-timeout is classified and retried at most MaxReadinessTimeoutRetries times ------------
 
     [Test]
     public async Task EnsureRunning_ReadinessTimeout_RetriesAtMostConfigured_IndependentOfRestartCap()
@@ -101,8 +97,6 @@ public sealed class SupervisorLifecycleTests
         AssertEx.Contains(ex.Message, "did not become ready", StringComparison.OrdinalIgnoreCase);
         AssertEx.True(launcher.Handles.All(h => h.WasTreeKilled), "Each timed-out spawn must be torn down.");
     }
-
-    // ---- operator eject with bounded in-flight lease drain -----------------------------------------------
 
     [Test]
     public async Task Eject_IdleProcess_TearsDownImmediately_Ejected()

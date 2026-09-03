@@ -407,7 +407,13 @@ public sealed class DevWorkflowRunEndpointTests
                                                    {"from":"second","to":"jointwo"},{"from":"plan","to":"jointwo"}]}
                                          """;
 
-        var keys = new[] { "first", "joinone", "second", "jointwo" };
+        var keys = new[]
+        {
+            "first",
+            "joinone",
+            "second",
+            "jointwo"
+        };
         var rows = keys.Select((key, index) => GateNodeRun() with
                        {
                            Id = Guid.Parse($"aaaaaaaa-aaaa-aaaa-aaaa-00000000000{index}"),

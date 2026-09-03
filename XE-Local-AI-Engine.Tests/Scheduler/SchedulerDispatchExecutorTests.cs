@@ -19,10 +19,6 @@ public sealed class SchedulerDispatchExecutorTests
     private static readonly Guid JobId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly DateTimeOffset Now = new(year: 2026, month: 6, day: 1, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Guard: definition not found
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task DispatchAsync_WhenDefinitionNotFound_DoesNotInvokeHandlerAndDoesNotThrow()
     {
@@ -37,10 +33,6 @@ public sealed class SchedulerDispatchExecutorTests
 
         AssertEx.Equal(expected: 0, handler.InvocationCount, "Handler must not be invoked when definition is missing.");
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Guard: definition disabled
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task DispatchAsync_WhenDefinitionDisabled_DoesNotInvokeHandlerAndDoesNotThrow()
@@ -57,11 +49,9 @@ public sealed class SchedulerDispatchExecutorTests
         AssertEx.Equal(expected: 0, handler.InvocationCount, "Handler must not be invoked for a disabled definition.");
     }
 
-    // ──────────────────────────────────────────────────────────────────────
     // Guard: definition soft-deleted (enabled flag is also false on soft-delete,
     //        but the code checks DeletedAtUtc independently; test it with
     //        enabled=true to exercise the deleted branch specifically)
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task DispatchAsync_WhenDefinitionSoftDeleted_DoesNotInvokeHandlerAndDoesNotThrow()
@@ -80,10 +70,6 @@ public sealed class SchedulerDispatchExecutorTests
         AssertEx.Equal(expected: 0, handler.InvocationCount, "Handler must not be invoked for a soft-deleted definition.");
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Guard: template id has no registered handler
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task DispatchAsync_WhenTemplateUnknown_DoesNotInvokeHandlerAndDoesNotThrow()
     {
@@ -101,10 +87,6 @@ public sealed class SchedulerDispatchExecutorTests
         // No exception thrown and the store was called once — the executor skipped after the registry miss.
         await store.Received(1).GetByIdAsync(JobId, Arg.Any<CancellationToken>());
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Happy path: enabled, known template → handler invoked once with correct context
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task DispatchAsync_WhenValidDefinition_InvokesHandlerOnceWithCorrectContext()
@@ -151,10 +133,6 @@ public sealed class SchedulerDispatchExecutorTests
         AssertEx.Equal(expected: 1, handler.InvocationCount, "Handler must be invoked exactly once.");
         AssertEx.Null(handler.LastContext?.Parameters, "Null parameters must propagate.");
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Per-fire use-case override merge (manual model-fit refresh)
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task Dispatch_WhenOverridePresent_MergesUseCaseIntoParameters()
@@ -305,10 +283,6 @@ public sealed class SchedulerDispatchExecutorTests
         AssertEx.Equal(storedJson, handler.LastContext?.Parameters, "Stored parameters must pass through unchanged with no override.");
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Cancellation propagates from handler
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task DispatchAsync_WhenCancellationRequested_PropagatesOperationCanceledException()
     {
@@ -326,10 +300,6 @@ public sealed class SchedulerDispatchExecutorTests
         // The handler calls ThrowIfCancellationRequested — the exception must propagate.
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => executor.DispatchAsync(JobId, "fire-cancel", scheduledFireTimeUtc: null, Now, cts.Token));
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ──────────────────────────────────────────────────────────────────────
 
     private static SchedulerDispatchExecutor CreateExecutor(IScheduledJobDefinitionStore store,
         IScheduledJobTemplateRegistry registry,

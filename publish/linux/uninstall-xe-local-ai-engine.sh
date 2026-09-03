@@ -74,7 +74,7 @@ echo "   Data directory: ${DATA_DIR}"
 [ "${DRY_RUN}" -eq 1 ] && echo "   (dry-run — nothing will be stopped or deleted)"
 echo
 
-# --- 1. Stop running processes ------------------------------------------------------
+# 1. Stop running processes
 
 # Resolve a pid's executable path, or empty on failure.
 exe_path() {
@@ -146,7 +146,7 @@ else
 fi
 echo
 
-# --- 2. Velopack-managed install note ----------------------------------------------
+# 2. Velopack-managed install note
 
 # Best-effort detection of a Velopack-managed install (installer/portable flavor):
 # Velopack lays out a "current/" dir next to an "Update" helper binary.
@@ -174,7 +174,7 @@ if [ -n "${VELOPACK_ROOT}" ]; then
   exit 0
 fi
 
-# --- 3. Delete the per-user data directory (portable / manual install) -------------
+# 3. Delete the per-user data directory (portable / manual install)
 
 if [ "${KEEP_DATA}" -eq 1 ]; then
   echo ">> --keep-data: leaving ${DATA_DIR} in place. Done."

@@ -27,7 +27,6 @@ import { createProvidersWrapper } from "@/test/RenderWithProviders";
 // The generated query key the refresh mutation invalidates (partial `_id` match), built via the production helper.
 const LATEST_KEY = modelFitInvalidationKey(modelFitQueryIds.latest);
 
-// Captures the queryKey of every invalidateQueries call so a test can assert which caches a mutation touched.
 const invalidatedKeys: unknown[] = [];
 
 function makeWrapper() {

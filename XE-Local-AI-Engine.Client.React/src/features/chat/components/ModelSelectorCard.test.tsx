@@ -80,7 +80,6 @@ describe("ModelSelectorCard", () => {
 		expect(screen.queryByTestId("chat-model-selector-no-chat-models")).toBeNull();
 	});
 
-	// Cloud (Codex) group tests
 
 	it("does not render the cloud group when cloudModelOptions is absent", async () => {
 		renderWithProviders(
@@ -165,7 +164,6 @@ describe("ModelSelectorCard", () => {
 
 		fireEvent.click(screen.getByTestId("chat-model-selector-trigger"));
 
-		// Both groups render their entry.
 		expect(await screen.findByTestId("chat-model-selector-option-codex-mini-latest")).toBeTruthy();
 		expect(await screen.findByTestId("chat-model-selector-option-gpt-4o")).toBeTruthy();
 

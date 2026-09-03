@@ -188,7 +188,6 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         AssertEx.Equal(chunkAlpha, result.Results[1].ChunkId);
     }
 
-    // ── service factory ──────────────────────────────────────────────────────────────────────────────
 
     private static KnowledgeSearchService CreateSearchService(NodeChatDbContext context,
         IReadOnlyList<FtsSearchHit> ftsHits,
@@ -254,7 +253,6 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         return reranker;
     }
 
-    // ── seed helpers ─────────────────────────────────────────────────────────────────────────────────
 
     private async Task MigrateAsync(string databasePath)
     {

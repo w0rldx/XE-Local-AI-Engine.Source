@@ -63,7 +63,6 @@ public sealed class AgentsCrudE2ETests : XEPooledE2ETestBase
         var agentName = $"E2E Agent {Guid.NewGuid():N}";
         var instructions = $"You are an E2E persistence probe {Guid.NewGuid():N}. Answer concisely.";
 
-        // --- Create ---
         await Page.GetByTestId("agent-create-button").ClickAsync();
         await Expect(Page.GetByTestId("agent-editor-card")).ToBeVisibleAsync();
         await Expect(Page.GetByTestId("agent-definition-form")).ToBeVisibleAsync();
@@ -92,7 +91,6 @@ public sealed class AgentsCrudE2ETests : XEPooledE2ETestBase
             Timeout = 5000
         });
 
-        // --- Reopen via the row's edit control and verify the persisted instructions round-trip ---
         // The edit button carries aria-label "Edit {{name}}" (pages.agents.list.editAria).
         var editButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
         {

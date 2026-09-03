@@ -40,10 +40,6 @@ public sealed class AdaptiveMemoryEndpointTests
         return $"/api/local/v1/agents/{agentDefinitionId}/execution-logs";
     }
 
-    // ----------------------------------------------------------------------------------------------------------------
-    // Governance reuse — an Extracted/Suggested candidate cannot reach Enabled without the eval gate + approval.
-    // ----------------------------------------------------------------------------------------------------------------
-
     [Test]
     public async Task ExtractedCandidate_CannotReachEnabled_WithoutEvalGateAndApproval()
     {
@@ -108,10 +104,6 @@ public sealed class AdaptiveMemoryEndpointTests
         AssertEx.Equal(PlaybookActionSource.Extracted, stored.Source);
     }
 
-    // ----------------------------------------------------------------------------------------------------------------
-    // Playbook list — scope filter + provenance/scope surfacing.
-    // ----------------------------------------------------------------------------------------------------------------
-
     [Test]
     public async Task ListPlaybook_WhenScopeSupplied_FiltersToThatScope()
     {
@@ -159,10 +151,6 @@ public sealed class AdaptiveMemoryEndpointTests
         using var document = JsonDocument.Parse(payload);
         AssertEx.Equal(expected: 2, document.RootElement.GetProperty("items").GetArrayLength());
     }
-
-    // ----------------------------------------------------------------------------------------------------------------
-    // Execution-logs diagnostics endpoint.
-    // ----------------------------------------------------------------------------------------------------------------
 
     [Test]
     public async Task ExecutionLogs_WhenNoBearerToken_ReturnsUnauthorized()
@@ -224,10 +212,6 @@ public sealed class AdaptiveMemoryEndpointTests
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    // ----------------------------------------------------------------------------------------------------------------
-    // Agent contract — defaultTemporaryChat round-trip on create + update.
-    // ----------------------------------------------------------------------------------------------------------------
-
     [Test]
     public async Task CreateAgent_CarriesDefaultTemporaryChat_RoundTrip()
     {
@@ -252,7 +236,6 @@ public sealed class AdaptiveMemoryEndpointTests
         using var createDocument = JsonDocument.Parse(createPayload);
         AssertEx.True(createDocument.RootElement.GetProperty("defaultTemporaryChat").GetBoolean(), "Create response should echo defaultTemporaryChat=true.");
 
-        // GET round-trip proves the flag persisted (not just echoed on the create response).
         using var getRequest = new HttpRequestMessage(HttpMethod.Get, createResponse.Headers.Location);
         factory.AddNodeBearerToken(getRequest);
         using var getResponse = await client.SendAsync(getRequest).ConfigureAwait(false);
@@ -295,10 +278,6 @@ public sealed class AdaptiveMemoryEndpointTests
         var stored = AssertEx.NotNull(await store.GetByIdAsync(agentId).ConfigureAwait(false));
         AssertEx.True(stored.DefaultTemporaryChat, "Persisted definition should carry DefaultTemporaryChat=true after update.");
     }
-
-    // ----------------------------------------------------------------------------------------------------------------
-    // Seed helpers.
-    // ----------------------------------------------------------------------------------------------------------------
 
     private static async Task<Guid> SeedAgentAsync(TestServerWebAppFactory factory)
     {

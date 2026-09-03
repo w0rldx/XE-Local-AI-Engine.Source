@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-/// <summary>Typed provenance for a locally acquired model.</summary>
 [JsonConverter(typeof(LocalModelOriginJsonConverter))]
 public enum LocalModelOrigin
 {

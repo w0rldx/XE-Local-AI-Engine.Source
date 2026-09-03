@@ -25,7 +25,6 @@ public interface ILocalModelProvider
     /// <summary>Downloads or updates a model and reports provider-specific byte/status progress when available.</summary>
     Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct);
 
-    /// <summary>Deletes a locally installed model.</summary>
     Task DeleteModelAsync(string modelName, CancellationToken ct);
 
     /// <summary>Loads or probes a model so first-token latency is paid before an interactive turn.</summary>

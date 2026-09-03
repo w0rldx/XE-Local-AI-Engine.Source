@@ -85,7 +85,6 @@ public sealed class SkillsPageE2ETests : XEPooledE2ETestBase
             "This body is third-party content the node stores verbatim.",
             string.Empty);
 
-        // --- Preview (writes nothing) ---
         await Page.GetByTestId("skill-import-button").ClickAsync();
         await Expect(Page.GetByTestId("skill-import-warning")).ToBeVisibleAsync();
         // The consequence line is the one sentence the posture cannot ship without; pin it explicitly.
@@ -111,7 +110,6 @@ public sealed class SkillsPageE2ETests : XEPooledE2ETestBase
         await Expect(Page.GetByTestId($"skill-import-candidate-{skillName}")).ToBeVisibleAsync();
         await Expect(Page.GetByTestId("skill-import-preview-error")).ToHaveCountAsync(0);
 
-        // --- Commit is gated on selection + acknowledgement ---
         var submit = Page.GetByTestId("skill-import-submit");
         // Nothing selected and nothing acknowledged yet.
         await Expect(submit).ToBeDisabledAsync();
@@ -143,7 +141,6 @@ public sealed class SkillsPageE2ETests : XEPooledE2ETestBase
 
         await Page.GetByTestId("skill-import-done").ClickAsync();
 
-        // --- The row: imported skills arrive DISABLED ---
         var row = Page.Locator("tr").Filter(new LocatorFilterOptions
         {
             HasText = skillName
@@ -155,7 +152,6 @@ public sealed class SkillsPageE2ETests : XEPooledE2ETestBase
         await Expect(row).ToContainTextAsync("Disabled");
         await Expect(row).ToContainTextAsync("Imported");
 
-        // --- Enabling is a separate deliberate edit ---
         await row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions
         {
             Name = $"Edit {skillName}"
@@ -186,7 +182,6 @@ public sealed class SkillsPageE2ETests : XEPooledE2ETestBase
             Timeout = 10_000
         });
 
-        // --- Delete ---
         var deleteResponse = await Page.RunAndWaitForResponseAsync(async () =>
             {
                 await row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions

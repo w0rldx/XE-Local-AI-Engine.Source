@@ -18,10 +18,7 @@ import { toAgentDefinition, toAgentDefinitions } from "@/features/agents/models/
 // create/update/delete mutations keep their domain-friendly call signatures (the page/form pass domain values) and
 // dispatch into the generated `{ path, body }` envelope, then invalidate the definitions list on success.
 
-// The generated query keys are single-element arrays `[{ _id: "<operationId>", ... }]`. Invalidating with just the
-// `_id` partial object matches every cached variant of that endpoint (TanStack partial-object matching). The
-// operationIds equal the generated SDK fn names. Centralized here so the literal `_id` key — which trips biome's
-// naming-convention rule — is constructed in exactly one place.
+// Generated keys are object arrays; TanStack partial matching on `_id` invalidates every endpoint variant.
 export const agentDefinitionsQueryIds = {
 	list: "listAgentDefinitions",
 } as const;

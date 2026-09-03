@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Tests.Development;
 using XE_Local_AI_Engine.Tests.Testing;
+using DevelopmentArtifactKind = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentArtifactKind;
 
 /// <summary>
 ///     What a materialized child's validation node judges. Live, it judged the committed base: Dev Mode leaves the
@@ -504,7 +505,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
             ProjectId,
             TaskId,
             AttemptId: Guid.NewGuid(),
-            XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentArtifactKind.Patch,
+            DevelopmentArtifactKind.Patch,
             SchemaVersion: 1,
             $"{ProjectId:N}/55555555555555555555555555555555",
             PatchHash,
@@ -592,7 +593,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
             throw new NotSupportedException();
 
         public Task<DevelopmentArtifactWith<ReadOnlyMemory<byte>>> ReadLatestAsync(Guid taskId,
-            XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentArtifactKind kind,
+            DevelopmentArtifactKind kind,
             CancellationToken cancellationToken = default) =>
             patch is null
                 ? throw new DevelopmentInvalidTransitionException("The Patch artifact failed immutable blob verification (HashMismatch).")
@@ -602,7 +603,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
             throw new NotSupportedException();
 
         public Task<DevelopmentPreparedArtifact> PrepareAsync(DevelopmentExecutionSnapshot snapshot,
-            XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentArtifactKind kind,
+            DevelopmentArtifactKind kind,
             ReadOnlyMemory<byte> content,
             DevelopmentPatchEvidence evidence,
             IReadOnlyList<Guid> inputArtifactIds,

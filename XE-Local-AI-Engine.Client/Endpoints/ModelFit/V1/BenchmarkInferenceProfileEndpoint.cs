@@ -10,7 +10,9 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 ///     FastEndpoints handler that benchmarks a drafted inference profile (POST model-fit/profiles/benchmark). The target
 ///     profile id is carried in the body (never a route param), so the POST always has a body. An empty id is rejected
 ///     with a 400. Calls <see cref="IInferenceProfileService.BenchmarkAsync" />; a failed harness leaves the snapshot
-///     Failed and is surfaced as a 400 via <c>AddError</c> + <c>Send.ErrorsAsync</c>, not an exception. On success it
+///     Failed and is surfaced as a 400 via <c>AddError</c> + <c>Send.ErrorsAsync</c>, not an exception. A SKIPPED result
+///     (the model was serving inference, so nothing ran and nothing was evicted) is also a 400 today, carrying its own
+///     retry-when-idle wording rather than the generic failure text. On success it
 ///     returns the measured metrics + snapshot id + (un-frozen) profile view — never the raw <c>/metrics</c> scrape.
 /// </summary>
 public sealed class BenchmarkInferenceProfileEndpoint(IInferenceProfileService inferenceProfileService)
@@ -36,6 +38,15 @@ public sealed class BenchmarkInferenceProfileEndpoint(IInferenceProfileService i
         var result = await _inferenceProfileService
                            .BenchmarkAsync(req.ProfileId, req.AllowPreSpawnVramPressure, ct)
                            .ConfigureAwait(false);
+
+        // A skip is not a failure: the model was busy, nothing was measured and nothing was evicted. It still returns
+        // 400 (the response DTO carries no skip state), so the WORDING is what tells the operator to simply retry.
+        if (result.Skipped)
+        {
+            AddError(result.FailureReason ?? "Skipped: the model is in use; the benchmark did not run. Retry when the model is idle.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
 
         if (!result.Success || result.Profile is null)
         {

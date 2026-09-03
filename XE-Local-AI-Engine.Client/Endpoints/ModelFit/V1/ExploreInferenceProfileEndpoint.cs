@@ -12,7 +12,9 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 ///     (<c>chat|embedding|reranker</c>) before calling <see cref="IInferenceProfileService.ExploreAsync" />. A domain
 ///     rejection — a cloud or missing model, or any
 ///     sanitized failure reason the service returns — is surfaced as a 400 via <c>AddError</c> + <c>Send.ErrorsAsync</c>,
-///     not an exception. On success it returns the drafted/updated profile view (machine key omitted).
+///     not an exception. A SKIPPED result (the model was serving inference, so nothing ran and nothing was evicted) is
+///     also a 400 today, carrying its own retry-when-idle wording rather than the generic failure text. On success it
+///     returns the drafted/updated profile view (machine key omitted).
 /// </summary>
 public sealed class ExploreInferenceProfileEndpoint(IInferenceProfileService inferenceProfileService)
     : Endpoint<ExploreInferenceProfileRequest, InferenceProfileActionResponse>
@@ -42,6 +44,15 @@ public sealed class ExploreInferenceProfileEndpoint(IInferenceProfileService inf
         }
 
         var result = await _inferenceProfileService.ExploreAsync(req.ModelName.Trim(), role, ct).ConfigureAwait(false);
+
+        // A skip is not a failure: the model was busy, nothing was measured and nothing was evicted. It still returns
+        // 400 (the response DTO carries no skip state), so the WORDING is what tells the operator to simply retry.
+        if (result.Skipped)
+        {
+            AddError(result.FailureReason ?? "Skipped: the model is in use; profiling did not run. Retry when the model is idle.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
 
         if (!result.Success || result.Profile is null)
         {

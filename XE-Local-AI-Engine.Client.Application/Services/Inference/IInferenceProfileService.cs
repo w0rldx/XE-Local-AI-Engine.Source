@@ -76,7 +76,7 @@ public sealed record InferenceProfileView(
     long? ProcessBudgetVramAtFreezeBytes = null);
 
 /// <summary>Outcome of an explore run: the drafted profile, or a sanitized reason when the model was rejected.</summary>
-public sealed record ExploreResult(bool Success, string? FailureReason, InferenceProfileView? Profile)
+public sealed record ExploreResult(bool Success, string? FailureReason, InferenceProfileView? Profile, bool Skipped = false)
 {
     /// <summary>A successful explore carrying the drafted profile.</summary>
     public static ExploreResult Ok(InferenceProfileView profile)
@@ -90,6 +90,15 @@ public sealed record ExploreResult(bool Success, string? FailureReason, Inferenc
     {
         return new ExploreResult(Success: false, reason, Profile: null);
     }
+
+    /// <summary>
+    ///     Not attempted: a warm role for the model was serving in-flight inference, so the exclusive profiling spawn
+    ///     refused to evict it. Distinct from <see cref="Fail" /> — nothing was measured and nothing went wrong.
+    /// </summary>
+    public static ExploreResult SkippedInUse(string reason)
+    {
+        return new ExploreResult(Success: false, reason, Profile: null, Skipped: true);
+    }
 }
 
 /// <summary>
@@ -102,12 +111,22 @@ public sealed record BenchmarkResult(
     string? FailureReason,
     Guid? SnapshotId,
     InferenceBenchmarkMetrics? Metrics,
-    InferenceProfileView? Profile)
+    InferenceProfileView? Profile,
+    bool Skipped = false)
 {
     /// <summary>A failed benchmark carrying a sanitized reason and (when one was created) the snapshot id.</summary>
     public static BenchmarkResult Fail(string reason, Guid? snapshotId = null)
     {
         return new BenchmarkResult(Success: false, reason, snapshotId, Metrics: null, Profile: null);
+    }
+
+    /// <summary>
+    ///     Not attempted: a warm role for the model was serving in-flight inference, so the exclusive profiling spawn
+    ///     refused to evict it. Distinct from <see cref="Fail" /> — nothing was measured and nothing went wrong.
+    /// </summary>
+    public static BenchmarkResult SkippedInUse(string reason, Guid? snapshotId = null)
+    {
+        return new BenchmarkResult(Success: false, reason, snapshotId, Metrics: null, Profile: null, Skipped: true);
     }
 }
 

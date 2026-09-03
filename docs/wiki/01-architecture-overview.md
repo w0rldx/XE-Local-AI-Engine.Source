@@ -152,7 +152,7 @@ result. Three accepted ADRs record the non-obvious decisions:
   base commit + workspace subject hash + changed-files manifest hash.
 - [ADR 0002 — cloud authorization uses `ChatOptions.AdditionalProperties`](../adr/0002-development-cloud-egress-carrier.md): the
   carrier that authorizes every raw cloud round, including the function-result follow-up round created inside
-  `FunctionInvokingChatClient`. Version-aware against the pinned `Microsoft.Extensions.AI` 10.8.3 — re-verify it when that pin moves.
+  `FunctionInvokingChatClient`. Version-aware against the pinned `Microsoft.Extensions.AI` 10.9.0 — re-verify it when that pin moves.
 - [ADR 0004 — Development Mode container execution (Docker stopgap)](../adr/0004-development-mode-container-execution-docker-stopgap.md):
   the scoped Docker permission described above, as a stopgap ahead of MXC. Its living implementation-status companion is
   [Development Mode container implementation status](../roadmaps/development-mode-container-status.md).

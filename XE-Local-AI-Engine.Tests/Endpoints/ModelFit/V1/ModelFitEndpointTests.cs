@@ -66,10 +66,6 @@ public sealed class ModelFitEndpointTests
         return $"{ApiPrefix}/model-fit/hf-token";
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // 401 — every route requires a bearer token (Operator policy).
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task GetLatestRecommendations_WhenNoBearerToken_ReturnsUnauthorized()
     {
@@ -122,10 +118,6 @@ public sealed class ModelFitEndpointTests
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Latest endpoint: explicit cache-miss (200 with hasCache:false), not a 404, and no raw fields.
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task GetLatestRecommendations_WhenNoCache_ReturnsOkWithHasCacheFalse()
     {
@@ -169,10 +161,6 @@ public sealed class ModelFitEndpointTests
         AssertEx.False(json.Contains("providerName", StringComparison.OrdinalIgnoreCase), "Latest response must not expose the dropped provider name.");
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Refresh endpoint: the template guard rejects an unknown/non-model-fit job id (400, not 500/no-op execution).
-    // ──────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task RefreshRecommendations_WhenJobNotFound_ReturnsBadRequestWithErrorBody()
     {
@@ -215,10 +203,6 @@ public sealed class ModelFitEndpointTests
         // The ctxTarget floor is validated BEFORE the template guard, so an out-of-range value 400s on its own.
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // New advisor management routes: reachable with an operator token, sanitized shapes.
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task HardwareProfile_WhenAuthorized_ReturnsSanitizedAggregates()
@@ -338,10 +322,6 @@ public sealed class ModelFitEndpointTests
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // HF token: the endpoints NEVER return the token value — only a presence flag (security gate).
-    // ──────────────────────────────────────────────────────────────────────
 
     [Test]
     public async Task HfTokenStatus_WhenAuthorized_ReturnsOnlyPresenceFlag_NeverTheToken()

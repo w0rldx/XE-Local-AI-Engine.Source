@@ -104,9 +104,6 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
         await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ──────────────────────────────────────────────────────────────────────
 
     private string GetDatabasePath(string fileName)
     {

@@ -12,15 +12,8 @@ import type {
 } from "@/features/mcp/models/McpServerModels";
 import type { McpConnectionStatus, McpServerToolsView } from "@/features/mcp/models/McpServerToolsModels";
 
-// Maps the generated (OpenAPI) MCP response types to the stricter domain view-models the components depend on.
-// The generated types are the single source of truth for the wire shape; their fields are all optional (`x?: T`),
-// so each mapper coalesces every field to a required value with a sensible default. The generated transportKind
-// enum is a string union with the SAME values as the domain McpTransportKind, so it maps through unchanged.
-//
-// REDACTION: the backend already redacts the MCP server response — secret-bearing fields are returned only as the
-// operator is permitted to see them. These mappers only ever surface what the API actually returns; they never
-// reconstruct or infer a sensitive field. The tools status/error are likewise whatever the redacting backend chose
-// to expose (a redacted connection error string, never raw transport internals).
+// Maps optional generated wire fields into required domain values; validation remains at the API boundary.
+// Only API-projected sanitized fields are exposed; generated and domain enum values stay aligned.
 
 const DEFAULT_TRANSPORT_KIND: McpTransportKind = "Stdio";
 // An omitted tier means the secure default, never the privileged one — the same fail-closed reading the

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-// i18next is not initialized in unit tests; resolve to the inline default the way the app's react-i18next mocks do.
+// No test i18n instance; resolve inline defaults.
 vi.mock("i18next", () => ({ t: (key: string, fallback?: string) => fallback ?? key }));
 
 import { ApiError } from "@/core/api/errors/ApiError";

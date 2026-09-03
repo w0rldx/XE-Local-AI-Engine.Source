@@ -38,11 +38,8 @@ function toCatalogSource(value: string): ModelFitCatalogSource {
 	return (modelFitCatalogSources as readonly string[]).includes(value) ? (value as ModelFitCatalogSource) : "bundled";
 }
 
-// Maps the generated (OpenAPI) model-fit response types to the stricter domain view-models the advisor depends on.
-// The generated types are the single source of truth for the wire shape; their fields are all optional (`x?: T`),
-// so each mapper coalesces every field to a required value with a safe default. The DTOs carry only sanitized
-// fields (no raw advisor JSON / stderr / diagnostics blobs); redaction is the backend's — the mapper only surfaces
-// what the API returns and never reconstructs a dropped field.
+// Maps optional generated wire fields into required domain values; validation remains at the API boundary.
+// Only API-projected sanitized fields are exposed.
 
 function toModelFitRecommendation(
 	dto: XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse,

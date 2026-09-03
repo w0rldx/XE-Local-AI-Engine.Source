@@ -4,9 +4,6 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Services.Connection;
 
-/// <summary>
-///     Represents recording hub message sender.
-/// </summary>
 public sealed class RecordingHubMessageSender : IHubMessageSender
 {
     private readonly IHubMessageSender _inner;

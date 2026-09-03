@@ -5,9 +5,9 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Aspire.Hosting.Browsers" Version="13.5.2-preview.1.26421.6" />
-    <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.5.2" />
-    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.5.2" />
+    <PackageVersion Include="Aspire.Hosting.Browsers" Version="13.5.3-preview.1.26425.3" />
+    <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.5.3" />
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.5.3" />
     <PackageVersion Include="Azure.AI.OpenAI" Version="2.1.0" />
     <!-- DefaultAzureCredential for Azure Foundry managed-identity auth, consumed by the Application factory. -->
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
@@ -37,12 +37,12 @@
          Its transports ship as separate `Docker.DotNet.Enhanced.{Unix,NPipe,NativeHttp,LegacyHttp}` packages that
          arrive transitively and lock-step to the same version, so they need no entry of their own. -->
     <PackageVersion Include="Docker.DotNet.Enhanced" Version="4.3.3" />
-    <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Sqlite" Version="13.4.0" />
-    <PackageVersion Include="CommunityToolkit.Aspire.OllamaSharp" Version="13.4.0" />
+    <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Sqlite" Version="13.5.0" />
+    <PackageVersion Include="CommunityToolkit.Aspire.OllamaSharp" Version="13.5.0" />
     <PackageVersion Include="FastEndpoints" Version="8.3.0" />
     <PackageVersion Include="FastEndpoints.Swagger" Version="8.3.0" />
     <PackageVersion Include="BouncyCastle.Cryptography" Version="2.7.0" />
-    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.177" />
+    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.200" />
     <!-- Architecture conformance tests (layer-dependency direction). Test-project only. -->
     <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
     <!-- Newest intended prerelease; banned-API hard wall (RS0030) over BannedSymbols.txt. -->
@@ -61,13 +61,11 @@
     <PackageVersion Include="Microsoft.Testing.Platform" Version="2.3.3" />
     <PackageVersion Include="Microsoft.Playwright" Version="1.62.0" />
     <PackageVersion Include="OllamaSharp" Version="5.4.30" />
-    <!-- Deliberately behind TUnit (1.65.0) and NOT a lockstep pair here: TUnit.Playwright 1.64.x+ compiles against
-         Microsoft.Playwright 1.62.0, so bumping it alone fails the E2E project with CS1705 against the 1.61.0 pin
-         above. Moving both is a coupled change — a Microsoft.Playwright bump also needs `playwright.ps1 install`
-         to refresh ~/.cache/ms-playwright and CI's browser layer — so do it as its own verified pass, not a
-         drive-by. 1.62.0 is the last TUnit.Playwright that still targets Microsoft.Playwright 1.61.0. -->
-    <PackageVersion Include="TUnit.Playwright" Version="1.58.0" />
-    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.8.3" />
+    <!-- Coupled to the Microsoft.Playwright pin above: TUnit.Playwright's nuspec sets the Microsoft.Playwright
+         floor (1.65.68 requires >= 1.62.0), so check that floor before moving either package. A Microsoft.Playwright
+         bump additionally needs `playwright.ps1 install` to refresh ~/.cache/ms-playwright and CI's browser layer. -->
+    <PackageVersion Include="TUnit.Playwright" Version="1.65.68" />
+    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.9.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.9.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.9.0" />
     <!-- Transitive only (pulled in by Microsoft.Extensions.AI.OpenAI): pinned
@@ -89,9 +87,9 @@
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.9.0" />
     <!-- Compatibility cohort: upgrade the stable MAF trio together after verifying their matching release set. -->
-    <PackageVersion Include="Microsoft.Agents.AI" Version="1.17.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.19.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.17.0" />
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.20.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.20.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.20.0" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.9.0" />
     <!-- ModelContextProtocol.AspNetCore takes an exact dependency on the matching ModelContextProtocol
          build, so these two only ever move together; a split bump fails restore with NU1107/NU1608. -->
@@ -104,13 +102,13 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.18.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.18.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.18.0" />
-    <PackageVersion Include="Quartz" Version="3.19.1" />
-    <PackageVersion Include="Quartz.Extensions.Hosting" Version="3.19.1" />
-    <PackageVersion Include="Quartz.Plugins" Version="3.19.1" />
-    <PackageVersion Include="Quartz.Plugins.TimeZoneConverter" Version="3.19.1" />
-    <PackageVersion Include="Quartz.Serialization.SystemTextJson" Version="3.19.1" />
+    <PackageVersion Include="Quartz" Version="3.20.0" />
+    <PackageVersion Include="Quartz.Extensions.Hosting" Version="3.20.0" />
+    <PackageVersion Include="Quartz.Plugins" Version="3.20.0" />
+    <PackageVersion Include="Quartz.Plugins.TimeZoneConverter" Version="3.20.0" />
+    <PackageVersion Include="Quartz.Serialization.SystemTextJson" Version="3.20.0" />
     <PackageVersion Include="Serilog" Version="4.4.0" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.16.10" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.17.2" />
     <PackageVersion Include="Scrutor" Version="7.0.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />
@@ -131,8 +129,8 @@
          https://github.com/microsoft/EventLogExpert/issues/604 -->
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
     <PackageVersion Include="System.Numerics.Tensors" Version="10.0.11" />
-    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
-    <PackageVersion Include="TUnit" Version="1.65.38" />
+    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.11" />
+    <PackageVersion Include="TUnit" Version="1.65.68" />
     <PackageVersion Include="Velopack" Version="1.2.0" />
     <PackageVersion Include="YamlDotNet" Version="18.0.0" />
   </ItemGroup>

@@ -9,10 +9,8 @@ public enum ImageModelSearchSort
     /// <summary>Most downloaded first (lifetime cumulative downloads).</summary>
     Downloads = 1,
 
-    /// <summary>Most liked first.</summary>
     Likes = 2,
 
-    /// <summary>Most recently updated first.</summary>
     LastModified = 3
 }
 
@@ -32,7 +30,6 @@ public sealed record ImageModelSearchQuery
     /// <summary>Free-text search term; when <see langword="null" /> the trending text-to-image repos are returned.</summary>
     public string? SearchText { get; init; }
 
-    /// <summary>Maximum repos to return.</summary>
     public int Limit { get; init; } = 20;
 
     /// <summary>Result ordering. Defaults to <see cref="ImageModelSearchSort.Trending" />.</summary>

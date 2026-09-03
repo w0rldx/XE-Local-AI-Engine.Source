@@ -66,11 +66,11 @@ public sealed class DevelopmentPersistenceTests : IDisposable
 
         var operationId = Guid.NewGuid();
         var blocked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                              operationId,
-                              DevelopmentTaskStatus.Blocked,
-                              ExpectedTaskVersion: 1,
-                              "The repository is not connected."))
-                          .ConfigureAwait(false);
+                                     operationId,
+                                     DevelopmentTaskStatus.Blocked,
+                                     ExpectedTaskVersion: 1,
+                                     "The repository is not connected."))
+                                 .ConfigureAwait(false);
 
         var written = await dbContext.DevelopmentEvents.AsNoTracking()
                                      .Where(entity => entity.OperationId == operationId)

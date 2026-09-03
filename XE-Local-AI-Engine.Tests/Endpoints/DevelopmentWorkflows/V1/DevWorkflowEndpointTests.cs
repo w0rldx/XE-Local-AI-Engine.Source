@@ -461,10 +461,10 @@ public sealed class DevWorkflowEndpointTests
         await using var factory = EnabledFactory(store);
 
         using var response = await SendAsync(factory,
-                                     "PUT",
-                                     Definition,
-                                     $$"""{"version":4,"name":"renamed","graph":{{DecompositionGraph}}}""")
-                                 .ConfigureAwait(false);
+                "PUT",
+                Definition,
+                $$"""{"version":4,"name":"renamed","graph":{{DecompositionGraph}}}""")
+            .ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -706,7 +706,7 @@ public sealed class DevWorkflowEndpointTests
         await using var factory = EnabledFactory(store);
 
         using var response = await SendAsync(factory, "PUT", RuleSet, """{"version":4,"name":"renamed","body":"Read the plan first.","enabled":false}""")
-                                   .ConfigureAwait(false);
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using (var updated = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false)))

@@ -91,7 +91,7 @@ public sealed class ChatActionsE2ETests : XESerialE2ETestBase
             Timeout = 15000
         });
 
-        // Assert the echoed reply text, NOT the "Node reply" bubble label. That label is the assistant
+        // Match the echoed reply text, not the "Node reply" bubble label. That label is the assistant
         // role caption (pages.chat.nodeReply in ChatMessage.tsx) and renders on every assistant bubble
         // including a failed, empty one — asserting it let a turn that produced no content at all read as
         // a completed reply. FakeOllama echoes "[fake-ollama] {last user message}".
@@ -102,7 +102,6 @@ public sealed class ChatActionsE2ETests : XESerialE2ETestBase
             });
     }
 
-    /// <summary>Current set of conversation ids rendered in the list.</summary>
     private async Task<HashSet<string>> ConversationIdsAsync()
     {
         var testIds = await Page.Locator("[data-testid^='conversation-item-']").EvaluateAllAsync<string[]>("nodes => nodes.map(n => n.getAttribute('data-testid'))");
@@ -136,7 +135,6 @@ public sealed class ChatActionsE2ETests : XESerialE2ETestBase
         return after.Except(before).Single();
     }
 
-    // ---- Per-message actions -------------------------------------------------
 
     [Test]
     [Category("Page")]
@@ -255,7 +253,6 @@ public sealed class ChatActionsE2ETests : XESerialE2ETestBase
         });
     }
 
-    // ---- Conversation management --------------------------------------------
 
     [Test]
     [Category("Page")]

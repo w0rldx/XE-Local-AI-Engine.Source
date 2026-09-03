@@ -66,8 +66,6 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         // resolve to it just because it is the least privileged thing registered.
         | SandboxProviderCapabilities.SuppliesHostToolchain;
 
-    // ---- ISandboxRuntimeProvider ----
-
     public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -386,8 +384,6 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
 
         return Task.CompletedTask;
     }
-
-    // ---- test/seed seams (the fake is a production-resident, config-selected double) ----
 
     /// <summary>Seed a host file so a later <see cref="CopyIntoAsync" /> has content to copy.</summary>
     public void WriteHostFile(string hostPath, string content)

@@ -28,7 +28,6 @@ using System.Text.RegularExpressions;
 /// </summary>
 internal static partial class MemoryProposalSecretScanner
 {
-    // ── Reject-whole-record patterns ──────────────────────────────────────
     // PEM private-key blocks (any variant).
     // Match timeout (milliseconds) guarding every pattern below against pathological/ReDoS inputs.
     private const int RegexTimeoutMilliseconds = 2000;
@@ -47,7 +46,6 @@ internal static partial class MemoryProposalSecretScanner
     [GeneratedRegex(@"""private_key""", RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
     private static partial Regex ServiceAccountPrivateKeyRegex();
 
-    // ── Redact-in-content patterns ────────────────────────────────────────
     // Assignment-like secrets: api_key=, secret:, password =, connectionstring=, client_secret=, access_token=, refresh_token=
     // followed by a non-whitespace, non-comment value (single/double quoted or bare word).
     [GeneratedRegex(@"(?:api[_\-]?key|secret|password|connectionstring|client_secret|access_token|refresh_token)\s*(?:=|:|:=|"":\s*""|':\s*')[^\s,;}{""'\r\n]{4,}",
@@ -106,7 +104,6 @@ internal static partial class MemoryProposalSecretScanner
         IReadOnlyList<string> evidence,
         string confidence)
     {
-        // ── 1. Whole-record reject: PEM private-key blocks ──────────────────
         if (PemPrivateKeyRegex().IsMatch(content)
             || OpenSshPrivateKeyRegex().IsMatch(content)
             || PemPrivateKeyRegex().IsMatch(type)
@@ -119,7 +116,6 @@ internal static partial class MemoryProposalSecretScanner
             };
         }
 
-        // ── 2. Whole-record reject: Google service-account JSON ─────────────
         if (ServiceAccountTypeRegex().IsMatch(content) && ServiceAccountPrivateKeyRegex().IsMatch(content))
         {
             return new ScanResult
@@ -129,7 +125,6 @@ internal static partial class MemoryProposalSecretScanner
             };
         }
 
-        // ── 3. Whole-record reject: secrets in metadata fields ──────────────
         if (new[]
             {
                 type,
@@ -153,7 +148,6 @@ internal static partial class MemoryProposalSecretScanner
             };
         }
 
-        // ── 4. Redact content matches ───────────────────────────────────────
         var redacted = RedactContent(content);
         var contentChanged = !string.Equals(redacted, content, StringComparison.Ordinal);
 
@@ -162,8 +156,6 @@ internal static partial class MemoryProposalSecretScanner
             RedactedContent = contentChanged ? redacted : null
         };
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────
 
     private static bool ContainsAnyRedactPattern(string value)
     {
@@ -271,8 +263,6 @@ internal static partial class MemoryProposalSecretScanner
 
         return entropy;
     }
-
-    // ── Public API ────────────────────────────────────────────────────────
 
     /// <summary>
     ///     Outcome of scanning a single proposal record. <see cref="ShouldReject" /> is set when the record must be

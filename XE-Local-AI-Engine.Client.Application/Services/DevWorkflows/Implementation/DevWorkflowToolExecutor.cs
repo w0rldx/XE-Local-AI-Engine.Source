@@ -136,16 +136,16 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             // Reaching here means it did not, so the row is judged for what it is rather than swept forever — and an
             // interrupted sandbox pass is retryable, so what that costs is the retry policy's answer.
             return await _retries.SettleFailureAsync(store,
-                    graph,
-                    run,
-                    nodeRun,
-                    nodeRuns,
-                    new DevWorkflowFailure(DevWorkflowFailureClasses.Interrupted,
-                        StoppedReason(graph, nodeRun, "The host stopped"),
-                        Output(nodeRun, DevWorkflowFailureClasses.Interrupted, run: null),
-                        DevWorkflowOutcomes.Interrupted),
-                    cancellationToken)
-                .ConfigureAwait(false);
+                                     graph,
+                                     run,
+                                     nodeRun,
+                                     nodeRuns,
+                                     new DevWorkflowFailure(DevWorkflowFailureClasses.Interrupted,
+                                         StoppedReason(graph, nodeRun, "The host stopped"),
+                                         Output(nodeRun, DevWorkflowFailureClasses.Interrupted, run: null),
+                                         DevWorkflowOutcomes.Interrupted),
+                                     cancellationToken)
+                                 .ConfigureAwait(false);
         }
 
         var written = 0;
@@ -244,16 +244,16 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         // attempt at the node that produced what these commands judged, or a human — is the retry policy's to decide.
         var failureClass = result.FailureClass ?? DevWorkflowFailureClasses.Internal;
         return await _retries.SettleFailureAsync(store,
-                graph,
-                run,
-                nodeRun,
-                nodeRuns,
-                new DevWorkflowFailure(failureClass,
-                    result.SanitizedReason ?? "This node run's validation commands did not pass.",
-                    Output(nodeRun, failureClass, result),
-                    failureClass == DevWorkflowFailureClasses.Timeout ? DevWorkflowOutcomes.Timeout : null),
-                cancellationToken)
-            .ConfigureAwait(false);
+                                 graph,
+                                 run,
+                                 nodeRun,
+                                 nodeRuns,
+                                 new DevWorkflowFailure(failureClass,
+                                     result.SanitizedReason ?? "This node run's validation commands did not pass.",
+                                     Output(nodeRun, failureClass, result),
+                                     failureClass == DevWorkflowFailureClasses.Timeout ? DevWorkflowOutcomes.Timeout : null),
+                                 cancellationToken)
+                             .ConfigureAwait(false);
     }
 
     /// <summary>

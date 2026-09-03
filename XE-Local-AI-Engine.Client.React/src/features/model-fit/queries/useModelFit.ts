@@ -23,10 +23,7 @@ import type { ModelFitRecommendationFilters, ModelFitUseCase } from "@/features/
 // useStartGgufDownload and marks the model in the shared GGUF store, so the download surfaces (with progress +
 // cancel) on the Model Management page. No download hook lives here anymore.
 
-// The generated query keys are single-element arrays `[{ _id: "<operationId>", ... }]`. Invalidating with just the
-// `_id` partial object matches every cached variant of that endpoint (TanStack partial-object matching). The
-// operationIds equal the generated SDK fn names. Centralized here (and reused by useModelFitSchedulerEvents) so the
-// literal `_id` key — which trips biome's naming-convention rule — is constructed in exactly one place.
+// Generated keys are object arrays; TanStack partial matching on `_id` invalidates every endpoint variant.
 export const modelFitQueryIds = {
 	latest: "getLatestRecommendations",
 	catalog: "getModelCatalogInfo",

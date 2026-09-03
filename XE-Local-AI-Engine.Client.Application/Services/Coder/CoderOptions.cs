@@ -9,7 +9,6 @@ namespace XE_Local_AI_Engine.Client.Services.Coder;
 /// </summary>
 public sealed class CoderOptions
 {
-    /// <summary>The configuration section this options type binds to.</summary>
     public const string SectionName = "Coder";
 
     /// <summary>Maximum number of entries a single <c>list_files</c> call returns. Defaults to 500.</summary>

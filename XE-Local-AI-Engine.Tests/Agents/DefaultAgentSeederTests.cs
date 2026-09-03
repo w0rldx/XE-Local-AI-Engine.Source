@@ -24,7 +24,6 @@ public sealed class DefaultAgentSeederTests
         var scopeFactory = factory.Services.GetRequiredService<IServiceScopeFactory>();
         var seeder = new DefaultAgentSeeder(scopeFactory, Options.Create(new LocalChatAgentOptions()), NullLogger<DefaultAgentSeeder>.Instance);
 
-        // First boot seeds the Default Assistant; the second boot must NOT duplicate it.
         await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
         await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
 

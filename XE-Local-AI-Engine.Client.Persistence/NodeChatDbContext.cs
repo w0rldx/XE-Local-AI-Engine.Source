@@ -6,9 +6,6 @@ using XE_Local_AI_Engine.Client.Persistence.Configurations;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
-/// <summary>
-///     Represents node chat db context.
-/// </summary>
 public sealed class NodeChatDbContext : DbContext
 {
     private readonly INodeSqliteKeyHolder _nodeSqliteKeyHolder;

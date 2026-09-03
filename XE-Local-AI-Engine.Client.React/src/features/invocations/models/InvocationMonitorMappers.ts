@@ -10,11 +10,8 @@ import type {
 	InvocationStatusDto,
 } from "@/features/invocations/models/InvocationMonitorModel";
 
-// Maps the generated (OpenAPI) invocation-monitor response to the stricter domain view-model the page depends
-// on. The generated types are the single source of truth for the wire shape; their fields are all optional
-// (`x?: T`), so each mapper coalesces every field to a required value with a sensible default. The generated
-// InvocationStatus enum is a string union with the SAME values as the domain union, so a present status maps
-// through unchanged and an omitted one falls back to "Pending" (the backend's first/initial status).
+// Maps optional generated wire fields into required domain values; validation remains at the API boundary.
+// Generated and domain enum values stay aligned.
 const DEFAULT_STATUS: InvocationStatusDto = "Pending";
 
 function toInvocationCurrent(

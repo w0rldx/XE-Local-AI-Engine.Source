@@ -81,7 +81,7 @@ Write-Host "   Data directory: $dataDir"
 if ($DryRun) { Write-Host "   (dry-run - nothing will be stopped or deleted)" }
 Write-Host ""
 
-# --- 1. Stop running processes ------------------------------------------------------
+# 1. Stop running processes
 
 # True when $Path is under $Root (or equal), case-insensitive, with a trailing-separator
 # guard so a sibling-prefix directory can never match (mirrors StaleLlamaServerReaper).
@@ -141,7 +141,7 @@ if ($targets.Count -gt 0) {
 }
 Write-Host ""
 
-# --- 2. Velopack-managed install note ----------------------------------------------
+# 2. Velopack-managed install note
 
 # Velopack installs per-user under %LOCALAPPDATA%\<PackId> with a "current\" dir and an
 # "Update.exe" helper. Detect and point at it; do NOT delete it here.
@@ -185,7 +185,7 @@ if ($velopackRoot) {
     exit 0
 }
 
-# --- 3. Delete the per-user data directory (portable / manual install) -------------
+# 3. Delete the per-user data directory (portable / manual install)
 
 if ($KeepData) {
     Write-Host ">> -KeepData: leaving $dataDir in place. Done."

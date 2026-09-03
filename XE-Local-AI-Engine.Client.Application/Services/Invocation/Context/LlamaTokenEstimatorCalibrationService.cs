@@ -4,6 +4,8 @@ using System.Net;
 using System.Text.Json;
 using System.Threading.Channels;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Opportunistically calibrates token estimates for llama.cpp models that are serving real requests. Each request
@@ -32,22 +34,26 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
     private readonly TimeProvider _timeProvider;
     private readonly Dictionary<string, CalibrationTarget> _targets = new(StringComparer.Ordinal);
     private readonly Channel<CalibrationWork> _work;
+    private readonly ILlamaServerProcessSupervisor _supervisor;
     private long _generation;
 
     public LlamaTokenEstimatorCalibrationService(HttpClient httpClient,
         ITokenEstimatorCalibrationStore store,
+        ILlamaServerProcessSupervisor supervisor,
         ILogger<LlamaTokenEstimatorCalibrationService> logger)
-        : this(httpClient, store, logger, DefaultInterval, TimeProvider.System, DefaultWorkCapacity)
+        : this(httpClient, store, supervisor, logger, DefaultInterval, TimeProvider.System, DefaultWorkCapacity)
     {
     }
 
     internal LlamaTokenEstimatorCalibrationService(HttpClient httpClient,
         ITokenEstimatorCalibrationStore store,
+        ILlamaServerProcessSupervisor supervisor,
         ILogger<LlamaTokenEstimatorCalibrationService> logger,
         TimeSpan interval,
         TimeProvider timeProvider,
         int workCapacity)
     {
+        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -165,7 +171,34 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
             }
         }
 
-        var result = await TryReadDivisorAsync(work.BaseAddress, cancellationToken).ConfigureAwait(false);
+        // The probe is a real request against the model's process, dispatched from this worker long after the chat
+        // that scheduled it. Unleased, profiling's pre-spawn claim wins and this POST lands on whatever now answers
+        // that port — the measurement process, since the allocator commonly re-hands the freed one. A refused lease
+        // skips the round entirely: calibration is opportunistic, and the next request reschedules it.
+        var acquisition = _supervisor.TryAcquireInferenceLease(work.ModelName, ModelRole.Chat);
+        if (acquisition.ProcessEvicting || acquisition.ProcessProfiling)
+        {
+            lock (_sync)
+            {
+                if (IsCurrentTarget(work))
+                {
+                    _targets[work.ModelName] = _targets[work.ModelName] with
+                    {
+                        InFlight = false,
+                        NextDueUtc = _timeProvider.GetUtcNow() + _interval
+                    };
+                }
+            }
+
+            return;
+        }
+
+        CalibrationResult result;
+        using (acquisition.Lease)
+        {
+            result = await TryReadDivisorAsync(work.BaseAddress, cancellationToken).ConfigureAwait(false);
+        }
+
         lock (_sync)
         {
             if (!IsCurrentTarget(work))
