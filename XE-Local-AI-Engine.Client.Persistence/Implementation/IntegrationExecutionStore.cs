@@ -1,0 +1,293 @@
+namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
+
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+
+/// <summary>
+///     Persistence boundary for integration executions and their event feed.
+///     <para>
+///         Every method here goes through EF so both encryption interceptors run — the terminal event's
+///         <c>detail_json</c> is an encrypted column, and only a <c>SaveChanges</c> seals it. The single exception is
+///         <see cref="AcceptAsync" /> in the sibling partial file, which opens its own connection and takes SQLite's
+///         write lock with <c>BEGIN IMMEDIATE</c> because it is the only method that needs a hard bound rather than a
+///         racy read.
+///     </para>
+/// </summary>
+public sealed partial class IntegrationExecutionStore : IIntegrationExecutionStore
+{
+    private readonly string _connectionString;
+    private readonly NodeChatDbContext _dbContext;
+
+    public IntegrationExecutionStore(NodeChatDbContext dbContext)
+    {
+        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _connectionString = dbContext.Database.GetConnectionString()
+                            ?? throw new InvalidOperationException("The integration execution store requires a configured SQLite connection string.");
+    }
+
+    public async Task<IntegrationExecutionSnapshot?> GetByIdAsync(Guid executionId, CancellationToken cancellationToken = default)
+    {
+        var entity = await _dbContext.IntegrationExecutions.AsNoTracking().SingleOrDefaultAsync(row => row.Id == executionId, cancellationToken).ConfigureAwait(false);
+        return entity is null ? null : ToSnapshot(entity);
+    }
+
+    public async Task<IntegrationExecutionSnapshot?> GetByRequestIdAsync(Guid principalId, Guid requestId, CancellationToken cancellationToken = default)
+    {
+        // Both columns: the unique index over (principal_id, request_id) guarantees this matches at most one row, and
+        // scoping by principal is what stops a replay ever seeing another integrator's execution.
+        var entity = await _dbContext.IntegrationExecutions.AsNoTracking()
+                                     .SingleOrDefaultAsync(row => row.PrincipalId == principalId && row.RequestId == requestId, cancellationToken)
+                                     .ConfigureAwait(false);
+        return entity is null ? null : ToSnapshot(entity);
+    }
+
+    public async Task<IReadOnlyList<IntegrationExecutionSnapshot>> ListAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        var query = _dbContext.IntegrationExecutions.AsNoTracking();
+
+        if (filter.TriggerId is { } triggerId)
+        {
+            query = query.Where(row => row.TriggerId == triggerId);
+        }
+
+        if (filter.SessionId is { } sessionId)
+        {
+            query = query.Where(row => row.SessionId == sessionId);
+        }
+
+        if (filter.Status is { } status)
+        {
+            query = query.Where(row => row.Status == status);
+        }
+
+        // The Id tie-break is load-bearing: ReceivedAtUtc is a millisecond stamp, so two accepts in the same
+        // millisecond would page non-deterministically and drop or duplicate a row across pages.
+        var entities = await query.OrderByDescending(row => row.ReceivedAtUtc)
+                                  .ThenByDescending(row => row.Id)
+                                  .Skip(Math.Max(val1: 0, filter.Offset))
+                                  .Take(Math.Max(val1: 0, filter.Limit))
+                                  .ToListAsync(cancellationToken)
+                                  .ConfigureAwait(false);
+        return [.. entities.Select(ToSnapshot)];
+    }
+
+    public async Task<bool> UpdateStatusAsync(IntegrationExecutionStatusUpdate command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var entity = await _dbContext.IntegrationExecutions.SingleOrDefaultAsync(row => row.Id == command.ExecutionId, cancellationToken).ConfigureAwait(false);
+        if (entity is null || entity.Version != command.ExpectedVersion || !command.ExpectedStatuses.Contains(entity.Status))
+        {
+            return false;
+        }
+
+        entity.Status = command.NewStatus;
+
+        // A null optional field means "leave it alone", never "clear it" — the opposite of TryTerminalizeAsync's rule.
+        if (command.StartedAtUtc is { } startedAtUtc)
+        {
+            entity.StartedAtUtc = startedAtUtc;
+        }
+
+        if (command.EndedAtUtc is { } endedAtUtc)
+        {
+            entity.EndedAtUtc = endedAtUtc;
+        }
+
+        if (command.InvocationId is { } invocationId)
+        {
+            entity.InvocationId = invocationId;
+        }
+
+        if (command.StopRequestedAtUtc is { } stopRequestedAtUtc)
+        {
+            entity.StopRequestedAtUtc = stopRequestedAtUtc;
+        }
+
+        if (command.FailureCategory is { } failureCategory)
+        {
+            entity.FailureCategory = failureCategory;
+        }
+
+        if (command.FailureSummary is { } failureSummary)
+        {
+            entity.FailureSummary = failureSummary;
+        }
+
+        entity.Version++;
+
+        try
+        {
+            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // The query-first check alone is not atomic; the version's concurrency-token mapping is what makes two
+            // concurrent compare-and-swaps resolve to exactly one winner, and the loser must learn it lost without a
+            // try/catch of its own.
+            _dbContext.ChangeTracker.Clear();
+            return false;
+        }
+
+        return true;
+    }
+
+    public async Task<bool> TryTerminalizeAsync(IntegrationTerminalizeCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var entity = await _dbContext.IntegrationExecutions.SingleOrDefaultAsync(row => row.Id == command.ExecutionId, cancellationToken).ConfigureAwait(false);
+        if (entity is null || entity.Version != command.ExpectedVersion || !command.ExpectedStatuses.Contains(entity.Status))
+        {
+            return false;
+        }
+
+        entity.Status = command.NewStatus;
+        entity.EndedAtUtc = command.EndedAtUtc;
+
+        // ASSIGNED, not merged: a terminal write is the final word on why a run ended, so a Completed command carrying
+        // two nulls must clear a category an earlier attempt left on the row.
+        entity.FailureCategory = command.FailureCategory;
+        entity.FailureSummary = command.FailureSummary;
+        entity.Version++;
+
+        _ = _dbContext.IntegrationExecutionEvents.Add(new IntegrationExecutionEvent
+        {
+            Id = Guid.NewGuid(),
+            ExecutionId = command.ExecutionId,
+            Sequence = command.Sequence,
+            EventType = command.EventType,
+            DetailJson = FailureDetail(command.FailureCategory, command.FailureSummary),
+            OccurredAtUtc = command.EndedAtUtc
+        });
+
+        // MAX for the execution, because an external.output row can still be committing; a plain assignment for the
+        // session, because sequences restart per execution.
+        entity.LastSequence = Math.Max(entity.LastSequence, command.Sequence);
+        await MoveSessionWatermarkAsync(entity.SessionId, command.Sequence, command.EndedAtUtc, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            _dbContext.ChangeTracker.Clear();
+            return false;
+        }
+
+        return true;
+    }
+
+    public async Task AppendEventAsync(IntegrationEventAppend command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var entity = await _dbContext.IntegrationExecutions.SingleOrDefaultAsync(row => row.Id == command.ExecutionId, cancellationToken).ConfigureAwait(false)
+                     ?? throw new InvalidOperationException($"Integration execution '{command.ExecutionId}' does not exist.");
+
+        _ = _dbContext.IntegrationExecutionEvents.Add(new IntegrationExecutionEvent
+        {
+            Id = command.EventId,
+            ExecutionId = command.ExecutionId,
+            Sequence = command.Sequence,
+            EventType = command.EventType,
+            DetailJson = command.DetailJson is null ? null : Encoding.UTF8.GetBytes(command.DetailJson),
+            OccurredAtUtc = command.OccurredAtUtc
+        });
+
+        entity.LastSequence = Math.Max(entity.LastSequence, command.Sequence);
+        await MoveSessionWatermarkAsync(entity.SessionId, command.Sequence, command.OccurredAtUtc, cancellationToken).ConfigureAwait(false);
+
+        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<IntegrationExecutionEventSnapshot>> ListEventsAsync(Guid executionId,
+        long sinceSequence,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        if (limit <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(limit), "An event page limit must be positive.");
+        }
+
+        // Materialize the entities FIRST and map afterwards. Projecting the columns inside the LINQ query materializes
+        // no entity, so the decryption interceptor never runs and the caller gets ciphertext.
+        var events = await _dbContext.IntegrationExecutionEvents.AsNoTracking()
+                                     .Where(row => row.ExecutionId == executionId && row.Sequence > sinceSequence)
+                                     .OrderBy(row => row.Sequence)
+                                     .Take(limit)
+                                     .ToListAsync(cancellationToken)
+                                     .ConfigureAwait(false);
+
+        return
+        [
+            .. events.Select(static row => new IntegrationExecutionEventSnapshot(row.Id,
+                row.ExecutionId,
+                row.Sequence,
+                row.EventType,
+                TextOrNull(row.DetailJson),
+                row.OccurredAtUtc))
+        ];
+    }
+
+    private async Task MoveSessionWatermarkAsync(Guid sessionId, long sequence, long atUtc, CancellationToken cancellationToken)
+    {
+        var session = await _dbContext.IntegrationSessions.SingleOrDefaultAsync(row => row.Id == sessionId, cancellationToken).ConfigureAwait(false);
+        if (session is null)
+        {
+            return;
+        }
+
+        session.LastSequence = sequence;
+        session.LastActivityUtc = atUtc;
+    }
+
+    /// <summary>
+    ///     The terminal event's small payload: null when the run ended without a failure, otherwise the two content-free
+    ///     failure fields. Bounded by <c>FailureSummary</c>'s own length; no transcript content reaches it.
+    /// </summary>
+    private static byte[]? FailureDetail(string? failureCategory, string? failureSummary)
+    {
+        if (failureCategory is null && failureSummary is null)
+        {
+            return null;
+        }
+
+        return JsonSerializer.SerializeToUtf8Bytes(new IntegrationTerminalDetail(failureCategory, failureSummary));
+    }
+
+    private static string? TextOrNull(byte[]? value) => value is null ? null : Encoding.UTF8.GetString(value);
+
+    private static IntegrationExecutionSnapshot ToSnapshot(IntegrationExecution entity) =>
+        new(entity.Id,
+            entity.TriggerId,
+            entity.SessionId,
+            entity.PrincipalId,
+            entity.RequestId,
+            entity.RequestFingerprint,
+            entity.KeyPrefix,
+            entity.InvocationId,
+            entity.Status,
+            entity.ReceivedAtUtc,
+            entity.StartedAtUtc,
+            entity.EndedAtUtc,
+            entity.StopRequestedAtUtc,
+            entity.FailureCategory,
+            entity.FailureSummary,
+            entity.OutputCount,
+            entity.OutputBytes,
+            entity.LastSequence,
+            entity.Version);
+
+    private sealed record IntegrationTerminalDetail(
+        [property: JsonPropertyName("failureCategory")] string? FailureCategory,
+        [property: JsonPropertyName("failureSummary")] string? FailureSummary);
+}

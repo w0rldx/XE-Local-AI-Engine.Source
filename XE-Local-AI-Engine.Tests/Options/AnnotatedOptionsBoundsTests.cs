@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -41,6 +42,7 @@ public sealed class AnnotatedOptionsBoundsTests
     [Arguments(typeof(DevelopmentOptions))]
     [Arguments(typeof(ConversationCompactionOptions))]
     [Arguments(typeof(ContainerSandboxOptions))]
+    [Arguments(typeof(IntegrationOptions))]
     public void DefaultOptions_PassDataAnnotationValidation(Type optionsType)
     {
         // The shipped defaults must always start a node; a bound tightened past its own default would otherwise only
@@ -62,6 +64,7 @@ public sealed class AnnotatedOptionsBoundsTests
     [Arguments(typeof(DevelopmentOptions))]
     [Arguments(typeof(ConversationCompactionOptions))]
     [Arguments(typeof(ContainerSandboxOptions))]
+    [Arguments(typeof(IntegrationOptions))]
     public void EveryAnnotatedRange_RejectsJustOutsideAndAcceptsTheBoundary(Type optionsType)
     {
         var probed = 0;
@@ -127,6 +130,26 @@ public sealed class AnnotatedOptionsBoundsTests
 
         AssertEx.Contains(Validate(instance),
             error => error.MemberNames.Contains(nameof(ContainerSandboxOptions.MinimumApiVersion), StringComparer.Ordinal));
+    }
+
+    [Test]
+    public void IntegrationEventBufferTtl_IsBoundedOnBothSides()
+    {
+        // A TimeSpan cannot carry a [Range], so the bound lives in the class's own IValidatableObject member — which
+        // Validator.TryValidateObject(..., validateAllProperties: true) runs, and which the table-driven probe above
+        // cannot reach.
+        foreach (var rejected in new[] { TimeSpan.FromSeconds(9), TimeSpan.FromHours(25) })
+        {
+            AssertEx.Contains(Validate(new IntegrationOptions { EventBufferTtlAfterTerminal = rejected }),
+                error => error.MemberNames.Contains(nameof(IntegrationOptions.EventBufferTtlAfterTerminal), StringComparer.Ordinal),
+                $"{rejected} is outside [10s, 24h] and must be rejected.");
+        }
+
+        foreach (var accepted in new[] { TimeSpan.FromSeconds(10), TimeSpan.FromHours(24) })
+        {
+            AssertEx.Empty(Validate(new IntegrationOptions { EventBufferTtlAfterTerminal = accepted })
+                .Where(static error => error.MemberNames.Contains(nameof(IntegrationOptions.EventBufferTtlAfterTerminal), StringComparer.Ordinal)));
+        }
     }
 
     private static void AssertBoundary(Type optionsType, PropertyInfo property, decimal? bound, bool isMinimum)

@@ -53,6 +53,11 @@ public static class NodeApplicationServiceCollectionExtensions
         // this order buys is hosted-service START order, which is registration order: Development's startup reconciler
         // terminalizes its own orphaned rows before the workflow dispatcher begins admitting node runs that drive them.
         builder.AddNodeDevWorkflows(configuration);
+
+        // After AddNodeDevWorkflows for the same hosted-service START order reason: the coordinator this module
+        // gains in the next slice must start after chat restart recovery has terminalized rows orphaned by a
+        // crash, so it never adopts an execution the chat path is still repairing.
+        builder.AddNodeIntegrations(configuration);
         // Development Mode container sandbox (ADR 0004). After AddNodeDevelopment so it reads as what it is: a
         // Development Mode concern, not an AgentHome one.
         builder.AddNodeContainerSandbox(configuration);
