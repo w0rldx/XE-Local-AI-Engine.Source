@@ -117,22 +117,47 @@ public sealed class BenchmarkQueueHostedServiceTests
 
     /// <summary>
     ///     Startup recovery runs BEFORE the first claim and outside the loop's guard, so a database failure there was
-    ///     the same StopHost kill by another door. It costs unrecovered work items, never the host.
+    ///     the same StopHost kill by another door. It costs neither the host nor the work items: the loop survives AND
+    ///     claims nothing until recovery has succeeded once, because recovery is the only thing that terminalizes the
+    ///     rows the previous process left Running — claiming past it orphans them for this process's lifetime.
     /// </summary>
     [Test]
-    public async Task ExecuteAsync_WhenStartupRecoveryThrows_LogsAndStillClaims()
+    public async Task ExecuteAsync_WhenStartupRecoveryThrows_ClaimsNothingUntilARetrySucceeds()
     {
         using var harness = new Harness();
         var work = Work(BenchmarkWorkKind.Primary);
         harness.Enqueue(work);
+        var attempts = 0;
         _ = harness.Store.RecoverRunsOnStartupAsync(Arg.Any<CancellationToken>())
-                   .Returns(_ => Task.FromException<IReadOnlyList<BenchmarkRunRecord>>(new InvalidOperationException("recovery failed")));
+                   .Returns(_ => ++attempts == 1
+                       ? Task.FromException<IReadOnlyList<BenchmarkRunRecord>>(new InvalidOperationException("recovery failed"))
+                       : Task.FromResult<IReadOnlyList<BenchmarkRunRecord>>([]));
+        // The failed recovery parks on the poll interval; the loop must survive that park and recover again.
+        harness.Signal.CancelOnWaitNumber = 2;
 
         await harness.RunToIdleAsync();
 
+        AssertEx.Equal(expected: 2, attempts, "A failed recovery is retried on the poll interval rather than abandoned.");
         await harness.RunExecutor.Received(1).ExecuteAsync(work, Arg.Any<CancellationToken>());
         AssertEx.True(harness.Logger.HasEntry(LogLevel.Error, "startup recovery failed"),
             "A failed recovery must be reported, not swallowed.");
+    }
+
+    /// <summary>The half the guard alone never gave: nothing is claimed while recovery is still failing.</summary>
+    [Test]
+    public async Task ExecuteAsync_WhileStartupRecoveryKeepsFailing_NeverClaims()
+    {
+        using var harness = new Harness();
+        harness.Enqueue(Work(BenchmarkWorkKind.Primary));
+        _ = harness.Store.RecoverRunsOnStartupAsync(Arg.Any<CancellationToken>())
+                   .Returns(_ => Task.FromException<IReadOnlyList<BenchmarkRunRecord>>(new InvalidOperationException("recovery failed")));
+        harness.Signal.CancelOnWaitNumber = 3;
+
+        await harness.RunToIdleAsync();
+
+        AssertEx.Equal(expected: 0, harness.ClaimCount,
+            "Rows the previous process left Running stay orphaned for this process's lifetime if the queue claims past a failed recovery.");
+        await harness.RunExecutor.DidNotReceiveWithAnyArgs().ExecuteAsync(default!, default);
     }
 
     /// <summary>

@@ -211,13 +211,10 @@ public sealed record DevelopmentExecutionSnapshot(
     ///     <see cref="PreviousRoundFeedback" /> is, so it costs no migration and reaches the coder and the reviewer
     ///     through the one channel both already read.
     ///     <para>
-    ///         ponytail: UNBOUNDED IN TIME, unlike <see cref="PreviousRoundFeedback" />, which only answers while the
-    ///         task sits where a rework round runs. A DevTask node that drove the project's own pre-existing task
-    ///         leaves this behind, so later MANUAL Dev Mode rounds on that task still carry the workflow's last policy
-    ///         snapshot. Kept: rule sets are project-scoped, so the text is not wrong for that task, only frozen at the
-    ///         run that applied it. Bounding it would need Dev Mode to know which node run is live, which is the
-    ///         workflow's knowledge and not the task's — add that only if a stale policy is ever observed to mislead a
-    ///         round.
+    ///         Bounded by the node run that applied it, not by the task: the workflow records its resolution on every
+    ///         dispatch — an EMPTY one included — and records an empty one again when it settles the node run. So a
+    ///         later workflow that resolves no policy, and a manual Dev Mode round after the workflow has finished,
+    ///         both answer nothing rather than replaying a snapshot nothing is enforcing any more.
     ///     </para>
     /// </summary>
     string? WorkflowPolicyText = null);
@@ -361,6 +358,12 @@ public interface IDevelopmentStore
     ///     <para>
     ///         The text goes into the event's encrypted detail. It is a SNAPSHOT the node run already made: this store
     ///         never reads a rule set, and what it is handed is what the workflow's audit permanently names by hash.
+    ///     </para>
+    ///     <para>
+    ///         A BLANK <paramref name="policyText" /> with no rule sets is the clear, and the snapshot reads the latest
+    ///         row — so recording one revokes the policy for every round after it. That is how the injection is bounded
+    ///         in time without a second event type: a workflow that resolves nothing, and one that has settled its node
+    ///         run, both say so on the same log the injection was written to.
     ///     </para>
     /// </summary>
     Task<DevelopmentOperationResult> RecordWorkflowPolicyAsync(Guid taskId,

@@ -158,10 +158,10 @@ public sealed partial class DevelopmentStore
     ///         resolution is the one that governs the round about to run.
     ///     </para>
     ///     <para>
-    ///         ponytail: NO STATUS BOUND, unlike <see cref="PreviousRoundFeedbackAsync" />, whose event only counts
-    ///         while it left the task where a coder round runs. The snapshot therefore outlives the run that applied
-    ///         it: a later manual round on the operator's own task still reads it. Bounding it would need Dev Mode to
-    ///         know which node run is live, which is the workflow's knowledge and not the task's.
+    ///         A latest row with BLANK text is the workflow saying nothing applies any more, and answers null. That is
+    ///         what bounds the snapshot in time: the executor records on EVERY dispatch — an empty resolution
+    ///         included — and again when it settles the node run, so neither a workflow that resolved no policy nor one
+    ///         that has finished governs the rounds that come after it.
     ///     </para>
     /// </summary>
     private async Task<string?> WorkflowPolicyTextAsync(Guid taskId, CancellationToken cancellationToken)
@@ -178,7 +178,8 @@ public sealed partial class DevelopmentStore
 
         try
         {
-            return JsonSerializer.Deserialize<WorkflowPolicyDetail>(detail, JsonOptions)?.PolicyText;
+            var policyText = JsonSerializer.Deserialize<WorkflowPolicyDetail>(detail, JsonOptions)?.PolicyText;
+            return string.IsNullOrWhiteSpace(policyText) ? null : policyText;
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {

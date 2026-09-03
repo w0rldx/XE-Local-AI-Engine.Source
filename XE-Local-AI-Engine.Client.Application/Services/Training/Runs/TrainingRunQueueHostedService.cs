@@ -59,9 +59,22 @@ public sealed class TrainingRunQueueHostedService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await RecoverAsync(stoppingToken).ConfigureAwait(false);
+        var recovered = false;
         while (!stoppingToken.IsCancellationRequested)
         {
+            // Nothing is CLAIMED until recovery has succeeded once — the benchmark queue's rule, for the benchmark
+            // queue's reason: only recovery terminalizes the rows the previous process left Running, and a loop that
+            // claims past a failed recovery orphans them for this process's whole lifetime.
+            if (!recovered)
+            {
+                recovered = await RecoverAsync(stoppingToken).ConfigureAwait(false);
+                if (!recovered)
+                {
+                    await WaitAsync(stoppingToken).ConfigureAwait(false);
+                    continue;
+                }
+            }
+
             TrainingWorkClaim? claim = null;
             IDisposable? admission = null;
             ILlamaServerRuntimeMutationLease? lease = null;
@@ -187,22 +200,28 @@ public sealed class TrainingRunQueueHostedService(
         }
     }
 
-    private async Task RecoverAsync(CancellationToken stoppingToken)
+    /// <summary>Answers whether recovery SUCCEEDED; the loop claims nothing until it has.</summary>
+    private async Task<bool> RecoverAsync(CancellationToken stoppingToken)
     {
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
-            foreach (var runId in await store.RecoverOnStartupAsync(stoppingToken).ConfigureAwait(false))
+            var recovered = await store.RecoverOnStartupAsync(stoppingToken).ConfigureAwait(false);
+            foreach (var runId in recovered)
             {
                 // A buffer that survived into this process cannot describe the new run; drop it so a reconnecting
                 // client is told to replay rather than shown stale progress from a run that no longer exists.
                 _events.EvictPlaintext(runId);
             }
+
+            _logger.LogInformation("Recovered {RunCount} interrupted training runs.", recovered.Count);
+            return true;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            _logger.LogError(exception, "Training run startup recovery failed; the queue continues with unrecovered work items.");
+            _logger.LogError(exception, "Training run startup recovery failed; retrying after the poll interval before any work is claimed.");
+            return false;
         }
     }
 }

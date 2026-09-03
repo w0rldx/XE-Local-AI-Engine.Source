@@ -94,11 +94,18 @@ public sealed partial class DevelopmentStore
         IReadOnlyList<DevelopmentWorkflowRuleSetReference> ruleSets,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(policyText);
+        ArgumentNullException.ThrowIfNull(policyText);
         ArgumentNullException.ThrowIfNull(ruleSets);
-        if (ruleSets.Count == 0)
+
+        // Blank text is the CLEAR, and it is the whole event vocabulary this needs: the snapshot query answers off the
+        // LATEST row, so a row saying "nothing applies" is exactly a row that revokes the one before it. A second event
+        // type would have to be understood by that query, by the docs catalog and by every reader of the log to say the
+        // same thing. What a clear must NOT do is name rule sets it is not applying.
+        var cleared = string.IsNullOrWhiteSpace(policyText);
+        if (cleared ? ruleSets.Count != 0 : ruleSets.Count == 0)
         {
-            throw new ArgumentException("A workflow-policy event must name at least one rule set.", nameof(ruleSets));
+            throw new ArgumentException("A workflow-policy event must name at least one rule set, and a cleared one must name none.",
+                nameof(ruleSets));
         }
 
         var projectId = await ProjectIdForTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
@@ -115,7 +122,7 @@ public sealed partial class DevelopmentStore
                     operationId,
                     WorkflowPolicyOperationPhase,
                     "WorkflowPolicyApplied",
-                    "Applied",
+                    cleared ? "Cleared" : "Applied",
                     ruleSets.Count.ToString(CultureInfo.InvariantCulture),
                     version: 1,
                     artifactId: null,

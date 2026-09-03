@@ -66,6 +66,48 @@ public sealed class DatasetGenerationHostedServiceTests
             "The queue must report the escaped executor failure rather than dying silently.");
     }
 
+    /// <summary>
+    ///     The benchmark queue's rule, mirrored: recovery is the only thing that terminalizes the rows the previous
+    ///     process left Running, so the loop survives a failed recovery AND claims nothing until one has succeeded.
+    /// </summary>
+    [Test]
+    public async Task ExecuteAsync_WhenStartupRecoveryThrows_ClaimsNothingUntilARetrySucceeds()
+    {
+        using var harness = new Harness();
+        var work = Work();
+        harness.Enqueue(work);
+        var attempts = 0;
+        _ = harness.Store.RecoverOnStartupAsync(Arg.Any<CancellationToken>())
+                   .Returns(_ => ++attempts == 1
+                       ? Task.FromException<IReadOnlyList<Guid>>(new InvalidOperationException("recovery failed"))
+                       : Task.FromResult<IReadOnlyList<Guid>>([]));
+        harness.Signal.CancelOnWaitNumber = 2;
+
+        await harness.RunToIdleAsync();
+
+        AssertEx.Equal(expected: 2, attempts, "A failed recovery is retried on the poll interval rather than abandoned.");
+        await harness.Executor.Received(1).ExecuteAsync(work, Arg.Any<CancellationToken>());
+        AssertEx.True(harness.Logger.HasEntry(LogLevel.Error, "startup recovery failed"),
+            "A failed recovery must be reported, not swallowed.");
+    }
+
+    /// <summary>The half the guard alone never gave: nothing is claimed while recovery is still failing.</summary>
+    [Test]
+    public async Task ExecuteAsync_WhileStartupRecoveryKeepsFailing_NeverClaims()
+    {
+        using var harness = new Harness();
+        harness.Enqueue(Work());
+        _ = harness.Store.RecoverOnStartupAsync(Arg.Any<CancellationToken>())
+                   .Returns(_ => Task.FromException<IReadOnlyList<Guid>>(new InvalidOperationException("recovery failed")));
+        harness.Signal.CancelOnWaitNumber = 3;
+
+        await harness.RunToIdleAsync();
+
+        AssertEx.Equal(expected: 0, harness.ClaimCount,
+            "Rows the previous process left Running stay orphaned for this process's lifetime if the queue claims past a failed recovery.");
+        await harness.Executor.DidNotReceiveWithAnyArgs().ExecuteAsync(default!, default);
+    }
+
     private static async Task<DatasetGenerationClaimedWork?> CancelThenThrowAsync(CancellationTokenSource cancellation)
     {
         await cancellation.CancelAsync();

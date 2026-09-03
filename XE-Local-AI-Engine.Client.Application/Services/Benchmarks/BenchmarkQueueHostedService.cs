@@ -24,9 +24,23 @@ public sealed class BenchmarkQueueHostedService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await RecoverAsync(stoppingToken).ConfigureAwait(false);
+        var recovered = false;
         while (!stoppingToken.IsCancellationRequested)
         {
+            // Nothing is CLAIMED until recovery has succeeded once. Guarding the throw kept the host up, but the loop
+            // then ran on regardless and the rows the previous process left Running — which only recovery
+            // terminalizes — stayed orphaned for this process's whole lifetime, stalling the single consumer behind
+            // them. The poll interval is the backoff.
+            if (!recovered)
+            {
+                recovered = await RecoverAsync(stoppingToken).ConfigureAwait(false);
+                if (!recovered)
+                {
+                    await signal.WaitAsync(_pollInterval, stoppingToken).ConfigureAwait(false);
+                    continue;
+                }
+            }
+
             BenchmarkClaimedWork? work = null;
             // The gate is taken BEFORE the claim and held through execution. Refusing at the CLAIM rather than at the
             // executor keeps queued benchmark work queued: it resumes on the next poll once the exclusive holder
@@ -131,8 +145,12 @@ public sealed class BenchmarkQueueHostedService(
     ///     Guarded like the loop below and like both sibling queues: this runs BEFORE the first claim, so a throw here
     ///     ends ExecuteAsync and, under the default BackgroundServiceExceptionBehavior.StopHost, takes the node down —
     ///     a transient database failure at startup must cost unrecovered work items, not the host.
+    ///     <para>
+    ///         Answers whether it SUCCEEDED, because a failure must not cost the work items either: the caller retries
+    ///         on the poll interval and claims nothing until this returns true.
+    ///     </para>
     /// </summary>
-    private async Task RecoverAsync(CancellationToken cancellationToken)
+    private async Task<bool> RecoverAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -157,14 +175,16 @@ public sealed class BenchmarkQueueHostedService(
             if (planner is null)
             {
                 logger.LogWarning("No pairwise planner is registered; skipping pairwise reconciliation on startup.");
-                return;
+                return true;
             }
 
             await planner.ReconcilePairwiseAsync(cancellationToken).ConfigureAwait(false);
+            return true;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.LogError(exception, "Benchmark startup recovery failed; the queue continues with unrecovered work items.");
+            logger.LogError(exception, "Benchmark startup recovery failed; retrying after the poll interval before any work is claimed.");
+            return false;
         }
     }
 }

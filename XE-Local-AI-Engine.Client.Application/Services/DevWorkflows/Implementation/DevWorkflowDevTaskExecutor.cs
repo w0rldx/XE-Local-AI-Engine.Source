@@ -164,15 +164,12 @@ internal sealed class DevWorkflowDevTaskExecutor
 
             taskId = resolved;
 
-            // The rule sets this node run RECORDED, put where Dev Mode's own prompts read them: once, at the moment
-            // the node run binds a task, and never again once it names one. A run re-binding the same task after a
-            // crash meets the store's idempotency on the same deterministic operation id rather than injecting twice.
-            // INSIDE the try, because a task deleted between the resolve and this write is the same decided fact the
-            // catch below stands the node down for.
-            if (nodeRun.DevelopmentTaskId is null)
-            {
-                await RecordPolicyAsync(development, run, nodeRun, taskId, cancellationToken).ConfigureAwait(false);
-            }
+            // The rule sets this node run RECORDED, put where Dev Mode's own prompts read them. On EVERY dispatch, not
+            // only the first bind: the operation id is keyed to this node-run ATTEMPT, so a replayed tick meets the
+            // store's idempotency, while a fix loop that routes the node run back around re-applies the policy the
+            // settle below cleared. INSIDE the try, because a task deleted between the resolve and this write is the
+            // same decided fact the catch below stands the node down for.
+            await RecordPolicyAsync(development, run, nodeRun, taskId, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is ArgumentException or KeyNotFoundException)
         {
@@ -286,9 +283,10 @@ internal sealed class DevWorkflowDevTaskExecutor
     ///     reviewer prompts read policy through — the same event-derived route <c>PreviousRoundFeedback</c> travels, so
     ///     it costs no column and no migration.
     ///     <para>
-    ///         Nothing applied writes nothing: an empty event would claim a resolution the node run does not have. So
-    ///         does a resolution whose bodies are all missing or all too long to fit — the render is what decides, and
-    ///         it logs each section it dropped.
+    ///         Nothing applied records an EMPTY resolution rather than nothing at all — and so does a resolution whose
+    ///         bodies are all missing or all too long to fit, the render being what decides and what logs each section
+    ///         it dropped. Writing nothing was the leak: the snapshot answers off the latest row, so a workflow that
+    ///         resolved no policy would leave the PREVIOUS one governing rounds it never applied to.
     ///     </para>
     /// </summary>
     private async Task RecordPolicyAsync(IDevelopmentStore development,
@@ -298,21 +296,52 @@ internal sealed class DevWorkflowDevTaskExecutor
         CancellationToken cancellationToken)
     {
         var applied = DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson);
-        if (applied.Count == 0)
-        {
-            return;
-        }
+        var policyText = applied.Count == 0
+            ? string.Empty
+            : DevWorkflowPolicyText.Render(applied, MaxPolicyCharacters, occupied: 0, nodeRun.Id, _logger).Trim();
+        await WritePolicyAsync(development,
+                run,
+                nodeRun,
+                taskId,
+                policyText,
+                policyText.Length == 0
+                    ? []
+                    : [.. applied.Select(entry => new DevelopmentWorkflowRuleSetReference(entry.Id, entry.Name, entry.ContentSha256))],
+                "devtask-policy",
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
 
-        var policyText = DevWorkflowPolicyText.Render(applied, MaxPolicyCharacters, occupied: 0, nodeRun.Id, _logger).Trim();
-        if (policyText.Length == 0)
-        {
-            return;
-        }
+    /// <summary>
+    ///     Revokes the injection when this node run is finished with the task, so what governed the workflow's rounds
+    ///     does not go on governing the operator's own later ones. Called only where the TASK itself has settled —
+    ///     approved, applied, cancelled, or blocked — never on a failure the retry policy may still re-attempt, because
+    ///     that node run is coming back and would come back ungoverned.
+    /// </summary>
+    private static async Task ClearPolicyAsync(IDevelopmentStore development,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        Guid taskId,
+        CancellationToken cancellationToken) =>
+        await WritePolicyAsync(development, run, nodeRun, taskId, string.Empty, [], "devtask-policy-clear", cancellationToken).ConfigureAwait(false);
 
+    /// <summary>
+    ///     One policy write, keyed to this node-run ATTEMPT and phase: a replayed tick meets the store's idempotency and
+    ///     appends nothing, while the next attempt of the same node run writes its own row.
+    /// </summary>
+    private static async Task WritePolicyAsync(IDevelopmentStore development,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        Guid taskId,
+        string policyText,
+        IReadOnlyList<DevelopmentWorkflowRuleSetReference> ruleSets,
+        string phase,
+        CancellationToken cancellationToken)
+    {
         _ = await development.RecordWorkflowPolicyAsync(taskId,
-                                 DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, ChildTaskAttempt, "devtask-policy"),
+                                 DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, phase),
                                  policyText,
-                                 [.. applied.Select(entry => new DevelopmentWorkflowRuleSetReference(entry.Id, entry.Name, entry.ContentSha256))],
+                                 ruleSets,
                                  cancellationToken)
                              .ConfigureAwait(false);
     }
@@ -522,6 +551,7 @@ internal sealed class DevWorkflowDevTaskExecutor
                 // A re-attempt with no routed failure behind it succeeds immediately, and that is the honest answer
                 // rather than a shortcut: nothing has said this implementation is wrong, and the claim the node is
                 // making — this task is implemented and waiting to be applied — is still true.
+                await ClearPolicyAsync(development, run, nodeRun, taskId, cancellationToken).ConfigureAwait(false);
                 return await SettleAsync(store,
                         run,
                         nodeRun,
@@ -534,6 +564,7 @@ internal sealed class DevWorkflowDevTaskExecutor
                     .ConfigureAwait(false);
 
             case DevelopmentTaskStatus.Cancelled:
+                await ClearPolicyAsync(development, run, nodeRun, taskId, cancellationToken).ConfigureAwait(false);
                 return await SettleAsync(store,
                         run,
                         nodeRun,
@@ -549,7 +580,9 @@ internal sealed class DevWorkflowDevTaskExecutor
 
                 // The chain gave up on its own terms — its review rounds ran out, or an operator stood it down. Another
                 // node-run attempt would re-drive a task that is not going anywhere, so this is the class that goes
-                // straight to a human.
+                // straight to a human. BudgetExhausted is not a retryable class, so this settle is terminal and the
+                // clear cannot strand a re-attempt.
+                await ClearPolicyAsync(development, run, nodeRun, taskId, cancellationToken).ConfigureAwait(false);
                 return await _retries.SettleFailureAsync(store,
                         graph,
                         run,

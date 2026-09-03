@@ -187,6 +187,63 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     }
 
     /// <summary>
+    ///     What bounds the injection in time: a policy event with BLANK text revokes the one before it. The snapshot
+    ///     answers off the latest row, so both the settle's explicit clear and a later workflow that resolved nothing
+    ///     stop the earlier policy governing rounds it was never applied to — and no second event type is needed to say
+    ///     it. A clear that named rule sets would be claiming an injection, so the store refuses one.
+    /// </summary>
+    [Test]
+    public async Task ABlankWorkflowPolicyRevokesTheOneBeforeItAndCannotNameRuleSets()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var ruleSets = new[] { new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash") };
+
+        var reworking = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), DevelopmentTaskStatus.ChangesRequested, version))
+                                   .ConfigureAwait(false);
+        var inProgress = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                        Guid.NewGuid(),
+                                        DevelopmentTaskStatus.InProgress,
+                                        reworking.Version))
+                                    .ConfigureAwait(false);
+        var attemptId = Guid.NewGuid();
+        _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
+                           attemptId,
+                           Guid.NewGuid(),
+                           DevelopmentAttemptRole.Coder,
+                           "local-model",
+                           "local",
+                           inProgress.Version))
+                       .ConfigureAwait(false);
+
+        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), Policy, ruleSets).ConfigureAwait(false);
+        AssertEx.Equal(Policy, (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).WorkflowPolicyText);
+
+        // The clear a settling node run writes.
+        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), string.Empty, []).ConfigureAwait(false);
+        AssertEx.Null((await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).WorkflowPolicyText,
+            "a cleared policy governs nothing that comes after it.");
+
+        // A later node run that DOES resolve one governs again — the clear is not a permanent kill.
+        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), Policy, ruleSets).ConfigureAwait(false);
+        AssertEx.Equal(Policy, (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).WorkflowPolicyText);
+
+        // And a later node run that resolves NOTHING records an empty applied event, which reads the same as a clear.
+        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), "   ", []).ConfigureAwait(false);
+        AssertEx.Null((await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).WorkflowPolicyText,
+            "a workflow that resolved no policy must not leave the previous one governing.");
+
+        _ = await AssertEx.ThrowsAsync<ArgumentException>(() => store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), string.Empty, ruleSets),
+                              "a clear that named rule sets would be claiming an injection it is not making.")
+                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<ArgumentException>(() => store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), Policy, []),
+                              "and an injection still has to name what composed it.")
+                          .ConfigureAwait(false);
+    }
+
+    /// <summary>
     ///     The hop that starts the new round is the hop that invalidates the old evidence, and it happens BEFORE any
     ///     attempt can read it: the interim <c>ChangesRequested</c> window leaves the reports alone, and
     ///     <c>ChangesRequested → InProgress</c> — which <c>StartNextActionAsync</c> makes before it starts a coder

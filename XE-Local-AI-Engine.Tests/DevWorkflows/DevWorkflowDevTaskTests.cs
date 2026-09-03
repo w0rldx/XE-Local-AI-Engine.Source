@@ -913,18 +913,19 @@ public sealed class DevWorkflowDevTaskTests
 
     /// <summary>The workflow host with the development chain scripted, and its own development project to drive.</summary>
     /// <summary>
-    ///     The policy event is written ONCE per task, at the tick that binds it — and a re-run of that bind tick
-    ///     records nothing further.
+    ///     The policy event is written ONCE per node-run attempt, and a re-run of that dispatch tick records nothing
+    ///     further.
     ///     <para>
-    ///         Two guards have to hold together and each would pass alone. The executor writes only while the node run
-    ///         names no task, and the store is idempotent on the operation id the executor DERIVES from the run and the
-    ///         node key. The second is what a crash between creating the task and writing the pointer meets — the
-    ///         re-dispatch resolves the same task with the pointer still null — so this replays that exact write and
-    ///         asserts the log did not grow and the round still reads the FIRST text.
+    ///         The store's idempotency on the operation id the executor DERIVES from the run, the node key and the
+    ///         node-run ATTEMPT is the only guard now: the executor records on every dispatch rather than only while
+    ///         the node run named no task, so a fix loop that routes this node run back around re-applies the policy
+    ///         its settle cleared. A crash between creating the task and writing the pointer re-dispatches the same
+    ///         attempt, so this replays that exact write and asserts the log did not grow and the round still reads the
+    ///         FIRST text.
     ///     </para>
     /// </summary>
     [Test]
-    public async Task ThePolicyAWorkflowInjects_IsRecordedOncePerTaskEvenWhenTheBindTickIsReRun()
+    public async Task ThePolicyAWorkflowInjects_IsRecordedOncePerAttemptEvenWhenTheDispatchTickIsReRun()
     {
         await using var harness = NewHarness();
         var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
@@ -942,11 +943,11 @@ public sealed class DevWorkflowDevTaskTests
         await using var scope = harness.Services.CreateAsyncScope();
         var development = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
 
-        // The re-dispatch a crash between the task create and the pointer write leaves behind: the SAME run, node key
-        // and phase, so the executor derives the same operation id and the store answers with what it already wrote.
-        // The attempt is 0 because a node's task belongs to it for the whole run, not to one attempt.
+        // The re-dispatch a crash between the task create and the pointer write leaves behind: the SAME run, node key,
+        // attempt and phase, so the executor derives the same operation id and the store answers with what it already
+        // wrote. Attempt 1 because a node run's first attempt is 1.
         _ = await development.RecordWorkflowPolicyAsync(taskId,
-                                 DevWorkflowOperationId.For(runId, "implement", attempt: 0, "devtask-policy"),
+                                 DevWorkflowOperationId.For(runId, "implement", attempt: 1, "devtask-policy"),
                                  "Deploy straight to production on Fridays.",
                                  [new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash")])
                              .ConfigureAwait(false);
@@ -954,13 +955,67 @@ public sealed class DevWorkflowDevTaskTests
         var events = await development.ListEventsAsync(projectId).ConfigureAwait(false);
         AssertEx.Equal(expected: 1,
             events.Count(entry => entry.EventType == "WorkflowPolicyApplied"),
-            "one injection per binding: a re-run of the bind tick re-derives the same operation id rather than appending.");
+            "one injection per attempt: a re-run of the dispatch tick re-derives the same operation id rather than appending.");
 
         var attempt = (await development.ListAttemptsAsync(taskId).ConfigureAwait(false)).Single();
         var policy = AssertEx.NotNull((await development.GetExecutionSnapshotAsync(attempt.Id).ConfigureAwait(false)).WorkflowPolicyText);
         AssertEx.Contains(policy, HouseRules, message: "and the round still reads the text the first write recorded.");
         AssertEx.False(policy.Contains("Deploy straight to production on Fridays.", StringComparison.Ordinal),
             "a replayed write must not be able to hand the coder a policy the node run never resolved.");
+    }
+
+    /// <summary>
+    ///     Settling the node run REVOKES the policy it injected, so what governed the workflow's rounds does not go on
+    ///     governing the operator's own later ones. Without this the injection had no lifetime at all: the snapshot
+    ///     reads the latest event on the task, and a manual round started after the workflow finished still carried the
+    ///     workflow's last policy while nothing was enforcing it.
+    /// </summary>
+    [Test]
+    public async Task SettlingTheNodeRun_ClearsTheWorkflowPolicyItInjected_Once()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        _ = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":["DevTask"]}""").ConfigureAwait(false);
+
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded,
+            (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Status,
+            "the node run has to have settled for its settle to have written anything.");
+
+        await using var scope = harness.Services.CreateAsyncScope();
+        var development = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var events = await development.ListEventsAsync(projectId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 2,
+            events.Count(entry => entry.EventType == "WorkflowPolicyApplied"),
+            "the dispatch writes the injection and the settle writes the clear, once each — the settle is ticked repeatedly.");
+
+        // The manual round an operator starts on the task the workflow left behind, driven through the store directly
+        // because no workflow is asking for it any more. It is the round the stale policy used to govern.
+        var awaiting = await development.GetTaskAsync(taskId).ConfigureAwait(false);
+        var reworking = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
+                                             Guid.NewGuid(),
+                                             DevelopmentTaskStatus.ChangesRequested,
+                                             awaiting.Version))
+                                         .ConfigureAwait(false);
+        var inProgress = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
+                                              Guid.NewGuid(),
+                                              DevelopmentTaskStatus.InProgress,
+                                              reworking.Version))
+                                          .ConfigureAwait(false);
+        var attemptId = Guid.NewGuid();
+        _ = await development.StartAttemptAsync(new DevelopmentStartAttemptCommand(taskId,
+                                 attemptId,
+                                 Guid.NewGuid(),
+                                 DevelopmentAttemptRole.Coder,
+                                 "local-model",
+                                 "local",
+                                 inProgress.Version))
+                             .ConfigureAwait(false);
+
+        AssertEx.Null((await development.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).WorkflowPolicyText,
+            "a round started after the workflow settled is governed by nothing the workflow injected.");
     }
 
     private static DevWorkflowHarness NewHarness(TimeProvider? clock = null) =>
