@@ -73,6 +73,42 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
         _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task AddIntegrationInvocationAsync(IntegrationInvocationAuditInput input, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        var entity = new AgentExecutionLog
+        {
+            Id = Guid.NewGuid(),
+            RecordKind = (int)AgentExecutionLogRecordKind.IntegrationInvocation,
+            SchemaVersion = 0,
+            // Same reason kind 2 binds Guid.Empty: an integration invocation is not per-agent telemetry, so it shares
+            // one retention bucket and never surfaces in the per-agent diagnostics view (kind 0) or the run-envelope
+            // ledger (kind 1).
+            AgentDefinitionId = Guid.Empty,
+            // ConversationId stays null even though every execution owns a conversation. ConversationFootprintPurge
+            // deletes execution logs by conversation_id, so a null keeps a conversation purge from reaching the audit
+            // row; these age out with the execution-log retention sweep instead. Every value on the row is a trigger
+            // name, a key prefix, an id or a status, so nothing content-bearing survives that choice.
+            ConversationId = null,
+            InvocationId = input.InvocationId,
+            RequestId = input.RequestId,
+            // Reuse existing columns without a schema change: trigger name → model_name, requesting key prefix →
+            // provider, target agent definition id → config_hash.
+            ModelName = input.TriggerName,
+            Provider = input.KeyPrefix,
+            ConfigHash = input.TargetAgentDefinitionId.ToString("N"),
+            TerminalStatus = input.TerminalStatus,
+            TraceId = input.TraceId,
+            Success = string.Equals(input.TerminalStatus, "completed", StringComparison.Ordinal),
+            LatencyMs = input.LatencyMs,
+            CreatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+        };
+
+        _ = _dbContext.AgentExecutionLogs.Add(entity);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<IReadOnlyList<AgentRunEnvelopeRecord>> ListRunEnvelopesAsync(Guid? conversationId, int limit, int offset = 0, CancellationToken cancellationToken = default)
     {
         // Floor the page bounds so a caller passing 0/negative still returns a sane (empty) page rather than throwing.

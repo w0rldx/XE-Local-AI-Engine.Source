@@ -1,9 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Node-scoped, append-only persistence for agent execution telemetry (adaptive memory diagnostics). Rows hold
-///     metadata only — latency/tokens/success/errorClass/configHash plus link ids — and are NEVER encrypted; no message
-///     content is stored here. The store owns id/timestamp stamping; it performs no content validation.
+///     Node-scoped, append-only persistence for agent execution telemetry. FOUR producers share this table, each
+///     discriminated by <see cref="AgentExecutionLogRecordKind" />: adaptive-memory diagnostics, the durable chat
+///     run envelope, the tool-approval decision audit and the integration invocation audit. Rows hold metadata only —
+///     latency/tokens/success/errorClass/configHash plus link ids — and are NEVER encrypted; no message content is
+///     stored here. Column meanings are overloaded across kinds, so <b>every read and aggregate must filter by
+///     <c>record_kind</c></b>. The store owns id/timestamp stamping; it performs no content validation.
 /// </summary>
 public interface IAgentExecutionLogStore
 {
@@ -12,6 +15,14 @@ public interface IAgentExecutionLogStore
     ///     assigning <c>Id</c> and <c>CreatedAtUtc</c>, and returns the stored record.
     /// </summary>
     Task<AgentExecutionLogRecord> AddAsync(AgentExecutionLogInput input, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Appends a single integration-invocation audit row (<see cref="AgentExecutionLogRecordKind.IntegrationInvocation" />),
+    ///     assigning <c>Id</c> and <c>CreatedAtUtc</c>. Metadata only — no inputs, no outputs, no message content,
+    ///     never encrypted. <c>ConversationId</c> stays null even though every execution owns a conversation, so a
+    ///     conversation purge does not reach these rows; they age out with the execution-log retention sweep instead.
+    /// </summary>
+    Task AddIntegrationInvocationAsync(IntegrationInvocationAuditInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Appends a single tool-approval DECISION audit row (<see cref="AgentExecutionLogRecordKind.ApprovalDecision" />),
@@ -138,8 +149,8 @@ public static class AgentRunEnvelope
 }
 
 /// <summary>
-///     Discriminates the producer of an <c>agent_execution_logs</c> row. Retention operates on the whole table, so both
-///     kinds are pruned by the same sweep; the discriminator only separates the diagnostics read view from the run ledger.
+///     Discriminates the producer of an <c>agent_execution_logs</c> row. Retention operates on the whole table, so all
+///     four kinds are pruned by the same sweep; the discriminator only separates each read view from the others.
 /// </summary>
 public enum AgentExecutionLogRecordKind
 {
@@ -155,7 +166,18 @@ public enum AgentExecutionLogRecordKind
     ///     diagnostics view (kind 0) and the run-envelope ledger (kind 1) since each read path filters to its own kind;
     ///     pruned by the same whole-table retention sweep.
     /// </summary>
-    ApprovalDecision = 2
+    ApprovalDecision = 2,
+
+    /// <summary>
+    ///     External-integration invocation audit: one content-free row per integration execution at terminalization.
+    ///     Reuses existing columns rather than adding a table — trigger name into <c>ModelName</c>, the requesting key
+    ///     prefix into <c>Provider</c>, the target agent definition id into <c>ConfigHash</c> — with
+    ///     <c>InvocationId</c>, <c>RequestId</c>, <c>TerminalStatus</c>, <c>TraceId</c> and <c>LatencyMs</c> in their
+    ///     own columns. Every value is a trigger name, a key prefix, an id or a status: no input, no output and no
+    ///     message reaches it. Like kind 2 it binds <c>AgentDefinitionId</c> to <c>Guid.Empty</c> so it shares one
+    ///     retention bucket and appears in no per-agent view.
+    /// </summary>
+    IntegrationInvocation = 3
 }
 
 /// <summary>
@@ -170,6 +192,23 @@ public sealed record ApprovalDecisionAuditInput(
     string Category,
     string Decision,
     string Source,
+    long LatencyMs);
+
+/// <summary>
+///     Fields supplied when appending an integration-invocation audit row. Metadata only — every value is a trigger
+///     name, a credential prefix, an id or a terminal status. <see cref="TerminalStatus" /> uses the existing
+///     envelope vocabulary (<c>completed</c> / <c>failed</c> / <c>cancelled</c>); <see cref="KeyPrefix" /> is audit
+///     metadata naming which of a principal's credentials sent the request, and answers no ownership question.
+///     <see cref="LatencyMs" /> is the accept-to-terminal wall clock in milliseconds.
+/// </summary>
+public sealed record IntegrationInvocationAuditInput(
+    Guid InvocationId,
+    Guid RequestId,
+    string TriggerName,
+    string KeyPrefix,
+    Guid TargetAgentDefinitionId,
+    string TerminalStatus,
+    string? TraceId,
     long LatencyMs);
 
 /// <summary>

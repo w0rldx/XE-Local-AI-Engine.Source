@@ -3,9 +3,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Append-only metadata log of a single agent run. Two producers share this table, distinguished by
-///     <see cref="RecordKind" />: adaptive-memory diagnostics (kind 0, one row per memory-enabled run) and the durable
-///     per-invocation run envelope (kind 1, one content-free row per ordinary chat invocation at terminalization).
+///     Append-only metadata log of a single agent run. FOUR producers share this table, distinguished by
+///     <see cref="RecordKind" />: adaptive-memory diagnostics (kind 0, one row per memory-enabled run), the durable
+///     per-invocation run envelope (kind 1, one content-free row per ordinary chat invocation at terminalization),
+///     the tool-approval decision audit (kind 2) and the external-integration invocation audit (kind 3).
+///     Every read and aggregate must filter by <see cref="RecordKind" />, because column meanings are overloaded
+///     across the four.
 ///     Holds NO message content — only latency/token/status telemetry plus ids that link back to the
 ///     already-encrypted chat tables. The whole row is plaintext (structural) and is NEVER encrypted;
 ///     <see cref="ErrorClass" /> is an exception type name (memory rows) or a <c>FailureCategory</c> enum name (envelope
@@ -16,8 +19,9 @@ internal sealed record class AgentExecutionLog
     public Guid Id { get; set; }
 
     /// <summary>
-    ///     Discriminates the row's producer: 0 = adaptive-memory diagnostics, 1 = chat run envelope. Mirrors
-    ///     <c>AgentExecutionLogRecordKind</c>. Existing rows backfill to 0. Plaintext (structural).
+    ///     Discriminates the row's producer: 0 = adaptive-memory diagnostics, 1 = chat run envelope,
+    ///     2 = tool-approval decision audit, 3 = integration invocation. Mirrors <c>AgentExecutionLogRecordKind</c>.
+    ///     Existing rows backfill to 0. Plaintext (structural).
     /// </summary>
     public int RecordKind { get; set; }
 
