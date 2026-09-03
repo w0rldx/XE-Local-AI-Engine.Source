@@ -620,18 +620,19 @@ public sealed class DevWorkflowAgentExecutorTests
     }
 
     /// <summary>
-    ///     A node that decomposes is told what the coder its tasks become can and cannot do, and a node that does not
-    ///     decompose is not. The gating is the half worth pinning: the paragraph is about the implementation lane, so
-    ///     appending it to every agent objective would spend the budget of nodes that never write a task on rules they
-    ///     cannot break — and the reason it exists at all is that four live runs died on slices with nothing to change.
+    ///     A node whose template expands into the implementation lane is told what the coder its tasks become can and
+    ///     cannot do, and a node that does not decompose is not. The gating is the half worth pinning: the paragraph is
+    ///     about the implementation lane, so appending it to every agent objective would spend the budget of nodes that
+    ///     never write a task on rules they cannot break — and the reason it exists at all is that four live runs died
+    ///     on slices with nothing to change.
     /// </summary>
     [Test]
-    public async Task TheObjective_ForANodeThatDecomposes_CarriesWhatEachTaskBecomes()
+    public async Task TheObjective_ForANodeThatDecomposesIntoDevTasks_CarriesWhatEachTaskBecomes()
     {
         // Two private hosts: each asserts on Objectives.Single(), which is a claim about every objective its fake was
         // handed, and the shared host would let one graph's node answer the other's assertion.
         await using var decomposing = new DevWorkflowHarness();
-        var decomposingRun = await decomposing.StartRunAsync(DevWorkflowGraphs.DecompositionSubtree, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
+        var decomposingRun = await decomposing.StartRunAsync(DevWorkflowGraphs.DecompositionIntoDevTasks, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
         _ = await decomposing.AdvanceUntilQuiescentAsync(decomposingRun).ConfigureAwait(false);
 
         await using var plain = new DevWorkflowHarness();
@@ -646,6 +647,58 @@ public sealed class DevWorkflowAgentExecutorTests
             message: "and the one an existing-test slice is refused by.");
         AssertEx.False(plain.Agent.Objectives.Single().Contains("What each task becomes", StringComparison.Ordinal),
             $"a node with no materialization writes no tasks and is told nothing about them: {plain.Agent.Objectives.Single()}");
+    }
+
+    /// <summary>
+    ///     A decomposition whose template subtree carries no <c>DevTask</c> is NOT handed the coder's contract. Its
+    ///     clones are ordinary sessions with no patch to export, and the materializer deliberately keeps them that way
+    ///     — it refuses a package for naming no changed files only when a DevTask is in the subtree — so telling that
+    ///     node every task must produce a code patch and a new test file binds it to rules nothing downstream applies.
+    /// </summary>
+    [Test]
+    public async Task TheObjective_ForADecompositionWithNoDevTaskInItsTemplate_OmitsWhatEachTaskBecomes()
+    {
+        // A private host for the same reason the pair above uses two: Objectives.Single() is a claim about every
+        // objective the fake was handed.
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionSubtree, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.False(harness.Agent.Objectives.Single().Contains("What each task becomes", StringComparison.Ordinal),
+            $"an Agent-and-Tool template produces no coder attempt, so its decomposition is told nothing about one: {harness.Agent.Objectives.Single()}");
+    }
+
+    /// <summary>
+    ///     And a template rooted in an Agent with a <c>DevTask</c> BELOW it is handed the contract all the same: the
+    ///     coder that cannot finish on an empty patch is one node further down, where reading only the template root
+    ///     would miss it. The same whole-subtree read the materializer refuses a package by.
+    /// </summary>
+    [Test]
+    public async Task TheObjective_ForADecompositionWithADevTaskBelowItsTemplateRoot_CarriesWhatEachTaskBecomes()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Contains(harness.Agent.Objectives.Single(),
+            "must finish by submitting a NON-EMPTY code change",
+            message: "the DevTask under the template root is a coder attempt, so its decomposition is bound by the coder's contract.");
+    }
+
+    /// <summary>
+    ///     The seeded <c>feature-development-v1</c> decomposition keeps the contract under the new gate: its template
+    ///     root <c>implement</c> is the DevTask, so the predicate the executor and the materializer share answers yes.
+    ///     Asserted on the predicate rather than on a run, because the seeded graph needs a project, six agents and a
+    ///     gate answered to reach its decompose node, and none of that is what this is about.
+    /// </summary>
+    [Test]
+    public void TheSeededFeatureDevelopmentDecomposition_StillMeetsTheContractGate()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph);
+        var materialization = AssertEx.NotNull(graph.Nodes["decompose"].Materialization, "the seeded decompose node declares a materialization.");
+
+        AssertEx.True(graph.TemplateSubtreeHasDevTask(materialization),
+            "the seeded template expands into a DevTask, so its decomposition is still told what each task becomes.");
     }
 
     /// <summary>

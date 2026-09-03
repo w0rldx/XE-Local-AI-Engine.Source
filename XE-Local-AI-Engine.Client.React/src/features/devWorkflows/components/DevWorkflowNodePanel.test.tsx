@@ -376,7 +376,8 @@ describe("DevWorkflowNodePanel", () => {
 		// precisely why an `All` join skips. The panel said the opposite of what was about to happen.
 		//
 		// C1 then split the third case back out: a Skipped source is WAIVED, because a skip a person chose is not a
-		// reason to throw away what its siblings carried. Three rows, two verdicts.
+		// reason to throw away what its siblings carried. WHICH skip that is comes off the row as `skipWaived`, which
+		// the server computes: the ancestor that decides it need not be in this list at all.
 		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Join", nodeKey: "join", label: "Join" }), {
 			run: devWorkflowRun({
 				graph: {
@@ -393,7 +394,7 @@ describe("DevWorkflowNodePanel", () => {
 				nodes: [
 					devWorkflowNodeRunSummary({ id: "n0", nodeKey: "join" }),
 					devWorkflowNodeRunSummary({ id: "n1", nodeKey: "landed", label: "Landed", status: "Succeeded" }),
-					devWorkflowNodeRunSummary({ id: "n2", nodeKey: "skipped", label: "Skipped one", status: "Skipped" }),
+					devWorkflowNodeRunSummary({ id: "n2", nodeKey: "skipped", label: "Skipped one", status: "Skipped", skipWaived: true }),
 					devWorkflowNodeRunSummary({ id: "n3", nodeKey: "failed", label: "Failed one", status: "Failed" }),
 					devWorkflowNodeRunSummary({ id: "n4", nodeKey: "cancelled", label: "Cancelled one", status: "Cancelled" }),
 					devWorkflowNodeRunSummary({ id: "n5", nodeKey: "live", label: "Live one", status: "Running" }),

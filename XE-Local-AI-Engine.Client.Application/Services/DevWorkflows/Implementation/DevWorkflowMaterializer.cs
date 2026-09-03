@@ -326,7 +326,7 @@ internal sealed class DevWorkflowMaterializer
         // free to root itself in an Agent that briefs a DevTask below it — and there the coder that cannot finish on an
         // empty patch is exactly as real, just one node further down. Read once, because it cannot differ between tasks
         // of one package.
-        var subtreeHasDevTask = subtree.Any(key => graph.Nodes.TryGetValue(key, out var templateNode) && templateNode.NodeType == DevWorkflowNodeType.DevTask);
+        var subtreeHasDevTask = graph.TemplateSubtreeHasDevTask(materialization);
 
         var ids = new HashSet<string>(StringComparer.Ordinal);
 

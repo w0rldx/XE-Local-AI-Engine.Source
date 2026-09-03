@@ -451,11 +451,14 @@ internal sealed class DevWorkflowAgentExecutor
         var objective = new StringBuilder();
         _ = objective.AppendLine(node.Instructions is { Length: > 0 } instructions ? instructions : $"Carry out the '{node.Label}' step of this development workflow.");
 
-        // A node that declares a materialization is writing work for the implementation lane, so it is told what that
-        // lane can and cannot do — in code, because it is the lane's contract rather than one template's strategy.
+        // A node whose template subtree carries a DevTask is writing work for the implementation lane, so it is told
+        // what that lane can and cannot do — in code, because it is the lane's contract rather than one template's
+        // strategy. Gated on the SAME predicate the materializer refuses a task package by: a template of Agent and
+        // Tool nodes produces no coder attempt, and telling its decomposition that every task must export a patch and
+        // add a new test file would bind it to rules nothing there enforces.
         // Uncapped like the instructions and counted the same way: it lands before the policy phase reads
         // objective.Length, so policy gets the room this leaves rather than overrunning the limit behind it.
-        if (node.Materialization is not null)
+        if (node.Materialization is { } materialization && graph.TemplateSubtreeHasDevTask(materialization))
         {
             _ = objective.AppendLine().AppendLine(DevWorkflowDecompositionContract.Text);
         }

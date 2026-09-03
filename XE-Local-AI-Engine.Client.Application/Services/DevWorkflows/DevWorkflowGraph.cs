@@ -218,6 +218,20 @@ internal sealed class DevWorkflowGraph
     }
 
     /// <summary>
+    ///     Whether a materialization's template carries a <c>DevTask</c> ANYWHERE. That is the node type whose clone
+    ///     becomes a Development coder attempt, so it is what decides whether the coder's contract applies at all: the
+    ///     attempt must export a NON-EMPTY patch, and a task written for it has to name the files it changes.
+    ///     <para>
+    ///         The whole subtree rather than its root, because a custom template is free to root itself in an Agent that
+    ///         briefs a DevTask below it. Shared between the materializer, which REFUSES a task package on it, and the
+    ///         agent executor, which appends the contract text on it, so what a decomposition is judged by cannot drift
+    ///         from what it was told.
+    ///     </para>
+    /// </summary>
+    public bool TemplateSubtreeHasDevTask(DevWorkflowMaterialization materialization) =>
+        TemplateSubtree(materialization).Any(key => Nodes.TryGetValue(key, out var node) && node.NodeType == DevWorkflowNodeType.DevTask);
+
+    /// <summary>
     ///     Parses the graph and enforces every structural rule. One method, because parsing IS the validation here: a
     ///     graph that survives this is one the dispatcher can route without a second opinion.
     ///     <para>

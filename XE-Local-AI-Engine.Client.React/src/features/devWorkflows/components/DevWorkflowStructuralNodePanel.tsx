@@ -134,12 +134,13 @@ export function DevWorkflowStructuralNodePanel({ nodeRun, nodeType, run }: DevWo
  * `Succeeded` source satisfies it; a `Failed` or `Cancelled` one kills it (DEAD), and under an `All` join one dead
  * edge is precisely why the join will SKIP rather than succeed.
  *
- * A `Skipped` source is the third answer (C1). The state machine WAIVES it — the join carries on — when nothing
- * upstream of it was dead, i.e. when a person chose the skip rather than a failure or a gate causing it. That
- * recursion needs every ancestor's row and the whole pinned graph, which this row does not have, so it approximates:
- * under `All` a Skipped dependency reads as waived. The approximation is wrong only for a skip that cascaded off
- * something dead, and there the panel understates rather than misleads — the DEAD sibling that caused it is in this
- * same list, badged dead, saying what will actually happen to the join.
+ * A `Skipped` source is the third answer (C1), and the ONE this row does not judge for itself. The state machine
+ * waives a skip — the join carries on — only when nothing upstream of it was dead, which is a recursion over every
+ * ancestor's row and the whole pinned graph. The ancestor that decides it need not be among the dependencies drawn
+ * here: in `failed → skipped → join` beside a succeeded sibling the runtime SKIPS the join, and a row reading its own
+ * status said the join would carry on. So the server sends the verdict as `skipWaived`, computed with the state
+ * machine's own predicate, and this row renders it: `true` waived, `false` dead. An older server sends neither, and
+ * then the badge says the row is skipped and claims nothing about the join.
  *
  * It is deliberately NOT `waitingOnNodeKeys` any more. The runtime sends that list only while the join itself is
  * Pending and drops every SETTLED source from it — so a Skipped branch arrived as "not waited on" and this row badged
@@ -168,8 +169,11 @@ function DependencyRow({
 	const settled = status !== undefined && isSettledDevWorkflowNodeStatus(status);
 	const isDead = settled && status !== "Succeeded";
 	// Under `Any` a skip is simply the branch that did not carry the join, which is the DEAD wording already. It is
-	// only `All` that changed: there, a skip is excused and the join goes on if a sibling arrived.
-	const isWaived = isDead && status === "Skipped" && joinSkipsOnDead;
+	// only `All` where the two skips part company, and there the answer is the SERVER's: `undefined` (an older server,
+	// or a graph it could not route) is a skip we say nothing about rather than one we guess at.
+	const skipUnderAll = isDead && status === "Skipped" && joinSkipsOnDead;
+	const isWaived = skipUnderAll && row?.skipWaived === true;
+	const isUnjudgedSkip = skipUnderAll && (row?.skipWaived === null || row?.skipWaived === undefined);
 	return (
 		<Group gap="xs" wrap="nowrap" data-testid={`dev-workflow-node-dependency-${nodeKey}`}>
 			<Text size="sm" style={{ flex: 1, minWidth: 0 }} lineClamp={1}>
@@ -183,6 +187,10 @@ function DependencyRow({
 			) : isWaived ? (
 				<Badge size="xs" variant="light" color="gray">
 					{t("pages.devWorkflows.structural.waivedAll", "skipped — the join carries on if a sibling succeeded")}
+				</Badge>
+			) : isUnjudgedSkip ? (
+				<Badge size="xs" variant="light" color="gray">
+					{t("pages.devWorkflows.structural.skipped", "skipped")}
 				</Badge>
 			) : isDead ? (
 				<Badge size="xs" variant="light" color="red">

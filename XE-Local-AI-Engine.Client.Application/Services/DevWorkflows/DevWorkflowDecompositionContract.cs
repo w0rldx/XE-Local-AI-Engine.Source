@@ -11,16 +11,24 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 ///     </para>
 ///     <para>
 ///         Owned here rather than baked into the seeded template because it describes the LANE, not one template's
-///         strategy: every materializing node in every graph an operator writes needs it, and a copy in each seeded
-///         string would drift from the code that enforces it and cost a seeder revision every time it were reworded.
+///         strategy: every node whose template expands into that lane, in every graph an operator writes, needs it, and
+///         a copy in each seeded string would drift from the code that enforces it and cost a seeder revision every
+///         time it were reworded.
 ///     </para>
 /// </summary>
 internal static class DevWorkflowDecompositionContract
 {
     /// <summary>
-    ///     Appended to a node's objective whenever it declares a materialization, straight after its own instructions
-    ///     and before anything the operator configured — the same standing as the instructions, because a task written
-    ///     against the wrong capabilities is worse than one written against no policy.
+    ///     Appended to a node's objective whenever its materialization template carries a <c>DevTask</c> anywhere in the
+    ///     subtree, straight after its own instructions and before anything the operator configured — the same standing
+    ///     as the instructions, because a task written against the wrong capabilities is worse than one written against
+    ///     no policy.
+    ///     <para>
+    ///         Not on every materializing node: a template of Agent and Tool nodes produces no coder attempt, so its
+    ///         decomposition would be told to make every task export a patch and add a new test file when nothing there
+    ///         asks for either. <c>DevWorkflowGraph.TemplateSubtreeHasDevTask</c> is the predicate, the same one the
+    ///         materializer refuses a task package by, so what a decomposition is told matches what it is judged by.
+    ///     </para>
     /// </summary>
     internal const string Text = """
                                  ## What each task becomes

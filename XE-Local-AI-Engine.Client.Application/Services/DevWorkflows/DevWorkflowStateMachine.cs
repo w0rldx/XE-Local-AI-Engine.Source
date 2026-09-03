@@ -169,6 +169,37 @@ internal static class DevWorkflowStateMachine
         return EdgeState(edge, graph, nodeRunsByKey, new Dictionary<string, bool>(StringComparer.Ordinal), new HashSet<string>(StringComparer.Ordinal));
     }
 
+    /// <summary>
+    ///     Which of a run's SKIPPED node runs the state machine WAIVES — the skips a person chose, as opposed to the
+    ///     ones that cascaded off something dead. Exactly the question <see cref="EdgeState" /> asks before it answers
+    ///     <c>Waived</c> rather than <c>Dead</c>, asked here for a whole run at once.
+    ///     <para>
+    ///         Exposed because the answer is NOT readable from a skipped row on its own, and a read model that guesses
+    ///         from status alone gets it backwards on the shape that matters: a failed node, a skip cascaded off it,
+    ///         and a join beside a succeeded sibling. There the runtime skips the join, and the failed ancestor need
+    ///         not be among the join's own dependencies for a client to see. Rather than mirror this recursion in the
+    ///         browser, the API sends the verdict — which is why this is the state machine's own predicate and not a
+    ///         second one shaped like it.
+    ///     </para>
+    ///     <para>
+    ///         ONE memo across every skipped row, not one per row: it is the same walk over the same graph, and
+    ///         re-running it per skip is what turns a wide fan-out of skips into a quadratic one.
+    ///     </para>
+    /// </summary>
+    public static IReadOnlySet<string> WaivedSkipNodeKeys(DevWorkflowGraph graph,
+        IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> nodeRunsByKey)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(nodeRunsByKey);
+
+        var waived = new Dictionary<string, bool>(StringComparer.Ordinal);
+        var resolving = new HashSet<string>(StringComparer.Ordinal);
+        return new HashSet<string>(nodeRunsByKey.Where(entry => entry.Value.Status == DevWorkflowNodeRunStatus.Skipped
+                                                                && IsWaived(entry.Key, graph, nodeRunsByKey, waived, resolving))
+                                                .Select(static entry => entry.Key),
+            StringComparer.Ordinal);
+    }
+
     private static DevWorkflowEdgeState EdgeState(DevWorkflowGraphEdge edge,
         DevWorkflowGraph graph,
         IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> nodeRunsByKey,
