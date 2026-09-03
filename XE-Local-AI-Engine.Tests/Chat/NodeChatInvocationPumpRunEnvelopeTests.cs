@@ -93,6 +93,60 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
     }
 
     [Test]
+    public async Task TerminalizeAsync_CarriesTheDispatchedTierFromTheInvocationState()
+    {
+        // The runner reports what `auto` resolved to onto the invocation state; the pump's only job is to copy both
+        // labels onto the envelope metadata, unchanged.
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Completed,
+            ModelUsed = "llama-3.1",
+            DispatchedTier = "fast",
+            AuthoredEffort = "auto"
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, "requested-model");
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Envelope != null
+                && request.Envelope.DispatchedTier == "fast"
+                && request.Envelope.AuthoredEffort == "auto"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_WhenTheTurnWasNotAuto_LeavesTheDispatchColumnsNull()
+    {
+        // Only an `auto` turn reports a dispatch, so an ordinary turn's envelope carries nulls — which is what makes
+        // `authored_effort IS NULL` the pre-`auto` population of the measurement.
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Completed,
+            ModelUsed = "llama-3.1"
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, "requested-model");
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Envelope != null
+                && request.Envelope.DispatchedTier == null
+                && request.Envelope.AuthoredEffort == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task TerminalizeInterruptedAsync_LeavesTheToolSchemaTokenEstimateNull()
     {
         // The interrupted/thin path has no invocation state to read the counters from, so the columns stay null rather

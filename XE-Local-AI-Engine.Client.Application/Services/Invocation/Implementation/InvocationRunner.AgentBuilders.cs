@@ -230,7 +230,7 @@ public sealed partial class InvocationRunner
     }
 
     /// <summary>
-    ///     Maps the runtime package onto the ten inputs the reasoning-effort dispatcher may read. Every field has one
+    ///     Maps the runtime package onto the inputs the reasoning-effort dispatcher may read. Every field has one
     ///     named source here, so nothing is invented at the seam — and nothing that is an IMMUTABLE constraint
     ///     (approval policy, egress gates, path guards, the sandbox, tool authorisation) can be reached from it.
     /// </summary>
@@ -251,25 +251,9 @@ public sealed partial class InvocationRunner
             latestUser?.Content ?? string.Empty,
             latestUser?.Images is { Count: > 0 },
             package.AllowedTools.Count,
-            package.SamplingOptions?.MaxOutputTokens is > 0,
             package.Skills is { Count: > 0 },
             package.ResponseJsonSchema is not null,
             package.IsUnattended);
-    }
-
-    /// <summary>
-    ///     Folds a dispatched FAST output budget onto the package's sampling options. Returns the INPUT REFERENCE
-    ///     unchanged when there is no dispatched budget or the send already pinned one, so the no-dispatch and
-    ///     explicit-budget paths stay byte-identical.
-    /// </summary>
-    private static SamplingOptions? ApplyDispatchedOutputBudget(SamplingOptions? sampling, int? dispatchedOutputTokens)
-    {
-        if (dispatchedOutputTokens is not > 0 || sampling?.MaxOutputTokens is > 0)
-        {
-            return sampling;
-        }
-
-        return (sampling ?? new SamplingOptions()) with { MaxOutputTokens = dispatchedOutputTokens };
     }
 
     /// <summary>

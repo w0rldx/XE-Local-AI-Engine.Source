@@ -125,6 +125,16 @@ public interface IWorkerEventDispatcher
     /// <param name="maxToolSchemaTokens">The largest single round's estimate.</param>
     Task ReportToolSchemaTokensAsync(Guid invocationId, long? toolSchemaTokens, int? maxToolSchemaTokens);
 
+    /// <summary>
+    ///     Records what reasoning effort <c>auto</c> resolved to on the invocation state, so the terminalize write can
+    ///     persist it onto the run-envelope row. Reported by the runner immediately after the dispatch, and only on a
+    ///     turn that was authored <c>auto</c> — every other turn leaves both members null. Category labels only: the
+    ///     tier and the authored effort, never a reason code, a signal value or any message text.
+    /// </summary>
+    /// <param name="dispatchedTier">The resolved tier's name.</param>
+    /// <param name="authoredEffort">The effort the turn was authored with (<c>auto</c>).</param>
+    Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort);
+
     Task ReportToolCallRequestedAsync(ToolCallRequestPayload payload);
 
     Task ReportApprovalRequestedAsync(ApprovalRequestPayload payload);

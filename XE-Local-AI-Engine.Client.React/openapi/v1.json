@@ -38532,6 +38532,14 @@
             "format": "int32",
             "nullable": true
           },
+          "dispatchedTier": {
+            "type": "string",
+            "nullable": true
+          },
+          "authoredEffort": {
+            "type": "string",
+            "nullable": true
+          },
           "contentChunkCount": {
             "type": "integer",
             "format": "int32",

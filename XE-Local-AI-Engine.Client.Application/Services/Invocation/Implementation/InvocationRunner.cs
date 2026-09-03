@@ -47,6 +47,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // tier's own graded level, so the re-run keeps the tier the dispatcher chose and only gives up the model.
     private const string FallbackDispatchEffort = "low";
 
+    /// <summary>The authored effort that opens the dispatch path, and the value persisted as <c>authored_effort</c>.</summary>
+    private const string AutoReasoningEffort = "auto";
+
     // A new local turn admitted after shutdown drain has begun. Surfaced as a clean Cancelled-category
     // failure — the node is going away — rather than being run into a drain that has already stopped waiting for it.
     private const string NodeDrainingMessage = "The node is shutting down and is not accepting new requests.";
@@ -279,7 +282,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             var resolvedModel = modelResolution.Model;
 
-            // Reasoning effort `auto`: resolve it into a concrete {model, effort, output budget} for THIS turn, here,
+            // Reasoning effort `auto`: resolve it into a concrete {model, effort} for THIS turn, here,
             // between model resolution and the local warm — so an admitted small-model swap is warmed instead of the
             // resolved model, rather than being reacted to after a warm that silently swallows its failure.
             //
@@ -290,7 +293,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // The scope is declared FIRST so `using`'s reverse-order disposal releases it LAST — after the ledger
             // reservation produced by the CapacityService that lives inside it. A plain nullable IServiceScope (not
             // AsyncServiceScope, whose `default` cannot be disposed safely) keeps the non-`auto` path a legal no-op.
-            using var dispatchScope = ReasoningEffortNormalizer.Normalize(package.ReasoningEffort) is "auto"
+            using var dispatchScope = ReasoningEffortNormalizer.Normalize(package.ReasoningEffort) is AutoReasoningEffort
                 ? _scopeFactory.CreateScope()
                 : null;
 
@@ -308,7 +311,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
             var originalModel = resolvedModel;
             var originalSupportsThinking = package.SupportsThinking;
             var originalReasoningBudgetEnforceable = package.ReasoningBudgetEnforceable;
-            var originalSamplingOptions = package.SamplingOptions;
             using var fastReservation = dispatchDecision?.CapacityReservation;
             if (dispatchDecision is { } dispatched)
             {
@@ -316,14 +318,21 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
                 // `package with { ... }` copies ConfigHash verbatim: the hash folds the AUTHORED effort, so two turns
                 // of one conversation that dispatch to different tiers still share one hash and a resume is never
-                // invalidated by a dispatch difference. The dispatched OUTPUT budget is deliberately NOT applied here
-                // — it needs the window the model actually launched with, so it is folded in after the warm below.
+                // invalidated by a dispatch difference. Sampling is untouched: no tier caps the turn's output (see
+                // ReasoningDispatchDecision.MaxOutputTokens), so a dispatched turn's send is shaped exactly like a
+                // non-`auto` one.
                 package = package with
                 {
                     ReasoningEffort = dispatched.Effort,
                     SupportsThinking = dispatched.SupportsThinking,
                     ReasoningBudgetEnforceable = dispatched.ReasoningBudgetEnforceable
                 };
+
+                // Onto the invocation state, so the terminalize write persists what `auto` resolved to with the
+                // envelope row. Two category labels: the tier, and the authored effort — which is `auto` by the
+                // branch condition above, and is what separates the dispatched population from the pre-`auto` one in
+                // the same query. Only an `auto` turn reaches this line, so every other turn's envelope carries nulls.
+                await dispatcher.ReportEffortDispatchAsync(package.InvocationId, ReasoningTierLabels.For(dispatched.Tier), AutoReasoningEffort).ConfigureAwait(false);
             }
 
             var modelWasSwapped = dispatchDecision is { } swapCandidate
@@ -413,21 +422,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
             var preWarmPolicy = turnPolicy;
             turnPolicy = turnPolicy.WithEffectiveContext(effectiveContextTokens);
 
-            // The dispatched FAST output budget, folded in only now that the launched window is known, and ONLY onto
-            // the send's sampling options — never onto TurnPolicy.ReservedOutputTokens. Both budgeters derive their
-            // output reservation from the requested max-output-tokens, so a 4096 cap on a small window reserves the
-            // whole window and starves (or fails) a turn that a non-`auto` turn would have served. Applying it only
-            // when it fits in a quarter of the real window keeps every small-window turn byte-identical to a non-auto
-            // one, and keeps the cap where it earns its keep: a large window, where the answer is what is being bounded.
-            if (dispatchDecision?.MaxOutputTokens is { } dispatchedOutputTokens
-                && dispatchedOutputTokens * 4 <= turnPolicy.ContextCapacityTokens)
-            {
-                package = package with
-                {
-                    SamplingOptions = ApplyDispatchedOutputBudget(package.SamplingOptions, dispatchedOutputTokens)
-                };
-            }
-
             if (context.GenerationAdmissionPolicy is { } admissionPolicy)
             {
                 // The normal chat path deliberately lets generation retry a failed warm so the provider boundary can
@@ -497,8 +491,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     {
                         ReasoningEffort = FallbackDispatchEffort,
                         SupportsThinking = originalSupportsThinking,
-                        ReasoningBudgetEnforceable = originalReasoningBudgetEnforceable,
-                        SamplingOptions = originalSamplingOptions
+                        ReasoningBudgetEnforceable = originalReasoningBudgetEnforceable
                     };
 
                     // Re-warm the ORIGINAL model and re-derive its window. The policy and effective-context above were

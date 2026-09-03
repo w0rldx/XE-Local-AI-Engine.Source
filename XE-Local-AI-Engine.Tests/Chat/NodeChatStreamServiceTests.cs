@@ -4994,6 +4994,17 @@ public sealed class NodeChatStreamServiceTests
             return Task.CompletedTask;
         }
 
+        public Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort)
+        {
+            if (CurrentInvocation is not null)
+            {
+                CurrentInvocation.DispatchedTier = dispatchedTier;
+                CurrentInvocation.AuthoredEffort = authoredEffort;
+            }
+
+            return Task.CompletedTask;
+        }
+
         public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory)
         {
             if (CurrentInvocation is not null)

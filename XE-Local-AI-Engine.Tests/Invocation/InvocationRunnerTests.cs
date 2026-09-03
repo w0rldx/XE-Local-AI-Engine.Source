@@ -3127,7 +3127,7 @@ public sealed class InvocationRunnerTests
         await RunAsync(runner, package);
 
         // No throw means no resolve. The definition must also be exactly what it was before this feature existed:
-        // the authored effort, the resolved model, and no dispatched output budget.
+        // the authored effort, the resolved model, and untouched sampling.
         var definitionBuilt = AssertEx.NotNull(built);
         AssertEx.True(string.Equals(reasoningEffort, definitionBuilt.ReasoningEffort, StringComparison.Ordinal),
             "the authored effort must reach the definition untouched");
@@ -3183,7 +3183,7 @@ public sealed class InvocationRunnerTests
         var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         InvocationAgentDefinition? built = null;
-        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn, maxOutputTokens: 4096));
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
         var runner = CreateRunner(sender,
             invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
             eventDispatcher: dispatcher,
@@ -3195,8 +3195,7 @@ public sealed class InvocationRunnerTests
         var definitionBuilt = AssertEx.NotNull(built);
         AssertEx.Equal("qwen3-1.7b", definitionBuilt.ModelId, "the turn runs on the model the dispatcher chose");
         AssertEx.Equal("low", definitionBuilt.ReasoningEffort);
-        AssertEx.Null(definitionBuilt.Sampling?.MaxOutputTokens,
-            "the 8192 default window cannot afford a 4096 output reservation, so the dispatched cap is refused");
+        AssertEx.Null(definitionBuilt.Sampling?.MaxOutputTokens, "no tier caps the send's output");
         await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
             payload.InvocationId == package.InvocationId
             && payload.Kind == TurnNoticeKind.EffortDispatched
@@ -3232,7 +3231,7 @@ public sealed class InvocationRunnerTests
         var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var observed = new List<InvocationAgentDefinition>();
-        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn, maxOutputTokens: 4096));
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
         var runner = CreateRunner(sender,
             invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
             eventDispatcher: dispatcher,
@@ -4107,35 +4106,17 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task Dispatch_WhenTheWindowAffordsIt_TheDispatchedBudgetCapsSamplingOnly()
-    {
-        // The cap is a CEILING on the answer, and it is only worth paying for when the window can spare the room the
-        // two budgeters then reserve for it. A 32k window can.
-        var sender = new MockHubMessageSender();
-        InvocationAgentDefinition? built = null;
-        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3.5:0.8b", "low", ReasoningDispatchReasons.ShortTurn, maxOutputTokens: 4096));
-        var runner = CreateRunner(sender,
-            invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
-            providerResolver: CreateLlamaCppResolver(effectiveContextTokens: 32768),
-            reasoningEffortDispatcherFactory: _ => stub);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").Build());
-
-        AssertEx.Equal(expected: 4096, AssertEx.NotNull(built).Sampling?.MaxOutputTokens);
-    }
-
-    [Test]
+    [Arguments(32768)]
     [Arguments(4096)]
-    [Arguments(2048)]
-    public async Task Dispatch_WhenTheWindowCannotAffordTheDispatchedBudget_LeavesTheTurnAsANonAutoOneWouldBe(int effectiveContextTokens)
+    public async Task Dispatch_WhenTierIsFast_LeavesTheSendsSamplingUntouched(int effectiveContextTokens)
     {
-        // The defect this pins: reserving 4096 output tokens of a 4096-token window leaves ZERO history budget, so an
-        // `auto` turn failed with ContextBudgetExceeded exactly where a non-`auto` turn served the same conversation.
-        // A window that cannot afford the cap simply does not get it.
+        // No tier caps the output. A FAST turn differs from a non-`auto` turn only in its effort, on a wide window as
+        // much as on a narrow one — which is what keeps both context budgeters' output RESERVATION where it was and
+        // keeps a small window from being starved by a reservation a non-`auto` turn would never have made.
         var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         InvocationAgentDefinition? built = null;
-        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3.5:0.8b", "low", ReasoningDispatchReasons.ShortTurn, maxOutputTokens: 4096));
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3.5:0.8b", "low", ReasoningDispatchReasons.ShortTurn));
         var runner = CreateRunner(sender,
             invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
             eventDispatcher: dispatcher,
@@ -4151,23 +4132,6 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task Dispatch_WhenTheWindowIsTheConfiguredDefault_LeavesTheTurnAsANonAutoOneWouldBe()
-    {
-        // The Ollama shape: the warm is a no-op, the launched window is unknown, and the budgeters fall back to the
-        // configured 8192 default. Reserving 4096 of it would halve the usable history of every FAST turn.
-        var sender = new MockHubMessageSender();
-        InvocationAgentDefinition? built = null;
-        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3.5:0.8b", "low", ReasoningDispatchReasons.ShortTurn, maxOutputTokens: 4096));
-        var runner = CreateRunner(sender,
-            invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
-            reasoningEffortDispatcherFactory: _ => stub);
-
-        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").Build());
-
-        AssertEx.Null(AssertEx.NotNull(built).Sampling?.MaxOutputTokens);
-    }
-
-    [Test]
     public async Task Dispatch_WhenTheFallbackRerunsOnTheOriginalModel_UsesTheOriginalModelsWindow()
     {
         // The swapped model was warmed at 4096 and the turn policy was sized against THAT window. Re-running the
@@ -4175,7 +4139,7 @@ public sealed class InvocationRunnerTests
         // authorised model would have kept — and would thread 4096 as the num_ctx of a process launched at 32768.
         var sender = new MockHubMessageSender();
         var observed = new List<InvocationAgentDefinition>();
-        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn, maxOutputTokens: 4096));
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
         var runner = CreateRunner(sender,
             invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
             providerResolver: CreatePerModelLlamaCppResolver(new Dictionary<string, int>(StringComparer.Ordinal)
@@ -4191,7 +4155,6 @@ public sealed class InvocationRunnerTests
         AssertEx.Equal(expected: 2, observed.Count, "exactly one re-run");
         AssertEx.Equal(expected: 4096, observed[0].EffectiveContextTokens, "the swapped send is sized against the fast model's window");
         AssertEx.Equal(expected: 32768, observed[1].EffectiveContextTokens, "the re-run is sized against the window of the model it actually runs on");
-        AssertEx.Null(observed[1].Sampling?.MaxOutputTokens, "the fallback gives up the dispatched cap along with the model");
         AssertEx.Empty(sender.SentEncryptedFailures);
     }
 
@@ -4258,10 +4221,9 @@ public sealed class InvocationRunnerTests
         string model,
         string effort,
         string reasonCode,
-        int? maxOutputTokens = null,
         IDisposable? reservation = null)
     {
-        return new ReasoningDispatchDecision(tier, model, effort, maxOutputTokens, SupportsThinking: true, ReasoningBudgetEnforceable: true, reasonCode, reservation);
+        return new ReasoningDispatchDecision(tier, model, effort, MaxOutputTokens: null, SupportsThinking: true, ReasoningBudgetEnforceable: true, reasonCode, reservation);
     }
 
     /// <summary>

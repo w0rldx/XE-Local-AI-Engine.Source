@@ -100,6 +100,15 @@ internal sealed class AgentExecutionLogConfiguration : IEntityTypeConfiguration<
         builder.Property(entity => entity.MaxToolSchemaTokens)
                .HasColumnName("max_tool_schema_tokens");
 
+        // Adaptive-effort dispatch telemetry, both nullable with no backfill: a pre-migration envelope row, and every
+        // turn that was not authored `auto`, simply reports null. Closed-vocabulary labels, so no length constraint
+        // buys anything the writer does not already guarantee.
+        builder.Property(entity => entity.DispatchedTier)
+               .HasColumnName("dispatched_tier");
+
+        builder.Property(entity => entity.AuthoredEffort)
+               .HasColumnName("authored_effort");
+
         // The paged list-by-agent read filters by agent and orders newest-first, so index the pair. No FK to
         // agent_definitions: a run log is diagnostic telemetry that should outlive the definition (mirrors the no-FK
         // conversation->definition choice), so deleting an agent must not cascade-delete its execution history.

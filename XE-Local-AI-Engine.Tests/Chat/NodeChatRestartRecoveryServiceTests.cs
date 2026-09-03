@@ -343,6 +343,56 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RecoverInterruptedMessagesAsync_BackfillsEnvelopesAtTheCurrentVersionWithNullDispatchColumns()
+    {
+        // Same rule as every other generation-detail column: the backfill stamps the CURRENT version (now v5) and
+        // leaves the dispatch labels null, because it has no invocation state to read a dispatch from.
+        await using var provider = await BuildProviderAsync("restart-recovery-envelope-dispatch.sqlite").ConfigureAwait(false);
+        var persistence = CreatePersistenceService(provider);
+        var recovery = CreateRecoveryService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Dispatch", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        _ = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 11).ConfigureAwait(false);
+
+        _ = await recovery.RecoverInterruptedMessagesAsync(99).ConfigureAwait(false);
+
+        var envelope = (await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false)).Single();
+        AssertEx.Equal(AgentRunEnvelope.CurrentSchemaVersion, envelope.SchemaVersion);
+        AssertEx.Null(envelope.DispatchedTier);
+        AssertEx.Null(envelope.AuthoredEffort);
+    }
+
+    [Test]
+    public async Task CancelThenAuthoritativeCompletion_UpsertsTheDispatchLabelsOverTheThinNulls()
+    {
+        // The end-to-end pin for the two write statements: the thin cancel's InsertIfAbsent writes both columns as
+        // null and the authoritative Upsert overwrites them in place. A column or parameter missing from either
+        // statement fails here rather than at runtime.
+        await using var provider = await BuildProviderAsync("cancel-then-complete-dispatch.sqlite").ConfigureAwait(false);
+        var persistence = CreatePersistenceService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("UpsertDispatch", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var correlation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 11).ConfigureAwait(false);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 12).ConfigureAwait(false);
+
+        await persistence.CancelMessageAsync(new NodeChatCancelRequest(correlation, CancelledAtUtc: 13)).ConfigureAwait(false);
+        var thin = (await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false)).Single();
+        AssertEx.Null(thin.DispatchedTier, "The thin cancel envelope has no invocation state to read a dispatch from.");
+
+        _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                                 NodeChatMessageStatusValues.Completed,
+                                 UpdatedAtUtc: 14,
+                                 "the real answer",
+                                 Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(),
+                                     DurationMs: 1_500L,
+                                     DispatchedTier: "deep",
+                                     AuthoredEffort: "auto")))
+                             .ConfigureAwait(false);
+
+        var envelope = (await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false)).Single();
+        AssertEx.Equal("deep", envelope.DispatchedTier);
+        AssertEx.Equal("auto", envelope.AuthoredEffort);
+    }
+
+    [Test]
     public async Task CancelThenAuthoritativeCompletion_UpsertsTheToolSchemaTokenEstimateOverTheThinNulls()
     {
         // The two write modes share one column list, so the thin cancel's InsertIfAbsent writes both columns as null and
