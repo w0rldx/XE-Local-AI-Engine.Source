@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 
@@ -120,6 +121,10 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
             {
                 entry.Queued = false;
                 DropFromEvictionQueue(executionId);
+                // A parked reader waits on this entry's source and nothing else. Dropping the entry without completing
+                // it would leave that reader waiting on a source no writer can ever reach: it must wake, find the entry
+                // gone and answer the gap.
+                Wake(entry);
             }
         }
     }
@@ -240,6 +245,80 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
         }
     }
 
+    public async IAsyncEnumerable<IntegrationStreamEvent> ReadAsync(Guid executionId,
+        long sinceSequence,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(sinceSequence);
+
+        var cursor = sinceSequence;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            List<IntegrationStreamEvent>? batch = null;
+            Task appended;
+            lock (_gate)
+            {
+                if (!_entries.TryGetValue(executionId, out var entry))
+                {
+                    // Never tracked, TTL-swept, or evicted under pressure. Same answer for all three: the ring cannot
+                    // serve this position and the caller must fall back to the persisted rows.
+                    throw new IntegrationEventGapException(executionId, cursor);
+                }
+
+                var floor = entry.Events.First is { } head ? Math.Max(entry.Floor, head.Value.Event.Sequence) : entry.Floor;
+                if (cursor < floor - 1 || cursor > entry.LatestSequence)
+                {
+                    // Below the retained window the reader would silently miss events; above the head it would park on
+                    // a cursor no append can ever reach, holding an open 200 that never speaks.
+                    throw new IntegrationEventGapException(executionId, cursor);
+                }
+
+                // The R5-3 barrier. A reserved-but-unresolved sequence is about to be committed, and yielding anything
+                // above it would advance the cursor PAST it — the late publish would then fall below the cursor and be
+                // lost to this reader forever, with no gap to report it. The snapshot therefore stops short of it, and
+                // both Publish and Abandon complete the very source captured below.
+                var barrier = entry.Pending.Count > 0 ? entry.Pending.Min : long.MaxValue;
+                // The list is kept in sequence order, so skip-then-take is the whole selection: no index arithmetic, no
+                // contiguity assertion, and a hole simply is not there to take.
+                var selected = entry.Events.Select(static buffered => buffered.Event)
+                                    .SkipWhile(streamEvent => streamEvent.Sequence <= cursor)
+                                    .TakeWhile(streamEvent => streamEvent.Sequence < barrier)
+                                    .ToList();
+                batch = selected.Count > 0 ? selected : null;
+
+                // Captured in the SAME acquisition as the snapshot: reading it after releasing the lock would let an
+                // append swap the source in between, leaving the reader waiting on the successor and missing what is
+                // already in the ring.
+                appended = entry.Appended.Task;
+            }
+
+            if (batch is not null)
+            {
+                foreach (var streamEvent in batch)
+                {
+                    yield return streamEvent;
+                    // Never cursor + 1: sequences are compared, never counted, because holes are legal.
+                    cursor = streamEvent.Sequence;
+
+                    if (TerminalTypes.Contains(streamEvent.Type))
+                    {
+                        // Completion is decided by the TYPE yielded, never by cursor == LastSequence: the head may name
+                        // a reservation that is still pending, and a terminal whose commit failed is followed by
+                        // another one.
+                        yield break;
+                    }
+                }
+
+                // Re-snapshot rather than wait: anything appended during the yield is already in the ring.
+                continue;
+            }
+
+            await appended.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     public void Dispose()
     {
         _sweepCancellation.Cancel();
@@ -280,6 +359,7 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
                 {
                     entry.Queued = false;
                     DropFromEvictionQueue(executionId);
+                    Wake(entry);
                 }
             }
 
@@ -414,6 +494,7 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
 
             entry.Queued = false;
             _ = _entries.Remove(candidate);
+            Wake(entry);
             return true;
         }
 

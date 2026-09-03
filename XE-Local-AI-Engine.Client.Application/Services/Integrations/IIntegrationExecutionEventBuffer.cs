@@ -80,4 +80,55 @@ public interface IIntegrationExecutionEventBuffer
 
     /// <summary>The oldest sequence still retained, which trimming moves. 0 when untracked or when nothing is retained.</summary>
     long Floor(Guid executionId);
+
+    /// <summary>
+    ///     Replays everything above <paramref name="sinceSequence" /> and then stays live, ending when it yields a
+    ///     terminal event. <paramref name="sinceSequence" /> is EXCLUSIVE and is a watermark, not a counter: resuming
+    ///     at a hole's own sequence is as correct as resuming at a published one.
+    ///     <para>
+    ///         Selection is by comparison only — <c>Sequence &gt; cursor</c>, bounded above by
+    ///         <see cref="LowestPendingReservation" /> — so a hole is skipped silently and a pending reservation is a
+    ///         WAIT. Throws <see cref="IntegrationEventGapException" /> for exactly three positions: below the retained
+    ///         floor, above the minted head, and an untracked execution.
+    ///     </para>
+    /// </summary>
+    IAsyncEnumerable<IntegrationStreamEvent> ReadAsync(Guid executionId, long sinceSequence, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+///     A reader asked for a position the ring cannot serve: below what it still retains, above what it has minted, or
+///     on an execution it no longer tracks at all. Never raised for a HOLE — an abandoned reservation is a legal skip —
+///     and never for a PENDING one, which is a wait.
+///     <para>
+///         Raised before the first yield, it is the stream writer's 410. Raised mid-enumeration, the writer ends the
+///         response cleanly: the status is already on the wire and the caller recovers by re-attaching, which then
+///         answers 410 with the poll route.
+///     </para>
+/// </summary>
+public sealed class IntegrationEventGapException : Exception
+{
+    public IntegrationEventGapException(Guid executionId, long sinceSequence)
+        : base($"Integration execution {executionId} cannot be replayed from sequence {sinceSequence}.")
+    {
+        ExecutionId = executionId;
+        SinceSequence = sinceSequence;
+    }
+
+    public IntegrationEventGapException()
+    {
+    }
+
+    public IntegrationEventGapException(string message)
+        : base(message)
+    {
+    }
+
+    public IntegrationEventGapException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+
+    public Guid ExecutionId { get; }
+
+    public long SinceSequence { get; }
 }
