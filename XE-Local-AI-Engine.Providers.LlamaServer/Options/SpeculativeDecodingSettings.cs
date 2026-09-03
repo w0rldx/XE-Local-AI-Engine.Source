@@ -12,9 +12,9 @@ public enum SpeculativeModeClass
     Disabled,
 
     /// <summary>
-    ///     Runs a SECOND GGUF as the drafter (<c>draft-simple</c>, <c>draft-eagle3</c>): requires a draft model path and
-    ///     emits <c>--spec-draft-model</c>, plus the draft-model offload knob <c>--spec-draft-ngl</c>. Costs that model's
-    ///     weights + KV on top of the target.
+    ///     Runs a SECOND GGUF as the drafter (<c>draft-simple</c>, <c>draft-eagle3</c>, <c>draft-dflash</c>,
+    ///     <c>draft-dspark</c>): requires a draft model path and emits <c>--spec-draft-model</c>, plus the draft-model
+    ///     offload knob <c>--spec-draft-ngl</c>. Costs that model's weights + KV on top of the target.
     /// </summary>
     ExternalDraft,
 
@@ -62,10 +62,13 @@ public readonly record struct SpeculativeDecodingSettings(
 
     /// <summary>
     ///     The <c>--spec-type</c> values this application exposes, each mapped to its capability class and each verified
-    ///     accepted by the pinned llama-server build (b10201 <c>--help</c>, re-probed 2026-08-07). A deliberate SUBSET:
-    ///     b10201 additionally accepts <c>draft-dflash</c> and <c>draft-dspark</c>, which are not offered here — both
-    ///     would be <see cref="SpeculativeModeClass.ExternalDraft" /> (each loads a second GGUF; b10201 resolves them
-    ///     from a sidecar draft repo and clamps <c>--spec-draft-n-max</c> to their block size). Kept lowercase;
+    ///     accepted by the pinned llama-server build (b10201 <c>--help</c>, re-probed 2026-08-07).
+    ///     <c>draft-dflash</c> and <c>draft-dspark</c> are offered too, both as
+    ///     <see cref="SpeculativeModeClass.ExternalDraft" />: each loads a second GGUF passed with
+    ///     <c>--spec-draft-model</c>, so the existing external-draft plumbing covers them and no mode-specific field is
+    ///     needed. Upstream clamps <c>--spec-draft-n-max</c> DOWN to the draft model's trained block size (its examples
+    ///     use 15 for DFlash and 7 for DSpark), so the operator must raise the value from its default of 3 — the clamp
+    ///     never raises it. With those two added the exposed set equals b10201's accepted set exactly. Kept lowercase;
     ///     <see cref="NormalizedMode" /> matches operator input case-insensitively and resolves to these keys.
     /// </summary>
     private static readonly IReadOnlyDictionary<string, SpeculativeModeClass> ModeClasses =
@@ -74,6 +77,8 @@ public readonly record struct SpeculativeDecodingSettings(
             [DisabledMode] = SpeculativeModeClass.Disabled,
             ["draft-simple"] = SpeculativeModeClass.ExternalDraft,
             ["draft-eagle3"] = SpeculativeModeClass.ExternalDraft,
+            ["draft-dflash"] = SpeculativeModeClass.ExternalDraft,
+            ["draft-dspark"] = SpeculativeModeClass.ExternalDraft,
             ["draft-mtp"] = SpeculativeModeClass.MainModelHeads,
             ["ngram-simple"] = SpeculativeModeClass.Draftless,
             ["ngram-map-k"] = SpeculativeModeClass.Draftless,
