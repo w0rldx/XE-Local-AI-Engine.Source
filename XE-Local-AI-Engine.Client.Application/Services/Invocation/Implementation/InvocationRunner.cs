@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
@@ -84,6 +85,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
     private readonly SpawnOptions _spawnOptions;
     private readonly AgentToolPipelineOptions _toolPipelineOptions;
+    private readonly IToolRelevanceCoreSet _toolRelevanceCoreSet;
+    private readonly ToolRelevanceOptions _toolRelevanceOptions;
 
     public InvocationRunner(Lazy<IHubMessageSender> hubSender,
         Lazy<IWorkerEventDispatcher> eventDispatcher,
@@ -101,6 +104,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IOptions<ProviderResilienceOptions> resilienceOptions,
         IOptions<AgentToolPipelineOptions> toolPipelineOptions,
         IOptions<ProviderCallBudgetOptions> providerCallBudgetOptions,
+        IOptions<ToolRelevanceOptions> toolRelevanceOptions,
+        IToolRelevanceCoreSet toolRelevanceCoreSet,
         IConfiguration configuration,
         INodeRuntimeSettings runtimeSettings,
         IOptions<SpawnOptions> spawnOptions,
@@ -136,6 +141,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _toolPipelineOptions = toolPipelineOptions.Value;
         ArgumentNullException.ThrowIfNull(providerCallBudgetOptions);
         _providerCallBudgetOptions = providerCallBudgetOptions.Value;
+        ArgumentNullException.ThrowIfNull(toolRelevanceOptions);
+        _toolRelevanceOptions = toolRelevanceOptions.Value;
+        _toolRelevanceCoreSet = toolRelevanceCoreSet ?? throw new ArgumentNullException(nameof(toolRelevanceCoreSet));
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(runtimeSettings);
         ArgumentNullException.ThrowIfNull(spawnOptions);
@@ -211,6 +219,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         using var providerBudgetScope = ProviderCallBudget.BeginScope(_providerCallBudgetOptions, harnessStartedTimestamp);
         var providerBudget = ProviderCallBudget.Current!;
+
+        // Seeded in the SAME place and for the same reason as the provider budget: the send-time relevance hop runs
+        // several awaited frames below this method, an AsyncLocal write in a callee never reaches its caller, and the
+        // scope has to exist before the agent is built. Inactive by default, in which case the hop is a
+        // reference-equality pass-through and list_tools is never appended.
+        using var toolRelevanceScope = ToolRelevanceScope.BeginScope(_toolRelevanceOptions.Enabled, _toolRelevanceCoreSet.GetCoreToolNames());
         StreamState? stream = null;
         string? invocationOutcome = null;
 

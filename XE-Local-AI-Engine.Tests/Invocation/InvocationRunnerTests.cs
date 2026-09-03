@@ -3557,6 +3557,9 @@ public sealed class InvocationRunnerTests
             Options.Create(new ProviderResilienceOptions()),
             Options.Create(new AgentToolPipelineOptions()),
             Options.Create(new ProviderCallBudgetOptions()),
+            // Tool relevance stays OFF here: every existing assertion in this file is a byte-identical-offer assertion.
+            Options.Create(new ToolRelevanceOptions()),
+            new FakeToolRelevanceCoreSet(),
             configuration,
             runtimeSettings,
             Options.Create(new SpawnOptions()),
