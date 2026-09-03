@@ -371,9 +371,12 @@ describe("DevWorkflowNodePanel", () => {
 
 	it("badges a DEAD inbound branch dead rather than satisfied, which is what the join will do with it", () => {
 		// LIVE-3 P2: the verdict came off `waitingOnNodeKeys`, which the runtime sends only while the join is Pending and
-		// which drops every SETTLED source — so a Skipped branch arrived as "not waited on" and read SATISFIED. Under the
-		// C1 rule (`DevWorkflowStateMachine.EdgeState`) a source that settled any way but Succeeded makes the edge DEAD,
-		// and that dead edge is precisely why an `All` join skips. The panel said the opposite of what was about to happen.
+		// which drops every SETTLED source — so a Skipped branch arrived as "not waited on" and read SATISFIED. Under
+		// `DevWorkflowStateMachine.EdgeState` a Failed or Cancelled source makes the edge DEAD, and that dead edge is
+		// precisely why an `All` join skips. The panel said the opposite of what was about to happen.
+		//
+		// C1 then split the third case back out: a Skipped source is WAIVED, because a skip a person chose is not a
+		// reason to throw away what its siblings carried. Three rows, two verdicts.
 		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Join", nodeKey: "join", label: "Join" }), {
 			run: devWorkflowRun({
 				graph: {
@@ -398,13 +401,17 @@ describe("DevWorkflowNodePanel", () => {
 			}),
 		});
 
-		for (const key of ["skipped", "failed", "cancelled"]) {
+		for (const key of ["failed", "cancelled"]) {
 			const row = screen.getByTestId(`dev-workflow-node-dependency-${key}`).textContent ?? "";
 			// `All` is the default policy, so the wording names the consequence: the join skips.
 			expect(row).toContain("dead — the join skips once nothing is pending");
 			expect(row).not.toContain("satisfied");
 			expect(row).not.toContain("outstanding");
 		}
+		const excused = screen.getByTestId("dev-workflow-node-dependency-skipped").textContent ?? "";
+		expect(excused).toContain("skipped — the join carries on if a sibling succeeded");
+		expect(excused).not.toContain("satisfied");
+		expect(excused).not.toContain("outstanding");
 		expect(screen.getByTestId("dev-workflow-node-dependency-landed").textContent).toContain("satisfied");
 		// Unsettled is a WAIT, not a verdict — the same answer `EdgeState` gives for a source that has not landed.
 		expect(screen.getByTestId("dev-workflow-node-dependency-live").textContent).toContain("outstanding");

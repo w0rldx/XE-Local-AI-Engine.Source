@@ -451,6 +451,15 @@ internal sealed class DevWorkflowAgentExecutor
         var objective = new StringBuilder();
         _ = objective.AppendLine(node.Instructions is { Length: > 0 } instructions ? instructions : $"Carry out the '{node.Label}' step of this development workflow.");
 
+        // A node that declares a materialization is writing work for the implementation lane, so it is told what that
+        // lane can and cannot do — in code, because it is the lane's contract rather than one template's strategy.
+        // Uncapped like the instructions and counted the same way: it lands before the policy phase reads
+        // objective.Length, so policy gets the room this leaves rather than overrunning the limit behind it.
+        if (node.Materialization is not null)
+        {
+            _ = objective.AppendLine().AppendLine(DevWorkflowDecompositionContract.Text);
+        }
+
         // The scoped rule sets, between the node's own instructions and what was asked, per §5.6.1a. Their text counts
         // against the same budget everything else does: policy that pushed the objective over the limit would crowd out
         // the request it is supposed to govern.
@@ -484,8 +493,13 @@ internal sealed class DevWorkflowAgentExecutor
         _ = objective.Append(inputSection);
 
         var upstream = await DevWorkflowUpstreamArtifacts.RecordAsync(store, graph, run, nodeRun, cancellationToken).ConfigureAwait(false);
+
+        // What did NOT arrive belongs in the same section as what did. An All join now carries on past a leaf a person
+        // skipped, so this node can be handed four implementations where the fan-out was five wide — and with nothing
+        // saying so it would judge the four as if they were the whole job. Named here rather than left to the absence.
+        var skipped = await DevWorkflowUpstreamArtifacts.SkippedAsync(store, graph, run.Id, nodeRun.NodeKey, cancellationToken).ConfigureAwait(false);
         var section = $"{Environment.NewLine}## What the steps before you produced{Environment.NewLine}";
-        if (upstream.Count > 0 && objective.Length + section.Length <= MaxObjectiveCharacters)
+        if ((upstream.Count > 0 || skipped.Count > 0) && objective.Length + section.Length <= MaxObjectiveCharacters)
         {
             _ = objective.Append(section);
             for (var index = 0; index < upstream.Count; index++)
@@ -517,6 +531,24 @@ internal sealed class DevWorkflowAgentExecutor
                         break;
                     }
                 }
+            }
+
+            // Last, and under the SAME bound as everything else: a line about work that did not happen must not push
+            // out a document that did. One line per skipped step, carrying the reason the row kept — which for an
+            // operator's decision is the operator's own words. The header goes on only with a line under it, so a
+            // budget that runs out mid-list leaves no heading promising steps it could not name.
+            var lines = skipped.Select(static skip => string.Create(CultureInfo.InvariantCulture,
+                                    $"- '{skip.NodeKey}' was skipped{(skip.TerminalReason is { Length: > 0 } reason ? $": {reason}" : ".")}{Environment.NewLine}"))
+                               .ToList();
+            for (var index = 0; index < lines.Count; index++)
+            {
+                var line = index == 0 ? $"{Environment.NewLine}### Skipped steps{Environment.NewLine}{lines[0]}" : lines[index];
+                if (objective.Length + line.Length > MaxObjectiveCharacters)
+                {
+                    break;
+                }
+
+                _ = objective.Append(line);
             }
         }
 

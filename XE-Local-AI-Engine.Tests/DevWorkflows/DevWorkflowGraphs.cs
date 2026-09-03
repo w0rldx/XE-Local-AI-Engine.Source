@@ -478,6 +478,103 @@ internal static class DevWorkflowGraphs
                                                  """;
 
     /// <summary>
+    ///     Two branches into an <c>All</c> join with a tail behind it, one branch unable to run at all: the agent node
+    ///     binds no definition, so it stands down for a human and an operator's Skip is what decides the join. The
+    ///     shape the live C1 finding took — one leaf excused, its siblings' work still worth carrying.
+    /// </summary>
+    public const string AllJoinOverASkippedBranch = """
+                                                    {
+                                                      "schemaVersion": 1,
+                                                      "nodes": [
+                                                        { "nodeKey": "allsplit", "nodeType": "Parallel" },
+                                                        { "nodeKey": "allsurvivor", "nodeType": "Tool" },
+                                                        { "nodeKey": "alldoomed", "nodeType": "Agent" },
+                                                        { "nodeKey": "allmerge", "nodeType": "Join" },
+                                                        { "nodeKey": "alltail", "nodeType": "Tool" }
+                                                      ],
+                                                      "edges": [
+                                                        { "from": "allsplit", "to": "allsurvivor" },
+                                                        { "from": "allsplit", "to": "alldoomed" },
+                                                        { "from": "allsurvivor", "to": "allmerge" },
+                                                        { "from": "alldoomed", "to": "allmerge" },
+                                                        { "from": "allmerge", "to": "alltail" }
+                                                      ]
+                                                    }
+                                                    """;
+
+    /// <summary>
+    ///     A skipped node with a FAILED ancestor behind it, beside a branch that succeeded. The distinction the waiver
+    ///     rule turns on: this skip is a cascade off real breakage, not an operator excusing a slice.
+    /// </summary>
+    public const string FanOutOverAFailingChain = """
+                                                  {
+                                                    "schemaVersion": 1,
+                                                    "nodes": [
+                                                      { "nodeKey": "start", "nodeType": "Parallel" },
+                                                      { "nodeKey": "lint", "nodeType": "Tool" },
+                                                      { "nodeKey": "broken", "nodeType": "Tool" },
+                                                      { "nodeKey": "after", "nodeType": "Tool" },
+                                                      { "nodeKey": "join", "nodeType": "Join" }
+                                                    ],
+                                                    "edges": [
+                                                      { "from": "start", "to": "lint" },
+                                                      { "from": "start", "to": "broken" },
+                                                      { "from": "broken", "to": "after" },
+                                                      { "from": "lint", "to": "join" },
+                                                      { "from": "after", "to": "join" }
+                                                    ]
+                                                  }
+                                                  """;
+
+    /// <summary>
+    ///     A gate whose two branches both reach the same <c>All</c> join, plus a conditional edge from the gate
+    ///     straight into it. The branch the condition did not take is Skipped like any other, and it must NOT be
+    ///     excused: nothing chose it, the graph refused it. The gate's own edge is listed FIRST on purpose — it is the
+    ///     dead edge a run took no notice of, sitting in front of the one that is actually news.
+    /// </summary>
+    public const string GateBranchesIntoAJoin = """
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [
+                                                    { "nodeKey": "gate", "nodeType": "Gate" },
+                                                    { "nodeKey": "taken", "nodeType": "Tool" },
+                                                    { "nodeKey": "nottaken", "nodeType": "Tool" },
+                                                    { "nodeKey": "join", "nodeType": "Join" }
+                                                  ],
+                                                  "edges": [
+                                                    { "from": "gate", "to": "taken", "condition": { "path": "passed", "op": "eq", "value": true } },
+                                                    { "from": "gate", "to": "nottaken", "condition": { "path": "passed", "op": "eq", "value": false } },
+                                                    { "from": "gate", "to": "join", "condition": { "path": "passed", "op": "eq", "value": false } },
+                                                    { "from": "taken", "to": "join" },
+                                                    { "from": "nottaken", "to": "join" }
+                                                  ]
+                                                }
+                                                """;
+
+    /// <summary>
+    ///     A decomposition AS MATERIALIZED: the clone leaves wired to the join, and the decomposition's own edge into
+    ///     it kept beside them. The shape that decides what happens when every clone is skipped.
+    /// </summary>
+    public const string MaterializedDecompositionJoin = """
+                                                        {
+                                                          "schemaVersion": 1,
+                                                          "nodes": [
+                                                            { "nodeKey": "decompose", "nodeType": "Agent" },
+                                                            { "nodeKey": "implement#one", "nodeType": "DevTask" },
+                                                            { "nodeKey": "implement#two", "nodeType": "DevTask" },
+                                                            { "nodeKey": "join", "nodeType": "Join" }
+                                                          ],
+                                                          "edges": [
+                                                            { "from": "decompose", "to": "implement#one" },
+                                                            { "from": "decompose", "to": "implement#two" },
+                                                            { "from": "decompose", "to": "join" },
+                                                            { "from": "implement#one", "to": "join" },
+                                                            { "from": "implement#two", "to": "join" }
+                                                          ]
+                                                        }
+                                                        """;
+
+    /// <summary>
     ///     A human gate beside sandbox work that is genuinely in flight — the X10 case as it actually occurs: one branch
     ///     is mid-build at the moment the other's approval is refused.
     /// </summary>

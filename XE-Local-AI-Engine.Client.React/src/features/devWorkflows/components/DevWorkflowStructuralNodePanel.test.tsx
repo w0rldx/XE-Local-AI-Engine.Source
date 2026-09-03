@@ -68,6 +68,62 @@ describe("DevWorkflowStructuralNodePanel", () => {
 		expect(screen.getByTestId("dev-workflow-node-dependency-validate").textContent).not.toContain("template");
 	});
 
+	it("reads a skipped dependency under an All join as waived and a failed one as dead", () => {
+		// C1: the state machine waives a skip a person chose, so the join carries on if a sibling arrived. Badging it
+		// dead beside the branch that failed told an operator the two would do the same thing to the join, and only
+		// one of them does.
+		renderWithProviders(
+			<DevWorkflowStructuralNodePanel
+				nodeRun={devWorkflowNodeRunDetail({ nodeKey: "join", nodeType: "Join", label: "Join" })}
+				nodeType="Join"
+				run={devWorkflowRun({
+					graph: {
+						schemaVersion: 1,
+						nodes: [{ nodeKey: "join", nodeType: "Join", label: "Join" }],
+						edges: [
+							{ from: "excused", to: "join" },
+							{ from: "broken", to: "join" },
+						],
+					},
+					nodes: [
+						devWorkflowNodeRunSummary({ id: "node-excused", nodeKey: "excused", label: "Excused", status: "Skipped" }),
+						devWorkflowNodeRunSummary({ id: "node-broken", nodeKey: "broken", label: "Broken", status: "Failed" }),
+					],
+				})}
+			/>,
+		);
+
+		expect(screen.getByTestId("dev-workflow-node-dependency-excused").textContent).toContain("the join carries on if a sibling succeeded");
+		expect(screen.getByTestId("dev-workflow-node-dependency-broken").textContent).toContain("the join skips once nothing is pending");
+	});
+
+	it("still reads a skipped dependency under an Any join as the branch that did not carry it", () => {
+		// `Waived` is not `Satisfied`: a merge that exists to carry ONE live branch cannot be carried by a branch
+		// nobody ran, so the wording under `Any` is unchanged.
+		renderWithProviders(
+			<DevWorkflowStructuralNodePanel
+				nodeRun={devWorkflowNodeRunDetail({ nodeKey: "join", nodeType: "Join", label: "Join" })}
+				nodeType="Join"
+				run={devWorkflowRun({
+					graph: {
+						schemaVersion: 1,
+						nodes: [{ nodeKey: "join", nodeType: "Join", label: "Join", joinPolicy: "Any" }],
+						edges: [
+							{ from: "excused", to: "join" },
+							{ from: "taken", to: "join" },
+						],
+					},
+					nodes: [
+						devWorkflowNodeRunSummary({ id: "node-excused", nodeKey: "excused", label: "Excused", status: "Skipped" }),
+						devWorkflowNodeRunSummary({ id: "node-taken", nodeKey: "taken", label: "Taken", status: "Succeeded" }),
+					],
+				})}
+			/>,
+		);
+
+		expect(screen.getByTestId("dev-workflow-node-dependency-excused").textContent).toContain("this branch will not carry the join");
+	});
+
 	it("lists a gate's branches and the condition each one carries, verbatim", () => {
 		renderWithProviders(
 			<DevWorkflowStructuralNodePanel
