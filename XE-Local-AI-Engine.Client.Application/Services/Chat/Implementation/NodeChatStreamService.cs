@@ -844,7 +844,9 @@ public sealed class NodeChatStreamService(
             ReasoningBudgetEnforceable: resolution.ReasoningBudgetEnforceable,
             // Per-agent opt-out from the send-time tool-relevance filter; not hashed, so an opted-out agent keeps a
             // byte-identical config hash.
-            DisableToolRelevanceFilter: resolved?.DisableToolRelevanceFilter ?? false));
+            DisableToolRelevanceFilter: resolved?.DisableToolRelevanceFilter ?? false,
+            // Model-selection provenance for the runner's reasoning-effort dispatcher; false = pinned, never swap.
+            AllowAutoModelSwap: resolution.AllowAutoModelSwap));
     }
 
     /// <summary>

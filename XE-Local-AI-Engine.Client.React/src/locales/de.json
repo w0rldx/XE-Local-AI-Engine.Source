@@ -172,7 +172,8 @@
 			"toolDisabled": "Tool deaktiviert",
 			"historyTruncated": "Verlauf gekürzt",
 			"orchestrationDegraded": "Orchestrierung nicht verwendet",
-			"toolsFiltered": "Tools gefiltert"
+			"toolsFiltered": "Tools gefiltert",
+			"effortDispatched": "Reasoning-Aufwand aufgelöst"
 		},
 		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus."
 	},
@@ -645,7 +646,8 @@
 				"low": "Niedrig",
 				"medium": "Mittel",
 				"high": "Hoch",
-				"xhigh": "Höchste"
+				"xhigh": "Höchste",
+				"auto": "Auto"
 			},
 			"newConversation": "Neuer normaler Chat",
 			"newEncryptedConversation": "Neuer verschlüsselter Chat",
@@ -2504,7 +2506,8 @@
 						"none": "Keiner",
 						"low": "Niedrig",
 						"medium": "Mittel",
-						"high": "Hoch"
+						"high": "Hoch",
+						"auto": "Auto"
 					}
 				},
 				"tools": {

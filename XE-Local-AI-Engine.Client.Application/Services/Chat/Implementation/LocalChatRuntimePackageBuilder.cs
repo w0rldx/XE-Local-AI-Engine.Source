@@ -56,6 +56,9 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             // Deliberately NOT fed into the config hash below (same reason as IsUnattended): the relevance filter
             // narrows only the provider-bound tools array, so opting out must leave the digest byte-identical.
             DisableToolRelevanceFilter = request.DisableToolRelevanceFilter,
+            // Deliberately NOT fed into the config hash below (same reason as IsUnattended): it describes how the model
+            // was CHOSEN, not the agent's configuration, so a menu pick and the node default hash identically.
+            AllowAutoModelSwap = request.AllowAutoModelSwap,
             RequestedCapabilities = request.RequestedCapabilities is null ? null : [.. request.RequestedCapabilities],
             Timeouts = timeouts,
             OrchestrationSpec = request.OrchestrationSpec,

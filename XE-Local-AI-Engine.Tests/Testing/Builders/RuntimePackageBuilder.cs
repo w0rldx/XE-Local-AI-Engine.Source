@@ -17,6 +17,8 @@ public sealed class RuntimePackageBuilder
     private Guid _invocationId = Guid.NewGuid();
     private bool _isUnattended;
     private string? _modelProfile = "qwen3.5:0.8b";
+    private string? _reasoningEffort;
+    private bool _allowAutoModelSwap;
     private OrchestrationSpec? _orchestrationSpec;
     private string _resolvedSystemPrompt = "You are helpful.";
     private SamplingOptions? _samplingOptions;
@@ -211,6 +213,20 @@ public sealed class RuntimePackageBuilder
         return this;
     }
 
+    /// <summary>The AUTHORED reasoning effort, normalized by the package builder in production. <c>auto</c> is the one the runner dispatches.</summary>
+    public RuntimePackageBuilder WithReasoningEffort(string? reasoningEffort)
+    {
+        _reasoningEffort = reasoningEffort;
+        return this;
+    }
+
+    /// <summary>Model-selection provenance: the node picked the model, so the dispatcher may replace it.</summary>
+    public RuntimePackageBuilder AllowingAutoModelSwap()
+    {
+        _allowAutoModelSwap = true;
+        return this;
+    }
+
     /// <summary>Marks the package as a scheduled/headless run, which has no operator to answer an approval.</summary>
     public RuntimePackageBuilder AsUnattended()
     {
@@ -223,6 +239,8 @@ public sealed class RuntimePackageBuilder
         return new RuntimePackage
         {
             IsUnattended = _isUnattended,
+            ReasoningEffort = _reasoningEffort,
+            AllowAutoModelSwap = _allowAutoModelSwap,
             Skills = _skills,
             CustomTools = _customTools,
             InvocationId = _invocationId,

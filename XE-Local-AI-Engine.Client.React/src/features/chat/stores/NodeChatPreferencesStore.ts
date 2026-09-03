@@ -18,7 +18,9 @@ const SHOW_TOKENS_PER_SECOND_STORAGE_KEY = "xe-node-chat-show-tokens-per-second"
 const KNOWLEDGE_BASE_ENABLED_STORAGE_KEY = "xe-node-chat-knowledge-base-enabled";
 
 // Graded reasoning efforts, offered for models that advertise the Ollama `thinking` capability.
-export const reasoningEfforts: readonly ReasoningEffort[] = ["none", "low", "medium", "high"];
+// "auto" is APPENDED, never prepended: clampReasoningEffort falls back to `available[0]`, so a leading "auto" would
+// silently become the fallback for every stale value that has no comparable rank.
+export const reasoningEfforts: readonly ReasoningEffort[] = ["none", "low", "medium", "high", "auto"];
 // Binary reasoning efforts (On/Off), offered for models WITHOUT the `thinking` capability that still reason by
 // default (e.g. some GGUF chat templates). "on" lets the model's built-in reasoning run (think omitted); "none"
 // suppresses it (think:false). "on" is first so it is the safe fallback default when a stale graded effort is
@@ -27,7 +29,7 @@ export const binaryReasoningEfforts: readonly ReasoningEffort[] = ["on", "none"]
 // Full graded effort set for Codex/cloud models (OpenAI Responses API reasoning.effort vocabulary).
 // "minimal" and "xhigh" are Codex-only — NEVER offered for Ollama models. The Chat.tsx model-switch clamp
 // resets any carryover Codex effort (e.g. "xhigh") when the user switches back to an Ollama model.
-export const codexReasoningEfforts: readonly ReasoningEffort[] = ["none", "minimal", "low", "medium", "high", "xhigh"];
+export const codexReasoningEfforts: readonly ReasoningEffort[] = ["none", "minimal", "low", "medium", "high", "xhigh", "auto"];
 // Every persistable reasoning-effort value — used to validate the hydrated localStorage value and persisted
 // wire values so a binary "on" survives reload/round-trip instead of being narrowed away.
 export const persistableReasoningEfforts: readonly ReasoningEffort[] = [
@@ -38,6 +40,7 @@ export const persistableReasoningEfforts: readonly ReasoningEffort[] = [
 	"medium",
 	"high",
 	"xhigh",
+	"auto",
 ];
 
 // Reasoning intensity rank, used to clamp a carried-over effort onto a different model's available set without
@@ -52,6 +55,10 @@ const reasoningEffortRank: Readonly<Record<ReasoningEffort, number>> = {
 	medium: 3,
 	high: 4,
 	xhigh: 5,
+	// The node picks the tier per turn, so "auto" has no intrinsic intensity. Ranked WITH "medium" so clamping it onto
+	// a model that does not offer it degrades to the middle of the graded set (and to "on" on a binary model) rather
+	// than collapsing to the list's first entry.
+	auto: 3,
 };
 
 // Map an effort onto a target model's available set, preserving reasoning intent instead of always falling back to

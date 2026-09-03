@@ -8,6 +8,14 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 ///     capability, for which the agent factory OMITS the <c>think</c> field so the model's built-in
 ///     (chat-template) reasoning runs. Blank or any unrecognized value normalizes to <c>null</c>
 ///     (unspecified).
+///     <para>
+///         <b>The <c>auto</c> value.</b> <c>auto</c> is a CONFIGURATION value like any other effort — persisted,
+///         hashed and shown in the picker — but it NEVER reaches a provider wire. The invocation runner resolves it
+///         per turn into a concrete <c>{model, effort, MaxOutputTokens}</c> before the agent definition is built
+///         (see <c>IReasoningEffortDispatcher</c>), so the value a provider sees is always one of the graded/binary
+///         levels above. It is recognized here so the ONE vocabulary stays the single source of truth; a leaked
+///         <c>auto</c> reaching the agent factory behaves exactly as any unrecognized value does today.
+///     </para>
 ///     Centralized so a new effort value is added in ONE place: the "on emits no reasoning" bug was the
 ///     <c>on</c> sentinel reaching the agent factory but being silently dropped to <c>null</c> by three
 ///     independent normalize/validate ladders (package builder, config hash, runtime-package validator),
@@ -25,7 +33,7 @@ public static class ReasoningEffortNormalizer
 {
     /// <summary>
     ///     Returns the canonical lowercase effort
-    ///     (<c>none</c>/<c>on</c>/<c>minimal</c>/<c>low</c>/<c>medium</c>/<c>high</c>/<c>xhigh</c>), or
+    ///     (<c>none</c>/<c>on</c>/<c>minimal</c>/<c>low</c>/<c>medium</c>/<c>high</c>/<c>xhigh</c>/<c>auto</c>), or
     ///     <c>null</c> when the input is blank or unrecognized. Case-insensitive; trims surrounding whitespace.
     /// </summary>
     public static string? Normalize(string? reasoningEffort)
@@ -46,6 +54,7 @@ public static class ReasoningEffortNormalizer
             "MEDIUM" => "medium",
             "HIGH" => "high",
             "XHIGH" => "xhigh",
+            "AUTO" => "auto",
             _ => null
         };
     }

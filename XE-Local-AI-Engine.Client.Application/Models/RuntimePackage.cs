@@ -73,6 +73,19 @@ public sealed record RuntimePackage
     /// </summary>
     public bool DisableToolRelevanceFilter { get; init; }
 
+    /// <summary>
+    ///     Whether the runner's reasoning-effort dispatcher may replace the model for this turn (the FAST tier's
+    ///     small-model swap). Named for the PERMISSION, not the state, so the <c>false</c> default is by construction
+    ///     "the model is pinned, never swap it": every construction site that omits it — the scheduler, the three
+    ///     benchmark executors, the encrypted/server envelope assembler — fails closed with no edit. Only the chat
+    ///     send/regenerate paths raise it, and only on a turn with no explicit user pick and no honored agent pin.
+    ///     Deliberately excluded from the config hash (mirrors <see cref="IsUnattended" />): it describes HOW the model
+    ///     was chosen, not the agent's configuration, so the same agent asking the same question hashes identically
+    ///     whether the operator picked the model from the menu or let the node default, and the cross-repo
+    ///     encrypted/server digest stays stable.
+    /// </summary>
+    public bool AllowAutoModelSwap { get; init; }
+
     public List<string>? RequestedCapabilities { get; init; }
 
     public required TimeoutSettings Timeouts { get; init; }

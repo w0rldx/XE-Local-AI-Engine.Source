@@ -172,7 +172,8 @@
 			"toolDisabled": "Tool disabled",
 			"historyTruncated": "History truncated",
 			"orchestrationDegraded": "Orchestration not used",
-			"toolsFiltered": "Tools filtered"
+			"toolsFiltered": "Tools filtered",
+			"effortDispatched": "Reasoning effort resolved"
 		},
 		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting."
 	},
@@ -645,7 +646,8 @@
 				"low": "Low",
 				"medium": "Medium",
 				"high": "High",
-				"xhigh": "Highest"
+				"xhigh": "Highest",
+				"auto": "Auto"
 			},
 			"newConversation": "New plain chat",
 			"newEncryptedConversation": "New encrypted chat",
@@ -2504,7 +2506,8 @@
 						"none": "None",
 						"low": "Low",
 						"medium": "Medium",
-						"high": "High"
+						"high": "High",
+						"auto": "Auto"
 					}
 				},
 				"tools": {
