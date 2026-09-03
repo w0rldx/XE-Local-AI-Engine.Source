@@ -122,9 +122,10 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         var now = _timeProvider.GetUtcNow();
         foreach (var (key, running) in _processes.ToArray())
         {
-            // A live profiling-pinned process is never idle-evicted mid-benchmark; an EXITED one is still reaped below
-            // so a dead handle never leaks even while pinned.
-            if (running.IsProfilingPinned && !running.Handle.HasExited)
+            // A live profiling process is never idle-evicted mid-benchmark; an EXITED one is still reaped below so a
+            // dead handle never leaks. IsProfilingOwned covers the registration-to-Pin() window, where the pin alone
+            // does not yet protect it.
+            if ((running.IsProfilingPinned || running.IsProfilingOwned) && !running.Handle.HasExited)
             {
                 continue;
             }
@@ -164,9 +165,10 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         var victimRank = int.MaxValue;
         foreach (var (key, running) in _processes)
         {
-            // A live profiling-pinned process is reserved for its benchmark — never select it as a cap-admission victim
-            // (an EXITED pinned process is a dead handle and stays eligible so its slot/port is reclaimed).
-            if (running.IsProfilingPinned && !running.Handle.HasExited)
+            // A live profiling process is reserved for its benchmark — never select it as a cap-admission victim (an
+            // EXITED one is a dead handle and stays eligible so its slot/port is reclaimed). IsProfilingOwned covers
+            // the registration-to-Pin() window, where a pooled-role profiling process would otherwise be LRU-eligible.
+            if ((running.IsProfilingPinned || running.IsProfilingOwned) && !running.Handle.HasExited)
             {
                 continue;
             }
@@ -218,7 +220,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         // heuristic scan and here, TryBeginEvict fails and no victim is admitted this round — the caller surfaces the
         // cap error rather than tree-killing a process under an active lease. An EXITED victim holds no real lease,
         // so it is torn down regardless.
-        if (!victim.Handle.HasExited && !victim.TryBeginEvict())
+        if (!victim.Handle.HasExited && !victim.TryBeginEvict(forProfiling: false, out _))
         {
             return false;
         }

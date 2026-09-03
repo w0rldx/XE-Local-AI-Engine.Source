@@ -36,6 +36,12 @@ internal sealed class LocalModelProxyForwarder
     private const int StreamCopyBufferSize = 16 * 1024;
 
     /// <summary>
+    ///     How many times a forwarded request re-ensures around a profiling spawn before answering 503. Profiling holds
+    ///     the per-key single-flight gate through its own teardown, so one re-ensure normally suffices.
+    /// </summary>
+    private const int MaxProfilingReEnsures = 3;
+
+    /// <summary>
     ///     Default maximum gap between two reads from the upstream child while streaming a response. A child that stops
     ///     producing bytes WITHOUT closing the socket would otherwise wedge the forward forever — the forwarding client
     ///     has an infinite timeout, and only caller disconnect would cancel it — leaving the inference lease held so a
@@ -124,31 +130,55 @@ internal sealed class LocalModelProxyForwarder
             return;
         }
 
+        // Provision, then take an inference lease for the request's lifetime so an operator eject drains this request
+        // instead of tree-killing it mid-stream. The two steps are not atomic, so the lease result also says whether
+        // the endpoint just handed out is still ours to use:
+        //   NotRunning      => proceed leaseless (EnsureRunning just returned an endpoint; the upstream call
+        //                      self-evidences liveness).
+        //   Evicting        => the operator is draining this process; refuse.
+        //   ProfilingOwned  => a measurement spawn took the key in between, and the port allocator commonly hands it
+        //                      the port the replaced process just freed — so this endpoint may BE the measurement.
+        //                      Re-ensure (which parks on the per-key gate profiling holds through teardown) rather
+        //                      than forward into it, bounded so back-to-back measurements answer retryably.
         LlamaServerEndpoint endpoint;
-        try
+        ILlamaServerInferenceLease? acquired;
+        var profilingReEnsures = 0;
+        while (true)
         {
-            endpoint = await _supervisor.EnsureRunningAsync(model, role, ct).ConfigureAwait(false);
-        }
-        catch (LlamaRuntimeException ex)
-        {
-            // Spawn failed, the loaded-model cap was reached, or restart-backoff was exceeded. The message is already
-            // sanitized by the supervisor. A busy/at-capacity node is a retryable condition, not a permanent failure.
-            _logger.LogWarning(ex, "Model proxy could not provision model {Model} for {Role}.", model, role);
-            await WriteBusyAsync(context, "The local runtime could not load the requested model right now (it may be at capacity). Try again shortly.", ct).ConfigureAwait(false);
-            return;
+            try
+            {
+                endpoint = await _supervisor.EnsureRunningAsync(model, role, ct).ConfigureAwait(false);
+            }
+            catch (LlamaRuntimeException ex)
+            {
+                // Spawn failed, the loaded-model cap was reached, or restart-backoff was exceeded. The message is already
+                // sanitized by the supervisor. A busy/at-capacity node is a retryable condition, not a permanent failure.
+                _logger.LogWarning(ex, "Model proxy could not provision model {Model} for {Role}.", model, role);
+                await WriteBusyAsync(context, "The local runtime could not load the requested model right now (it may be at capacity). Try again shortly.", ct).ConfigureAwait(false);
+                return;
+            }
+
+            var acquisition = _supervisor.TryAcquireInferenceLease(model, role);
+            if (acquisition.ProcessEvicting)
+            {
+                await WriteBusyAsync(context, "The requested model is being ejected by the operator. Try again shortly.", ct).ConfigureAwait(false);
+                return;
+            }
+
+            if (!acquisition.ProcessProfiling)
+            {
+                acquired = acquisition.Lease;
+                break;
+            }
+
+            if (profilingReEnsures++ >= MaxProfilingReEnsures)
+            {
+                await WriteBusyAsync(context, "The requested model is being profiled by a benchmark right now. Try again shortly.", ct).ConfigureAwait(false);
+                return;
+            }
         }
 
-        // Hold an inference lease for the request's lifetime so an operator eject drains this request instead of
-        // tree-killing it mid-stream. NotRunning => proceed leaseless (EnsureRunning just returned an endpoint; the
-        // upstream call self-evidences liveness). Evicting => the operator is draining this process; refuse.
-        var acquisition = _supervisor.TryAcquireInferenceLease(model, role);
-        if (acquisition.ProcessEvicting)
-        {
-            await WriteBusyAsync(context, "The requested model is being ejected by the operator. Try again shortly.", ct).ConfigureAwait(false);
-            return;
-        }
-
-        using var lease = acquisition.Lease;
+        using var lease = acquired;
 
         var upstreamUri = new Uri($"{endpoint.BaseAddress.AbsoluteUri.TrimEnd('/')}/{upstreamPath}");
         using var upstreamRequest = new HttpRequestMessage(HttpMethod.Post, upstreamUri)

@@ -109,14 +109,24 @@ public sealed class InferenceProfileService : IInferenceProfileService
         var build = installed?.Tag is { } tag && !string.IsNullOrWhiteSpace(tag) ? tag : UnknownBuild;
         var metadata = await _ggufMetadataReader.ReadMetadataAsync(filePath, ct).ConfigureAwait(false);
 
-        var draft = await _supervisor.RunExclusiveProfilingAsync(modelName,
-            role,
-            ResolvedLaunchArguments.Explore(),
-            enableMetrics: false,
-            body: (context, _) => Task.FromResult(result: _fittedArgsParser.TryParseFittedArgs(context.FitParamsOutput,
-                context.StartupOutput,
-                context.SuccessfulLaunchArguments)),
-            ct).ConfigureAwait(false);
+        ResolvedLaunchArguments? draft;
+        try
+        {
+            draft = await _supervisor.RunExclusiveProfilingAsync(modelName,
+                role,
+                ResolvedLaunchArguments.Explore(),
+                enableMetrics: false,
+                body: (context, _) => Task.FromResult(result: _fittedArgsParser.TryParseFittedArgs(context.FitParamsOutput,
+                    context.StartupOutput,
+                    context.SuccessfulLaunchArguments)),
+                ct).ConfigureAwait(false);
+        }
+        catch (LlamaServerProfilingRefusedException exception)
+        {
+            // A warm role is serving: nothing was spawned and nothing was evicted, so this is a skip, not a failure.
+            _logger.LogInformation("Explore skipped for a model in use: {Reason}", exception.Message);
+            return ExploreResult.SkippedInUse(exception.Message);
+        }
 
         if (draft is null)
         {
@@ -218,6 +228,23 @@ public sealed class InferenceProfileService : IInferenceProfileService
         catch (OperationCanceledException)
         {
             throw;
+        }
+        catch (LlamaServerProfilingRefusedException exception)
+        {
+            // A warm role is serving: nothing was spawned and nothing was evicted. The snapshot opened above is closed
+            // as cancelled (no run happened) and the caller is told this was skipped, not that the benchmark failed.
+            _logger.LogInformation("Benchmark skipped for profile {ProfileId}: {Reason}", profileId, exception.Message);
+            await _snapshotStore.MarkTerminalAsync(snapshot.Id,
+                                    ModelFitRunStatus.Cancelled,
+                                    exitCode: null,
+                                    durationMs: NowUnixMs() - startedAtUtc,
+                                    rawJson: null,
+                                    stderrExcerpt: exception.Message,
+                                    diagnosticsJson: null,
+                                    completedAtUtc: NowUnixMs(),
+                                    ct)
+                                .ConfigureAwait(false);
+            return BenchmarkResult.SkippedInUse(exception.Message, snapshot.Id);
         }
         catch (Exception exception)
         {

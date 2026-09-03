@@ -6,8 +6,11 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [NotInParallel]
@@ -403,19 +406,103 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
         }
     }
 
+    [Test]
+    public async Task Schedule_WhenProfilingOwnsTheModel_SkipsTheProbeInsteadOfPostingToTheMeasurement()
+    {
+        // The probe is dispatched from the worker long after the chat that scheduled it. Unleased, profiling's claim
+        // wins and this POST lands on whatever now answers that port — commonly the measurement process itself.
+        var contacted = 0;
+        using var handler = new DelegateHandler((_, _) =>
+        {
+            Interlocked.Increment(ref contacted);
+            return Task.FromResult(JsonResponse(TokenArray(count: 10)));
+        });
+        using var client = new HttpClient(handler);
+        var store = new RecordingCalibrationStore();
+        var refused = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.TryAcquireInferenceLease(Arg.Any<string>(), Arg.Any<ModelRole>())
+                  .Returns(_ =>
+                  {
+                      refused.TrySetResult();
+                      return LlamaServerLeaseAcquisition.ProfilingOwned;
+                  });
+        using var service = CreateService(client, store, supervisor: supervisor);
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            service.Schedule("model-a", new Uri("http://127.0.0.1:18123"));
+
+            // The lease decision is the point the worker either sends or skips; once it has been made and refused,
+            // any probe would already have been dispatched.
+            await refused.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+
+        AssertEx.Equal(expected: 0, Volatile.Read(ref contacted), "No probe may be sent while profiling owns the model.");
+        _ = supervisor.Received(1).TryAcquireInferenceLease("model-a", ModelRole.Chat);
+    }
+
+    [Test]
+    public async Task Schedule_HoldsAnInferenceLeaseWhileProbing()
+    {
+        var heldDuringProbe = false;
+        var lease = Substitute.For<ILlamaServerInferenceLease>();
+        var probed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var handler = new DelegateHandler((_, _) =>
+        {
+            heldDuringProbe = lease.ReceivedCalls().All(call => call.GetMethodInfo().Name != nameof(IDisposable.Dispose));
+            probed.TrySetResult();
+            return Task.FromResult(JsonResponse(TokenArray(count: 10)));
+        });
+        using var client = new HttpClient(handler);
+        var store = new RecordingCalibrationStore();
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.TryAcquireInferenceLease(Arg.Any<string>(), Arg.Any<ModelRole>())
+                  .Returns(LlamaServerLeaseAcquisition.Granted(lease));
+        using var service = CreateService(client, store, supervisor: supervisor);
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            service.Schedule("model-a", new Uri("http://127.0.0.1:18123"));
+            await probed.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+
+        AssertEx.True(heldDuringProbe, "The lease must still be held while the probe is in flight.");
+        lease.Received(1).Dispose();
+    }
+
     private static LlamaTokenEstimatorCalibrationService CreateService(HttpClient client,
         ITokenEstimatorCalibrationStore store,
         TimeSpan? interval = null,
         ILogger<LlamaTokenEstimatorCalibrationService>? logger = null,
         TimeProvider? timeProvider = null,
-        int? workCapacity = null)
+        int? workCapacity = null,
+        ILlamaServerProcessSupervisor? supervisor = null)
     {
         return new LlamaTokenEstimatorCalibrationService(client,
             store,
+            supervisor ?? LeasingSupervisor(),
             logger ?? NullLogger<LlamaTokenEstimatorCalibrationService>.Instance,
             interval ?? TimeSpan.FromMinutes(30),
             timeProvider ?? TimeProvider.System,
             workCapacity ?? LlamaTokenEstimatorCalibrationService.DefaultWorkCapacity);
+    }
+
+    /// <summary>A supervisor that grants the probe's lease, which is the normal state for a model serving requests.</summary>
+    private static ILlamaServerProcessSupervisor LeasingSupervisor()
+    {
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.TryAcquireInferenceLease(Arg.Any<string>(), Arg.Any<ModelRole>())
+                  .Returns(LlamaServerLeaseAcquisition.Granted(Substitute.For<ILlamaServerInferenceLease>()));
+        return supervisor;
     }
 
     private static int CalibrationTextTokenCount(int divisor)
