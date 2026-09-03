@@ -31,7 +31,7 @@ Every project below is grounded in its `.csproj` (`Sdk=` / `OutputType` / `Proje
 |---|---|---|
 | `XE-Local-AI-Engine.Client` | `Microsoft.NET.Sdk.Web` | The **Node Web Server**. Hosts the React UI (static files), exposes `/api/local/v1` + local SignalR hubs, owns the single platform WorkerHub connection, and supervises node-owned model-runtime host child processes. The composition root — wires every provider + application service. See [01-architecture-overview.md](01-architecture-overview.md), [09-api-and-hubs.md](09-api-and-hubs.md). |
 | `XE-Local-AI-Engine.Client.Application` | `Microsoft.NET.Sdk` | The **application layer**: decisions/orchestration for chat, agents, scheduler, model fit, inference tuning, knowledge/RAG, images, uploads, benchmarking, training, and development mode. Depends on every provider + persistence + agent + contracts. See [03-local-runtime-and-providers.md](03-local-runtime-and-providers.md), [05-chat.md](05-chat.md), [06-scheduler.md](06-scheduler.md), [07-model-fit.md](07-model-fit.md). |
-| `XE-Local-AI-Engine.Client.Persistence` | `Microsoft.NET.Sdk` | EF Core + SQLite with selected per-column AEAD encryption. Owns the DbContexts, entities, every migration under `Client.Persistence/Migrations/` (that folder is the inventory — count it there; all but `InitialNodeChatSchema` and `AddNodeMessageLifecycleColumns` are timestamped), and the 2 model snapshots (`NodeIdentityDbContextModelSnapshot`, `NodeChatDbContextModelSnapshot`). References ASP.NET Identity EF Core + `Microsoft.EntityFrameworkCore.Sqlite` (design/tools `PrivateAssets`). Has **no** project references — it is a leaf. See [08-data-and-persistence.md](08-data-and-persistence.md). |
+| `XE-Local-AI-Engine.Client.Persistence` | `Microsoft.NET.Sdk` | EF Core + SQLite with selected per-column AEAD encryption. Owns the DbContexts, entities, every migration under `Client.Persistence/Migrations/` (that folder is the inventory — count it there; all but `InitialNodeChatSchema` and `AddNodeMessageLifecycleColumns` are timestamped), and the 2 model snapshots (`NodeIdentityDbContextModelSnapshot`, `NodeChatDbContextModelSnapshot`). References ASP.NET Identity EF Core + `Microsoft.EntityFrameworkCore.Sqlite` (design/tools `PrivateAssets`). References `Providers.Abstractions` (its only project reference). See [08-data-and-persistence.md](08-data-and-persistence.md). |
 | `XE-Local-AI-Engine.AI.Agent` | `Microsoft.NET.Sdk`, `net10.0` | Microsoft Agent Framework (MAF) + Microsoft.Extensions.AI (MEAI) wiring: agents, tools, playbooks, the AgentHome write-back loop. See [04-agent-mode.md](04-agent-mode.md). |
 | `XE-Local-AI-Engine.AI.Contracts` | `Microsoft.NET.Sdk` | Shared, dependency-free contract types — `Enums/` and `Events/` only (verified). Referenced by both `Client` and `Client.Application` so transport DTOs/events are defined once. Note: despite the name this is an in-tree project, **not** a git submodule (no `.gitmodules` entry matches). |
 | `XE-Local-AI-Engine.WindowsLauncher` | `Microsoft.NET.Sdk`, `Exe` | Packaged Windows entry point. Runs `VelopackApp.Build().Run()` before application code, then launches the published `Client` host in desktop mode through `WindowsLauncherApplication`. It has no project references; the boundary is a child-process handoff rather than an assembly dependency. See [Hosting & Deployment](11-hosting-and-deployment.md). |
@@ -90,7 +90,7 @@ Solid arrows are `ProjectReference` edges (verified from each `.csproj`).
             │                                      │  │  │
             └► Providers.Ollama ──┐   Providers.{Llama,HF,Codex,Capabilities,Ollama,SDcpp,Training}
                                   ▼                │  │  │
-                       Providers.Abstractions ◄────┴──┴──┘
+                       Providers.Abstractions ◄────┴──┴──┘ ◄── Client.Persistence (benchmark contracts)
                                   ▲
   Capabilities / CodexOAuth / HuggingFace / LlamaServer / Ollama / OpenAICompat / StableDiffusionCpp / Training
      (each references ONLY Abstractions; LlamaServer + OpenAICompat also ► OpenAICompatible.Core, a leaf)
@@ -109,7 +109,7 @@ Notable edges:
 - **`Client.Application` is the hub of the product graph** — it references every `Providers.*` project (`Abstractions`, `Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `OpenAICompat`, `StableDiffusionCpp`, `Training`), `Client.Persistence`, `AI.Agent`, `ServiceDefaults`, and `AI.Contracts`.
 - **`Client` (Web) references a narrower set** — `AI.Agent`, `Client.Application`, `Client.Persistence`, `Providers.Abstractions`, `Providers.Ollama`, `ServiceDefaults`, `AI.Contracts`. It reaches the other providers transitively through `Client.Application`; only `Ollama` is referenced directly at the web layer (legacy direct dependency).
 - **Providers reference `Providers.Abstractions` only** (verified for `Capabilities`, `CodexOAuth`, `HuggingFace`, `Ollama`, `StableDiffusionCpp`, and `Training`), with ONE reviewed exception: `LlamaServer` and `OpenAICompat` also reference the leaf `Providers.OpenAICompatible.Core` so the OpenAI wire layer exists once instead of twice. `Capabilities` is the only provider that another non-abstraction project depends on beyond the normal app/test edges.
-- **`Client.Persistence` and `Providers.Abstractions` and `AI.Contracts` are leaves** (no outbound project references) — the bottom of the layering.
+- **`Providers.Abstractions` and `AI.Contracts` are leaves** (no outbound project references) — the bottom of the layering. `Client.Persistence` sits one step above: its only project reference is `Providers.Abstractions`.
 - **`AppHost` references `Client`** for dev orchestration but nothing references `AppHost`.
 - **`WindowsLauncher` is an assembly leaf.** It references no product project; the packaged launcher starts the published `Client` executable as a child process after Velopack lifecycle handling.
 
@@ -121,7 +121,7 @@ Notable edges:
         ▼
    Application            Client.Application     (decisions / services)
         │
-        ├──► Domain/Persistence   Client.Persistence  (EF Core + SQLite)
+        ├──► Domain/Persistence   Client.Persistence  (EF Core + SQLite; ──► Providers.Abstractions for benchmark contracts)
         ├──► Agent                AI.Agent            (MAF/MEAI)
         └──► Provider seams       Providers.Abstractions
                                        ▲
@@ -139,7 +139,7 @@ their abstractions; persistence does not depend back on the web host.
 Maintainer invariants:
 
 1. **Providers behind abstractions.** Code outside a provider project depends on `ILocalModelProvider` / `IChatClient` / `IEmbeddingGenerator` (MEAI) — never on a provider SDK type. Adding a model backend = a new `Providers.*` project that references **only** `Providers.Abstractions`, plus DI registration in `Client.Application`/`Client`. See [03-local-runtime-and-providers.md](03-local-runtime-and-providers.md).
-2. **One-way flow.** Web → Application → (Persistence / Agent / Provider seams). `Client.Persistence` and `Providers.Abstractions` must stay leaves. Do not add an upward reference (e.g. Persistence → Application).
+2. **One-way flow.** Web → Application → (Persistence / Agent / Provider seams). `Providers.Abstractions` and `AI.Contracts` must stay leaves. `Client.Persistence` may reference only `Providers.Abstractions` (it does, for the benchmark contract types persisted in `BenchmarkRun`); do not add any other outbound reference, and never an upward one (e.g. Persistence → Application).
 3. **Contracts shared, not duplicated.** Cross-boundary DTOs/events/enums live in `AI.Contracts`; reuse them rather than redefining per layer.
 4. **Application holds decisions; Web is wiring.** Business/orchestration logic belongs in `Client.Application` services; `Client` endpoints/hubs orchestrate and apply security (loopback-only, Host/Origin checks, secret redaction). See [12-security-and-privacy.md](12-security-and-privacy.md).
 5. **No Docker on the inference path; no HostAgent at all.** Per the 2026-06-17 runtime re-architecture, inference + AgentHome run as host processes (`Providers.LlamaServer` + a process sandbox provider), and there is no HostAgent project. Don't reintroduce a HostAgent reference, and don't put a container between the app and a model. **One scoped exception:** [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) permits a Docker Engine API client (`Docker.DotNet.Enhanced`) for **Development Mode build/test/lint execution only**, behind the existing `ISandboxRuntimeProvider` seam — AgentHome and Coder stay on the process provider. A container reference anywhere else is still a defect.
