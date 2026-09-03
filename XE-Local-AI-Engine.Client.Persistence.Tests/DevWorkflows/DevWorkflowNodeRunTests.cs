@@ -65,6 +65,54 @@ public sealed class DevWorkflowNodeRunTests
     }
 
     /// <summary>
+    ///     FU2-3: an operator's Retry is allowed AT the cap and buys ONE more attempt, so it raises the row's own cap
+    ///     alongside the attempt it spends. Without it the row reads "attempt 4 of 3" — the runtime claiming it broke
+    ///     its own budget where a person granted one more try — and the retry policy's cap check refuses the very
+    ///     attempt that was just bought.
+    /// </summary>
+    [Test]
+    public async Task WideningTheCap_RaisesItByOnePerRetryAndOnlyWhenAsked()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var nodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "implement", seed.RunVersion).ConfigureAwait(false);
+
+        var automatic = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                        nodeRunId,
+                                        version,
+                                        DevWorkflowNodeRunStatus.Pending,
+                                        IncrementAttempt: true))
+                                    .ConfigureAwait(false);
+        AssertEx.Equal(expected: 3, (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).Single().MaxAttempts, "an automatic re-attempt buys nothing.");
+
+        var bought = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                     nodeRunId,
+                                     automatic.Version,
+                                     DevWorkflowNodeRunStatus.Pending,
+                                     IncrementAttempt: true,
+                                     WidenMaxAttempts: true))
+                                 .ConfigureAwait(false);
+        var widened = (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).Single();
+        AssertEx.Equal(expected: 3, widened.Attempt);
+        AssertEx.Equal(expected: 4, widened.MaxAttempts);
+
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                            nodeRunId,
+                            bought.Version,
+                            DevWorkflowNodeRunStatus.Pending,
+                            IncrementAttempt: true,
+                            WidenMaxAttempts: true))
+                        .ConfigureAwait(false);
+        var again = (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).Single();
+        AssertEx.Equal(expected: 4, again.Attempt);
+        AssertEx.Equal(expected: 5, again.MaxAttempts, "each retry buys exactly one, so the cap tracks the decisions rather than being switched off by the first.");
+    }
+
+    /// <summary>
     ///     The detail this store writes is READ BY NAME, so its casing is a contract and not a formatting choice.
     ///     <para>
     ///         Serialized with the framework default it came out <c>{"WorkSessionId":…,"Attempt":1}</c> while every

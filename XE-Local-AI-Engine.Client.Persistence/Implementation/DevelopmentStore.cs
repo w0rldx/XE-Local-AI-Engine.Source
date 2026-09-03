@@ -35,7 +35,19 @@ public sealed partial class DevelopmentStore(NodeChatDbContext dbContext, TimePr
         {
             [DevelopmentTaskStatus.Planned] = [DevelopmentTaskStatus.Ready, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
             [DevelopmentTaskStatus.Ready] = [DevelopmentTaskStatus.InProgress, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
-            [DevelopmentTaskStatus.InProgress] = [DevelopmentTaskStatus.Validation, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
+            // ChangesRequested is reachable from InProgress for the workflow lane's other rework ask: an operator who
+            // retries a blocked implementation node says WHY, and a task whose coder round failed has no other way to
+            // be handed that sentence — the next round would be composed from the same three fields the failed one
+            // was. It costs no review round (rounds are spent ENTERING review) and changes no outcome: the next action
+            // from either status is a coder round.
+            //
+            // CALLER-SIDE INVARIANT, and the edge is only safe with it: the one caller,
+            // DevWorkflowDevTaskExecutor.CarryOperatorRetryAsync, first checks that the task's LAST coder attempt did
+            // not succeed. A task whose coder round DID succeed is on its way to deterministic validation, and asking
+            // it for changes here would discard that round's work and its evidence. Any future caller of this edge
+            // owes the same check.
+            [DevelopmentTaskStatus.InProgress] =
+                [DevelopmentTaskStatus.Validation, DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
             [DevelopmentTaskStatus.Validation] = [DevelopmentTaskStatus.InProgress, DevelopmentTaskStatus.InReview, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
             [DevelopmentTaskStatus.InReview] = [DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.AwaitingApply, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
             [DevelopmentTaskStatus.ChangesRequested] = [DevelopmentTaskStatus.InProgress, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],

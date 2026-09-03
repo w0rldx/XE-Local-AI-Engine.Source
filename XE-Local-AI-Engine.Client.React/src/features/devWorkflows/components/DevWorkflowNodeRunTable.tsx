@@ -9,6 +9,7 @@ import {
 	type DevWorkflowNodeRunSummaryResponse,
 	type DevWorkflowNodeStatus,
 	devWorkflowAttemptCounts,
+	devWorkflowAttemptLabel,
 	toDevWorkflowNodeStatus,
 	toDevWorkflowNodeType,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
@@ -125,7 +126,7 @@ export function DevWorkflowNodeRunTable({ nodes, selectedNodeRunId, onSelect }: 
 					{ordered.map((node) => {
 						const status = toDevWorkflowNodeStatus(node.status);
 						const nodeType = toDevWorkflowNodeType(node.nodeType);
-						const { attempt, maxAttempts } = devWorkflowAttemptCounts(node.attempt, node.maxAttempts);
+						const counts = devWorkflowAttemptCounts(node.attempt, node.maxAttempts, node.operatorRetries);
 						return (
 							<Table.Tr
 								key={node.id}
@@ -170,9 +171,9 @@ export function DevWorkflowNodeRunTable({ nodes, selectedNodeRunId, onSelect }: 
 								<Table.Td>
 									<Stack gap={2}>
 										<DevWorkflowNodeStatusBadge status={status} testId={`dev-workflow-node-status-${node.id}`} />
-										{maxAttempts > 1 && attempt > 1 ? (
+										{counts.maxAttempts > 1 && counts.attempt > 1 ? (
 											<Text size="xs" c="dimmed" data-testid={`dev-workflow-node-attempt-${node.id}`}>
-												{t("pages.devWorkflows.nodes.attempt", "attempt {{attempt}} of {{maxAttempts}}", { attempt, maxAttempts })}
+												{devWorkflowAttemptLabel(t, counts)}
 											</Text>
 										) : null}
 									</Stack>

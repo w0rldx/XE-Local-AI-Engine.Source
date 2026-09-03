@@ -113,6 +113,15 @@ internal sealed partial class DevWorkflowStore
         var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken).ConfigureAwait(false);
         var now = Now();
 
+        if (command.WidenMaxAttempts)
+        {
+            // An operator's Retry is allowed AT the cap and buys exactly one more attempt, so the cap moves with it.
+            // In place, like the attempt beside it: without this the row reads "attempt 4 of 3" — the runtime saying
+            // it broke its own budget where in fact a human granted one more try — and every automatic check that
+            // compares Attempt against MaxAttempts would refuse the attempt the person just paid for.
+            nodeRun.MaxAttempts++;
+        }
+
         if (command.IncrementAttempt)
         {
             // In place: the node-run is one row per node key for its whole life, and the per-attempt history

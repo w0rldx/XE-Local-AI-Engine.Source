@@ -424,7 +424,14 @@ public sealed record TransitionDevWorkflowNodeRunCommand(
     bool IncrementAttempt = false,
     bool ClearWorkSession = false,
     string? Outcome = null,
-    DevWorkflowWorkItemStatus? WorkItemStatus = null);
+    DevWorkflowWorkItemStatus? WorkItemStatus = null,
+    /// <summary>
+    ///     Buys the node run exactly one more attempt, by raising the cap its own row carries. Set only by an
+    ///     operator's <c>Retry</c>, which is allowed AT the cap and widens it by one each time it is used — so
+    ///     <c>Attempt</c> never exceeds the row's own <c>MaxAttempts</c>, and the retry policy's cap check goes on
+    ///     meaning what it says instead of the run reporting that it broke its own budget.
+    /// </summary>
+    bool WidenMaxAttempts = false);
 
 /// <summary>
 ///     One cross-node retry route, as the single decision it is: the <c>node.retry.routed</c> event that records it and

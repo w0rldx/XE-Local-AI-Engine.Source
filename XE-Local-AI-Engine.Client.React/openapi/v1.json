@@ -31890,6 +31890,10 @@
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse"
             }
           },
+          "operatorRetries": {
+            "type": "integer",
+            "format": "int32"
+          },
           "startedAtUtc": {
             "type": "integer",
             "nullable": true
@@ -32482,6 +32486,10 @@
           },
           "sequence": {
             "type": "integer"
+          },
+          "operatorRetries": {
+            "type": "integer",
+            "format": "int32"
           },
           "skipWaived": {
             "type": "boolean",

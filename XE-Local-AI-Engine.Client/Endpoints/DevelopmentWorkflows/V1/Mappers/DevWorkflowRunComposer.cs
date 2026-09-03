@@ -55,6 +55,10 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         // apart — the ancestor that decides it need not be among the join's own dependencies — so the answer ships on
         // the row rather than being re-derived in the browser.
         var waivedSkips = DevWorkflowGraphContract.WaivedSkipNodeKeys(run.GraphJson, byKey);
+
+        // ONE decision read for the whole run, like every other list this composer works from: how many attempts a
+        // human bought is a per-node answer, and asking it per node would be an N+1 on the repaint fetch.
+        var decisions = await _store.ListDecisionsAsync(run.Id, cancellationToken).ConfigureAwait(false);
         var nodes = detail.NodeRuns
                           .Select(nodeRun => ToSummary(nodeRun,
                               nodesByKey.GetValueOrDefault(nodeRun.NodeKey),
@@ -65,7 +69,8 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
                               materializationCounts,
                               agentsById,
                               staleInputs.Contains(nodeRun.Id),
-                              SkipWaived(nodeRun, waivedSkips)))
+                              SkipWaived(nodeRun, waivedSkips),
+                              OperatorRetries(nodeRun, decisions)))
                           .ToList();
 
         return new DevWorkflowRunResponse(run.Id,
@@ -159,6 +164,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             nodeRun.FailureClass,
             nodeRun.TerminalReason,
             [.. decisions.Where(decision => decision.NodeRunId == nodeRunId).OrderBy(static decision => decision.Sequence).Select(DevWorkflowContractMapper.ToResponse)],
+            OperatorRetries(nodeRun, decisions),
             nodeRun.StartedAtUtc,
             nodeRun.EndedAtUtc,
             nodeRun.Sequence);
@@ -173,7 +179,8 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         IReadOnlyDictionary<Guid, int> materializationCounts,
         IReadOnlyDictionary<Guid, AgentDefinitionRecord> agentsById,
         bool hasStaleInputs,
-        bool? skipWaived) =>
+        bool? skipWaived,
+        int operatorRetries) =>
         new(nodeRun.Id,
             nodeRun.NodeKey,
             nodeRun.NodeType.ToString(),
@@ -202,7 +209,26 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             StartedAtUtc: nodeRun.StartedAtUtc,
             CompletedAtUtc: nodeRun.EndedAtUtc,
             Sequence: nodeRun.Sequence,
+            OperatorRetries: operatorRetries,
             SkipWaived: skipWaived);
+
+    /// <summary>
+    ///     How many attempts an operator has bought this node run, as a count of its <c>Retry</c> decisions — which is
+    ///     the record of the widening, one row per retry. Derived rather than stored: each retry raises the row's
+    ///     <c>MaxAttempts</c> in place, so nothing on the row remembers what the definition declared.
+    ///     <para>
+    ///         Only the APPLIED ones. A decision is recorded against the attempt it was answered on and the dispatcher
+    ///         widens and increments later, so between the two the row still reads its old attempt and its old cap
+    ///         while the decision already exists — and on a PAUSED run that window stays open until someone resumes it.
+    ///         Counting an unspent retry there made the client subtract a widening that had not happened and render a
+    ///         cap one lower than the definition's. <c>decision.Attempt &lt; nodeRun.Attempt</c> is the same test
+    ///         <c>DevWorkflowRetryPolicy.PromisedAsync</c> uses to tell a promised re-attempt from a spent one.
+    ///     </para>
+    /// </summary>
+    private static int OperatorRetries(DevWorkflowNodeRunSnapshot nodeRun, IReadOnlyList<DevWorkflowDecisionSnapshot> decisions) =>
+        decisions.Count(decision => decision.NodeRunId == nodeRun.Id
+                                    && decision.Decision == DevWorkflowDecisionKind.Retry
+                                    && decision.Attempt < nodeRun.Attempt);
 
     /// <summary>
     ///     The waived verdict as the wire carries it: only a <c>Skipped</c> row has one, and a run whose pinned graph

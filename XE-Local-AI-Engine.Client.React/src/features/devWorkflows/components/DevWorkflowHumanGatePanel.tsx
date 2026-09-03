@@ -212,7 +212,14 @@ export function DevWorkflowHumanGatePanel({
 
 			<Textarea
 				label={t("pages.devWorkflows.gate.commentLabel", "Comment")}
-				description={t("pages.devWorkflows.gate.commentHint", "Required when you reject or ask for changes.")}
+				description={
+					allowedDecisions.includes("Retry")
+						? t(
+								"pages.devWorkflows.gate.commentHintRetry",
+								"Required when you reject or ask for changes. A retry reason is passed to the next attempt.",
+							)
+						: t("pages.devWorkflows.gate.commentHint", "Required when you reject or ask for changes.")
+				}
 				value={comment}
 				maxLength={COMMENT_MAX}
 				autosize={true}

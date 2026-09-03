@@ -133,6 +133,17 @@ describe("DevWorkflowHumanGatePanel", () => {
 		expect(screen.getByTestId("dev-workflow-gate-Abandon")).toBeDefined();
 	});
 
+	it("tells the operator the comment reaches the retried attempt, but only where Retry is on offer", () => {
+		const { unmount } = renderPanel(gateNode({ status: "Blocked", allowedDecisions: ["Retry", "Abandon"] }));
+
+		expect(screen.getByTestId("dev-workflow-gate-panel").textContent).toContain("A retry reason is passed to the next attempt.");
+		unmount();
+
+		renderPanel(gateNode({ allowedDecisions: ["Approve", "Reject"] }));
+
+		expect(screen.getByTestId("dev-workflow-gate-panel").textContent).not.toContain("A retry reason is passed");
+	});
+
 	it("renders ONLY the decisions the server allows, so no button can come back a 409", () => {
 		renderPanel(gateNode({ allowedDecisions: ["Approve", "Reject"] }));
 

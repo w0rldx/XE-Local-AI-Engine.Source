@@ -81,6 +81,69 @@ public sealed class DevWorkflowRetryPolicyTests
         await store.DidNotReceive().TransitionNodeRunAsync(Arg.Any<TransitionDevWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     FU2-3: the state right after an operator retried a node AT the cap its definition declared — the graph
+    ///     allows <c>implement</c> three attempts, they retried it on attempt 2, and the widening left the row at
+    ///     attempt 3 of 4 with their reason on the inputs. A retryable failure on the attempt they bought re-attempts
+    ///     rather than blocking, and ONLY because the check reads the widened cap: at the declared 3 the same row
+    ///     reads "3 of 3" and <c>ReAttemptSameNodeAsync</c> blocks it. The try after theirs is an ORDINARY automatic
+    ///     one, so the members are stripped exactly as a stale <c>priorFailure</c> is — leaving them would have the
+    ///     next objective quote a person who said nothing about the try that just failed.
+    /// </summary>
+    [Test]
+    public async Task AnAutomaticReAttemptAfterAnOperatorRetry_RunsToTheWidenedCapWithoutTheStaleOperatorRetryMembers()
+    {
+        var store = Store();
+        _ = store.TransitionNodeRunAsync(Arg.Any<TransitionDevWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>())
+                 .Returns(new DevWorkflowMutationResult(RunId, Sequence: 7, Version: 3, DevWorkflowRunStatus.Running, GraphRevision: 0));
+
+        var implement = NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running) with
+        {
+            Attempt = 3,
+            MaxAttempts = 4,
+            InputJson = """{"requirements":"Add the negate tests.","operatorRetryReason":"Start from src/inference.","operatorRetryAttempt":3}"""
+        };
+
+        var written = await SettleSameNodeAsync(store, implement).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, written);
+        var command = Transitioned(store).Single();
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending,
+            command.TargetStatus,
+            "the attempt the operator bought is admitted rather than refused by the cap their retry already moved: "
+            + "at the definition's own 3 this row is at its cap and blocks instead.");
+        AssertEx.False(command.WidenMaxAttempts, "and an automatic re-attempt buys nothing of its own.");
+        var input = AssertEx.NotNull(command.InputJson);
+        AssertEx.Contains(input, "requirements", message: "everything the node was admitted with still travels.");
+        AssertEx.Contains(input, "priorFailure");
+        AssertEx.False(input.Contains("operatorRetryReason", StringComparison.Ordinal),
+            "the reason belonged to the attempt the operator retried, and nobody said anything about this one.");
+        AssertEx.False(input.Contains("operatorRetryAttempt", StringComparison.Ordinal));
+    }
+
+    /// <summary>A retryable failure on <c>implement</c>, which declares no retry target and so re-attempts itself.</summary>
+    private static Task<int> SettleSameNodeAsync(IDevWorkflowStore store, DevWorkflowNodeRunSnapshot implement)
+    {
+        var policy = new DevWorkflowRetryPolicy(Substitute.For<IServiceScopeFactory>(),
+            Options.Create(new DevWorkflowOptions()),
+            TimeProvider.System,
+            NullLogger<DevWorkflowRetryPolicy>.Instance);
+        return policy.SettleFailureAsync(store,
+            DevWorkflowGraph.Parse(FixLoop),
+            Run(),
+            implement,
+            [implement],
+            new DevWorkflowFailure(DevWorkflowFailureClasses.ProviderError, "The coder attempt could not reach its model.", """{"failureClass":"ProviderError"}"""),
+            CancellationToken.None);
+    }
+
+    private static IReadOnlyList<TransitionDevWorkflowNodeRunCommand> Transitioned(IDevWorkflowStore store) =>
+    [
+        .. store.ReceivedCalls()
+                .Where(call => string.Equals(call.GetMethodInfo().Name, nameof(IDevWorkflowStore.TransitionNodeRunAsync), StringComparison.Ordinal))
+                .Select(static call => (TransitionDevWorkflowNodeRunCommand)call.GetArguments()[0]!)
+    ];
+
     /// <summary>A failed <c>validate</c> routed back at the <c>implement</c> that produced what it was judging.</summary>
     private static Task<int> RouteAsync(IDevWorkflowStore store)
     {

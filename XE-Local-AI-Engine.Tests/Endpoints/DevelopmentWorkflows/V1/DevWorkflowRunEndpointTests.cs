@@ -1012,6 +1012,93 @@ public sealed class DevWorkflowRunEndpointTests
         AssertEx.Equal(JsonValueKind.Null, nodes["survey"].ValueKind, "the question only means something for a skipped row.");
     }
 
+    /// <summary>
+    ///     FU2-3: an operator's Retry widens the node run's own cap, so the raw pair on the row reads "attempt 4 of 4"
+    ///     for a node whose definition allows three. The count of retries ships beside it, and the cap the definition
+    ///     declared is the subtraction — otherwise the badge either quotes a budget nobody set or reports the runtime
+    ///     breaking one.
+    /// </summary>
+    [Test]
+    public async Task GetRun_CountsTheAttemptsAnOperatorBought()
+    {
+        var retried = WorkNodeRun(1, "research", DevWorkflowNodeRunStatus.Running) with
+        {
+            Attempt = 4,
+            MaxAttempts = 4
+        };
+        var untouched = WorkNodeRun(2, "approval", DevWorkflowNodeRunStatus.Pending);
+
+        // A Retry recorded but NOT yet settled: the decision row is written against the attempt it answered, and the
+        // dispatcher widens and increments on a later tick — indefinitely later while the run is paused.
+        var unapplied = WorkNodeRun(3, "verify", DevWorkflowNodeRunStatus.Blocked) with
+        {
+            Attempt = 3,
+            MaxAttempts = 3
+        };
+        var runs = RunService(new DevWorkflowRunDetail(RunSnapshot(), [retried, untouched, unapplied], PendingDecisionCount: 1, BlockingGateNodeRunId: null));
+        var store = Store();
+        _ = store.ListDecisionsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                 .Returns([
+                     Decision(retried.Id, attempt: 3, DevWorkflowDecisionKind.Retry),
+                     Decision(untouched.Id, attempt: 1, DevWorkflowDecisionKind.Skip),
+                     Decision(unapplied.Id, attempt: 3, DevWorkflowDecisionKind.Retry)
+                 ]);
+        await using var factory = EnabledFactory(store, runs);
+
+        using var response = await SendAsync(factory, "GET", Run).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var nodes = document.RootElement.GetProperty("nodes")
+                            .EnumerateArray()
+                            .ToDictionary(static node => node.GetProperty("nodeKey").GetString()!, static node => node.GetProperty("operatorRetries").GetInt32());
+
+        AssertEx.Equal(expected: 1, nodes["research"], "one APPLIED Retry bought one attempt, so the declared cap is 4 - 1 = 3.");
+        AssertEx.Equal(expected: 0, nodes["approval"], "a decision that is not a Retry buys nothing, and a node nobody retried counts none.");
+        AssertEx.Equal(expected: 0,
+            nodes["verify"],
+            "the retry is recorded against the attempt still on the row, so nothing has been widened yet and subtracting one would show a cap below the definition's.");
+    }
+
+    /// <summary>The drill-down answers the same count, off the decisions it already lists on the same response.</summary>
+    [Test]
+    public async Task GetNodeRun_CountsTheAttemptsAnOperatorBought()
+    {
+        var store = Store();
+        _ = store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>())
+                 .Returns(GateNodeRun() with
+                 {
+                     Attempt = 2,
+                     MaxAttempts = 2
+                 });
+        _ = store.ListDecisionsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                 .Returns([Decision(GateNodeRunId, attempt: 1, DevWorkflowDecisionKind.Retry)]);
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 1,
+            document.RootElement.GetProperty("operatorRetries").GetInt32(),
+            "the panel needs the same subtraction the card does, or the two disagree about the declared cap.");
+    }
+
+    private static DevWorkflowDecisionSnapshot Decision(Guid nodeRunId, int attempt, DevWorkflowDecisionKind decision) =>
+        new(Guid.NewGuid(),
+            RunId,
+            nodeRunId,
+            attempt,
+            decision,
+            Comment: null,
+            PayloadJson: null,
+            DecidedBySubject: "operator",
+            OperationId: Guid.NewGuid(),
+            Sequence: attempt,
+            DecidedAtUtc: 1);
+
     /// <summary>One work node run of the run under test, distinguished only by its key and status.</summary>
     private static DevWorkflowNodeRunSnapshot WorkNodeRun(int ordinal, string nodeKey, DevWorkflowNodeRunStatus status) =>
         GateNodeRun() with

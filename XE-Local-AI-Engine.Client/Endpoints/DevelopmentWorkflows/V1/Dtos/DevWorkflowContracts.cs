@@ -395,6 +395,14 @@ public sealed record DevWorkflowNodeRunSummaryResponse(
     long? CompletedAtUtc,
     long Sequence,
     /// <summary>
+    ///     How many times an operator has retried this node run. A human retry is allowed AT the cap and buys one more
+    ///     attempt, so <see cref="MaxAttempts" /> already includes them: the cap the DEFINITION declared is
+    ///     <c>maxAttempts - operatorRetries</c>, and a client that shows the raw pair says "attempt 4 of 4" for a node
+    ///     whose definition allows three. Counted server-side off the run's decision rows, which are the record of the
+    ///     widening.
+    /// </summary>
+    int OperatorRetries,
+    /// <summary>
     ///     For a <c>Skipped</c> row only: whether the state machine WAIVES this skip, so a downstream <c>All</c> join
     ///     carries on past it as long as a sibling arrived. <c>false</c> means the skip is dead and the join will skip
     ///     with it; <c>null</c> means the question does not apply — any other status — or that the pinned graph could
@@ -447,6 +455,14 @@ public sealed record DevWorkflowNodeRunDetailResponse(
     string? FailureClass,
     string? TerminalReason,
     IReadOnlyList<DevWorkflowDecisionResponse> Decisions,
+    /// <summary>
+    ///     How many times an operator has retried this node run. A human retry is allowed AT the cap and buys one more
+    ///     attempt, so <see cref="MaxAttempts" /> already includes them: the cap the DEFINITION declared is
+    ///     <c>maxAttempts - operatorRetries</c>, and a client that shows the raw pair says "attempt 4 of 4" for a node
+    ///     whose definition allows three. Counted server-side off the run's decision rows, which are the record of the
+    ///     widening.
+    /// </summary>
+    int OperatorRetries,
     long? StartedAtUtc,
     long? CompletedAtUtc,
     long Sequence);
