@@ -113,6 +113,30 @@ internal static class DevWorkflowGraphs
                                         """;
 
     /// <summary>
+    ///     <see cref="FanOutFixLoop" /> with the loop BOUNDED by the definition: the check allows one re-run of its
+    ///     producer and no more. The producer's own attempt ceiling is raised out of the way, so what stops the loop
+    ///     here is the per-loop cap rather than the target's attempts — otherwise the two bounds cannot be told apart.
+    /// </summary>
+    public const string FanOutFixLoopBounded = """
+                                               {
+                                                 "schemaVersion": 1,
+                                                 "nodes": [
+                                                   { "nodeKey": "implement", "nodeType": "Agent", "label": "Implement", "maxAttempts": 6,
+                                                     "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                                   { "nodeKey": "lint", "nodeType": "Tool" },
+                                                   { "nodeKey": "test", "nodeType": "Tool", "retryTarget": "implement", "maxAttempts": 6, "maxLoopIterations": 1 },
+                                                   { "nodeKey": "join", "nodeType": "Join" }
+                                                 ],
+                                                 "edges": [
+                                                   { "from": "implement", "to": "lint" },
+                                                   { "from": "implement", "to": "test" },
+                                                   { "from": "lint", "to": "join" },
+                                                   { "from": "test", "to": "join" }
+                                                 ]
+                                               }
+                                               """;
+
+    /// <summary>
     ///     TWO checks that both route their failures to the same producer, so both can fail in one round and each is a
     ///     node the other's reset would move. The shape a fix loop deadlocks on if a route waits for its siblings.
     /// </summary>

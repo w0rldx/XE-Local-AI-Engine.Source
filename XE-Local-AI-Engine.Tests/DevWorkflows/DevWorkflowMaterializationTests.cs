@@ -219,12 +219,105 @@ public sealed class DevWorkflowMaterializationTests
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
         AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
-        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).Count, "no children, and no rows invented for a template nothing cloned.");
+        AssertEx.Equal(expected: 3,
+            (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).Count,
+            "no children, and one row — and only one — standing for the validation that did not apply.");
         AssertEx.Equal(expected: 0, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).GraphRevision, "there was no rewrite to make: the graph already said this.");
-        var marker = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Single(static entry => entry.EventType == "graph.changed");
+        var events = await harness.ReadEventsAsync(runId).ConfigureAwait(false);
+        AssertEx.Empty(events.Where(static entry => entry.EventType == "graph.changed"), "no graph changed, so nothing says one did.");
+        var marker = events.Last(static entry => entry.EventType == "node.materialized");
         AssertEx.Contains(AssertEx.NotNull(marker.DetailJson),
-            "\"revisionBumped\":false",
-            message: "the one graph.changed that changes no graph says so, or a consumer refetches and gets the same revision back.");
+            "\"graphRevision\":0",
+            message: "the commit marker says no graph moved, or a consumer refetches and gets the same revision back.");
+    }
+
+    /// <summary>
+    ///     Ruling D12: the zero-task path writes one already-succeeded row per validation node in the template, rather
+    ///     than exempting the apply downstream from having to find one.
+    ///     <para>
+    ///         Without the row an apply node's runtime pre-check asks about a template key that has no row at all,
+    ///         reads it as "nothing validated this", and blocks a run that did exactly what it was asked. The row is
+    ///         seeded terminal rather than seeded and then transitioned: a <c>Pending</c> row at a template key is
+    ///         admissible — its only inbound edge is dropped as template-sourced — so the tool lane would really run
+    ///         the template's validation commands, and a crash between the two writes would do that.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ADecompositionThatFoundNoWorkWritesOneNotApplicableValidateRow()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await DecomposeAsync(harness, "[]").ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var validate = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, validate.Status, "the row stands for a check that did not need to run, so it is not pending work.");
+        AssertEx.Contains(AssertEx.NotNull(validate.OutputJson),
+            "\"verdict\":\"validation-not-applicable\"",
+            message: "and it says WHY it succeeded, or a reader takes it for a check that passed.");
+        AssertEx.Contains(validate.OutputJson!,
+            "\"status\":\"succeeded\"",
+            message: "the routing vocabulary's own value, so a conditional out-edge on this node fires as a real pass would.");
+        AssertEx.Null(validate.MaterializationIndex, "it stands for ZERO clones, which is a different fact from being clone n.");
+    }
+
+    /// <summary>
+    ///     And the reason the row exists: the apply behind the join is reached UNBLOCKED. The apply's runtime check asks
+    ///     whether a validation succeeded on the path this run took, and "there was nothing to decompose" has to answer
+    ///     that as a pass rather than as an absence.
+    /// </summary>
+    [Test]
+    public async Task AZeroTaskDecompositionReachesItsApplyUnblocked()
+    {
+        await using var harness = DevWorkflowHarness.WithAScriptedChain();
+        var runId = await IntegrationRunWithNoWorkAsync(harness).ConfigureAwait(false);
+
+        await harness.DecideAsync(runId, "integrationapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var integrate = await harness.ReadNodeRunAsync(runId, "integrate").ConfigureAwait(false);
+        AssertEx.NotEqual(DevWorkflowNodeRunStatus.Pending, integrate.Status, "the apply was dispatched at all, or this asserts nothing about the pre-check.");
+        AssertEx.False((integrate.TerminalReason ?? string.Empty).Contains("GRAPH-C4-3", StringComparison.Ordinal),
+            $"the apply must not be blocked for want of a validation that was written for it: {integrate.FailureClass} — {integrate.TerminalReason}");
+    }
+
+    /// <summary>
+    ///     The counter-proof, and the rule the pre-check exists for: when the validation the apply's proof rested on is
+    ///     no longer a success, the apply is blocked for a human rather than applying patches nothing has judged.
+    ///     <para>
+    ///         The row is moved directly, which is what the harness's own escape hatch is for: at this baseline every
+    ///         reachable path to an apply keeps its validation succeeded, and the shape this models is the one the
+    ///         follow-up round introduces — an operator's skip that an <c>All</c> join now carries on past.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AnApplyWhoseValidationNoLongerSucceededIsBlockedWithPolicy()
+    {
+        await using var harness = DevWorkflowHarness.WithAScriptedChain();
+        var runId = await IntegrationRunWithNoWorkAsync(harness).ConfigureAwait(false);
+
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Failed).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "integrationapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var integrate = await harness.ReadNodeRunAsync(runId, "integrate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, integrate.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.Policy,
+            integrate.FailureClass,
+            "a policy refusal needs a person; calling it a configuration fault sends them to fix a definition that is fine.");
+        AssertEx.Contains(AssertEx.NotNull(integrate.TerminalReason), "GRAPH-C4-3", StringComparison.Ordinal);
+    }
+
+    /// <summary>The shipped integration shape, decomposed into no work at all and standing at its integration gate.</summary>
+    private static async Task<Guid> IntegrationRunWithNoWorkAsync(DevWorkflowHarness harness)
+    {
+        var (projectId, _) = await harness.SeedDevelopmentProjectAsync().ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionIntoDevTasksAndIntegration, "Add the feature.", projectId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "decompose", "tasks.json", "[]").ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        return runId;
     }
 
     /// <summary>

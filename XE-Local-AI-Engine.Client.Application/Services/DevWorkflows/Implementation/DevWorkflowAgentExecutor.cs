@@ -4,10 +4,15 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Common;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 
 /// <summary>
 ///     The agent lane: one work session per agent node-run attempt, driven by the run that owns it.
@@ -57,18 +62,33 @@ internal sealed class DevWorkflowAgentExecutor
     /// </summary>
     private const int MaxInjectableArtifactBytes = 256 * 1024;
 
+    /// <summary>
+    ///     The four work-session state tools, by name. They are <c>WriteExecute</c> because they write durable session
+    ///     rows, which is the only write category the enum has — and they are what EVERY workflow agent node is offered,
+    ///     so counting them would make <c>GRAPH-C4-2</c>'s runtime half block every agent node there is. Read off the
+    ///     catalog rather than listed here, so a fifth state tool joins the exclusion by being declared, and a new
+    ///     write tool that is NOT one of them counts until someone adds it there.
+    /// </summary>
+    private static readonly HashSet<string> SessionRowTools = [.. WorkSessionToolCatalog.Descriptors.Select(static descriptor => descriptor.Name)];
+
     private readonly IAgentDefinitionStore _agents;
     private readonly IDevWorkflowArtifactBlobStore _blobs;
+    private readonly ILocalDefaultChatModelResolver _localDefaultModel;
     private readonly ILogger<DevWorkflowAgentExecutor> _logger;
+    private readonly INodeSettingsStore _nodeSettings;
     private readonly DevWorkflowOptions _options;
     private readonly DevWorkflowArtifactPromotion _promotion;
     private readonly DevWorkflowRetryPolicy _retries;
+    private readonly IAgentDefinitionResolver _runtimes;
     private readonly IAgentWorkSessionStore _sessionStore;
     private readonly IWorkflowOwnedWorkSessionLifecycle _sessions;
 
     public DevWorkflowAgentExecutor(IWorkflowOwnedWorkSessionLifecycle sessions,
         IAgentWorkSessionStore sessionStore,
         IAgentDefinitionStore agents,
+        IAgentDefinitionResolver runtimes,
+        INodeSettingsStore nodeSettings,
+        ILocalDefaultChatModelResolver localDefaultModel,
         DevWorkflowArtifactPromotion promotion,
         IDevWorkflowArtifactBlobStore blobs,
         DevWorkflowRetryPolicy retries,
@@ -79,6 +99,9 @@ internal sealed class DevWorkflowAgentExecutor
         _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
         _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
         _agents = agents ?? throw new ArgumentNullException(nameof(agents));
+        _runtimes = runtimes ?? throw new ArgumentNullException(nameof(runtimes));
+        _nodeSettings = nodeSettings ?? throw new ArgumentNullException(nameof(nodeSettings));
+        _localDefaultModel = localDefaultModel ?? throw new ArgumentNullException(nameof(localDefaultModel));
         _promotion = promotion ?? throw new ArgumentNullException(nameof(promotion));
         _blobs = blobs ?? throw new ArgumentNullException(nameof(blobs));
         _retries = retries ?? throw new ArgumentNullException(nameof(retries));
@@ -164,6 +187,14 @@ internal sealed class DevWorkflowAgentExecutor
         catch (DevWorkflowValidationException exception)
         {
             return written + await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Configuration, exception.Message, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (DevWorkflowPolicyException exception)
+        {
+            // GRAPH-C4-2's runtime half. NOT Configuration: nothing is misconfigured — the node's agent may do more
+            // than the definition admits to, and only a person can say whether that is meant. Policy blocks for a
+            // human rather than failing the run, and a retry would produce the same answer.
+            return written + await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Policy, exception.Message, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -314,6 +345,7 @@ internal sealed class DevWorkflowAgentExecutor
         }
 
         var agentDefinitionId = await ResolveAgentAsync(node, cancellationToken).ConfigureAwait(false);
+        await EnsureDeclaredWhatItCanWriteAsync(graph, node, agentDefinitionId, cancellationToken).ConfigureAwait(false);
         var objective = await ComposeObjectiveAsync(store, graph, run, node, nodeRun, cancellationToken).ConfigureAwait(false);
         var created = await _sessions.CreateAsync(node.Label, objective, agentDefinitionId, RuntimeOf(node), cancellationToken).ConfigureAwait(false);
 
@@ -413,6 +445,60 @@ internal sealed class DevWorkflowAgentExecutor
         node is { } present && (present.ModelProfile is not null || present.ReasoningEffort is not null)
             ? new WorkSessionRuntimeOverride(present.ModelProfile, present.ReasoningEffort)
             : null;
+
+    /// <summary>
+    ///     <c>GRAPH-C4-2</c>'s runtime half: an Agent node whose bound agent will really be offered a tool that writes
+    ///     or runs commands has to have SAID so, or the template has to have waived the rule once and in writing.
+    ///     <para>
+    ///         The structural half alone would be inert by construction — it can only bite on an apply node, which Y3
+    ///         already gates, and on a declaration an author volunteered. What a node may actually do is decided when
+    ///         the binding is resolved, so the question is asked there.
+    ///     </para>
+    ///     <para>
+    ///         Asked of the RESOLVER's own answer, never of a re-derived <c>offer ∩ allowedToolNames</c>. The seeded
+    ///         Default Assistant takes the WHOLE capability-gated offer and ships with an empty allowed set, so a
+    ///         re-derived intersection is empty for exactly the binding whose reach is widest — the hole this rule
+    ///         exists to close. The effective model is resolved first because the offer is capability-gated: a null
+    ///         model returns a thinner offer and would under-block. The node's own override wins over the definition's
+    ///         pin, which is what <c>honorModelProfile</c> says here, exactly as the runtime override does at dispatch.
+    ///     </para>
+    ///     <para>
+    ///         A node that already declares <c>WriteExecute</c> is not asked at all: its declaration has dragged it
+    ///         into the structural rule's gate requirement at save, which is the stronger answer and the earlier one.
+    ///     </para>
+    /// </summary>
+    private async Task EnsureDeclaredWhatItCanWriteAsync(DevWorkflowGraph graph, DevWorkflowGraphNode node, Guid agentDefinitionId, CancellationToken cancellationToken)
+    {
+        if (graph.AllowUngatedWrites || DevWorkflowGraph.Effects(node).Contains(DevWorkflowNodeEffect.WriteExecute))
+        {
+            return;
+        }
+
+        var settings = await _nodeSettings.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var activeModel = node.ModelProfile ?? await _localDefaultModel.ResolveAsync(settings.DefaultModelName, cancellationToken).ConfigureAwait(false);
+        var resolved = await _runtimes.ResolveAsync(agentDefinitionId,
+                                          activeModel,
+                                          retrievalQuery: null,
+                                          supportsTools: true,
+                                          honorModelProfile: node.ModelProfile is null,
+                                          activeModelIsCloud: false,
+                                          cancellationToken)
+                                      .ConfigureAwait(false);
+        if (resolved is null)
+        {
+            // The bound id names a definition that no longer exists. That is not this rule's business: the paths that
+            // own it answer it already, and this one has nothing to judge.
+            return;
+        }
+
+        if (resolved.AllowedTools.FirstOrDefault(static tool => tool.Category == ToolCategory.WriteExecute && !SessionRowTools.Contains(tool.Name)) is { } write)
+        {
+            throw new DevWorkflowPolicyException($"Node '{node.NodeKey}' is bound to an agent that will be offered '{write.Name}', which can write files or run "
+                                                 + "commands outside this node's sandbox, and the node declares no 'WriteExecute' capability. Declare it on the "
+                                                 + "node — which then needs a human gate on every path into it — or set 'allowUngatedWrites' on this template and "
+                                                 + "say why (invariant GRAPH-C4-2).");
+        }
+    }
 
     private async Task<Guid> ResolveAgentAsync(DevWorkflowGraphNode node, CancellationToken cancellationToken)
     {

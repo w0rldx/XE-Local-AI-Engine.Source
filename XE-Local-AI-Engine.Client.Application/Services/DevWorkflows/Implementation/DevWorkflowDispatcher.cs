@@ -884,6 +884,21 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
         if (node.NodeType == DevWorkflowNodeType.Tool)
         {
+            if (node.ToolMode == DevWorkflowToolMode.Apply && !AValidationSucceededOnThePathTaken(graph, node, byKey))
+            {
+                // GRAPH-C4-3's runtime half, and it goes BEFORE the consumption record below: a blocked apply must not
+                // first record that it consumed inputs it never read. Policy rather than a failure — nothing broke,
+                // and the answer is a person's.
+                return await BlockAsync(store,
+                        run,
+                        nodeRun,
+                        $"Node '{node.NodeKey}' applies approved patches, and no validation node succeeded on the path this run took. "
+                        + "Nothing has judged what is about to be applied (invariant GRAPH-C4-3).",
+                        DevWorkflowFailureClasses.Policy,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
             if (nodeRun.Status == DevWorkflowNodeRunStatus.Pending)
             {
                 // These commands judge what the steps before them produced, so a later version of any of it makes this
@@ -1022,6 +1037,56 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         {
             return null;
         }
+    }
+
+    /// <summary>
+    ///     <c>GRAPH-C4-3</c>, asked of the rows a run actually landed rather than of every structural ancestor: does the
+    ///     apply node's SATISFIED provenance contain a <c>Tool</c>/<c>Validate</c> node whose row succeeded?
+    ///     <para>
+    ///         One backward walk over inbound edges the state machine itself calls <c>Satisfied</c>, which is what makes
+    ///         the rule the smaller one. A branch that did not run drops out with no special case — a <c>Skipped</c>,
+    ///         <c>Failed</c> or <c>Cancelled</c> source kills every out-edge — so an <c>Any</c> convergence whose other
+    ///         branch carried its own validation does not block the apply on work that was correctly not done. By the
+    ///         same token no "and all of them succeeded" companion is needed: a validation that did not succeed cannot
+    ///         be on a satisfied path at all, because its own out-edges would be dead.
+    ///     </para>
+    ///     <para>
+    ///         An unmaterialized template key reads <c>Pending</c> and falls out exactly as admission's own template
+    ///         filter drops it — and the zero-task decomposition's no-op verdict row puts it back in, which is what
+    ///         makes that path pass this check without an exemption of its own.
+    ///     </para>
+    /// </summary>
+    private static bool AValidationSucceededOnThePathTaken(DevWorkflowGraph graph,
+        DevWorkflowGraphNode apply,
+        IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> byKey)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal)
+        {
+            apply.NodeKey
+        };
+        var pending = new Stack<string>();
+        pending.Push(apply.NodeKey);
+        while (pending.Count > 0)
+        {
+            foreach (var edge in graph.InboundEdges(pending.Pop()))
+            {
+                var source = byKey.GetValueOrDefault(edge.From);
+                if (DevWorkflowStateMachine.EdgeState(edge, source) != DevWorkflowEdgeState.Satisfied || !seen.Add(edge.From))
+                {
+                    continue;
+                }
+
+                if (graph.Nodes.GetValueOrDefault(edge.From) is { NodeType: DevWorkflowNodeType.Tool, ToolMode: DevWorkflowToolMode.Validate }
+                    && source?.Status == DevWorkflowNodeRunStatus.Succeeded)
+                {
+                    return true;
+                }
+
+                pending.Push(edge.From);
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

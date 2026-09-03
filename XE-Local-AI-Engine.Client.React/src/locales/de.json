@@ -5206,6 +5206,7 @@
 				"loadFailed": "Der Bericht dieses Knotens konnte nicht geladen werden.",
 				"unreadable": "Der Bericht dieses Knotens konnte nicht gelesen werden, sein Ergebnis ist deshalb nicht belastbar. Öffnen Sie ihn im Reiter „Artefakte“, um den gespeicherten Inhalt zu sehen.",
 				"refused": "Es wurde kein Bericht geschrieben, hier steht daher nichts, was belegt, was dieser Knoten getan hat.",
+				"notApplicable": "Für diesen Lauf wurde nichts zerlegt, daher hatte diese Prüfung nichts zu validieren.",
 				"priorAttempt": "Der gespeicherte Bericht stammt aus Versuch {{reportAttempt}}, dieser Knoten ist bei Versuch {{attempt}}. Er ist nicht das aktuelle Ergebnis — öffnen Sie ihn im Reiter „Artefakte“, wenn Sie den früheren Nachweis brauchen.",
 				"passed": "Prüfung bestanden",
 				"failed": "Prüfung fehlgeschlagen",

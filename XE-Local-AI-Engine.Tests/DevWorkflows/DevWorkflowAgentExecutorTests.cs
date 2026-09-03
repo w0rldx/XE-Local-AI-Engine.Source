@@ -2,10 +2,17 @@ namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
@@ -914,4 +921,187 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
             $"the objective was {objective.Length} characters, past the ceiling.");
     }
+
+    /// <summary>
+    ///     <c>GRAPH-C4-2</c>'s runtime half: what a node may actually do is decided when its binding is resolved, so an
+    ///     Agent node whose agent will really be offered a write/execute tool has to have SAID so.
+    ///     <para>
+    ///         <c>Policy</c>, not <c>Configuration</c>: nothing is misconfigured — the definition is coherent and the
+    ///         agent is legitimately allowed the tool — and only a person can say whether a workflow node meant to have
+    ///         it. The tool is named, because "declare a capability" is not actionable without knowing which one.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AnAgentNodeOfferedAWriteToolAndDeclaringNothing_BlocksWithPolicy()
+    {
+        await using var harness = OfferingAWriteTool();
+        var agentId = await AllowingAsync(harness, "run_python").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(BoundAgent(agentId)).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, research.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.Policy, research.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(research.TerminalReason), "run_python");
+        AssertEx.Contains(research.TerminalReason!, "GRAPH-C4-2", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     The same node, declaring what it can do and standing behind the gate that declaration then requires, runs.
+    ///     The rule asks for a declaration, not for a tool to be taken away.
+    /// </summary>
+    [Test]
+    public async Task AnAgentNodeDeclaringTheWriteBehindAGate_Runs()
+    {
+        await using var harness = OfferingAWriteTool();
+        var agentId = await AllowingAsync(harness, "run_python").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GatedBoundAgent(agentId)).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, research.Status, $"the declared node runs: {research.FailureClass} — {research.TerminalReason}");
+        AssertEx.NotEmpty(harness.Agent.Created);
+    }
+
+    /// <summary>
+    ///     The regression a re-derived <c>offer ∩ allowedToolNames</c> would have missed. The seeded Default Assistant
+    ///     takes the WHOLE capability-gated offer and ships with an EMPTY allowed set, so the intersection is empty for
+    ///     exactly the binding whose reach is widest — and a node bound to it would have passed this check while being
+    ///     offered every write tool on the node. The question is asked of the resolver's own answer instead.
+    /// </summary>
+    [Test]
+    public async Task AnAgentNodeBoundToTheDefaultAssistant_IsJudgedOnTheWholeOfferItReallyGets()
+    {
+        await using var harness = OfferingAWriteTool();
+        AgentDefinitionRecord seeded;
+        await using (var scope = harness.Services.CreateAsyncScope())
+        {
+            seeded = await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>()
+                                .AddSeededAsync(new AgentDefinitionInput("Default Assistant",
+                                        Description: null,
+                                        "Be helpful.",
+                                        ModelProfile: null,
+                                        ReasoningEffort: null,
+                                        AgentDefinitionKind.Single,
+                                        AllowedToolNames: [],
+                                        new Dictionary<string, bool>(StringComparer.Ordinal),
+                                        OrchestrationTopologyJson: null),
+                                    AgentDefaults.DefaultAgentSeedSlug)
+                                .ConfigureAwait(false);
+        }
+
+        var runId = await harness.StartRunAsync(BoundAgent(seeded.Id)).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked,
+            research.Status,
+            "an empty allowed set is not an empty offer, and this binding is the one definition that proves it.");
+        AssertEx.Equal(DevWorkflowFailureClasses.Policy, research.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(research.TerminalReason), "run_python");
+    }
+
+    /// <summary>
+    ///     And the four work-session state tools are not what this rule is about. They are <c>WriteExecute</c> because
+    ///     they write durable session rows, EVERY workflow agent node is offered them, and counting them would block
+    ///     every agent node there is — so they are excluded off the catalog that declares them.
+    /// </summary>
+    [Test]
+    public async Task AnAgentNodeOfferedOnlyTheSessionRowTools_IsNotBlocked()
+    {
+        await using var harness = OfferingTools(SessionRowOffer());
+        var agentId = await AllowingAsync(harness, "record_finding").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(BoundAgent(agentId)).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, research.Status, $"{research.FailureClass} — {research.TerminalReason}");
+    }
+
+    /// <summary>One agent node bound to a definition this test created, which is what makes the resolver answer at all.</summary>
+    private static string BoundAgent(Guid agentDefinitionId) =>
+        $$"""
+          {
+            "schemaVersion": 1,
+            "nodes": [{ "nodeKey": "research", "nodeType": "Agent", "label": "Research", "agentDefinitionId": "{{agentDefinitionId}}" }],
+            "edges": []
+          }
+          """;
+
+    /// <summary>The same node declaring the write, behind the human gate that declaration then requires (GRAPH-C4-2a).</summary>
+    private static string GatedBoundAgent(Guid agentDefinitionId) =>
+        $$"""
+          {
+            "schemaVersion": 1,
+            "nodes": [
+              { "nodeKey": "approve", "nodeType": "HumanGate", "label": "Approve" },
+              { "nodeKey": "research", "nodeType": "Agent", "label": "Research", "agentDefinitionId": "{{agentDefinitionId}}",
+                "requiredCapabilities": { "WriteExecute": "runs the release script" } }
+            ],
+            "edges": [{ "from": "approve", "to": "research" }]
+          }
+          """;
+
+    /// <summary>A definition allowing exactly the named tools, so the resolver's intersecting branch answers with them.</summary>
+    private static async Task<Guid> AllowingAsync(DevWorkflowHarness harness, params string[] toolNames)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        var created = await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>()
+                                 .AddAsync(new AgentDefinitionInput("Workflow agent",
+                                     Description: null,
+                                     "Do the step.",
+                                     ModelProfile: null,
+                                     ReasoningEffort: null,
+                                     AgentDefinitionKind.Single,
+                                     toolNames,
+                                     new Dictionary<string, bool>(StringComparer.Ordinal),
+                                     OrchestrationTopologyJson: null))
+                                 .ConfigureAwait(false);
+        return created.Id;
+    }
+
+    /// <summary>
+    ///     A host whose tool offer really carries a write/execute tool. Stubbed rather than driven off the node's
+    ///     installed models: the offer is capability-gated on the effective model, and a test host has none — so the
+    ///     real provider would answer with nothing and this rule would be asserted against an empty set.
+    /// </summary>
+    private static DevWorkflowHarness OfferingAWriteTool() =>
+        OfferingTools([
+            .. SessionRowOffer(),
+            new AllowedToolDto
+            {
+                Id = Guid.NewGuid(),
+                Name = "run_python",
+                Location = ToolLocation.ClientLocal,
+                Category = ToolCategory.WriteExecute
+            }
+        ]);
+
+    private static DevWorkflowHarness OfferingTools(IReadOnlyList<AllowedToolDto> offer) =>
+        new(services =>
+        {
+            var provider = Substitute.For<ILocalToolOfferProvider>();
+            _ = provider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(offer);
+            _ = provider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(offer);
+            _ = provider.GetKnownToolNamesAsync(Arg.Any<CancellationToken>()).Returns([.. offer.Select(static tool => tool.Name)]);
+            services.RemoveAll<ILocalToolOfferProvider>();
+            services.AddSingleton(provider);
+        });
+
+    /// <summary>The four state tools as the offer really carries them: write/execute, and on every agent node.</summary>
+    private static List<AllowedToolDto> SessionRowOffer() =>
+        [
+            .. new[] { "update_work_plan", "record_finding", "save_artifact", "complete_work_session" }.Select(static name => new AllowedToolDto
+            {
+                Id = Guid.NewGuid(),
+                Name = name,
+                Location = ToolLocation.ClientLocal,
+                Category = ToolCategory.WriteExecute
+            })
+        ];
 }

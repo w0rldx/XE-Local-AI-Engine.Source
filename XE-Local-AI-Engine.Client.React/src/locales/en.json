@@ -5206,6 +5206,7 @@
 				"loadFailed": "Could not load this node's report.",
 				"unreadable": "This node's report could not be read, so its result cannot be trusted. Open it in the artifacts tab to see what was stored.",
 				"refused": "No report was written, so there is nothing here that evidences what this node did.",
+				"notApplicable": "Nothing was decomposed for this run, so this check had nothing to validate.",
 				"priorAttempt": "The stored report is attempt {{reportAttempt}}'s, and this node is on attempt {{attempt}}. It is not the current result — open it from the artifacts tab if you want the earlier evidence.",
 				"passed": "Validation passed",
 				"failed": "Validation failed",
