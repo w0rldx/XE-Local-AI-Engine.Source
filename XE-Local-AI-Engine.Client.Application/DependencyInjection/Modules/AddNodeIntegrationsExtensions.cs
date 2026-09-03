@@ -54,6 +54,10 @@ internal static class AddNodeIntegrationsExtensions
         builder.Services.AddSingleton<IntegrationCancellationRegistry>();
         builder.Services.AddScoped<IIntegrationInvocationService, IntegrationInvocationService>();
 
+        // The single consumer of that channel. Hosted, so its startup sweep runs before the loop reads an id, and so
+        // the loop stops with the host.
+        builder.Services.AddHostedService<IntegrationExecutionCoordinator>();
+
         return builder;
     }
 }

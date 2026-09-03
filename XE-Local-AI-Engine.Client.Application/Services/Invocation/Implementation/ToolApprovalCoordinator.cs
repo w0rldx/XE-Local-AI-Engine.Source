@@ -169,7 +169,7 @@ public sealed class ToolApprovalCoordinator
 
         if (package.IsUnattended)
         {
-            var reason = $"approval required in an unattended run: {approvalToolName ?? approvalRequest.ToolCall.CallId}";
+            var reason = $"{ApprovalUnavailableException.UnattendedReasonPrefix}{approvalToolName ?? approvalRequest.ToolCall.CallId}";
             _logger.LogWarning("Failing unattended invocation {InvocationId}: {Reason}", package.InvocationId, reason);
             await RecordApprovalDecisionAuditAsync(package,
                 approvalToolName,

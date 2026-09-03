@@ -181,6 +181,16 @@ internal sealed class FakeIntegrationTriggerStore : IIntegrationTriggerStore
         _rows.Add(snapshot);
         return snapshot;
     }
+
+    /// <summary>Disables a seeded trigger, which the accept path and the coordinator both treat as "no such trigger".</summary>
+    public void Disable(Guid triggerId)
+    {
+        var index = _rows.FindIndex(row => row.Id == triggerId);
+        _rows[index] = _rows[index] with
+        {
+            Enabled = false
+        };
+    }
 }
 
 /// <summary>
@@ -270,6 +280,43 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
     public Task<IntegrationExecutionSnapshot?> GetByIdAsync(Guid executionId, CancellationToken cancellationToken = default) =>
         Task.FromResult(_rows.SingleOrDefault(row => row.Id == executionId));
 
+    /// <summary>
+    ///     Inserts a row an earlier accept would have committed, so a suite can start from any point of the state
+    ///     machine without replaying the whole admission path.
+    /// </summary>
+    public IntegrationExecutionSnapshot Seed(Guid executionId,
+        Guid triggerId,
+        Guid sessionId,
+        IntegrationExecutionStatus status = IntegrationExecutionStatus.Accepted,
+        long receivedAtUtc = 0,
+        long lastSequence = 1,
+        long version = 0,
+        long? stopRequestedAtUtc = null,
+        string keyPrefix = "xeint_abcdefgh")
+    {
+        var snapshot = new IntegrationExecutionSnapshot(executionId,
+            triggerId,
+            sessionId,
+            PrincipalId: Guid.NewGuid(),
+            RequestId: Guid.NewGuid(),
+            RequestFingerprint: ReadOnlyMemory<byte>.Empty,
+            keyPrefix,
+            InvocationId: Guid.Empty,
+            status,
+            receivedAtUtc,
+            StartedAtUtc: null,
+            EndedAtUtc: null,
+            stopRequestedAtUtc,
+            FailureCategory: null,
+            FailureSummary: null,
+            OutputCount: 0,
+            OutputBytes: 0,
+            lastSequence,
+            version);
+        _rows.Add(snapshot);
+        return snapshot;
+    }
+
     public Task<IntegrationExecutionSnapshot?> GetByRequestIdAsync(Guid principalId, Guid requestId, CancellationToken cancellationToken = default)
     {
         if (HideNextRequestIdLookup)
@@ -296,9 +343,18 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
         return Task.FromResult<IReadOnlyList<IntegrationExecutionSnapshot>>(matches);
     }
 
+    /// <summary>Makes the next non-terminal CAS lose, as it does when a concurrent cancel CASed the same version first.</summary>
+    public bool FailNextStatusCas { get; set; }
+
     public Task<bool> UpdateStatusAsync(IntegrationExecutionStatusUpdate command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        if (FailNextStatusCas)
+        {
+            FailNextStatusCas = false;
+            return Task.FromResult(false);
+        }
 
         var index = _rows.FindIndex(row => row.Id == command.ExecutionId);
         if (index < 0 || _rows[index].Version != command.ExpectedVersion || !command.ExpectedStatuses.Contains(_rows[index].Status))
@@ -320,9 +376,41 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
         return Task.FromResult(true);
     }
 
+    /// <summary>Makes the next terminal transaction throw, which must publish nothing and leave the row non-terminal.</summary>
+    public bool ThrowOnNextTerminalize { get; set; }
+
+    /// <summary>Makes the next terminal CAS lose, as it does when another path terminalized the row first.</summary>
+    public bool FailNextTerminalizeCas { get; set; }
+
+    /// <summary>Makes the bounded retry lose as well, so a caller cannot recover by re-reading the row's version.</summary>
+    public bool FailSecondTerminalizeCas { get; set; }
+
+    /// <summary>Moves a row's receive stamp, so a queue-age deadline can be driven without waiting real minutes.</summary>
+    public void Backdate(Guid executionId, long receivedAtUtc)
+    {
+        var index = _rows.FindIndex(row => row.Id == executionId);
+        _rows[index] = _rows[index] with
+        {
+            ReceivedAtUtc = receivedAtUtc
+        };
+    }
+
     public Task<bool> TryTerminalizeAsync(IntegrationTerminalizeCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        if (ThrowOnNextTerminalize)
+        {
+            ThrowOnNextTerminalize = false;
+            throw new DbUpdateException("The terminal transaction failed.");
+        }
+
+        if (FailNextTerminalizeCas)
+        {
+            FailNextTerminalizeCas = FailSecondTerminalizeCas;
+            FailSecondTerminalizeCas = false;
+            return Task.FromResult(false);
+        }
 
         var index = _rows.FindIndex(row => row.Id == command.ExecutionId);
         if (index < 0 || _rows[index].Version != command.ExpectedVersion || !command.ExpectedStatuses.Contains(_rows[index].Status))
@@ -372,5 +460,51 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
             command.EventType,
             command.DetailJson,
             command.OccurredAtUtc));
+    }
+}
+
+/// <summary>
+///     In-memory <see cref="IIntegrationSessionStore" />. Seeded directly rather than through an accept, because the
+///     coordinator's suite starts from rows an earlier accept already committed.
+/// </summary>
+internal sealed class FakeIntegrationSessionStore : IIntegrationSessionStore
+{
+    private readonly List<IntegrationSessionSnapshot> _rows = [];
+
+    public IReadOnlyList<IntegrationSessionSnapshot> Rows => _rows;
+
+    public Task<IntegrationSessionSnapshot?> GetByIdAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_rows.SingleOrDefault(row => row.Id == sessionId));
+
+    public Task<bool> CloseAsync(Guid sessionId, long atUtc, CancellationToken cancellationToken = default)
+    {
+        var index = _rows.FindIndex(row => row.Id == sessionId);
+        if (index < 0)
+        {
+            return Task.FromResult(false);
+        }
+
+        _rows[index] = _rows[index] with
+        {
+            Status = IntegrationSessionStatus.Closed,
+            LastActivityUtc = atUtc
+        };
+        return Task.FromResult(true);
+    }
+
+    public IntegrationSessionSnapshot Seed(Guid sessionId, Guid triggerId, Guid conversationId, Guid agentDefinitionId)
+    {
+        var snapshot = new IntegrationSessionSnapshot(sessionId,
+            triggerId,
+            PrincipalId: Guid.NewGuid(),
+            conversationId,
+            agentDefinitionId,
+            IntegrationSessionStatus.Active,
+            CreatedAtUtc: 0,
+            LastActivityUtc: 0,
+            ExecutionCount: 1,
+            LastSequence: 1);
+        _rows.Add(snapshot);
+        return snapshot;
     }
 }
