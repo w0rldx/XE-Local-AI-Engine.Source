@@ -17,6 +17,24 @@ public enum ReasoningTier
 }
 
 /// <summary>
+///     The persisted <c>dispatched_tier</c> vocabulary. Written to a column and read back by the measurement queries,
+///     so the three labels are stable and are never renamed — hence a switch rather than a case fold of the enum name.
+/// </summary>
+internal static class ReasoningTierLabels
+{
+    internal static string For(ReasoningTier tier)
+    {
+        return tier switch
+        {
+            ReasoningTier.Fast => "fast",
+            ReasoningTier.Normal => "normal",
+            ReasoningTier.Deep => "deep",
+            _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, "Unknown reasoning tier.")
+        };
+    }
+}
+
+/// <summary>
 ///     Everything the reasoning-effort dispatcher is allowed to look at. Immutable constraints are deliberately
 ///     ABSENT: approval policy, secret masking, the loopback/Host gates, path guards, the sandbox,
 ///     <c>AllowCloudModelAccess</c>, node-local-only analysis/eval/extraction/judge models and tool authorisation are
@@ -35,7 +53,6 @@ public enum ReasoningTier
 /// </param>
 /// <param name="HasAttachments">Whether an image rides the latest user turn.</param>
 /// <param name="OfferedToolCount">How many tools the turn offers. NEVER a score term — it only refuses the model swap.</param>
-/// <param name="HasExplicitOutputBudget">Whether a developer-gated per-send max-output-tokens was requested.</param>
 /// <param name="HasSkills">Whether the turn carries resolved agent skills.</param>
 /// <param name="HasResponseSchema">Whether the turn's output is constrained to a JSON schema.</param>
 /// <param name="IsUnattended">Whether this is a scheduled/headless run.</param>
@@ -48,7 +65,6 @@ public sealed record ReasoningDispatchRequest(string ResolvedModel,
     string LatestUserText,
     bool HasAttachments,
     int OfferedToolCount,
-    bool HasExplicitOutputBudget,
     bool HasSkills,
     bool HasResponseSchema,
     bool IsUnattended);
@@ -60,7 +76,12 @@ public sealed record ReasoningDispatchRequest(string ResolvedModel,
 /// <param name="Tier">The resolved tier, also the persisted category label.</param>
 /// <param name="Model">The model to run — the resolved model, or the node-local FAST model when a swap was admitted.</param>
 /// <param name="Effort">A concrete effort from the ordinary vocabulary. Never <c>auto</c>: that is what was resolved.</param>
-/// <param name="MaxOutputTokens">An output budget to widen the turn's reservation to, or null to leave it alone.</param>
+/// <param name="MaxOutputTokens">
+///     Always null today. No tier caps the turn's output: the FAST cap was dropped because it bought nothing on the
+///     reasoning side (the provider's own clamp already yields the full <c>low</c> budget without it) and cost real
+///     history, since both context budgeters derive their output RESERVATION from the requested max-output-tokens.
+///     The member stays so a future tier can carry one without moving the seam.
+/// </param>
 /// <param name="SupportsThinking">Re-resolved for <paramref name="Model" /> when it was swapped; the input's value otherwise.</param>
 /// <param name="ReasoningBudgetEnforceable">Likewise — a stale flag after a swap sends a budget the model 400s on.</param>
 /// <param name="ReasonCode">
@@ -114,9 +135,6 @@ public static class ReasoningDispatchReasons
 
     /// <summary>No signal was decisive.</summary>
     public const string Balanced = "balanced";
-
-    /// <summary>Appended to a reason when the FAST output budget was NOT applied because the send pinned its own.</summary>
-    public const string ExplicitBudgetKeptSuffix = "-explicit-budget-kept";
 
     /// <summary>The model was picked by the user or honored from the agent's pin, so it is not ours to replace.</summary>
     public const string ModelPinned = "model-pinned";

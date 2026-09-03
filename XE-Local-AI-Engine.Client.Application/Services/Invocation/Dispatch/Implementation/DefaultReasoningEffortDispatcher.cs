@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <summary>
 ///     The single <see cref="IReasoningEffortDispatcher" />: a deterministic heuristic, no model call.
 ///     <see cref="ReasoningEffortSignals" /> owns the ladder that turns a turn's shape into a tier; this class turns
-///     that tier into the concrete <c>{model, effort, output budget}</c> the runner applies, and owns the gates that
+///     that tier into the concrete <c>{model, effort}</c> pair the runner applies, and owns the gates that
 ///     decide whether the model may be replaced at all.
 ///     <para>
 ///         <b>The tier is never demoted.</b> Nothing about a turn's contents moves it down. Five package members
@@ -38,19 +38,13 @@ public sealed class DefaultReasoningEffortDispatcher(
     IModelCapabilityResolver modelCapabilityResolver,
     ILlamaServerProcessSupervisor processSupervisor) : IReasoningEffortDispatcher
 {
-    // A FAST turn caps the ANSWER, not the reasoning: DeferredLlamaServerChatClient.ClampToGenerationRoom narrows a
-    // reasoning budget to half of min(num_ctx, MaxOutputTokens), and at 4096 that clamp is min(2048, 2048) — the full
-    // `low` budget, with about 2048 tokens left for the answer. Below 4096 the clamp would start eating the reasoning
-    // budget instead, which is the one thing the tier must not do.
-    //
-    // This is a CEILING the runner applies only when it fits in a quarter of the window the model actually launched
-    // with, and only onto the send's sampling options. Both context budgeters derive their output RESERVATION from
-    // the requested max-output-tokens, so an unconditional cap would shrink the history budget of every FAST turn and
-    // fail outright on a window at or below 4096 — see InvocationRunner, where that gate lives.
-    private const int FastGradedOutputTokens = 4096;
-
-    // A binary-branch FAST turn suppresses reasoning outright, so the whole budget is answer.
-    private const int FastBinaryOutputTokens = 2048;
+    // NO TIER CAPS THE OUTPUT. A FAST cap was designed to bound the ANSWER, but
+    // DeferredLlamaServerChatClient.ClampToGenerationRoom narrows a reasoning budget to half of
+    // min(num_ctx, MaxOutputTokens), and min(2048, num_ctx / 2) equals min(2048, min(num_ctx, 4096) / 2) for every
+    // num_ctx — so the cap changed nothing on the reasoning side. On the history side it cost real tokens: both
+    // context budgeters derive their output RESERVATION from the requested max-output-tokens. Every decision
+    // therefore carries a null MaxOutputTokens, and a FAST turn differs from a non-`auto` turn only in its effort
+    // (and its model, when a swap is admitted).
 
     private const string LowEffort = "low";
     private const string MediumEffort = "medium";
@@ -77,7 +71,7 @@ public sealed class DefaultReasoningEffortDispatcher(
         // of them, and the participants resolve their own efforts. Normal, never swapped, no score computed.
         if (request.HasOrchestration)
         {
-            return Decide(request, ReasoningTier.Normal, ReasoningDispatchReasons.Orchestration, maxOutputTokens: null);
+            return Decide(request, ReasoningTier.Normal, ReasoningDispatchReasons.Orchestration);
         }
 
         var (tier, tierReason) = ReasoningEffortSignals.Resolve(request.LatestUserText, request.HasAttachments, request.ConversationDepth);
@@ -87,31 +81,26 @@ public sealed class DefaultReasoningEffortDispatcher(
         // Reported as `binary-model` so the notice says WHY the effort is not one of the graded levels.
         if (!request.SupportsThinking)
         {
-            var binaryBudget = tier == ReasoningTier.Fast && await IsNodeLocalAsync(request.ResolvedModel, cancellationToken).ConfigureAwait(false)
-                ? FastBinaryOutputTokens
-                : (int?)null;
-
-            return Decide(request, tier, ReasoningDispatchReasons.BinaryModel, binaryBudget);
+            return Decide(request, tier, ReasoningDispatchReasons.BinaryModel);
         }
 
-        // Everything below is FAST-only: the other two tiers carry no output budget and are never swapped, so they
-        // cost no trust lookup, no settings read and no capacity probe.
+        // Everything below is FAST-only: the other two tiers are never swapped, so they cost no trust lookup, no
+        // settings read and no capacity probe.
         if (tier != ReasoningTier.Fast)
         {
-            return Decide(request, tier, tierReason, maxOutputTokens: null);
+            return Decide(request, tier, tierReason);
         }
 
-        // One lookup, used twice: it caps the output budget (a cloud model's budget is the provider's business) and it
-        // is swap gate 1. ModelTrustLocality treats `Unresolved` exactly as `Cloud`, so `== Local` is fail-closed by
+        // Swap gate 1. ModelTrustLocality treats `Unresolved` exactly as `Cloud`, so `== Local` is fail-closed by
         // construction.
         var resolvedIsLocal = await IsNodeLocalAsync(request.ResolvedModel, cancellationToken).ConfigureAwait(false);
         var swap = await ResolveSwapAsync(request, resolvedIsLocal, cancellationToken).ConfigureAwait(false);
         if (swap.FastModel is null)
         {
-            return Decide(request, tier, swap.RefusalReason ?? tierReason, resolvedIsLocal ? FastGradedOutputTokens : null);
+            return Decide(request, tier, swap.RefusalReason ?? tierReason);
         }
 
-        return await DecideSwappedAsync(request, tier, tierReason, swap, cancellationToken).ConfigureAwait(false);
+        return await DecideSwappedAsync(tier, tierReason, swap, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -120,24 +109,21 @@ public sealed class DefaultReasoningEffortDispatcher(
     ///     <c>SupportsThinking</c> picks an effort from the wrong ladder. The reason stays the TIER reason: every gate
     ///     passed, so there is no rule to name.
     /// </summary>
-    private async Task<ReasoningDispatchDecision> DecideSwappedAsync(ReasoningDispatchRequest request,
-        ReasoningTier tier,
+    private async Task<ReasoningDispatchDecision> DecideSwappedAsync(ReasoningTier tier,
         string tierReason,
         SwapResolution swap,
         CancellationToken cancellationToken)
     {
         var fastModel = swap.FastModel!;
         var capabilities = await _modelCapabilityResolver.ResolveAsync(fastModel, cancellationToken).ConfigureAwait(false);
-        var budget = capabilities.SupportsThinking ? FastGradedOutputTokens : FastBinaryOutputTokens;
-        var budgetKept = request.HasExplicitOutputBudget;
 
         return new ReasoningDispatchDecision(tier,
             fastModel,
             ResolveEffort(capabilities.SupportsThinking, tier),
-            budgetKept ? null : budget,
+            MaxOutputTokens: null,
             capabilities.SupportsThinking,
             capabilities.ReasoningBudgetEnforceable,
-            budgetKept ? tierReason + ReasoningDispatchReasons.ExplicitBudgetKeptSuffix : tierReason,
+            tierReason,
             swap.Reservation);
     }
 
@@ -287,20 +273,18 @@ public sealed class DefaultReasoningEffortDispatcher(
     }
 
     /// <summary>
-    ///     Builds the no-swap decision: the resolved model keeps its capability flags, and a FAST output budget yields
-    ///     to a developer-gated per-send budget (the send asked for a specific ceiling; the dispatcher's is a default).
+    ///     Builds the no-swap decision: the resolved model, its own capability flags, and the tier's effort. Nothing
+    ///     else about the turn changes.
     /// </summary>
-    private static ReasoningDispatchDecision Decide(ReasoningDispatchRequest request, ReasoningTier tier, string reasonCode, int? maxOutputTokens)
+    private static ReasoningDispatchDecision Decide(ReasoningDispatchRequest request, ReasoningTier tier, string reasonCode)
     {
-        var budgetKept = maxOutputTokens is not null && request.HasExplicitOutputBudget;
-
         return new ReasoningDispatchDecision(tier,
             request.ResolvedModel,
             ResolveEffort(request.SupportsThinking, tier),
-            budgetKept ? null : maxOutputTokens,
+            MaxOutputTokens: null,
             request.SupportsThinking,
             request.ReasoningBudgetEnforceable,
-            budgetKept ? reasonCode + ReasoningDispatchReasons.ExplicitBudgetKeptSuffix : reasonCode,
+            reasonCode,
             CapacityReservation: null);
     }
 

@@ -61,12 +61,16 @@ public sealed class ReasoningEffortDispatcherTests
     }
 
     [Test]
-    public async Task Dispatch_WhenModelIsBinaryAndTierIsFast_CarriesTheBinaryOutputBudget()
+    public async Task Dispatch_WhenModelIsBinaryAndTierIsFast_CarriesNoOutputBudgetAndNeverConsultsTheTrustResolver()
     {
-        var decision = await DispatchAsync(Request("hi", supportsThinking: false));
+        // No tier caps the output any more, so the binary branch is a pure ladder mapping: it needs no locality lookup
+        // and hands the send nothing to change.
+        var trustResolver = CreateTrustResolver(ModelTrustLocality.Local);
+        var decision = await DispatchAsync(Request("hi", supportsThinking: false), trustResolver);
 
         AssertEx.Equal(ReasoningTier.Fast, decision.Tier);
-        AssertEx.Equal(expected: 2048, decision.MaxOutputTokens);
+        AssertEx.Null(decision.MaxOutputTokens);
+        await trustResolver.DidNotReceive().ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     // ---- the score terms, one at a time -------------------------------------------------------------------------
@@ -358,10 +362,10 @@ public sealed class ReasoningEffortDispatcherTests
     [Test]
     [Arguments(ModelTrustLocality.Cloud)]
     [Arguments(ModelTrustLocality.Unresolved)]
-    public async Task Fast_WhenResolvedModelIsCloudOrUnresolved_NeverSwapsAndCarriesNoOutputBudget(ModelTrustLocality locality)
+    public async Task Fast_WhenResolvedModelIsCloudOrUnresolved_NeverSwaps(ModelTrustLocality locality)
     {
         // `Unresolved` is treated exactly as `Cloud` by every gate, so the `== Local` comparison is fail-closed by
-        // construction. A cloud turn keeps the ladder but never the swap and never a node-side output budget.
+        // construction. A cloud turn keeps the ladder but never the swap.
         var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true), CreateTrustResolver(locality));
 
         AssertEx.Equal(ReasoningTier.Fast, decision.Tier);
@@ -372,16 +376,16 @@ public sealed class ReasoningEffortDispatcherTests
     }
 
     [Test]
-    public async Task Fast_WhenNoFastModelIsConfigured_KeepsTheResolvedModelAtLowWithTheFullOutputBudget()
+    public async Task Fast_WhenNoFastModelIsConfigured_KeepsTheResolvedModelAtLowWithNoOutputBudget()
     {
         // Every request-shape gate passes, so the only thing left is that this node names no FAST model. The turn
-        // still gets the FAST ladder: same model, `low`, and the output budget that keeps the reasoning cap honest.
+        // still gets the FAST ladder: same model, `low`, and a send shaped exactly like a non-`auto` one.
         var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true));
 
         AssertEx.Equal(ReasoningTier.Fast, decision.Tier);
         AssertEx.Equal("low", decision.Effort);
         AssertEx.Equal(ResolvedModel, decision.Model);
-        AssertEx.Equal(expected: 4096, decision.MaxOutputTokens);
+        AssertEx.Null(decision.MaxOutputTokens);
         AssertEx.Equal(ReasoningDispatchReasons.FastModelUnset, decision.ReasonCode);
     }
 
@@ -495,7 +499,7 @@ public sealed class ReasoningEffortDispatcherTests
         AssertEx.Equal(ReasoningTier.Fast, decision.Tier);
         AssertEx.Equal(FastModel, decision.Model);
         AssertEx.Equal("low", decision.Effort);
-        AssertEx.Equal(expected: 4096, decision.MaxOutputTokens);
+        AssertEx.Null(decision.MaxOutputTokens);
         AssertEx.True(decision.SupportsThinking);
         AssertEx.False(decision.ReasoningBudgetEnforceable, "the replacement's own flag, not the resolved model's");
         AssertEx.Equal(ReasoningDispatchReasons.ShortTurn, decision.ReasonCode, "every gate passed, so the reason names the tier signal");
@@ -504,10 +508,9 @@ public sealed class ReasoningEffortDispatcherTests
     }
 
     [Test]
-    public async Task Fast_WhenTheSwappedModelIsBinary_SendsTheBinaryEffortAndBudget()
+    public async Task Fast_WhenTheSwappedModelIsBinary_SendsTheBinaryEffort()
     {
-        // The replacement's ladder, not the resolved model's: a fast model with no graded thinking gets `none` and the
-        // smaller all-answer budget.
+        // The replacement's ladder, not the resolved model's: a fast model with no graded thinking gets `none`.
         var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
             fastModelName: FastModel,
             fastModelLocality: ModelTrustLocality.Local,
@@ -515,7 +518,7 @@ public sealed class ReasoningEffortDispatcherTests
 
         AssertEx.Equal(FastModel, decision.Model);
         AssertEx.Equal("none", decision.Effort);
-        AssertEx.Equal(expected: 2048, decision.MaxOutputTokens);
+        AssertEx.Null(decision.MaxOutputTokens);
     }
 
     [Test]
@@ -596,28 +599,6 @@ public sealed class ReasoningEffortDispatcherTests
     }
 
     [Test]
-    public async Task Fast_WhenTheSendPinsItsOwnOutputBudget_KeepsItAndSaysSo()
-    {
-        // A developer-gated per-send max-output-tokens is an explicit ceiling; the dispatcher's is a default, so the
-        // send wins and the reason records that the FAST budget was not applied.
-        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true, hasExplicitOutputBudget: true));
-
-        AssertEx.Equal(ReasoningTier.Fast, decision.Tier);
-        AssertEx.Null(decision.MaxOutputTokens);
-        AssertEx.Equal(ReasoningDispatchReasons.FastModelUnset + ReasoningDispatchReasons.ExplicitBudgetKeptSuffix, decision.ReasonCode);
-    }
-
-    [Test]
-    public async Task Dispatch_WhenTierIsNotFast_IgnoresAnExplicitOutputBudget()
-    {
-        // Only FAST carries a budget, so the suffix must not appear anywhere else.
-        var decision = await DispatchAsync(Request(new string('a', 300), hasExplicitOutputBudget: true));
-
-        AssertEx.Equal(ReasoningTier.Normal, decision.Tier);
-        AssertEx.Equal(ReasoningDispatchReasons.Balanced, decision.ReasonCode);
-    }
-
-    [Test]
     public async Task Dispatch_CarriesTheResolvedModelsCapabilityFlagsThroughWhenNothingIsSwapped()
     {
         var decision = await DispatchAsync(Request("thanks, noted", reasoningBudgetEnforceable: false));
@@ -649,7 +630,6 @@ public sealed class ReasoningEffortDispatcherTests
         int conversationDepth = 2,
         bool hasAttachments = false,
         int offeredToolCount = 0,
-        bool hasExplicitOutputBudget = false,
         bool hasSkills = false,
         bool hasResponseSchema = false,
         bool isUnattended = false)
@@ -663,7 +643,6 @@ public sealed class ReasoningEffortDispatcherTests
             latestUserText,
             hasAttachments,
             offeredToolCount,
-            hasExplicitOutputBudget,
             hasSkills,
             hasResponseSchema,
             isUnattended);
