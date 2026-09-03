@@ -5015,7 +5015,8 @@
 				"startFailed": "Could not start a run.",
 				"startRun": "Start a run",
 				"waitingOnYou_one": "{{count}} waiting on you",
-				"waitingOnYou_other": "{{count}} waiting on you"
+				"waitingOnYou_other": "{{count}} waiting on you",
+				"cost": "{{input}} / {{output}} tok · {{tools}} tool calls, final attempts only"
 			},
 			"delete": {
 				"open": "Delete",
@@ -5051,7 +5052,10 @@
 				"appliesPatches": "applies patches",
 				"materializedOf": "generated · {{index}} of {{count}}",
 				"staleInputs": "Stale inputs",
-				"agentWithModel": "{{agent}} · {{model}}"
+				"agentWithModel": "{{agent}} · {{model}}",
+				"columnCost": "Cost",
+				"costTokens": "{{input}} / {{output}} tok",
+				"costToolCalls": "{{count}} tool calls"
 			},
 			"events": {
 				"title": "Events",
@@ -5200,7 +5204,46 @@
 				"devTaskNoStage": "This task has not reported a stage yet.",
 				"devTaskEvidence": "Dev Mode shows this task's attempts, patch and validation evidence. The approval that lets a patch land is a gate node in this workflow.",
 				"objective": "Objective",
-				"cascadeRerun": "This node is running again because “{{node}}” failed and the run is re-doing the work that depended on it."
+				"cascadeRerun": "This node is running again because “{{node}}” failed and the run is re-doing the work that depended on it.",
+				"cost": {
+					"title": "Cost",
+					"none": "Nothing was recorded for this attempt.",
+					"tokensIn": "Input tokens",
+					"tokensOut": "Output tokens",
+					"reasoning": "Reasoning tokens",
+					"estimated": "Estimated input tokens",
+					"providerCalls": "Provider calls",
+					"toolCalls": "Tool calls",
+					"schemaTokens": "Tool schema tokens",
+					"steps": "Work-session steps",
+					"servedModel": "Served by",
+					"queuedFor": "Queued for",
+					"ranFor": "Ran for",
+					"providerTime": "Provider time",
+					"otherTime": "Tools and loop",
+					"toolNames": "Tools called",
+					"toolNamesTruncated": "…and more",
+					"route": "Route taken",
+					"routeTruncated": "shortened",
+					"routeSatisfied": "satisfied → {{nodes}}",
+					"routeDead": "not taken → {{nodes}}",
+					"gateAnswer": "answered {{answer}}",
+					"routeGateNote": "A satisfied edge means its condition fired, not that the successor ran — a join can still skip on a dead sibling edge."
+				},
+				"failureGroup": {
+					"Cancelled": "Cancelled",
+					"Timeout": "Timeout",
+					"Interrupted": "Interrupted",
+					"Provider": "Provider",
+					"ModelCapability": "Model capability",
+					"ContextExceeded": "Context exceeded",
+					"Configuration": "Configuration",
+					"Policy": "Policy",
+					"BudgetExhausted": "Budget exhausted",
+					"ToolOrCommand": "Tool or command",
+					"Rejected": "Rejected",
+					"Internal": "Internal"
+				}
 			},
 			"validation": {
 				"loadFailed": "Could not load this node's report.",

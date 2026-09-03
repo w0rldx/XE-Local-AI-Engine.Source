@@ -18,6 +18,7 @@ import type {
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse as DevWorkflowNodeRunSummaryResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetResponse as DevWorkflowRuleSetResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetSummaryResponse as DevWorkflowRuleSetSummaryResponse,
+	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse as DevWorkflowRunCostResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventResponse as DevWorkflowRunEventResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse as DevWorkflowRunResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse as DevWorkflowRunSummaryResponse,
@@ -36,6 +37,7 @@ export type {
 	DevWorkflowNodeRunSummaryResponse,
 	DevWorkflowRuleSetResponse,
 	DevWorkflowRuleSetSummaryResponse,
+	DevWorkflowRunCostResponse,
 	DevWorkflowRunEventResponse,
 	DevWorkflowRunResponse,
 	DevWorkflowRunSummaryResponse,
@@ -284,6 +286,24 @@ export function devWorkflowAttemptCounts(
 ): { readonly attempt: number; readonly maxAttempts: number } {
 	const current = attempt ?? 1;
 	return { attempt: current, maxAttempts: Math.max(current, maxAttempts ?? 1) };
+}
+
+/**
+ * "12s" / "4m 12s" / "1h 04m". The unit letters are the same abbreviations the benchmark tables already print.
+ *
+ * Shared by the node-run table's status line and the node panel's cost section, so a node's "took 4m 12s" and the
+ * panel's "ran for" can never disagree about the same two timestamps.
+ */
+export function formatDevWorkflowDuration(milliseconds: number): string {
+	const totalSeconds = Math.max(0, Math.round(milliseconds / 1000));
+	if (totalSeconds < 60) {
+		return `${totalSeconds}s`;
+	}
+	const minutes = Math.floor(totalSeconds / 60);
+	if (minutes < 60) {
+		return `${minutes}m ${String(totalSeconds % 60).padStart(2, "0")}s`;
+	}
+	return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
 }
 
 /** The shared decoder (P4 §2.10), kept under the feature's own name so no call site or test had to move. */
