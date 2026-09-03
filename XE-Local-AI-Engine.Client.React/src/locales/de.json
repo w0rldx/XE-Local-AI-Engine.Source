@@ -5055,7 +5055,8 @@
 				"agentWithModel": "{{agent}} · {{model}}",
 				"columnCost": "Kosten",
 				"costTokens": "{{input}} / {{output}} Tok.",
-				"costToolCalls": "{{count}} Tool-Aufrufe"
+				"costToolCalls_one": "{{count}} Tool-Aufruf",
+				"costToolCalls_other": "{{count}} Tool-Aufrufe"
 			},
 			"events": {
 				"title": "Ereignisse",

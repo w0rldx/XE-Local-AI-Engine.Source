@@ -115,15 +115,19 @@ WHERE n.run_id IN (:runIds) AND n.failure_class IS NOT NULL GROUP BY failure_gro
    cost".** The two sources cannot double-count, because a reset row is emptied before the next attempt fills it.
    **Never put `SUM(attempt)` in the same SELECT as `SUM(input_tokens)`** — it reads as a per-attempt average and
    is not one.
-3. **Node-run tokens are a lower bound**, for six separate reasons: a replayed step keeps the first attempt's
+3. **Node-run tokens are a lower bound**, for seven separate reasons: a replayed step keeps the first attempt's
    numbers (`WorkSessionModels.cs:120-125`); some envelopes are written after the fact by crash recovery
    (`NodeChatRestartRecoveryService`); a step that spawned sub-agents ran more than one budget
    (`WorkSessionModels.cs:115-118`) whose invocations may not share the conversation; the envelope read is
    paged, so a truncated page under-counts rather than failing; **a node run abandoned while its session was
    mid-step counts only the steps that had ended**, because the consumption row is written inside `SettleStepAsync`
    and an in-flight step has none yet — which is exactly the `Blocked` and `Cancelled` case, the one where the
-   biggest numbers are; and **the envelope read stops after 20 pages of 200**, so a conversation past 4,000
-   envelopes under-counts rather than holding a dispatcher tick open.
+   biggest numbers are; **the envelope read stops after 20 pages of 200**, so a conversation past 4,000
+   envelopes under-counts rather than holding a dispatcher tick open; and **one retry route shares ONE collection
+   budget** (`PublishingDevWorkflowStore.RouteRetryAsync` opens a single 5 s deadline before the loop over
+   `command.Resets`), so a route wide enough or slow enough to exhaust it forwards its later resets unenriched —
+   those attempts get no `node.retry.scheduled` cost vector at all, and the retry-arm total below under-counts by
+   exactly them.
 4. `estimated_input_tokens` is a character-profile estimate (`WorkSessionModels.cs:129`); quote it only where
    `input_tokens` is null.
 5. `provider_calls` is a ratio against its cap only while one budget was attached (`WorkSessionModels.cs:115-118`).

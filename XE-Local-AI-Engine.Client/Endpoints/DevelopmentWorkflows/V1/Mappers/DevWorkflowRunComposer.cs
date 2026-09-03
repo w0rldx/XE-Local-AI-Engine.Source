@@ -255,11 +255,29 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
     ///     The route as the column stores it. The response record IS the stored document's shape, so this is a parse
     ///     rather than a translation — and an unreadable column costs this node its route rather than costing the
     ///     drill-down a 500, exactly as an unreadable policy resolution does.
+    ///     <para>
+    ///         Both lists are non-nullable on the wire, and a tolerant parse cannot promise that on its own: a document
+    ///         that omits <c>satisfied</c> deserialises to a null list, and the generated client validates the response
+    ///         with zod, whose <c>.optional()</c> accepts a missing member and REJECTS a null one. An absent list is
+    ///         therefore an empty list — the node keeps its route rather than losing the drill-down.
+    ///     </para>
     /// </summary>
-    private static DevWorkflowNodeRouteResponse? Route(string? routeJson) => Read<DevWorkflowNodeRouteResponse>(routeJson);
+    private static DevWorkflowNodeRouteResponse? Route(string? routeJson) =>
+        Read<DevWorkflowNodeRouteResponse>(routeJson) is { } route
+            ? route with
+            {
+                Satisfied = route.Satisfied ?? [],
+                Dead = route.Dead ?? []
+            }
+            : null;
 
-    /// <summary>The tool names as the column stores them: a JSON string array whose last element may be the truncation marker.</summary>
-    private static IReadOnlyList<string>? ToolNames(string? toolNamesJson) => Read<IReadOnlyList<string>>(toolNamesJson);
+    /// <summary>
+    ///     The tool names as the column stores them: a JSON string array whose last element may be the truncation
+    ///     marker. A null element is dropped for the same reason the route's lists are defaulted — zod rejects a null
+    ///     inside the array and the whole drill-down would fail over one bad entry.
+    /// </summary>
+    private static IReadOnlyList<string>? ToolNames(string? toolNamesJson) =>
+        Read<IReadOnlyList<string>>(toolNamesJson)?.Where(static name => name is not null).ToList();
 
     private static T? Read<T>(string? json)
         where T : class

@@ -653,6 +653,39 @@ public sealed class DevWorkflowRunEndpointTests
     }
 
     /// <summary>
+    ///     The parseable-but-partial case, which the unreadable one above does not cover. A document that omits a list
+    ///     deserialises it as null, and the generated client validates the response with zod, whose <c>.optional()</c>
+    ///     accepts a missing member and rejects a null one — so an absent list has to reach the wire as an empty array
+    ///     or one hand-edited column costs the whole drill-down. Same for a null element inside the tool names.
+    /// </summary>
+    [Test]
+    public async Task GetNodeRun_WithAPartialRouteDocument_AnswersEmptyListsRatherThanNulls()
+    {
+        var store = Store();
+        store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(GateNodeRun() with
+        {
+            RouteJson = """{"gateAnswer":"Approve","truncated":false}""",
+            ToolNamesJson = """["read_document",null]"""
+        });
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var route = document.RootElement.GetProperty("route");
+        AssertEx.Equal(JsonValueKind.Array, route.GetProperty("satisfied").ValueKind, "an absent list is an empty list, never a null the client's zod schema rejects.");
+        AssertEx.Equal(expected: 0, route.GetProperty("satisfied").GetArrayLength());
+        AssertEx.Equal(JsonValueKind.Array, route.GetProperty("dead").ValueKind);
+        AssertEx.Equal(expected: 0, route.GetProperty("dead").GetArrayLength());
+        AssertEx.Equal("Approve", route.GetProperty("gateAnswer").GetString(), "and the members the document DID carry survive.");
+
+        var toolNames = document.RootElement.GetProperty("toolNames").EnumerateArray().Select(static value => value.GetString()).ToList();
+        AssertEx.Equal("read_document", string.Join(",", toolNames), "a null entry is dropped rather than shipped into an array of strings.");
+    }
+
+    /// <summary>
     ///     The run rollup, summed over the node runs the composer already loads — no extra query — plus the three
     ///     headline numbers on each node summary. A member nothing reported stays null all the way up.
     /// </summary>

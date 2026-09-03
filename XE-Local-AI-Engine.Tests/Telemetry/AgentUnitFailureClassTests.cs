@@ -69,7 +69,9 @@ public sealed class AgentUnitFailureClassTests
     /// <summary>
     ///     The vocabulary is closed, and its size is the number of i18n keys the client ships under
     ///     <c>pages.devWorkflows.node.failureGroup</c>. A token added here without one shows the reader a raw
-    ///     identifier, so the count is pinned on both sides.
+    ///     identifier, so the count is pinned on both sides: this test owns the C# half, and the client's
+    ///     <c>src/features/devWorkflows/I18nParity.test.ts</c> names the same twelve tokens against <c>en.json</c>
+    ///     while its parity block carries them into every other locale.
     /// </summary>
     [Test]
     public void TheVocabulary_IsTwelveDistinctTokens()

@@ -128,7 +128,7 @@ export function DevWorkflowNodeRunTable({ nodes, selectedNodeRunId, onSelect }: 
 						<Table.Th>{t("pages.devWorkflows.nodes.columnNode", "Node")}</Table.Th>
 						<Table.Th>{t("pages.devWorkflows.nodes.columnStatus", "Status")}</Table.Th>
 						<Table.Th>{t("pages.devWorkflows.nodes.columnDetail", "Detail")}</Table.Th>
-							<Table.Th>{t("pages.devWorkflows.nodes.columnCost", "Cost")}</Table.Th>
+						<Table.Th>{t("pages.devWorkflows.nodes.columnCost", "Cost")}</Table.Th>
 					</Table.Tr>
 				</Table.Thead>
 				<Table.Tbody>
