@@ -163,6 +163,78 @@ public sealed class NodeSettingsAdministrationServiceTests
 
         AssertEx.True(result.Updated);
         AssertEx.Equal("qwen3-1.7b", result.Settings.AutoEffortFastModelName);
+        await trustResolver.DidNotReceiveWithAnyArgs().ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task Save_WhenTheStoredFastModelIsNoLongerLocal_DoesNotBlockAnUnrelatedPatch()
+    {
+        // The guard validates a CHANGE, not the merged result. Uninstalling the configured fast model must not turn
+        // every save of every other setting into a rejection naming a field the operator never touched; the
+        // dispatcher's per-turn re-check is what keeps the stale value from ever being used.
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
+        {
+            AutoEffortFastModelName = "qwen3-1.7b"
+        });
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                        .Returns(Task.FromResult("external"));
+        var service = CreateService(store, localModelProviderResolver: providerResolver);
+
+        var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            ChatCacheReuse = 512
+        }).ConfigureAwait(false);
+
+        AssertEx.True(result.Updated, "an unrelated patch must not be rejected over a stored fast model.");
+        AssertEx.Equal("qwen3-1.7b", result.Settings.AutoEffortFastModelName);
+        await store.Received(1).SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task SaveTrustedMerged_WhenTheStoredFastModelIsNoLongerLocal_SavesTheUnchangedValue()
+    {
+        // The same rule on the endpoint's path, which hands the service an already-merged snapshot: the fast model
+        // rides along unchanged in every save, so re-validating it there would block the settings page outright.
+        var store = Substitute.For<INodeSettingsStore>();
+        var stored = new StoredNodeSettings
+        {
+            AutoEffortFastModelName = "qwen3-1.7b"
+        };
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(stored);
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                        .Returns(Task.FromResult("external"));
+        var service = CreateService(store, localModelProviderResolver: providerResolver);
+
+        var result = await service.SaveTrustedMergedAsync(stored with { ChatCacheReuse = 512 }).ConfigureAwait(false);
+
+        AssertEx.True(result.Updated);
+        AssertEx.Equal("qwen3-1.7b", result.Settings.AutoEffortFastModelName);
+        await store.Received(1).SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task SaveTrustedMerged_WhenTheFastModelChangesToANonLocalOne_IsRejected()
+    {
+        // The change itself is still refused on the endpoint's path, not only the MCP patch's.
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                        .Returns(Task.FromResult("external"));
+        var service = CreateService(store, localModelProviderResolver: providerResolver);
+
+        var result = await service.SaveTrustedMergedAsync(new StoredNodeSettings
+        {
+            AutoEffortFastModelName = "ext:studio/qwen3-1.7b"
+        }).ConfigureAwait(false);
+
+        AssertEx.False(result.Updated);
+        AssertEx.Equal(1, result.ValidationErrors.Count);
+        AssertEx.Equal(NodeSettingsField.AutoEffortFastModelName, result.ValidationErrors[0].Field);
+        await store.DidNotReceive().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -255,8 +327,15 @@ public sealed class NodeSettingsAdministrationServiceTests
         runtime.GetLlamaMaxLoadedProcessesAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(StoredNodeSettings.DefaultLlamaMaxLoadedProcesses));
 
         // Default to an installed node-local llama.cpp model so the fast-model locality gate is transparent to every
-        // test that does not set the setting at all.
-        modelTrustResolver ??= Substitute.For<IModelTrustResolver>();
+        // test that does not set the setting at all. The trust stub is explicit rather than leaning on NSubstitute's
+        // default, which only happens to be Local because Local is the enum's zero.
+        if (modelTrustResolver is null)
+        {
+            modelTrustResolver = Substitute.For<IModelTrustResolver>();
+            modelTrustResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                              .Returns(Task.FromResult(ModelTrustLocality.Local));
+        }
+
         if (localModelProviderResolver is null)
         {
             localModelProviderResolver = Substitute.For<ILocalModelProviderResolver>();

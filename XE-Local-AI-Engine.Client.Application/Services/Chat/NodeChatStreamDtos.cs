@@ -109,7 +109,14 @@ public sealed record NodeChatStreamRequest(
     // node's authored effort IS that session's pin and there is no composer behind it. False everywhere else, so every
     // ordinary send keeps the precedence it has today. Trailing optional so the SignalR hub forwards the record
     // unchanged.
-    bool ReasoningEffortOverridesAgentPin = false);
+    bool ReasoningEffortOverridesAgentPin = false,
+    // Whether this turn is a step of a supervised work session rather than a send someone typed. Set UNCONDITIONALLY by
+    // WorkSessionExecutionSupervisor, so it is true on every step of every session — including every development-
+    // workflow node step, whatever that node authored — and false on every ordinary chat send. The runtime package
+    // refuses the adaptive-effort model swap on it: a session step is autonomous, and a step served by a model neither
+    // the graph's author nor the operator chose is not their decision. Trailing optional so the SignalR hub forwards the
+    // record unchanged.
+    bool IsWorkSessionTurn = false);
 
 public sealed record ChatStreamEvent(
     string Type,

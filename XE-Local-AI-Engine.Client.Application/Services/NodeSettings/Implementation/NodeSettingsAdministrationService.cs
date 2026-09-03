@@ -40,7 +40,8 @@ internal sealed class NodeSettingsAdministrationService(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        return await ValidateAndSaveAsync(settings, cancellationToken).ConfigureAwait(false);
+        var current = await GetTrustedSettingsAsync(cancellationToken).ConfigureAwait(false);
+        return await ValidateAndSaveAsync(settings, current, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<NodeSettingsAdministrationResult> ApplyAgenticPatchAsync(NodeSettingsAgenticPatch patch,
@@ -86,7 +87,7 @@ internal sealed class NodeSettingsAdministrationService(
             AutoEffortFastModelName = TrimWhenProvided(patch.AutoEffortFastModelName, current.AutoEffortFastModelName)
         };
 
-        var result = await ValidateAndSaveAsync(merged, cancellationToken).ConfigureAwait(false);
+        var result = await ValidateAndSaveAsync(merged, current, cancellationToken).ConfigureAwait(false);
         if (result.Updated && patch.DefaultModelName is not null)
         {
             await _defaultModelSelectionPolicy
@@ -98,13 +99,21 @@ internal sealed class NodeSettingsAdministrationService(
     }
 
     private async Task<NodeSettingsAdministrationResult> ValidateAndSaveAsync(StoredNodeSettings settings,
+        StoredNodeSettings current,
         CancellationToken cancellationToken)
     {
         // Enforcement point 1 of the node-locality gate, on BOTH save paths (the endpoint's merged save and the MCP
         // patch) rather than only the patch: the runner's dispatcher may move an `auto` turn onto this model, and the
         // turn's data was admitted upstream against a node-local one. A cloud id, an `ext:` id or an Ollama name would
         // carry that data somewhere no egress gate authorised, so it is refused before it can ever be stored.
-        if (!string.IsNullOrWhiteSpace(settings.AutoEffortFastModelName)
+        //
+        // Only on a CHANGE to the value, though. Both save paths validate the merged result, so re-validating an
+        // unchanged stored value would reject every save of every other setting once the configured fast model is
+        // uninstalled — with a message naming a field the operator never touched. The dispatcher re-checks the same
+        // pair per turn (enforcement point 2), so an already-stored value that stops being node-local is refused where
+        // it would actually be used rather than blocking the settings page.
+        if (!string.Equals(settings.AutoEffortFastModelName, current.AutoEffortFastModelName, StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(settings.AutoEffortFastModelName)
             && !await IsInstalledNodeLocalModelAsync(settings.AutoEffortFastModelName, cancellationToken).ConfigureAwait(false))
         {
             return NodeSettingsAdministrationResult.Rejected(settings,

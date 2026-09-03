@@ -19,6 +19,10 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
 
     private static readonly string[] DispatchColumns = ["dispatched_tier", "authored_effort"];
 
+    // The columns the PRECEDING migration added. EF's SQLite DropColumn is a table rebuild from the target migration's
+    // model, so a rollback that regenerated the table from a stale model would silently take these with it.
+    private static readonly string[] PrecedingMigrationColumns = ["tool_schema_tokens", "max_tool_schema_tokens"];
+
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
@@ -130,6 +134,12 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
         foreach (var column in DispatchColumns)
         {
             AssertEx.False(columns.Contains(column), $"Rolling back one migration should drop the {column} column.");
+        }
+
+        foreach (var column in PrecedingMigrationColumns)
+        {
+            AssertEx.True(columns.Contains(column),
+                $"The rollback's table rebuild must keep the preceding migration's {column} column.");
         }
     }
 

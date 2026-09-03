@@ -58,6 +58,9 @@ public sealed class SaveNodeSettingsEndpoint(INodeSettingsAdministrationService 
             case NodeSettingsField.KeepModelWarmIntervalSeconds:
                 AddError(r => r.KeepModelWarmIntervalSeconds, error.Message);
                 break;
+            case NodeSettingsField.AutoEffortFastModelName:
+                AddError(r => r.AutoEffortFastModelName, error.Message);
+                break;
             default:
                 AddError(error.Message);
                 break;

@@ -261,11 +261,12 @@ public sealed class NodeChatStreamServiceTests
     [Test]
     [Arguments(true, false)]
     [Arguments(false, true)]
-    public async Task SendMessageAsync_WhenTheTurnIsDrivenByAWorkflowNode_NeverAllowsAnAutoModelSwap(bool overridesAgentPin, bool expectedAllowAutoModelSwap)
+    public async Task SendMessageAsync_WhenTheTurnIsAWorkSessionStep_NeverAllowsAnAutoModelSwap(bool isWorkSessionTurn, bool expectedAllowAutoModelSwap)
     {
-        // A development-workflow node's turn sets ReasoningEffortOverridesAgentPin and nothing else does. The graph was
-        // authored against a model, so a node step must never be served by a model the author did not choose — even
-        // when neither the node nor the bound agent pins one, which is the shape that would otherwise be swap-eligible.
+        // The exact shape ruling 2 closes: a development-workflow node that authors NEITHER a model nor an effort, on
+        // an agent that pins neither, with no tools — swap-eligible on every other signal. The work-session supervisor
+        // sets IsWorkSessionTurn on every step whatever the node authored, so the graph's step is never served by a
+        // model its author did not choose. The same send WITHOUT the flag is an ordinary chat turn and stays eligible.
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -302,8 +303,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           ReasoningEffort: "auto",
-                           ReasoningEffortOverridesAgentPin: overridesAgentPin)).ConfigureAwait(false))
+                           IsWorkSessionTurn: isWorkSessionTurn)).ConfigureAwait(false))
         {
             drained++;
         }
@@ -4737,8 +4737,8 @@ public sealed class NodeChatStreamServiceTests
         // runtime package (or stays null when none was selected).
         public SamplingOptions? LastSamplingOptions { get; private set; }
 
-        // The model-selection provenance carried on the runtime package; the workflow-node test asserts a node-driven
-        // turn never hands the dispatcher permission to replace the model.
+        // The model-selection provenance carried on the runtime package; the work-session test asserts a supervised
+        // step never hands the dispatcher permission to replace the model.
         public bool LastAllowAutoModelSwap { get; private set; }
 
         public bool CaptureObserved { get; private set; }

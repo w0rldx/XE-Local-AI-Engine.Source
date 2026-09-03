@@ -592,6 +592,7 @@ public sealed class WorkSessionStepLoopTests
             AssertEx.Equal("qwen3-30b", request.Model);
             AssertEx.Equal("high", request.ReasoningEffort);
             AssertEx.True(request.ReasoningEffortOverridesAgentPin, "the caller's effort is a pin, so it must beat the bound agent's own.");
+            AssertEx.True(request.IsWorkSessionTurn, "every supervised step is a work-session turn, pinned or not.");
         }
     }
 
@@ -618,6 +619,8 @@ public sealed class WorkSessionStepLoopTests
         AssertEx.Null(fake.Requests[0].Model, "an unpinned session resolves its model the way every other send does.");
         AssertEx.Null(fake.Requests[0].ReasoningEffort);
         AssertEx.False(fake.Requests[0].ReasoningEffortOverridesAgentPin);
+        AssertEx.True(fake.Requests[0].IsWorkSessionTurn,
+            "an unpinned session is still a supervised step, so the adaptive-effort swap must stay refused on it.");
     }
 
     private static FakeNodeChatStreamService ResolveStream(TestServerWebAppFactory factory, ref FakeNodeChatStreamService? stream)

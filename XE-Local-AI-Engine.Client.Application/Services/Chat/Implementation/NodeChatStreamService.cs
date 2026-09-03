@@ -846,11 +846,12 @@ public sealed class NodeChatStreamService(
             // byte-identical config hash.
             DisableToolRelevanceFilter: resolved?.DisableToolRelevanceFilter ?? false,
             // Model-selection provenance for the runner's reasoning-effort dispatcher; false = pinned, never swap.
-            // A development-workflow node's turn never swaps, whatever its provenance says. The node authored the
-            // effort and the graph was authored against a model; an unpinned node on an unpinned agent would otherwise
-            // be swap-eligible, and a workflow step silently served by a different model is not a decision the graph's
-            // author made. ReasoningEffortOverridesAgentPin is true on exactly those turns and nowhere else.
-            AllowAutoModelSwap: resolution.AllowAutoModelSwap && !request.ReasoningEffortOverridesAgentPin));
+            // A work-session step never swaps, whatever its provenance says — and every development-workflow node runs
+            // as one. The graph was authored against a model; a node that authors neither a model nor an effort, bound
+            // to an agent that pins neither, would otherwise be swap-eligible, and a workflow step silently served by a
+            // different model is not a decision the graph's author made. IsWorkSessionTurn is set unconditionally by
+            // the work-session supervisor, so it covers those turns whether or not the node authored anything.
+            AllowAutoModelSwap: resolution.AllowAutoModelSwap && !request.IsWorkSessionTurn));
     }
 
     /// <summary>

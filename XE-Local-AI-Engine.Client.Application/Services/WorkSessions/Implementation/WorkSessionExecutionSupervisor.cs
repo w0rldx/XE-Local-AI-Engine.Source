@@ -411,7 +411,10 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             // needs the flag beside it, because a caller-supplied effort otherwise LOSES to the agent's.
             Model: run.Runtime?.ModelProfile,
             ReasoningEffort: run.Runtime?.ReasoningEffort,
-            ReasoningEffortOverridesAgentPin: run.Runtime?.ReasoningEffort is { Length: > 0 });
+            ReasoningEffortOverridesAgentPin: run.Runtime?.ReasoningEffort is { Length: > 0 },
+            // Every step of every session, whatever the caller pinned: this turn is autonomous, so the send path must
+            // never let the adaptive-effort dispatcher serve it on a model nobody chose.
+            IsWorkSessionTurn: true);
 
         // Tighten the tool-result ceiling for this step, seeded BEFORE the enumeration starts so the value flows into
         // the invocation's async context (the send path calls the runner inline, not through a detached Task). The

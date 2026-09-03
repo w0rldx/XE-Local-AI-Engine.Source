@@ -373,6 +373,31 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
+    public async Task SaveNodeSettings_WhenAutoEffortFastModelIsNotNodeLocal_BindsTheErrorToTheField()
+    {
+        // The locality rejection must name the request property, the way the capacity rejection names
+        // llamaMaxLoadedProcesses. Unbound, it falls to the generic bucket and neither the React select's per-field
+        // error nor an API consumer can attribute it.
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            AutoEffortFastModelName = "ext:studio/qwen3-1.7b"
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        var error = document.RootElement.GetProperty("errors")[0];
+        AssertEx.Equal("autoEffortFastModelName", error.GetProperty("name").GetString());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public void NodeSettings_KeepModelWarmFields_RoundTripThroughMapper()
     {
         var stored = new SaveNodeSettingsRequest
