@@ -3359,6 +3359,19 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 	startedAtUtc?: number | null;
 	completedAtUtc?: number | null;
 	sequence?: number;
+	inputTokens?: number | null;
+	outputTokens?: number | null;
+	reasoningTokens?: number | null;
+	estimatedInputTokens?: number | null;
+	providerCalls?: number | null;
+	toolCalls?: number | null;
+	toolSchemaTokens?: number | null;
+	toolNames?: Array<string> | null;
+	providerTurnMs?: number | null;
+	servedModelName?: string | null;
+	route?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse | null;
+	workSessionSteps?: number | null;
+	failureClassGroup?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppliedRuleSetResponse = {
@@ -3366,6 +3379,13 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppli
 	name?: string;
 	contentSha256?: string;
 	currentContentSha256?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse = {
+	satisfied?: Array<string>;
+	dead?: Array<string>;
+	gateAnswer?: string | null;
+	truncated?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunRequest = {
@@ -3510,6 +3530,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunRe
 	completedAtUtc?: number | null;
 	version?: number;
 	lastSequence?: number;
+	cost?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse = {
@@ -3538,6 +3559,17 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 	startedAtUtc?: number | null;
 	completedAtUtc?: number | null;
 	sequence?: number;
+	inputTokens?: number | null;
+	outputTokens?: number | null;
+	toolCalls?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse = {
+	inputTokens?: number | null;
+	outputTokens?: number | null;
+	toolCalls?: number | null;
+	providerCalls?: number | null;
+	providerTurnMs?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1StartDevWorkflowRunRequest = {

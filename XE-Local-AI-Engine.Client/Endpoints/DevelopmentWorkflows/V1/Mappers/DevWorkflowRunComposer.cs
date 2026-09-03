@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 
+using System.Text.Json;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -19,6 +21,9 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
     private readonly IAgentDefinitionStore _agents = agents ?? throw new ArgumentNullException(nameof(agents));
     private readonly IAgentWorkSessionStore _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
     private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+
+    /// <summary>camelCase, matching the documents the runtime wrote into these columns.</summary>
+    private static readonly JsonSerializerOptions TelemetryJsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task<DevWorkflowRunResponse> ComposeAsync(DevWorkflowRunDetail detail, CancellationToken cancellationToken)
     {
@@ -80,7 +85,11 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             run.StartedAtUtc,
             run.EndedAtUtc,
             run.Version,
-            run.LastSequence);
+            run.LastSequence,
+
+            // Summed over the node runs already loaded above: the rollup costs no extra query, and a run's own row
+            // carries no cost of its own to disagree with.
+            Cost: RunCost(detail.NodeRuns));
     }
 
     public async Task<DevWorkflowNodeRunDetailResponse> ComposeNodeAsync(Guid runId, Guid nodeRunId, CancellationToken cancellationToken)
@@ -155,7 +164,23 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             [.. decisions.Where(decision => decision.NodeRunId == nodeRunId).OrderBy(static decision => decision.Sequence).Select(DevWorkflowContractMapper.ToResponse)],
             nodeRun.StartedAtUtc,
             nodeRun.EndedAtUtc,
-            nodeRun.Sequence);
+            nodeRun.Sequence,
+
+            // Named from here on: the tail is a run of same-typed optional slots, so a positional call would compile
+            // silently misaligned if a field is spliced in ahead of them.
+            InputTokens: nodeRun.InputTokens,
+            OutputTokens: nodeRun.OutputTokens,
+            ReasoningTokens: nodeRun.ReasoningTokens,
+            EstimatedInputTokens: nodeRun.EstimatedInputTokens,
+            ProviderCalls: nodeRun.ProviderCalls,
+            ToolCalls: nodeRun.ToolCalls,
+            ToolSchemaTokens: nodeRun.ToolSchemaTokens,
+            ToolNames: ToolNames(nodeRun.ToolNamesJson),
+            ProviderTurnMs: nodeRun.ProviderTurnMs,
+            ServedModelName: nodeRun.ServedModelName,
+            Route: Route(nodeRun.RouteJson),
+            WorkSessionSteps: nodeRun.WorkSessionSteps,
+            FailureClassGroup: AgentUnitFailureClass.FromDevWorkflowFailureClass(nodeRun.FailureClass));
     }
 
     private static DevWorkflowNodeRunSummaryResponse ToSummary(DevWorkflowNodeRunSnapshot nodeRun,
@@ -194,7 +219,65 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             HasStaleInputs: hasStaleInputs,
             StartedAtUtc: nodeRun.StartedAtUtc,
             CompletedAtUtc: nodeRun.EndedAtUtc,
-            Sequence: nodeRun.Sequence);
+            Sequence: nodeRun.Sequence,
+            InputTokens: nodeRun.InputTokens,
+            OutputTokens: nodeRun.OutputTokens,
+            ToolCalls: nodeRun.ToolCalls);
+
+    /// <summary>
+    ///     The run's spend, added member by member over its node runs. A member stays null until some row reports it,
+    ///     so a run whose nodes never measured anything says "nobody measured" rather than "zero".
+    /// </summary>
+    private static DevWorkflowRunCostResponse RunCost(IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns)
+    {
+        long? inputTokens = null;
+        long? outputTokens = null;
+        int? toolCalls = null;
+        int? providerCalls = null;
+        long? providerTurnMs = null;
+        foreach (var nodeRun in nodeRuns)
+        {
+            inputTokens = Add(inputTokens, nodeRun.InputTokens);
+            outputTokens = Add(outputTokens, nodeRun.OutputTokens);
+            toolCalls = Add(toolCalls, nodeRun.ToolCalls);
+            providerCalls = Add(providerCalls, nodeRun.ProviderCalls);
+            providerTurnMs = Add(providerTurnMs, nodeRun.ProviderTurnMs);
+        }
+
+        return new DevWorkflowRunCostResponse(inputTokens, outputTokens, toolCalls, providerCalls, providerTurnMs);
+    }
+
+    private static long? Add(long? total, long? term) => term is { } value ? (total ?? 0) + value : total;
+
+    private static int? Add(int? total, int? term) => term is { } value ? (total ?? 0) + value : total;
+
+    /// <summary>
+    ///     The route as the column stores it. The response record IS the stored document's shape, so this is a parse
+    ///     rather than a translation — and an unreadable column costs this node its route rather than costing the
+    ///     drill-down a 500, exactly as an unreadable policy resolution does.
+    /// </summary>
+    private static DevWorkflowNodeRouteResponse? Route(string? routeJson) => Read<DevWorkflowNodeRouteResponse>(routeJson);
+
+    /// <summary>The tool names as the column stores them: a JSON string array whose last element may be the truncation marker.</summary>
+    private static IReadOnlyList<string>? ToolNames(string? toolNamesJson) => Read<IReadOnlyList<string>>(toolNamesJson);
+
+    private static T? Read<T>(string? json)
+        where T : class
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<T>(json, TelemetryJsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     ///     Which upstream nodes a <c>Pending</c> node run is still waiting on, computed here rather than left to the
