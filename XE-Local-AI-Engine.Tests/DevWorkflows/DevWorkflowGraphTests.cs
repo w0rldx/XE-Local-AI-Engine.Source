@@ -258,6 +258,75 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
+    ///     Chain two gates and strand the downstream one, and every gate above it is stranded too. The sentence that
+    ///     says "whose only out-edge can never fire" is only true of the gate that OWNS the dead edge, so an ordinal
+    ///     tie-break naming 'alpha' would send the operator to fix an edge that is fine.
+    /// </summary>
+    [Test]
+    public void Parse_WithTwoChainedGatesAndOneDeadEdge_NamesTheGateThatOwnsIt()
+    {
+        const string ChainedGates = """
+                                    {"schemaVersion":1,
+                                     "nodes":[{"nodeKey":"alpha","nodeType":"HumanGate"},
+                                              {"nodeKey":"beta","nodeType":"HumanGate"},
+                                              {"nodeKey":"ship","nodeType":"Agent"}],
+                                     "edges":[{"from":"alpha","to":"beta"},
+                                              {"from":"beta","to":"ship","condition":{"path":"decision","op":"eq","value":"Approved"}}]}
+                                    """;
+
+        var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(ChainedGates)).Message;
+
+        AssertEx.Contains(refusal, "Node 'beta' is a human gate whose only out-edge can never fire");
+        AssertEx.Contains(refusal, "GRAPH-C4-1", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     The join collects what the clones produced, so it must FOLLOW the node that decomposes the work. This is the
+    ///     shape that made the augmented graph cyclic: the virtual edge 'm' → 't' closes the loop 't' → 'j' → 'm' → 't'
+    ///     that <see cref="DevWorkflowGraph" />'s cycle check cannot see, because it walks the authored edges only. The
+    ///     fixpoint then ran over an order that was not topological and under-approximated, refusing this graph with a
+    ///     GRAPH-C4-2 complaint although 'start' is a human gate on every path into 't'.
+    /// </summary>
+    [Test]
+    public void Parse_WithAMaterializationJoiningIntoOneOfItsOwnAncestors_IsRejected()
+    {
+        const string JoinUpstream = """
+                                    {"schemaVersion":1,
+                                     "nodes":[{"nodeKey":"start","nodeType":"HumanGate"},
+                                              {"nodeKey":"j","nodeType":"Join"},
+                                              {"nodeKey":"t","nodeType":"Agent","requiredCapabilities":{"WriteExecute":"writes the release notes"}},
+                                              {"nodeKey":"m","nodeType":"Agent",
+                                               "materialization":{"templateNodeKey":"t","artifactKind":"TaskPackage","joinNodeKey":"j","maxChildren":2}}],
+                                     "edges":[{"from":"start","to":"j"},{"from":"t","to":"j"},{"from":"j","to":"m"}]}
+                                    """;
+
+        var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(JoinUpstream)).Message;
+
+        AssertEx.Contains(refusal, "names join node 'j', which is 'm' itself or one of its ancestors");
+        AssertEx.False(refusal.Contains("GRAPH-C4-2", StringComparison.Ordinal),
+            "and it is refused for the shape it is, not with a gating complaint that is false.");
+    }
+
+    /// <summary>
+    ///     The same rule's other half: a node naming ITSELF as its own join. Expansion wires every clone's leaf to the
+    ///     join, so this one would route the clones straight back into the node that produced them.
+    /// </summary>
+    [Test]
+    public void Parse_WithAMaterializationJoiningIntoItself_IsRejected()
+    {
+        const string SelfJoin = """
+                                {"schemaVersion":1,
+                                 "nodes":[{"nodeKey":"t","nodeType":"Agent"},
+                                          {"nodeKey":"m","nodeType":"Agent",
+                                           "materialization":{"templateNodeKey":"t","artifactKind":"TaskPackage","joinNodeKey":"m","maxChildren":2}}],
+                                 "edges":[{"from":"t","to":"m"}]}
+                                """;
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(SelfJoin)).Message,
+            "names join node 'm', which is 'm' itself or one of its ancestors");
+    }
+
+    /// <summary>
     ///     The fourth step, and the one that is a rule rather than a footnote: a template leaf carries no out-edge, so
     ///     it lands in <c>TerminalNodeKeys</c> — and the zero-task decomposition's no-op verdict row would then make a
     ///     run read <c>Completed</c> at a key whose real tail never ran.
@@ -690,6 +759,10 @@ public sealed class DevWorkflowGraphTests
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","requiredCapabilities":{"Sorcery":"why"}}],"edges":[]}""", "unknown capability 'Sorcery'")]
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","requiredCapabilities":{"WriteExecute":true}}],"edges":[]}""", "needs a reason")]
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","requiredCapabilities":{"WriteExecute":""}}],"edges":[]}""", "needs a reason")]
+    [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Tool","requiredCapabilities":{"WriteExecute":"rewrites the working tree"}}],"edges":[]}""",
+        "is a Tool node, and only an Agent node's reach is declared")]
+    [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"HumanGate","requiredCapabilities":{"Network":"asks a webhook"}}],"edges":[]}""",
+        "is a HumanGate node, and only an Agent node's reach is declared")]
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","maxLoopIterations":3}],"edges":[]}""", "no 'retryTarget'")]
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Tool","retryTarget":"a","maxLoopIterations":0}],"edges":[{"from":"a","to":"b"}]}""",
         "must be positive")]
