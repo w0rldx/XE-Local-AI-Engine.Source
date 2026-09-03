@@ -41,6 +41,13 @@ internal sealed class NodeConversationConfiguration : IEntityTypeConfiguration<N
                .HasColumnName("origin")
                .HasDefaultValue(NodeChatOrigin.Local);
 
+        // The chat/work-session/integration discriminator. Additive with a default, so a pre-feature
+        // conversation reads as an ordinary chat and an older binary's inserts still succeed.
+        builder.Property(entity => entity.Kind)
+               .HasColumnName("kind")
+               .HasMaxLength(32)
+               .HasDefaultValue(NodeConversationKind.Chat);
+
         builder.Property(entity => entity.BranchOfConversationId)
                .HasColumnName("branch_of_conversation_id");
 

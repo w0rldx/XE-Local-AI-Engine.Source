@@ -30,7 +30,8 @@ public static class ConversationFootprintPurge
         "conversation_uploaded_files",
         "agent_execution_logs",
         "purged_tombstones",
-        "agent_work_sessions"
+        "agent_work_sessions",
+        "integration_sessions"
     ];
 
     /// <summary>
@@ -85,6 +86,25 @@ public static class ConversationFootprintPurge
                            [conversationId],
                            cancellationToken)
                        .ConfigureAwait(false);
+
+        // An integration session owns its conversation on the same terms, so purging the conversation takes the
+        // session, its executions and their events with it. Only integration_sessions carries conversation_id, so
+        // the two descendant tables resolve through a subselect on it and must go FIRST — once the session row is
+        // gone the subselect no longer finds them. They are deliberately absent from CoveredChildTables, which
+        // mirrors what BE-08 discovers: conversation/message-keyed tables only. integration_triggers and
+        // integration_api_keys are node-scoped and are correctly untouched by a conversation purge.
+        await dbContext.Database
+                       .ExecuteSqlRawAsync(
+                           "DELETE FROM integration_execution_events WHERE execution_id IN (SELECT e.id FROM integration_executions e JOIN integration_sessions s ON s.id = e.session_id WHERE s.conversation_id = {0});",
+                           [conversationId],
+                           cancellationToken)
+                       .ConfigureAwait(false);
+        await dbContext.Database
+                       .ExecuteSqlRawAsync("DELETE FROM integration_executions WHERE session_id IN (SELECT id FROM integration_sessions WHERE conversation_id = {0});",
+                           [conversationId],
+                           cancellationToken)
+                       .ConfigureAwait(false);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM integration_sessions WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
 
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_work_sessions WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM conversations WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);

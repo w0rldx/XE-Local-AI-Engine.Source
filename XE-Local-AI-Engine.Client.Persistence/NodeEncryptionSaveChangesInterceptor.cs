@@ -211,6 +211,17 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptRequiredProperty(entry, entry.Property(entity => entity.KeyHash), Guid.Empty, entry.Entity.Id, "local_model_proxy_api_key_hash", trackedProperties);
         }
 
+        // The external-integration bearer credentials are guarded on the same terms as the two singleton key rows
+        // above: the stored value is a one-way SHA-256 digest, so the AAD-bound AEAD protects the digest from a
+        // database-file WRITER who would otherwise substitute the hash of a key they chose and invoke every trigger
+        // on the node. Required, so it always encrypts. A distinct AAD column name binds it to this table; unlike
+        // the two above, a node holds MANY of these rows, so the record id is the row's own id rather than a
+        // singleton's.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<IntegrationApiKey>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.KeyHash), Guid.Empty, entry.Entity.Id, "integration_api_key_hash", trackedProperties);
+        }
+
         // Scheduled job definitions are node-scoped (no conversation/message), so the AAD binds the empty conversation
         // id to the definition's own id plus the column name. Only the opaque job parameters are encrypted; they are
         // optional, so they encrypt only when present.
@@ -716,6 +727,16 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
         foreach (var entry in nodeContext.ChangeTracker.Entries<DevWorkflowRunEvent>())
         {
             EncryptOptionalProperty(entry, entry.Property(entity => entity.DetailJson), entry.Entity.RunId, entry.Entity.Id, "dev_workflow_run_event_detail_json", trackedProperties);
+        }
+
+        // The one column in the integration family that holds real content: an external.output event carries the
+        // tool's payload verbatim. The owning execution fills the conversation slot of the AAD, so a re-parented
+        // event row fails its tag check instead of reading back as another execution's output. Optional — phase
+        // events carry no detail, which is what lets the raw-ADO accept path skip encryption entirely.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<IntegrationExecutionEvent>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.DetailJson), entry.Entity.ExecutionId, entry.Entity.Id, "integration_execution_event_detail_json",
+                trackedProperties);
         }
 
         // The two artifact tables add nothing here on purpose: the bytes live on disk under the blob store's own AAD

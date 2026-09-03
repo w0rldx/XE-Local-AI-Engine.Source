@@ -96,7 +96,8 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
                                                      UserId: null,
                                                      _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
                                                      NodeChatOriginValues.Local,
-                                                     model.AgentDefinitionId),
+                                                     model.AgentDefinitionId,
+                                                     NodeConversationKind.WorkSession),
                                                  cancellationToken)
                                              .ConfigureAwait(false);
 

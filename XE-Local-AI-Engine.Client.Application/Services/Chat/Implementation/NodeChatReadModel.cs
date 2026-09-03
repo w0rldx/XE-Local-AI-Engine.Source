@@ -137,7 +137,7 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                                           SELECT mi.message_id FROM messages mi
                                           WHERE mi.conversation_id = c.conversation_id
                                           ORDER BY mi.sequence DESC LIMIT 1)
-                                      WHERE c.purged = 0 AND c.archived = 0
+                                      WHERE c.purged = 0 AND c.archived = 0 AND c.kind = 'chat'
                                       ORDER BY c.is_pinned DESC, c.last_seen_utc DESC
                                       LIMIT $limit;
                                       """;
@@ -160,7 +160,7 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                                           SELECT mi.message_id FROM messages mi
                                           WHERE mi.conversation_id = c.conversation_id
                                           ORDER BY mi.sequence DESC LIMIT 1)
-                                      WHERE c.purged = 0
+                                      WHERE c.purged = 0 AND c.kind = 'chat'
                                       ORDER BY c.is_pinned DESC, c.last_seen_utc DESC
                                       LIMIT $limit;
                                       """;

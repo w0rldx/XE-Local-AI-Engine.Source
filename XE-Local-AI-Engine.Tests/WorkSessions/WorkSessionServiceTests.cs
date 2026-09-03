@@ -39,6 +39,28 @@ public sealed class WorkSessionServiceTests
         AssertEx.Contains(await service.ListAsync().ConfigureAwait(false), summary => summary.Id == created.Id);
     }
 
+    [Test]
+    public async Task Create_StampsTheOwnedConversationAsAWorkSessionAndKeepsItOutOfTheChatList()
+    {
+        var agentId = await SeedAgentAsync(Host.Factory, "tool-capable-model").ConfigureAwait(false);
+
+        await using var scope = Host.Factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
+        var chat = scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>();
+
+        var created = await service.CreateAsync(new CreateWorkSessionRequestModel("Kind check", "Prove the discriminator.", AgentWorkSessionKind.Research, agentId))
+                                   .ConfigureAwait(false);
+
+        AssertEx.NotNull(await chat.GetConversationAsync(created.ConversationId).ConfigureAwait(false),
+            "A by-id read stays unfiltered — the session's own transcript reader depends on it.");
+
+        var listed = (await chat.ListConversationsAsync(new NodeChatListConversationsRequest(IncludeArchived: true)).ConfigureAwait(false))
+                     .Select(static summary => summary.ConversationId)
+                     .ToArray();
+        AssertEx.False(listed.Contains(created.ConversationId),
+            "WorkSessionService must create its conversation with NodeConversationKind.WorkSession, so it never shows as a chat the operator did not start.");
+    }
+
     /// <summary>
     ///     FU-5: the caller's own model pin BEATS the bound agent's, and is what the tool gate judges — in both
     ///     directions, because an override that only ever loosened or only ever tightened would not be a pin.

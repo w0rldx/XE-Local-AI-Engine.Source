@@ -179,6 +179,16 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<DevWorkflowArtifactUse> DevWorkflowArtifactUses => Set<DevWorkflowArtifactUse>();
 
+    internal DbSet<IntegrationTrigger> IntegrationTriggers => Set<IntegrationTrigger>();
+
+    internal DbSet<IntegrationApiKey> IntegrationApiKeys => Set<IntegrationApiKey>();
+
+    internal DbSet<IntegrationSession> IntegrationSessions => Set<IntegrationSession>();
+
+    internal DbSet<IntegrationExecution> IntegrationExecutions => Set<IntegrationExecution>();
+
+    internal DbSet<IntegrationExecutionEvent> IntegrationExecutionEvents => Set<IntegrationExecutionEvent>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     /// <summary>
@@ -460,5 +470,10 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new DevWorkflowDecisionConfiguration());
         modelBuilder.ApplyConfiguration(new DevWorkflowArtifactConfiguration());
         modelBuilder.ApplyConfiguration(new DevWorkflowArtifactUseConfiguration());
+        modelBuilder.ApplyConfiguration(new IntegrationTriggerConfiguration());
+        modelBuilder.ApplyConfiguration(new IntegrationApiKeyConfiguration());
+        modelBuilder.ApplyConfiguration(new IntegrationSessionConfiguration());
+        modelBuilder.ApplyConfiguration(new IntegrationExecutionConfiguration());
+        modelBuilder.ApplyConfiguration(new IntegrationExecutionEventConfiguration());
     }
 }

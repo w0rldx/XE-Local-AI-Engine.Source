@@ -30,7 +30,7 @@ internal sealed class NodeChatConversationCommands(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var conversationId = Guid.NewGuid();
+        var conversationId = request.ConversationId ?? Guid.NewGuid();
         var createdAtUtc = request.CreatedAtUtc;
 
         return await _writer.ExecuteConversationExclusiveAsync(conversationId,
@@ -43,8 +43,8 @@ internal sealed class NodeChatConversationCommands(
 
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
-                                      INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, agent_definition_id, memory_excluded)
-                                      VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin, $agent_definition_id, $memory_excluded);
+                                      INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, agent_definition_id, memory_excluded, kind)
+                                      VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin, $agent_definition_id, $memory_excluded, $kind);
                                       """;
                 AddParameter(command, "$conversation_id", conversationId);
                 AddParameter(command, "$title", EncryptTitle(request.Title, dbContext, conversationId));
@@ -54,6 +54,7 @@ internal sealed class NodeChatConversationCommands(
                 AddParameter(command, "$origin", request.Origin);
                 AddParameter(command, "$agent_definition_id", request.AgentDefinitionId);
                 AddParameter(command, "$memory_excluded", memoryExcluded ? 1 : 0);
+                AddParameter(command, "$kind", request.Kind);
                 await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
                 await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
 
