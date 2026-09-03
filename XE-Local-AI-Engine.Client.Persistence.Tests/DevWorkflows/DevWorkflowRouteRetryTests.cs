@@ -102,6 +102,45 @@ public sealed class DevWorkflowRouteRetryTests
             (await store.ListEventsAsync(seed.RunId).ConfigureAwait(false)).Count(item => item.EventType == DevWorkflowEventTypes.NodeRetryRouted));
     }
 
+    /// <summary>
+    ///     The guarantee the policy's single re-ask stands on: a route that failed leaves the SAME store usable, so
+    ///     asking again on the scope that just lost is a fresh write and not a doubled one.
+    ///     <para>
+    ///         The first ask is failed mid-cascade, after rows and an event are already tracked, which is the only
+    ///         shape where a dirty change tracker could survive. It cannot: every failure path rolls the transaction
+    ///         back through one helper that clears the tracker with it, so the second ask re-reads the rows and each
+    ///         reset spends exactly one attempt.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ARouteAskedAgainOnTheStoreThatJustFailed_AppliesEachResetExactlyOnce()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await SeedRoundOneAsync(store).ConfigureAwait(false);
+
+        _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(() =>
+                              store.RouteRetryAsync(RouteFrom(seed.RunId, Guid.NewGuid(), [VerifyId, Guid.NewGuid(), FullValidateId])))
+                          .ConfigureAwait(false);
+
+        // The SAME store instance, as the retry policy uses it: one scoped store, asked twice inside one tick.
+        _ = await store.RouteRetryAsync(RouteFrom(seed.RunId, Guid.NewGuid(), [VerifyId, IntegrateId, FullValidateId])).ConfigureAwait(false);
+
+        var nodeRuns = (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).ToDictionary(row => row.NodeKey, StringComparer.Ordinal);
+        foreach (var key in new[] { "verify", "integrate", "fullvalidate" })
+        {
+            AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, nodeRuns[key].Status);
+            AssertEx.Equal(expected: 2, nodeRuns[key].Attempt, $"'{key}' spends ONE attempt across both asks; a tracker the failure left dirty would have spent two.");
+        }
+
+        var events = await store.ListEventsAsync(seed.RunId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, events.Count(item => item.EventType == DevWorkflowEventTypes.NodeRetryRouted), "The ask that failed left no event behind for the one that worked.");
+        AssertEx.Equal(expected: 3,
+            events.Count(item => item.EventType == DevWorkflowEventTypes.NodeRetryScheduled),
+            "One re-attempt event per reset row, not two.");
+    }
+
     /// <summary>Where round one leaves the tail: a verification, the apply past the gate, and the full check that failed.</summary>
     private static async Task<DevWorkflowSeed> SeedRoundOneAsync(DevWorkflowStore store)
     {
