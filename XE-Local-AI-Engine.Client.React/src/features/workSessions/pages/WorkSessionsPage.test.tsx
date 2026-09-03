@@ -41,6 +41,9 @@ function agentsRoute() {
 				defaultTemporaryChat: false,
 				memoryExtractionEnabled: true,
 				disableBaseScaffold: false,
+				// Required (non-nullable) on AgentDefinitionResponse: the list response is zod-validated at the API
+				// boundary, so an omitted required field fails the whole query and the selector renders no agents.
+				disableToolRelevanceFilter: false,
 				version: 1,
 				createdAtUtc: 1,
 				updatedAtUtc: 1,
