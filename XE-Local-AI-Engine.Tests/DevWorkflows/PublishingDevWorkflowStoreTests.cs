@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using System.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -134,10 +135,68 @@ public sealed class PublishingDevWorkflowStoreTests
                 DevWorkflowDecisionKind.Approve)))
     ];
 
+    /// <summary>
+    ///     One collection budget for the WHOLE retry route, however many resets it carries. The route's resets come from
+    ///     the retry target's descendants, so they are bounded only by the graph's width: a deadline per reset would let
+    ///     a stalled collector hold the dispatcher tick for the width times the budget, and the fix loop's re-send after
+    ///     a lost concurrency race would double it again.
+    ///     <para>
+    ///         Proved on the tokens rather than on the clock: two <c>CancellationToken</c>s are equal when they came from
+    ///         the same source, so ten resets seeing ONE distinct deadline is the claim itself. The elapsed bound is the
+    ///         same claim in wall-clock terms, with a margin wide enough not to flake.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ARetryRoute_BoundsEveryResetWithOneDeadline()
+    {
+        const int resets = 10;
+        var budget = TimeSpan.FromMilliseconds(300);
+        var telemetry = new StubDevWorkflowNodeTelemetrySource { Delay = TimeSpan.FromMinutes(1) };
+        var (store, publisher) = Create(telemetry, budget);
+        var route = new RouteDevWorkflowRetryCommand(
+            new AppendDevWorkflowEventCommand(RunId, DevWorkflowVersions.Any, DevWorkflowEventTypes.NodeRetryRouted, NodeRunId),
+            [.. Enumerable.Range(0, resets).Select(static _ => ReAttempt())]);
+
+        var elapsed = Stopwatch.StartNew();
+        _ = await store.RouteRetryAsync(route).ConfigureAwait(false);
+        elapsed.Stop();
+
+        AssertEx.Equal(resets, telemetry.Calls, "Every reset is still offered to the collector; only the budget is shared.");
+        AssertEx.Equal(expected: 1,
+            telemetry.Deadlines.Distinct().Count(),
+            "All ten collections must run under ONE deadline, or the route costs the graph's width times the budget.");
+        AssertEx.True(elapsed.Elapsed < budget * 3,
+            $"A route of {resets} stalled collections took {elapsed.ElapsedMilliseconds} ms against a {budget.TotalMilliseconds} ms budget.");
+        await publisher.Received(1).PublishAsync(RunId, Sequence, DevWorkflowChangeKind.Node, Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>The other half of the same claim: a single settle owns its own budget and shares nothing with the next one.</summary>
+    [Test]
+    public async Task TwoSettles_EachGetTheirOwnDeadline()
+    {
+        var telemetry = new StubDevWorkflowNodeTelemetrySource();
+        var (store, _) = Create(telemetry, TimeSpan.FromSeconds(5));
+
+        _ = await store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked)).ConfigureAwait(false);
+        _ = await store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked)).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 2, telemetry.Deadlines.Distinct().Count(), "One settle, one budget — a slow settle may not shorten the next one's.");
+    }
+
     private static TransitionDevWorkflowNodeRunCommand NodeRunTransition(DevWorkflowNodeRunStatus target) =>
         new(RunId, NodeRunId, DevWorkflowVersions.Any, target);
 
-    private static (IDevWorkflowStore Store, IDevWorkflowEventPublisher Publisher) Create()
+    /// <summary>The shape both re-attempt write paths build: a Pending reset that spends an attempt and carries a detail to merge into.</summary>
+    private static TransitionDevWorkflowNodeRunCommand ReAttempt() =>
+        new(RunId,
+            NodeRunId,
+            DevWorkflowVersions.Any,
+            DevWorkflowNodeRunStatus.Pending,
+            DetailJson: """{"attempt":2}""",
+            IncrementAttempt: true);
+
+    private static (IDevWorkflowStore Store, IDevWorkflowEventPublisher Publisher) Create(StubDevWorkflowNodeTelemetrySource? source = null,
+        TimeSpan? collectionTimeout = null)
     {
         var inner = Substitute.For<IDevWorkflowStore>();
         var result = new DevWorkflowMutationResult(RunId, Sequence, Version: 2, DevWorkflowRunStatus.Running, GraphRevision: 0);
@@ -157,8 +216,13 @@ public sealed class PublishingDevWorkflowStoreTests
 
         // A telemetry source that answers nothing: this suite is about the announcement, and a collector that returned
         // something would only add a second read to every probe.
-        var telemetry = new StubDevWorkflowNodeTelemetrySource();
-        return (new PublishingDevWorkflowStore(inner, publisher, telemetry, new DevWorkflowGraphCache(), NullLogger<PublishingDevWorkflowStore>.Instance), publisher);
+        var telemetry = source ?? new StubDevWorkflowNodeTelemetrySource();
+        return (new PublishingDevWorkflowStore(inner,
+            publisher,
+            telemetry,
+            new DevWorkflowGraphCache(),
+            NullLogger<PublishingDevWorkflowStore>.Instance,
+            collectionTimeout), publisher);
     }
 
     private sealed record Probe(string Method, DevWorkflowChangeKind Kind, Func<IDevWorkflowStore, Task> Invoke);

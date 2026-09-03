@@ -28,13 +28,20 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
     IDevWorkflowEventPublisher publisher,
     IDevWorkflowNodeTelemetrySource telemetry,
     DevWorkflowGraphCache graphs,
-    ILogger<PublishingDevWorkflowStore> logger) : IDevWorkflowStore
+    ILogger<PublishingDevWorkflowStore> logger,
+    TimeSpan? collectionTimeout = null) : IDevWorkflowStore
 {
     /// <summary>
-    ///     How long the whole cost collection may take before the settle goes ahead without it. It runs on a dispatcher
-    ///     tick, and a measurement that delays a run is worse than a measurement that is missing.
+    ///     How long a cost collection may take before the settle goes ahead without it. It runs on a dispatcher tick,
+    ///     and a measurement that delays a run is worse than a measurement that is missing.
+    ///     <para>
+    ///         It bounds the whole ASK, not one command: a retry route enriches every reset it carries under ONE
+    ///         deadline, because the graph's width is what decides how many resets there are and a per-command budget
+    ///         would multiply by it. The parameter exists so a test can prove that without waiting five real seconds;
+    ///         production takes the default.
+    ///     </para>
     /// </summary>
-    private static readonly TimeSpan CollectionTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan DefaultCollectionTimeout = TimeSpan.FromSeconds(5);
 
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -56,6 +63,7 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
     private readonly IDevWorkflowNodeTelemetrySource _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
     private readonly DevWorkflowGraphCache _graphs = graphs ?? throw new ArgumentNullException(nameof(graphs));
     private readonly ILogger<PublishingDevWorkflowStore> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly TimeSpan _collectionTimeout = collectionTimeout ?? DefaultCollectionTimeout;
 
     public Task<DevWorkflowWorkItemSnapshot> CreateWorkItemAsync(CreateDevWorkflowWorkItemCommand command, CancellationToken cancellationToken = default) =>
         _inner.CreateWorkItemAsync(command, cancellationToken);
@@ -172,10 +180,13 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        // ONE deadline for every reset, not one each: `Resets` is built from the retry target's descendants and is
+        // bounded only by the graph's width, so a per-reset budget would hold the dispatcher tick for N times it.
+        using var deadline = NewCollectionDeadline(cancellationToken);
         var resets = new List<TransitionDevWorkflowNodeRunCommand>(command.Resets.Count);
         foreach (var reset in command.Resets)
         {
-            resets.Add(await EnrichAsync(reset, cancellationToken).ConfigureAwait(false));
+            resets.Add(await EnrichWithinDeadlineAsync(reset, deadline.Token, cancellationToken).ConfigureAwait(false));
         }
 
         return await PublishAsync(_inner.RouteRetryAsync(command with { Resets = resets }, cancellationToken), DevWorkflowChangeKind.Node, cancellationToken)
@@ -258,9 +269,30 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
     /// </summary>
     private async Task<TransitionDevWorkflowNodeRunCommand> EnrichAsync(TransitionDevWorkflowNodeRunCommand command, CancellationToken cancellationToken)
     {
+        // The deadline is opened only for a command that will actually collect, so an ordinary Running transition
+        // pays for no timer at all.
+        if (!IsReAttempt(command) && !WritesTelemetry(command.TargetStatus))
+        {
+            return command;
+        }
+
+        using var deadline = NewCollectionDeadline(cancellationToken);
+        return await EnrichWithinDeadlineAsync(command, deadline.Token, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     The enrichment itself, under a deadline its CALLER owns — one per settle, one per retry route. Everything
+    ///     that reads a row does so on <paramref name="deadline" />; <paramref name="cancellationToken" /> is kept only
+    ///     to tell an expired deadline (swallowed, the command goes through unenriched) from a cancelled caller
+    ///     (rethrown).
+    /// </summary>
+    private async Task<TransitionDevWorkflowNodeRunCommand> EnrichWithinDeadlineAsync(TransitionDevWorkflowNodeRunCommand command,
+        CancellationToken deadline,
+        CancellationToken cancellationToken)
+    {
         if (IsReAttempt(command))
         {
-            return await EnrichReAttemptAsync(command, cancellationToken).ConfigureAwait(false);
+            return await EnrichReAttemptAsync(command, deadline, cancellationToken).ConfigureAwait(false);
         }
 
         if (!WritesTelemetry(command.TargetStatus))
@@ -270,15 +302,12 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
 
         try
         {
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            deadline.CancelAfter(CollectionTimeout);
-
             // The PRE-write row, and it is read for four things only: the work session, the development task, the
             // attempt's start and the row's node type. Its Status and OutputJson are the previous attempt's and must
             // never be the ones a route question is asked about.
-            var snapshot = await _inner.GetNodeRunAsync(command.NodeRunId, deadline.Token).ConfigureAwait(false);
-            var routeJson = await RouteJsonAsync(command, snapshot, deadline.Token).ConfigureAwait(false);
-            var collected = await _telemetry.CollectAsync(snapshot, command.TargetStatus, deadline.Token).ConfigureAwait(false);
+            var snapshot = await _inner.GetNodeRunAsync(command.NodeRunId, deadline).ConfigureAwait(false);
+            var routeJson = await RouteJsonAsync(command, snapshot, deadline).ConfigureAwait(false);
+            var collected = await _telemetry.CollectAsync(snapshot, command.TargetStatus, deadline).ConfigureAwait(false);
 
             if (collected is null && routeJson is null)
             {
@@ -344,18 +373,16 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
     ///     </para>
     /// </summary>
     private async Task<TransitionDevWorkflowNodeRunCommand> EnrichReAttemptAsync(TransitionDevWorkflowNodeRunCommand command,
+        CancellationToken deadline,
         CancellationToken cancellationToken)
     {
         try
         {
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            deadline.CancelAfter(CollectionTimeout);
-
-            var snapshot = await _inner.GetNodeRunAsync(command.NodeRunId, deadline.Token).ConfigureAwait(false);
+            var snapshot = await _inner.GetNodeRunAsync(command.NodeRunId, deadline).ConfigureAwait(false);
 
             // Collected as the FAILED attempt it is. The row itself may still read Running — a re-attempt is written
             // straight over a live row — but what this cost vector describes is an attempt that is over.
-            var collected = await _telemetry.CollectAsync(snapshot, DevWorkflowNodeRunStatus.Failed, deadline.Token).ConfigureAwait(false);
+            var collected = await _telemetry.CollectAsync(snapshot, DevWorkflowNodeRunStatus.Failed, deadline).ConfigureAwait(false);
             if (collected is null)
             {
                 return command;
@@ -403,6 +430,14 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
     /// </summary>
     private static bool IsReAttempt(TransitionDevWorkflowNodeRunCommand command) =>
         command.TargetStatus == DevWorkflowNodeRunStatus.Pending && command.IncrementAttempt && command.DetailJson is not null;
+
+    /// <summary>One collection budget, linked to the caller's own token so a cancelled request is still a cancelled request.</summary>
+    private CancellationTokenSource NewCollectionDeadline(CancellationToken cancellationToken)
+    {
+        var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(_collectionTimeout);
+        return deadline;
+    }
 
     /// <summary>Where an attempt's spend stops changing: it has settled, been abandoned, or stopped to ask a human.</summary>
     private static bool WritesTelemetry(DevWorkflowNodeRunStatus status) =>

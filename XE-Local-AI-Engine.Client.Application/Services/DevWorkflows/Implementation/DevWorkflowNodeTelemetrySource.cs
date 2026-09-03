@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
 using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -12,9 +11,18 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 ///     session takes the agent path, a development task takes the DevTask path, and a node run with neither — Tool,
 ///     Gate, Parallel, Join, and every <c>Skipped</c> row — has no cost rows to read and answers nothing.
 /// </summary>
+/// <remarks>
+///     <paramref name="development" /> is optional BECAUSE the whole Development module is: every one of its services,
+///     <c>IDevelopmentStore</c> included, is registered only when <c>Development:Enabled</c> is true
+///     (<c>AddNodeDevelopmentExtensions</c>), while this collector is registered unconditionally beside the workflow
+///     store that every node-run transition goes through. A required dependency would therefore fail to resolve
+///     <c>IDevWorkflowStore</c> itself on a node with Development Mode switched off. The container fills a defaulted
+///     parameter with null when the service is absent, which is the same answer the DevTask lane gives for the same
+///     reason — and the node run simply reports no DevTask cost.
+/// </remarks>
 internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore workSessions,
     IAgentExecutionLogStore executionLogs,
-    IServiceProvider services) : IDevWorkflowNodeTelemetrySource
+    IDevelopmentStore? development = null) : IDevWorkflowNodeTelemetrySource
 {
     /// <summary>camelCase, matching the supervisor that wrote these rows.</summary>
     private static readonly JsonSerializerOptions ConsumptionJsonOptions = new(JsonSerializerDefaults.Web);
@@ -42,12 +50,19 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
     /// <summary>The schema's own bound on the node run's <c>tool_names_json</c> (<c>DevWorkflowNodeRunConfiguration</c>).</summary>
     private const int MaxToolNamesJson = 1024;
 
+    /// <summary>
+    ///     The schema's bound on <c>served_model_name</c>. Clamped HERE, by construction, like both sibling text
+    ///     columns: <c>agent_execution_logs.model_name</c> declares no length of its own and SQLite enforces none, so a
+    ///     name copied verbatim would make the column's declared bound a lie.
+    /// </summary>
+    private const int MaxServedModelName = 256;
+
     /// <summary>The final element of a trimmed name list. One character, and unmistakably not a tool.</summary>
     private const string TruncatedToolNameMarker = "…";
 
     private readonly IAgentWorkSessionStore _workSessions = workSessions ?? throw new ArgumentNullException(nameof(workSessions));
     private readonly IAgentExecutionLogStore _executionLogs = executionLogs ?? throw new ArgumentNullException(nameof(executionLogs));
-    private readonly IServiceProvider _services = services ?? throw new ArgumentNullException(nameof(services));
+    private readonly IDevelopmentStore? _development = development;
 
     public async Task<DevWorkflowNodeTelemetry?> CollectAsync(DevWorkflowNodeRunSnapshot nodeRun,
         DevWorkflowNodeRunStatus targetStatus,
@@ -112,12 +127,12 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
         long? nodeRunStartedAtUtc,
         CancellationToken cancellationToken)
     {
-        if (_services.GetService<IDevelopmentStore>() is not { } development || nodeRunStartedAtUtc is not { } startedAtUtc)
+        if (_development is null || nodeRunStartedAtUtc is not { } startedAtUtc)
         {
             return null;
         }
 
-        var attempts = await development.ListAttemptsAsync(developmentTaskId, cancellationToken).ConfigureAwait(false);
+        var attempts = await _development.ListAttemptsAsync(developmentTaskId, cancellationToken).ConfigureAwait(false);
 
         long? inputTokens = null;
         long? outputTokens = null;
@@ -193,7 +208,7 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
 
                 // The store orders newest first, so the first envelope of the first page is the model that served the
                 // last turn — the receipt, as opposed to whatever the node or the agent asked for.
-                servedModelName ??= string.IsNullOrWhiteSpace(envelope.ModelName) ? null : envelope.ModelName;
+                servedModelName ??= Clamp(envelope.ModelName, MaxServedModelName);
             }
 
             if (envelopes.Count < EnvelopePageSize)
@@ -203,6 +218,17 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
         }
 
         return new EnvelopeTotals(inputTokens, outputTokens, reasoningTokens, providerTurnMs, servedModelName);
+    }
+
+    /// <summary>A name as the column can hold it, or null when there was none to hold.</summary>
+    private static string? Clamp(string? name, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        return name.Length <= maxLength ? name : name[..maxLength];
     }
 
     private static WorkSessionStepConsumptionDetail? ReadConsumption(string detailJson)

@@ -4,11 +4,13 @@ using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -307,6 +309,104 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         AssertEx.NotNull(tool.RouteJson, "It still records where it routed, which is the one thing every terminal row can answer.");
     }
 
+    /// <summary>
+    ///     The served model name is clamped to the column's 256 characters BY CONSTRUCTION, like both sibling text
+    ///     columns. <c>agent_execution_logs.model_name</c> declares no length of its own and SQLite enforces none, so a
+    ///     name copied verbatim would silently overrun a bound the schema declares — and the collector is where the
+    ///     bound can still be kept.
+    /// </summary>
+    [Test]
+    public async Task ServedModelName_IsClampedToTheColumnsBound()
+    {
+        var conversationId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var sessions = Substitute.For<IAgentWorkSessionStore>();
+        sessions.GetAsync(sessionId, Arg.Any<CancellationToken>()).Returns(Session(sessionId, conversationId));
+        sessions.ListEventsAsync(sessionId, Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns([]);
+
+        var logs = Substitute.For<IAgentExecutionLogStore>();
+        logs.ListRunEnvelopesAsync(conversationId, Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns([Envelope(conversationId, new string('m', 300))]);
+
+        var collected = await new DevWorkflowNodeTelemetrySource(sessions, logs)
+                              .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None)
+                              .ConfigureAwait(false);
+
+        var served = AssertEx.NotNull(AssertEx.NotNull(collected).ServedModelName);
+        AssertEx.Equal(expected: 256, served.Length, "served_model_name is declared at 256 characters, so the collector may not hand the column more.");
+        AssertEx.Equal(new string('m', 256), served, "And it is the FRONT of the name that is kept, not a hash of it.");
+    }
+
+    private static AgentWorkSessionSnapshot Session(Guid sessionId, Guid conversationId) =>
+        new(sessionId,
+            "Research",
+            "Objective",
+            AgentWorkSessionKind.Research,
+            AgentWorkSessionStatus.Completed,
+            Guid.NewGuid(),
+            conversationId,
+            CurrentTaskId: null,
+            StepCount: 1,
+            LastCheckpointId: null,
+            LastSequence: 1,
+            ConfigVersion: 1,
+            CreatedAtUtc: 0,
+            UpdatedAtUtc: 0,
+            Version: 1);
+
+    private static AgentRunEnvelopeRecord Envelope(Guid conversationId, string modelName) =>
+        new(Guid.NewGuid(),
+            SchemaVersion: 1,
+            Guid.NewGuid(),
+            conversationId,
+            MessageId: null,
+            InvocationId: null,
+            RequestId: null,
+            modelName,
+            "local",
+            "Completed",
+            Success: true,
+            FailureCategory: null,
+            DurationMs: 10,
+            PromptTokens: 1,
+            CompletionTokens: 2,
+            ReasoningTokens: null,
+            TotalTokens: 3,
+            ContentChunkCount: null,
+            ReasoningChunkCount: null,
+            TraceId: null,
+            StartedAtUtc: null,
+            CreatedAtUtc: 0);
+
+    private static DevWorkflowNodeRunSnapshot NodeRunWithSession(Guid sessionId) =>
+        new(Guid.NewGuid(),
+            Guid.NewGuid(),
+            "research",
+            DevWorkflowNodeType.Agent,
+            Attempt: 1,
+            MaxAttempts: 3,
+            SessionResumes: 0,
+            DevWorkflowNodeRunStatus.Running,
+            QueueReason: null,
+            PendingDecisionKind: null,
+            Sequence: 1,
+            sessionId,
+            WorkSessionAvailable: true,
+            AgentDefinitionId: null,
+            DevelopmentProjectId: null,
+            DevelopmentTaskId: null,
+            InputJson: null,
+            OutputJson: null,
+            PolicyResolutionJson: null,
+            MaterializedFromNodeRunId: null,
+            MaterializationIndex: null,
+            FailureClass: null,
+            TerminalReason: null,
+            QueuedAtUtc: null,
+            StartedAtUtc: null,
+            EndedAtUtc: null,
+            CreatedAtUtc: 0);
+
     /// <summary>Every observable the two arms of T1 compare: the events, the rows and the work item.</summary>
     private static async Task<string> DriveBothGraphsAsync(StubDevWorkflowNodeTelemetrySource? stub)
     {
@@ -337,7 +437,14 @@ public sealed class DevWorkflowNodeRunTelemetryTests
 
     private static async Task RecordAsync(DevWorkflowHarness harness, Guid runId, List<string> lines)
     {
-        lines.Add(await harness.ReadEventTrailAsync(runId).ConfigureAwait(false));
+        // The event Outcome is compared here rather than in the shared trail helper: it belongs to THIS tuple (plan
+        // section 5) and it is the field a later enrichment would reach for, but the rest of the namespace asserts on
+        // the trail as a list of types.
+        foreach (var entry in await harness.ReadEventsAsync(runId).ConfigureAwait(false))
+        {
+            lines.Add($"event {entry.EventType} outcome={entry.Outcome}");
+        }
+
         foreach (var nodeRun in (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).OrderBy(static row => row.NodeKey, StringComparer.Ordinal))
         {
             lines.Add($"{nodeRun.NodeKey} {nodeRun.Status} attempt={nodeRun.Attempt} failure={nodeRun.FailureClass} reason={nodeRun.TerminalReason}");
@@ -381,7 +488,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         }
     }
 
-    private static void AssertEmptyTelemetry(DevWorkflowNodeRunSnapshot nodeRun, string because)
+    internal static void AssertEmptyTelemetry(DevWorkflowNodeRunSnapshot nodeRun, string because)
     {
         AssertEx.Null(nodeRun.InputTokens, because);
         AssertEx.Null(nodeRun.OutputTokens, because);

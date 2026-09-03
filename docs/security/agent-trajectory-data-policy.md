@@ -18,6 +18,19 @@ same rule for the inbound MCP surface in the positive and the negative: tool nam
 identity, decision, duration, audit outcome are recorded; *arguments, prompts, message content, tokens, passwords, full
 keys and host paths are never recorded*.
 
+**Outbound tool names are recorded too, and that is an extension of the rule above rather than a case of it.** ADR
+0006 §7's tool-name precedent is about the *inbound* MCP surface — what a caller asked this node to run. The agent
+loop also records the names of the tools it called *itself*, in two places: the per-step consumption detail on a work
+session's `StepEnded` / `StepFailed` event, and `dev_workflow_node_runs.tool_names_json` on a settled workflow node
+run. Three conditions bound it, all enforced in code rather than by convention. **Names only** — never an argument,
+never a result, never a per-call sequence; the surrounding numbers are counts. **Capped** — the set is bounded at
+sixteen distinct names inside `ProviderCallBudget` itself, re-capped when a node run unions its steps, and the
+serialized column is clamped to 1024 characters with a trailing `…` element when it had to drop names, so neither a
+runaway tool loop nor a long name can grow the record. **Operator-authored** — a tool name is a value this node's own
+catalog and the operator's MCP registrations chose, so it is an identifier of configuration, not of a user's content.
+A name still says which capability an agent reached for, which is why it is written down here rather than left to the
+code comments that state the same three conditions at each carrier.
+
 Rows are pruned by `RetentionSweeperService` against `AgentExecutionLogRetentionOptions` (`RetentionDays`, default 30,
 on a `SweepInterval` cadence). The window is validated at startup, because a non-positive value would set the cutoff at
 or after "now" and purge the table.

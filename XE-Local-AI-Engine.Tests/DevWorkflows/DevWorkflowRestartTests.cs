@@ -393,6 +393,42 @@ public sealed class DevWorkflowRestartTests
         AssertEx.Contains(AssertEx.NotNull(settled.TerminalReason), "could not settle");
     }
 
+    /// <summary>
+    ///     T4: startup recovery is the one node-run write path deliberately OUTSIDE the telemetry choke point —
+    ///     <c>ReconcileNonTerminalNodeRunsAsync</c> is forwarded straight to the inner store — so a row it settles keeps
+    ///     its verdict and carries no cost at all.
+    ///     <para>
+    ///         Driven on a row that would otherwise have plenty to report: an agent node run with a live session and a
+    ///         real consumption row on it, landing in <c>Blocked</c>, which IS inside the choke point's status set. The
+    ///         twelve nulls therefore prove the bypass rather than an absence of anything to collect.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task Recovery_LeavesTelemetryNull()
+    {
+        await using var harness = DevWorkflowHarness.WithASecondWriter();
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        // What the collector WOULD have found, had this path crossed it.
+        await DevWorkflowNodeRunTelemetryTests
+              .AppendStepConsumptionAsync(harness,
+                  runId,
+                  "research",
+                  """{"providerCalls":2,"estimatedInputTokens":120,"toolCallsCompleted":1,"toolSchemaTokens":40}""")
+              .ConfigureAwait(false);
+
+        // From here every session read re-attempts the row, so recovery gives up on it and settles it for a human.
+        harness.Drift.Target = (runId, (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Id);
+        await harness.RestartAsync().ConfigureAwait(false);
+
+        var settled = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, settled.Status, "The verdict is the reconciler's, unchanged.");
+        AssertEx.Equal(DevWorkflowFailureClasses.Interrupted, settled.FailureClass);
+        DevWorkflowNodeRunTelemetryTests.AssertEmptyTelemetry(settled,
+            "The reconciler bypasses the publishing decorator, so it writes no telemetry — not even for a row that had cost to report.");
+    }
+
     /// <summary>Row #7 — the two human waits are durable states. A restart does not touch them at all.</summary>
     [Test]
     [Arguments(DevWorkflowNodeRunStatus.WaitingForApproval)]
