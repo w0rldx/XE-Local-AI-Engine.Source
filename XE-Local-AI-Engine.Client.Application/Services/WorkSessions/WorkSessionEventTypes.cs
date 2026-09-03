@@ -59,4 +59,11 @@ internal static class WorkSessionStepPhases
     ///     real row the retried step writes when it actually runs.
     /// </summary>
     public const string ToolGate = "tool-gate";
+
+    /// <summary>
+    ///     A step the write-declaration guard stopped before it was sent (<c>GRAPH-C4-2</c>). Its own phase for the
+    ///     same reason as <see cref="ToolGate" />: sharing one would let idempotency swallow the row a step that really
+    ///     ran would write.
+    /// </summary>
+    public const string WriteGate = "write-gate";
 }

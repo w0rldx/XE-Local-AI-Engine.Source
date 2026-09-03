@@ -1048,6 +1048,139 @@ public sealed class DevWorkflowAgentExecutorTests
             $"a tool the effective projection does not contain is not this node's to declare: {research.FailureClass} — {research.TerminalReason}");
     }
 
+
+    /// <summary>
+    ///     The declaration and the waiver ride on the session's runtime override, which the run re-supplies off its
+    ///     PINNED graph on every start and resume. That is what lets the supervisor ask the same question of every turn
+    ///     — a check made once at creation is not made at all, because the agent definition it judges is mutable.
+    /// </summary>
+    [Test]
+    public async Task AnAgentNodeThatOwesADeclaration_ArmsItsSessionToJudgeEveryTurn()
+    {
+        await using var harness = OfferingAWriteTool();
+        var agentId = await AllowingAsync(harness, "record_finding").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(BoundAgent(agentId)).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Contains(harness.Agent.Runtimes,
+            entry => entry.Runtime?.RefuseUndeclaredWrites == true,
+            "the node declared nothing and its template waived nothing, so every turn of its session has to keep proving it.");
+    }
+
+    /// <summary>
+    ///     And a node that DID declare arms nothing: its write is already gated structurally, which is the stronger
+    ///     answer and the earlier one, so re-asking every turn would only cost a resolve.
+    /// </summary>
+    [Test]
+    public async Task AnAgentNodeThatDeclaredItsWrite_DoesNotArmItsSession()
+    {
+        await using var harness = OfferingAWriteTool();
+        var agentId = await AllowingAsync(harness, "run_python").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GatedBoundAgent(agentId)).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.NotEmpty(harness.Agent.Runtimes);
+        AssertEx.False(harness.Agent.Runtimes.Any(entry => entry.Runtime?.RefuseUndeclaredWrites == true),
+            "a declared node is judged at save, on every path into it, which is more than a per-turn check could say.");
+    }
+
+    /// <summary>
+    ///     Reading the supervisor's refusal back into this lane. The definition is widened after the session is running,
+    ///     the supervisor refuses the turn and can only fail the session it owns — and the poll turns that into the
+    ///     node run's own refusal, with the class and the sentence the pre-session check would have produced rather
+    ///     than the provider-failure path's "the agent's work session failed".
+    /// </summary>
+    [Test]
+    public async Task ASessionThatFailedAfterItsDefinitionWasWidened_BlocksTheNodeRunWithPolicy()
+    {
+        await using var harness = OfferingAWriteTool();
+        var agentId = await AllowingAsync(harness, "record_finding").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(BoundAgent(agentId)).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Status);
+
+        await WideningAsync(harness, agentId, "run_python").ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, research.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.Policy, research.FailureClass, "a widened projection is a policy question for a person, not a provider failure to retry.");
+        AssertEx.Contains(AssertEx.NotNull(research.TerminalReason), "run_python");
+        AssertEx.Contains(research.TerminalReason!, "GRAPH-C4-2", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     A deleted definition is the other bypass, and it reads the same way here: the turn would have fallen back to
+    ///     the default persona and its whole offer, so the refusal says so rather than reporting a provider failure.
+    /// </summary>
+    [Test]
+    public async Task ASessionThatFailedAfterItsDefinitionWasDeleted_BlocksRatherThanReportingAProviderFailure()
+    {
+        await using var harness = OfferingAWriteTool();
+        var agentId = await AllowingAsync(harness, "record_finding").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(BoundAgent(agentId)).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await using (var scope = harness.Services.CreateAsyncScope())
+        {
+            _ = await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>().DeleteAsync(agentId).ConfigureAwait(false);
+        }
+
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, research.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.Policy, research.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(research.TerminalReason), "no longer exists");
+        AssertEx.Contains(research.TerminalReason!, "GRAPH-C4-2", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     And a session that failed with its definition untouched keeps the path it has always taken: the retry policy
+    ///     decides, because a provider failure is retryable and this rule has nothing to say about it.
+    /// </summary>
+    [Test]
+    public async Task ASessionThatFailedWithItsDefinitionUntouched_TakesTheOrdinaryFailurePath()
+    {
+        await using var harness = OfferingAWriteTool();
+        var agentId = await AllowingAsync(harness, "record_finding").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(BoundAgent(agentId)).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.False(research.FailureClass == DevWorkflowFailureClasses.Policy,
+            $"nothing widened, so nothing this rule owns happened: {research.TerminalReason}");
+    }
+
+    /// <summary>The operator edit the per-turn guard exists for: the bound definition gains a tool that writes.</summary>
+    private static async Task WideningAsync(DevWorkflowHarness harness, Guid agentDefinitionId, params string[] toolNames)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
+        var definition = AssertEx.NotNull(await store.GetByIdAsync(agentDefinitionId).ConfigureAwait(false));
+        _ = await store.UpdateAsync(agentDefinitionId,
+                           new AgentDefinitionInput(definition.Name,
+                               definition.Description,
+                               definition.Instructions,
+                               definition.ModelProfile,
+                               definition.ReasoningEffort,
+                               definition.Kind,
+                               toolNames,
+                               new Dictionary<string, bool>(StringComparer.Ordinal),
+                               definition.OrchestrationTopologyJson))
+                       .ConfigureAwait(false);
+    }
+
     /// <summary>One agent node bound to a definition this test created, which is what makes the resolver answer at all.</summary>
     private static string BoundAgent(Guid agentDefinitionId) =>
         $$"""

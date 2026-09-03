@@ -499,11 +499,23 @@ internal sealed class DevWorkflowGraph
     /// </summary>
     private static int? ParseMaxLoopIterations(JsonElement element, string nodeKey, string? retryTarget)
     {
-        var maxLoopIterations = OptionalPositiveInt(element, "maxLoopIterations", nodeKey);
+        // Every refusal about the cap carries the invariant id, the shared number parsers' own included: the id is what
+        // the operator quotes and what the tests assert on, and a bare "must be positive" would be the one C4-4
+        // complaint that cannot be traced back to the rule that raised it.
+        int? maxLoopIterations;
+        try
+        {
+            maxLoopIterations = OptionalPositiveInt(element, "maxLoopIterations", nodeKey);
+        }
+        catch (DevWorkflowValidationException exception)
+        {
+            throw new DevWorkflowValidationException($"{exception.Message.TrimEnd('.')} (invariant GRAPH-C4-4).");
+        }
+
         if (maxLoopIterations is not null && retryTarget is null)
         {
             throw new DevWorkflowValidationException($"Node '{nodeKey}' declares a 'maxLoopIterations' but no 'retryTarget', so it has no fix loop to bound. "
-                                                     + "The cap counts routes to a retry target, and this node routes none.");
+                                                     + "The cap counts routes to a retry target, and this node routes none (invariant GRAPH-C4-4).");
         }
 
         return maxLoopIterations;
@@ -627,6 +639,12 @@ internal sealed class DevWorkflowGraph
     /// </summary>
     private void Validate()
     {
+        // Which materializer owns each template node. A template subtree is cloned once per task by the node that owns
+        // it, and the zero-task decomposition writes its no-op verdict row under the template's OWN key — so a node
+        // two materializers both claim would be seeded twice under one key, and the second producer would fail on the
+        // store's existing-key refusal on every tick from then on.
+        var templateOwner = new Dictionary<string, string>(StringComparer.Ordinal);
+
         foreach (var node in Nodes.Values)
         {
             if (node.Materialization is { } materialization)
@@ -653,7 +671,7 @@ internal sealed class DevWorkflowGraph
                                                              + "itself.");
                 }
 
-                ValidateTemplateSubtree(node.NodeKey, materialization);
+                ValidateTemplateSubtree(node.NodeKey, materialization, templateOwner);
             }
 
             if (node.JoinPolicy == DevWorkflowJoinPolicy.Any && InboundEdges(node.NodeKey).Count < 2)
@@ -1058,11 +1076,23 @@ internal sealed class DevWorkflowGraph
     ///         which is what this refuses.
     ///     </para>
     /// </summary>
-    private void ValidateTemplateSubtree(string nodeKey, DevWorkflowMaterialization materialization)
+    private void ValidateTemplateSubtree(string nodeKey, DevWorkflowMaterialization materialization, Dictionary<string, string> templateOwner)
     {
         var subtree = TemplateSubtree(materialization);
         foreach (var key in subtree)
         {
+            // Exactly one materializer owns each template node. Two that share a subtree stay structurally legal only
+            // until a decomposition finds no work: each producer then seeds the SAME template key with its own no-op
+            // verdict row under its own operation id, the first commits, and the second is refused by the store for
+            // the life of the run — a deadlock authored at save time, so it is refused at save time.
+            if (!templateOwner.TryAdd(key, nodeKey) && !string.Equals(templateOwner[key], nodeKey, StringComparison.Ordinal))
+            {
+                throw new DevWorkflowValidationException($"Node '{key}' is inside the materialization template of '{templateOwner[key]}' and of '{nodeKey}'. A template "
+                                                         + "subtree is cloned once per task by the node that owns it, and a decomposition that finds no work records "
+                                                         + "its verdict under the template's own key — two owners would both try to write it. Give each "
+                                                         + "decomposition a template of its own.");
+            }
+
             if (Nodes[key].Materialization is not null && !string.Equals(key, nodeKey, StringComparison.Ordinal))
             {
                 throw new DevWorkflowValidationException($"Node '{key}' decomposes work and is inside the materialization template of node '{nodeKey}'. Nested "
@@ -1079,24 +1109,72 @@ internal sealed class DevWorkflowGraph
             // the doc there calls that moot because a template never gets a node run. The zero-task decomposition's
             // no-op verdict row is the exception that falsifies the premise: a template leaf would take a Succeeded row
             // at a key the completion predicate reads, and the run would report Completed though its real tail never
-            // ran. Refusing the shape at save is cheaper than teaching two runtime rules about each other. "Has an
-            // out-edge" implies "reaches the join" because the subtree pulls every non-join edge target back into
-            // itself, so the only edge that can leave one is the edge to the declared join — an argument that leans on
-            // acyclicity, which this call runs BEFORE EnsureAcyclic proves. Nothing unsound follows: a cyclic graph is
-            // refused a few lines later either way, and it simply reads this complaint rather than the cycle one.
-            if (OutboundEdges(key).Count == 0)
+            // ran. Refusing the shape at save is cheaper than teaching two runtime rules about each other.
+            //
+            // Scoped to the nodes that row is written FOR, which is what the premise it restores is about: the
+            // materializer seeds one row per Tool/Validate node of the subtree and none for anything else, so an
+            // edge-less DevTask or Agent template stays rowless and can neither satisfy nor block the completion
+            // predicate — exactly as the doc says. Widening the rule to every node type would refuse a shape that has
+            // always been legal and is still harmless, the baseline decomposition template among them.
+            //
+            // "Has an out-edge" implies "reaches the join" because the subtree pulls every non-join edge target back
+            // into itself, so the only edge that can leave one is the edge to the declared join — an argument that
+            // leans on acyclicity, which this call runs BEFORE EnsureAcyclic proves. Nothing unsound follows: a cyclic
+            // graph is refused a few lines later either way, and it simply reads this complaint rather than the cycle
+            // one.
+            if (Nodes[key] is { NodeType: DevWorkflowNodeType.Tool, ToolMode: DevWorkflowToolMode.Validate } && OutboundEdges(key).Count == 0)
             {
-                throw new DevWorkflowValidationException($"Node '{key}' is inside the materialization template of '{nodeKey}' and no edge leaves it, so it would "
-                                                         + $"count as an end of the run. Give it an edge to the join node '{materialization.JoinNodeKey}' "
-                                                         + "(invariant GRAPH-C4-1).");
+                throw new DevWorkflowValidationException($"Node '{key}' validates inside the materialization template of '{nodeKey}' and no edge leaves it, so it "
+                                                         + "would count as an end of the run — and a decomposition that found no work records a succeeded verdict "
+                                                         + $"under that key. Give it an edge to the join node '{materialization.JoinNodeKey}' (invariant "
+                                                         + "GRAPH-C4-1).");
             }
         }
     }
 
-    /// <summary>Depth-first colouring: white unvisited, grey on the current path, black finished. A grey hit is the cycle.</summary>
+    /// <summary>
+    ///     No cycle in the authored graph, and none in the AUGMENTED one either.
+    ///     <para>
+    ///         The second walk is not a duplicate of the first. Each materializer's own join is already refused as
+    ///         itself or one of its ancestors, which closes the loop ONE virtual edge can make — but two materializers
+    ///         whose templates lead into each other close a loop no single-materializer rule can see: authored the
+    ///         graph is acyclic, and only the virtual edges together make it a cycle. That matters twice over.
+    ///         <see cref="AncestorsFirst" /> would answer with an order that is not topological, so
+    ///         <see cref="Assured" /> would compute a one-pass fixpoint over it and give an order-dependent answer;
+    ///         and at run time the clone edges each expansion wires turn the virtual cycle into a real one.
+    ///     </para>
+    ///     <para>
+    ///         Authored first, so a plain back edge still reads as the plain complaint. A graph with no materialization
+    ///         has the same edge set twice and skips the second walk entirely.
+    ///     </para>
+    /// </summary>
     private void EnsureAcyclic()
     {
+        EnsureAcyclic(Edges,
+            static (nodeKey, _) => $"The workflow graph has a cycle through node '{nodeKey}'. A fix loop is a retryTarget, not a back edge.");
+
+        var augmented = AugmentedEdges();
+        if (augmented.Count == Edges.Count)
+        {
+            return;
+        }
+
+        EnsureAcyclic(augmented,
+            (nodeKey, cycle) =>
+            {
+                var materializers = cycle.Where(key => Nodes[key].Materialization is not null).Select(static key => $"'{key}'").ToList();
+                return $"Node '{nodeKey}' is on a cycle that only appears once the materializations of {string.Join(" and ", materializers)} are expanded. Each "
+                       + "decomposition's clones are wired to its join, so templates that lead into one another would route each expansion into the other and the "
+                       + "run would never finish. Point one of them at a template outside the other's reach.";
+            });
+    }
+
+    /// <summary>Depth-first colouring: white unvisited, grey on the current path, black finished. A grey hit is the cycle.</summary>
+    private void EnsureAcyclic(IReadOnlyList<DevWorkflowGraphEdge> edges, Func<string, IReadOnlyList<string>, string> message)
+    {
+        var outbound = edges.ToLookup(static edge => edge.From, StringComparer.Ordinal);
         var onPath = new HashSet<string>(StringComparer.Ordinal);
+        var path = new List<string>();
         var finished = new HashSet<string>(StringComparer.Ordinal);
         foreach (var nodeKey in Nodes.Keys)
         {
@@ -1112,14 +1190,18 @@ internal sealed class DevWorkflowGraph
 
             if (!onPath.Add(nodeKey))
             {
-                throw new DevWorkflowValidationException($"The workflow graph has a cycle through node '{nodeKey}'. A fix loop is a retryTarget, not a back edge.");
+                // The path from the repeated key onwards IS the cycle, which is what lets the message name the nodes
+                // that made it rather than the one node the walk happened to come back to.
+                throw new DevWorkflowValidationException(message(nodeKey, path[path.IndexOf(nodeKey)..]));
             }
 
-            foreach (var edge in OutboundEdges(nodeKey))
+            path.Add(nodeKey);
+            foreach (var edge in outbound[nodeKey])
             {
                 Walk(edge.To);
             }
 
+            path.RemoveAt(path.Count - 1);
             _ = onPath.Remove(nodeKey);
             _ = finished.Add(nodeKey);
         }

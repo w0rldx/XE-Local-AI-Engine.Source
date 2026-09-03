@@ -54,6 +54,9 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     /// </summary>
     private const string ToolGateOutcome = "ToolGate";
 
+    /// <summary>What the step row says about a turn the write-declaration guard refused. Fixed text, like every outcome here.</summary>
+    private const string WriteGateOutcome = "WriteGate";
+
     /// <summary>
     ///     Web defaults, so the consumption record reaches the browser in the same camelCase convention as every other
     ///     JSON payload the session surface carries.
@@ -365,6 +368,41 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             await CheckpointAsync(sessionId).ConfigureAwait(false);
             await SettleAsync(sessionId, AgentWorkSessionStatus.Paused, refusal).ConfigureAwait(false);
             return StepOutcome.Settled;
+        }
+
+        // GRAPH-C4-2's runtime half, asked of THIS turn. The workflow lane checks the same question before it creates
+        // the session, but what it checks there is mutable: the agent definition can be edited between two steps to
+        // add a write-capable tool, or deleted so this turn resolves the default persona and its whole offer, and
+        // every step re-resolves the definition by id. So the node's declaration and its template's waiver ride on the
+        // runtime override, which is re-supplied on every start and resume off the run's PINNED graph, and the turn
+        // that would widen past them is refused here rather than sent.
+        //
+        // Fail CLOSED, which is the opposite of the allow-list guard above, and for the reason that guard gives: that
+        // one is advisory because the offer enforces it anyway, and nothing else enforces this. A read that throws
+        // reaches the session loop's own handler, which terminalizes — closed, and legible.
+        //
+        // Failed rather than Paused: a paused workflow session is resumed by its owning run, so a pause would loop
+        // until the resume budget ran out and report a budget it did not really exhaust. Failed settles it once, and
+        // the run's next poll asks the same guard and blocks the node run with this rule's own class and sentence.
+        if (run.Runtime?.RefuseUndeclaredWrites == true)
+        {
+            var undeclared = await turnScope.ServiceProvider.GetRequiredService<WorkSessionWriteDeclarationGuard>()
+                                            .InspectAsync(state.Session.AgentDefinitionId, run.Runtime.ModelProfile, CancellationToken.None)
+                                            .ConfigureAwait(false);
+            if (undeclared is not null)
+            {
+                _logger.LogWarning("Work session {SessionId} step {Step} was not sent: {Reason}", sessionId, step, undeclared);
+                _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
+                            WorkSessionVersions.Any,
+                            WorkSessionEventTypes.StepEnded,
+                            WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.WriteGate),
+                            WriteGateOutcome),
+                        CancellationToken.None))
+                    .ConfigureAwait(false);
+                await CheckpointAsync(sessionId).ConfigureAwait(false);
+                await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, undeclared).ConfigureAwait(false);
+                return StepOutcome.Settled;
+            }
         }
 
         // Bound what this step will replay BEFORE the send. Every earlier step's state block, answer and reasoning is

@@ -356,6 +356,72 @@ describe("validateDevWorkflowGraph", () => {
 		);
 	});
 
+	it("refuses a template VALIDATION node no edge leaves, and only that", () => {
+		// GRAPH-C4-1's fourth step. A template check with no out-edge is an end of the run, and a decomposition that
+		// finds no work writes a succeeded verdict row under that very key — so the run would read as finished though
+		// its real tail never ran. The editor lets an operator delete `validate → join`, so the mirror has to say so
+		// before Save rather than after the server's 400.
+		expect(
+			rules(
+				templateGraph({
+					nodes: [
+						node("decompose", {
+							materialization: { templateNodeKey: "implement", artifactKind: "TaskPackage", joinNodeKey: "join", maxChildren: 5 },
+						}),
+						node("implement", { nodeType: "DevTask", isTemplate: true }),
+						node("validate", { nodeType: "Tool", isTemplate: true }),
+						node("join", { nodeType: "Join" }),
+					],
+					edges: [
+						{ from: "decompose", to: "join" },
+						{ from: "implement", to: "validate" },
+					],
+				}),
+			),
+		).toContain("templateValidationLeaf");
+
+		// And it stops there. No verdict row is ever written under a DevTask or Agent template key, so an edge-less one
+		// stays rowless and as harmless as it has always been — `templateGraph` itself is that shape minus the join
+		// edge, and it validated before this rule existed.
+		expect(
+			rules(
+				templateGraph({
+					edges: [{ from: "decompose", to: "join" }],
+				}),
+			),
+		).not.toContain("templateValidationLeaf");
+	});
+
+	it("refuses a cycle only the materializations close, because the fixpoint below needs a topological order", () => {
+		// Each join is downstream of its own materializer, so no single-materializer rule sees it and the AUTHORED
+		// graph is acyclic. Only the two virtual template edges together close the loop.
+		expect(
+			rules({
+				schemaVersion: 1,
+				nodes: [
+					node("start", { nodeType: "Parallel" }),
+					node("j1", { nodeType: "Join" }),
+					node("j2", { nodeType: "Join" }),
+					node("end", { nodeType: "Join" }),
+					node("m1", { materialization: { templateNodeKey: "t1", artifactKind: "TaskPackage", joinNodeKey: "j1", maxChildren: 2 } }),
+					node("m2", { materialization: { templateNodeKey: "t2", artifactKind: "TaskPackage", joinNodeKey: "j2", maxChildren: 2 } }),
+					node("t1", { nodeType: "DevTask" }),
+					node("t2", { nodeType: "DevTask" }),
+				],
+				edges: [
+					{ from: "start", to: "j1" },
+					{ from: "start", to: "j2" },
+					{ from: "t1", to: "j1" },
+					{ from: "t2", to: "j2" },
+					{ from: "j1", to: "m2" },
+					{ from: "j2", to: "m1" },
+					{ from: "m1", to: "end" },
+					{ from: "m2", to: "end" },
+				],
+			}),
+		).toContain("cycle");
+	});
+
 	it("refuses an apply a run can reach with no validation having run", () => {
 		const unvalidated = {
 			schemaVersion: 1,

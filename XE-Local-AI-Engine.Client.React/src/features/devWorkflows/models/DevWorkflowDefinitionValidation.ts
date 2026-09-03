@@ -41,6 +41,7 @@ export const devWorkflowGraphRules = [
 	"strandedBranch",
 	"ungatedWrite",
 	"applyWithoutValidation",
+	"templateValidationLeaf",
 ] as const;
 export type DevWorkflowGraphRule = (typeof devWorkflowGraphRules)[number];
 
@@ -415,7 +416,18 @@ export function validateDevWorkflowGraph(graph: DevWorkflowGraph | undefined): r
 		issues.push({ rule: "multipleEntries", subject: extra });
 	}
 
-	const cyclic = hasCycle([...declared], successors);
+	// Over the AUGMENTED successors, as the server does. Two materializations whose templates lead into each other
+	// close a cycle no authored edge shows, and the fixpoint below assumes a topological order — so the graph is
+	// refused here rather than saved and refused there.
+	const augmentedSuccessors = new Map<string, string[]>(
+		[...successors].map(([from, to]) => [from, [...to]] as [string, string[]]),
+	);
+	for (const edge of augmentedEdges(nodes, [])) {
+		if (declared.has(edge.from) && declared.has(edge.to)) {
+			augmentedSuccessors.set(edge.from, [...(augmentedSuccessors.get(edge.from) ?? []), edge.to]);
+		}
+	}
+	const cyclic = hasCycle([...declared], augmentedSuccessors);
 	if (cyclic) {
 		// The message says what to do instead, because the shape an author reaches for here is a fix loop and the
 		// runtime models one: a `retryTarget` routes back without the graph carrying a back edge.
@@ -508,6 +520,22 @@ function capabilityInvariants(
 			// reads as "'g → b' is a human gate". The server has a separate sentence here for the same reason.
 			issues.push({ rule: "orphanedGateEdge", subject: `${orphaned?.from ?? ""} → ${orphaned?.to ?? ""}` });
 		}
+	}
+
+	// GRAPH-C4-1, step four, narrowed exactly as the server narrows it: a Tool node in Validate mode inside a
+	// materialization template with no out-edge would count as an end of the run, and a decomposition that finds no
+	// work writes a succeeded verdict row under that very key — so the run would read as finished though its real tail
+	// never ran. Only validation nodes, because they are the only template keys that row is ever written for: an
+	// edge-less DevTask or Agent template stays rowless and is as harmless as it has always been.
+	const templateLeaf = nodes.find(
+		(node) =>
+			templates.has(node.nodeKey ?? "") &&
+			nodeTypeOf(node) === "tool" &&
+			!isDevWorkflowApplyToolMode(node.toolMode) &&
+			!edges.some((edge) => edge.from === (node.nodeKey ?? "")),
+	);
+	if (templateLeaf) {
+		issues.push({ rule: "templateValidationLeaf", subject: templateLeaf.nodeKey ?? "" });
 	}
 
 	// GRAPH-C4-2: a node that writes outside its sandbox is reached through a human gate, unless the template says

@@ -327,27 +327,132 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
-    ///     The fourth step, and the one that is a rule rather than a footnote: a template leaf carries no out-edge, so
-    ///     it lands in <c>TerminalNodeKeys</c> — and the zero-task decomposition's no-op verdict row would then make a
-    ///     run read <c>Completed</c> at a key whose real tail never ran.
+    ///     The fourth step, and the one that is a rule rather than a footnote: a template VALIDATION leaf carries no
+    ///     out-edge, so it lands in <c>TerminalNodeKeys</c> — and the zero-task decomposition's no-op verdict row would
+    ///     then make a run read <c>Completed</c> at a key whose real tail never ran.
     /// </summary>
     [Test]
-    public void Parse_WithATemplateNodeThatNoEdgeLeaves_IsRejected()
+    public void Parse_WithATemplateValidationNodeThatNoEdgeLeaves_IsRejected()
     {
-        const string EdgelessTemplate = """
-                                        {"schemaVersion":1,
-                                         "nodes":[{"nodeKey":"decompose","nodeType":"Agent",
-                                                   "materialization":{"templateNodeKey":"implement","artifactKind":"TaskPackage","joinNodeKey":"join","maxChildren":4}},
-                                                  {"nodeKey":"implement","nodeType":"DevTask"},
-                                                  {"nodeKey":"join","nodeType":"Join"}],
-                                         "edges":[{"from":"decompose","to":"join"}]}
-                                        """;
+        const string EdgelessCheck = """
+                                     {"schemaVersion":1,
+                                      "nodes":[{"nodeKey":"decompose","nodeType":"Agent",
+                                                "materialization":{"templateNodeKey":"implement","artifactKind":"TaskPackage","joinNodeKey":"join","maxChildren":4}},
+                                               {"nodeKey":"implement","nodeType":"DevTask"},
+                                               {"nodeKey":"validate","nodeType":"Tool"},
+                                               {"nodeKey":"join","nodeType":"Join"}],
+                                      "edges":[{"from":"decompose","to":"join"},{"from":"implement","to":"validate"}]}
+                                     """;
 
-        var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(EdgelessTemplate)).Message;
+        var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(EdgelessCheck)).Message;
 
-        AssertEx.Contains(refusal, "Node 'implement' is inside the materialization template of 'decompose' and no edge leaves it");
+        AssertEx.Contains(refusal, "Node 'validate' validates inside the materialization template of 'decompose' and no edge leaves it");
         AssertEx.Contains(refusal, "Give it an edge to the join node 'join'");
         AssertEx.Contains(refusal, "GRAPH-C4-1", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     And the rule stops exactly there. The no-op verdict row is written for <c>Tool</c>/<c>Validate</c> template
+    ///     nodes and for nothing else, so an edge-less <c>DevTask</c> or <c>Agent</c> template stays rowless and can
+    ///     neither satisfy nor block the completion predicate — which is what the terminal-keys doc has always said.
+    ///     Asking those for an out-edge would refuse the baseline decomposition shape, which has always validated.
+    /// </summary>
+    [Test]
+    [Arguments("DevTask")]
+    [Arguments("Agent")]
+    public void Parse_WithATemplateNodeThatWritesNoVerdictAndNoEdgeLeaves_IsAccepted(string nodeType)
+    {
+        var graph = DevWorkflowGraph.Parse("""
+                                           {"schemaVersion":1,
+                                            "nodes":[{"nodeKey":"decompose","nodeType":"Agent",
+                                                      "materialization":{"templateNodeKey":"implement","artifactKind":"TaskPackage","joinNodeKey":"join","maxChildren":4}},
+                                                     {"nodeKey":"implement","nodeType":"NODETYPE"},
+                                                     {"nodeKey":"join","nodeType":"Join"}],
+                                            "edges":[{"from":"decompose","to":"join"}]}
+                                           """.Replace("NODETYPE", nodeType, StringComparison.Ordinal));
+
+        AssertEx.True(graph.TemplateKeys.Contains("implement"), "the template is still the template.");
+    }
+
+    /// <summary>
+    ///     <c>GRAPH-C4-1</c>'s fourth step is what makes the no-op verdict row safe, so the shape it protects has to be
+    ///     accepted: a template validation node wired to the join is not an end of the run.
+    /// </summary>
+    [Test]
+    public void Parse_WithATemplateValidationNodeWiredToTheJoin_IsAccepted()
+    {
+        var graph = DevWorkflowGraph.Parse("""
+                                           {"schemaVersion":1,
+                                            "nodes":[{"nodeKey":"decompose","nodeType":"Agent",
+                                                      "materialization":{"templateNodeKey":"implement","artifactKind":"TaskPackage","joinNodeKey":"join","maxChildren":4}},
+                                                     {"nodeKey":"implement","nodeType":"DevTask"},
+                                                     {"nodeKey":"validate","nodeType":"Tool"},
+                                                     {"nodeKey":"join","nodeType":"Join"}],
+                                            "edges":[{"from":"decompose","to":"join"},{"from":"implement","to":"validate"},{"from":"validate","to":"join"}]}
+                                           """);
+
+        AssertEx.False(graph.TerminalNodeKeys.Contains("validate"), "a template check the join follows is not an end of the run.");
+    }
+
+    /// <summary>
+    ///     Two materializations whose virtual template edges close a loop between them. Each join is downstream of its
+    ///     own materializer, so the single-materializer ancestry rule is silent and the AUTHORED graph is acyclic — only
+    ///     the augmented one is not, and a fixpoint walked in a non-topological order would answer whatever the node
+    ///     dictionary's order happened to give it.
+    /// </summary>
+    [Test]
+    public void Parse_WithACycleOnlyTheMaterializationsClose_IsRejected()
+    {
+        const string AugmentedCycle = """
+                                      {"schemaVersion":1,
+                                       "nodes":[{"nodeKey":"start","nodeType":"Parallel"},
+                                                {"nodeKey":"j1","nodeType":"Join"},
+                                                {"nodeKey":"j2","nodeType":"Join"},
+                                                {"nodeKey":"end","nodeType":"Join"},
+                                                {"nodeKey":"m1","nodeType":"Agent",
+                                                 "materialization":{"templateNodeKey":"t1","artifactKind":"TaskPackage","joinNodeKey":"j1","maxChildren":2}},
+                                                {"nodeKey":"m2","nodeType":"Agent",
+                                                 "materialization":{"templateNodeKey":"t2","artifactKind":"TaskPackage","joinNodeKey":"j2","maxChildren":2}},
+                                                {"nodeKey":"t1","nodeType":"DevTask"},
+                                                {"nodeKey":"t2","nodeType":"DevTask"}],
+                                       "edges":[{"from":"start","to":"j1"},{"from":"start","to":"j2"},
+                                                {"from":"t1","to":"j1"},{"from":"t2","to":"j2"},
+                                                {"from":"j1","to":"m2"},{"from":"j2","to":"m1"},
+                                                {"from":"m1","to":"end"},{"from":"m2","to":"end"}]}
+                                      """;
+
+        var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(AugmentedCycle)).Message;
+
+        AssertEx.Contains(refusal, "only appears once the materializations of");
+        AssertEx.Contains(refusal, "'m1'", StringComparison.Ordinal);
+        AssertEx.Contains(refusal, "'m2'", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     Two materializers sharing one template subtree. Structurally it looks legal, and it deadlocks the first time
+    ///     a decomposition finds no work: both producers seed the same template key with their own verdict row under
+    ///     their own operation id, the first commits, and the second is refused by the store on every tick after.
+    /// </summary>
+    [Test]
+    public void Parse_WithTwoMaterializationsSharingOneTemplate_IsRejected()
+    {
+        const string SharedTemplate = """
+                                      {"schemaVersion":1,
+                                       "nodes":[{"nodeKey":"start","nodeType":"Parallel"},
+                                                {"nodeKey":"m1","nodeType":"Agent",
+                                                 "materialization":{"templateNodeKey":"v","artifactKind":"TaskPackage","joinNodeKey":"j","maxChildren":2}},
+                                                {"nodeKey":"m2","nodeType":"Agent",
+                                                 "materialization":{"templateNodeKey":"v","artifactKind":"TaskPackage","joinNodeKey":"j","maxChildren":2}},
+                                                {"nodeKey":"v","nodeType":"Tool"},
+                                                {"nodeKey":"j","nodeType":"Join"}],
+                                       "edges":[{"from":"start","to":"m1"},{"from":"start","to":"m2"},
+                                                {"from":"m1","to":"j"},{"from":"m2","to":"j"},{"from":"v","to":"j"}]}
+                                      """;
+
+        var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(SharedTemplate)).Message;
+
+        AssertEx.Contains(refusal, "Node 'v' is inside the materialization template of 'm1' and of 'm2'");
+        AssertEx.Contains(refusal, "Give each decomposition a template of its own");
     }
 
     /// <summary>
@@ -766,9 +871,23 @@ public sealed class DevWorkflowGraphTests
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","maxLoopIterations":3}],"edges":[]}""", "no 'retryTarget'")]
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Tool","retryTarget":"a","maxLoopIterations":0}],"edges":[{"from":"a","to":"b"}]}""",
         "must be positive")]
+    [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Tool","retryTarget":"a","maxLoopIterations":1.5}],"edges":[{"from":"a","to":"b"}]}""",
+        "must be a whole number")]
     [Arguments("""{"allowUngatedWrites":"true","nodes":[{"nodeKey":"a","nodeType":"Agent"}],"edges":[]}""", "must be true or false")]
     public void Parse_RejectsAGraphItCannotRoute(string json, string expectedMessage) =>
         AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message, expectedMessage);
+
+    /// <summary>
+    ///     Every <c>GRAPH-C4-4</c> parse refusal names the rule, the shared number parsers' own complaints included —
+    ///     the id is what the operator quotes, and a bare "must be positive" would be the one cap message that could
+    ///     not be traced back to the invariant that raised it.
+    /// </summary>
+    [Test]
+    [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","maxLoopIterations":3}],"edges":[]}""")]
+    [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Tool","retryTarget":"a","maxLoopIterations":0}],"edges":[{"from":"a","to":"b"}]}""")]
+    [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Tool","retryTarget":"a","maxLoopIterations":1.5}],"edges":[{"from":"a","to":"b"}]}""")]
+    public void Parse_WithAnUnusableLoopCap_NamesTheInvariant(string json) =>
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message, "GRAPH-C4-4", StringComparison.Ordinal);
 
     [Test]
     public void Parse_WithNoEntryNode_IsRejected()

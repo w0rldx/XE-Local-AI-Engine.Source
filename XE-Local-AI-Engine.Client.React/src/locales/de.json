@@ -5313,7 +5313,8 @@
 					"orphanedGateEdge": "Die Kante {{subject}} verlässt eine menschliche Freigabe, und keine Antwort würde sie je nehmen. Knüpfen Sie sie an eine Antwort, die die Freigabe geben kann.",
 					"strandedBranch": "„{{subject}}“ erreicht kein Ende des Laufs: Jeder Weg von dort führt über eine Kante einer Freigabe, die nie zutreffen kann.",
 					"ungatedWrite": "„{{subject}}“ kann in das Repository schreiben und ein Lauf erreicht den Knoten, ohne dass jemand gefragt wird. Legen Sie auf jeden Weg dorthin eine menschliche Freigabe, oder erlauben Sie Schreibzugriff ohne Freigabe für diese Vorlage und begründen Sie es.",
-					"applyWithoutValidation": "„{{subject}}“ wendet freigegebene Patches an und ein Lauf erreicht den Knoten, ohne dass eine Validierung gelaufen ist. Legen Sie auf jeden Weg dorthin einen Werkzeugknoten im Modus „Validate“."
+					"applyWithoutValidation": "„{{subject}}“ wendet freigegebene Patches an und ein Lauf erreicht den Knoten, ohne dass eine Validierung gelaufen ist. Legen Sie auf jeden Weg dorthin einen Werkzeugknoten im Modus „Validate“.",
+					"templateValidationLeaf": "„{{subject}}“ validiert innerhalb einer Materialisierungsvorlage, und keine Kante verlässt den Knoten — er würde als Ende des Laufs zählen. Geben Sie ihm eine Kante zum Join-Knoten der Vorlage."
 				}
 			},
 			"devTaskStatus": {
