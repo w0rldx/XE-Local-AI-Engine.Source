@@ -4,6 +4,7 @@ import type {
 	XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse as NodeSettingsResponse,
 	XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest as SaveNodeSettingsRequest,
 } from "@/core/api/generated";
+import { type KvCacheType, kvCacheTypes } from "@/core/models/KvCacheTypes";
 
 // The migrated appsettings knobs as editable form state. Numbers are kept as `number | string` so an in-progress
 // edit (an empty input, a partial number) survives in the controlled NumberInput without being coerced; validation
@@ -68,11 +69,11 @@ export const speculativeModeSelectValues = [
 	"draft-mtp",
 ] as const;
 
-// KV-cache element types for GPU chat spawns, mirroring the backend LlamaServerKvCacheTypes allow-list. `f16` emits no
-// -ctk/-ctv at all; the quantized types halve (q8_0) or quarter (q4_0) the KV bytes and require flash attention.
-export const KV_CACHE_TYPE_DEFAULT = "q8_0";
+// The provider default for a GPU chat spawn; the node setting seeds the launch policy with it when unset.
+export const KV_CACHE_TYPE_DEFAULT: KvCacheType = "q8_0";
 
-export const kvCacheTypeSelectValues = ["f16", KV_CACHE_TYPE_DEFAULT, "q4_0"] as const;
+// The shared allow-list is the only one — see core/models/KvCacheTypes.
+export const kvCacheTypeSelectValues = kvCacheTypes;
 
 export function isAllowedKvCacheType(type: string): boolean {
 	return (kvCacheTypeSelectValues as readonly string[]).includes(type.trim());

@@ -471,7 +471,7 @@ internal static class AddNodeModelRuntimeExtensions
     ///     <c>f16</c> collapses to <c>EnableGpuKvCacheQuantization = false</c>, which is exactly the
     ///     no-<c>-ctk</c>/<c>-ctv</c>/<c>-fa</c> vector a CPU spawn already emits.
     /// </summary>
-    private static LlamaServerLaunchPolicyOptions BuildSeededLlamaServerLaunchPolicyOptions(IServiceProvider serviceProvider)
+    internal static LlamaServerLaunchPolicyOptions BuildSeededLlamaServerLaunchPolicyOptions(IServiceProvider serviceProvider)
     {
         var runtimeSettings = serviceProvider.GetRequiredService<INodeRuntimeSettings>();
         var kvCacheType = runtimeSettings.GetKvCacheType();

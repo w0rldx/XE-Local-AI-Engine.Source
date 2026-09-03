@@ -1,9 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
+using XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>Validation + role-mapping coverage for <see cref="LlamaServerLaunchPolicyOptions" />.</summary>
 public sealed class LlamaServerLaunchPolicyOptionsTests
@@ -80,6 +84,33 @@ public sealed class LlamaServerLaunchPolicyOptionsTests
         // The fold constant the fingerprint omits at, the options default, and the node-settings default are one value.
         AssertEx.Equal(LlamaServerKvCacheTypes.Q8_0, StoredNodeSettings.DefaultKvCacheType);
         AssertEx.Equal(LlamaServerKvCacheTypes.Q8_0, providerDefault.KvCacheType);
+    }
+
+    [Test]
+    public void Seed_AssignsOnlyTheKvCacheTypeAndItsQuantizationFlag()
+    {
+        // The DI seed itself, not a hand-written re-expression of it. Any third assignment added to
+        // BuildSeededLlamaServerLaunchPolicyOptions makes the seeded object differ from the provider default on a
+        // third member, which breaks invariant 2 (byte-identical argv, launch identity and profile fingerprint) and
+        // must break this test. f16 is used because it moves BOTH members the seed is allowed to move.
+        using var services = new ServiceCollection()
+                             .AddSingleton(StubNodeRuntimeSettings.Create().WithKvCacheType(LlamaServerKvCacheTypes.F16).Build())
+                             .BuildServiceProvider();
+
+        var seeded = AddNodeModelRuntimeExtensions.BuildSeededLlamaServerLaunchPolicyOptions(services);
+        var providerDefault = new LlamaServerLaunchPolicyOptions();
+        var moved = typeof(LlamaServerLaunchPolicyOptions)
+                    .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                    .Where(property => !Equals(property.GetValue(seeded), property.GetValue(providerDefault)))
+                    .Select(static property => property.Name)
+                    .Order()
+                    .ToArray();
+
+        AssertEx.Equal($"{nameof(LlamaServerLaunchPolicyOptions.EnableGpuKvCacheQuantization)},{nameof(LlamaServerLaunchPolicyOptions.KvCacheType)}",
+            string.Join(',', moved),
+            "The DI seed must assign exactly the KV cache type and its quantization flag.");
+        AssertEx.Equal(LlamaServerKvCacheTypes.F16, seeded.KvCacheType);
+        AssertEx.False(seeded.EnableGpuKvCacheQuantization);
     }
 
     [Test]

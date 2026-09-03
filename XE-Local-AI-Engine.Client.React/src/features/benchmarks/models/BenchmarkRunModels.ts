@@ -1,4 +1,5 @@
 import { ApiError } from "@/core/api/errors/ApiError";
+import { type KvCacheType, kvCacheTypes } from "@/core/models/KvCacheTypes";
 import type { BenchmarkRunFidelity } from "@/features/benchmarks/models/BenchmarkFidelityModels";
 import type { BenchmarkOrigin } from "@/features/benchmarks/models/BenchmarkProjectModels";
 
@@ -162,8 +163,8 @@ export const isUnsupportedKvCacheTypeError = (error: unknown): boolean =>
  */
 export const benchmarkPromptReserveTokens = 512;
 
-export const benchmarkKvCacheTypes = ["f16", "q8_0", "q4_0"] as const;
-export type BenchmarkKvCacheType = (typeof benchmarkKvCacheTypes)[number];
+export const benchmarkKvCacheTypes = kvCacheTypes;
+export type BenchmarkKvCacheType = KvCacheType;
 /** Was the type picked by the operator, or derived at freeze from the binary's manifest? */
 export type BenchmarkKvCacheTypeSource = "explicit" | "auto";
 export type BenchmarkFlashAttentionMode = "auto" | "on";
@@ -180,6 +181,10 @@ export interface BenchmarkLaunchFacts {
 	kvAutoReason: string | null;
 	flashAttentionMode: BenchmarkFlashAttentionMode | null;
 	intendedLaunchIdentity: string | null;
+	// True when the run was frozen under a launch-identity scheme this build no longer computes, so the intended and
+	// effective identities are NOT comparable and a difference between them is not drift. Server-computed; the client
+	// never learns the scheme number. Null when the run recorded no launch intent at all.
+	launchIdentitySchemeOutdated: boolean | null;
 	intendedExecutableSha256: string | null;
 	effectiveLaunchIdentity: string | null;
 	/** Variant name, or `cpu` / `cpu-fallback` / `metal-unverified` / `unknown`. */
@@ -200,6 +205,7 @@ export const noBenchmarkLaunchFacts: BenchmarkLaunchFacts = {
 	kvAutoReason: null,
 	flashAttentionMode: null,
 	intendedLaunchIdentity: null,
+	launchIdentitySchemeOutdated: null,
 	intendedExecutableSha256: null,
 	effectiveLaunchIdentity: null,
 	effectiveBackend: null,
