@@ -85,29 +85,55 @@ public sealed class IntegrationExecutionQueryService
 
         var nowUnixMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
-        // NewStatus equal to the current status makes this a pure marker write under the same compare-and-swap, so it
-        // cannot resurrect a row that terminalized a moment ago.
-        var marked = await _executions.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(executionId,
-                                              execution.Version,
-                                              new HashSet<IntegrationExecutionStatus>
-                                              {
-                                                  execution.Status
-                                              },
-                                              execution.Status,
-                                              StartedAtUtc: null,
-                                              EndedAtUtc: null,
-                                              InvocationId: null,
-                                              nowUnixMs),
-                                          cancellationToken)
-                                      .ConfigureAwait(false);
-
-        if (marked && execution.Status is IntegrationExecutionStatus.Accepted or IntegrationExecutionStatus.Queued)
+        try
         {
-            await TryTerminalizeCancelledAsync(execution, execution.Version + 1, nowUnixMs, cancellationToken).ConfigureAwait(false);
-        }
+            // CancellationToken.None from here down, for the same reason the coordinator uses it: a cancel that has
+            // decided to stop a run must finish stamping and closing it even if the client that asked walks away.
+            //
+            // NewStatus equal to the current status makes this a pure marker write under the same compare-and-swap, so
+            // it cannot resurrect a row that terminalized a moment ago.
+            var marked = await _executions.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(executionId,
+                                                  execution.Version,
+                                                  new HashSet<IntegrationExecutionStatus>
+                                                  {
+                                                      execution.Status
+                                                  },
+                                                  execution.Status,
+                                                  StartedAtUtc: null,
+                                                  EndedAtUtc: null,
+                                                  InvocationId: null,
+                                                  nowUnixMs),
+                                              CancellationToken.None)
+                                          .ConfigureAwait(false);
 
-        _ = _cancellations.Signal(executionId);
-        return IntegrationCancelOutcome.Requested;
+            if (!marked)
+            {
+                // The CAS lost. Either the coordinator advanced the row a moment ago and the signal below still
+                // reaches it, or the row terminalized — and a cancel on a finished run is a 409, not a 202.
+                var fresh = await _executions.GetByIdAsync(executionId, CancellationToken.None).ConfigureAwait(false);
+                if (fresh is null)
+                {
+                    return IntegrationCancelOutcome.NotFound;
+                }
+
+                if (fresh.Status is not (IntegrationExecutionStatus.Accepted or IntegrationExecutionStatus.Queued or IntegrationExecutionStatus.Running))
+                {
+                    return IntegrationCancelOutcome.AlreadyTerminal;
+                }
+            }
+            else if (execution.Status is IntegrationExecutionStatus.Accepted or IntegrationExecutionStatus.Queued)
+            {
+                await TryTerminalizeCancelledAsync(execution, execution.Version + 1, nowUnixMs, CancellationToken.None).ConfigureAwait(false);
+            }
+
+            return IntegrationCancelOutcome.Requested;
+        }
+        finally
+        {
+            // Step 3 runs on EVERY path, throws included. A queued row that was never signalled sits in its lease wait
+            // until MaxQueueAgeSeconds, because the durable marker is only honoured at the post-lease re-check.
+            _ = _cancellations.Signal(executionId);
+        }
     }
 
     private async Task TryTerminalizeCancelledAsync(IntegrationExecutionSnapshot execution,

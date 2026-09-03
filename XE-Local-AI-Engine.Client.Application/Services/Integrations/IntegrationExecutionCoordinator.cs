@@ -71,6 +71,14 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
 
+    /// <summary>
+    ///     When this instance was built, which is during host construction and therefore before ANY hosted service —
+    ///     Kestrel's included — has started. The startup sweep uses it instead of assuming a registration order it does
+    ///     not control: the listener may already be accepting requests while the sweep pages, and a row admitted in
+    ///     that window holds a 202 the caller has been given.
+    /// </summary>
+    private readonly long _constructedAtUtc;
+
     public IntegrationExecutionCoordinator(IServiceScopeFactory scopeFactory,
         Channel<Guid> queue,
         IIntegrationExecutionEventBuffer buffer,
@@ -87,6 +95,7 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         _options = options.Value;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _constructedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
     }
 
     /// <summary>
@@ -218,6 +227,13 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
             var recovered = 0;
             foreach (var row in interrupted)
             {
+                if (row.ReceivedAtUtc >= _constructedAtUtc)
+                {
+                    // Admitted after this coordinator existed, so it cannot be a leftover of the previous process: the
+                    // accept path enqueues every row it commits, and this one's caller is holding its 202.
+                    continue;
+                }
+
                 // R3-1: seed the ring from the persisted watermark so the sweep's terminal event continues the
                 // execution's OWN numbering instead of restarting at 1 and colliding with rows already written.
                 if (!_buffer.TryCreate(row.Id, row.LastSequence))
@@ -460,19 +476,47 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
 
         var leaseTask = dispatcher.ReportInvocationAssignedAsync(package, queueDeadline.Token);
 
-        // 7a. A free slot completes the task synchronously, so an incomplete task is an exact, allocation-free "this
-        //     one had to wait". Accepted -> Running directly is legal; Queued exists only for a real wait, and this is
-        //     its only producer.
-        if (!leaseTask.IsCompleted
-            && await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(executionId, context.Version, AcceptedOnly, IntegrationExecutionStatus.Queued), runToken)
-                          .ConfigureAwait(false))
+        try
         {
-            // A false means a concurrent cancel already CASed the row on the same version, so the row is terminal and
-            // no execution.queued may follow it.
-            context.Version++;
-            var queued = _buffer.Append(executionId, session.Id, IntegrationStreamEventTypes.ExecutionQueued, contentType: null, payload: null);
-            await store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), executionId, queued.Sequence, queued.Type, DetailJson: null, queued.OccurredAtUtc), runToken)
-                       .ConfigureAwait(false);
+            // 7a. A free slot completes the task synchronously, so an incomplete task is an exact, allocation-free
+            //     "this one had to wait". Accepted -> Running directly is legal; Queued exists only for a real wait,
+            //     and this is its only producer.
+            if (!leaseTask.IsCompleted
+                && await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(executionId, context.Version, AcceptedOnly, IntegrationExecutionStatus.Queued), runToken)
+                              .ConfigureAwait(false))
+            {
+                // A false means a concurrent cancel already CASed the row on the same version, so the row is terminal
+                // and no execution.queued may follow it.
+                context.Version++;
+                var queued = _buffer.Append(executionId, session.Id, IntegrationStreamEventTypes.ExecutionQueued, contentType: null, payload: null);
+                await store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), executionId, queued.Sequence, queued.Type, DetailJson: null, queued.OccurredAtUtc), runToken)
+                           .ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            // The lease request is still in flight and this frame is about to unwind past the only await that would
+            // have taken ownership of it. Disposing `queueDeadline` does NOT cancel a pending SemaphoreSlim wait, so
+            // the permit would be granted to nobody and held forever — and that semaphore is the node's ONE invocation
+            // slot, shared with chat, regeneration, the scheduler and the benchmark executors.
+            //
+            // Cancelling first is what keeps this bounded: the wait unwinds at once with no permit held, and in the
+            // race where it was granted a moment earlier the lease comes back here and is disposed. Never a detached
+            // task — the settle has to happen before the fault handler runs, or the row terminalizes while the slot is
+            // still held.
+            await queueDeadline.CancelAsync().ConfigureAwait(false);
+            try
+            {
+                var orphan = await leaseTask.ConfigureAwait(false);
+                await orphan.DisposeAsync().ConfigureAwait(false);
+            }
+            catch (Exception reclaimFailure)
+            {
+                // The wait unwound with no permit, which is the ordinary outcome of the cancel above.
+                _logger.LogDebug(reclaimFailure, "The orphaned invocation lease for integration execution {ExecutionId} held no permit.", executionId);
+            }
+
+            throw;
         }
 
         IAsyncDisposable lease;
@@ -598,8 +642,14 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
             string? failureSummary = null;
             try
             {
+                var runner = services.GetRequiredService<IInvocationRunner>();
+
+                // B5 asks for BOTH. The linked run token stops the generation, but only Cancel() cancels the run's
+                // pending tool calls and attributes the turn to CancellationOrigin.User rather than to a bare abort.
+                // Registered for the CURRENT run only, and unregistered with it.
+                await using var cancelBridge = cancelToken.Register(() => runner.Cancel(package.InvocationId));
                 using var executionContext = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
-                await services.GetRequiredService<IInvocationRunner>().RunAsync(executionContext, runToken).ConfigureAwait(false);
+                await runner.RunAsync(executionContext, runToken).ConfigureAwait(false);
             }
             catch (ApprovalUnavailableException approvalUnavailable)
             {
@@ -614,9 +664,16 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         finally
         {
             // Reverse acquisition order: a leaked reservation wrongly rejects later spawns, and disposing a null one
-            // (QueueSameModel) is a no-op.
-            reservation?.Dispose();
-            await lease.DisposeAsync().ConfigureAwait(false);
+            // (QueueSameModel) is a no-op. The inner try is not decoration: a throw from the reservation would
+            // otherwise skip the lease and starve every later run on the node.
+            try
+            {
+                reservation?.Dispose();
+            }
+            finally
+            {
+                await lease.DisposeAsync().ConfigureAwait(false);
+            }
         }
     }
 

@@ -301,6 +301,13 @@ internal sealed class IntegrationApiHandler
 
             reader.AdvanceTo(sequence.End);
 
+            if (result.IsCanceled)
+            {
+                // A cancelled read yields no further bytes, so looping on it spins the CPU until RequestAborted throws
+                // on its own. Answer with the cancellation the reader already reported.
+                throw new OperationCanceledException("The integration request body read was cancelled.", context.RequestAborted);
+            }
+
             if (writer.WrittenCount > cap)
             {
                 return null;
@@ -351,7 +358,7 @@ internal sealed class IntegrationApiHandler
     }
 
     private static IntegrationExecutionLinks Links(Guid executionId) =>
-        new($"/{LocalApiRoutes.Prefix}/integration-api/executions/{executionId:D}");
+        new($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.IntegrationApi.ExecutionById.Replace("{executionId}", executionId.ToString("D"), StringComparison.Ordinal)}");
 
     /// <summary>
     ///     The wire spelling of a status. An explicit map rather than a lower-cased <c>ToString</c>: the strings are the

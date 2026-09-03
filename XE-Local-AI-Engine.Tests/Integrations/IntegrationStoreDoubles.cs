@@ -361,9 +361,31 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
     /// <summary>Makes the next non-terminal CAS lose, as it does when a concurrent cancel CASed the same version first.</summary>
     public bool FailNextStatusCas { get; set; }
 
+    /// <summary>Makes the next non-terminal CAS throw, which is what a locked database or a disposed context looks like.</summary>
+    public bool ThrowOnNextStatusCas { get; set; }
+
+    /// <summary>Runs just before the next non-terminal CAS, so a suite can close the row inside the window the CAS loses to.</summary>
+    public Action? BeforeNextStatusCas { get; set; }
+
     public Task<bool> UpdateStatusAsync(IntegrationExecutionStatusUpdate command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        // The real store throws on a cancelled token. A double that silently ignores it lets a caller pass the client's
+        // RequestAborted into a write that must survive the client, and no test can tell.
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (ThrowOnNextStatusCas)
+        {
+            ThrowOnNextStatusCas = false;
+            throw new SqliteException("database is locked", errorCode: 5);
+        }
+
+        if (BeforeNextStatusCas is { } hook)
+        {
+            BeforeNextStatusCas = null;
+            hook();
+        }
 
         if (FailNextStatusCas)
         {
@@ -413,6 +435,7 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
     public Task<bool> TryTerminalizeAsync(IntegrationTerminalizeCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (ThrowOnNextTerminalize)
         {

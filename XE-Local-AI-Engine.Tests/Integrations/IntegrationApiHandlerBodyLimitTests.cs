@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Integrations;
 
+using System.IO.Pipelines;
 using System.Net;
 using System.Security.Claims;
 using System.Text;
@@ -22,6 +23,11 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         host presents no Kestrel connection, so an assertion here would neither pass nor disprove anything about
 ///         them. They are proven in the live round. What IS asserted here is that a caller who lies about, or omits,
 ///         <c>Content-Length</c> gets the same 413 and never allocates more than one byte past the cap.
+///     </para>
+///     <para>
+///         Mechanism 2's HANDLING is provable here even though its trigger is not: the throw Kestrel raises as it
+///         consumes an oversized body is a plain <see cref="BadHttpRequestException" />, which a fake body pipe can
+///         raise verbatim.
 ///     </para>
 /// </summary>
 public sealed class IntegrationApiHandlerBodyLimitTests
@@ -50,6 +56,35 @@ public sealed class IntegrationApiHandlerBodyLimitTests
 
         AssertEx.Equal((int)HttpStatusCode.RequestEntityTooLarge, context.Response.StatusCode);
         await fixture.Invocations.DidNotReceive().AcceptAsync(Arg.Any<IntegrationAcceptRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Invoke_WhenTheHostRefusesTheBodyMidRead_Returns413FromMechanismTwosCatch()
+    {
+        // What Kestrel does once IHttpMaxRequestBodySizeFeature is exceeded on a chunked body: the read itself throws.
+        // The trigger needs a real connection, the handling does not.
+        using var fixture = new Fixture();
+        var context = fixture.ContextFor("{}"u8.ToArray(), truthfulContentLength: false);
+        context.Features.Set<IRequestBodyPipeFeature>(new StubBodyPipeFeature(new ThrowingPipeReader()));
+
+        await fixture.Handler.InvokeAsync(context);
+
+        AssertEx.Equal((int)HttpStatusCode.RequestEntityTooLarge, context.Response.StatusCode, "A host-refused body is oversized, not malformed.");
+        await fixture.Invocations.DidNotReceive().AcceptAsync(Arg.Any<IntegrationAcceptRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Invoke_WhenTheBodyReadIsCancelled_StopsInsteadOfSpinningOnTheCancelledResult()
+    {
+        // A ReadResult with IsCanceled set yields no further bytes. Ignoring it burned the loop until RequestAborted
+        // happened to throw on its own.
+        using var fixture = new Fixture();
+        var context = fixture.ContextFor("{}"u8.ToArray(), truthfulContentLength: false);
+        var reader = new CancellingPipeReader();
+        context.Features.Set<IRequestBodyPipeFeature>(new StubBodyPipeFeature(reader));
+
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => fixture.Handler.InvokeAsync(context));
+        AssertEx.True(reader.ReadCount <= CancellingPipeReader.SpinCeiling, "The cancelled result must end the loop, not be read past.");
     }
 
     [Test]
@@ -127,6 +162,78 @@ public sealed class IntegrationApiHandlerBodyLimitTests
         AssertEx.Equal("60",
             context.Response.Headers.RetryAfter.ToString(),
             "Retry-After matches the window and the middleware's own rejection, so a caller sees one convention whichever layer refused it.");
+    }
+
+    private sealed class StubBodyPipeFeature(PipeReader reader) : IRequestBodyPipeFeature
+    {
+        public PipeReader Reader { get; } = reader;
+    }
+
+    /// <summary>Raises exactly what Kestrel raises when the request body passes the host cap as it is consumed.</summary>
+    private sealed class ThrowingPipeReader : PipeReader
+    {
+        public override void AdvanceTo(SequencePosition consumed)
+        {
+        }
+
+        public override void AdvanceTo(SequencePosition consumed, SequencePosition examined)
+        {
+        }
+
+        public override void CancelPendingRead()
+        {
+        }
+
+        public override void Complete(Exception? exception = null)
+        {
+        }
+
+        public override ValueTask<ReadResult> ReadAsync(CancellationToken cancellationToken = default) =>
+            throw new BadHttpRequestException("Request body too large.", StatusCodes.Status413PayloadTooLarge);
+
+        public override bool TryRead(out ReadResult result)
+        {
+            result = default;
+            return false;
+        }
+    }
+
+    /// <summary>Answers cancelled reads, bounded so a handler that ignores the flag fails the assertion rather than hanging.</summary>
+    private sealed class CancellingPipeReader : PipeReader
+    {
+        public const int SpinCeiling = 8;
+
+        public int ReadCount { get; private set; }
+
+        public override void AdvanceTo(SequencePosition consumed)
+        {
+        }
+
+        public override void AdvanceTo(SequencePosition consumed, SequencePosition examined)
+        {
+        }
+
+        public override void CancelPendingRead()
+        {
+        }
+
+        public override void Complete(Exception? exception = null)
+        {
+        }
+
+        public override ValueTask<ReadResult> ReadAsync(CancellationToken cancellationToken = default)
+        {
+            ReadCount++;
+            return ReadCount > SpinCeiling
+                ? ValueTask.FromResult(new ReadResult(default, isCanceled: false, isCompleted: true))
+                : ValueTask.FromResult(new ReadResult(default, isCanceled: true, isCompleted: false));
+        }
+
+        public override bool TryRead(out ReadResult result)
+        {
+            result = default;
+            return false;
+        }
     }
 
     private sealed class Fixture : IDisposable

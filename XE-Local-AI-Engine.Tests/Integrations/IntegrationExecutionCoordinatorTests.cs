@@ -395,7 +395,7 @@ public sealed class IntegrationExecutionCoordinatorTests
     }
 
     [Test]
-    public async Task Run_WhenTheTerminalTransactionThrows_PublishesNothingAndLeavesTheRowNonTerminal()
+    public async Task Run_WhenTheTerminalTransactionThrows_PublishesNoCompletionAndFallsBackToInternalFailure()
     {
         using var harness = new Harness();
         var executionId = harness.SeedAccepted();
@@ -403,14 +403,133 @@ public sealed class IntegrationExecutionCoordinatorTests
 
         await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
 
-        // The single transaction rolls the status back with the event, so the row stays visible to the next restart
-        // sweep — the property the split write could not deliver.
+        // The single transaction rolls the status back with the event, so the run's own completion is never published.
+        // The throw then reaches ProcessOneAsync's handler, which re-reads the row, wins the CAS and closes it — the
+        // row IS terminal when the method returns, and leaving it for the next restart would be the worse outcome.
         AssertEx.Equal(long.MaxValue,
             harness.Buffer.LowestPendingReservation(executionId),
             "A reservation that is neither published nor abandoned stalls every reader on this execution.");
         AssertEx.False(harness.Executions.Events.Any(row => row.ExecutionId == executionId
                                                             && string.Equals(row.EventType, IntegrationStreamEventTypes.ExecutionCompleted, StringComparison.Ordinal)),
             "A failed commit publishes nothing.");
+
+        var row = harness.Row(executionId);
+        AssertEx.Equal(IntegrationExecutionStatus.Failed, row.Status, "The fault handler terminalizes rather than leaving a slot held against the row forever.");
+        AssertEx.Equal(IntegrationFailureCategories.InternalFailure, row.FailureCategory);
+        AssertEx.Equal(expected: 1,
+            harness.Executions.Events.Count(candidate => candidate.ExecutionId == executionId
+                                                         && string.Equals(candidate.EventType, IntegrationStreamEventTypes.ExecutionFailed, StringComparison.Ordinal)),
+            "One terminal event, written by whoever won the CAS.");
+    }
+
+    [Test]
+    public async Task Run_WhenTheQueuedTransitionThrowsWhileTheLeaseIsPending_CancelsTheLeaseRequestInsteadOfLeakingThePermit()
+    {
+        // Disposing the deadline source does NOT cancel a pending SemaphoreSlim wait, so a throw in this window used
+        // to leave the node's ONE invocation permit granted to a frame that had already unwound — deadlocking chat,
+        // regeneration, the scheduler and every later integration run until the process restarted.
+        using var harness = new Harness();
+        harness.HoldLease();
+        var executionId = harness.SeedAccepted();
+        harness.Executions.ThrowOnNextStatusCas = true;
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        // Bounded on purpose: a regression parks the request on the still-held gate forever, and a hang is not a
+        // failure a suite can report.
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => harness.LeaseRequest.WaitAsync(TimeSpan.FromSeconds(10)),
+            "The orphaned lease request must be cancelled, not left to be granted to nobody.");
+        AssertEx.False(harness.LeaseAcquired, "No permit may be held once the run that asked for it has unwound.");
+        AssertEx.Equal(IntegrationExecutionStatus.Failed, harness.Row(executionId).Status);
+        AssertEx.Equal(IntegrationFailureCategories.InternalFailure, harness.Row(executionId).FailureCategory);
+    }
+
+    [Test]
+    public async Task Run_WhenTheCapacityReservationThrowsOnDispose_StillReleasesTheInvocationLease()
+    {
+        // Same starvation by a narrower path: the reservation and the lease shared one finally, so a throw from the
+        // first skipped the second.
+        using var harness = new Harness();
+        var executionId = harness.SeedAccepted();
+        harness.FailNextReservationDispose = true;
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        AssertEx.True(harness.LeaseDisposed, "The node's invocation slot must come back whatever the reservation does.");
+    }
+
+    [Test]
+    public async Task Run_WhenACancelMarkerBumpsTheVersionMidRun_WinsTheTerminalCasOnTheRetry()
+    {
+        // The production race deviation 4's single retry exists for: a cancel stamps its durable stop marker on a
+        // Running row through UpdateStatusAsync, bumping the version, and the terminal CAS then carries a stale one.
+        using var harness = new Harness();
+        var executionId = harness.SeedAccepted();
+        harness.StampStopMarkerFor = executionId;
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        var row = harness.Row(executionId);
+        AssertEx.Equal(IntegrationExecutionStatus.Completed, row.Status, "The generation had already finished, so the run's own terminal status is the true one.");
+        AssertEx.True(row.StopRequestedAtUtc is not null, "The marker landed mid-run, which is what bumped the version.");
+        AssertEx.Equal(expected: 1,
+            harness.Executions.Events.Count(candidate => candidate.ExecutionId == executionId && IsTerminalEvent(candidate.EventType)),
+            "The retry must close the row, not mint a second terminal event.");
+        await harness.AuditLog.Received(requiredNumberOfCalls: 1).AddIntegrationInvocationAsync(Arg.Any<IntegrationInvocationAuditInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Run_WhenTheRetriedTerminalCasAlsoLoses_AbandonsTheReservationAndWritesNoAuditRow()
+    {
+        // The retry is bounded at one. A second loss means another path owns the terminal artefacts, so this one
+        // publishes nothing and audits nothing.
+        using var harness = new Harness();
+        var executionId = harness.SeedAccepted();
+        harness.StampStopMarkerFor = executionId;
+        harness.Executions.FailNextTerminalizeCas = true;
+        harness.Executions.FailSecondTerminalizeCas = true;
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        AssertEx.Equal(long.MaxValue, harness.Buffer.LowestPendingReservation(executionId), "Every Reserve is resolved, on the loses-twice path too.");
+        AssertEx.False(harness.Executions.Events.Any(candidate => candidate.ExecutionId == executionId && IsTerminalEvent(candidate.EventType)));
+        await harness.AuditLog.DidNotReceive().AddIntegrationInvocationAsync(Arg.Any<IntegrationInvocationAuditInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Run_WhenTheRunIsCancelled_CancelsTheInvocationByIdAsWellAsSignallingTheToken()
+    {
+        // B5 asks for both. The linked token stops the generation, but only Cancel() reaches the run's pending tool
+        // calls and attributes the turn to the user rather than to a bare abort.
+        using var harness = new Harness();
+        var executionId = harness.SeedAccepted();
+        harness.SignalCancelFor = executionId;
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        var package = harness.CapturedPackage ?? throw new AssertionException("The runner was never called.");
+        harness.Runner.Received(requiredNumberOfCalls: 1).Cancel(package.InvocationId);
+    }
+
+    [Test]
+    public async Task StartAsync_SkipsRowsAdmittedAfterTheCoordinatorWasConstructed()
+    {
+        // Kestrel is registered during builder construction and starts before this coordinator, so a request can be
+        // admitted while the sweep is still paging. Terminalizing it would contradict a 202 the caller already holds.
+        using var harness = new Harness();
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var interrupted = harness.SeedAccepted(receivedAtUtc: now - 600_000);
+        var admittedDuringStartup = harness.SeedAccepted(receivedAtUtc: now + 600_000);
+
+        await harness.Coordinator.StartAsync(CancellationToken.None);
+        await harness.Coordinator.StopAsync(CancellationToken.None);
+
+        AssertEx.Equal(IntegrationExecutionStatus.Failed, harness.Row(interrupted).Status, "A row the previous process left behind is not resumable.");
+        AssertEx.Equal(IntegrationFailureCategories.Restart, harness.Row(interrupted).FailureCategory);
+        AssertEx.Equal(IntegrationExecutionStatus.Accepted, harness.Row(admittedDuringStartup).Status,
+            "A row admitted after this coordinator existed is live, and the accept path already enqueued it.");
+        AssertEx.False(harness.Executions.Events.Any(candidate => candidate.ExecutionId == admittedDuringStartup),
+            "The sweep must not write a terminal event for a run that has not started yet.");
     }
 
     [Test]
@@ -481,6 +600,11 @@ public sealed class IntegrationExecutionCoordinatorTests
         }
     }
 
+    private static bool IsTerminalEvent(string eventType) =>
+        string.Equals(eventType, IntegrationStreamEventTypes.ExecutionCompleted, StringComparison.Ordinal)
+        || string.Equals(eventType, IntegrationStreamEventTypes.ExecutionFailed, StringComparison.Ordinal)
+        || string.Equals(eventType, IntegrationStreamEventTypes.ExecutionCancelled, StringComparison.Ordinal);
+
     /// <summary>Polls a coordinator state a background await produces, so a test never sleeps for a fixed guess.</summary>
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
@@ -509,6 +633,8 @@ public sealed class IntegrationExecutionCoordinatorTests
     private sealed class Harness : IDisposable
     {
         private readonly IntegrationExecutionEventBuffer _buffer;
+        private readonly long _constructedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        private Task<IAsyncDisposable>? _leaseRequest;
         private readonly Guid _agentDefinitionId = Guid.NewGuid();
         private readonly FakeIntegrationTriggerStore _triggers = new();
         private readonly FakeIntegrationSessionStore _sessions = new();
@@ -545,7 +671,7 @@ public sealed class IntegrationExecutionCoordinatorTests
                         return new CapacityDecision(CapacityVerdict.Allow, "Capacity available.", OllamaEvictionWarning: false, _reservation);
                     });
             Dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
-                      .Returns(callInfo => AcquireLeaseAsync(callInfo.Arg<CancellationToken>()));
+                      .Returns(callInfo => _leaseRequest = AcquireLeaseAsync(callInfo.Arg<CancellationToken>()));
             Persistence.GetConversationForTurnAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(_ => BuildConversation());
             Persistence.CreateAssistantPlaceholderAsync(Arg.Any<NodeChatCreateAssistantPlaceholderRequest>(), Arg.Any<CancellationToken>())
                        .Returns(callInfo =>
@@ -568,8 +694,10 @@ public sealed class IntegrationExecutionCoordinatorTests
                       RunCount++;
                       var package = callInfo.Arg<InvocationExecutionContext>().Package;
                       CapturedPackage = package;
+                      StampStopMarker();
                       if (!RaiseTerminalState)
                       {
+                          SignalCancel();
                           return;
                       }
 
@@ -586,6 +714,7 @@ public sealed class IntegrationExecutionCoordinatorTests
                           CompletedAt = DateTimeOffset.UnixEpoch,
                           GenerationDurationMs = 12
                       }));
+                      SignalCancel();
                   });
 
             var options = Options.Create(new IntegrationOptions());
@@ -692,6 +821,16 @@ public sealed class IntegrationExecutionCoordinatorTests
 
         public bool LeaseDisposed => LeaseDisposedOrdinal > 0;
 
+        /// <summary>The in-flight lease request, so a test can settle it instead of guessing at a delay.</summary>
+        public Task<IAsyncDisposable> LeaseRequest =>
+            _leaseRequest ?? throw new AssertionException("No lease was ever requested.");
+
+        /// <summary>Stamps a durable stop marker on this row from inside the run, which bumps the version the terminal CAS carries.</summary>
+        public Guid? StampStopMarkerFor { get; set; }
+
+        /// <summary>Signals the registry's cancel token from inside the run, exactly as the cancel primitive does.</summary>
+        public Guid? SignalCancelFor { get; set; }
+
         public Guid SeedAccepted(IntegrationExecutionStatus status = IntegrationExecutionStatus.Accepted,
             long? receivedAtUtc = null,
             long lastSequence = 1,
@@ -703,7 +842,9 @@ public sealed class IntegrationExecutionCoordinatorTests
                 _trigger.Id,
                 SessionId,
                 status,
-                receivedAtUtc ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                // A second BEFORE this harness built the coordinator, so the default row reads as one the previous
+                // process left behind and the startup sweep still visits it.
+                receivedAtUtc ?? (_constructedAtUtc - 1_000),
                 lastSequence,
                 version,
                 stopRequestedAtUtc);
@@ -736,8 +877,55 @@ public sealed class IntegrationExecutionCoordinatorTests
         internal void RecordLeaseDisposed() =>
             LeaseDisposedOrdinal = Next();
 
-        internal void RecordReservationDisposed() =>
+        internal void RecordReservationDisposed()
+        {
             ReservationDisposedOrdinal = Next();
+            if (!FailNextReservationDispose)
+            {
+                return;
+            }
+
+            FailNextReservationDispose = false;
+            throw new InvalidOperationException("The capacity reservation could not be released.");
+        }
+
+        /// <summary>Makes the next reservation disposal throw, which must NOT cost the node its invocation lease.</summary>
+        public bool FailNextReservationDispose { get; set; }
+
+        private void StampStopMarker()
+        {
+            if (StampStopMarkerFor is not { } target)
+            {
+                return;
+            }
+
+            StampStopMarkerFor = null;
+
+            // Exactly what the cancel primitive's step 1 does to a Running row: a pure marker write under the row's
+            // CURRENT version, which bumps it and leaves the coordinator's terminal CAS holding a stale one.
+            var row = Executions.Rows.Single(candidate => candidate.Id == target);
+            _ = Executions.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(target,
+                                     row.Version,
+                                     new HashSet<IntegrationExecutionStatus> { row.Status },
+                                     row.Status,
+                                     StartedAtUtc: null,
+                                     EndedAtUtc: null,
+                                     InvocationId: null,
+                                     StopRequestedAtUtc: 4_242))
+                          .GetAwaiter()
+                          .GetResult();
+        }
+
+        private void SignalCancel()
+        {
+            if (SignalCancelFor is not { } target)
+            {
+                return;
+            }
+
+            SignalCancelFor = null;
+            _ = Cancellations.Signal(target);
+        }
 
         private async Task<IAsyncDisposable> AcquireLeaseAsync(CancellationToken cancellationToken)
         {
