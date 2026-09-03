@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using System.Threading.Channels;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Integrations;
@@ -38,6 +40,19 @@ internal static class AddNodeIntegrationsExtensions
         // the same execution different numbering. Singleton, and disposed with the container because it owns a
         // PeriodicTimer.
         builder.Services.AddSingleton<IIntegrationExecutionEventBuffer, IntegrationExecutionEventBuffer>();
+
+        // The queue between the scoped accept path and the single-consumer coordinator. FullMode.Wait, never
+        // DropWrite: under DropWrite a full channel returns TRUE and discards the id, stranding an admitted row that
+        // nothing would ever drain and that the admission count would then block a slot with forever.
+        builder.Services.AddSingleton(static serviceProvider =>
+            Channel.CreateBounded<Guid>(new BoundedChannelOptions(serviceProvider.GetRequiredService<IOptions<IntegrationOptions>>().Value.MaxQueuedExecutions)
+            {
+                SingleReader = true,
+                FullMode = BoundedChannelFullMode.Wait
+            }));
+
+        builder.Services.AddSingleton<IntegrationCancellationRegistry>();
+        builder.Services.AddScoped<IIntegrationInvocationService, IntegrationInvocationService>();
 
         return builder;
     }

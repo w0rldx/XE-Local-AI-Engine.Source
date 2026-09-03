@@ -182,3 +182,195 @@ internal sealed class FakeIntegrationTriggerStore : IIntegrationTriggerStore
         return snapshot;
     }
 }
+
+/// <summary>
+///     In-memory <see cref="IIntegrationExecutionStore" />. It reproduces the three behaviours the accept path depends
+///     on — the revocation re-read, both admission caps, and the <c>(PrincipalId, RequestId)</c> uniqueness — because
+///     a mock that merely records calls could not tell a correct accept order from a wrong one.
+/// </summary>
+internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
+{
+    private readonly List<IntegrationExecutionEventSnapshot> _events = [];
+    private readonly List<IntegrationExecutionSnapshot> _rows = [];
+
+    public IReadOnlyList<IntegrationExecutionSnapshot> Rows => _rows;
+
+    public IReadOnlyList<IntegrationExecutionEventSnapshot> Events => _events;
+
+    /// <summary>Sessions an accept created, so a suite can assert exactly one was written per admitted execution.</summary>
+    public List<IntegrationSessionCreate> CreatedSessions { get; } = [];
+
+    /// <summary>Key prefixes the in-transaction re-read reports as revoked, which is a <see langword="false" /> and nothing written.</summary>
+    public HashSet<string> RevokedKeyPrefixes { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Makes the next accept fail the unique index, so the (PrincipalId, RequestId) race path can be driven.</summary>
+    public bool FailNextAcceptWithUniqueViolation { get; set; }
+
+    /// <summary>
+    ///     Makes the next dedup lookup answer "no such request", which is what a loser of the race sees: its pre-check
+    ///     runs before the winner commits, so only the unique index can decide it.
+    /// </summary>
+    public bool HideNextRequestIdLookup { get; set; }
+
+    public Task<bool> AcceptAsync(IntegrationAcceptCommand command,
+        int maxActive,
+        int maxActivePerPrincipal,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        if (RevokedKeyPrefixes.Contains(command.KeyPrefix))
+        {
+            return Task.FromResult(false);
+        }
+
+        if (FailNextAcceptWithUniqueViolation)
+        {
+            FailNextAcceptWithUniqueViolation = false;
+            throw new DbUpdateException("UNIQUE constraint failed: integration_executions.principal_id, integration_executions.request_id");
+        }
+
+        var active = _rows.Where(static row => row.Status is IntegrationExecutionStatus.Accepted
+                                               or IntegrationExecutionStatus.Queued
+                                               or IntegrationExecutionStatus.Running)
+                          .ToArray();
+        if (active.Length >= maxActive || active.Count(row => row.PrincipalId == command.PrincipalId) >= maxActivePerPrincipal)
+        {
+            throw new IntegrationQueueFullException("The node is at its concurrent execution limit.");
+        }
+
+        if (command.NewSession is { } session)
+        {
+            CreatedSessions.Add(session);
+        }
+
+        _rows.Add(new IntegrationExecutionSnapshot(command.ExecutionId,
+            command.TriggerId,
+            command.SessionId,
+            command.PrincipalId,
+            command.RequestId,
+            command.RequestFingerprint,
+            command.KeyPrefix,
+            InvocationId: Guid.Empty,
+            IntegrationExecutionStatus.Accepted,
+            command.ReceivedAtUtc,
+            StartedAtUtc: null,
+            EndedAtUtc: null,
+            StopRequestedAtUtc: null,
+            FailureCategory: null,
+            FailureSummary: null,
+            OutputCount: 0,
+            OutputBytes: 0,
+            command.AcceptedEvent.Sequence,
+            Version: 0));
+        AddEvent(command.AcceptedEvent);
+        return Task.FromResult(true);
+    }
+
+    public Task<IntegrationExecutionSnapshot?> GetByIdAsync(Guid executionId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_rows.SingleOrDefault(row => row.Id == executionId));
+
+    public Task<IntegrationExecutionSnapshot?> GetByRequestIdAsync(Guid principalId, Guid requestId, CancellationToken cancellationToken = default)
+    {
+        if (HideNextRequestIdLookup)
+        {
+            HideNextRequestIdLookup = false;
+            return Task.FromResult<IntegrationExecutionSnapshot?>(null);
+        }
+
+        return Task.FromResult(_rows.SingleOrDefault(row => row.PrincipalId == principalId && row.RequestId == requestId));
+    }
+
+    public Task<IReadOnlyList<IntegrationExecutionSnapshot>> ListAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        var matches = _rows.Where(row => (filter.TriggerId is null || row.TriggerId == filter.TriggerId)
+                                         && (filter.SessionId is null || row.SessionId == filter.SessionId)
+                                         && (filter.Status is null || row.Status == filter.Status))
+                           .OrderByDescending(static row => row.ReceivedAtUtc)
+                           .ThenByDescending(static row => row.Id)
+                           .Skip(filter.Offset)
+                           .Take(filter.Limit)
+                           .ToArray();
+        return Task.FromResult<IReadOnlyList<IntegrationExecutionSnapshot>>(matches);
+    }
+
+    public Task<bool> UpdateStatusAsync(IntegrationExecutionStatusUpdate command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var index = _rows.FindIndex(row => row.Id == command.ExecutionId);
+        if (index < 0 || _rows[index].Version != command.ExpectedVersion || !command.ExpectedStatuses.Contains(_rows[index].Status))
+        {
+            return Task.FromResult(false);
+        }
+
+        _rows[index] = _rows[index] with
+        {
+            Status = command.NewStatus,
+            StartedAtUtc = command.StartedAtUtc ?? _rows[index].StartedAtUtc,
+            EndedAtUtc = command.EndedAtUtc ?? _rows[index].EndedAtUtc,
+            InvocationId = command.InvocationId ?? _rows[index].InvocationId,
+            StopRequestedAtUtc = command.StopRequestedAtUtc ?? _rows[index].StopRequestedAtUtc,
+            FailureCategory = command.FailureCategory ?? _rows[index].FailureCategory,
+            FailureSummary = command.FailureSummary ?? _rows[index].FailureSummary,
+            Version = _rows[index].Version + 1
+        };
+        return Task.FromResult(true);
+    }
+
+    public Task<bool> TryTerminalizeAsync(IntegrationTerminalizeCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var index = _rows.FindIndex(row => row.Id == command.ExecutionId);
+        if (index < 0 || _rows[index].Version != command.ExpectedVersion || !command.ExpectedStatuses.Contains(_rows[index].Status))
+        {
+            return Task.FromResult(false);
+        }
+
+        _rows[index] = _rows[index] with
+        {
+            Status = command.NewStatus,
+            EndedAtUtc = command.EndedAtUtc,
+            FailureCategory = command.FailureCategory,
+            FailureSummary = command.FailureSummary,
+            LastSequence = Math.Max(_rows[index].LastSequence, command.Sequence),
+            Version = _rows[index].Version + 1
+        };
+        AddEvent(new IntegrationEventAppend(Guid.NewGuid(), command.ExecutionId, command.Sequence, command.EventType, DetailJson: null, command.EndedAtUtc));
+        return Task.FromResult(true);
+    }
+
+    public Task AppendEventAsync(IntegrationEventAppend command, CancellationToken cancellationToken = default)
+    {
+        AddEvent(command);
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<IntegrationExecutionEventSnapshot>> ListEventsAsync(Guid executionId,
+        long sinceSequence,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+
+        var matches = _events.Where(row => row.ExecutionId == executionId && row.Sequence > sinceSequence)
+                             .OrderBy(static row => row.Sequence)
+                             .Take(limit)
+                             .ToArray();
+        return Task.FromResult<IReadOnlyList<IntegrationExecutionEventSnapshot>>(matches);
+    }
+
+    private void AddEvent(IntegrationEventAppend command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        _events.Add(new IntegrationExecutionEventSnapshot(command.EventId,
+            command.ExecutionId,
+            command.Sequence,
+            command.EventType,
+            command.DetailJson,
+            command.OccurredAtUtc));
+    }
+}
