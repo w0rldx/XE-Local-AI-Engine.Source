@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.WorkSessions;
 
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -8,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -167,6 +169,64 @@ public sealed class WorkSessionToolHandlerTests
     }
 
     [Test]
+    public async Task UpdateWorkPlan_Add_NamesTheNewTaskIds_SoTheSameStepCanMoveThem()
+    {
+        // Live finding P3: the step's state block is composed before the added tasks exist, so in a one-step session
+        // the add result is the only place the model can learn an id. Without it no task can be marked Blocked, and
+        // the workflow executor's Blocked-task signal cannot fire on a single-step node at all.
+        var factory = Host.Factory;
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
+
+        string added;
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        {
+            added = await handler.ExecuteAsync("""{"operations":[{"op":"add","title":"Obtain approval"},{"op":"add","title":"Write choice.md"}]}""")
+                                 .ConfigureAwait(false);
+        }
+
+        AssertEx.Contains(added, "Added 2 task(s):");
+        foreach (var task in await ReadTasksAsync(factory, sessionId).ConfigureAwait(false))
+        {
+            AssertEx.Contains(added,
+                $"\"{task.Title}\" = {task.Id}",
+                message: "The result names every added task with the id in the spelling the state block prints.");
+        }
+
+        // Read one id back out of the result exactly as a model would, then move that task with no state block to consult.
+        var approvalId = IdFromAddResult(added, "Obtain approval");
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        {
+            _ = await handler
+                      .ExecuteAsync($$"""{"operations":[{"op":"update","taskId":"{{approvalId}}","status":"Blocked","blockedReason":"No operator answered."}]}""")
+                      .ConfigureAwait(false);
+        }
+
+        var blocked = (await ReadTasksAsync(factory, sessionId).ConfigureAwait(false)).Single(task => task.Title == "Obtain approval");
+        AssertEx.Equal(AgentWorkSessionTaskStatus.Blocked, blocked.Status, "An id taken from the add result is one 'update' accepts.");
+        AssertEx.Equal("No operator answered.", blocked.BlockedReason);
+    }
+
+    [Test]
+    public async Task UpdateWorkPlan_Add_BeyondTheListedBound_CountsTheRestRatherThanNamingThem()
+    {
+        var factory = Host.Factory;
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
+        var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
+        var operations = string.Join(',', Enumerable.Range(1, 13).Select(static index => $$"""{"op":"add","title":"Task {{index}}"}"""));
+
+        using var scope = AgentRunConversationContext.BeginScope(session.ConversationId);
+        var result = await handler.ExecuteAsync($$"""{"operations":[{{operations}}]}""").ConfigureAwait(false);
+
+        AssertEx.Contains(result, "Added 13 task(s):");
+        AssertEx.Contains(result, "\"Task 10\" = ");
+        AssertEx.Contains(result, ", +3 more.");
+        AssertEx.True(!result.Contains("\"Task 11\" = ", StringComparison.Ordinal),
+            "The bound stops the list, so a maximal batch cannot spend the step's context echoing itself.");
+    }
+
+    [Test]
     public async Task RecordFinding_WritesTheRowAndPublishesItsWatermark()
     {
         var publisher = new RecordingWorkSessionEventPublisher();
@@ -279,6 +339,67 @@ public sealed class WorkSessionToolHandlerTests
             entry => entry.EventType == WorkSessionEventTypes.CompletionRequested);
     }
 
+    /// <summary>
+    ///     The honesty argument, both ways. It is written onto the completion EVENT because that is where the workflow
+    ///     executor reads it back from when it decides whether the node run succeeded or has to stand down.
+    /// </summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task CompleteWorkSession_CarriesObjectiveMetOntoTheEventDetail(bool objectiveMet)
+    {
+        var factory = Host.Factory;
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
+
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        {
+            _ = await handler.ExecuteAsync($$"""{"summary":"What it came to.","objectiveMet":{{(objectiveMet ? "true" : "false")}}}""").ConfigureAwait(false);
+        }
+
+        AssertEx.Equal(objectiveMet,
+            AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false))).ObjectiveMet,
+            "The declaration is the whole point of the argument, so it has to survive to the event.");
+    }
+
+    [Test]
+    public async Task CompleteWorkSession_WithoutObjectiveMet_DeclaresNothing()
+    {
+        // Absent is not "not met": every completion recorded before the argument existed is one of these, and reading
+        // them as unmet would retroactively block node runs whose sessions finished cleanly.
+        var factory = Host.Factory;
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
+
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        {
+            _ = await handler.ExecuteAsync("""{"summary":"Everything asked for is recorded."}""").ConfigureAwait(false);
+        }
+
+        AssertEx.Null(AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false))).ObjectiveMet);
+    }
+
+    [Test]
+    public async Task CompleteWorkSession_WhenAKeyIsUnknown_StillRejectsTheWholeCall()
+    {
+        var factory = Host.Factory;
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
+
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        {
+            AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"Done.","objectiveWasMet":false}""").ConfigureAwait(false),
+                WorkSessionToolDefinitions.CompleteWorkSession.ExampleArguments);
+        }
+
+        AssertEx.False((await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false))
+                       .Any(static entry => entry.EventType == WorkSessionEventTypes.CompletionRequested),
+            "A call the deserializer refused must not close the session.");
+    }
+
     [Test]
     public async Task EveryHandler_WithoutAnAmbientConversation_FailsClosed()
     {
@@ -383,6 +504,23 @@ public sealed class WorkSessionToolHandlerTests
                     services.AddSingleton<IWorkSessionEventPublisher>(publisher);
                 }
         };
+
+    /// <summary>The completion the tool recorded, parsed the way the supervisor and the workflow executor parse it.</summary>
+    private static WorkSessionCompletionDetail? ReadCompletionDetail(IReadOnlyList<WorkSessionEventSnapshot> events)
+    {
+        var recorded = AssertEx.NotNull(events.LastOrDefault(static entry => entry.EventType == WorkSessionEventTypes.CompletionRequested),
+            "The tool records the request as an event.");
+        return JsonSerializer.Deserialize<WorkSessionCompletionDetail>(AssertEx.NotNull(recorded.DetailJson, "The event carries the completion detail."));
+    }
+
+    /// <summary>The id a model would copy out of an add result: the 36 characters after the task's quoted title and ' = '.</summary>
+    private static string IdFromAddResult(string result, string title)
+    {
+        var marker = $"\"{title}\" = ";
+        var start = result.IndexOf(marker, StringComparison.Ordinal);
+        AssertEx.True(start >= 0, $"The add result names '{title}'. Result: {result}");
+        return result.Substring(start + marker.Length, 36);
+    }
 
     private static IClientLocalToolHandler Handler(TestServerWebAppFactory factory, string toolName) =>
         AssertEx.NotNull(factory.Services.GetServices<IClientLocalToolHandler>().SingleOrDefault(handler => handler.ToolName == toolName),

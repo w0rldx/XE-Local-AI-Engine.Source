@@ -8,6 +8,13 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 public sealed partial class DevelopmentStore
 {
+    /// <summary>
+    ///     The outcome a task transition carries when a PERSON asked for it, written by
+    ///     <see cref="TransitionTaskAsync" /> and read by <see cref="OperatorInstructionAsync" />. Any other transition
+    ///     keeps the plain "Transitioned" it always had.
+    /// </summary>
+    private const string OperatorTransitionOutcome = "TransitionedByOperator";
+
     public async Task<IReadOnlyList<DevelopmentEventSnapshot>> ListEventsAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
         // Materialized rather than projected, because the reason lives in an ENCRYPTED column: the decryption
@@ -76,7 +83,8 @@ public sealed partial class DevelopmentStore
             // backfilled after the attempt started still resolve one.
             snapshot.Attempt.CommandProfileJson ?? snapshot.Project.CommandProfileJson,
             await PreviousRoundFeedbackAsync(snapshot.Task.Id, cancellationToken).ConfigureAwait(false),
-            await WorkflowPolicyTextAsync(snapshot.Task.Id, cancellationToken).ConfigureAwait(false));
+            await WorkflowPolicyTextAsync(snapshot.Task.Id, cancellationToken).ConfigureAwait(false),
+            await OperatorInstructionAsync(snapshot.Task.Id, cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
@@ -93,12 +101,18 @@ public sealed partial class DevelopmentStore
     ///         The recorded status is what qualifies it: only an event that left the task where a coder round runs is
     ///         feedback for one. A block, an apply, and a validation that PASSED all carry reasons and none of them are.
     ///     </para>
+    ///     <para>
+    ///         A transition a PERSON asked for is excluded, because it answers <see cref="OperatorInstructionAsync" />
+    ///         instead. The two are disjoint by construction so a prompt that ranks the operator above the reviewer
+    ///         cannot render the same sentence twice, once under each heading.
+    ///     </para>
     /// </summary>
     private async Task<string?> PreviousRoundFeedbackAsync(Guid taskId, CancellationToken cancellationToken)
     {
         var latest = await _dbContext.DevelopmentEvents.AsNoTracking()
                                      .Where(entity => entity.TaskId == taskId
                                                       && entity.DetailJson != null
+                                                      && entity.Outcome != OperatorTransitionOutcome
                                                       && (entity.EventType == "TaskTransitioned"
                                                           || entity.EventType == "ReviewFinalized"
                                                           || entity.EventType == "ValidationFinalized"))
@@ -191,6 +205,49 @@ public sealed partial class DevelopmentStore
 
     /// <summary>The shape a workflow's policy event carries: the rendered text, and which rule sets composed it.</summary>
     private sealed record WorkflowPolicyDetail(string? PolicyText, IReadOnlyList<DevelopmentWorkflowRuleSetReference>? RuleSets);
+
+    /// <summary>
+    ///     The last thing a PERSON told this task to do differently: the latest transition whose outcome is
+    ///     <see cref="OperatorTransitionOutcome" />, and nothing when nobody has ever asked.
+    ///     <para>
+    ///         No STATUS gate, which is what separates it from <see cref="PreviousRoundFeedbackAsync" />. A Dev Mode
+    ///         task's requirements cannot be edited, so an operator's retry reason is the only channel that can amend
+    ///         one — and an amendment that stopped governing at the next event would be undone by the reviewer round it
+    ///         was written to correct.
+    ///     </para>
+    ///     <para>
+    ///         It is bounded the same way <see cref="WorkflowPolicyTextAsync" /> is, and by the same row: only an
+    ///         instruction written AFTER the latest <c>WorkflowPolicyApplied</c> governs. The executor writes one on
+    ///         every dispatch and again when it settles the node run, so an instruction dies with the node-run attempt
+    ///         that carried it and cannot outlive the workflow into a second node run or an operator's own later
+    ///         rounds. A task no workflow ever drove has no such row, no boundary, and keeps the unbounded reading.
+    ///     </para>
+    ///     <para>
+    ///         ponytail: the ceiling is one instruction per dispatch — a later comment-carrying Retry writes a new
+    ///         boundary and a new instruction after it, but nothing retracts one WITHIN the dispatch that wrote it. If
+    ///         that ever bites, read a blank-reason operator row as the retraction.
+    ///     </para>
+    /// </summary>
+    private async Task<string?> OperatorInstructionAsync(Guid taskId, CancellationToken cancellationToken)
+    {
+        var boundary = await _dbContext.DevelopmentEvents.AsNoTracking()
+                                       .Where(entity => entity.TaskId == taskId && entity.EventType == "WorkflowPolicyApplied")
+                                       .OrderByDescending(entity => entity.Sequence)
+                                       .Select(entity => (long?)entity.Sequence)
+                                       .FirstOrDefaultAsync(cancellationToken)
+                                       .ConfigureAwait(false) ?? 0L;
+        var latest = await _dbContext.DevelopmentEvents.AsNoTracking()
+                                     .Where(entity => entity.TaskId == taskId
+                                                      && entity.Sequence > boundary
+                                                      && entity.EventType == "TaskTransitioned"
+                                                      && entity.Outcome == OperatorTransitionOutcome
+                                                      && entity.DetailJson != null)
+                                     .OrderByDescending(entity => entity.Sequence)
+                                     .FirstOrDefaultAsync(cancellationToken)
+                                     .ConfigureAwait(false);
+        var said = ReasonOf(latest?.DetailJson);
+        return string.IsNullOrWhiteSpace(said) ? null : said;
+    }
 
     public async Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default)
     {

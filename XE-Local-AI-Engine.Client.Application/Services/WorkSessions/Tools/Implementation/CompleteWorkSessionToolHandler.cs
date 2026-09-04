@@ -4,13 +4,20 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-internal sealed record CompleteWorkSessionRequest(string? Summary);
-
-/// <summary>The completion request the supervisor reads back at step end, as it is written to the event log.</summary>
-internal sealed record WorkSessionCompletionDetail(string Summary);
+internal sealed record CompleteWorkSessionRequest(string? Summary, bool? ObjectiveMet = null);
 
 /// <summary>
-///     <c>complete_work_session</c>: the model declaring the objective met.
+///     The completion request the supervisor reads back at step end, as it is written to the event log.
+///     <para>
+///         <see cref="ObjectiveMet" /> is nullable rather than defaulted so that an event recorded before the argument
+///         existed reads as <see langword="null" /> — absent, and therefore met — instead of as an unmet objective the
+///         model never declared. Only an explicit <see langword="false" /> stands a workflow-owned node run down.
+///     </para>
+/// </summary>
+internal sealed record WorkSessionCompletionDetail(string Summary, bool? ObjectiveMet = null);
+
+/// <summary>
+///     <c>complete_work_session</c>: the model closing the session, met or not.
 ///     <para>
 ///         It does <b>not</b> terminalize anything — it appends one event and returns, so the turn finishes cleanly and
 ///         whatever the model still wants to say is persisted. The supervisor reads the event back after the terminal
@@ -55,7 +62,7 @@ internal sealed class CompleteWorkSessionToolHandler(
                                // One completion per step: a model that calls this twice in one turn records it once.
                                WorkSessionOperationId.For(session.Id, session.StepCount, "completion"),
                                Outcome: null,
-                               JsonSerializer.Serialize(new WorkSessionCompletionDetail(request.Summary!))),
+                               JsonSerializer.Serialize(new WorkSessionCompletionDetail(request.Summary!, request.ObjectiveMet))),
                            cancellationToken)
                        .ConfigureAwait(false);
 

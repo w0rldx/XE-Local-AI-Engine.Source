@@ -357,7 +357,13 @@ public sealed partial class DevelopmentStore
                     command.OperationId,
                     DevelopmentOperationPhases.Completed,
                     "TaskTransitioned",
-                    "Transitioned",
+
+                    // The outcome, not the event type and not a new member of the detail document, is what separates a
+                    // person's sentence from a reviewer's. The event type stays "TaskTransitioned" because the task did
+                    // transition, the detail document stays byte-for-byte what it was, and the discriminator lands in a
+                    // column the snapshot query can filter on in SQL — a flag inside the JSON blob could only be found
+                    // by reading rows back and parsing them.
+                    command.OperatorDirected ? OperatorTransitionOutcome : "Transitioned",
                     task.Status.ToString(),
                     task.Version,
                     artifactId: null,

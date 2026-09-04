@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.WorkSessions.Tools.Implementation;
 
 using System.Globalization;
+using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -42,6 +43,13 @@ internal sealed class UpdateWorkPlanToolHandler(
     IWorkSessionEventPublisher publisher,
     ILogger<UpdateWorkPlanToolHandler> logger) : WorkSessionToolHandler<UpdateWorkPlanRequest>(scopeFactory, options, publisher, logger)
 {
+    /// <summary>
+    ///     How many added-task ids one result names. Deliberately under
+    ///     <see cref="WorkSessionToolDefinitions.MaxPlanOperations" /> so a maximal batch of adds cannot spend the
+    ///     step's context echoing itself; anything past it reads back off the next state block.
+    /// </summary>
+    private const int MaxListedAddedTasks = 10;
+
     public override string ToolName => WorkSessionToolDefinitions.UpdateWorkPlan.ToolName;
 
     public override string Description => WorkSessionToolDefinitions.UpdateWorkPlan.Description;
@@ -99,9 +107,42 @@ internal sealed class UpdateWorkPlanToolHandler(
                                     cancellationToken)
                                 .ConfigureAwait(false);
 
-        return new WorkSessionToolOutcome(string.Create(CultureInfo.InvariantCulture, $"Recorded {changes.Count} work-plan change(s)."),
-            result.Sequence,
-            WorkSessionChangeKind.Task);
+        return new WorkSessionToolOutcome(Describe(changes), result.Sequence, WorkSessionChangeKind.Task);
+    }
+
+    /// <summary>
+    ///     The sentence handed back to the model. An 'add' mints its id here, so naming those ids is the only way a
+    ///     one-step session can move a task it just added: the state block for the step was composed before the task
+    ///     existed, and a model with no id for 'update' cannot mark that task Blocked — the signal a workflow node
+    ///     reads to stand the step down for a human never fires (live finding P3).
+    /// </summary>
+    private static string Describe(IReadOnlyList<WorkPlanTaskChange> changes)
+    {
+        var text = new StringBuilder(string.Create(CultureInfo.InvariantCulture, $"Recorded {changes.Count} work-plan change(s)."));
+        var added = changes.Where(static change => change.Operation == WorkPlanTaskOperation.Add).ToList();
+        if (added.Count == 0)
+        {
+            return text.ToString();
+        }
+
+        _ = text.Append(CultureInfo.InvariantCulture, $" Added {added.Count} task(s): ");
+        for (var index = 0; index < added.Count && index < MaxListedAddedTasks; index++)
+        {
+            if (index > 0)
+            {
+                _ = text.Append(", ");
+            }
+
+            // The id in the exact spelling the state block prints and TryParseId reads back.
+            _ = text.Append(CultureInfo.InvariantCulture, $"\"{added[index].Title}\" = {added[index].TaskId}");
+        }
+
+        if (added.Count > MaxListedAddedTasks)
+        {
+            _ = text.Append(CultureInfo.InvariantCulture, $", +{added.Count - MaxListedAddedTasks} more");
+        }
+
+        return text.Append(". Use these ids for update, complete or drop in this step.").ToString();
     }
 
     private string? ValidateOperation(WorkPlanOperationRequest operation)

@@ -729,7 +729,7 @@ public sealed class DevWorkflowDevTaskTests
         var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, implemented.Status, AssertEx.NotNull(implemented.OutputJson));
         AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, implemented.FailureClass);
-        AssertEx.Contains(AssertEx.NotNull(implemented.TerminalReason), "review rounds");
+        AssertEx.Contains(AssertEx.NotNull(implemented.TerminalReason), "of its rounds");
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
             (await ReadTaskAsync(harness, onlyOneRound).ConfigureAwait(false)).Status,
             "a round it cannot finish is not asked for, so the task keeps the approval it earned.");
@@ -1195,6 +1195,18 @@ public sealed class DevWorkflowDevTaskTests
 
         await harness.DecideAsync(runId, "implement", DevWorkflowDecisionKind.Retry, comment: "Do not add a test file; extend the existing negate tests.")
                      .ConfigureAwait(false);
+
+        // Read WHILE the node run is still live. An OPERATOR instruction, not the previous round's feedback: the two
+        // are separate fields because the prompts rank them, a person's sentence amending the task's immutable
+        // requirements and outranking a reviewer's. It is bounded by the node run that made it, so the read has to
+        // happen before the settle rather than after — see the last assertion in this test.
+        var snapshot = await AdvanceUntilTheOperatorIsQuotedAsync(harness, runId, taskId).ConfigureAwait(false);
+        var said = AssertEx.NotNull(snapshot.OperatorInstruction,
+            "the round the operator paid for must be told what they said, or it redoes exactly what was refused.");
+        AssertEx.Contains(said, "extend the existing negate tests");
+        AssertEx.Contains(said, "implement", message: "and which step of the workflow the person was answering.");
+        AssertEx.Null(snapshot.PreviousRoundFeedback, "nothing reviewed this round, so there is no previous round to quote.");
+
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
         var retried = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
@@ -1204,10 +1216,8 @@ public sealed class DevWorkflowDevTaskTests
             retried.Status,
             $"the round the retry asked for ran to AwaitingApply: {retried.TerminalReason ?? retried.OutputJson}");
 
-        var feedback = AssertEx.NotNull((await ReadCoderSnapshotAsync(harness, taskId).ConfigureAwait(false)).PreviousRoundFeedback,
-            "the round the operator paid for must be told what they said, or it redoes exactly what was refused.");
-        AssertEx.Contains(feedback, "extend the existing negate tests");
-        AssertEx.Contains(feedback, "implement", message: "and which step of the workflow the person was answering.");
+        AssertEx.Null((await ReadCoderSnapshotAsync(harness, taskId).ConfigureAwait(false)).OperatorInstruction,
+            "and it stops governing the moment the node run that made it settles, or it would outrank the requirements of every round after.");
 
         // The tick after the asked-for round walks the task back to InProgress with no attempt this node run is
         // answerable for, so it reaches the guard a SECOND time on the same attempt with the reason still on its
@@ -1223,6 +1233,55 @@ public sealed class DevWorkflowDevTaskTests
 
     private static Task<(Guid ProjectId, Guid TaskId)> SeedDevelopmentTaskAsync(DevWorkflowHarness harness) =>
         harness.SeedDevelopmentProjectAsync();
+
+    /// <summary>
+    ///     A <c>DevTask</c> node whose deterministic gate FAILS asks for a coder round, and does not re-run the gate
+    ///     against the attempt it has just judged.
+    ///     <para>
+    ///         The failed gate used to return the task to <c>InProgress</c> — behind a succeeded coder attempt, the
+    ///         exact state the next-action decision reads as "implemented, validate it" — so every tick of this loop
+    ///         re-ran the whole command profile against the same patch. Measured live on 2026-09-04: 289 validation
+    ///         runs in 25 minutes and 282 report rows on one task, zero coder rounds, ended only by cancelling the run.
+    ///         The negative control is three symbols together, not one: <c>TargetFor</c> back to <c>InProgress</c>,
+    ///         <c>FinalizeValidationAsync</c>'s argument guard re-widened to admit it, and its bounded
+    ///         <c>CurrentReviewRound++</c> removed. That makes the loop below run the gate once per tick and this
+    ///         assertion count them. Reverting <c>TargetFor</c> ALONE fails differently and uninterestingly — the
+    ///         store's argument guard throws and the executor settles the node run on it.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ADevTaskNodeWhoseGateFailsAsksForACoderRoundInsteadOfRevalidatingTheSameAttempt()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        harness.Chain.FailTheDeterministicGate();
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var events = await ListDevelopmentEventsAsync(harness, projectId).ConfigureAwait(false);
+        var validations = events.Count(static entry => entry.EventType == "ValidationStarted");
+        AssertEx.Equal(expected: 1,
+            validations,
+            $"the gate judged one coder attempt once; running it again against the same attempt is the livelock: {string.Join(", ", harness.Chain.Actions)}");
+
+        AssertEx.Contains(harness.Chain.Actions,
+            static action => action == nameof(DevelopmentTaskStatus.ChangesRequested),
+            $"the failed gate left the task where a CODER round starts: {string.Join(", ", harness.Chain.Actions)}");
+        var task = await ReadTaskAsync(harness, taskId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, task.CurrentReviewRound, "and the failure spent a round, which is the only thing bounding the rework loop.");
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status, "the rework round is running: this node run is working, not stuck.");
+        var running = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
+            running.Status,
+            $"a working node run carries no terminal: {running.TerminalReason ?? running.OutputJson}");
+    }
+
+    private static async Task<IReadOnlyList<DevelopmentEventSnapshot>> ListDevelopmentEventsAsync(DevWorkflowHarness harness, Guid projectId)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ListEventsAsync(projectId).ConfigureAwait(false);
+    }
 
     private static Task<DevelopmentTaskSnapshot> ReadTaskAsync(DevWorkflowHarness harness, Guid taskId) =>
         harness.ReadDevelopmentTaskAsync(taskId);
@@ -1311,6 +1370,29 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>The brief the task's latest coder attempt was composed from — the channel a rework reason travels down.</summary>
+    /// <summary>
+    ///     Ticks one at a time until the round the operator asked for is running and carries their sentence. One at a
+    ///     time because the instruction is bounded by the node run: advancing straight to quiescence settles the node
+    ///     run, which correctly revokes it, and would read as if it had never arrived.
+    /// </summary>
+    private static async Task<DevelopmentExecutionSnapshot> AdvanceUntilTheOperatorIsQuotedAsync(DevWorkflowHarness harness,
+        Guid runId,
+        Guid taskId,
+        int maxTicks = 20)
+    {
+        for (var tick = 0; tick < maxTicks; tick++)
+        {
+            _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+            var snapshot = await ReadCoderSnapshotAsync(harness, taskId).ConfigureAwait(false);
+            if (snapshot.OperatorInstruction is not null)
+            {
+                return snapshot;
+            }
+        }
+
+        throw new InvalidOperationException($"No coder round quoting the operator started within {maxTicks} ticks.");
+    }
+
     private static async Task<DevelopmentExecutionSnapshot> ReadCoderSnapshotAsync(DevWorkflowHarness harness, Guid taskId)
     {
         await using var scope = harness.Services.CreateAsyncScope();

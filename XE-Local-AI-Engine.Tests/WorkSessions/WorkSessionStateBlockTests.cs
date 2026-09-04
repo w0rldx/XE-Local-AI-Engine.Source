@@ -125,12 +125,18 @@ public sealed class WorkSessionStateBlockTests
         AssertEx.True(block.IndexOf(AskUserTool.ToolName, StringComparison.Ordinal) > block.IndexOf(UntrustedContentFraming.EndMarkerPrefix, StringComparison.Ordinal),
             "The notice is an instruction the model must follow, so it belongs after the untrusted fence closes.");
 
-        // The stuck instruction must not end in "complete the session": the executor maps every completed session to a
-        // succeeded node run, so telling a stuck step to complete is telling it to report success it did not have.
+        // The stuck instruction names the two signals DevWorkflowAgentExecutor reads out of a completed session before
+        // it decides the node run's fate. A step told to complete without them is a step told to report a success it
+        // did not have, which is live finding F1.
+        AssertEx.Contains(block, "mark the task Blocked with the reason");
         AssertEx.Contains(block, "objective was NOT met");
-        AssertEx.Contains(block, "do not claim success");
-        AssertEx.False(block.Contains("then complete the session", StringComparison.Ordinal),
-            "A stuck step that completes is reported to the operator as a success, so the prompt must not ask for it.");
+        AssertEx.Contains(block, "complete_work_session with objectiveMet false");
+        AssertEx.Contains(block, "Do not claim success in the completion summary.");
+
+        // The seeded persona teaches Blocked as a transient marker to attach to an ask_user question — a tool these
+        // sessions do not get — so without this clause a model routes around the obstacle, completes honestly, and
+        // leaves the stale Blocked row that now stands its node run down.
+        AssertEx.Contains(block, "moved to Done or Dropped before you complete");
     }
 
     [Test]
