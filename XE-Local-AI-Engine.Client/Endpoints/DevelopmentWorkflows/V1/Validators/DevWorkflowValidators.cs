@@ -56,7 +56,7 @@ public sealed class ListDevWorkflowWorkItemsRequestValidator : Validator<ListDev
     public ListDevWorkflowWorkItemsRequestValidator() =>
         When(static request => request.Status is not null,
             () => RuleFor(static request => request.Status)
-                  .Must(static status => Enum.TryParse<DevWorkflowWorkItemStatus>(status, ignoreCase: true, out _))
+                  .Must(static status => DevWorkflowTokenRules.IsNamed<DevWorkflowWorkItemStatus>(status))
                   .WithMessage($"status must be one of {string.Join(", ", Enum.GetNames<DevWorkflowWorkItemStatus>())}."));
 }
 
@@ -126,7 +126,7 @@ public sealed class CreateDevWorkflowRuleSetRequestValidator : Validator<CreateD
     ///     silent-no-op trap this check exists to close.
     /// </summary>
     internal static bool HasOnlyKnownNodeTypes(DevWorkflowRuleScope? scope) =>
-        scope?.NodeTypes is not { } nodeTypes || nodeTypes.All(static nodeType => Enum.GetNames<DevWorkflowNodeType>().Contains(nodeType, StringComparer.OrdinalIgnoreCase));
+        scope?.NodeTypes is not { } nodeTypes || nodeTypes.All(DevWorkflowTokenRules.IsNamed<DevWorkflowNodeType>);
 
     internal static string UnknownNodeTypeMessage { get; } = $"scope.nodeTypes must contain only {string.Join(", ", Enum.GetNames<DevWorkflowNodeType>())}.";
 }
@@ -169,7 +169,7 @@ public sealed class ListDevWorkflowRunsRequestValidator : Validator<ListDevWorkf
     {
         When(static request => request.Status is not null,
             () => RuleFor(static request => request.Status)
-                  .Must(static status => Enum.TryParse<DevWorkflowRunStatus>(status, ignoreCase: true, out _))
+                  .Must(static status => DevWorkflowTokenRules.IsNamed<DevWorkflowRunStatus>(status))
                   .WithMessage($"status must be one of {string.Join(", ", Enum.GetNames<DevWorkflowRunStatus>())}."));
 
         RuleFor(static request => request.Limit)
@@ -232,7 +232,7 @@ public sealed class DevWorkflowDecisionRequestValidator : Validator<DevWorkflowD
         // Parsed, not merely non-empty: the six kinds are one enum, and whether THIS node run can take the one named
         // is the runtime's answer, given later as a conflict.
         RuleFor(static request => request.Decision)
-            .Must(static decision => Enum.TryParse<DevWorkflowDecisionKind>(decision, ignoreCase: true, out _))
+            .Must(static decision => DevWorkflowTokenRules.IsNamed<DevWorkflowDecisionKind>(decision))
             .WithMessage($"decision must be one of {string.Join(", ", Enum.GetNames<DevWorkflowDecisionKind>())}.");
 
         When(static request => request.Comment is not null,
@@ -245,6 +245,19 @@ public sealed class DevWorkflowDecisionRequestValidator : Validator<DevWorkflowD
                   .MaximumLength(DevWorkflowRequestLimits.MaxPayloadLength)
                   .WithMessage($"payloadJson is longer than the {DevWorkflowRequestLimits.MaxPayloadLength}-character limit."));
     }
+}
+
+/// <summary>
+///     The one spelling of "is this a member of that enum". Matched against the NAMES, never through
+///     <c>Enum.TryParse</c>: that also accepts the underlying numbers, so <c>"3"</c> and <c>"-1"</c> would pass the
+///     door and then be read by the endpoint behind it as a member nobody named — a filter that matches nothing, or,
+///     on the decision axis, an intervention the operator never asked for.
+/// </summary>
+internal static class DevWorkflowTokenRules
+{
+    public static bool IsNamed<TEnum>(string? raw)
+        where TEnum : struct, Enum =>
+        raw is not null && Enum.GetNames<TEnum>().Contains(raw, StringComparer.OrdinalIgnoreCase);
 }
 
 internal static class DevWorkflowRequestLimits
