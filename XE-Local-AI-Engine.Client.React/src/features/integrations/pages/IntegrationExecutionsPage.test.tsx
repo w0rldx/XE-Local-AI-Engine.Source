@@ -489,6 +489,14 @@ describe("IntegrationExecutionsPage", () => {
 		expect(group.getAttribute("aria-label")).toBe("Filter executions by status");
 	});
 
+	// F5: the session dropdown is a SELECTOR, not a paged table. Reading it at the executions page size hid every
+	// session past the 50th from the filter, so a run could not be narrowed to it at all.
+	it("reads the whole session list for the filter selector, not one table page", () => {
+		renderPage();
+
+		expect(sessionHooksMock.useIntegrationSessions).toHaveBeenCalledWith({}, { limit: 200 });
+	});
+
 	it("sends the trigger and session filters to the query", async () => {
 		sessionHooksMock.useIntegrationSessions.mockReturnValue(
 			makeListQuery([

@@ -127,6 +127,9 @@ export function useServerTablePagination({
 	onPageSizeChange,
 }: ServerTablePaginationInput): TablePaginationFooterProps {
 	const pageCount = Math.max(1, Math.ceil(totalItems / pageSize));
+	// The clamp lands on the NEXT render, so every number here is computed from the page that will actually be shown.
+	// Reading the raw page instead rendered "201–60 of 60" for the frame in between.
+	const activePage = Math.min(Math.max(1, page), pageCount);
 
 	useEffect(() => {
 		if (page > pageCount) {
@@ -135,12 +138,12 @@ export function useServerTablePagination({
 	}, [onPageChange, page, pageCount]);
 
 	return {
-		page: Math.min(Math.max(1, page), pageCount),
+		page: activePage,
 		pageCount,
 		pageSize,
 		totalItems,
-		firstItemIndex: totalItems === 0 ? 0 : (page - 1) * pageSize + 1,
-		lastItemIndex: Math.min(page * pageSize, totalItems),
+		firstItemIndex: totalItems === 0 ? 0 : (activePage - 1) * pageSize + 1,
+		lastItemIndex: Math.min(activePage * pageSize, totalItems),
 		pageSizeOptions,
 		onPageChange,
 		onPageSizeChange,

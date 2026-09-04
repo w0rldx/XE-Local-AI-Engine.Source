@@ -20,6 +20,7 @@ import {
 	type IntegrationExecutionFilters,
 	type IntegrationExecutionStatus,
 	integrationExecutionStatuses,
+	integrationListLimit,
 	integrationPageSize,
 	integrationPageSizeOptions,
 } from "@/features/integrations/models/IntegrationModels";
@@ -96,7 +97,9 @@ export function IntegrationExecutionsPage() {
 		offset: (page - 1) * pageSize,
 	});
 	const triggersQuery = useIntegrationTriggers();
-	const sessionsQuery = useIntegrationSessions();
+	// A selector, not a pager: it needs every session an operator might filter by, so it asks for the validator's
+	// maximum rather than the table's page size.
+	const sessionsQuery = useIntegrationSessions({}, { limit: integrationListLimit });
 	const cancelMutation = useCancelIntegrationExecution();
 
 	const executions = useMemo(() => executionsQuery.data?.items ?? [], [executionsQuery.data]);
