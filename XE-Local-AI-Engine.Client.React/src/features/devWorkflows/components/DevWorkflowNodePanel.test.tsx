@@ -292,6 +292,33 @@ describe("DevWorkflowNodePanel", () => {
 		expect(total).toContain("the real total is higher");
 	});
 
+	it("counts the last attempt in the total's honesty only once the node has settled", () => {
+		// The overflow can hit the FINAL attempt too: the node ends Failed having paid for rounds nobody has token
+		// counts for. Excluding the last row unconditionally would label that sum a complete total.
+		const nodeRunId = devWorkflowNodeRunDetail().id;
+		// Attempt 1 is fully recorded, so the last row's status is the only thing deciding the wording below.
+		const events = [
+			devWorkflowRunEvent({
+				id: "retry-a",
+				sequence: 2,
+				eventType: "node.retry.scheduled",
+				nodeRunId,
+				detailJson: JSON.stringify({ attempt: 1, inputTokens: 400, providerCalls: 2 }),
+			}),
+		];
+		renderPanel(devWorkflowNodeRunDetail({ status: "Failed", attempt: 2, maxAttempts: 3, providerCalls: 6, inputTokens: null }), {
+			events,
+		});
+		expect(screen.getByTestId("dev-workflow-node-attempts-total").textContent).toContain("the real total is higher");
+
+		// The same shape while the node is still working is not missing evidence, it is work not finished yet.
+		cleanup();
+		renderPanel(devWorkflowNodeRunDetail({ status: "Running", attempt: 2, maxAttempts: 3, providerCalls: 6, inputTokens: null }), {
+			events,
+		});
+		expect(screen.getByTestId("dev-workflow-node-attempts-total").textContent).not.toContain("the real total is higher");
+	});
+
 	it("says the total is a floor when an earlier attempt's event never loaded, rather than printing a wrong number", () => {
 		// A tail-anchored page set reaches attempt 2's retry but not attempt 1's, so attempt 1 recorded nothing. Adding
 		// the two it CAN see and calling that the total would understate what the run paid, silently.

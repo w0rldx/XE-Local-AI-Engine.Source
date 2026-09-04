@@ -13,6 +13,8 @@ import {
 import {
 	type DevWorkflowNodeRunDetailResponse,
 	formatDevWorkflowDuration,
+	isSettledDevWorkflowNodeStatus,
+	toDevWorkflowNodeStatus,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
 
 export interface DevWorkflowNodeAttemptsProps {
@@ -93,10 +95,11 @@ export function DevWorkflowNodeAttempts({ attempts, nodeRun }: DevWorkflowNodeAt
 		toolCalls: sum("toolCalls"),
 		agentTurnMs: sum("agentTurnMs"),
 	});
-	// An EARLIER attempt the log cannot account for makes the sum a floor rather than the total. The last row is never
-	// that: it is the attempt still running, which has simply not spent anything yet, and calling that partial would
-	// put the caveat on every node currently working.
-	const partial = rows.slice(0, -1).some((row) => isUnrecorded(row.cost));
+	// An attempt the log cannot account for makes the sum a floor rather than the total. The last row counts only once
+	// the node has SETTLED: while it is pending, queued or running it has simply not spent everything yet, and reading
+	// that as missing evidence would put the caveat on every node currently working.
+	const settled = isSettledDevWorkflowNodeStatus(toDevWorkflowNodeStatus(nodeRun?.status));
+	const partial = (settled ? rows : rows.slice(0, -1)).some((row) => isUnrecorded(row.cost));
 
 	return (
 		<SectionCard title={t("pages.devWorkflows.attempts.title", "Attempts")} gap={4} data-testid="dev-workflow-node-attempts">
