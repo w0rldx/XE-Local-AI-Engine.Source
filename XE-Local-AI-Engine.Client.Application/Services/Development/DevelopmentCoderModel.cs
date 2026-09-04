@@ -139,7 +139,7 @@ internal sealed class DevelopmentCoderModel(
                     AIFunctionFactory.Create(gateway.WriteFileAsync, "write_file", "Write one bounded UTF-8 workspace file."),
                     AIFunctionFactory.Create(gateway.ApplyPatchAsync, "apply_patch", "Apply one bounded Git patch to safe workspace paths."),
                     AIFunctionFactory.Create(gateway.GetStatusAsync, "get_status", "Inspect the current Git status."),
-                    AIFunctionFactory.Create(gateway.GetDiffAsync, "get_diff", "Inspect the current bounded Git diff."),
+                    AIFunctionFactory.Create(gateway.GetDiffAsync, "get_diff", "Inspect the bounded Git diff of the workspace against the base commit. Files created in this attempt are untracked and are not in it; get_status lists those."),
                     AIFunctionFactory.Create(gateway.RunCommandAsync, "run_command", "Run one code-owned command id from the fixed Development catalog."),
                     AIFunctionFactory.Create(gateway.SubmitImplementation, "submit_implementation", "Submit the typed final implementation evidence after all changes are complete.")
                 ]

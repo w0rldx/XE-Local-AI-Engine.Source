@@ -1089,6 +1089,117 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
                      Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    ///     FU3-1: a later attempt is told what the shared workspace already carries, and reporting a carried path it
+    ///     returned to the base commit is accepted.
+    ///     <para>
+    ///         Live on 2026-09-04 a coder reverted a file an earlier attempt had created, listed it in changedFiles
+    ///         because it had touched it, and lost the whole attempt to changed_file_manifest_mismatch. Its mental model
+    ///         was "changed in this attempt"; the contract is "differs from the base commit at submission time". Naming
+    ///         the carried files closes the gap in the prompt, and forgiving exactly this one direction closes it in the
+    ///         check — the manifest artifact is derived from git, never from the submission.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task CoderRunner_NamesTheCarriedFilesAndAcceptsOneReturnedToTheBaseCommit()
+    {
+        var second = new ScriptedCoderModel([("README.md", "base\n"), ("feature.txt", "implemented\n")], ["README.md", "feature.txt"]);
+
+        await RunTwoAttemptsOnOneTaskAsync("carried-accept-data",
+                  new ScriptedCoderModel([("README.md", "changed\n")], ["README.md"]),
+                  second)
+              .ConfigureAwait(false);
+
+        AssertEx.Contains(second.Prompt, "Files in this shared workspace that already differ from the base commit");
+        AssertEx.Contains(second.Prompt, "README.md");
+    }
+
+    /// <summary>
+    ///     Both ends of a rename are carried. Attempt 1 renames README.md away; attempt 2 renames it back and adds a
+    ///     file, so README.md matches the base commit again while the coder honestly reports having touched it. Only
+    ///     the rename's SOURCE path makes that submission legible, and git reports it in PreviousPath.
+    /// </summary>
+    [Test]
+    public async Task CoderRunner_CarriesBothEndsOfARenameAnEarlierAttemptMade()
+    {
+        await RunTwoAttemptsOnOneTaskAsync("carried-rename-data",
+                  new ScriptedCoderModel([], ["renamed.md"], Rename("README.md", "renamed.md")),
+                  new ScriptedCoderModel([("feature.txt", "implemented\n")], ["README.md", "feature.txt"], Rename("renamed.md", "README.md")))
+              .ConfigureAwait(false);
+    }
+
+    /// <summary>A pure rename patch, which is what git emits for a move with no content change.</summary>
+    private static string Rename(string from, string to) =>
+        $"diff --git a/{from} b/{to}\nsimilarity index 100%\nrename from {from}\nrename to {to}\n";
+
+    /// <summary>A path this task never changed is still over-reporting, whichever attempt claims it.</summary>
+    [Test]
+    public async Task CoderRunner_StillRefusesAPathThatNeverDifferedFromTheBaseCommit()
+    {
+        var exception = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() =>
+                                  RunTwoAttemptsOnOneTaskAsync("carried-overreport-data",
+                                      new ScriptedCoderModel([("feature.txt", "implemented\n")], ["feature.txt"]),
+                                      new ScriptedCoderModel([("second.txt", "more\n")], ["feature.txt", "second.txt", "README.md"])))
+                              .ConfigureAwait(false);
+
+        AssertEx.Equal(DevelopmentAttemptFailureCodes.ChangedFileManifestMismatch, exception.FailureCode);
+        AssertEx.Contains(exception.OperatorReason, "Submitted but not changed: README.md");
+    }
+
+    /// <summary>Under-reporting stays fatal: that is the direction in which a change escapes the review it needs.</summary>
+    [Test]
+    public async Task CoderRunner_StillRefusesAnAttemptThatOmitsAFileTheWorkspaceCarries()
+    {
+        var exception = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() =>
+                                  RunTwoAttemptsOnOneTaskAsync("carried-underreport-data",
+                                      new ScriptedCoderModel([("feature.txt", "implemented\n")], ["feature.txt"]),
+                                      new ScriptedCoderModel([("second.txt", "more\n")], ["second.txt"])))
+                              .ConfigureAwait(false);
+
+        AssertEx.Equal(DevelopmentAttemptFailureCodes.ChangedFileManifestMismatch, exception.FailureCode);
+        AssertEx.Contains(exception.OperatorReason, "Changed but not submitted: feature.txt");
+    }
+
+    /// <summary>
+    ///     Two coder attempts on ONE task, which is what makes them share one workspace: the provider keys it by
+    ///     project and task, so only the attempt id differs between the two snapshots.
+    /// </summary>
+    private async Task RunTwoAttemptsOnOneTaskAsync(string dataDirectoryName, ScriptedCoderModel first, ScriptedCoderModel second)
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var data = Path.Combine(_root, dataDirectoryName);
+        Directory.CreateDirectory(data);
+        var options = Options.Create(OptionsValue());
+        var firstAttempt = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+        var secondAttempt = firstAttempt with
+        {
+            AttemptId = Guid.NewGuid()
+        };
+
+        var store = Substitute.For<IDevelopmentStore>();
+        store.GetExecutionSnapshotAsync(firstAttempt.AttemptId, Arg.Any<CancellationToken>()).Returns(firstAttempt);
+        store.GetExecutionSnapshotAsync(secondAttempt.AttemptId, Arg.Any<CancellationToken>()).Returns(secondAttempt);
+        store.AttachArtifactAsync(Arg.Any<DevelopmentAttachArtifactCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call => Operation(firstAttempt, call.Arg<DevelopmentAttachArtifactCommand>().ArtifactId));
+        store.TerminalizeAttemptAsync(Arg.Any<DevelopmentTerminalizeAttemptCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call => Operation(firstAttempt, artifactId: null));
+
+        var blob = Substitute.For<IDevelopmentArtifactBlobStore>();
+        blob.WriteAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>())
+            .Returns(call => new DevelopmentArtifactBlobWriteResult($"{call.ArgAt<Guid>(0):N}/{call.ArgAt<Guid>(1):N}",
+                "HASH-" + call.ArgAt<Guid>(1).ToString("N"),
+                call.ArgAt<ReadOnlyMemory<byte>>(2).Length));
+
+        using var sandbox = CreateSandbox();
+        var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var binding = Binding(firstAttempt, repository);
+        DevelopmentCoderAttemptRunner Runner(IDevelopmentCoderModel model) =>
+            new(store, workspace, sandbox, new DevelopmentPatchEvidenceService(options), blob, model, new UnexpectedCloudContextService(), options);
+
+        _ = await Runner(first).RunAsync(firstAttempt.AttemptId, binding).ConfigureAwait(false);
+        _ = await Runner(second).RunAsync(secondAttempt.AttemptId, binding).ConfigureAwait(false);
+    }
+
     private static DevelopmentOptions OptionsValue(int maxPatchBytes = 1024 * 1024,
         int maxFileWriteBytes = 1024 * 1024,
         int maxCommandOutputBytes = 256 * 1024) =>
@@ -1331,6 +1442,42 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
                     ["tests/FeatureTests.cs"],
                     [],
                     Notes: null),
+                InputTokens: 10,
+                OutputTokens: 20);
+        }
+    }
+
+    /// <summary>
+    ///     A coder that makes the writes it was handed and submits the changed-file list it was handed, recording the
+    ///     prompt it was given. Scripting both halves is what lets a test state "this attempt reverted a file an
+    ///     earlier one created and reported it" without a real model.
+    /// </summary>
+    private sealed class ScriptedCoderModel(IReadOnlyList<(string Path, string Content)> writes, IReadOnlyList<string> changedFiles, string? patch = null) : IDevelopmentCoderModel
+    {
+        public string? Prompt { get; private set; }
+
+        public async Task<DevelopmentCoderModelResult> RunAsync(string modelId,
+            string prompt,
+            IDevelopmentWorkspaceTools tools,
+            int maxOutputTokens,
+            int maxToolCalls,
+            DevelopmentAttemptLiveProgress? liveProgress = null,
+            DevelopmentCloudRoleRoute? cloudRoute = null,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(tools);
+            Prompt = prompt;
+            if (patch is not null)
+            {
+                _ = await tools.ApplyPatchAsync(patch, cancellationToken).ConfigureAwait(false);
+            }
+
+            foreach (var (path, content) in writes)
+            {
+                _ = await tools.WriteFileAsync(path, content, cancellationToken).ConfigureAwait(false);
+            }
+
+            return new DevelopmentCoderModelResult(new DevelopmentCoderSubmission("Scripted attempt.", changedFiles, [], Notes: null),
                 InputTokens: 10,
                 OutputTokens: 20);
         }

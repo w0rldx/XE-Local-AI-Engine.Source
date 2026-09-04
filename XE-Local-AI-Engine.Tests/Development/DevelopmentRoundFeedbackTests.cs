@@ -23,7 +23,8 @@ public sealed class DevelopmentRoundFeedbackTests
     {
         var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot("Node 'validate' rejected this implementation: 3 of 15 tests failed."),
             Session(),
-            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null));
+            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null),
+            Carried());
 
         AssertEx.Contains(prompt, "Feedback from the previous round:");
         AssertEx.Contains(prompt, "3 of 15 tests failed");
@@ -37,7 +38,8 @@ public sealed class DevelopmentRoundFeedbackTests
     {
         var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null),
             Session(),
-            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null));
+            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null),
+            Carried());
 
         AssertEx.False(prompt.Contains("Feedback from the previous round", StringComparison.Ordinal),
             "a first round has nothing to be told, and an empty heading would read as one.");
@@ -59,7 +61,8 @@ public sealed class DevelopmentRoundFeedbackTests
 
         var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(reason),
             Session(),
-            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null));
+            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null),
+            Carried());
 
         AssertEx.Contains(prompt, "Feedback from the previous round:");
         AssertEx.Contains(prompt, "ParseBound returns the low bound when the range is inverted.");
@@ -110,7 +113,8 @@ public sealed class DevelopmentRoundFeedbackTests
     {
         var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null, WorkflowPolicy),
             Session(),
-            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null));
+            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null),
+            Carried());
 
         AssertEx.Contains(prompt, "Policy (rule sets applied by the workflow):");
         AssertEx.Contains(prompt, "## Policy: House rules");
@@ -125,7 +129,8 @@ public sealed class DevelopmentRoundFeedbackTests
     {
         var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null),
             Session(),
-            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null));
+            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null),
+            Carried());
 
         AssertEx.False(prompt.Contains("Policy (rule sets applied by the workflow)", StringComparison.Ordinal),
             "an ordinary Dev Mode task has no workflow governing it, and an empty heading would read as one that said nothing.");
@@ -154,6 +159,61 @@ public sealed class DevelopmentRoundFeedbackTests
         AssertEx.False(prompt.Contains("Policy (rule sets applied by the workflow)", StringComparison.Ordinal),
             "a review of an ordinary Dev Mode task has no workflow policy to hold it to.");
     }
+
+    /// <summary>
+    ///     A rework round is told WHICH files the shared workspace already carries, not only that such files exist.
+    ///     Live on 2026-09-04 a coder reverted a file an earlier attempt had created, reported it, and lost the whole
+    ///     attempt to changed_file_manifest_mismatch: it had the rule and not the data, and each attempt is a fresh
+    ///     conversation that cannot remember the round before it.
+    /// </summary>
+    [Test]
+    public void TheCoderPromptNamesTheFilesTheSharedWorkspaceAlreadyCarries()
+    {
+        var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null),
+            Session(),
+            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null),
+            Carried("src/Calculator.cs", "tests/CalculatorTests.cs"));
+
+        AssertEx.Contains(prompt, "Files in this shared workspace that already differ from the base commit");
+        AssertEx.Contains(prompt, "src/Calculator.cs, tests/CalculatorTests.cs");
+        AssertEx.Contains(prompt, "a file you revert or delete back to the base commit is NOT a changed file");
+    }
+
+    /// <summary>A task's first attempt carries nothing, and a heading over an empty list would read as one that did.</summary>
+    [Test]
+    public void WithAnEmptyWorkspace_TheCoderPromptSaysNothingAboutCarriedFiles()
+    {
+        var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null),
+            Session(),
+            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null),
+            Carried());
+
+        AssertEx.False(prompt.Contains("Files in this shared workspace that already differ", StringComparison.Ordinal),
+            "a first attempt has no earlier attempt to have left anything behind.");
+    }
+
+    /// <summary>
+    ///     The list is bounded and ordered. MaxChangedFiles allows 256 paths, and a prompt is a context window: the
+    ///     coder is given the first twenty in a stable order and told how many it is not being shown.
+    /// </summary>
+    [Test]
+    public void TheCarriedFileListIsOrderedAndBounded()
+    {
+        var carried = Carried([.. Enumerable.Range(0, 23).Select(index => $"src/File{index:D2}.cs")]);
+
+        var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null),
+            Session(),
+            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null),
+            carried);
+
+        AssertEx.Contains(prompt, "src/File00.cs, src/File01.cs");
+        AssertEx.Contains(prompt, "src/File19.cs (+3 more)");
+        AssertEx.False(prompt.Contains("src/File20.cs", StringComparison.Ordinal), "the twenty-first path is past the bound.");
+    }
+
+    /// <summary>What an earlier attempt on the same task left in the shared workspace.</summary>
+    private static IReadOnlySet<string> Carried(params string[] paths) =>
+        paths.ToHashSet(StringComparer.Ordinal);
 
     /// <summary>What a workflow renders onto the task: a heading the audit names and the body it snapshotted.</summary>
     private const string WorkflowPolicy = "## Policy: House rules\nNever touch production without an approved plan.";
