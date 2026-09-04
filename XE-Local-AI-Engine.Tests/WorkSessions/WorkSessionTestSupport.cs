@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -116,6 +117,13 @@ internal sealed record StepScript(
 ///     Stands in for the chat send path. It records what the supervisor asked for, yields a scripted event sequence, and
 ///     — like the real service — registers the turn with the cancellation registry so a pause, a cancel or an expired
 ///     park actually ends it.
+///     <para>
+///         It also honors <see cref="NodeChatStreamRequest.RefuseUndeclaredWrites" />, by resolving the binding once and
+///         asking the SAME production guard the real send asks of its own resolution. That is what makes the supervisor
+///         tests here about the supervisor: the decision is not restated, and a turn refused this way never reaches
+///         <see cref="Requests" /> because it was never sent. The real service's own single-resolution enforcement is
+///         pinned in <c>NodeChatStreamServiceTests</c>.
+///     </para>
 /// </summary>
 internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegistry cancellationRegistry, IServiceProvider services, Guid sessionId)
     : INodeChatStreamService
@@ -154,6 +162,17 @@ internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegis
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
+        if (request is { RefuseUndeclaredWrites: true, AgentDefinitionId: { } bound })
+        {
+            await using var gateScope = services.CreateAsyncScope();
+            if (await gateScope.ServiceProvider.GetRequiredService<WorkSessionWriteDeclarationGuard>()
+                               .InspectAsync(bound, request.Model, cancellationToken)
+                               .ConfigureAwait(false) is { } refusal)
+            {
+                throw new WorkSessionUndeclaredWriteException(refusal);
+            }
+        }
+
         lock (_recordGate)
         {
             _requests.Add(request);

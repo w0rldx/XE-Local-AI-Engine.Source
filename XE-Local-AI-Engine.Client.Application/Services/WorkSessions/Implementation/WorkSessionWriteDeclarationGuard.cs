@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -23,12 +24,18 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 ///         the turn really runs on — the one place the offer is read directly, and read whole rather than narrowed.
 ///     </para>
 ///     <para>
+///         This instance half is the EARLY answer only — the one the development-workflow lane asks BEFORE a session
+///         exists, where a refusal costs nothing and reads as configuration. It must never be the enforcing one: it
+///         resolves the definition itself, and the turn it precedes resolves that same mutable definition again, so a
+///         widening that lands between the two reaches the send. The enforcing answer is <see cref="Refuse" />, asked
+///         by the send path of the ONE projection it is about to hand the model — one resolution, one decision.
+///     </para>
+///     <para>
 ///         ponytail: this runs a COMPLETE <see cref="IAgentDefinitionResolver.ResolveAsync" /> — persona composition and
-///         the playbook read included — to read tool categories, and the turn it guards resolves the same definition
-///         again a moment later. Every read is a store read on a cache-first path and there is no provider round trip
-///         (the retrieval query is null, so the playbook takes its static prepend). The upgrade path is a
-///         projection-only overload on that resolver returning <c>AllowedTools</c> alone; worth it only if a profile
-///         ever shows this resolve mattering against the turn it precedes.
+///         the playbook read included — to read tool categories. Every read is a store read on a cache-first path and
+///         there is no provider round trip (the retrieval query is null, so the playbook takes its static prepend). The
+///         upgrade path is a projection-only overload on that resolver returning <c>AllowedTools</c> alone; worth it
+///         only if a profile ever shows this resolve mattering against the dispatch it guards.
 ///     </para>
 /// </summary>
 internal sealed class WorkSessionWriteDeclarationGuard
@@ -91,17 +98,49 @@ internal sealed class WorkSessionWriteDeclarationGuard
         // delete the definition mid-session and a rule that only ever judged resolved bindings would go silent.
         var projection = resolved?.AllowedTools
                          ?? await _offer.GetOfferedToolsAsync(activeModel, isCloudModel: false, cancellationToken).ConfigureAwait(false);
-        if (projection.FirstOrDefault(static tool => tool.Category == ToolCategory.WriteExecute && !SessionRowTools.Contains(tool.Name)) is not { } write)
+        return Refuse(projection, bindingResolved: resolved is not null);
+    }
+
+    /// <summary>
+    ///     The refusal a turn's OWN tool offer earns, or <see langword="null" /> when it carries no undeclared write.
+    ///     <para>
+    ///         The enforcing half of <c>GRAPH-C4-2</c>, and the reason it takes the offer rather than an id: the send
+    ///         path calls it with the very list it is about to put in the runtime package, so there is nothing between
+    ///         the decision and the send for an operator to edit. A turn that is offered no tools at all — the engine
+    ///         switched off, or a model that cannot call them — carries no write and is not refused.
+    ///     </para>
+    /// </summary>
+    /// <param name="offer">The tools this turn will really be handed, or <see langword="null" /> when it offers none.</param>
+    /// <param name="bindingResolved">
+    ///     Whether the turn resolved the session's own agent definition. False means it fell back to the default
+    ///     persona — the definition was deleted or never bound — which is a different sentence for the operator,
+    ///     because the fix is to restore the agent rather than to narrow it.
+    /// </param>
+    public static string? Refuse(IReadOnlyList<AllowedToolDto>? offer, bool bindingResolved)
+    {
+        if (offer?.FirstOrDefault(static tool => tool.Category == ToolCategory.WriteExecute && !SessionRowTools.Contains(tool.Name)) is not { } write)
         {
             return null;
         }
 
-        return resolved is null
-            ? $"This node is bound to an agent definition that no longer exists, so its turn falls back to the default assistant — which is offered '{write.Name}', a "
-              + "tool that can write files or run commands outside this node's sandbox — while the node declares no 'WriteExecute' capability. Restore the agent, bind "
-              + "another, or set 'allowUngatedWrites' on this template and say why (invariant GRAPH-C4-2)."
-            : $"This node is bound to an agent that will be offered '{write.Name}', which can write files or run commands outside this node's sandbox, and the node "
+        return bindingResolved
+            ? $"This node is bound to an agent that will be offered '{write.Name}', which can write files or run commands outside this node's sandbox, and the node "
               + "declares no 'WriteExecute' capability. Declare it on the node — which then needs a human gate on every path into it — or set 'allowUngatedWrites' on "
-              + "this template and say why (invariant GRAPH-C4-2).";
+              + "this template and say why (invariant GRAPH-C4-2)."
+            : $"This node is bound to an agent definition that no longer exists, so its turn falls back to the default assistant — which is offered '{write.Name}', a "
+              + "tool that can write files or run commands outside this node's sandbox — while the node declares no 'WriteExecute' capability. Restore the agent, bind "
+              + "another, or set 'allowUngatedWrites' on this template and say why (invariant GRAPH-C4-2).";
     }
 }
+
+/// <summary>
+///     A turn refused before it was sent because its own tool offer carried a write/execute tool the development-workflow
+///     node driving it never declared (<c>GRAPH-C4-2</c>).
+///     <para>
+///         Thrown out of the send path rather than streamed as a terminal so it cannot be mistaken for a provider
+///         failure: the work-session supervisor catches it, records the gate that stopped the step, and settles the
+///         session with this message — which the owning run then blocks its node run with, under the <c>Policy</c>
+///         failure class.
+///     </para>
+/// </summary>
+internal sealed class WorkSessionUndeclaredWriteException(string message) : InvalidOperationException(message);

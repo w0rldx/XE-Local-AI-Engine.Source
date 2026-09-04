@@ -109,7 +109,15 @@ public sealed record NodeChatStreamRequest(
     // node's authored effort IS that session's pin and there is no composer behind it. False everywhere else, so every
     // ordinary send keeps the precedence it has today. Trailing optional so the SignalR hub forwards the record
     // unchanged.
-    bool ReasoningEffortOverridesAgentPin = false);
+    bool ReasoningEffortOverridesAgentPin = false,
+    // GRAPH-C4-2's runtime half, carried on the turn it judges. Set by a work session a development-workflow Agent node
+    // drives when that node declares no WriteExecute capability and its template waives nothing: the send resolves the
+    // agent definition ONCE and refuses before it sends if that resolution's own tool offer carries a tool which writes
+    // files or runs commands. It rides the request rather than being asked ahead of the send because the definition is
+    // mutable — a check that resolves it separately is answering about a projection the turn may no longer use. False
+    // everywhere else, so every ordinary send is unchanged. Trailing optional so the SignalR hub forwards the record
+    // unchanged.
+    bool RefuseUndeclaredWrites = false);
 
 public sealed record ChatStreamEvent(
     string Type,

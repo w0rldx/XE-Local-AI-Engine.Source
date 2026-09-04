@@ -54,9 +54,6 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     /// </summary>
     private const string ToolGateOutcome = "ToolGate";
 
-    /// <summary>What the step row says about a turn the write-declaration guard refused. Fixed text, like every outcome here.</summary>
-    private const string WriteGateOutcome = "WriteGate";
-
     /// <summary>
     ///     Web defaults, so the consumption record reaches the browser in the same camelCase convention as every other
     ///     JSON payload the session surface carries.
@@ -370,41 +367,6 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             return StepOutcome.Settled;
         }
 
-        // GRAPH-C4-2's runtime half, asked of THIS turn. The workflow lane checks the same question before it creates
-        // the session, but what it checks there is mutable: the agent definition can be edited between two steps to
-        // add a write-capable tool, or deleted so this turn resolves the default persona and its whole offer, and
-        // every step re-resolves the definition by id. So the node's declaration and its template's waiver ride on the
-        // runtime override, which is re-supplied on every start and resume off the run's PINNED graph, and the turn
-        // that would widen past them is refused here rather than sent.
-        //
-        // Fail CLOSED, which is the opposite of the allow-list guard above, and for the reason that guard gives: that
-        // one is advisory because the offer enforces it anyway, and nothing else enforces this. A read that throws
-        // reaches the session loop's own handler, which terminalizes — closed, and legible.
-        //
-        // Failed rather than Paused: a paused workflow session is resumed by its owning run, so a pause would loop
-        // until the resume budget ran out and report a budget it did not really exhaust. Failed settles it once, and
-        // the run's next poll asks the same guard and blocks the node run with this rule's own class and sentence.
-        if (run.Runtime?.RefuseUndeclaredWrites == true)
-        {
-            var undeclared = await turnScope.ServiceProvider.GetRequiredService<WorkSessionWriteDeclarationGuard>()
-                                            .InspectAsync(state.Session.AgentDefinitionId, run.Runtime.ModelProfile, CancellationToken.None)
-                                            .ConfigureAwait(false);
-            if (undeclared is not null)
-            {
-                _logger.LogWarning("Work session {SessionId} step {Step} was not sent: {Reason}", sessionId, step, undeclared);
-                _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
-                            WorkSessionVersions.Any,
-                            WorkSessionEventTypes.StepEnded,
-                            WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.WriteGate),
-                            WriteGateOutcome),
-                        CancellationToken.None))
-                    .ConfigureAwait(false);
-                await CheckpointAsync(sessionId).ConfigureAwait(false);
-                await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, undeclared).ConfigureAwait(false);
-                return StepOutcome.Settled;
-            }
-        }
-
         // Bound what this step will replay BEFORE the send. Every earlier step's state block, answer and reasoning is
         // otherwise re-sent verbatim for the life of the session, and the step's own tool loop — a single knowledge-base
         // read is capped at 50,000 characters — needs that room. Over budget, the older turns fold into the synopsis the
@@ -449,7 +411,15 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             // needs the flag beside it, because a caller-supplied effort otherwise LOSES to the agent's.
             Model: run.Runtime?.ModelProfile,
             ReasoningEffort: run.Runtime?.ReasoningEffort,
-            ReasoningEffortOverridesAgentPin: run.Runtime?.ReasoningEffort is { Length: > 0 });
+            ReasoningEffortOverridesAgentPin: run.Runtime?.ReasoningEffort is { Length: > 0 },
+            // GRAPH-C4-2's runtime half, handed to the turn that has to obey it rather than asked here. The node's
+            // declaration and its template's waiver ride on the runtime override, which is re-supplied on every start
+            // and resume off the run's PINNED graph — so nothing an operator edits mid-run can widen what a running
+            // session is allowed to be offered. The decision itself belongs to the send: it resolves the mutable agent
+            // definition once and judges the offer THAT resolution produced, which is the only projection a check can
+            // be sure the turn will actually use. Asked here instead, it would answer about a definition the send is
+            // free to re-resolve differently a moment later.
+            RefuseUndeclaredWrites: run.Runtime?.RefuseUndeclaredWrites == true);
 
         // Tighten the tool-result ceiling for this step, seeded BEFORE the enumeration starts so the value flows into
         // the invocation's async context (the send path calls the runner inline, not through a detached Task). The
@@ -471,6 +441,18 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         try
         {
             terminal = await DrainStepAsync(turnScope.ServiceProvider.GetRequiredService<INodeChatStreamService>(), guard, request, sessionId).ConfigureAwait(false);
+        }
+        catch (WorkSessionUndeclaredWriteException refusal)
+        {
+            // The send resolved the agent definition, saw a write/execute tool the node never declared in the offer it
+            // was about to hand the model, and stopped rather than sending it (GRAPH-C4-2). Nothing ran, so this is the
+            // gate's own row and not a step failure — and the row is what the owning run reads back, because the state
+            // it was decided from is mutable and re-deriving the cause later would answer differently.
+            //
+            // Failed rather than Paused: a paused workflow session is resumed by its owning run, so a pause would loop
+            // until the resume budget ran out and report a budget it did not really exhaust. Failed settles it once,
+            // and the run's next poll blocks the node run with this rule's own class and this sentence.
+            return await SettleWriteGateAsync(sessionId, step, refusal.Message).ConfigureAwait(false);
         }
         finally
         {
@@ -818,6 +800,32 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         {
             _logger.LogWarning(exception, "Work session {SessionId} was already past {Status} when the step ended.", sessionId, target);
         }
+    }
+
+    /// <summary>
+    ///     Records the write-declaration gate's refusal against the step it stopped, then settles the session on it.
+    ///     <para>
+    ///         The sentence is written as the step row's DETAIL and not only as the session's terminal reason, because
+    ///         the development-workflow run that owns this session has to answer with <c>GRAPH-C4-2</c>'s own failure
+    ///         class and the only honest source for a historical cause is the record written when it happened. A cause
+    ///         re-derived from the agent definition's CURRENT state goes quiet the moment an operator restores or
+    ///         narrows that definition, and the node run then falls through as an ordinary retryable provider failure.
+    ///     </para>
+    /// </summary>
+    private async Task<StepOutcome> SettleWriteGateAsync(Guid sessionId, int step, string refusal)
+    {
+        _logger.LogWarning("Work session {SessionId} step {Step} was not sent: {Reason}", sessionId, step, refusal);
+        _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
+                    WorkSessionVersions.Any,
+                    WorkSessionEventTypes.StepEnded,
+                    WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.WriteGate),
+                    WorkSessionEventTypes.WriteGateOutcome,
+                    WorkSessionEventTypes.WriteGateDetail(refusal)),
+                CancellationToken.None))
+            .ConfigureAwait(false);
+        await CheckpointAsync(sessionId).ConfigureAwait(false);
+        await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, refusal).ConfigureAwait(false);
+        return StepOutcome.Settled;
     }
 
     private async Task TerminalizeFailureAsync(Guid sessionId, string reason)

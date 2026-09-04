@@ -31,6 +31,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -532,6 +533,159 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(drained > 0, "Expected the send to stream events.");
         var readLocalTool = runner.LastAllowedTools.Single(tool => tool.Name == "GetCurrentTime");
         AssertEx.Equal(expected: true, readLocalTool.RequiresApproval);
+    }
+
+    /// <summary>
+    ///     <c>GRAPH-C4-2</c>, the send-time half. The development-workflow lane checks a node's binding BEFORE it creates
+    ///     the session, and the turn resolves that same mutable definition again — so a definition widened in the window
+    ///     between the two reads used to reach the send, judged by a check that had answered about a projection the turn
+    ///     no longer used. The resolver here answers narrow ONCE and write-capable ever after, which is exactly that edit
+    ///     landing between them: the early check passes and the turn is still refused, because the turn is judged on the
+    ///     offer it is itself about to hand the model.
+    /// </summary>
+    [Test]
+    public async Task SendMessageAsync_WhenTheDefinitionWidensAfterTheEarlyCheck_RefusesTheTurnOnTheOfferItWouldRun()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentDefinitionId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"));
+        var resolver = CreateWideningAgentDefinitionResolver(agentDefinitionId);
+        var service = CreateWriteDeclarationService(persistence, runner, dispatcher, resolver, offerProvider);
+
+        // The early answer, taken while the definition is still narrow — the pre-session check the workflow lane makes.
+        var early = await new WorkSessionWriteDeclarationGuard(resolver, offerProvider, CreateNodeSettingsStore(), CreateLocalDefaultChatModelResolver())
+                          .InspectAsync(agentDefinitionId, WriteDeclarationModel, CancellationToken.None)
+                          .ConfigureAwait(false);
+        AssertEx.Null(early, "The definition carries nothing that writes when the early check reads it.");
+
+        var refusal = await AssertEx.ThrowsAsync<WorkSessionUndeclaredWriteException>(async () =>
+        {
+            await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                               "hello",
+                               MessageId: assistantMessageId,
+                               RequestId: requestId,
+                               Model: WriteDeclarationModel,
+                               UseLocalTools: true,
+                               AgentDefinitionId: agentDefinitionId,
+                               RefuseUndeclaredWrites: true)).ConfigureAwait(false))
+            {
+                // The refusal lands before the first tool-bearing event; nothing here is expected to run.
+            }
+        }).ConfigureAwait(false);
+
+        AssertEx.Contains(refusal.Message, WriteDeclarationToolName, StringComparison.Ordinal);
+        AssertEx.Contains(refusal.Message, "GRAPH-C4-2", StringComparison.Ordinal);
+        AssertEx.Empty(runner.LastAllowedTools, "The refused turn never reached the runner, so no offer was ever handed to a model.");
+    }
+
+    /// <summary>
+    ///     The same widened definition on a turn that never armed the rule — every ordinary chat send, and every work
+    ///     session a development workflow is not driving. It runs exactly as it does today: the write tool is offered,
+    ///     the turn is sent, and nothing about the flag's default costs it anything.
+    /// </summary>
+    [Test]
+    public async Task SendMessageAsync_WhenTheWriteDeclarationIsNotArmed_SendsTheWriteCapableOfferUnchanged()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentDefinitionId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"));
+        var resolver = CreateWideningAgentDefinitionResolver(agentDefinitionId);
+        var service = CreateWriteDeclarationService(persistence, runner, dispatcher, resolver, offerProvider);
+
+        // Burn the narrow first answer so this send resolves the widened definition, exactly as the refusing test does.
+        _ = await resolver.ResolveAsync(agentDefinitionId, WriteDeclarationModel, retrievalQuery: null, supportsTools: true, honorModelProfile: false,
+                              activeModelIsCloud: false, CancellationToken.None)
+                          .ConfigureAwait(false);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           Model: WriteDeclarationModel,
+                           UseLocalTools: true,
+                           AgentDefinitionId: agentDefinitionId)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.Contains(runner.LastAllowedTools, tool => tool.Name == WriteDeclarationToolName);
+    }
+
+    /// <summary>The model these two tests pin, so the turn and the early check resolve the same head.</summary>
+    private const string WriteDeclarationModel = "tool-capable-model";
+
+    /// <summary>The write/execute tool the widened definition gains — not one of the work-session state tools.</summary>
+    private const string WriteDeclarationToolName = "write_the_repository";
+
+    /// <summary>
+    ///     A resolver standing in for a definition an operator widens: narrow on its FIRST answer, write-capable on
+    ///     every one after. Two reads of one mutable row are what the race is made of, so the stub answers as that row
+    ///     would.
+    /// </summary>
+    private static IAgentDefinitionResolver CreateWideningAgentDefinitionResolver(Guid agentDefinitionId)
+    {
+        var resolved = 0;
+        var narrow = new ResolvedAgentRuntime("Persona.", [CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}")], WriteDeclarationModel, null, 1,
+            agentDefinitionId);
+        var widened = narrow with
+        {
+            AllowedTools =
+            [
+                CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
+                CreateLocalToolDto(WriteDeclarationToolName, "{\"type\":\"object\"}", ToolCategory.WriteExecute)
+            ]
+        };
+
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns(_ => Task.FromResult<ResolvedAgentRuntime?>(Interlocked.Increment(ref resolved) == 1 ? narrow : widened));
+        return resolver;
+    }
+
+    private static NodeChatStreamService CreateWriteDeclarationService(INodeChatPersistenceService persistence,
+        ReasoningCapturingInvocationRunner runner,
+        RecordingWorkerEventDispatcher dispatcher,
+        IAgentDefinitionResolver resolver,
+        ILocalToolOfferProvider offerProvider)
+    {
+        return new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
+            Substitute.For<IConversationSandboxStager>(),
+            Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatStreamService>.Instance);
     }
 
     [Test]

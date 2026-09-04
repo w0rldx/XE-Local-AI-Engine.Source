@@ -1338,10 +1338,10 @@ public sealed class DevWorkflowAgentExecutorTests
     }
 
     /// <summary>
-    ///     Reading the supervisor's refusal back into this lane. The definition is widened after the session is running,
-    ///     the supervisor refuses the turn and can only fail the session it owns — and the poll turns that into the
-    ///     node run's own refusal, with the class and the sentence the pre-session check would have produced rather
-    ///     than the provider-failure path's "the agent's work session failed".
+    ///     Reading the send's refusal back into this lane. The definition is widened after the session is running, the
+    ///     send refuses the turn and can only fail the session it owns — and the poll turns that into the node run's own
+    ///     refusal, with the class and the sentence the pre-session check would have produced rather than the
+    ///     provider-failure path's "the agent's work session failed".
     /// </summary>
     [Test]
     public async Task ASessionThatFailedAfterItsDefinitionWasWidened_BlocksTheNodeRunWithPolicy()
@@ -1354,7 +1354,7 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Status);
 
         await WideningAsync(harness, agentId, "run_python").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+        await harness.RefuseAgentWriteAsync(runId, "research", WidenedRefusal).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
         var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
@@ -1381,7 +1381,7 @@ public sealed class DevWorkflowAgentExecutorTests
             _ = await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>().DeleteAsync(agentId).ConfigureAwait(false);
         }
 
-        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+        await harness.RefuseAgentWriteAsync(runId, "research", DeletedRefusal).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
         var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
@@ -1390,6 +1390,45 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Contains(AssertEx.NotNull(research.TerminalReason), "no longer exists");
         AssertEx.Contains(research.TerminalReason!, "GRAPH-C4-2", StringComparison.Ordinal);
     }
+
+    /// <summary>
+    ///     The failure class survives the operator putting the definition back. A refusal is something that HAPPENED, so
+    ///     the poll reads the record the refusal wrote — asking the guard again instead would answer about the definition
+    ///     as it stands now, go quiet the moment it was narrowed or restored, and hand the node run to the retry policy
+    ///     as an ordinary retryable provider failure. The window is not exotic: an operator watching a run fail is likely
+    ///     to fix the definition before the next poll ever lands.
+    /// </summary>
+    [Test]
+    public async Task ASessionRefusedForAnUndeclaredWrite_KeepsThePolicyClassAfterTheDefinitionIsNarrowedAgain()
+    {
+        await using var harness = OfferingAWriteTool();
+        var agentId = await AllowingAsync(harness, "record_finding").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(BoundAgent(agentId)).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await WideningAsync(harness, agentId, "run_python").ConfigureAwait(false);
+        await harness.RefuseAgentWriteAsync(runId, "research", WidenedRefusal).ConfigureAwait(false);
+
+        // The operator sees the failure and takes the write tool straight back off, BEFORE the run's next tick.
+        await WideningAsync(harness, agentId, "record_finding").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, research.Status, "a refusal is not undone by narrowing the definition after it.");
+        AssertEx.Equal(DevWorkflowFailureClasses.Policy, research.FailureClass, "the cause is read from the record of the refusal, not re-decided from current state.");
+        AssertEx.Contains(AssertEx.NotNull(research.TerminalReason), "run_python");
+        AssertEx.Contains(research.TerminalReason!, "GRAPH-C4-2", StringComparison.Ordinal);
+    }
+
+    /// <summary>The sentence the send writes onto the refusal row when a bound definition gains a tool that writes.</summary>
+    private const string WidenedRefusal =
+        "This node is bound to an agent that will be offered 'run_python', which can write files or run commands outside this node's sandbox, and the node "
+        + "declares no 'WriteExecute' capability (invariant GRAPH-C4-2).";
+
+    /// <summary>And the one it writes when the definition is gone and the turn would fall back to the default persona.</summary>
+    private const string DeletedRefusal =
+        "This node is bound to an agent definition that no longer exists, so its turn falls back to the default assistant — which is offered 'run_python', a "
+        + "tool that can write files or run commands outside this node's sandbox (invariant GRAPH-C4-2).";
 
     /// <summary>
     ///     And a session that failed with its definition untouched keeps the path it has always taken: the retry policy

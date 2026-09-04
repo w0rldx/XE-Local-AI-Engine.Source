@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 
 public sealed class NodeChatStreamService(
     INodeChatPersistenceService persistence,
@@ -108,6 +109,30 @@ public sealed class NodeChatStreamService(
         // AssistantQueued.
         var resolution = await ResolveTurnAsync(request, conversation, activeModelOverride: null, trimmedContent, cancellationToken).ConfigureAwait(false);
 
+        // GRAPH-C4-2's runtime half, enforced at the ONE boundary where the answer cannot go stale. A development-
+        // workflow Agent node that declares no WriteExecute capability arms this on every turn of the session it drives;
+        // the earlier check at node dispatch resolves the definition separately and is therefore the friendly refusal,
+        // not the enforcing one — the definition can be widened, or deleted so the turn falls back to the default
+        // persona and its whole offer, in the window between that check and this send. So the rule is asked of the
+        // OFFER this turn will really hand the model, resolved once and reused verbatim below: one resolution, one
+        // decision, nothing left in between for an edit to land in. The supervisor turns the throw into the gate's own
+        // row and the session's terminal reason.
+        //
+        // Resolved early ONLY for a turn that armed the rule, and deliberately: the offer read is part of the
+        // pre-ownership window every other turn relies on (a client that disconnects while GetEnableToolsAsync is in
+        // flight must find a placeholder to terminalize), so an unarmed send resolves it in its usual place below and
+        // moves not at all. An armed turn has no browser behind it, and refusing before the placeholder exists is what
+        // keeps a refused step from leaving a stranded row.
+        ChatToolOffer? declaredWriteOffer = null;
+        if (request.RefuseUndeclaredWrites)
+        {
+            declaredWriteOffer = await ResolveToolOfferAsync(request, resolution, cancellationToken).ConfigureAwait(false);
+            if (WorkSessionWriteDeclarationGuard.Refuse(declaredWriteOffer.AllowedTools, resolution.Resolved is not null) is { } undeclaredWrite)
+            {
+                throw new WorkSessionUndeclaredWriteException(undeclaredWrite);
+            }
+        }
+
         var assistantPlaceholder = await PersistAssistantPlaceholderAsync(request, resolution, assistantMessageId, requestId, cancellationToken).ConfigureAwait(false);
 
         // The assistant row now exists as Pending, but run ownership (the pump + runner + their protective finally) is
@@ -183,7 +208,9 @@ public sealed class NodeChatStreamService(
         // construction fails before the pump/runner teardown exists.
         using var eventSubscription = new ChatStreamEventForwarder(eventDispatcher, correlation, requestId, stateChannel.Writer, eventSink, sequence, parts, timeProvider);
 
-        var toolOffer = await ResolveToolOfferAsync(request, resolution, cancellationToken).ConfigureAwait(false);
+        // The armed turn's offer, already settled above and reused verbatim so the rule judged the same list the package
+        // carries; every other turn resolves it right here, exactly where it always did.
+        var toolOffer = declaredWriteOffer ?? await ResolveToolOfferAsync(request, resolution, cancellationToken).ConfigureAwait(false);
         var offerTools = toolOffer.OfferTools;
         var allowedTools = toolOffer.AllowedTools;
 

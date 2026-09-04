@@ -245,20 +245,19 @@ internal sealed class DevWorkflowAgentExecutor
 
             case AgentWorkSessionStatus.Failed:
 
-                // GRAPH-C4-2's runtime half, read back. The supervisor refuses a TURN whose tool projection widened
-                // past what the node declared — a definition edited between two steps, or deleted so the turn would
-                // fall back to the default persona — and all it can do about it is stop the session it owns. Asking
-                // the same guard here is what turns that stop into this lane's own refusal, carrying the class and the
-                // sentence the pre-session check would have produced rather than "the agent's work session failed".
+                // GRAPH-C4-2's runtime half, read back — from the RECORD of the refusal, never re-decided here. The
+                // send refuses a turn whose own tool offer widened past what the node declared — a definition edited
+                // between two steps, or deleted so the turn falls back to the default persona — and all the session can
+                // do about it is stop. The row it wrote is what turns that stop into this lane's own refusal, carrying
+                // the class and the sentence rather than "the agent's work session failed".
                 //
-                // Asked of the SESSION's binding, which is what its turns resolve, and only for a node that owes a
-                // declaration at all — an ordinary provider failure costs nothing here. An operator who put the
-                // definition back between the refusal and this poll gets the provider-failure path instead, which is
-                // no longer a lie: nothing is widened any more, and the session's own reason still records what
-                // stopped it.
+                // Asking the guard again instead would answer about the definition as it stands NOW: an operator who
+                // restored or narrowed it between the refusal and this poll would send the node run down the retryable
+                // provider-failure path, losing the Policy class for a refusal that really happened. A historical cause
+                // is read, not recomputed. The node's declaration is still consulted first, off the run's PINNED graph,
+                // so an ordinary provider failure costs nothing but a dictionary miss.
                 if (DeclarationRequired(graph, graph.Nodes.GetValueOrDefault(nodeRun.NodeKey))
-                    && await _writes.InspectAsync(session.AgentDefinitionId, graph.Nodes.GetValueOrDefault(nodeRun.NodeKey)?.ModelProfile, cancellationToken)
-                        .ConfigureAwait(false) is { } refusal)
+                    && await ReadWriteGateRefusalAsync(sessionId, cancellationToken).ConfigureAwait(false) is { } refusal)
                 {
                     return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Policy, refusal, cancellationToken).ConfigureAwait(false);
                 }
@@ -833,6 +832,23 @@ internal sealed class DevWorkflowAgentExecutor
         {
             return null;
         }
+    }
+
+    /// <summary>
+    ///     The sentence the write-declaration gate stopped this session with, or <see langword="null" /> when nothing
+    ///     stopped it that way.
+    ///     <para>
+    ///         Read off the step row the supervisor wrote at the moment of the refusal — the outcome tag is the stable
+    ///         code and its detail is the sentence — so the answer is a fact about what happened rather than a verdict
+    ///         about what the agent definition currently allows. The LAST such row wins for the same reason a terminal
+    ///         reason does: it is the one the session settled on.
+    ///     </para>
+    /// </summary>
+    private async Task<string?> ReadWriteGateRefusalAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        var events = await _sessionStore.ListEventsAsync(sessionId, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
+        var refused = events.LastOrDefault(static entry => string.Equals(entry.Outcome, WorkSessionEventTypes.WriteGateOutcome, StringComparison.Ordinal));
+        return WorkSessionEventTypes.ReadWriteGateDetail(refused?.DetailJson);
     }
 
     private static string FailureOutput(DevWorkflowNodeRunSnapshot nodeRun, WorkSessionDetail session, string failureClass) =>
