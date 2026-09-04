@@ -38,8 +38,18 @@ internal sealed class FakeIntegrationApiKeyStore : IIntegrationApiKeyStore
     public Task<IReadOnlyList<IntegrationApiKeySnapshot>> ListAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<IntegrationApiKeySnapshot>>(_rows.ToArray());
 
-    public Task<IntegrationApiKeySnapshot?> GetByPrefixAsync(string keyPrefix, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_rows.SingleOrDefault(row => string.Equals(row.KeyPrefix, keyPrefix, StringComparison.Ordinal)));
+    /// <summary>
+    ///     How many key reads this store has served. The masked paths must do the SAME number of them whether the
+    ///     addressed row exists or not, or the difference is a timing oracle for row existence behind two
+    ///     byte-identical 404s.
+    /// </summary>
+    public int GetByPrefixCalls { get; private set; }
+
+    public Task<IntegrationApiKeySnapshot?> GetByPrefixAsync(string keyPrefix, CancellationToken cancellationToken = default)
+    {
+        GetByPrefixCalls++;
+        return Task.FromResult(_rows.SingleOrDefault(row => string.Equals(row.KeyPrefix, keyPrefix, StringComparison.Ordinal)));
+    }
 
     public Task<bool> TouchLastUsedAsync(Guid keyId, long atUtc, CancellationToken cancellationToken = default) =>
         Task.FromResult(Replace(keyId, row => row with
@@ -145,8 +155,12 @@ internal sealed class FakeIntegrationTriggerStore : IIntegrationTriggerStore
     public Task<IntegrationTriggerSnapshot?> GetByIdAsync(Guid triggerId, CancellationToken cancellationToken = default) =>
         Task.FromResult(_rows.SingleOrDefault(row => row.Id == triggerId));
 
+    /// <summary>How many by-name reads this store has served, so a suite can pin the accept path's constant shape.</summary>
+    public int NameLookups { get; private set; }
+
     public Task<IntegrationTriggerSnapshot?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
     {
+        NameLookups++;
         if (HideNextNameLookup)
         {
             HideNextNameLookup = false;
@@ -341,6 +355,30 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
     public bool ThrowOnNextGetById { get; set; }
 
     /// <summary>
+    ///     How many further reads throw. Set to the coordinator's retry budget to make a dispatch fault survive every
+    ///     attempt, so the row has to be terminalized rather than left holding an admission slot until the next
+    ///     restart — and the read that terminalization itself does still succeeds.
+    /// </summary>
+    public int ThrowOnGetByIdCount { get; set; }
+
+    /// <summary>
+    ///     Stamps a durable stop marker under the row's CURRENT version, exactly as the cancel primitive's step 1
+    ///     does: a pure marker write that bumps the version without terminalizing.
+    /// </summary>
+    public void StampStopMarker(Guid executionId, long stopRequestedAtUtc)
+    {
+        lock (_gate)
+        {
+            var index = _rows.FindIndex(row => row.Id == executionId);
+            _rows[index] = _rows[index] with
+            {
+                StopRequestedAtUtc = stopRequestedAtUtc,
+                Version = _rows[index].Version + 1
+            };
+        }
+    }
+
+    /// <summary>
     ///     The session store an accept's continuation bump reaches, when a suite drives one. Null for the coordinator
     ///     suites, which only ever seed rows an earlier accept already committed.
     /// </summary>
@@ -440,6 +478,12 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
     {
         lock (_gate)
         {
+            if (ThrowOnGetByIdCount > 0)
+            {
+                ThrowOnGetByIdCount--;
+                throw new DbUpdateException("The execution row could not be read.");
+            }
+
             if (ThrowOnNextGetById)
             {
                 ThrowOnNextGetById = false;
@@ -504,8 +548,16 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
         }
     }
 
+    /// <summary>Makes every paged list throw, which is how a WHOLE startup sweep fails.</summary>
+    public bool ThrowOnEveryList { get; set; }
+
     public Task<IReadOnlyList<IntegrationExecutionSnapshot>> ListAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default)
     {
+        if (ThrowOnEveryList)
+        {
+            throw new DbUpdateException("The execution rows could not be listed.");
+        }
+
         ArgumentNullException.ThrowIfNull(filter);
 
         lock (_gate)
@@ -580,6 +632,9 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
         }
     }
 
+    /// <summary>Every kind-3 audit row the terminal transactions committed, in order. Only a WON compare-and-swap adds one.</summary>
+    public List<IntegrationInvocationAuditInput> Audits { get; } = [];
+
     /// <summary>Makes the next terminal transaction throw, which must publish nothing and leave the row non-terminal.</summary>
     public bool ThrowOnNextTerminalize { get; set; }
 
@@ -637,6 +692,13 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
                 LastSequence = Math.Max(_rows[index].LastSequence, command.Sequence),
                 Version = _rows[index].Version + 1
             };
+
+            // The kind-3 audit row is part of the terminal TRANSACTION now, so it lands here and only for the winner —
+            // a double that dropped it would hide the very atomicity the store guarantees.
+            if (command.Audit is { } audit)
+            {
+                Audits.Add(audit);
+            }
             // The real store writes the caller's payload onto the terminal row; a double that dropped it would hide a
             // stream and a poll answering differently.
             AddEvent(new IntegrationEventAppend(Guid.NewGuid(), command.ExecutionId, command.Sequence, command.EventType, command.EventDetailJson, command.EndedAtUtc));

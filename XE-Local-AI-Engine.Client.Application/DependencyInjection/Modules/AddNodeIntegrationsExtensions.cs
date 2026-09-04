@@ -79,7 +79,6 @@ internal static class AddNodeIntegrationsExtensions
             serviceProvider.GetRequiredService<IIntegrationTriggerStore>(),
             serviceProvider.GetRequiredService<IIntegrationExecutionEventBuffer>(),
             serviceProvider.GetRequiredService<IntegrationCancellationRegistry>(),
-            serviceProvider.GetRequiredService<IAgentExecutionLogStore>(),
             serviceProvider.GetRequiredService<TimeProvider>(),
             serviceProvider.GetRequiredService<ILogger<IntegrationExecutionQueryService>>()));
         builder.Services.AddScoped<IntegrationExternalAccess>();

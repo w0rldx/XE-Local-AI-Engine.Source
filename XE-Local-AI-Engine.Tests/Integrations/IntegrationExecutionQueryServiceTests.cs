@@ -36,7 +36,7 @@ public sealed class IntegrationExecutionQueryServiceTests
         AssertEx.True(harness.Executions.Events.Any(candidate => candidate.ExecutionId == executionId
                                                                  && string.Equals(candidate.EventType, IntegrationStreamEventTypes.ExecutionCancelled, StringComparison.Ordinal)),
             "Whoever wins the terminal CAS owns the terminal event.");
-        await harness.AuditLog.Received(requiredNumberOfCalls: 1).AddIntegrationInvocationAsync(Arg.Any<IntegrationInvocationAuditInput>(), Arg.Any<CancellationToken>());
+        AssertEx.Equal(expected: 1, harness.Executions.Audits.Count);
         AssertEx.True(harness.CancelTokenFired, "The registered run must be signalled on every path.");
     }
 
@@ -86,12 +86,9 @@ public sealed class IntegrationExecutionQueryServiceTests
                 Triggers,
                 _buffer,
                 _cancellations,
-                AuditLog,
                 TimeProvider.System,
                 NullLogger<IntegrationExecutionQueryService>.Instance);
         }
-
-        public IAgentExecutionLogStore AuditLog { get; } = Substitute.For<IAgentExecutionLogStore>();
 
         public bool CancelTokenFired => _cancelToken.IsCancellationRequested;
 

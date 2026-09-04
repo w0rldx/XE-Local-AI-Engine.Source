@@ -245,7 +245,7 @@ public sealed class IntegrationExecutionCoordinatorTests
         AssertEx.Equal(expected: 0,
             harness.Executions.Events.Count(row => row.ExecutionId == executionId),
             "Whoever won the terminal CAS owns the artefacts; the coordinator appends nothing to a row it lost.");
-        await harness.AuditLog.DidNotReceive().AddIntegrationInvocationAsync(Arg.Any<IntegrationInvocationAuditInput>(), Arg.Any<CancellationToken>());
+        AssertEx.Empty(harness.Executions.Audits);
     }
 
     [Test]
@@ -374,7 +374,7 @@ public sealed class IntegrationExecutionCoordinatorTests
                               .ToArray();
         AssertEx.Equal(expected: 1, terminals.Length, "The coordinator is the only terminal producer, and it produces exactly one.");
         AssertEx.Equal(events[^1].Sequence, terminals[0].Sequence, "A reader stops on the terminal, so it must be the highest sequence for the execution.");
-        await harness.AuditLog.Received(requiredNumberOfCalls: 1).AddIntegrationInvocationAsync(Arg.Any<IntegrationInvocationAuditInput>(), Arg.Any<CancellationToken>());
+        AssertEx.Equal(expected: 1, harness.Executions.Audits.Count);
     }
 
     [Test]
@@ -474,7 +474,7 @@ public sealed class IntegrationExecutionCoordinatorTests
         AssertEx.Equal(expected: 1,
             harness.Executions.Events.Count(candidate => candidate.ExecutionId == executionId && IsTerminalEvent(candidate.EventType)),
             "The retry must close the row, not mint a second terminal event.");
-        await harness.AuditLog.Received(requiredNumberOfCalls: 1).AddIntegrationInvocationAsync(Arg.Any<IntegrationInvocationAuditInput>(), Arg.Any<CancellationToken>());
+        AssertEx.Equal(expected: 1, harness.Executions.Audits.Count);
     }
 
     [Test]
@@ -492,7 +492,7 @@ public sealed class IntegrationExecutionCoordinatorTests
 
         AssertEx.Equal(long.MaxValue, harness.Buffer.LowestPendingReservation(executionId), "Every Reserve is resolved, on the loses-twice path too.");
         AssertEx.False(harness.Executions.Events.Any(candidate => candidate.ExecutionId == executionId && IsTerminalEvent(candidate.EventType)));
-        await harness.AuditLog.DidNotReceive().AddIntegrationInvocationAsync(Arg.Any<IntegrationInvocationAuditInput>(), Arg.Any<CancellationToken>());
+        AssertEx.Empty(harness.Executions.Audits);
     }
 
     [Test]
@@ -541,7 +541,7 @@ public sealed class IntegrationExecutionCoordinatorTests
         await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
 
         AssertEx.Equal(long.MaxValue, harness.Buffer.LowestPendingReservation(executionId), "Every Reserve is resolved, on the lost path too.");
-        await harness.AuditLog.DidNotReceive().AddIntegrationInvocationAsync(Arg.Any<IntegrationInvocationAuditInput>(), Arg.Any<CancellationToken>());
+        AssertEx.Empty(harness.Executions.Audits);
     }
 
     [Test]
@@ -674,9 +674,10 @@ public sealed class IntegrationExecutionCoordinatorTests
 
             await harness.Queue.Writer.WriteAsync(healthy);
             await WaitUntilAsync(() => harness.Row(healthy).Status == IntegrationExecutionStatus.Completed);
+            await WaitUntilAsync(() => harness.Row(faulting).Status != IntegrationExecutionStatus.Accepted);
 
-            AssertEx.Equal(IntegrationExecutionStatus.Accepted, harness.Row(faulting).Status,
-                "The faulted row is left non-terminal for the next restart sweep, which is the documented outcome.");
+            AssertEx.Equal(IntegrationExecutionStatus.Completed, harness.Row(faulting).Status,
+                "One transient read failure is retried, so the run still happens.");
         }
         finally
         {
@@ -714,6 +715,143 @@ public sealed class IntegrationExecutionCoordinatorTests
         {
             harness.ReleaseLeaseSlot();
         }
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenEveryDispatchAttemptFaults_TerminalizesTheRowInsteadOfStrandingIt()
+    {
+        // The id has already left the channel, so nothing else will ever pick this execution up. Leaving it Accepted
+        // held one of its principal's admission slots until the process restarted, and the default per-principal cap
+        // is two: two such faults answered every later invoke from that integrator with a 503.
+        using var harness = new Harness();
+        var stranded = harness.SeedLive();
+
+        await harness.Coordinator.StartAsync(CancellationToken.None);
+        try
+        {
+            // Exactly the retry budget: every attempt faults, and the read the terminalization itself does succeeds.
+            harness.Executions.ThrowOnGetByIdCount = 3;
+            await harness.Queue.Writer.WriteAsync(stranded);
+
+            await WaitUntilAsync(() => harness.Row(stranded).Status == IntegrationExecutionStatus.Failed);
+            AssertEx.Equal(IntegrationFailureCategories.InternalFailure, harness.Row(stranded).FailureCategory);
+            AssertEx.True(harness.Executions.Events.Any(candidate => candidate.ExecutionId == stranded && IsTerminalEvent(candidate.EventType)),
+                "A terminalized row owes its caller a terminal event.");
+        }
+        finally
+        {
+            await harness.Coordinator.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Test]
+    public async Task StartAsync_WhenTheWholeSweepKeepsFailing_FailsHostStartRatherThanServingWithWedgedRows()
+    {
+        // The sweep used to swallow this and start anyway, leaving every interrupted row non-terminal AND still
+        // counted against its principal's cap. McpAgentRunRecoveryService's shape: log critical, rethrow, let the
+        // supervisor restart.
+        using var harness = new Harness();
+        _ = harness.SeedAccepted();
+        harness.Executions.ThrowOnEveryList = true;
+
+        _ = await AssertEx.ThrowsAsync<Exception>(() => harness.Coordinator.StartAsync(CancellationToken.None)).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task StartAsync_WhenAnEventSitsAboveTheRowWatermark_SeedsRecoveryFromTheEventNotTheWatermark()
+    {
+        // The lost-update this fix closes leaves exactly this row behind: a watermark of 2 with a committed event at 4.
+        // Seeding the ring at 2 mints the terminal at 3 and then collides with the existing row at 4 on EVERY restart,
+        // so the execution can never terminalize and holds its admission slot for good.
+        using var harness = new Harness();
+        var executionId = harness.SeedAccepted(lastSequence: 2);
+        harness.Buffer.Remove(executionId);
+        await harness.Executions.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(),
+            executionId,
+            Sequence: 4,
+            IntegrationStreamEventTypes.ToolCompleted,
+            DetailJson: null,
+            OccurredAtUtc: 1));
+
+        await harness.Coordinator.StartAsync(CancellationToken.None);
+        try
+        {
+            var row = harness.Row(executionId);
+            AssertEx.Equal(IntegrationExecutionStatus.Failed, row.Status);
+            AssertEx.Equal(IntegrationFailureCategories.Restart, row.FailureCategory);
+
+            var terminal = harness.Executions.Events.Single(candidate => candidate.ExecutionId == executionId && IsTerminalEvent(candidate.EventType));
+            AssertEx.Equal(expected: 5L, terminal.Sequence, "The recovery terminal continues from the highest PERSISTED sequence, not from the stale watermark.");
+        }
+        finally
+        {
+            await harness.Coordinator.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Test]
+    public async Task Run_WhenTheTargetAgentIsAnOrchestrator_RefusesItAsTriggerUnavailable()
+    {
+        // Ruling D2 scopes V1 to a saved single agent, and this package carries no orchestration spec: an orchestrator
+        // would report Completed having run none of its participants. Checked at run time as well as at save, because
+        // a definition's Kind can change after the trigger was written.
+        using var harness = new Harness
+        {
+            DefinitionKind = AgentDefinitionKind.Orchestrator
+        };
+        var executionId = harness.SeedAccepted();
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        var row = harness.Row(executionId);
+        AssertEx.Equal(IntegrationExecutionStatus.Failed, row.Status);
+        AssertEx.Equal(IntegrationFailureCategories.TriggerUnavailable, row.FailureCategory);
+        AssertEx.Contains(row.FailureSummary ?? string.Empty, "orchestrator");
+        AssertEx.Equal(expected: 0, harness.RunCount, "An orchestrator target must never reach the runner as a lone agent.");
+    }
+
+    [Test]
+    public async Task Run_WhenAStopMarkerLandsBeforeTheRunningCas_TerminalizesCancelledRatherThanFailed()
+    {
+        // The cancel path stamps its durable marker as a NON-terminal status update, which bumps the version and makes
+        // the coordinator's Running CAS lose. Reloading the row and ignoring the marker terminalized it
+        // Failed/internal-failure and beat the cancel to it, so a caller that got a 202 from the cancel endpoint was
+        // then shown a failure it never asked for.
+        using var harness = new Harness();
+        var executionId = harness.SeedAccepted();
+        harness.Executions.BeforeNextStatusCas = () => harness.Executions.StampStopMarker(executionId, stopRequestedAtUtc: 4_242);
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        var row = harness.Row(executionId);
+        AssertEx.Equal(IntegrationExecutionStatus.Cancelled, row.Status);
+        AssertEx.Null(row.FailureCategory, "A cancel is an outcome, not a failure.");
+        AssertEx.Equal(expected: 0, harness.RunCount, "The row never reached Running, so nothing ran.");
+    }
+
+    [Test]
+    public async Task Run_WhenTheRunIsCancelledMidGeneration_TerminalizesCancelledRatherThanInternalFailure()
+    {
+        // The run token is linked to the cancel token, so a real runner surfaces the cancel as an
+        // OperationCanceledException. Classifying that as internal-failure told the caller its request broke when it
+        // had done exactly what was asked.
+        using var harness = new Harness();
+        var executionId = harness.SeedAccepted();
+        harness.DuringRun = (self, package) =>
+        {
+            AssertEx.NotNull(package);
+            _ = self.Cancellations.Signal(executionId);
+            throw new OperationCanceledException();
+        };
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        var row = harness.Row(executionId);
+        AssertEx.Equal(IntegrationExecutionStatus.Cancelled, row.Status);
+        AssertEx.Null(row.FailureCategory);
+        AssertEx.True(harness.Executions.Events.Any(candidate => candidate.ExecutionId == executionId
+                                                                 && string.Equals(candidate.EventType, IntegrationStreamEventTypes.ExecutionCancelled, StringComparison.Ordinal)),
+            "A cancelled run publishes execution.cancelled, never execution.failed.");
     }
 
     private static bool IsTerminalEvent(string eventType) =>

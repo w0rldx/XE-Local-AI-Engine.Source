@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -21,6 +22,9 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
         "Caller-managed sessions are limited to agents whose tools are read-only, because tool history is not yet persisted.";
 
     private const string NameConflictMessage = "Another trigger already uses that name.";
+
+    private const string OrchestratorMessage =
+        "Orchestrator agents cannot be integration trigger targets; external integrations run a single saved agent.";
 
     private readonly IAgentDefinitionResolver _agentResolver;
     private readonly IAgentDefinitionStore _agents;
@@ -147,6 +151,15 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
         if (definition is null)
         {
             return new IntegrationTriggerResult(IntegrationTriggerOutcome.AgentMissing, Trigger: null, AgentMissingMessage);
+        }
+
+        // Ruling D2 scopes V1 to a saved SINGLE agent. The coordinator builds no OrchestrationSpec — it is byte-for-byte
+        // the scheduler's run-agent shape — so an orchestrator saved here would report Completed having run none of its
+        // participants. Refused at save AND re-checked in the coordinator, because a definition's Kind can change after
+        // the trigger was written.
+        if (definition.Kind != AgentDefinitionKind.Single)
+        {
+            return new IntegrationTriggerResult(IntegrationTriggerOutcome.TargetKindRejected, Trigger: null, OrchestratorMessage);
         }
 
         if (sessionPolicy != IntegrationSessionPolicy.CallerManaged)

@@ -77,7 +77,21 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        var entity = new AgentExecutionLog
+        _ = _dbContext.AgentExecutionLogs.Add(BuildIntegrationInvocation(input, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()));
+        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     The kind-3 row's whole shape, in one place. <see cref="IntegrationExecutionStore.TryTerminalizeAsync" />
+    ///     builds it too — it adds the row to the SAME <c>SaveChanges</c> as the terminal status and the terminal
+    ///     event, so a required audit row cannot be lost to a database failure after a committed terminal — and two
+    ///     copies of this mapping would drift the moment either column moved.
+    /// </summary>
+    internal static AgentExecutionLog BuildIntegrationInvocation(IntegrationInvocationAuditInput input, long createdAtUtc)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        return new AgentExecutionLog
         {
             Id = Guid.NewGuid(),
             RecordKind = (int)AgentExecutionLogRecordKind.IntegrationInvocation,
@@ -102,11 +116,8 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
             TraceId = input.TraceId,
             Success = string.Equals(input.TerminalStatus, "completed", StringComparison.Ordinal),
             LatencyMs = input.LatencyMs,
-            CreatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+            CreatedAtUtc = createdAtUtc
         };
-
-        _ = _dbContext.AgentExecutionLogs.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<AgentRunEnvelopeRecord>> ListRunEnvelopesAsync(Guid? conversationId, int limit, int offset = 0, CancellationToken cancellationToken = default)

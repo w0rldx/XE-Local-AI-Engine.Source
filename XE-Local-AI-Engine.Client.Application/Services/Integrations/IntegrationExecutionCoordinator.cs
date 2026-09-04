@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -43,6 +44,16 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
 {
     /// <summary>How many rows the startup sweep pulls per page. Bounded so a large backlog does not load in one list.</summary>
     private const int RecoveryPageSize = 200;
+
+    /// <summary>
+    ///     How many times a dispatch fault, or the whole startup sweep, is retried before it is given up on. Small on
+    ///     purpose: these retries exist for a transient store failure, and a fault that survives three attempts is not
+    ///     one.
+    /// </summary>
+    private const int MaxRecoveryAttempts = 3;
+
+    /// <summary>The pause between those attempts. Short, because an admitted execution's caller is waiting on it.</summary>
+    private static readonly TimeSpan RecoveryRetryDelay = TimeSpan.FromMilliseconds(250);
 
     /// <summary>The statuses a terminal transition may leave. Nothing else is a legal source for one.</summary>
     private static readonly IReadOnlySet<IntegrationExecutionStatus> NonTerminalStatuses = new HashSet<IntegrationExecutionStatus>
@@ -110,7 +121,33 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
     /// </summary>
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        await ReconcileInterruptedAsync(cancellationToken).ConfigureAwait(false);
+        // The sweep used to swallow a whole-sweep failure and start anyway. That left every interrupted row
+        // non-terminal AND still counted against its principal's admission cap, so the node came up serving 503s to
+        // an integrator with no in-flight work and no way to clear it short of another restart. A bounded retry
+        // covers the transient case; past it the host refuses to start, exactly as McpAgentRunRecoveryService does,
+        // so the supervisor restarts rather than serving wedged.
+        for (var attempt = 1; attempt <= MaxRecoveryAttempts; attempt++)
+        {
+            try
+            {
+                await ReconcileInterruptedAsync(cancellationToken).ConfigureAwait(false);
+                break;
+            }
+            catch (Exception exception) when (attempt < MaxRecoveryAttempts && !cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogWarning(exception,
+                    "Integration execution startup recovery failed on attempt {Attempt} of {MaxAttempts}; retrying.",
+                    attempt,
+                    MaxRecoveryAttempts);
+                await Task.Delay(RecoveryRetryDelay, _timeProvider, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogCritical(exception, "Integration execution startup recovery failed; the node cannot admit executions safely.");
+                throw;
+            }
+        }
+
         await base.StartAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -148,9 +185,7 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                 return;
             }
 
-            var context = new ExecutionRunContext(store,
-                scope.ServiceProvider.GetRequiredService<IAgentExecutionLogStore>(),
-                execution);
+            var context = new ExecutionRunContext(store, execution);
 
             try
             {
@@ -160,12 +195,25 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
             {
                 // Every stage is wrapped so a throw still terminalizes: a row stuck Running is worse than a wrong one,
                 // because the admission count holds a slot against it forever.
-                var shutdown = stoppingToken.IsCancellationRequested && exception is OperationCanceledException;
-                _logger.LogError(exception, "Integration execution {ExecutionId} faulted; terminalizing it.", executionId);
-                await TerminalizeFromFaultAsync(context,
-                        shutdown ? IntegrationFailureCategories.Shutdown : IntegrationFailureCategories.InternalFailure,
-                        shutdown ? "The node stopped while the execution was in flight." : "The execution failed unexpectedly.")
-                    .ConfigureAwait(false);
+                //
+                // A cancel is classified BEFORE shutdown: the run's own token is the one the cancel primitive signals,
+                // and a caller that asked for a cancel and got `Failed / internal-failure` was told its request broke
+                // when in fact it did exactly what was asked.
+                if (exception is OperationCanceledException && cancelToken.IsCancellationRequested)
+                {
+                    _logger.LogInformation("Integration execution {ExecutionId} was cancelled while in flight.", executionId);
+                    await TerminalizeFromFaultAsync(context, IntegrationExecutionStatus.Cancelled, failureCategory: null, failureSummary: null).ConfigureAwait(false);
+                }
+                else
+                {
+                    var shutdown = stoppingToken.IsCancellationRequested && exception is OperationCanceledException;
+                    _logger.LogError(exception, "Integration execution {ExecutionId} faulted; terminalizing it.", executionId);
+                    await TerminalizeFromFaultAsync(context,
+                            IntegrationExecutionStatus.Failed,
+                            shutdown ? IntegrationFailureCategories.Shutdown : IntegrationFailureCategories.InternalFailure,
+                            shutdown ? "The node stopped while the execution was in flight." : "The execution failed unexpectedly.")
+                        .ConfigureAwait(false);
+                }
             }
 
             // Placed AFTER every terminal path rather than inside one of them: an execution can end at a dozen points,
@@ -226,13 +274,71 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
     /// </summary>
     private async Task RunDispatchedAsync(Guid executionId, CancellationToken stoppingToken)
     {
+        for (var attempt = 1; attempt <= MaxRecoveryAttempts; attempt++)
+        {
+            try
+            {
+                await ProcessOneAsync(executionId, stoppingToken).ConfigureAwait(false);
+                return;
+            }
+            catch (Exception exception)
+            {
+                // Leaving the row for the next restart sweep was the old behaviour, and it cost the principal an
+                // admission slot until the process was restarted: the id is already out of the channel, so nothing
+                // else will ever pick this execution up.
+                _logger.LogError(exception,
+                    "Integration execution {ExecutionId} faulted outside its own handler on attempt {Attempt} of {MaxAttempts}.",
+                    executionId,
+                    attempt,
+                    MaxRecoveryAttempts);
+
+                if (attempt >= MaxRecoveryAttempts || stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                try
+                {
+                    await Task.Delay(RecoveryRetryDelay, _timeProvider, stoppingToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+        }
+
+        await TerminalizeStrandedAsync(executionId).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     The last resort for a dispatched execution whose every attempt escaped its own handler: re-read the row and
+    ///     close it through the ordinary fault path, so the admission slot it holds is released and its caller gets a
+    ///     terminal event instead of silence.
+    /// </summary>
+    private async Task TerminalizeStrandedAsync(Guid executionId)
+    {
         try
         {
-            await ProcessOneAsync(executionId, stoppingToken).ConfigureAwait(false);
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var store = scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>();
+            var row = await store.GetByIdAsync(executionId, CancellationToken.None).ConfigureAwait(false);
+            if (row is null || !NonTerminalStatuses.Contains(row.Status))
+            {
+                return;
+            }
+
+            var context = new ExecutionRunContext(store, row);
+            await TerminalizeFromFaultAsync(context,
+                    IntegrationExecutionStatus.Failed,
+                    IntegrationFailureCategories.InternalFailure,
+                    "The execution could not be dispatched.")
+                .ConfigureAwait(false);
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "Integration execution {ExecutionId} faulted outside its own handler; its row is left for the next restart sweep.", executionId);
+            // Everything else already failed; the next restart sweep is genuinely the last line here.
+            _logger.LogError(exception, "Integration execution {ExecutionId} could not be terminalized after its dispatch faults.", executionId);
         }
     }
 
@@ -243,75 +349,95 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
     /// </summary>
     private async Task ReconcileInterruptedAsync(CancellationToken cancellationToken)
     {
-        try
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>();
+
+        var interrupted = new List<IntegrationExecutionSnapshot>();
+        foreach (var status in NonTerminalStatuses)
         {
-            await using var scope = _scopeFactory.CreateAsyncScope();
-            var store = scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>();
-            var auditLog = scope.ServiceProvider.GetRequiredService<IAgentExecutionLogStore>();
-
-            var interrupted = new List<IntegrationExecutionSnapshot>();
-            foreach (var status in NonTerminalStatuses)
+            var offset = 0;
+            while (true)
             {
-                var offset = 0;
-                while (true)
+                var page = await store.ListAsync(new IntegrationExecutionFilter(TriggerId: null, SessionId: null, status, RecoveryPageSize, offset), cancellationToken)
+                                      .ConfigureAwait(false);
+                interrupted.AddRange(page);
+                if (page.Count < RecoveryPageSize)
                 {
-                    var page = await store.ListAsync(new IntegrationExecutionFilter(TriggerId: null, SessionId: null, status, RecoveryPageSize, offset), cancellationToken)
-                                          .ConfigureAwait(false);
-                    interrupted.AddRange(page);
-                    if (page.Count < RecoveryPageSize)
-                    {
-                        break;
-                    }
-
-                    offset += page.Count;
-                }
-            }
-
-            var recovered = 0;
-            foreach (var row in interrupted)
-            {
-                if (row.ReceivedAtUtc >= _constructedAtUtc)
-                {
-                    // Admitted after this coordinator existed, so it cannot be a leftover of the previous process: the
-                    // accept path enqueues every row it commits, and this one's caller is holding its 202.
-                    continue;
+                    break;
                 }
 
-                // R3-1: seed the ring from the persisted watermark so the sweep's terminal event continues the
-                // execution's OWN numbering instead of restarting at 1 and colliding with rows already written.
-                if (!_buffer.TryCreate(row.Id, row.LastSequence))
-                {
-                    _logger.LogWarning("The event buffer refused a recovery entry for integration execution {ExecutionId}; it stays non-terminal for the next restart.", row.Id);
-                    continue;
-                }
-
-                var context = new ExecutionRunContext(store, auditLog, row);
-                if (await TerminalizeAsync(context,
-                            NonTerminalStatuses,
-                            IntegrationExecutionStatus.Failed,
-                            IntegrationFailureCategories.Restart,
-                            "The node restarted while the execution was in flight.")
-                        .ConfigureAwait(false))
-                {
-                    recovered++;
-
-                    // The sweep is a DIFFERENT terminal path from the run's own, and it has to close per-invocation
-                    // sessions too — otherwise a session interrupted by a restart stays Active with no execution that
-                    // could ever close it. The busy guard is bypassed by construction: the row is already terminal.
-                    await ClosePerInvocationSessionAsync(scope.ServiceProvider, row).ConfigureAwait(false);
-                }
-            }
-
-            if (recovered > 0)
-            {
-                _logger.LogWarning("Terminalized {Count} interrupted integration execution(s) during startup recovery.", recovered);
+                offset += page.Count;
             }
         }
-        catch (Exception exception)
+
+        var recovered = 0;
+        foreach (var row in interrupted)
         {
-            // A failed sweep leaves the rows non-terminal for the next restart to retry. Refusing to start the node
-            // over it would trade a bounded, self-healing backlog for an outage.
-            _logger.LogError(exception, "Integration execution startup recovery failed; interrupted rows stay non-terminal.");
+            if (row.ReceivedAtUtc >= _constructedAtUtc)
+            {
+                // Admitted after this coordinator existed, so it cannot be a leftover of the previous process: the
+                // accept path enqueues every row it commits, and this one's caller is holding its 202.
+                continue;
+            }
+
+            // R3-1: seed the ring from the persisted watermark so the sweep's terminal event continues the
+            // execution's OWN numbering instead of restarting at 1 and colliding with rows already written.
+            // The watermark alone is not enough: a writer that lost the watermark race before the crash left a
+            // row whose highest EVENT sequence is above it, and seeding below that mints a terminal sequence that
+            // collides with an existing (execution_id, sequence) row on every restart forever.
+            var seedSequence = await HighestPersistedSequenceAsync(store, row, cancellationToken).ConfigureAwait(false);
+            if (!_buffer.TryCreate(row.Id, seedSequence))
+            {
+                _logger.LogWarning("The event buffer refused a recovery entry for integration execution {ExecutionId}; it stays non-terminal for the next restart.", row.Id);
+                continue;
+            }
+
+            var context = new ExecutionRunContext(store, row);
+            if (await TerminalizeAsync(context,
+                        NonTerminalStatuses,
+                        IntegrationExecutionStatus.Failed,
+                        IntegrationFailureCategories.Restart,
+                        "The node restarted while the execution was in flight.")
+                    .ConfigureAwait(false))
+            {
+                recovered++;
+
+                // The sweep is a DIFFERENT terminal path from the run's own, and it has to close per-invocation
+                // sessions too — otherwise a session interrupted by a restart stays Active with no execution that
+                // could ever close it. The busy guard is bypassed by construction: the row is already terminal.
+                await ClosePerInvocationSessionAsync(scope.ServiceProvider, row).ConfigureAwait(false);
+            }
+        }
+
+        if (recovered > 0)
+        {
+            _logger.LogWarning("Terminalized {Count} interrupted integration execution(s) during startup recovery.", recovered);
+        }
+    }
+
+    /// <summary>
+    ///     The highest sequence this execution can prove: its row watermark, or a persisted event above it. Pages
+    ///     forward from the watermark rather than reading the whole feed, so the ordinary case — a watermark that is
+    ///     already current — costs one empty page.
+    /// </summary>
+    private static async Task<long> HighestPersistedSequenceAsync(IIntegrationExecutionStore store,
+        IntegrationExecutionSnapshot row,
+        CancellationToken cancellationToken)
+    {
+        var highest = row.LastSequence;
+        while (true)
+        {
+            var page = await store.ListEventsAsync(row.Id, highest, RecoveryPageSize, cancellationToken).ConfigureAwait(false);
+            if (page.Count == 0)
+            {
+                return highest;
+            }
+
+            highest = page[^1].Sequence;
+            if (page.Count < RecoveryPageSize)
+            {
+                return highest;
+            }
         }
     }
 
@@ -349,6 +475,22 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         if (definition is null)
         {
             await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.TriggerUnavailable, "The trigger's target agent no longer exists.").ConfigureAwait(false);
+            return;
+        }
+
+        // Ruling D2 scopes V1 to a saved SINGLE agent. This package carries no OrchestrationSpec — the scheduler's
+        // run-agent shape it is modelled on carries none either — so InvocationRunner would take RunSingleAgentAsync
+        // and an orchestrator would report Completed having run none of its participants, none of its routing and none
+        // of its handoffs. Rejected rather than orchestrated: the offer emit_output is unioned into is the ROOT's, the
+        // caller-managed read-only rule judges the ROOT's tools, and both would have to be pushed across every
+        // participant before an orchestrated integration run could be honest. Checked here as well as at save because
+        // a definition's Kind can change after the trigger was written.
+        if (definition.Kind != AgentDefinitionKind.Single)
+        {
+            await TerminalizeBeforeRunAsync(context,
+                    IntegrationFailureCategories.TriggerUnavailable,
+                    "The trigger's target agent is an orchestrator, which external integrations do not run.")
+                .ConfigureAwait(false);
             return;
         }
 
@@ -750,7 +892,19 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                 }
 
                 context.Version = reloaded.Version;
+
+                // The overwhelmingly likely reason this CAS lost: the cancel path stamped its durable stop marker as a
+                // NON-terminal status update, which bumps the version without terminalizing. Reading the marker and
+                // ignoring it raced the cancel to a `Failed / internal-failure` terminal, so a caller that got its 202
+                // from the cancel endpoint was then shown a failure it never caused.
+                if (reloaded.StopRequestedAtUtc is not null)
+                {
+                    await TerminalizeAsync(context, BeforeRunStatuses, IntegrationExecutionStatus.Cancelled, failureCategory: null, failureSummary: null).ConfigureAwait(false);
+                    return;
+                }
+
                 await TerminalizeFromFaultAsync(context,
+                        IntegrationExecutionStatus.Failed,
                         IntegrationFailureCategories.InternalFailure,
                         $"The execution could not be moved to Running from {reloaded.Status}.")
                     .ConfigureAwait(false);
@@ -1068,7 +1222,10 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
     ///     The safety net for a throw anywhere in the pipeline: re-read the row so the CAS carries a version that is
     ///     actually current, and terminalize whatever non-terminal status it is in.
     /// </summary>
-    private async Task TerminalizeFromFaultAsync(ExecutionRunContext context, string failureCategory, string failureSummary)
+    private async Task TerminalizeFromFaultAsync(ExecutionRunContext context,
+        IntegrationExecutionStatus status,
+        string? failureCategory,
+        string? failureSummary)
     {
         try
         {
@@ -1085,7 +1242,7 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
             }
 
             context.Version = row.Version;
-            _ = await TerminalizeAsync(context, NonTerminalStatuses, IntegrationExecutionStatus.Failed, failureCategory, failureSummary).ConfigureAwait(false);
+            _ = await TerminalizeAsync(context, NonTerminalStatuses, status, failureCategory, failureSummary).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -1171,7 +1328,8 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                                              endedAtUtc,
                                              failureCategory,
                                              failureSummary,
-                                             payload?.GetRawText()),
+                                             payload?.GetRawText(),
+                                             BuildAudit(context, status, endedAtUtc)),
                                          CancellationToken.None)
                                      .ConfigureAwait(false);
             if (!won)
@@ -1188,8 +1346,6 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                 payload));
             published = true;
             context.Version++;
-
-            await WriteAuditAsync(context, status, endedAtUtc).ConfigureAwait(false);
             return true;
         }
         finally
@@ -1202,35 +1358,26 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
     }
 
     /// <summary>
-    ///     The ONE kind-3 audit row per execution, written by whoever won the terminal CAS. Content-free by contract:
-    ///     ids, a trigger name, a credential prefix and a terminal status.
+    ///     The ONE kind-3 audit row per execution, carried INTO the terminal command so the store inserts it in the
+    ///     same transaction as the status and the terminal event. It used to be a separate write after the terminal
+    ///     committed and its failures were swallowed, which lost the row for good: every later terminalization rejects
+    ///     an already-terminal row, so nothing could write it afterwards. Content-free by contract: ids, a trigger
+    ///     name, a credential prefix and a terminal status.
     /// </summary>
-    private async Task WriteAuditAsync(ExecutionRunContext context, IntegrationExecutionStatus status, long endedAtUtc)
-    {
-        try
-        {
-            await context.AuditLog.AddIntegrationInvocationAsync(new IntegrationInvocationAuditInput(context.InvocationId,
-                    context.RequestId,
-                    context.TriggerName,
-                    context.KeyPrefix,
-                    context.TargetAgentDefinitionId,
-                    status switch
-                    {
-                        IntegrationExecutionStatus.Completed => NodeChatMessageStatusValues.Completed,
-                        IntegrationExecutionStatus.Cancelled => NodeChatMessageStatusValues.Cancelled,
-                        _ => NodeChatMessageStatusValues.Failed
-                    },
-                    Activity.Current?.TraceId.ToString(),
-                    Math.Max(val1: 0L, endedAtUtc - context.ReceivedAtUtc)),
-                CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (Exception exception)
-        {
-            // The row is already terminal and the event is already published. Losing the audit row is worth a log line,
-            // not a reversal of a committed terminal.
-            _logger.LogError(exception, "The kind-3 audit row for integration execution {ExecutionId} could not be written.", context.ExecutionId);
-        }
-    }
+    private static IntegrationInvocationAuditInput BuildAudit(ExecutionRunContext context, IntegrationExecutionStatus status, long endedAtUtc) =>
+        new(context.InvocationId,
+            context.RequestId,
+            context.TriggerName,
+            context.KeyPrefix,
+            context.TargetAgentDefinitionId,
+            status switch
+            {
+                IntegrationExecutionStatus.Completed => NodeChatMessageStatusValues.Completed,
+                IntegrationExecutionStatus.Cancelled => NodeChatMessageStatusValues.Cancelled,
+                _ => NodeChatMessageStatusValues.Failed
+            },
+            Activity.Current?.TraceId.ToString(),
+            Math.Max(val1: 0L, endedAtUtc - context.ReceivedAtUtc));
 
     private static async Task ReloadVersionAsync(ExecutionRunContext context)
     {
@@ -1250,10 +1397,9 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
     /// </summary>
     private sealed class ExecutionRunContext
     {
-        public ExecutionRunContext(IIntegrationExecutionStore store, IAgentExecutionLogStore auditLog, IntegrationExecutionSnapshot execution)
+        public ExecutionRunContext(IIntegrationExecutionStore store, IntegrationExecutionSnapshot execution)
         {
             Store = store;
-            AuditLog = auditLog;
             ExecutionId = execution.Id;
             SessionId = execution.SessionId;
             RequestId = execution.RequestId;
@@ -1268,8 +1414,6 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         }
 
         public IIntegrationExecutionStore Store { get; }
-
-        public IAgentExecutionLogStore AuditLog { get; }
 
         public Guid ExecutionId { get; }
 

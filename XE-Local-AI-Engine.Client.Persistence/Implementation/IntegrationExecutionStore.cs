@@ -194,10 +194,17 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
             OccurredAtUtc = command.EndedAtUtc
         });
 
-        // MAX for the execution, because an external.output row can still be committing; a plain assignment for the
-        // session, because sequences restart per execution.
-        entity.LastSequence = Math.Max(entity.LastSequence, command.Sequence);
-        await MoveSessionWatermarkAsync(entity.SessionId, command.Sequence, command.EndedAtUtc, cancellationToken).ConfigureAwait(false);
+        // The kind-3 audit row rides the SAME SaveChanges as the status and the event. Written only by the winner of
+        // the CAS, because a lost CAS rolls the whole transaction back and never reaches the commit below.
+        if (command.Audit is { } audit)
+        {
+            _ = _dbContext.AgentExecutionLogs.Add(AgentExecutionLogStore.BuildIntegrationInvocation(audit, command.EndedAtUtc));
+        }
+
+        // ONE transaction around the status CAS, the terminal event, the audit row and both watermarks: the watermarks
+        // move through SQL rather than through a loaded value, so two writers racing on the same row cannot each apply
+        // their own stale MAX and lose the higher one.
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -216,6 +223,9 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
             throw;
         }
 
+        await MoveWatermarksAsync(command.ExecutionId, entity.SessionId, command.Sequence, command.EndedAtUtc, cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
         return true;
     }
 
@@ -230,7 +240,11 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
             throw new ArgumentException($"A '{command.EventType}' event's detail may not exceed {MaxEventDetailBytes} UTF-8 bytes.", nameof(command));
         }
 
-        var entity = await _dbContext.IntegrationExecutions.SingleOrDefaultAsync(row => row.Id == command.ExecutionId, cancellationToken).ConfigureAwait(false)
+        // AsNoTracking: nothing on the row is mutated here any more — both watermarks move through SQL below — and a
+        // tracked copy would only carry a stale LastSequence into the next call on this scoped context.
+        var entity = await _dbContext.IntegrationExecutions.AsNoTracking()
+                                     .SingleOrDefaultAsync(row => row.Id == command.ExecutionId, cancellationToken)
+                                     .ConfigureAwait(false)
                      ?? throw new InvalidOperationException($"Integration execution '{command.ExecutionId}' does not exist.");
 
         _ = _dbContext.IntegrationExecutionEvents.Add(new IntegrationExecutionEvent
@@ -243,8 +257,7 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
             OccurredAtUtc = command.OccurredAtUtc
         });
 
-        entity.LastSequence = Math.Max(entity.LastSequence, command.Sequence);
-        await MoveSessionWatermarkAsync(entity.SessionId, command.Sequence, command.OccurredAtUtc, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -252,11 +265,14 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         }
         catch (DbUpdateException)
         {
-            // A duplicate (ExecutionId, Sequence) is a caller bug and rethrows, but the failed event and both moved
-            // watermarks stay tracked; without this clear the next append on the same scoped context replays them.
+            // A duplicate execution-and-sequence pair is a caller bug and rethrows, but the failed event stays
+            // tracked; without this clear, the next append on the same scoped context replays it.
             _dbContext.ChangeTracker.Clear();
             throw;
         }
+
+        await MoveWatermarksAsync(command.ExecutionId, entity.SessionId, command.Sequence, command.OccurredAtUtc, cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IntegrationExecutionSnapshot?> FindActiveBySessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
@@ -307,10 +323,7 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         entity.OutputBytes += length;
         entity.OutputCount++;
 
-        // MAX, never a plain assignment: the coordinator's own appends and this one can commit out of order, and a
-        // slower writer must not move the watermark backwards.
-        entity.LastSequence = Math.Max(entity.LastSequence, append.Sequence);
-        await MoveSessionWatermarkAsync(entity.SessionId, append.Sequence, append.OccurredAtUtc, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -323,6 +336,9 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
             _dbContext.ChangeTracker.Clear();
             throw;
         }
+
+        await MoveWatermarksAsync(append.ExecutionId, entity.SessionId, append.Sequence, append.OccurredAtUtc, cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
         return true;
     }
@@ -357,16 +373,34 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         ];
     }
 
-    private async Task MoveSessionWatermarkAsync(Guid sessionId, long sequence, long atUtc, CancellationToken cancellationToken)
+    /// <summary>
+    ///     Both watermarks, in SQL, inside the caller's open transaction — never through a value loaded before the
+    ///     event was written. Two writers on one execution (the stream mapper's pump and <c>emit_output</c>) each read
+    ///     their own <c>LastSequence</c>, applied <c>Math.Max</c> in memory and saved through separate contexts, so the
+    ///     slower one overwrote the higher watermark with its own stale number. Recovery then seeded the replay ring
+    ///     below a sequence that already had a row.
+    ///     <para>
+    ///         The execution's watermark is a running MAXIMUM computed by the database. The session's stays a plain
+    ///         assignment: sequences restart at 1 per execution, so a maximum across a session's executions would
+    ///         freeze at the deepest old stream and never move again — it is the activity indicator the UI renders,
+    ///         not an ordering key, and last-writer-wins is the behaviour it wants.
+    ///     </para>
+    /// </summary>
+    private async Task MoveWatermarksAsync(Guid executionId, Guid sessionId, long sequence, long atUtc, CancellationToken cancellationToken)
     {
-        var session = await _dbContext.IntegrationSessions.SingleOrDefaultAsync(row => row.Id == sessionId, cancellationToken).ConfigureAwait(false);
-        if (session is null)
-        {
-            return;
-        }
+        // A CASE expression rather than Math.Max: it is the shape every provider translates, and the comparison has to
+        // happen in the database for the update to be atomic with respect to a concurrent writer.
+        _ = await _dbContext.IntegrationExecutions.Where(row => row.Id == executionId)
+                            .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.LastSequence,
+                                    row => row.LastSequence > sequence ? row.LastSequence : sequence),
+                                cancellationToken)
+                            .ConfigureAwait(false);
 
-        session.LastSequence = sequence;
-        session.LastActivityUtc = atUtc;
+        _ = await _dbContext.IntegrationSessions.Where(row => row.Id == sessionId)
+                            .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.LastSequence, sequence)
+                                                                  .SetProperty(row => row.LastActivityUtc, atUtc),
+                                cancellationToken)
+                            .ConfigureAwait(false);
     }
 
     /// <summary>

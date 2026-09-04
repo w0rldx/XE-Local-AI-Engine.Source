@@ -723,6 +723,103 @@ public sealed class IntegrationExecutionStoreTests
         AssertEx.Equal(expected: 0, await store.CountActiveBySessionAsync(Guid.NewGuid()).ConfigureAwait(false));
     }
 
+    [Test]
+    public async Task AppendEventAsync_WhenTwoContextsRaceOnOneExecution_KeepsTheHIGHESTWatermark()
+    {
+        // The lost update this closes: both writers loaded LastSequence, applied Math.Max in memory and saved through
+        // separate contexts, so whichever committed last wrote its own stale number. Recovery then seeded the replay
+        // ring below a sequence that already had a row, and every restart re-collided on the unique index.
+        using var fixture = new IntegrationTestFixture();
+        var seed = await SeedAsync(fixture).ConfigureAwait(false);
+        var accept = await AcceptOneAsync(fixture, seed).ConfigureAwait(false);
+
+        await using var slow = fixture.CreateContext();
+        await using var fast = fixture.CreateContext();
+        var slowStore = new IntegrationExecutionStore(slow);
+        var fastStore = new IntegrationExecutionStore(fast);
+
+        // The slow writer already holds the row in its change tracker at LastSequence 1 — exactly the state the append
+        // path used to read from, because EF's identity map returns the TRACKED instance rather than the fresh row.
+        var tracked = await slow.IntegrationExecutions.SingleAsync(row => row.Id == accept.ExecutionId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1L, tracked.LastSequence);
+
+        await fastStore.AppendEventAsync(Append(accept.ExecutionId, sequence: 4, "external.output")).ConfigureAwait(false);
+        await slowStore.AppendEventAsync(Append(accept.ExecutionId, sequence: 3, "tool.completed")).ConfigureAwait(false);
+
+        await using var reader = fixture.CreateContext();
+        var row = AssertEx.NotNull(await new IntegrationExecutionStore(reader).GetByIdAsync(accept.ExecutionId).ConfigureAwait(false));
+        AssertEx.Equal(expected: 4L, row.LastSequence, "The slower writer's stale 3 must never move the watermark back below the committed 4.");
+    }
+
+    [Test]
+    public async Task TryTerminalizeAsync_WritesTheAuditRowInTheSAMETransactionAsTheTerminal()
+    {
+        using var fixture = new IntegrationTestFixture();
+        var seed = await SeedAsync(fixture).ConfigureAwait(false);
+        var accept = await AcceptOneAsync(fixture, seed).ConfigureAwait(false);
+
+        await using var context = fixture.CreateContext();
+        var store = new IntegrationExecutionStore(context);
+        AssertEx.True(await store.TryTerminalizeAsync(Terminal(accept.ExecutionId, expectedVersion: 0, Accepted) with
+        {
+            Audit = Audit(seed)
+        }).ConfigureAwait(false));
+
+        AssertEx.Equal(expected: 1L, await fixture.RawScalarAsync("SELECT COUNT(*) FROM agent_execution_logs WHERE record_kind = 3;").ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task TryTerminalizeAsync_WhenTheTerminalEventCannotBeWritten_RollsBackTheAuditRowToo()
+    {
+        // The failure Codex named: the audit insert used to be a SEPARATE SaveChanges after the terminal committed, so
+        // a storage failure between the two lost the one-per-execution audit row forever — every later terminalization
+        // rejects an already-terminal row. Driven here from the other side: a terminal event that violates the unique
+        // sequence index must take the audit row down with it, and leave the row non-terminal for a retry.
+        using var fixture = new IntegrationTestFixture();
+        var seed = await SeedAsync(fixture).ConfigureAwait(false);
+        var accept = await AcceptOneAsync(fixture, seed).ConfigureAwait(false);
+
+        await using var context = fixture.CreateContext();
+        var store = new IntegrationExecutionStore(context);
+
+        // Sequence 1 is the accepted event's, already committed by the admission transaction.
+        _ = await AssertEx.ThrowsAsync<DbUpdateException>(() => store.TryTerminalizeAsync(Terminal(accept.ExecutionId, expectedVersion: 0, Accepted, sequence: 1) with
+                          {
+                              Audit = Audit(seed)
+                          }))
+                          .ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 0L, await fixture.RawScalarAsync("SELECT COUNT(*) FROM agent_execution_logs WHERE record_kind = 3;").ConfigureAwait(false),
+            "A rolled-back terminal must leave no audit row behind, or the row would claim an outcome the execution never reached.");
+
+        await using var reader = fixture.CreateContext();
+        var row = AssertEx.NotNull(await new IntegrationExecutionStore(reader).GetByIdAsync(accept.ExecutionId).ConfigureAwait(false));
+        AssertEx.Equal(IntegrationExecutionStatus.Accepted, row.Status, "Nothing about the failed terminal may survive it.");
+        AssertEx.Equal(expected: 1L, row.LastSequence);
+    }
+
+    private static IntegrationInvocationAuditInput Audit(SeedState seed) =>
+        new(Guid.NewGuid(),
+            Guid.NewGuid(),
+            "sensor-ingest",
+            seed.KeyPrefix,
+            seed.AgentDefinitionId,
+            "cancelled",
+            TraceId: null,
+            LatencyMs: 12);
+
+    private static IntegrationEventAppend Append(Guid executionId, long sequence, string eventType) =>
+        new(Guid.NewGuid(), executionId, sequence, eventType, """{"ok":true}""", OccurredAtUtc: 5_000);
+
+    /// <summary>One admitted execution through the real accept transaction, so its row and its sequence 1 are real.</summary>
+    private static async Task<IntegrationAcceptCommand> AcceptOneAsync(IntegrationTestFixture fixture, SeedState seed)
+    {
+        await using var context = fixture.CreateContext();
+        var accept = NewAccept(seed);
+        AssertEx.True(await new IntegrationExecutionStore(context).AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4).ConfigureAwait(false));
+        return accept;
+    }
+
     private static IntegrationTerminalizeCommand Terminal(Guid executionId,
         long expectedVersion,
         IReadOnlySet<IntegrationExecutionStatus> expectedStatuses,

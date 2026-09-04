@@ -81,7 +81,7 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         ConversationId = Guid.NewGuid();
         _ = _sessions.Seed(SessionId, _trigger.Id, ConversationId, _agentDefinitionId);
 
-        Definitions.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(BuildDefinition());
+        Definitions.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(_ => BuildDefinition());
         NodeSettings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
         LocalDefault.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(EffectiveLocalModel);
         Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
@@ -293,6 +293,13 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     public Action<IntegrationCoordinatorHarness, RuntimePackage>? DuringRun { get; set; }
 
     public IReadOnlyList<AllowedToolDto> OfferedTools { get; set; } = [];
+
+    /// <summary>
+    ///     The target definition's execution shape. Settable because ruling D2 limits an integration trigger to a
+    ///     SINGLE agent, and the coordinator has to refuse an orchestrator that was repointed after the trigger was
+    ///     saved.
+    /// </summary>
+    public AgentDefinitionKind DefinitionKind { get; set; } = AgentDefinitionKind.Single;
 
     public bool HideConversation { get; set; }
 
@@ -559,7 +566,7 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
             Instructions: "raw instructions (must NOT be used directly)",
             ModelProfile: null,
             ReasoningEffort: null,
-            AgentDefinitionKind.Single,
+            DefinitionKind,
             AllowedToolNames: [],
             new Dictionary<string, bool>(StringComparer.Ordinal),
             OrchestrationTopologyJson: null,

@@ -122,7 +122,15 @@ public sealed record IntegrationTerminalizeCommand(
     ///     The terminal EVENT's detail, when the caller built one. The same JSON it publishes on the stream event, so
     ///     the poll route and the stream hand a caller the same envelope. Null falls back to the failure columns.
     /// </summary>
-    string? EventDetailJson = null);
+    string? EventDetailJson = null,
+    /// <summary>
+    ///     The ONE kind-3 audit row this execution owes, written by whoever wins the terminal compare-and-swap and in
+    ///     the SAME transaction as the status and the terminal event. It used to be a separate <c>SaveChanges</c> after
+    ///     the terminal committed, so a database failure between the two lost a required audit row permanently: every
+    ///     later terminalization rejects an already-terminal row, so nothing could ever write it. A null means the
+    ///     caller audits nothing (the queue-full accept path, which never had an invocation to audit).
+    /// </summary>
+    IntegrationInvocationAuditInput? Audit = null);
 
 /// <summary>
 ///     Paged filter for the admin executions list. The paging fields are <see cref="Limit" /> and <see cref="Offset" />

@@ -21,7 +21,6 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 /// </summary>
 public sealed class IntegrationExecutionQueryService
 {
-    private readonly IAgentExecutionLogStore _auditLog;
     private readonly IIntegrationExecutionEventBuffer _buffer;
     private readonly IntegrationCancellationRegistry _cancellations;
     private readonly IIntegrationExecutionStore _executions;
@@ -33,7 +32,6 @@ public sealed class IntegrationExecutionQueryService
         IIntegrationTriggerStore triggers,
         IIntegrationExecutionEventBuffer buffer,
         IntegrationCancellationRegistry cancellations,
-        IAgentExecutionLogStore auditLog,
         TimeProvider timeProvider,
         ILogger<IntegrationExecutionQueryService> logger)
     {
@@ -41,7 +39,6 @@ public sealed class IntegrationExecutionQueryService
         _triggers = triggers ?? throw new ArgumentNullException(nameof(triggers));
         _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
         _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
-        _auditLog = auditLog ?? throw new ArgumentNullException(nameof(auditLog));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -160,6 +157,18 @@ public sealed class IntegrationExecutionQueryService
             return;
         }
 
+        // The audit row is built BEFORE the terminal command and carried inside it, so the store inserts it in the
+        // same transaction. Written only if the CAS below wins, because a lost CAS rolls that transaction back.
+        var trigger = await _triggers.GetByIdAsync(execution.TriggerId, cancellationToken).ConfigureAwait(false);
+        var audit = new IntegrationInvocationAuditInput(execution.InvocationId,
+            execution.RequestId,
+            trigger?.Name ?? execution.TriggerId.ToString("D"),
+            execution.KeyPrefix,
+            trigger?.TargetAgentDefinitionId ?? Guid.Empty,
+            NodeChatMessageStatusValues.Cancelled,
+            Activity.Current?.TraceId.ToString(),
+            Math.Max(val1: 0L, nowUnixMs - execution.ReceivedAtUtc));
+
         var sequence = _buffer.Reserve(execution.Id);
         var published = false;
         try
@@ -176,7 +185,9 @@ public sealed class IntegrationExecutionQueryService
                                                IntegrationStreamEventTypes.ExecutionCancelled,
                                                nowUnixMs,
                                                FailureCategory: null,
-                                               FailureSummary: null),
+                                               FailureSummary: null,
+                                               EventDetailJson: null,
+                                               audit),
                                            cancellationToken)
                                        .ConfigureAwait(false);
             if (!won)
@@ -192,8 +203,6 @@ public sealed class IntegrationExecutionQueryService
                 ContentType: null,
                 Payload: null));
             published = true;
-
-            await WriteAuditAsync(execution, nowUnixMs, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -203,29 +212,6 @@ public sealed class IntegrationExecutionQueryService
                 // the barrier until the entry is evicted.
                 _buffer.Abandon(execution.Id, sequence);
             }
-        }
-    }
-
-    private async Task WriteAuditAsync(IntegrationExecutionSnapshot execution, long endedAtUtc, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var trigger = await _triggers.GetByIdAsync(execution.TriggerId, cancellationToken).ConfigureAwait(false);
-            await _auditLog.AddIntegrationInvocationAsync(new IntegrationInvocationAuditInput(execution.InvocationId,
-                    execution.RequestId,
-                    trigger?.Name ?? execution.TriggerId.ToString("D"),
-                    execution.KeyPrefix,
-                    trigger?.TargetAgentDefinitionId ?? Guid.Empty,
-                    NodeChatMessageStatusValues.Cancelled,
-                    Activity.Current?.TraceId.ToString(),
-                    Math.Max(val1: 0L, endedAtUtc - execution.ReceivedAtUtc)),
-                cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception exception)
-        {
-            // The row is already terminal and the event is already published; losing the audit row is worth a log line,
-            // not a reversal of a committed terminal.
-            _logger.LogError(exception, "The kind-3 audit row for cancelled integration execution {ExecutionId} could not be written.", execution.Id);
         }
     }
 }

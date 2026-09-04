@@ -35,6 +35,7 @@ internal static class IntegrationTriggerResponses
 
             case IntegrationTriggerOutcome.AgentMissing:
             case IntegrationTriggerOutcome.SessionPolicyRejected:
+            case IntegrationTriggerOutcome.TargetKindRejected:
                 errors.AddError(result.Message ?? "The trigger could not be saved.");
                 return send.ErrorsAsync(cancellation: ct);
 

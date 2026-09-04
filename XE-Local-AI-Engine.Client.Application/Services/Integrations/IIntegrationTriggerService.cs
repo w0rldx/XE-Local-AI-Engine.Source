@@ -49,6 +49,9 @@ public enum IntegrationTriggerOutcome
     /// <summary>The target agent's tool offer is not read-only, so it cannot host caller-managed sessions. 400.</summary>
     SessionPolicyRejected,
 
+    /// <summary>The target agent is an orchestrator, and ruling D2 scopes V1 to a saved single agent. 400.</summary>
+    TargetKindRejected,
+
     /// <summary>No row with that id. 404.</summary>
     NotFound,
 

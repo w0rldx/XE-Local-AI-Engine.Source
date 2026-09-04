@@ -79,6 +79,42 @@ public sealed class IntegrationTriggerServiceTests
     }
 
     [Test]
+    public async Task CreateAsync_WhenTheTargetAgentIsAnOrchestrator_IsRejectedAndWritesNothing()
+    {
+        // Ruling D2 scopes V1 to a saved single agent. The coordinator builds no orchestration spec, so an orchestrator
+        // saved here would run as a lone agent and report Completed having run none of its participants — a plausible
+        // and materially wrong answer, which is worse than a refusal at save time.
+        var harness = new Harness();
+        var agentId = harness.SeedAgent(kind: AgentDefinitionKind.Orchestrator);
+
+        var result = await harness.Service.CreateAsync(Input("sensor-feed", agentId)).ConfigureAwait(false);
+
+        AssertEx.Equal(IntegrationTriggerOutcome.TargetKindRejected, result.Outcome);
+        AssertEx.Contains(result.Message, "Orchestrator");
+        AssertEx.Empty(harness.Triggers.Rows);
+    }
+
+    [Test]
+    public async Task UpdateAsync_WhenRepointedAtAnOrchestrator_IsRejectedAndLeavesTheRowAlone()
+    {
+        var harness = new Harness();
+        var single = harness.SeedAgent();
+        var orchestrator = harness.SeedAgent(kind: AgentDefinitionKind.Orchestrator);
+        var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", single)).ConfigureAwait(false)).Trigger);
+
+        var result = await harness.Service.UpdateAsync(created.Id, new IntegrationTriggerUpdateInput(created.Version,
+                                            "Sensor feed",
+                                            Description: null,
+                                            Enabled: true,
+                                            orchestrator,
+                                            IntegrationSessionPolicy.PerInvocation,
+                                            IntegrationInputKinds.Text)).ConfigureAwait(false);
+
+        AssertEx.Equal(IntegrationTriggerOutcome.TargetKindRejected, result.Outcome);
+        AssertEx.Equal(single, harness.Triggers.Rows.Single().TargetAgentDefinitionId, "A rejected update leaves the stored target untouched.");
+    }
+
+    [Test]
     public async Task CreateAsync_CallerManagedAgainstAReadLocalAgent_IsAccepted()
     {
         var harness = new Harness();
@@ -288,7 +324,10 @@ public sealed class IntegrationTriggerServiceTests
         public IIntegrationTriggerService Service { get; }
 
         /// <summary>Seeds an agent definition whose resolved offer carries exactly one tool of <paramref name="category" />.</summary>
-        public Guid SeedAgent(ToolCategory category = ToolCategory.ReadLocal, bool requiresApproval = false, string? modelProfile = null)
+        public Guid SeedAgent(ToolCategory category = ToolCategory.ReadLocal,
+            bool requiresApproval = false,
+            string? modelProfile = null,
+            AgentDefinitionKind kind = AgentDefinitionKind.Single)
         {
             var agentId = Guid.NewGuid();
             _ = Agents.GetByIdAsync(agentId, Arg.Any<CancellationToken>())
@@ -298,7 +337,7 @@ public sealed class IntegrationTriggerServiceTests
                           "Instructions",
                           modelProfile,
                           ReasoningEffort: null,
-                          AgentDefinitionKind.Single,
+                          kind,
                           [],
                           new Dictionary<string, bool>(StringComparer.Ordinal),
                           OrchestrationTopologyJson: null,

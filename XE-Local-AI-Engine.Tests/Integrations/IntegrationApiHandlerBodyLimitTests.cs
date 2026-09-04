@@ -264,7 +264,6 @@ public sealed class IntegrationApiHandlerBodyLimitTests
                     triggers,
                     Substitute.For<IIntegrationExecutionEventBuffer>(),
                     new IntegrationCancellationRegistry(),
-                    Substitute.For<IAgentExecutionLogStore>(),
                     TimeProvider.System,
                     NullLogger<IntegrationExecutionQueryService>.Instance),
                 new IntegrationSessionService(sessions,
