@@ -188,7 +188,9 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
             ExecutionId = command.ExecutionId,
             Sequence = command.Sequence,
             EventType = command.EventType,
-            DetailJson = FailureDetail(command.FailureCategory, command.FailureSummary),
+            // The caller's own payload when it built one; the failure columns are the fallback for a caller that did
+            // not, so a terminal written straight through this store still carries its reason.
+            DetailJson = command.EventDetailJson is { } detail ? Encoding.UTF8.GetBytes(detail) : FailureDetail(command.FailureCategory, command.FailureSummary),
             OccurredAtUtc = command.EndedAtUtc
         });
 

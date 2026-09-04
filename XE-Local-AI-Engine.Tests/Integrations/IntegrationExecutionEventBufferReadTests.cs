@@ -405,6 +405,38 @@ public sealed class IntegrationExecutionEventBufferReadTests
         AssertEx.Equal(executionId, gap.ExecutionId);
     }
 
+    /// <summary>
+    ///     Test 8a — host shutdown. A parked reader waits on its entry's source and nothing else, so disposal has to
+    ///     complete those sources: otherwise every open stream waits out its own request token instead of ending here.
+    /// </summary>
+    [Test]
+    public async Task Dispose_WakesAParkedReaderInsteadOfLeavingItOnASourceNoWriterCanReach()
+    {
+        // Disposed by hand mid-test, so it cannot also be a `using`: this buffer's Dispose cancels its own sweep token
+        // and is not written to survive a second call.
+        var buffer = CreateBuffer();
+        try
+        {
+            var executionId = Guid.NewGuid();
+            AssertEx.True(buffer.TryCreate(executionId));
+            _ = Append(buffer, executionId);
+
+            await using var reader = new Reader(buffer, executionId, sinceSequence: 0);
+            await reader.WaitForCountAsync(expected: 1);
+
+            buffer.Dispose();
+            buffer = null;
+
+            var gap = await AssertEx.ThrowsAsync<IntegrationEventGapException>(() => reader.Completion.WaitAsync(TimeSpan.FromSeconds(10)),
+                "A reader parked across disposal must find the entry gone and answer the gap, exactly as it does for Remove.");
+            AssertEx.Equal(executionId, gap.ExecutionId);
+        }
+        finally
+        {
+            buffer?.Dispose();
+        }
+    }
+
     /// <summary>Test 9.</summary>
     [Test]
     public async Task ReadAsync_WhileFourThreadsAppend_YieldsEveryMintedSequenceInOrder()

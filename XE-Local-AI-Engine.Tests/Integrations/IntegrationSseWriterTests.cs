@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.Integrations;
 
 using System.IO.Pipelines;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
@@ -221,7 +224,68 @@ public sealed class IntegrationSseWriterTests
         _ = await held[1].Streaming.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
+    /// <summary>
+    ///     Test 43 — a dead peer on the keepalive write, with a move still parked. Two failures at once: the write path
+    ///     caught only cancellation, and the enumerator was then disposed with that move in flight, which a
+    ///     compiler-generated async iterator answers with <c>NotSupportedException</c> thrown outside every catch.
+    /// </summary>
+    [Test]
+    public async Task WriteAsync_WhenTheBodyFailsWhileAMoveIsParked_SwallowsItAndDrainsTheReader()
+    {
+        var clock = new ManualTimeProvider();
+        // Released ONLY by the writer's own cancellation: the caller never aborts here, so if the drain were not bounded
+        // by the writer's own token this test would hang rather than fail.
+        var stub = new ParkingBuffer(releaseOnCancellation: true);
+        var logger = new RecordingLogger<IntegrationSseWriter>();
+        using var writer = CreateWriter(stub, clock, logger: logger);
+        using var body = new FaultingBody(static () => new IOException("The peer is gone."));
+        var context = BuildContext(body);
+
+        var streaming = writer.WriteAsync(context, Guid.NewGuid(), sinceSequence: 0, context.RequestAborted);
+        await AdvanceToKeepaliveAsync(clock, body);
+
+        AssertEx.Equal(IntegrationSseWriteOutcome.Streamed, await streaming.WaitAsync(TimeSpan.FromSeconds(10)),
+            "Kestrel surfaces a dead peer as IOException as often as it does an abort, and on a started 200 there is no status left to say it with.");
+        AssertEx.True(stub.Ended, "The outstanding move must be drained before the enumerator is disposed.");
+        AssertEx.True(logger.HasEntry(LogLevel.Debug, "ended early"), "A disconnect is logged at debug, never thrown.");
+    }
+
+    /// <summary>Test 44 — the ordinary client-disconnect path: an abort landing while a move is parked.</summary>
+    [Test]
+    public async Task WriteAsync_WhenTheCallerAbortsWhileAMoveIsParked_DisposesTheEnumeratorCleanly()
+    {
+        var clock = new ManualTimeProvider();
+        // This reader ignores cancellation, so the parked move is still in flight when the writer tears down — which is
+        // the state the disposal bug needs, and which an abort-from-outside would only race into.
+        var stub = new ParkingBuffer(releaseOnCancellation: false);
+        using var aborted = new CancellationTokenSource();
+        using var writer = CreateWriter(stub, clock);
+        using var body = new FaultingBody(() =>
+        {
+            aborted.Cancel();
+            return new OperationCanceledException(aborted.Token);
+        });
+        var context = BuildContext(body);
+
+        var streaming = writer.WriteAsync(context, Guid.NewGuid(), sinceSequence: 0, aborted.Token);
+        await AdvanceToKeepaliveAsync(clock, body);
+        await stub.Cancelled.WaitAsync(TimeSpan.FromSeconds(10));
+        stub.Release();
+
+        AssertEx.Equal(IntegrationSseWriteOutcome.Streamed, await streaming.WaitAsync(TimeSpan.FromSeconds(10)),
+            "An abort is a normal end of forwarding; the NotSupportedException from disposing a live enumerator is not, and it escapes onto a response that already sent 200.");
+        AssertEx.True(stub.Ended, "The reader must have ended before the enumerator was disposed.");
+    }
+
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+
+    /// <summary>Arms the keepalive timer, then fires it — which is what puts the failing write next to a parked move.</summary>
+    private static async Task AdvanceToKeepaliveAsync(ManualTimeProvider clock, FaultingBody body)
+    {
+        await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount > 0, TimeSpan.FromSeconds(10), "The writer never armed its keepalive timer.");
+        clock.Advance(TimeSpan.FromSeconds(16));
+        await body.Attempted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+    }
 
     private static async Task AdvanceAndSettleAsync(ManualTimeProvider clock, MemoryStream body, TimeSpan delta, int expectedKeepalives)
     {
@@ -255,16 +319,28 @@ public sealed class IntegrationSseWriterTests
             }),
             TimeProvider.System);
 
-    private static IntegrationSseWriter CreateWriter(IIntegrationExecutionEventBuffer buffer, TimeProvider? timeProvider = null, int maxTracked = 64) =>
+    private static IntegrationSseWriter CreateWriter(IIntegrationExecutionEventBuffer buffer,
+        TimeProvider? timeProvider = null,
+        int maxTracked = 64,
+        ILogger<IntegrationSseWriter>? logger = null) =>
         new(buffer,
             Options.Create(new IntegrationOptions
             {
                 MaxTrackedExecutions = maxTracked
             }),
-            timeProvider ?? TimeProvider.System);
+            timeProvider ?? TimeProvider.System,
+            logger ?? NullLogger<IntegrationSseWriter>.Instance);
 
     private static DefaultHttpContext BuildContext(out MemoryStream responseBody) =>
         BuildContext(out responseBody, out _);
+
+    private static DefaultHttpContext BuildContext(Stream responseBody)
+    {
+        var context = new DefaultHttpContext();
+        context.Features.Set<IHttpResponseBodyFeature>(new StubResponseBody(responseBody));
+        context.Response.Body = responseBody;
+        return context;
+    }
 
     private static DefaultHttpContext BuildContext(out MemoryStream responseBody, out StubResponseBody responseFeature)
     {
@@ -296,6 +372,88 @@ public sealed class IntegrationSseWriterTests
 
         public Task CompleteAsync() =>
             Task.CompletedTask;
+    }
+
+    /// <summary>A response body that fails the way a peer that is gone does, and records that it was written to.</summary>
+    private sealed class FaultingBody(Func<Exception> failure) : MemoryStream
+    {
+        public TaskCompletionSource Attempted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            _ = Attempted.TrySetResult();
+            return ValueTask.FromException(failure());
+        }
+    }
+
+    /// <summary>
+    ///     A reader that parks until a test lets it go. It is a real compiler-generated async iterator on purpose:
+    ///     disposing one of those with a <c>MoveNextAsync</c> in flight is what throws <c>NotSupportedException</c>, and
+    ///     a hand-written enumerator would not reproduce it.
+    /// </summary>
+    private sealed class ParkingBuffer(bool releaseOnCancellation) : IIntegrationExecutionEventBuffer
+    {
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>Completes when the reader's token is cancelled, i.e. when the writer has torn its stream down.</summary>
+        public Task Cancelled =>
+            _cancelled.Task;
+
+        /// <summary>Whether the parked move ran to an end, which it cannot have done if it was disposed under.</summary>
+        public bool Ended { get; private set; }
+
+        public void Release() =>
+            _release.TrySetResult();
+
+        public bool IsTracked(Guid executionId) =>
+            true;
+
+        public long Floor(Guid executionId) =>
+            1;
+
+        public long LastSequence(Guid executionId) =>
+            1;
+
+        public async IAsyncEnumerable<IntegrationStreamEvent> ReadAsync(Guid executionId,
+            long sinceSequence,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await using (cancellationToken.Register(() => _cancelled.TrySetResult()).ConfigureAwait(false))
+            {
+                try
+                {
+                    await (releaseOnCancellation ? _release.Task.WaitAsync(cancellationToken) : _release.Task).ConfigureAwait(false);
+                }
+                finally
+                {
+                    Ended = true;
+                }
+            }
+
+            yield break;
+        }
+
+        public bool TryCreate(Guid executionId, long initialSequence = 0) =>
+            throw new NotSupportedException();
+
+        public void Remove(Guid executionId) =>
+            throw new NotSupportedException();
+
+        public IntegrationStreamEvent Append(Guid executionId, Guid sessionId, string type, string? contentType, JsonElement? payload) =>
+            throw new NotSupportedException();
+
+        public long Reserve(Guid executionId) =>
+            throw new NotSupportedException();
+
+        public void Publish(IntegrationStreamEvent streamEvent) =>
+            throw new NotSupportedException();
+
+        public void Abandon(Guid executionId, long sequence) =>
+            throw new NotSupportedException();
+
+        public long LowestPendingReservation(Guid executionId) =>
+            throw new NotSupportedException();
     }
 
     /// <summary>

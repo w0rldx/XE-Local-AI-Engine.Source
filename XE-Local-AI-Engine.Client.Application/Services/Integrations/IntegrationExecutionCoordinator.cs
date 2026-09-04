@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Integrations;
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Models;
@@ -549,7 +550,9 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
             package.InvocationId,
             _options.MaxOutputBytes,
             TimeSpan.FromMilliseconds(services.GetRequiredService<IOptions<ChatStreamBudgetOptions>>().Value.EmitDebounceMs),
-            _timeProvider);
+            _timeProvider,
+            // The coordinator's own logger: the mapper rides this run's subscription and has no lifetime of its own.
+            _logger);
 
         dispatcher.InvocationStateChanged += OnInvocationStateChanged;
         dispatcher.InvocationStateChanged += mapper.OnInvocationStateChanged;
@@ -893,6 +896,11 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                 state.StartedAt == default ? null : state.StartedAt.ToUnixTimeMilliseconds(),
                 provider);
 
+            // Carried to the terminal event: `execution.completed` is `{tokens?, durationMs}`, and this is the one
+            // place both numbers exist.
+            context.RunDurationMs = durationMs;
+            context.TotalTokens = state.TotalTokens;
+
             _ = await services.GetRequiredService<INodeChatPersistenceService>()
                               .TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                                       terminalStatus,
@@ -1133,6 +1141,20 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         };
 
         var endedAtUtc = NowUnixMilliseconds();
+
+        // ONE payload for both writes below. A terminal frame with a null payload tells an integrator nothing about
+        // why the run ended, and the row would then carry a reason the stream never gave.
+        var payload = status switch
+        {
+            // The run's own duration when the invocation reported one; otherwise the wall time since the request was
+            // admitted, which includes the queue wait but is never absent.
+            IntegrationExecutionStatus.Completed => IntegrationTerminalPayload.Completion(context.TotalTokens,
+                context.RunDurationMs ?? Math.Max(val1: 0L, endedAtUtc - context.ReceivedAtUtc)),
+            // `execution.cancelled` carries no payload by contract: a cancel is an outcome, not a failure.
+            IntegrationExecutionStatus.Cancelled => (JsonElement?)null,
+            _ => IntegrationTerminalPayload.Failure(failureCategory, failureSummary)
+        };
+
         var sequence = _buffer.Reserve(context.ExecutionId);
         var published = false;
         try
@@ -1146,7 +1168,8 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                                              eventType,
                                              endedAtUtc,
                                              failureCategory,
-                                             failureSummary),
+                                             failureSummary,
+                                             payload?.GetRawText()),
                                          CancellationToken.None)
                                      .ConfigureAwait(false);
             if (!won)
@@ -1160,7 +1183,7 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                 context.SessionId,
                 endedAtUtc,
                 ContentType: null,
-                Payload: null));
+                payload));
             published = true;
             context.Version++;
 
@@ -1255,6 +1278,11 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         public string KeyPrefix { get; }
 
         public long ReceivedAtUtc { get; }
+
+        /// <summary>The run's own duration and token total, read off the terminal invocation state for the terminal event.</summary>
+        public long? RunDurationMs { get; set; }
+
+        public int? TotalTokens { get; set; }
 
         public string TriggerName { get; private set; }
 

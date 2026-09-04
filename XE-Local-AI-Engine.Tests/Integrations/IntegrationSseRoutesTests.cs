@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Integrations;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using TUnit.Core.Interfaces;
@@ -111,9 +112,9 @@ public sealed class IntegrationSseRoutesTests
 
         AssertEx.Equal(HttpStatusCode.Gone, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
-        AssertEx.Contains(body, $"/api/local/v1/integration-api/executions/{executionId:D}/events");
-        AssertEx.Contains(body, $"/api/local/v1/integration-api/executions/{executionId:D}",
-            message: "A 410 that does not name the recovery route is a dead end for the caller.");
+        AssertEx.Contains(body, $"the committed events from /api/local/v1/integration-api/executions/{executionId:D}/events");
+        AssertEx.Contains(body, $"the status from /api/local/v1/integration-api/executions/{executionId:D}.",
+            message: "A 410 that does not name BOTH fallbacks is a dead end for the caller; the status path is a prefix of the events path, so it has to be asserted with what follows it.");
         AssertEx.False(body.Contains("event:", StringComparison.Ordinal), "The refusal must not be a partially written stream.");
     }
 
@@ -304,6 +305,76 @@ public sealed class IntegrationSseRoutesTests
             "A curl or a webhook sender has no Origin; refusing that would make the whole external family unreachable. TestServer proves little here — the live curl round is the real evidence.");
     }
 
+    /// <summary>
+    ///     Test 45 — a duplicate whose ring entry is gone still gets the duplicate's own 202. The accept transaction has
+    ///     already committed by the time the writer answers, so a 410 here would tell the caller the request was not
+    ///     admitted when it was.
+    /// </summary>
+    [Test]
+    public async Task Invoke_WhenTheStreamCannotBeServed_FallsBackToTheAcceptBodyRatherThanA410()
+    {
+        using var client = Factory.CreateClient();
+        var seeded = await SeedAsync(client, "invoke-duplicate-gone");
+        var requestId = Guid.NewGuid();
+        var body = InvokeBody(requestId);
+        var executionId = await SeedExecutionAsync(seeded.TriggerId,
+            seeded.PrincipalId,
+            seeded.KeyPrefix,
+            tracked: false,
+            requestId: requestId,
+            fingerprint: IntegrationRequestFingerprint.Compute(seeded.PrincipalId, seeded.TriggerName, sessionId: null, Encoding.UTF8.GetBytes(body)));
+
+        AssertEx.False(Factory.Services.GetRequiredService<IIntegrationExecutionEventBuffer>().IsTracked(executionId),
+            "The ring must not hold this execution, or the writer would stream instead of refusing.");
+        using var response = await SendInvokeAsync(client, seeded.BroadKey, seeded.TriggerName, body, EventStream);
+
+        AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode,
+            "410 means 'that position is gone', which is not an answer to 'was my request accepted' — the accept body names the execution and the events route instead.");
+        AssertEx.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        var accepted = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<StatusLinksBody>(IntegrationEndpointPayloads.Json));
+        AssertEx.Equal(executionId, accepted.ExecutionId, "The body must name the execution the duplicate resolved to.");
+        AssertEx.Equal(IntegrationApiRoutes.Events(executionId), accepted.Links.Events);
+    }
+
+    /// <summary>
+    ///     Test 46 — <c>Accept</c> is parsed, not substring-matched: a <c>q=0</c> is a refusal and <c>*/*</c> is not a
+    ///     request for a stream.
+    /// </summary>
+    [Test]
+    [Arguments("text/event-stream", true, 1)]
+    [Arguments("application/json, text/event-stream;q=0.9", true, 2)]
+    [Arguments("text/html, text/event-stream;q=0", false, 3)]
+    [Arguments("*/*", false, 4)]
+    [Arguments("application/json", false, 5)]
+    public async Task Events_ChoosesTheStreamOnlyForAnAcceptThatAsksForIt(string accept, bool expectStream, int index)
+    {
+        using var client = Factory.CreateClient();
+        var seeded = await SeedAsync(client, $"events-accept-{index}");
+        var executionId = await SeedExecutionAsync(seeded.TriggerId, seeded.PrincipalId, seeded.KeyPrefix, tracked: true);
+        AppendPhases(executionId, count: 1, terminal: true);
+
+        using var response = await SendAsync(client, HttpMethod.Get, IntegrationApiRoutes.Events(executionId), seeded.BroadKey, accept);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(expectStream ? EventStream : "application/json",
+            response.Content.Headers.ContentType?.MediaType,
+            $"Accept '{accept}' must select the {(expectStream ? "stream" : "persisted rows")}.");
+    }
+
+    /// <summary>The exact bytes the fingerprint is taken over: the body is hashed RAW, so a retry must resend them.</summary>
+    private static string InvokeBody(Guid requestId) =>
+        $$"""{"requestId":"{{requestId:D}}","inputs":[{"type":"text","text":"Name three primes."}]}""";
+
+    private static async Task<HttpResponseMessage> SendInvokeAsync(HttpClient client, string key, string triggerName, string body, string accept)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, IntegrationApiRoutes.Invoke(triggerName));
+        request.Headers.Add("Authorization", $"Bearer {key}");
+        request.Headers.Add("Accept", accept);
+        using var content = new StringContent(body, Encoding.UTF8, "application/json");
+        request.Content = content;
+        return await client.SendAsync(request);
+    }
+
     private void AppendPhases(Guid executionId, int count, bool terminal)
     {
         var buffer = Factory.Services.GetRequiredService<IIntegrationExecutionEventBuffer>();
@@ -350,7 +421,13 @@ public sealed class IntegrationSseRoutesTests
     ///     Writes an admitted row through the real store rather than the invoke route, so the suite asserts on a stable
     ///     execution instead of racing a background run that has no model to reach.
     /// </summary>
-    private async Task<Guid> SeedExecutionAsync(Guid triggerId, Guid principalId, string keyPrefix, bool tracked, bool active = false)
+    private async Task<Guid> SeedExecutionAsync(Guid triggerId,
+        Guid principalId,
+        string keyPrefix,
+        bool tracked,
+        bool active = false,
+        Guid? requestId = null,
+        byte[]? fingerprint = null)
     {
         using var scope = Factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>();
@@ -362,8 +439,8 @@ public sealed class IntegrationSseRoutesTests
                 triggerId,
                 sessionId,
                 principalId,
-                Guid.NewGuid(),
-                new byte[] { 1, 2, 3 },
+                requestId ?? Guid.NewGuid(),
+                fingerprint ?? [1, 2, 3],
                 keyPrefix,
                 now,
                 new IntegrationEventAppend(Guid.NewGuid(), executionId, Sequence: 1, IntegrationStreamEventTypes.ExecutionAccepted, DetailJson: null, now)),
@@ -527,17 +604,100 @@ public sealed class IntegrationSseStreamCapTests
         var trigger = await IntegrationEndpointPayloads.CreateTriggerAsync(factory, client, "stream-cap", agentId);
         var key = await IntegrationEndpointPayloads.GenerateKeyAsync(factory, client, "stream-cap-key");
         var executionId = await SeedTrackedExecutionAsync(factory, trigger.Id, key.View.PrincipalId, key.View.KeyPrefix);
+        try
+        {
+            // Held open on purpose: the writer's slot is released in its finally, which only runs when the stream ends.
+            using var held = await HoldTheOnlySlotAsync(client, key.Key, executionId);
 
-        // Held open on purpose: the writer's slot is released in its finally, which only runs when the stream ends.
-        using var held = await SendAsync(client, key.Key, executionId, HttpCompletionOption.ResponseHeadersRead);
-        AssertEx.Equal(HttpStatusCode.OK, held.StatusCode);
+            using var refused = await SendAsync(client, key.Key, executionId, HttpCompletionOption.ResponseContentRead);
 
-        using var refused = await SendAsync(client, key.Key, executionId, HttpCompletionOption.ResponseContentRead);
+            AssertEx.Equal(HttpStatusCode.ServiceUnavailable, refused.StatusCode,
+                "A caller that cannot be served now is told so, rather than parked holding a connection.");
+            AssertEx.Equal("5", refused.Headers.RetryAfter?.ToString());
+            AssertEx.Equal("application/json", refused.Content.Headers.ContentType?.MediaType, "The refusal is a status, never a partially written stream.");
+        }
+        finally
+        {
+            // This host tracks ONE execution and nothing terminal ever lands on this one, so the entry is not evictable:
+            // leaving it behind would deny the next test in the class its own ring entry.
+            ReleaseEntry(factory, executionId);
+        }
+    }
 
-        AssertEx.Equal(HttpStatusCode.ServiceUnavailable, refused.StatusCode,
-            "A caller that cannot be served now is told so, rather than parked holding a connection.");
-        AssertEx.Equal("5", refused.Headers.RetryAfter?.ToString());
-        AssertEx.Equal("application/json", refused.Content.Headers.ContentType?.MediaType, "The refusal is a status, never a partially written stream.");
+    /// <summary>
+    ///     Test 47 — the same refusal on the INVOKE route is not the invoke's answer. The execution was admitted and is
+    ///     holding the node's lease, so a 503 there would say the opposite of what happened; the accept body, which
+    ///     names the execution and the events route, is what the caller gets instead.
+    /// </summary>
+    [Test]
+    public async Task Invoke_WhenEveryStreamSlotIsHeld_AnswersTheAcceptBodyRatherThan503()
+    {
+        var factory = Host.Factory;
+        using var client = factory.CreateClient();
+        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(factory, "invoke-busy-agent");
+        var trigger = await IntegrationEndpointPayloads.CreateTriggerAsync(factory, client, "invoke-busy", agentId);
+        var key = await IntegrationEndpointPayloads.GenerateKeyAsync(factory, client, "invoke-busy-key");
+        var requestId = Guid.NewGuid();
+        var body = $$"""{"requestId":"{{requestId:D}}","inputs":[{"type":"text","text":"Name three primes."}]}""";
+
+        // A DUPLICATE of a row seeded here, so the invoke reaches the stream branch without minting a second ring entry
+        // this one-entry host has no room for. The dedup pair is (principal, request id) and the body is hashed raw.
+        var executionId = await SeedTrackedExecutionAsync(factory,
+            trigger.Id,
+            key.View.PrincipalId,
+            key.View.KeyPrefix,
+            requestId,
+            IntegrationRequestFingerprint.Compute(key.View.PrincipalId, trigger.Name, sessionId: null, Encoding.UTF8.GetBytes(body)));
+        try
+        {
+            using var held = await HoldTheOnlySlotAsync(client, key.Key, executionId);
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, IntegrationApiRoutes.Invoke(trigger.Name));
+            request.Headers.Add("Authorization", $"Bearer {key.Key}");
+            request.Headers.Add("Accept", "text/event-stream");
+            using var content = new StringContent(body, Encoding.UTF8, "application/json");
+            request.Content = content;
+            using var response = await client.SendAsync(request);
+
+            AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode,
+                "A 503 on invoke means 'not admitted', which is the opposite of what happened: only the GET route maps a busy writer to a status.");
+            AssertEx.Null(response.Headers.RetryAfter, "Retry-After belongs to a refusal, and this request was not refused.");
+            AssertEx.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+            AssertEx.Contains(await response.Content.ReadAsStringAsync(), executionId.ToString("D"), message: "The accept body must name the execution the caller can attach to.");
+        }
+        finally
+        {
+            ReleaseEntry(factory, executionId);
+        }
+    }
+
+    /// <summary>Drops the ring entry and, with it, the stream held on it — this host has room for exactly one.</summary>
+    private static void ReleaseEntry(TestServerWebAppFactory factory, Guid executionId) =>
+        factory.Services.GetRequiredService<IIntegrationExecutionEventBuffer>().Remove(executionId);
+
+    /// <summary>
+    ///     Takes the host's single stream slot. Retried rather than asserted once: the slot is released server-side when
+    ///     the previous test's held response finishes tearing down, which does not happen on the test's thread.
+    /// </summary>
+    private static async Task<HttpResponseMessage> HoldTheOnlySlotAsync(HttpClient client, string key, Guid executionId)
+    {
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(10);
+        while (true)
+        {
+            var held = await SendAsync(client, key, executionId, HttpCompletionOption.ResponseHeadersRead);
+            if (held.StatusCode == HttpStatusCode.OK)
+            {
+                return held;
+            }
+
+            held.Dispose();
+            if (DateTimeOffset.UtcNow > deadline)
+            {
+                throw new AssertionException("The single stream slot never came free.");
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(25));
+        }
     }
 
     private static async Task<HttpResponseMessage> SendAsync(HttpClient client, string key, Guid executionId, HttpCompletionOption completion)
@@ -548,7 +708,12 @@ public sealed class IntegrationSseStreamCapTests
         return await client.SendAsync(request, completion);
     }
 
-    private static async Task<Guid> SeedTrackedExecutionAsync(TestServerWebAppFactory factory, Guid triggerId, Guid principalId, string keyPrefix)
+    private static async Task<Guid> SeedTrackedExecutionAsync(TestServerWebAppFactory factory,
+        Guid triggerId,
+        Guid principalId,
+        string keyPrefix,
+        Guid? requestId = null,
+        byte[]? fingerprint = null)
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>();
@@ -560,8 +725,8 @@ public sealed class IntegrationSseStreamCapTests
                 triggerId,
                 sessionId,
                 principalId,
-                Guid.NewGuid(),
-                new byte[] { 1, 2, 3 },
+                requestId ?? Guid.NewGuid(),
+                fingerprint ?? [1, 2, 3],
                 keyPrefix,
                 now,
                 new IntegrationEventAppend(Guid.NewGuid(), executionId, Sequence: 1, IntegrationStreamEventTypes.ExecutionAccepted, DetailJson: null, now)),

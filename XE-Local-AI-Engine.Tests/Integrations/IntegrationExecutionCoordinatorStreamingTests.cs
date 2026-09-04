@@ -145,7 +145,7 @@ public sealed class IntegrationExecutionCoordinatorStreamingTests
 
         // An SSE consumer attaches and goes away, which is what a caller that switches to polling actually does.
         using var options = new IntegrationSseWriterOptions();
-        using var writer = new IntegrationSseWriter(harness.Buffer, options, TimeProvider.System);
+        using var writer = new IntegrationSseWriter(harness.Buffer, options, TimeProvider.System, NullLogger<IntegrationSseWriter>.Instance);
         var context = new DefaultHttpContext
         {
             Response =
@@ -168,6 +168,64 @@ public sealed class IntegrationExecutionCoordinatorStreamingTests
         runner.DidNotReceive().CancelDetached(Arg.Any<Guid>());
         runner.DidNotReceive().CancelDetached(invocationId);
         reaper.Dispose();
+    }
+
+    /// <summary>
+    ///     Live F1 — a failed run's terminal frame carries <c>{category, summary}</c>, and the persisted row carries the
+    ///     same bytes. A null payload told an integrator nothing about why the run ended, and the reason lived only in a
+    ///     column no external route returns.
+    /// </summary>
+    [Test]
+    public async Task Run_WhenTheRunFails_PublishesTheReasonAndPersistsTheSameDetail()
+    {
+        using var harness = new Harness();
+        harness.TerminalStatus = InvocationStatus.Failed;
+        harness.TerminalFailureCategory = FailureCategory.ProviderUnreachable;
+        harness.TerminalError = "the provider could not be reached";
+        var executionId = harness.SeedLive();
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        var terminal = (await ReadAsync(harness, executionId))[^1];
+        AssertEx.Equal(IntegrationStreamEventTypes.ExecutionFailed, terminal.Type);
+        var payload = terminal.Payload ?? throw new AssertionException("The terminal frame carries no payload, so the caller learns nothing about the failure.");
+        AssertEx.Equal(IntegrationFailureCategories.InternalFailure, payload.GetProperty("category").GetString(), "Only the closed categories reach the wire.");
+        AssertEx.NotEmpty(payload.GetProperty("summary").GetString(), "A category with no summary is half an answer.");
+        AssertEx.Equal(payload.GetRawText(),
+            harness.Executions.Events.Last(row => row.ExecutionId == executionId).DetailJson,
+            "The poll route reads this row, so it must hand back exactly the envelope the stream gave.");
+    }
+
+    /// <summary>Live F1 — a completed run's terminal frame carries <c>{tokens?, durationMs}</c>.</summary>
+    [Test]
+    public async Task Run_WhenTheRunCompletes_PublishesTheDurationAndTheTokenTotal()
+    {
+        using var harness = new Harness();
+        harness.TerminalTotalTokens = 1_234;
+        var executionId = harness.SeedLive();
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        var terminal = (await ReadAsync(harness, executionId))[^1];
+        AssertEx.Equal(IntegrationStreamEventTypes.ExecutionCompleted, terminal.Type);
+        var payload = terminal.Payload ?? throw new AssertionException("The terminal frame carries no payload, so a caller cannot tell a fast run from a slow one.");
+        AssertEx.Equal(expected: 12L, payload.GetProperty("durationMs").GetInt64(), "The RUN's own duration, not the wall time since the request was admitted.");
+        AssertEx.Equal(expected: 1_234, payload.GetProperty("tokens").GetInt32());
+        AssertEx.Equal(payload.GetRawText(), harness.Executions.Events.Last(row => row.ExecutionId == executionId).DetailJson);
+    }
+
+    /// <summary>Live F1 — `tokens?` is optional: a provider that reported none omits the field rather than sending null.</summary>
+    [Test]
+    public async Task Run_WhenNoTokenTotalWasReported_OmitsTheTokensField()
+    {
+        using var harness = new Harness();
+        var executionId = harness.SeedLive();
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        var payload = (await ReadAsync(harness, executionId))[^1].Payload ?? throw new AssertionException("The terminal frame carries no payload.");
+        AssertEx.False(payload.TryGetProperty("tokens", out _), "A null tokens field would make every caller special-case it.");
+        AssertEx.True(payload.TryGetProperty("durationMs", out _), "durationMs is not optional.");
     }
 
     private static void RaiseContent(Harness harness, Guid invocationId, string content, InvocationStatus status) =>

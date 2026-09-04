@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.Net.Http.Headers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Integrations.V1;
 using XE_Local_AI_Engine.Client.Endpoints.Integrations.V1.Mappers;
@@ -26,6 +27,8 @@ using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 /// </summary>
 internal sealed class IntegrationApiHandler
 {
+    private const string EventStreamMediaType = "text/event-stream";
+
     private const string MaskedExecutionMessage = "No such execution.";
 
     /// <summary>The session family's single masked answer. Unknown, foreign and allowlist-excluded are all this one.</summary>
@@ -201,11 +204,16 @@ internal sealed class IntegrationApiHandler
         // The stream is offered only for an admitted execution. Every rejection above answered with a real status on a
         // response that has not started, which is the property that lets a 503 or a 409 still be JSON even when the
         // caller asked for a stream.
+        // A refusal here is NOT the accept's answer. The accept transaction has already committed, so answering 503
+        // ("not admitted") or 410 would contradict an execution that is running and holding the node's lease: fall
+        // through to the ordinary accept body, which names the execution and the events route to attach to instead.
+        // Only the GET route, where a refusal really is the whole answer, maps an outcome to a status.
         if (result.Outcome is IntegrationAcceptOutcome.Accepted or IntegrationAcceptOutcome.Duplicate
             && WantsEventStream(context)
-            && result.ExecutionId is { } admitted)
+            && result.ExecutionId is { } admitted
+            && await _writer.WriteAsync(context, admitted, sinceSequence: 0, context.RequestAborted).ConfigureAwait(false)
+            == IntegrationSseWriteOutcome.Streamed)
         {
-            await WriteStreamAsync(context, admitted, sinceSequence: 0).ConfigureAwait(false);
             return;
         }
 
@@ -266,8 +274,9 @@ internal sealed class IntegrationApiHandler
         int.TryParse(context.Request.Query["limit"], NumberStyles.Integer, CultureInfo.InvariantCulture, out var limit) ? limit : null;
 
     /// <summary>
-    ///     Hands the response to the writer and maps its answer. The writer refuses before any byte is written, which is
-    ///     what keeps 410 and 503 real statuses rather than a reset connection.
+    ///     Hands the response to the writer and maps its answer. GET only: on the invoke route the execution is already
+    ///     admitted, so a refusal falls through to the accept body instead. The writer refuses before any byte is
+    ///     written, which is what keeps 410 and 503 real statuses rather than a reset connection.
     /// </summary>
     private async Task WriteStreamAsync(HttpContext context, Guid executionId, long sinceSequence)
     {
@@ -301,8 +310,14 @@ internal sealed class IntegrationApiHandler
             ? sequence
             : 0;
 
+    /// <summary>
+    ///     Whether the caller asked for the stream, PARSED rather than substring-matched: <c>text/event-stream;q=0</c>
+    ///     is a refusal, not a request, and <c>*/*</c> — curl's default — asks for the node's own default, which on
+    ///     this family is JSON.
+    /// </summary>
     private static bool WantsEventStream(HttpContext context) =>
-        context.Request.Headers.Accept.Any(static value => value?.Contains("text/event-stream", StringComparison.OrdinalIgnoreCase) == true);
+        MediaTypeHeaderValue.TryParseList(context.Request.Headers.Accept, out var accepted)
+        && accepted.Any(static media => media.MediaType.Equals(EventStreamMediaType, StringComparison.OrdinalIgnoreCase) && media.Quality != 0);
 
     public async Task GetExecutionAsync(HttpContext context)
     {

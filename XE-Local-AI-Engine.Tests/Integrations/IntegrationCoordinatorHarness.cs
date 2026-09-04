@@ -141,7 +141,8 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
                       ModelUsed = EffectiveLocalModel,
                       StartedAt = DateTimeOffset.UnixEpoch,
                       CompletedAt = DateTimeOffset.UnixEpoch,
-                      GenerationDurationMs = 12
+                      GenerationDurationMs = 12,
+                      TotalTokens = TerminalTotalTokens
                   }));
                   SignalCancel();
               });
@@ -324,6 +325,9 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     public string? TerminalError { get; set; }
 
     public FailureCategory? TerminalFailureCategory { get; set; }
+
+    /// <summary>The token total the provider reported, or null for one that reported none.</summary>
+    public int? TerminalTotalTokens { get; set; }
 
     public RuntimePackage? CapturedPackage { get; private set; }
 

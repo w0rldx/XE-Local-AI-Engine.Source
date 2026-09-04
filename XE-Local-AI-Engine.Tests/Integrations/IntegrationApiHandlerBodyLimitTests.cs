@@ -247,7 +247,10 @@ public sealed class IntegrationApiHandlerBodyLimitTests
         public Fixture(int permitLimit = 100)
         {
             _rateLimiter = new IntegrationPrincipalRateLimiter(permitLimit);
-            _writer = new IntegrationSseWriter(Substitute.For<IIntegrationExecutionEventBuffer>(), Options.Create(new IntegrationOptions()), TimeProvider.System);
+            _writer = new IntegrationSseWriter(Substitute.For<IIntegrationExecutionEventBuffer>(),
+                Options.Create(new IntegrationOptions()),
+                TimeProvider.System,
+                NullLogger<IntegrationSseWriter>.Instance);
             Invocations.AcceptAsync(Arg.Any<IntegrationAcceptRequest>(), Arg.Any<CancellationToken>())
                        .Returns(new IntegrationAcceptResult(IntegrationAcceptOutcome.TriggerNotFound, ExecutionId: null, SessionId: null, Status: null, "No such trigger."));
 

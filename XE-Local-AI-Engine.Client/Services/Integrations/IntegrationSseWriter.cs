@@ -44,6 +44,8 @@ internal sealed class IntegrationSseWriter : IDisposable
 
     private readonly IIntegrationExecutionEventBuffer _buffer;
 
+    private readonly ILogger<IntegrationSseWriter> _logger;
+
     /// <summary>
     ///     Concurrent open streams, bounded by the SAME option that bounds tracked executions. Many readers can attach
     ///     to one execution, so the buffer's cap bounds executions and the fixed-window limiter bounds attach RATE;
@@ -53,11 +55,15 @@ internal sealed class IntegrationSseWriter : IDisposable
 
     private readonly TimeProvider _timeProvider;
 
-    public IntegrationSseWriter(IIntegrationExecutionEventBuffer buffer, IOptions<IntegrationOptions> options, TimeProvider timeProvider)
+    public IntegrationSseWriter(IIntegrationExecutionEventBuffer buffer,
+        IOptions<IntegrationOptions> options,
+        TimeProvider timeProvider,
+        ILogger<IntegrationSseWriter> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         var maxStreams = options.Value.MaxTrackedExecutions;
         _openStreams = new SemaphoreSlim(maxStreams, maxStreams);
@@ -139,7 +145,12 @@ internal sealed class IntegrationSseWriter : IDisposable
         // frame — which on a cold model load can be minutes away.
         await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
 
-        await using var source = _buffer.ReadAsync(executionId, sinceSequence, cancellationToken).GetAsyncEnumerator(cancellationToken);
+        // The reader gets OUR token, linked to the caller's. A write failure that is not an abort — a dead peer
+        // surfacing as IOException — leaves the caller's token uncancelled, and the outstanding move would then park
+        // forever; cancelling this one is what bounds the drain in the finally.
+        using var readCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var readToken = readCancellation.Token;
+        var source = _buffer.ReadAsync(executionId, sinceSequence, readToken).GetAsyncEnumerator(readToken);
         Task<bool>? pending = null;
         try
         {
@@ -150,7 +161,7 @@ internal sealed class IntegrationSseWriter : IDisposable
                 // to return.
                 pending ??= source.MoveNextAsync().AsTask();
 
-                using var keepaliveCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                using var keepaliveCancellation = CancellationTokenSource.CreateLinkedTokenSource(readToken);
                 var keepalive = Task.Delay(TimeSpan.FromSeconds(KeepaliveSeconds), _timeProvider, keepaliveCancellation.Token);
                 if (await Task.WhenAny(pending, keepalive).ConfigureAwait(false) != pending)
                 {
@@ -177,9 +188,34 @@ internal sealed class IntegrationSseWriter : IDisposable
             // frame: none of the eleven locked event types means "you were cut". The caller re-attaches with
             // Last-Event-ID and THAT attach answers 410 with the recovery route.
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException
+                                          || (exception is OperationCanceledException && cancellationToken.IsCancellationRequested))
         {
-            // The caller went away. Forwarding stops; the run does not.
+            // The caller went away: an abort, a dead peer Kestrel surfaces as IOException or a connection torn down
+            // under the write. Forwarding stops; the run does not. The proxy forwarder swallows the same family for
+            // the same reason, and on a response that already sent 200 there is no status left to say it with.
+            _logger.LogDebug(exception, "The integration event stream for execution {ExecutionId} ended early.", executionId);
+        }
+        finally
+        {
+            // NEVER dispose the enumerator with a move in flight: a compiler-generated async iterator answers that with
+            // NotSupportedException, thrown outside every catch above and onto a response that already sent its 200.
+            // Cancelling our own token ends the reader's wait, so the drain is bounded by us and not by the peer.
+            if (pending is { IsCompleted: false })
+            {
+                await readCancellation.CancelAsync().ConfigureAwait(false);
+                try
+                {
+                    _ = await pending.ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    // Whatever the abandoned move ended as, nothing can act on it: the response is over.
+                    _logger.LogDebug(exception, "The integration event reader for execution {ExecutionId} ended while being drained.", executionId);
+                }
+            }
+
+            await source.DisposeAsync().ConfigureAwait(false);
         }
     }
 }

@@ -334,6 +334,22 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
         }
 
         _sweepCancellation.Dispose();
+
+        // Host shutdown. A parked reader waits on its entry's source and nothing else, so dropping the entries without
+        // completing those sources would leave every reader waiting on one no writer can reach — waiting out its own
+        // request token instead of ending here. Wake first, then clear: the reader finds the entry gone and answers the
+        // gap, exactly as it does for Remove.
+        lock (_gate)
+        {
+            foreach (var entry in _entries.Values)
+            {
+                entry.Queued = false;
+                Wake(entry);
+            }
+
+            _entries.Clear();
+            _terminal.Clear();
+        }
     }
 
     /// <summary>

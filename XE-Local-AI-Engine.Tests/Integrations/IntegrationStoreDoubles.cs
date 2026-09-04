@@ -637,7 +637,9 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
                 LastSequence = Math.Max(_rows[index].LastSequence, command.Sequence),
                 Version = _rows[index].Version + 1
             };
-            AddEvent(new IntegrationEventAppend(Guid.NewGuid(), command.ExecutionId, command.Sequence, command.EventType, DetailJson: null, command.EndedAtUtc));
+            // The real store writes the caller's payload onto the terminal row; a double that dropped it would hide a
+            // stream and a poll answering differently.
+            AddEvent(new IntegrationEventAppend(Guid.NewGuid(), command.ExecutionId, command.Sequence, command.EventType, command.EventDetailJson, command.EndedAtUtc));
             return Task.FromResult(true);
         }
     }

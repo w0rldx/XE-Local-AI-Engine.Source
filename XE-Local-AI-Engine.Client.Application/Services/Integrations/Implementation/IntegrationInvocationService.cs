@@ -14,6 +14,9 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
 {
     private const string TriggerNotFoundMessage = "No such trigger.";
 
+    /// <summary>One literal, because the row's column and the terminal frame's payload must say the same thing.</summary>
+    private const string QueueFullSummary = "The execution queue refused the admitted request.";
+
     /// <summary>SQLite's <c>SQLITE_CONSTRAINT</c>. The unique index is the only constraint this path can violate.</summary>
     private const int SqliteConstraintErrorCode = 19;
 
@@ -300,6 +303,8 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         var sequence = _buffer.Reserve(executionId);
         var endedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var resolved = false;
+        // The same payload on the row and on the frame, exactly as the coordinator's terminal does it.
+        var payload = IntegrationTerminalPayload.Failure(IntegrationFailureCategories.QueueFull, QueueFullSummary);
 
         try
         {
@@ -314,7 +319,8 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
                                                     IntegrationStreamEventTypes.ExecutionFailed,
                                                     endedAtUtc,
                                                     IntegrationFailureCategories.QueueFull,
-                                                    FailureSummary: "The execution queue refused the admitted request."),
+                                                    QueueFullSummary,
+                                                    payload.GetRawText()),
                                                 CancellationToken.None)
                                                 .ConfigureAwait(false);
 
@@ -326,7 +332,7 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
                     sessionId,
                     endedAtUtc,
                     ContentType: null,
-                    Payload: null));
+                    payload));
                 resolved = true;
             }
         }

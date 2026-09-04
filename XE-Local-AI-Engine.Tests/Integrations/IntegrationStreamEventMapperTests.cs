@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Integrations;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -274,6 +275,31 @@ public sealed class IntegrationStreamEventMapperTests
             "A lost tool row means the persisted transcript is incomplete, so the run cannot be reported as completed.");
     }
 
+    /// <summary>
+    ///     Test 43 — neither handler may throw. Both dispatcher raise sites are a bare <c>?.Invoke</c> on the runner's
+    ///     own thread, so an escaping throw would take out the run's streaming loop and skip every later subscriber.
+    /// </summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task Handlers_WhenTheRingEntryIsGone_LogTheFailureInsteadOfThrowingOntoTheRunnersThread(bool tool)
+    {
+        await using var context = new MapperContext();
+        context.RemoveEntry();
+
+        if (tool)
+        {
+            context.RaiseTool(ToolCallLifecyclePhase.Requested);
+        }
+        else
+        {
+            context.Raise("Hello", InvocationStatus.Running);
+        }
+
+        AssertEx.True(context.Logger.HasEntry(LogLevel.Error, "the stream loses this event"),
+            "An event the mapper cannot record costs a frame, and it has to say so; silence would hide a wiring bug.");
+    }
+
     private static ToolCallLifecyclePayload Payload(ToolCallLifecyclePhase phase, bool isError) =>
         new()
         {
@@ -312,8 +338,15 @@ public sealed class IntegrationStreamEventMapperTests
                 _invocationId,
                 new IntegrationOptions().MaxOutputBytes,
                 TimeSpan.FromMilliseconds(40),
-                Clock);
+                Clock,
+                Logger);
         }
+
+        public RecordingLogger<IntegrationStreamEventMapper> Logger { get; } = new();
+
+        /// <summary>Drops the ring entry under the mapper, which is what makes an append throw.</summary>
+        public void RemoveEntry() =>
+            _buffer.Remove(_executionId);
 
         public ManualTimeProvider Clock { get; } = new();
 

@@ -1,11 +1,15 @@
 namespace XE_Local_AI_Engine.Tests.RateLimiting;
 
+using System.Collections;
 using System.Net;
 using System.Net.Http.Json;
+using System.Reflection;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -220,9 +224,10 @@ public sealed class RateLimitPolicyTests
     ///     <para>
     ///         Two halves, because neither alone is the claim. First, the stream routes really do keep
     ///         <c>.RequireRateLimiting</c> — D5 stands and R2-11 forbids removing it to make anything pass. Second, the
-    ///         policy is a FIXED WINDOW, and a fixed-window lease returns nothing on disposal: holding one for a
-    ///         response's whole lifetime is therefore indistinguishable from releasing it at once, which is exactly the
-    ///         premise D5 rests on. A concurrency limiter is what would have made an open stream cost a slot.
+    ///         REGISTERED policy is a fixed window over the shared peer-address partition, and a fixed-window lease
+    ///         returns nothing on disposal: holding one for a response's whole lifetime is therefore indistinguishable
+    ///         from releasing it at once, which is exactly the premise D5 rests on. A concurrency limiter is what would
+    ///         have made an open stream cost a slot.
     ///     </para>
     /// </summary>
     [Test]
@@ -242,31 +247,34 @@ public sealed class RateLimitPolicyTests
                 $"{route.RoutePattern.RawText} must keep its rate-limiting policy: R2-11 forbids removing it from a stream route.");
         }
 
-        using var limiter = new FixedWindowRateLimiter(new FixedWindowRateLimiterOptions
-        {
-            AutoReplenishment = false,
-            PermitLimit = 2,
-            QueueLimit = 0,
-            Window = TimeSpan.FromMinutes(1)
-        });
+        // The REGISTERED policy, not a limiter this test built: building one here would assert the BCL, and swapping
+        // GetFixedWindowLimiter for a concurrency limiter — the exact change D5 rests on not happening — would leave it
+        // green. The map and the partition's factory are internal, so both are read by reflection.
+        var options = Host.Factory.Services.GetRequiredService<IOptions<RateLimiterOptions>>().Value;
+        var policyMap = AssertEx.NotNull(Property(options, "PolicyMap") as IDictionary,
+            "RateLimiterOptions no longer exposes a policy map; this assertion has to be rewritten against whatever replaced it.");
+        var policy = AssertEx.NotNull(policyMap[NodeAuthRateLimits.IntegrationApiPolicy], $"{NodeAuthRateLimits.IntegrationApiPolicy} is not registered.");
 
-        var streamLease = limiter.AttemptAcquire();
-        AssertEx.True(streamLease.IsAcquired, "The stream's own request takes the first permit.");
-        using (var second = limiter.AttemptAcquire())
-        {
-            AssertEx.True(second.IsAcquired, "A second request is served while the stream is still open, so the stream took ONE permit and not the window.");
-        }
+        var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.7");
+        var partition = AssertEx.NotNull(policy.GetType().GetMethod("GetPartition")?.Invoke(policy, [context]), "The policy no longer answers GetPartition.");
+        AssertEx.Equal("203.0.113.7",
+            Property(AssertEx.NotNull(Property(partition, "PartitionKey"), "The partition carries no key."), "Key")?.ToString(),
+            "The integration family partitions on the peer address through the SAME helper as the three policies beside it: this middleware runs before authentication, so no claim exists to partition on.");
 
-        using (var third = limiter.AttemptAcquire())
-        {
-            AssertEx.False(third.IsAcquired, "The window is spent after two requests, stream included — the ceiling still binds.");
-        }
+        var factory = AssertEx.NotNull(Property(partition, "Factory") as Delegate, "The partition carries no limiter factory.");
+        using var limiter = AssertEx.NotNull(factory.DynamicInvoke(Property(partition, "PartitionKey")) as RateLimiter, "The factory produced no limiter.");
 
-        streamLease.Dispose();
-        using var afterRelease = limiter.AttemptAcquire();
-        AssertEx.False(afterRelease.IsAcquired,
-            "A fixed window returns nothing on lease disposal, so when the lease is released cannot matter — which is why an open response body is safe to rate-limit.");
+        AssertEx.True(limiter is FixedWindowRateLimiter,
+            $"The policy must be a FIXED WINDOW and is {limiter.GetType().Name}: a fixed-window lease returns nothing on disposal, so holding one for a whole SSE response is indistinguishable from releasing it at once — which is the premise D5 rests on. A concurrency limiter would make an open stream cost a slot for its lifetime.");
+        AssertEx.Equal(IntegrationIpPermitLimit,
+            (int)AssertEx.NotNull(limiter.GetStatistics(), "The limiter reports no statistics.").CurrentAvailablePermits,
+            "The window must carry the configured per-IP permit limit, which is what this fixture lowered to make the ceiling observable.");
     }
+
+    /// <summary>Reads a property whatever its visibility: the rate-limiting policy map and partition factory are internal.</summary>
+    private static object? Property(object instance, string name) =>
+        instance.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(instance);
 
     private static Task<HttpResponseMessage> PostInvokeAsync(HttpClient client)
     {

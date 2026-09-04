@@ -117,7 +117,12 @@ public sealed record IntegrationTerminalizeCommand(
     string EventType,
     long EndedAtUtc,
     string? FailureCategory,
-    string? FailureSummary);
+    string? FailureSummary,
+    /// <summary>
+    ///     The terminal EVENT's detail, when the caller built one. The same JSON it publishes on the stream event, so
+    ///     the poll route and the stream hand a caller the same envelope. Null falls back to the failure columns.
+    /// </summary>
+    string? EventDetailJson = null);
 
 /// <summary>
 ///     Paged filter for the admin executions list. The paging fields are <see cref="Limit" /> and <see cref="Offset" />

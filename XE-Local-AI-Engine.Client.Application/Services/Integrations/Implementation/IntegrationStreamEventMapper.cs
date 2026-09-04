@@ -41,6 +41,7 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
     private readonly TimeSpan _emitDebounce;
     private readonly Guid _executionId;
     private readonly IIntegrationExecutionStore _executions;
+    private readonly ILogger _logger;
     private readonly Lock _gate = new();
     private readonly Guid _invocationId;
     private readonly int _maxOutputBytes;
@@ -71,10 +72,12 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
         Guid invocationId,
         int maxOutputBytes,
         TimeSpan emitDebounce,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ILogger logger)
     {
         _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
         _executions = executions ?? throw new ArgumentNullException(nameof(executions));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _executionId = executionId;
         _sessionId = sessionId;
         _invocationId = invocationId;
@@ -168,7 +171,23 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(args);
 
-        var state = args.State;
+        try
+        {
+            MapInvocationState(args.State);
+        }
+        catch (Exception exception)
+        {
+            // The dispatcher raises with a bare ?.Invoke on the runner's own thread, so a throw here would escape onto
+            // that thread and skip every later subscriber. An event this mapper cannot record costs a frame, never the
+            // run: the terminal row and the persisted transcript are written elsewhere.
+            _logger.LogError(exception,
+                "Mapping an invocation state change for integration execution {ExecutionId} failed; the stream loses this event.",
+                _executionId);
+        }
+    }
+
+    private void MapInvocationState(InvocationState state)
+    {
         if (state.InvocationId != _invocationId)
         {
             return;
@@ -217,7 +236,22 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(args);
 
-        if (args.Payload.InvocationId != _invocationId || ToolLifecycle(args.Payload) is not { } draft)
+        try
+        {
+            MapToolLifecycle(args.Payload);
+        }
+        catch (Exception exception)
+        {
+            // Same reason as the assistant half: this runs on the runner's thread behind a bare ?.Invoke.
+            _logger.LogError(exception,
+                "Mapping a tool lifecycle change for integration execution {ExecutionId} failed; the stream loses this event.",
+                _executionId);
+        }
+    }
+
+    private void MapToolLifecycle(ToolCallLifecyclePayload payload)
+    {
+        if (payload.InvocationId != _invocationId || ToolLifecycle(payload) is not { } draft)
         {
             return;
         }
