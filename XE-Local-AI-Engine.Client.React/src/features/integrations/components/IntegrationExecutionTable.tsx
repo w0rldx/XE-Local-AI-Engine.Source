@@ -3,12 +3,8 @@ import { IconEye, IconPlayerStop } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
-import {
-	formatIntegrationDuration,
-	formatIntegrationOptionalTimestamp,
-	formatIntegrationTimestamp,
-	shortPrincipalId,
-} from "@/features/integrations/components/IntegrationFormatters";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { formatIntegrationDuration, shortPrincipalId } from "@/features/integrations/components/IntegrationFormatters";
 import { IntegrationExecutionStatusBadge } from "@/features/integrations/components/IntegrationStatusBadge";
 import {
 	type IntegrationExecution,
@@ -105,13 +101,13 @@ export function IntegrationExecutionTable({
 								</Group>
 							</Table.Td>
 							<Table.Td>
-								<Text size="sm">{formatIntegrationTimestamp(execution.receivedAtUtc)}</Text>
+								<Text size="sm">{formatTimestamp(execution.receivedAtUtc)}</Text>
 							</Table.Td>
 							<Table.Td>
-								<Text size="sm">{formatIntegrationOptionalTimestamp(execution.startedAtUtc)}</Text>
+								<Text size="sm">{formatTimestamp(execution.startedAtUtc)}</Text>
 							</Table.Td>
 							<Table.Td>
-								<Text size="sm">{formatIntegrationOptionalTimestamp(execution.endedAtUtc)}</Text>
+								<Text size="sm">{formatTimestamp(execution.endedAtUtc)}</Text>
 							</Table.Td>
 							<Table.Td>
 								<Text size="sm">{formatIntegrationDuration(execution.startedAtUtc, execution.endedAtUtc)}</Text>

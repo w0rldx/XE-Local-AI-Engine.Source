@@ -3,11 +3,8 @@ import { IconAlertTriangle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
-import {
-	formatRunDuration,
-	formatRunTimestamp,
-	scheduledRunStatusColor,
-} from "@/features/scheduler/components/SchedulerRunFormatters";
+import { formatDurationSeconds, formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { scheduledRunStatusColor } from "@/features/scheduler/components/SchedulerRunFormatters";
 import type { ScheduledJobRun } from "@/features/scheduler/models/SchedulerModels";
 
 interface ScheduledJobRunDetailProps {
@@ -61,19 +58,19 @@ export function ScheduledJobRunDetail({ run, isLoading, error }: ScheduledJobRun
 					<Text size="xs" c="dimmed">
 						{t("pages.scheduler.runs.detail.fired", "Fired")}
 					</Text>
-					<Text size="sm">{formatRunTimestamp(run.actualFireTimeUtc)}</Text>
+					<Text size="sm">{formatTimestamp(run.actualFireTimeUtc)}</Text>
 				</Stack>
 				<Stack gap={0}>
 					<Text size="xs" c="dimmed">
 						{t("pages.scheduler.runs.detail.completed", "Completed")}
 					</Text>
-					<Text size="sm">{formatRunTimestamp(run.completedAtUtc)}</Text>
+					<Text size="sm">{formatTimestamp(run.completedAtUtc)}</Text>
 				</Stack>
 				<Stack gap={0}>
 					<Text size="xs" c="dimmed">
 						{t("pages.scheduler.runs.detail.duration", "Duration")}
 					</Text>
-					<Text size="sm">{formatRunDuration(run.durationMs)}</Text>
+					<Text size="sm">{formatDurationSeconds(run.durationMs)}</Text>
 				</Stack>
 			</Group>
 			{run.summary ? (

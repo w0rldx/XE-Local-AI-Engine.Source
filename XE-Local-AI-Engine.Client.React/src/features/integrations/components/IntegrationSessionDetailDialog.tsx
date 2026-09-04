@@ -5,11 +5,8 @@ import { useTranslation } from "react-i18next";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
-import {
-	formatIntegrationDuration,
-	formatIntegrationTimestamp,
-	shortPrincipalId,
-} from "@/features/integrations/components/IntegrationFormatters";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { formatIntegrationDuration, shortPrincipalId } from "@/features/integrations/components/IntegrationFormatters";
 import {
 	IntegrationExecutionStatusBadge,
 	IntegrationSessionStatusBadge,
@@ -89,13 +86,13 @@ export function IntegrationSessionDetailDialog({ session, onClose }: Integration
 					<Text size="sm" c="dimmed" w={160}>
 						{t("pages.integrations.sessions.list.columns.created", "Created")}
 					</Text>
-					<Text size="sm">{formatIntegrationTimestamp(session.createdAtUtc)}</Text>
+					<Text size="sm">{formatTimestamp(session.createdAtUtc)}</Text>
 				</Group>
 				<Group gap="sm">
 					<Text size="sm" c="dimmed" w={160}>
 						{t("pages.integrations.sessions.list.columns.lastActivity", "Last activity")}
 					</Text>
-					<Text size="sm">{formatIntegrationTimestamp(session.lastActivityUtc)}</Text>
+					<Text size="sm">{formatTimestamp(session.lastActivityUtc)}</Text>
 				</Group>
 
 				<Divider
@@ -134,7 +131,7 @@ export function IntegrationSessionDetailDialog({ session, onClose }: Integration
 										<IntegrationExecutionStatusBadge status={execution.status} />
 									</Table.Td>
 									<Table.Td>
-										<Text size="sm">{formatIntegrationTimestamp(execution.receivedAtUtc)}</Text>
+										<Text size="sm">{formatTimestamp(execution.receivedAtUtc)}</Text>
 									</Table.Td>
 									<Table.Td>
 										<Text size="sm">

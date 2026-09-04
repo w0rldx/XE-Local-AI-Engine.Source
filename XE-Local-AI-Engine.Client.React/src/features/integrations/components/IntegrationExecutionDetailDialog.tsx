@@ -5,12 +5,8 @@ import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
-import {
-	formatIntegrationDuration,
-	formatIntegrationOptionalTimestamp,
-	formatIntegrationTimestamp,
-	shortPrincipalId,
-} from "@/features/integrations/components/IntegrationFormatters";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { formatIntegrationDuration, shortPrincipalId } from "@/features/integrations/components/IntegrationFormatters";
 import { IntegrationExecutionStatusBadge } from "@/features/integrations/components/IntegrationStatusBadge";
 import { IntegrationExecutionTimeline } from "@/features/integrations/components/IntegrationExecutionTimeline";
 import {
@@ -110,13 +106,13 @@ export function IntegrationExecutionDetailDialog({
 							<Code>{execution.sessionId}</Code>
 						</DetailRow>
 						<DetailRow label={t("pages.integrations.executions.list.columns.received", "Received")}>
-							<Text size="sm">{formatIntegrationTimestamp(execution.receivedAtUtc)}</Text>
+							<Text size="sm">{formatTimestamp(execution.receivedAtUtc)}</Text>
 						</DetailRow>
 						<DetailRow label={t("pages.integrations.executions.list.columns.started", "Started")}>
-							<Text size="sm">{formatIntegrationOptionalTimestamp(execution.startedAtUtc)}</Text>
+							<Text size="sm">{formatTimestamp(execution.startedAtUtc)}</Text>
 						</DetailRow>
 						<DetailRow label={t("pages.integrations.executions.list.columns.ended", "Ended")}>
-							<Text size="sm">{formatIntegrationOptionalTimestamp(execution.endedAtUtc)}</Text>
+							<Text size="sm">{formatTimestamp(execution.endedAtUtc)}</Text>
 						</DetailRow>
 						<DetailRow label={t("pages.integrations.executions.list.columns.duration", "Duration")}>
 							<Text size="sm">{formatIntegrationDuration(execution.startedAtUtc, execution.endedAtUtc)}</Text>

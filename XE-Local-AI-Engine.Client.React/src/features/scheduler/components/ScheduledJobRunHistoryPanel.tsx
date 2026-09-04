@@ -5,11 +5,8 @@ import { useTranslation } from "react-i18next";
 
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
-import {
-	formatRunDuration,
-	formatRunTimestamp,
-	scheduledRunStatusColor,
-} from "@/features/scheduler/components/SchedulerRunFormatters";
+import { formatDurationSeconds, formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { scheduledRunStatusColor } from "@/features/scheduler/components/SchedulerRunFormatters";
 import {
 	isActiveRunStatus,
 	type ScheduledJob,
@@ -155,8 +152,8 @@ export function ScheduledJobRunHistoryPanel({
 												</Badge>
 											</Table.Td>
 											<Table.Td>{t(`pages.scheduler.runs.trigger.${run.triggeredBy}`, run.triggeredBy)}</Table.Td>
-											<Table.Td>{formatRunTimestamp(run.actualFireTimeUtc ?? run.scheduledFireTimeUtc)}</Table.Td>
-											<Table.Td>{formatRunDuration(run.durationMs)}</Table.Td>
+											<Table.Td>{formatTimestamp(run.actualFireTimeUtc ?? run.scheduledFireTimeUtc)}</Table.Td>
+											<Table.Td>{formatDurationSeconds(run.durationMs)}</Table.Td>
 											<Table.Td>
 												<Text size="sm" lineClamp={1}>
 													{run.summary ?? "—"}
