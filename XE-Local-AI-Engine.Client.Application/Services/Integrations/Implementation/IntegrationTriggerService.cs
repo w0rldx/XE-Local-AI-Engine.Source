@@ -156,23 +156,31 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
             return null;
         }
 
+        return await AllowsCallerManagedAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false)
+            ? null
+            : new IntegrationTriggerResult(IntegrationTriggerOutcome.SessionPolicyRejected, Trigger: null, CallerManagedMessage);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> AllowsCallerManagedAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
+    {
         // The offer is model-gated, so resolving with a null active model would yield a NARROWER tool set than the run
         // and could pass a trigger the accept path then rejects. Resolve against the same effective model the
         // coordinator picks: the agent's pin, else the node's local default (RunSavedAgentHandler's step 2, minus the
         // capacity call).
+        var definition = await _agents.GetByIdAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        if (definition is null)
+        {
+            // Fail closed. A definition that is gone cannot be shown to offer read-only tools only.
+            return false;
+        }
+
         var settings = await _nodeSettings.LoadAsync(cancellationToken).ConfigureAwait(false);
         var localDefault = await _localDefaultResolver.ResolveAsync(settings.DefaultModelName, cancellationToken).ConfigureAwait(false);
         var pinned = string.IsNullOrWhiteSpace(definition.ModelProfile) ? null : definition.ModelProfile;
         var effectiveModel = pinned ?? localDefault;
 
         var resolved = await _agentResolver.ResolveAsync(agentDefinitionId, effectiveModel, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        // ToolCategory.Unknown is the fail-closed default for an uncategorised tool, so the predicate is
-        // "not ReadLocal" rather than "is WriteExecute". Unlike BenchmarkEligibilityPolicy this does NOT also reject
-        // RequiresApproval: approval-gated tools stay in the offer and fail loudly at run time (ruling R4-5).
-        var offersWriteTools = resolved?.AllowedTools.Any(static tool => tool.Category != ToolCategory.ReadLocal) ?? false;
-        return offersWriteTools
-            ? new IntegrationTriggerResult(IntegrationTriggerOutcome.SessionPolicyRejected, Trigger: null, CallerManagedMessage)
-            : null;
+        return IIntegrationTriggerService.AllowsCallerManaged(resolved?.AllowedTools);
     }
 }

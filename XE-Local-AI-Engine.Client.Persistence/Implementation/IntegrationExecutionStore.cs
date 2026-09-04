@@ -87,6 +87,14 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         return [.. entities.Select(ToSnapshot)];
     }
 
+    public Task<int> CountActiveBySessionAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        _dbContext.IntegrationExecutions.AsNoTracking()
+                  .CountAsync(row => row.SessionId == sessionId
+                                     && (row.Status == IntegrationExecutionStatus.Accepted
+                                         || row.Status == IntegrationExecutionStatus.Queued
+                                         || row.Status == IntegrationExecutionStatus.Running),
+                      cancellationToken);
+
     public async Task<bool> UpdateStatusAsync(IntegrationExecutionStatusUpdate command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);

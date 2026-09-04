@@ -53,8 +53,24 @@ public enum IntegrationAcceptOutcome
     /// <summary>The node-wide or per-principal admission cap was full. 503 with a <c>Retry-After</c>, and nothing written.</summary>
     QueueFull,
 
-    /// <summary>Caller-managed sessions are not reachable yet. 422.</summary>
-    SessionUnsupported,
+    /// <summary>
+    ///     The named session does not exist, belongs to another integrator, belongs to a trigger this key's allowlist
+    ///     excludes, or belongs to a DIFFERENT trigger — one 404 for all four, byte-identical, so the surface cannot be
+    ///     used to enumerate session ids.
+    /// </summary>
+    SessionNotFound,
+
+    /// <summary>The named session is closed and accepts no further execution. 409.</summary>
+    SessionClosed,
+
+    /// <summary>An execution on the named session is still Accepted, Queued or Running. 409.</summary>
+    SessionBusy,
+
+    /// <summary>
+    ///     A caller-managed trigger whose target agent offers a tool outside <c>ToolCategory.ReadLocal</c>. 422, and
+    ///     nothing is written — there is no execution row to terminalize.
+    /// </summary>
+    SessionPolicyRejected,
 
     /// <summary>The credential was revoked between authentication and admission. The same generic 401 the auth handler writes.</summary>
     Unauthorized

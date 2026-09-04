@@ -25,6 +25,8 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
     private readonly IntegrationOptions _options;
     private readonly INodeChatPersistenceService _persistence;
     private readonly Channel<Guid> _queue;
+    private readonly IntegrationSessionGate _sessionGate;
+    private readonly IntegrationSessionService _sessions;
     private readonly TimeProvider _timeProvider;
     private readonly IIntegrationTriggerStore _triggers;
 
@@ -34,6 +36,8 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         IIntegrationExecutionStore executions,
         IIntegrationExecutionEventBuffer buffer,
         INodeChatPersistenceService persistence,
+        IntegrationSessionService sessions,
+        IntegrationSessionGate sessionGate,
         Channel<Guid> queue,
         IOptions<IntegrationOptions> options,
         TimeProvider timeProvider,
@@ -45,6 +49,8 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         _executions = executions ?? throw new ArgumentNullException(nameof(executions));
         _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
         _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
+        _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
+        _sessionGate = sessionGate ?? throw new ArgumentNullException(nameof(sessionGate));
         _queue = queue ?? throw new ArgumentNullException(nameof(queue));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
@@ -72,51 +78,71 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             return Rejected(IntegrationAcceptOutcome.TriggerNotFound, TriggerNotFoundMessage);
         }
 
-        // 2. Caller-managed sessions are not reachable yet, in either direction: a trigger configured for them, or a
-        //    caller naming a session id at all.
-        if (trigger.SessionPolicy == IntegrationSessionPolicy.CallerManaged || request.SessionId is not null)
+        // 2. The session gate, and the per-session mutual exclusion around EVERYTHING that follows. A continuation
+        //    holds its session's gate from resolution through the accept transaction's return and the seed write: the
+        //    admission transaction bounds the node and the principal but counts nothing per session, so two accepts
+        //    that both read "not busy" would both write a seed into the SAME conversation and the first execution
+        //    would read the second caller's input as history.
+        //
+        //    A PerInvocation accept and a NEW caller-managed session name no session, so they take no gate — nothing
+        //    else can name a session that does not exist yet.
+        var caller = new IntegrationCallerIdentity(key.PrincipalId, request.KeyPrefix);
+        var gateLease = request.SessionId is { } gatedSessionId
+            ? await _sessionGate.EnterAsync(gatedSessionId, cancellationToken).ConfigureAwait(false)
+            : null;
+        try
         {
-            return Rejected(IntegrationAcceptOutcome.SessionUnsupported, "Caller-managed sessions are not available yet.");
-        }
+            var gate = await _sessions.ResolveForInvocationAsync(request.SessionId, trigger, caller, cancellationToken).ConfigureAwait(false);
+            if (gate.Outcome != IntegrationAcceptOutcome.Accepted)
+            {
+                return Rejected(gate.Outcome, gate.Message);
+            }
 
-        // 3. Inputs, then the composed seed measured against its ceiling. The composer never truncates: silently
-        //    trimming an external payload changes the meaning of the request without telling the caller.
-        if (!AcceptsInputs(trigger, request.Inputs, out var inputsMessage))
+            // 3. Inputs, then the composed seed measured against its ceiling. The composer never truncates: silently
+            //    trimming an external payload changes the meaning of the request without telling the caller.
+            if (!AcceptsInputs(trigger, request.Inputs, out var inputsMessage))
+            {
+                return Rejected(IntegrationAcceptOutcome.InputsRejected, inputsMessage);
+            }
+
+            var seed = IntegrationSeedComposer.Compose(request.Inputs);
+            if (IntegrationSeedComposer.Utf8ByteCount(seed) > _options.MaxSeedBytes)
+            {
+                return Rejected(IntegrationAcceptOutcome.InputsRejected, "The composed request is larger than this node accepts.");
+            }
+
+            // 4. Dedup, scoped to (principal, request id) — the pair the unique index covers. A FOREIGN request id is
+            //    simply not found, so one integrator can never preclaim another's and force it a permanent 409.
+            var fingerprint = IntegrationRequestFingerprint.Compute(key.PrincipalId, triggerName, request.SessionId, request.RawBody.Span);
+            var duplicate = await ResolveDuplicateAsync(key.PrincipalId, request.RequestId, fingerprint, cancellationToken).ConfigureAwait(false);
+            if (duplicate is not null)
+            {
+                return duplicate;
+            }
+
+            return await AdmitAsync(request, key.PrincipalId, trigger, gate.Existing, seed, fingerprint, cancellationToken).ConfigureAwait(false);
+        }
+        finally
         {
-            return Rejected(IntegrationAcceptOutcome.InputsRejected, inputsMessage);
+            gateLease?.Dispose();
         }
-
-        var seed = IntegrationSeedComposer.Compose(request.Inputs);
-        if (IntegrationSeedComposer.Utf8ByteCount(seed) > _options.MaxSeedBytes)
-        {
-            return Rejected(IntegrationAcceptOutcome.InputsRejected, "The composed request is larger than this node accepts.");
-        }
-
-        // 4. Dedup, scoped to (principal, request id) — the pair the unique index covers. A FOREIGN request id is
-        //    simply not found, so one integrator can never preclaim another's and force it a permanent 409.
-        var fingerprint = IntegrationRequestFingerprint.Compute(key.PrincipalId, triggerName, request.SessionId, request.RawBody.Span);
-        var duplicate = await ResolveDuplicateAsync(key.PrincipalId, request.RequestId, fingerprint, cancellationToken).ConfigureAwait(false);
-        if (duplicate is not null)
-        {
-            return duplicate;
-        }
-
-        return await AdmitAsync(request, key.PrincipalId, trigger, seed, fingerprint, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<IntegrationAcceptResult> AdmitAsync(IntegrationAcceptRequest request,
         Guid principalId,
         IntegrationTriggerSnapshot trigger,
+        IntegrationSessionSnapshot? existingSession,
         string seed,
         byte[] fingerprint,
         CancellationToken cancellationToken)
     {
-        // 5. Mint the ids and the buffer entry. The conversation id is minted HERE and recorded inside the admission
-        //    transaction; step 7 creates the conversation at exactly that id, which is what makes an orphan
-        //    conversation impossible rather than merely unlikely.
+        // 5. Mint the ids and the buffer entry. For a NEW session the conversation id is minted HERE and recorded
+        //    inside the admission transaction; step 7 creates the conversation at exactly that id, which is what makes
+        //    an orphan conversation impossible rather than merely unlikely. A CONTINUATION mints neither: it joins the
+        //    existing session and writes its seed into that session's existing conversation.
         var executionId = Guid.NewGuid();
-        var sessionId = Guid.NewGuid();
-        var conversationId = Guid.NewGuid();
+        var sessionId = existingSession?.Id ?? Guid.NewGuid();
+        var conversationId = existingSession?.ConversationId ?? Guid.NewGuid();
         var receivedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
         if (!_buffer.TryCreate(executionId))
@@ -139,7 +165,13 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
 
             // 6. One raw-connection transaction under BEGIN IMMEDIATE: the write lock is taken before the counts are
             //    read, which is what makes the advertised bound the enforced bound.
-            var command = new IntegrationAcceptCommand(new IntegrationSessionCreate(sessionId, trigger.Id, conversationId, trigger.TargetAgentDefinitionId),
+            // A null NewSession is what tells the store this is a continuation: it bumps the existing row's
+            // ExecutionCount and LastActivityUtc inside the same commit, scoped to the caller's own Active session, and
+            // throws IntegrationSessionUnavailableException if that scoped update matches nothing — the race-free
+            // backstop behind the gate's own pre-checks.
+            var command = new IntegrationAcceptCommand(existingSession is null
+                    ? new IntegrationSessionCreate(sessionId, trigger.Id, conversationId, trigger.TargetAgentDefinitionId)
+                    : null,
                 executionId,
                 trigger.Id,
                 sessionId,
@@ -159,6 +191,14 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             catch (IntegrationQueueFullException)
             {
                 return Rejected(IntegrationAcceptOutcome.QueueFull, "The node is at its concurrent execution limit.");
+            }
+            catch (IntegrationSessionUnavailableException)
+            {
+                // The store's scoped session update matched no row: the session went missing, changed hands or closed
+                // between the gate's pre-check and this transaction. The gate answers the precise 404/409 on every
+                // path a caller can actually reach; this is the race-free backstop, and it answers the masked 404
+                // rather than confirming which of the three it was.
+                return Rejected(IntegrationAcceptOutcome.SessionNotFound, "No such session.");
             }
             catch (Exception exception) when (exception is DbUpdateException or SqliteException { SqliteErrorCode: SqliteConstraintErrorCode })
             {
@@ -198,15 +238,18 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             // CancellationToken.None on both: past the commit the work is no longer the caller's to cancel. A client
             // that disconnects here would otherwise leave an Accepted row that was never enqueued, and the admission
             // cap counts it against its principal until the next restart sweep.
-            _ = await _persistence.CreateConversationAsync(new NodeChatCreateConversationRequest(trigger.DisplayName,
-                                          UserId: null,
-                                          receivedAtUtc,
-                                          NodeChatOriginValues.Local,
-                                          trigger.TargetAgentDefinitionId,
-                                          NodeConversationKind.Integration,
-                                          conversationId),
-                                      CancellationToken.None)
-                                  .ConfigureAwait(false);
+            if (existingSession is null)
+            {
+                _ = await _persistence.CreateConversationAsync(new NodeChatCreateConversationRequest(trigger.DisplayName,
+                                              UserId: null,
+                                              receivedAtUtc,
+                                              NodeChatOriginValues.Local,
+                                              trigger.TargetAgentDefinitionId,
+                                              NodeConversationKind.Integration,
+                                              conversationId),
+                                          CancellationToken.None)
+                                      .ConfigureAwait(false);
+            }
 
             // The seed message id IS the execution id, so a continuation can address the seed turn with no lookup and
             // no extra column. One execution owns exactly one seed, so the ids cannot collide.

@@ -42,6 +42,48 @@ public interface IIntegrationSessionStore
 {
     Task<IntegrationSessionSnapshot?> GetByIdAsync(Guid sessionId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     The session, but only when <paramref name="principalId" /> owns it. Returns <see langword="null" /> for a
+    ///     missing row AND for a foreign one, so the two are indistinguishable to every caller — the masking rule is
+    ///     the shape of the return, not an <c>if</c> a route has to remember.
+    ///     <para>
+    ///         Ownership is the row's own <c>PrincipalId</c> column, never a key prefix: two credentials of one
+    ///         integrator must reach the same sessions, so a credential rotation does not strand them. The CURRENT
+    ///         key's trigger allowlist is a second, separate limb applied by <c>IntegrationExternalAccess</c> — an
+    ///         authorisation decision does not belong in a persistence method.
+    ///     </para>
+    /// </summary>
+    Task<IntegrationSessionSnapshot?> GetForPrincipalAsync(Guid sessionId, Guid principalId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The session that owns <paramref name="conversationId" />, or <see langword="null" />. The lookup behind
+    ///     <c>emit_output</c>: a tool handler has only the ambient conversation id the invocation runner seeded, and
+    ///     this is what turns it back into the execution's session. At most one row — a conversation is owned by one
+    ///     session.
+    /// </summary>
+    Task<IntegrationSessionSnapshot?> FindByConversationAsync(Guid conversationId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     A page of sessions, ordered <c>LastActivityUtc</c> then <c>Id</c> DESCENDING before <c>Skip</c>/<c>Take</c>.
+    ///     The id tie-break is load-bearing for the same reason it is on the executions list: two sessions touched in
+    ///     the same millisecond would otherwise page non-deterministically and drop or duplicate a row across pages. A
+    ///     null filter argument does not constrain.
+    /// </summary>
+    Task<IReadOnlyList<IntegrationSessionSnapshot>> ListAsync(Guid? triggerId,
+        IntegrationSessionStatus? status,
+        int limit,
+        int offset,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Closes a session so no further execution may join it. Idempotent; returns <see langword="false" /> only when no row matched.</summary>
     Task<bool> CloseAsync(Guid sessionId, long atUtc, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Removes the session row. This is the BACKSTOP of an operator delete, not its mechanism: deleting a session
+    ///     means purging its owned conversation, and <c>ConversationFootprintPurge</c> already takes the session row,
+    ///     its executions and their events with it. This runs afterwards so a purge that could not complete still
+    ///     removes the row, rather than leaving an operator looking at a session whose conversation is gone. Returns
+    ///     <see langword="false" /> when the purge already removed it, which is the ordinary case.
+    /// </summary>
+    Task<bool> DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default);
 }

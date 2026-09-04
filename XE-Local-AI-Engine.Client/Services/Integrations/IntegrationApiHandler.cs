@@ -365,13 +365,16 @@ internal sealed class IntegrationApiHandler
                     context.RequestAborted).ConfigureAwait(false);
                 return;
             case IntegrationAcceptOutcome.TriggerNotFound:
+            case IntegrationAcceptOutcome.SessionNotFound:
                 await WriteMessageAsync(context, StatusCodes.Status404NotFound, result.Message).ConfigureAwait(false);
                 return;
             case IntegrationAcceptOutcome.RequestConflict:
+            case IntegrationAcceptOutcome.SessionClosed:
+            case IntegrationAcceptOutcome.SessionBusy:
                 await WriteMessageAsync(context, StatusCodes.Status409Conflict, result.Message).ConfigureAwait(false);
                 return;
             case IntegrationAcceptOutcome.InputsRejected:
-            case IntegrationAcceptOutcome.SessionUnsupported:
+            case IntegrationAcceptOutcome.SessionPolicyRejected:
                 await WriteMessageAsync(context, StatusCodes.Status422UnprocessableEntity, result.Message).ConfigureAwait(false);
                 return;
             case IntegrationAcceptOutcome.QueueFull:

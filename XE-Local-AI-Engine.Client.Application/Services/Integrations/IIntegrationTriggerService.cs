@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Integrations;
 
 using System.Diagnostics.CodeAnalysis;
+using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
@@ -76,6 +78,35 @@ public interface IIntegrationTriggerService
     Task<IntegrationTriggerResult> UpdateAsync(Guid triggerId, IntegrationTriggerUpdateInput input, CancellationToken cancellationToken = default);
 
     Task<bool> DeleteAsync(Guid triggerId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Ruling R4-9(a)'s predicate, run against the agent's offer AS IT IS NOW: a caller-managed session may only
+    ///     target an agent whose every resolved tool is <c>ToolCategory.ReadLocal</c>. Used at trigger save AND on the
+    ///     accept path, because an agent definition's tools can change between the two and only the accept path sees
+    ///     the definition as it is at invocation time.
+    ///     <para>
+    ///         The offer is resolved against the SAME effective model the coordinator picks (the agent's pin, else the
+    ///         node's local default), because the offer is model-gated: resolving with no model would yield a NARROWER
+    ///         set than the run and pass a trigger the accept path then refuses.
+    ///     </para>
+    ///     <para>
+    ///         Fails CLOSED — a definition that cannot be resolved is not allowed. It also needs no special case for
+    ///         the seeded Default Assistant: that definition receives the WHOLE capability-gated offer regardless of
+    ///         its (empty) <c>AllowedToolNames</c>, so the resolved offer this reads already carries the
+    ///         orchestration and write tools that refuse it.
+    ///     </para>
+    /// </summary>
+    Task<bool> AllowsCallerManagedAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The bare half of <see cref="AllowsCallerManagedAsync" />, for a caller that has ALREADY resolved the offer —
+    ///     the execution coordinator, which must judge the very offer its package will carry rather than a second
+    ///     resolve that could disagree. <c>ToolCategory.Unknown</c> is the fail-closed default for an uncategorised
+    ///     tool, so the predicate is "not ReadLocal" rather than "is WriteExecute". Approval-gated tools do NOT trip it:
+    ///     they stay in the offer and fail loudly at the call (ruling R4-5).
+    /// </summary>
+    static bool AllowsCallerManaged(IReadOnlyList<AllowedToolDto>? resolvedTools) =>
+        resolvedTools is not null && !resolvedTools.Any(static tool => tool.Category != ToolCategory.ReadLocal);
 
     /// <summary>
     ///     Normalises an external trigger name the one way the whole feature agrees on: trimmed and lowercased. Both

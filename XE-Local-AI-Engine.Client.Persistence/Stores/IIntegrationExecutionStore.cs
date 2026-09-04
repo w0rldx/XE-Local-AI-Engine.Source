@@ -204,6 +204,15 @@ public interface IIntegrationExecutionStore
     Task<IReadOnlyList<IntegrationExecutionSnapshot>> ListAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     How many of ONE session's executions are <c>Accepted</c>, <c>Queued</c> or <c>Running</c>. Deliberately not
+    ///     the node-wide count folded into <see cref="AcceptAsync" />: that one is a hard admission bound, while this
+    ///     answers "is this caller-managed session busy right now" for the 409 that a second concurrent invoke and an
+    ///     operator delete both need. It is a READ, so its caller holds the per-session gate across it AND the mutation
+    ///     that follows — checking outside the gate guards nothing.
+    /// </summary>
+    Task<int> CountActiveBySessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     One <c>SaveChanges</c>. Returns <see langword="false" /> WITHOUT writing when the row is missing, the version
     ///     is stale, or the current status is outside the command's expected set.
     ///     <para>

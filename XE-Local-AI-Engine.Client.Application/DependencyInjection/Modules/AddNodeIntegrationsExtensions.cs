@@ -4,6 +4,7 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 
@@ -52,6 +53,20 @@ internal static class AddNodeIntegrationsExtensions
             }));
 
         builder.Services.AddSingleton<IntegrationCancellationRegistry>();
+
+        // One mutual-exclusion gate per caller-managed session id, shared by the scoped accept path and the scoped
+        // session service — so a singleton, the same shape the cancellation registry has.
+        builder.Services.AddSingleton<IntegrationSessionGate>();
+        builder.Services.AddScoped(static serviceProvider => new IntegrationSessionService(
+            serviceProvider.GetRequiredService<IIntegrationSessionStore>(),
+            serviceProvider.GetRequiredService<IIntegrationExecutionStore>(),
+            serviceProvider.GetRequiredService<IIntegrationTriggerStore>(),
+            serviceProvider.GetRequiredService<IIntegrationTriggerService>(),
+            serviceProvider.GetRequiredService<IntegrationExternalAccess>(),
+            serviceProvider.GetRequiredService<INodeChatPersistenceService>(),
+            serviceProvider.GetRequiredService<IntegrationSessionGate>(),
+            serviceProvider.GetRequiredService<TimeProvider>(),
+            serviceProvider.GetRequiredService<ILogger<IntegrationSessionService>>()));
         builder.Services.AddScoped<IIntegrationInvocationService, IntegrationInvocationService>();
 
         // Two concrete classes with no interface, registered as themselves and injected as themselves: a

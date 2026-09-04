@@ -295,6 +295,12 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
             {
                 CreatedSessions.Add(session);
             }
+            else
+            {
+                // A continuation. The real store's session bump is scoped to the caller's own ACTIVE session and
+                // abandons the transaction when it matches no row, which is the race-free backstop behind S3's gate.
+                Sessions?.BumpForAccept(command.SessionId, command.PrincipalId, command.ReceivedAtUtc);
+            }
 
             _rows.Add(new IntegrationExecutionSnapshot(command.ExecutionId,
                 command.TriggerId,
@@ -322,6 +328,36 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
 
     /// <summary>Makes the next row read throw before the run's own handler is in scope, which is what escapes ProcessOneAsync.</summary>
     public bool ThrowOnNextGetById { get; set; }
+
+    /// <summary>
+    ///     The session store an accept's continuation bump reaches, when a suite drives one. Null for the coordinator
+    ///     suites, which only ever seed rows an earlier accept already committed.
+    /// </summary>
+    public FakeIntegrationSessionStore? Sessions { get; set; }
+
+    /// <summary>Moves a row to a terminal status without replaying a whole run, so a suite can free a busy session.</summary>
+    public void Complete(Guid executionId)
+    {
+        lock (_gate)
+        {
+            var index = _rows.FindIndex(row => row.Id == executionId);
+            _rows[index] = _rows[index] with
+            {
+                Status = IntegrationExecutionStatus.Completed
+            };
+        }
+    }
+
+    public Task<int> CountActiveBySessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            return Task.FromResult(_rows.Count(row => row.SessionId == sessionId
+                                                      && row.Status is IntegrationExecutionStatus.Accepted
+                                                          or IntegrationExecutionStatus.Queued
+                                                          or IntegrationExecutionStatus.Running));
+        }
+    }
 
     public Task<IntegrationExecutionSnapshot?> GetByIdAsync(Guid executionId, CancellationToken cancellationToken = default)
     {
@@ -596,6 +632,58 @@ internal sealed class FakeIntegrationSessionStore : IIntegrationSessionStore
     public Task<IntegrationSessionSnapshot?> GetByIdAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
         Task.FromResult(_rows.SingleOrDefault(row => row.Id == sessionId));
 
+    public Task<IntegrationSessionSnapshot?> GetForPrincipalAsync(Guid sessionId, Guid principalId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_rows.SingleOrDefault(row => row.Id == sessionId && row.PrincipalId == principalId));
+
+    public Task<IntegrationSessionSnapshot?> FindByConversationAsync(Guid conversationId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_rows.SingleOrDefault(row => row.ConversationId == conversationId));
+
+    public Task<IReadOnlyList<IntegrationSessionSnapshot>> ListAsync(Guid? triggerId,
+        IntegrationSessionStatus? status,
+        int limit,
+        int offset,
+        CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<IntegrationSessionSnapshot> page =
+        [
+            .. _rows.Where(row => (triggerId is not { } trigger || row.TriggerId == trigger)
+                                  && (status is not { } sessionStatus || row.Status == sessionStatus))
+                    .OrderByDescending(static row => row.LastActivityUtc)
+                    .ThenByDescending(static row => row.Id)
+                    .Skip(Math.Max(val1: 0, offset))
+                    .Take(Math.Max(val1: 0, limit))
+        ];
+        return Task.FromResult(page);
+    }
+
+    public Task<bool> DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_rows.RemoveAll(row => row.Id == sessionId) > 0);
+
+    /// <summary>Drops a row behind the caller's back, which is how the accept transaction's backstop gets driven.</summary>
+    public void Forget(Guid sessionId) =>
+        _ = _rows.RemoveAll(row => row.Id == sessionId);
+
+    /// <summary>
+    ///     The accept transaction's half of a continuation: bump the caller's own ACTIVE session, or abandon. It throws
+    ///     the same type the real store does, which is what lets a suite drive the backstop rather than assume it.
+    /// </summary>
+    public void BumpForAccept(Guid sessionId, Guid principalId, long atUtc)
+    {
+        var index = _rows.FindIndex(row => row.Id == sessionId
+                                           && row.PrincipalId == principalId
+                                           && row.Status == IntegrationSessionStatus.Active);
+        if (index < 0)
+        {
+            throw new IntegrationSessionUnavailableException($"Integration session '{sessionId}' cannot host this execution.");
+        }
+
+        _rows[index] = _rows[index] with
+        {
+            ExecutionCount = _rows[index].ExecutionCount + 1,
+            LastActivityUtc = atUtc
+        };
+    }
+
     public Task<bool> CloseAsync(Guid sessionId, long atUtc, CancellationToken cancellationToken = default)
     {
         var index = _rows.FindIndex(row => row.Id == sessionId);
@@ -622,17 +710,24 @@ internal sealed class FakeIntegrationSessionStore : IIntegrationSessionStore
         };
     }
 
-    public IntegrationSessionSnapshot Seed(Guid sessionId, Guid triggerId, Guid conversationId, Guid agentDefinitionId)
+    public IntegrationSessionSnapshot Seed(Guid sessionId,
+        Guid triggerId,
+        Guid conversationId,
+        Guid agentDefinitionId,
+        Guid? principalId = null,
+        IntegrationSessionStatus status = IntegrationSessionStatus.Active,
+        long lastActivityUtc = 0,
+        int executionCount = 1)
     {
         var snapshot = new IntegrationSessionSnapshot(sessionId,
             triggerId,
-            PrincipalId: Guid.NewGuid(),
+            principalId ?? Guid.NewGuid(),
             conversationId,
             agentDefinitionId,
-            IntegrationSessionStatus.Active,
+            status,
             CreatedAtUtc: 0,
-            LastActivityUtc: 0,
-            ExecutionCount: 1,
+            lastActivityUtc,
+            executionCount,
             LastSequence: 1);
         _rows.Add(snapshot);
         return snapshot;

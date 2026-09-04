@@ -23,7 +23,7 @@ public sealed class IntegrationInvocationServiceTests
     [Test]
     public async Task Accept_WithAValidRequest_AdmitsCommitsAndEnqueuesInThatOrder()
     {
-        var harness = new Harness();
+        var harness = new IntegrationInvokeHarness();
         var trigger = harness.SeedTrigger("sensor-feed");
 
         var result = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
@@ -51,7 +51,7 @@ public sealed class IntegrationInvocationServiceTests
     [Test]
     public async Task Accept_CarriesTheBufferMintedSequenceIntoTheAcceptedEventRow()
     {
-        var harness = new Harness();
+        var harness = new IntegrationInvokeHarness();
         var trigger = harness.SeedTrigger("sensor-feed");
 
         var result = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
@@ -73,7 +73,7 @@ public sealed class IntegrationInvocationServiceTests
     {
         // THE load-bearing masking assertion: a distinct code for "exists but not yours" would confirm the name to a
         // key that is explicitly scoped away from it.
-        var harness = new Harness();
+        var harness = new IntegrationInvokeHarness();
         _ = harness.SeedTrigger("disabled-trigger", enabled: false);
         var other = harness.SeedTrigger("not-allowlisted");
         var allowed = harness.SeedTrigger("allowed");
@@ -91,7 +91,7 @@ public sealed class IntegrationInvocationServiceTests
     [Test]
     public async Task Accept_WithANullAllowlist_ReachesEveryTrigger()
     {
-        var harness = new Harness();
+        var harness = new IntegrationInvokeHarness();
         var trigger = harness.SeedTrigger("sensor-feed");
 
         AssertEx.Equal(IntegrationAcceptOutcome.Accepted, (await harness.AcceptAsync(trigger.Name).ConfigureAwait(false)).Outcome);
@@ -100,7 +100,7 @@ public sealed class IntegrationInvocationServiceTests
     [Test]
     public async Task Accept_WithARevokedKey_AnswersTheGenericUnauthorizedAndWritesNothing()
     {
-        var harness = new Harness();
+        var harness = new IntegrationInvokeHarness();
         var trigger = harness.SeedTrigger("sensor-feed");
         harness.RevokeKey();
 
@@ -115,9 +115,9 @@ public sealed class IntegrationInvocationServiceTests
     {
         // The window the round-four ruling closed: a caller holds an authenticated request open, is revoked, and would
         // otherwise still create durable work. The transaction re-reads the row, so it cannot.
-        var harness = new Harness();
+        var harness = new IntegrationInvokeHarness();
         var trigger = harness.SeedTrigger("sensor-feed");
-        harness.Executions.RevokedKeyPrefixes.Add(Harness.KeyPrefix);
+        harness.Executions.RevokedKeyPrefixes.Add(IntegrationInvokeHarness.KeyPrefix);
 
         var result = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
 
@@ -130,7 +130,7 @@ public sealed class IntegrationInvocationServiceTests
     [Test]
     public async Task Accept_WithNoInputsOrAnUnacceptedKind_IsRejectedWithoutWriting()
     {
-        var harness = new Harness();
+        var harness = new IntegrationInvokeHarness();
         var textOnly = harness.SeedTrigger("text-only", acceptedInputKinds: IntegrationInputKinds.Text);
 
         var empty = await harness.AcceptAsync(textOnly.Name, inputs: []).ConfigureAwait(false);
@@ -146,7 +146,7 @@ public sealed class IntegrationInvocationServiceTests
     [Test]
     public async Task Accept_WithASeedPastTheCeiling_IsRejectedRatherThanSilentlyTruncated()
     {
-        var harness = new Harness(maxSeedBytes: 64);
+        var harness = new IntegrationInvokeHarness(maxSeedBytes: 64);
         var trigger = harness.SeedTrigger("sensor-feed");
 
         var result = await harness.AcceptAsync(trigger.Name, inputs: [Text(new string('x', count: 512))]).ConfigureAwait(false);
@@ -156,24 +156,23 @@ public sealed class IntegrationInvocationServiceTests
     }
 
     [Test]
-    public async Task Accept_ForACallerManagedTriggerOrASuppliedSessionId_IsUnsupported()
+    public async Task Accept_ForAPerInvocationTriggerWithASessionId_IsTheSameNotFoundAnUnknownIdGets()
     {
-        var harness = new Harness();
-        var callerManaged = harness.SeedTrigger("caller-managed", sessionPolicy: IntegrationSessionPolicy.CallerManaged);
+        // A per-invocation trigger has no addressable sessions, so naming one must not be a distinct code that would
+        // confirm the policy of a trigger this caller cannot otherwise inspect.
+        var harness = new IntegrationInvokeHarness();
         var perInvocation = harness.SeedTrigger("per-invocation");
 
-        var policy = await harness.AcceptAsync(callerManaged.Name).ConfigureAwait(false);
         var withSession = await harness.AcceptAsync(perInvocation.Name, sessionId: Guid.NewGuid()).ConfigureAwait(false);
 
-        AssertEx.Equal(IntegrationAcceptOutcome.SessionUnsupported, policy.Outcome);
-        AssertEx.Equal(IntegrationAcceptOutcome.SessionUnsupported, withSession.Outcome);
+        AssertEx.Equal(IntegrationAcceptOutcome.SessionNotFound, withSession.Outcome);
         AssertEx.Empty(harness.Executions.Rows);
     }
 
     [Test]
     public async Task Accept_WithTheSameRequestIdAndByteIdenticalBody_ReturnsTheFirstExecutionAndWritesNoSecondRow()
     {
-        var harness = new Harness();
+        var harness = new IntegrationInvokeHarness();
         var trigger = harness.SeedTrigger("sensor-feed");
         var requestId = Guid.NewGuid();
         var body = """{"requestId":"x","inputs":[]}"""u8.ToArray();
@@ -191,7 +190,7 @@ public sealed class IntegrationInvocationServiceTests
     {
         // Byte-exactness is the design, not a bug: there is no canonicalisation anywhere, so a retry must resend the
         // identical bytes. The API doc says so.
-        var harness = new Harness();
+        var harness = new IntegrationInvokeHarness();
         var trigger = harness.SeedTrigger("sensor-feed");
         var requestId = Guid.NewGuid();
 
@@ -208,7 +207,7 @@ public sealed class IntegrationInvocationServiceTests
     {
         // The uniqueness index is scoped to (PrincipalId, RequestId), so a foreign request id is simply NOT FOUND and
         // the request proceeds on its own merits — one integrator can never preclaim another's ids.
-        var harness = new Harness(maxQueuedPerPrincipal: 4);
+        var harness = new IntegrationInvokeHarness(maxQueuedPerPrincipal: 4);
         var trigger = harness.SeedTrigger("sensor-feed");
         var requestId = Guid.NewGuid();
         var body = """{"a":1}"""u8.ToArray();
@@ -226,14 +225,14 @@ public sealed class IntegrationInvocationServiceTests
     {
         // A rotation must not strand an in-flight request: ownership and the fingerprint key on the principal, not on
         // which credential happened to be presented.
-        var harness = new Harness();
+        var harness = new IntegrationInvokeHarness();
         var trigger = harness.SeedTrigger("sensor-feed");
         var requestId = Guid.NewGuid();
         var body = """{"a":1}"""u8.ToArray();
         var first = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body).ConfigureAwait(false);
 
         harness.RotateCredential();
-        var replay = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, keyPrefix: Harness.RotatedKeyPrefix).ConfigureAwait(false);
+        var replay = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, keyPrefix: IntegrationInvokeHarness.RotatedKeyPrefix).ConfigureAwait(false);
 
         AssertEx.Equal(IntegrationAcceptOutcome.Duplicate, replay.Outcome);
         AssertEx.Equal(first.ExecutionId, replay.ExecutionId);
@@ -242,7 +241,7 @@ public sealed class IntegrationInvocationServiceTests
     [Test]
     public async Task Accept_WhenAConcurrentAcceptWinsTheUniqueIndexRace_ResolvesItAsADuplicateRatherThanA500()
     {
-        var harness = new Harness();
+        var harness = new IntegrationInvokeHarness();
         var trigger = harness.SeedTrigger("sensor-feed");
         var requestId = Guid.NewGuid();
         var body = """{"a":1}"""u8.ToArray();
@@ -260,7 +259,7 @@ public sealed class IntegrationInvocationServiceTests
     [Test]
     public async Task Accept_WhenTheNodeWideCapIsFull_Is503AndWritesNothingMore()
     {
-        var harness = new Harness(maxQueued: 2, maxQueuedPerPrincipal: 2);
+        var harness = new IntegrationInvokeHarness(maxQueued: 2, maxQueuedPerPrincipal: 2);
         var trigger = harness.SeedTrigger("sensor-feed");
         _ = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
         _ = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
@@ -275,7 +274,7 @@ public sealed class IntegrationInvocationServiceTests
     public async Task Accept_WhenOnePrincipalIsAtItsOwnCap_RefusesItWhileAdmittingAnother()
     {
         // The fairness floor: one noisy integrator must not fill the node-wide queue and starve every other one.
-        var harness = new Harness(maxQueued: 8, maxQueuedPerPrincipal: 1);
+        var harness = new IntegrationInvokeHarness(maxQueued: 8, maxQueuedPerPrincipal: 1);
         var trigger = harness.SeedTrigger("sensor-feed");
         _ = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
 
@@ -291,7 +290,7 @@ public sealed class IntegrationInvocationServiceTests
     {
         // A leaked reservation holds a tracked slot that only a terminal event could free, and a rejected execution
         // will never get one — so the ring would fill with ghosts.
-        var harness = new Harness(maxQueued: 1, maxQueuedPerPrincipal: 1, maxTracked: 3);
+        var harness = new IntegrationInvokeHarness(maxQueued: 1, maxQueuedPerPrincipal: 1, maxTracked: 3);
         var trigger = harness.SeedTrigger("sensor-feed");
         _ = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
 
@@ -308,7 +307,7 @@ public sealed class IntegrationInvocationServiceTests
     {
         // Defended, not expected: the admission count gates it. A discarded id would otherwise strand an Accepted row
         // that nothing drains and that the count blocks a slot with forever.
-        var harness = new Harness(queueCapacity: 1);
+        var harness = new IntegrationInvokeHarness(queueCapacity: 1);
         var trigger = harness.SeedTrigger("sensor-feed");
         _ = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
 
@@ -328,7 +327,7 @@ public sealed class IntegrationInvocationServiceTests
     {
         // Runs forward, never backward. The row is a visible, cancellable, audited Accepted row that the coordinator
         // terminalises with a real reason, which is strictly better than a silent rollback.
-        var harness = new Harness();
+        var harness = new IntegrationInvokeHarness();
         var trigger = harness.SeedTrigger("sensor-feed");
         harness.Persistence.CreateConversationAsync(Arg.Any<NodeChatCreateConversationRequest>(), Arg.Any<CancellationToken>())
                .ThrowsAsync(new InvalidOperationException("disk on fire"));
@@ -346,7 +345,7 @@ public sealed class IntegrationInvocationServiceTests
     {
         // The admission cap counts Accepted rows, so a post-commit abort that skipped the enqueue would hold a slot
         // against its principal until the next restart sweep — two aborts lock one integrator out.
-        var harness = new Harness();
+        var harness = new IntegrationInvokeHarness();
         var trigger = harness.SeedTrigger("sensor-feed");
         using var aborted = new CancellationTokenSource();
         _ = harness.Persistence.CreateConversationAsync(Arg.Any<NodeChatCreateConversationRequest>(), Arg.Any<CancellationToken>())
@@ -371,7 +370,7 @@ public sealed class IntegrationInvocationServiceTests
     {
         // Same leak class as the aborted-caller case, narrower trigger: letting the terminalize failure out would turn
         // a refused admission into a 500 and tell the caller nothing.
-        var harness = new Harness(queueCapacity: 1);
+        var harness = new IntegrationInvokeHarness(queueCapacity: 1);
         var trigger = harness.SeedTrigger("sensor-feed");
         _ = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
         harness.Executions.ThrowOnNextTerminalize = true;
@@ -387,170 +386,4 @@ public sealed class IntegrationInvocationServiceTests
 
     private static IntegrationInputDto Json(string json) =>
         new(IntegrationInputKinds.Json, Text: null, "payload", json);
-
-    private sealed class Harness
-    {
-        public const string KeyPrefix = "xeint_aaaaaaaa";
-
-        public const string RotatedKeyPrefix = "xeint_bbbbbbbb";
-
-        private readonly List<IntegrationApiKeySnapshot> _keys;
-        private readonly IIntegrationApiKeyStore _keyStore;
-
-        public Harness(int maxQueued = 8,
-            int maxQueuedPerPrincipal = 8,
-            int maxSeedBytes = 262_144,
-            int maxTracked = 64,
-            int queueCapacity = 8)
-        {
-            PrincipalId = Guid.NewGuid();
-            _keys =
-            [
-                new IntegrationApiKeySnapshot(Guid.NewGuid(),
-                    PrincipalId,
-                    KeyPrefix,
-                    ReadOnlyMemory<byte>.Empty,
-                    "primary",
-                    AllowedTriggerIdsJson: null,
-                    CreatedAtUtc: 1,
-                    LastUsedAtUtc: null,
-                    RevokedAtUtc: null)
-            ];
-
-            _keyStore = Substitute.For<IIntegrationApiKeyStore>();
-            _ = _keyStore.GetByPrefixAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                         .Returns(call => _keys.SingleOrDefault(row => string.Equals(row.KeyPrefix, call.Arg<string>(), StringComparison.Ordinal)));
-
-            Buffer = new IntegrationExecutionEventBuffer(Options.Create(new IntegrationOptions
-                {
-                    MaxTrackedExecutions = maxTracked
-                }),
-                TimeProvider.System);
-
-            Queue = Channel.CreateBounded<Guid>(new BoundedChannelOptions(queueCapacity)
-            {
-                SingleReader = true,
-                FullMode = BoundedChannelFullMode.Wait
-            });
-
-            Persistence = Substitute.For<INodeChatPersistenceService>();
-
-            Service = new IntegrationInvocationService(Triggers,
-                _keyStore,
-                Substitute.For<IIntegrationApiKeyService>(),
-                Executions,
-                Buffer,
-                Persistence,
-                Queue,
-                Options.Create(new IntegrationOptions
-                {
-                    MaxQueuedExecutions = maxQueued,
-                    MaxQueuedExecutionsPerPrincipal = maxQueuedPerPrincipal,
-                    MaxSeedBytes = maxSeedBytes,
-                    MaxTrackedExecutions = maxTracked
-                }),
-                TimeProvider.System,
-                NullLogger<IntegrationInvocationService>.Instance);
-        }
-
-        public IntegrationExecutionEventBuffer Buffer { get; }
-
-        public FakeIntegrationExecutionStore Executions { get; } = new();
-
-        public INodeChatPersistenceService Persistence { get; }
-
-        public Guid PrincipalId { get; }
-
-        public Channel<Guid> Queue { get; }
-
-        public IIntegrationInvocationService Service { get; }
-
-        public FakeIntegrationTriggerStore Triggers { get; } = new();
-
-        public IntegrationTriggerSnapshot SeedTrigger(string name,
-            bool enabled = true,
-            IntegrationSessionPolicy sessionPolicy = IntegrationSessionPolicy.PerInvocation,
-            IntegrationInputKinds acceptedInputKinds = IntegrationInputKinds.Text | IntegrationInputKinds.Json) =>
-            Triggers.Seed(name, Guid.NewGuid(), enabled, sessionPolicy, acceptedInputKinds);
-
-        public void RestrictKeyTo(Guid triggerId) =>
-            _keys[0] = _keys[0] with
-            {
-                AllowedTriggerIdsJson = $"[\"{triggerId}\"]"
-            };
-
-        public void RevokeKey() =>
-            _keys[0] = _keys[0] with
-            {
-                RevokedAtUtc = 2
-            };
-
-        /// <summary>Issues a second credential for the SAME integrator, which is the rotation case ownership must survive.</summary>
-        public void RotateCredential() =>
-            _keys.Add(_keys[0] with
-            {
-                Id = Guid.NewGuid(),
-                KeyPrefix = RotatedKeyPrefix,
-                Label = "rotated"
-            });
-
-        public NodeChatCreateConversationRequest CapturedConversation() =>
-            (NodeChatCreateConversationRequest)Persistence.ReceivedCalls()
-                                                          .Single(static call => call.GetMethodInfo().Name == nameof(INodeChatPersistenceService.CreateConversationAsync))
-                                                          .GetArguments()[0]!;
-
-        public NodeChatPersistUserMessageRequest CapturedSeed() =>
-            (NodeChatPersistUserMessageRequest)Persistence.ReceivedCalls()
-                                                          .Single(static call => call.GetMethodInfo().Name == nameof(INodeChatPersistenceService.PersistUserMessageAsync))
-                                                          .GetArguments()[0]!;
-
-        public Task<IntegrationAcceptResult> AcceptAsync(string triggerName,
-            IReadOnlyList<IntegrationInputDto>? inputs = null,
-            Guid? requestId = null,
-            byte[]? rawBody = null,
-            Guid? sessionId = null,
-            Guid? principalId = null,
-            string keyPrefix = KeyPrefix,
-            CancellationToken cancellationToken = default)
-        {
-            return Service.AcceptAsync(Request(triggerName, inputs, requestId, rawBody, sessionId, principalId, keyPrefix), cancellationToken);
-        }
-
-        private IntegrationAcceptRequest Request(string triggerName,
-            IReadOnlyList<IntegrationInputDto>? inputs,
-            Guid? requestId,
-            byte[]? rawBody,
-            Guid? sessionId,
-            Guid? principalId,
-            string keyPrefix)
-        {
-            if (principalId is { } stranger)
-            {
-                // A different integrator presenting its own credential, which is what makes the (principal, request id)
-                // scoping observable at all.
-                var strangerPrefix = $"xeint_{stranger:N}"[..14];
-                if (!_keys.Any(row => string.Equals(row.KeyPrefix, strangerPrefix, StringComparison.Ordinal)))
-                {
-                    _keys.Add(_keys[0] with
-                    {
-                        Id = Guid.NewGuid(),
-                        PrincipalId = stranger,
-                        KeyPrefix = strangerPrefix,
-                        Label = "stranger",
-                        RevokedAtUtc = null
-                    });
-                }
-
-                keyPrefix = strangerPrefix;
-            }
-
-            return new IntegrationAcceptRequest(triggerName,
-                principalId ?? PrincipalId,
-                keyPrefix,
-                requestId ?? Guid.NewGuid(),
-                sessionId,
-                inputs ?? [Text("do the thing")],
-                rawBody ?? Encoding.UTF8.GetBytes("""{"inputs":[]}"""));
-        }
-    }
 }

@@ -695,6 +695,34 @@ public sealed class IntegrationExecutionStoreTests
             "A replay must only ever see its own principal's rows; otherwise one integrator's 409 is another's request id.");
     }
 
+    [Test]
+    public async Task CountActiveBySessionAsync_CountsOnlyOneSessionsNonTerminalRows()
+    {
+        // Not the node-wide count the admission transaction folds in: this is the per-SESSION busy read behind the 409
+        // that a second concurrent invoke and an operator delete both need.
+        using var fixture = new IntegrationTestFixture();
+        var seed = await SeedAsync(fixture).ConfigureAwait(false);
+
+        await using var context = fixture.CreateContext();
+        var mine = IntegrationTestFixture.Session(seed.TriggerId, seed.PrincipalId);
+        var other = IntegrationTestFixture.Session(seed.TriggerId, seed.PrincipalId);
+        context.IntegrationSessions.AddRange(mine, other);
+        context.IntegrationExecutions.AddRange(
+            IntegrationTestFixture.Execution(seed.TriggerId, mine.Id, seed.PrincipalId, status: IntegrationExecutionStatus.Accepted),
+            IntegrationTestFixture.Execution(seed.TriggerId, mine.Id, seed.PrincipalId, status: IntegrationExecutionStatus.Queued),
+            IntegrationTestFixture.Execution(seed.TriggerId, mine.Id, seed.PrincipalId, status: IntegrationExecutionStatus.Running),
+            IntegrationTestFixture.Execution(seed.TriggerId, mine.Id, seed.PrincipalId, status: IntegrationExecutionStatus.Completed),
+            IntegrationTestFixture.Execution(seed.TriggerId, mine.Id, seed.PrincipalId, status: IntegrationExecutionStatus.Failed),
+            IntegrationTestFixture.Execution(seed.TriggerId, mine.Id, seed.PrincipalId, status: IntegrationExecutionStatus.Cancelled),
+            IntegrationTestFixture.Execution(seed.TriggerId, other.Id, seed.PrincipalId, status: IntegrationExecutionStatus.Running));
+        _ = await context.SaveChangesAsync().ConfigureAwait(false);
+
+        var store = new IntegrationExecutionStore(context);
+        AssertEx.Equal(expected: 3, await store.CountActiveBySessionAsync(mine.Id).ConfigureAwait(false));
+        AssertEx.Equal(expected: 1, await store.CountActiveBySessionAsync(other.Id).ConfigureAwait(false));
+        AssertEx.Equal(expected: 0, await store.CountActiveBySessionAsync(Guid.NewGuid()).ConfigureAwait(false));
+    }
+
     private static IntegrationTerminalizeCommand Terminal(Guid executionId,
         long expectedVersion,
         IReadOnlySet<IntegrationExecutionStatus> expectedStatuses,
