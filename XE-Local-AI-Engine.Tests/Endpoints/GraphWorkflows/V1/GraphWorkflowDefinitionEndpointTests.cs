@@ -471,6 +471,31 @@ public sealed class GraphWorkflowDefinitionEndpointTests
     }
 
     /// <summary>
+    ///     And an explicit <c>null</c> is the third spelling of the same thing. It is not a version, so it reads as the
+    ///     absent member does — 1 — and it carries nothing past the parser, which still answers every present integer.
+    /// </summary>
+    [Test]
+    public async Task CreateDefinition_WithANullSchemaVersion_ReadsAsVersionOne()
+    {
+        var store = Store();
+        string? stored = null;
+        store.CreateDefinitionAsync(Arg.Any<CreateGraphWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call =>
+             {
+                 stored = call.Arg<CreateGraphWorkflowDefinitionCommand>().GraphJson;
+                 return Snapshot(stored);
+             });
+        await using var factory = EnabledFactory(store);
+        var graph = GraphWorkflowGraphs.StartAgentEnd.Replace("\"schemaVersion\": 1", "\"schemaVersion\": null", StringComparison.Ordinal);
+
+        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(graph)).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
+        using var document = JsonDocument.Parse(AssertEx.NotNull(stored));
+        AssertEx.Equal(1, document.RootElement.GetProperty("schemaVersion").GetInt32(), "null says nothing, so the stored document says 1.");
+    }
+
+    /// <summary>
     ///     A body whose bulk is in the GRAPH rather than in a bounded field: name and description have their own length
     ///     rules, so an oversized one of those would answer 400 from the validator and prove nothing about the cap.
     /// </summary>

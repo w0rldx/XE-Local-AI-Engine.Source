@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
+using System.Globalization;
+using System.Numerics;
 using System.Text.Json;
 
 /// <summary>The closed comparison set. No boolean algebra: two conditions are two edges into an <c>All</c> join.</summary>
@@ -113,8 +115,8 @@ internal sealed record GraphWorkflowCondition(string Path, GraphWorkflowConditio
         {
             // Widest exact type first. Through double, 9007199254740992 and 9007199254740993 are the SAME value, so a
             // 'gt' over ids or byte counts past 2^53 answers on a rounding artefact rather than on the numbers. Double
-            // is kept as the last resort for the tokens neither exact type reads — exponent forms out of decimal range
-            // — and a token not even double reads is not an ordering at all.
+            // is kept as the last resort for the tokens no exact arm reads — fractional and exponent forms out of
+            // decimal range — and a token not even double reads is not an ordering at all.
             if (left.TryGetInt64(out var leftLong) && right.TryGetInt64(out var rightLong))
             {
                 return leftLong.CompareTo(rightLong);
@@ -125,6 +127,20 @@ internal sealed record GraphWorkflowCondition(string Path, GraphWorkflowConditio
                 return leftDecimal.CompareTo(rightDecimal);
             }
 
+            // Past decimal's range an INTEGER token still has an exact value, and only a chain that ends at double
+            // loses it: 1e29 and 1e29+1 are the same double. NumberStyles.AllowLeadingSign is the '^-?[0-9]+$' shape
+            // itself — sign and digits, nothing else — so a fractional or exponent token simply does not parse here
+            // and falls through to the line below.
+            if (BigInteger.TryParse(left.GetRawText(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var leftInteger)
+                && BigInteger.TryParse(right.GetRawText(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var rightInteger))
+            {
+                return leftInteger.CompareTo(rightInteger);
+            }
+
+            // ponytail: fractional and exponent tokens beyond decimal range still round through double, so two that
+            // differ only past ~17 significant digits read as equal and an integer token compared against its own
+            // exponent form answers on the rounded pair. Upgrade path if that ever routes a real graph wrongly:
+            // normalise each token into a BigInteger significand plus a base-10 exponent and compare those.
             return left.TryGetDouble(out var leftDouble) && right.TryGetDouble(out var rightDouble)
                 ? leftDouble.CompareTo(rightDouble)
                 : null;

@@ -49,8 +49,13 @@ internal static class GraphWorkflowContractMapper
 
     /// <summary>
     ///     The wire graph as the document that gets stored. An ABSENT schema version is written as 1 — the version an
-    ///     editor that never sends the member is drawing — and a PRESENT one travels verbatim, 0 and 2 included, so
-    ///     the parser answers it with the version refusal instead of this mapper quietly making it supported.
+    ///     editor that never sends the member is drawing — and a PRESENT integer travels verbatim, 0 and 2 included,
+    ///     so the parser answers it with the version refusal instead of this mapper quietly making it supported.
+    ///     <para>
+    ///         An explicit JSON <c>null</c> and an absent member BOTH mean 1, deliberately: null is the JSON spelling
+    ///         of "I am not saying", not of a version, and there is no unsupported document it could smuggle past the
+    ///         parser — every version this node refuses is an integer, and every present integer passes through.
+    ///     </para>
     /// </summary>
     public static string ToGraphJson(GraphWorkflowGraph graph)
     {

@@ -58,6 +58,11 @@ public sealed class ValidateGraphWorkflowDefinitionRequest
 ///     author wrote a version this node does not speak", and normalizing both to 1 would smuggle an unsupported
 ///     document past the parser's version refusal. Absent means 1; anything present travels verbatim and is answered
 ///     by the parser.
+///     <para>
+///         An explicit JSON <c>null</c> reads the same as an absent member — both mean 1. Null is the JSON spelling of
+///         "I am not saying" rather than a version, and it smuggles nothing past the parser: every version this node
+///         refuses is an integer, and every present integer passes through to be answered there.
+///     </para>
 /// </remarks>
 public sealed record GraphWorkflowGraph(int? SchemaVersion, IReadOnlyList<GraphWorkflowGraphNode> Nodes, IReadOnlyList<GraphWorkflowGraphEdge> Edges)
 {

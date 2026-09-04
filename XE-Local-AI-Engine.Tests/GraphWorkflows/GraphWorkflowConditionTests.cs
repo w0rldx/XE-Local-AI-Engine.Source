@@ -146,6 +146,28 @@ public sealed class GraphWorkflowConditionTests
     }
 
     /// <summary>
+    ///     The same argument one range further out. 30-digit ids are past <c>decimal</c> too, and a chain that ends at
+    ///     double reads two of them differing in the last digit as one value — every relational operator would then
+    ///     answer on the rounding rather than on the numbers.
+    /// </summary>
+    [Test]
+    public void Evaluate_OrdersIntegerTokensBeyondDecimalRangeExactly()
+    {
+        const string Big = """{"n":100000000000000000000000000002}""";
+        const string Neighbour = "100000000000000000000000000001";
+
+        AssertEx.True(Evaluate("n", "gt", Neighbour, Big), "…002 is greater than …001, and only an exact comparison over the tokens can say so.");
+        AssertEx.False(Evaluate("n", "lt", Neighbour, Big));
+        AssertEx.False(Evaluate("n", "eq", Neighbour, Big), "the two are distinct integers, however they round as doubles.");
+        AssertEx.True(Evaluate("n", "ne", Neighbour, Big));
+
+        // The documented ceiling, not an accident: an exponent form is not an integer token, so this pair falls to the
+        // double arm, where 1e29 and 1e29 + 2 are the same value. Recording the answer the double path gives is the
+        // point — the day the significand/exponent upgrade in Order lands, this row is what has to change.
+        AssertEx.True(Evaluate("n", "eq", "1e29", Big), "an integer token against its exponent form is answered by the double fallback.");
+    }
+
+    /// <summary>
     ///     Exponent forms are numbers like any other, and neither side has to be spelled the same way as the other for
     ///     the comparison to be exact.
     /// </summary>
