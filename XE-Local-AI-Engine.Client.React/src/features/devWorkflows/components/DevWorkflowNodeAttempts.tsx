@@ -148,7 +148,7 @@ export function DevWorkflowNodeAttempts({ attempts, nodeRun }: DevWorkflowNodeAt
 					{partial
 						? t(
 								"pages.devWorkflows.attempts.totalPartial",
-								"Total across the attempts on record: {{summary}} — at least one earlier attempt left no record, so the real total is higher.",
+								"Total across the attempts on record: {{summary}} — at least one attempt has incomplete cost data, so the real total is higher.",
 								{ summary: totalSummary },
 							)
 						: t("pages.devWorkflows.attempts.total", "Total across attempts: {{summary}}", { summary: totalSummary })}
