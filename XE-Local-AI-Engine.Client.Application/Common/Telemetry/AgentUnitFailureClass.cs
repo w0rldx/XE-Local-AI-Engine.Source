@@ -55,6 +55,12 @@ public static class AgentUnitFailureClass
     /// <summary>A human said no.</summary>
     public const string Rejected = "Rejected";
 
+    /// <summary>
+    ///     The agent itself said the objective was not met — a plan task left Blocked, or an honest unmet close — and a
+    ///     human decides. Neither a fault of the runtime nor a refusal by a person, so neither group fits it.
+    /// </summary>
+    public const string ObjectiveNotMet = "ObjectiveNotMet";
+
     /// <summary>Everything else, including a reason written in no vocabulary at all.</summary>
     public const string Internal = "Internal";
 
@@ -74,6 +80,7 @@ public static class AgentUnitFailureClass
         [DevWorkflowFailureClasses.BudgetExhausted] = BudgetExhausted,
         [DevWorkflowFailureClasses.ToolCommandFailed] = ToolOrCommand,
         [DevWorkflowFailureClasses.GateRejected] = Rejected,
+        [DevWorkflowFailureClasses.ObjectiveNotMet] = ObjectiveNotMet,
         [DevWorkflowFailureClasses.Internal] = Internal
     };
 

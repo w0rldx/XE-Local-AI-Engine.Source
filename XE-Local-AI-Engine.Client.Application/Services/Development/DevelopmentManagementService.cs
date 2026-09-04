@@ -84,7 +84,12 @@ internal sealed class DevelopmentManagementService(
     IOptions<DevWorkflowOptions> workflowOptions,
     TimeProvider timeProvider) : IDevelopmentManagementService
 {
-    private const string ReviewRoundLimitReason = "The configured maximum review rounds has been reached.";
+    /// <summary>
+    ///     Why a task with no rounds left was stood down — and, because it is PERSISTED as the task's reason and read
+    ///     back to recognise that stand-down, also the sentinel for it. Says "rounds" rather than "review rounds"
+    ///     because the budget stopped counting review entries alone: a failed deterministic gate spends one too.
+    /// </summary>
+    private const string ReviewRoundLimitReason = "The configured maximum number of rounds has been reached.";
 
     private readonly IDevelopmentApplyService _applyService = applyService ?? throw new ArgumentNullException(nameof(applyService));
     private readonly IDevelopmentArtifactBlobStore _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
@@ -313,21 +318,31 @@ internal sealed class DevelopmentManagementService(
             throw new DevelopmentInvalidTransitionException("The Development task already has an active attempt.");
         }
 
-        if (task.Status == DevelopmentTaskStatus.InProgress
-            && attempts.LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Coder) is { Status: DevelopmentAttemptStatus.Succeeded })
-        {
-            if (task.CurrentReviewRound >= task.MaxReviewRounds)
-            {
-                _ = await _coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
-                                              DerivedOperationId(operationId, "review-round-limit"),
-                                              DevelopmentTaskStatus.Blocked,
-                                              task.Version,
-                                              ReviewRoundLimitReason),
-                                          cancellationToken)
-                                      .ConfigureAwait(false);
-                return new DevelopmentNextActionResult("Blocked", projectId, taskId, null, DevelopmentTaskStatus.Blocked, null);
-            }
+        // InProgress behind a SUCCEEDED coder attempt is the state that means "implemented, validate it".
+        var awaitingValidation = task.Status == DevelopmentTaskStatus.InProgress
+                                 && attempts.LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Coder) is
+                                     { Status: DevelopmentAttemptStatus.Succeeded };
 
+        // The budget is checked BEFORE the branch that would spend it, and covers the rework wait as well as the
+        // validation wait: a task at the cap has nothing left whichever of the two it is sitting in. Gated on
+        // ChangesRequested too because that is where a rejected review and a failed gate both leave it, and starting
+        // the coder round from there first spent a whole model attempt — its tokens and its duration — on work that
+        // could never reach a review. InReview is deliberately absent: that round is already paid for.
+        if ((awaitingValidation || task.Status == DevelopmentTaskStatus.ChangesRequested)
+            && task.CurrentReviewRound >= task.MaxReviewRounds)
+        {
+            _ = await _coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
+                                          DerivedOperationId(operationId, "review-round-limit"),
+                                          DevelopmentTaskStatus.Blocked,
+                                          task.Version,
+                                          ReviewRoundLimitReason),
+                                      cancellationToken)
+                                  .ConfigureAwait(false);
+            return new DevelopmentNextActionResult("Blocked", projectId, taskId, null, DevelopmentTaskStatus.Blocked, null);
+        }
+
+        if (awaitingValidation)
+        {
             if (!_supervisor.StartValidation(taskId))
             {
                 throw new DevelopmentConcurrencyException("Deterministic validation is already scheduled for this task.");

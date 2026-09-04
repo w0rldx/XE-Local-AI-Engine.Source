@@ -107,7 +107,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                 validationReport,
                 timeout.Token).ConfigureAwait(false);
             var model = await _reviewerModel.RunAsync(snapshot.ModelId,
-                BuildPrompt(snapshot, task, validationReport),
+                BuildPrompt(snapshot, task, validationReport, profile),
                 tools,
                 maxOutputTokens,
                 _options.MaxToolCalls,
@@ -280,16 +280,20 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
     /// <summary>Internal so the composition can be pinned directly; nothing outside this class calls it.</summary>
     internal static string BuildPrompt(DevelopmentExecutionSnapshot snapshot,
         DevelopmentTaskSnapshot task,
-        DevelopmentValidationReport validation) =>
+        DevelopmentValidationReport validation,
+        DevelopmentCommandProfile profile) =>
         string.Concat("Task: ", snapshot.Title,
             "\nRequirements:\n", snapshot.Requirements,
             "\nAcceptance criteria:\n", snapshot.AcceptanceCriteriaJson,
+            "\n", DevelopmentTestWritePolicy.Prompt(profile),
             Policy(snapshot.WorkflowPolicyText),
-            "\nReview round: ", task.CurrentReviewRound, " of ", task.MaxReviewRounds,
+            OperatorInstruction(snapshot.OperatorInstruction),
+            "\nRound: ", task.CurrentReviewRound, " of ", task.MaxReviewRounds,
             "\nValidated subject: ", validation.SubjectHash,
             "\nValidation profile: ", validation.CommandProfileVersion,
             "\nValidation passed: ", validation.Passed,
             DescribeTestResults(validation),
+            "\nJudge the work against the requirements AS AMENDED by any operator instruction above, and never request a change the test-write policy forbids.",
             "\nUse only the read-only tools. Never modify the worktree or claim task completion.");
 
     /// <summary>
@@ -324,6 +328,21 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                        ? $"- {entry.CommandId}: {entry.Outcome.Executed} executed, {entry.Outcome.Passed} passed, {entry.Outcome.Failed} failed, {entry.Outcome.Discovered} discovered"
                        : $"- {entry.CommandId}: no readable test result ({entry.Outcome.ParseFailureCode})"));
     }
+
+    /// <summary>
+    ///     What a person told this task to do differently, which until now reached the coder alone. Live on 2026-09-04
+    ///     that asymmetry deadlocked a task: the operator moved a test out of a base-committed file the test-write
+    ///     policy protects, the coder complied and passed validation 4 of 4, and the reviewer — still reading only the
+    ///     original requirements — demanded it be moved back. The next coder round obeyed the reviewer and was refused
+    ///     by the policy, and no number of retries could break the loop.
+    /// </summary>
+    private static string OperatorInstruction(string? instruction) =>
+        string.IsNullOrWhiteSpace(instruction)
+            ? string.Empty
+            : string.Concat("\nOperator instruction. This AMENDS the requirements and the acceptance criteria above, wherever they conflict:\n",
+                instruction,
+                "\nWork implementing it is not a requirement violation on that point; judge everything else as usual.",
+                "\nIt does not amend the workspace test-write policy, which is enforced and cannot be waived.");
 
     /// <summary>The workspace policy's message, or the generic line when it cannot be shown safely.</summary>
     private static string PolicyReason(DevelopmentWorkspaceSecurityException exception)

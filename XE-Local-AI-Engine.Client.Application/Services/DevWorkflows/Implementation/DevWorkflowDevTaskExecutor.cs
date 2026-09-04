@@ -677,7 +677,8 @@ internal sealed class DevWorkflowDevTaskExecutor
 
     /// <summary>
     ///     Hands the operator's reason for retrying this node run to the task's next coder round, and answers whether
-    ///     it wrote one.
+    ///     it wrote one. Marked <c>OperatorDirected</c>, which is what lets the coder and reviewer prompts rank a
+    ///     person's sentence above the task's own immutable requirements and above a reviewer's feedback.
     ///     <para>
     ///         Only from <c>InProgress</c> with a coder attempt that did NOT succeed, which is where a blocked-then-
     ///         retried implementation lands: the next action there is a coder round either way, so the change request
@@ -688,8 +689,9 @@ internal sealed class DevWorkflowDevTaskExecutor
     ///         <item><c>InProgress</c> whose last coder attempt SUCCEEDED is on its way to deterministic validation;
     ///             asking for changes would throw that round and its evidence away.</item>
     ///         <item><c>Ready</c> and <c>Planned</c> have no round to brief — nothing has been implemented yet.</item>
-    ///         <item><c>ChangesRequested</c> already carries a reviewer's own feedback, and overwriting it would
-    ///             replace the verdict the round exists to answer.</item>
+    ///         <item><c>ChangesRequested</c> already carries the verdict that asked for the round — a reviewer's
+    ///             feedback, or the deterministic gate's failure — and overwriting it would replace the very thing the
+    ///             round exists to answer.</item>
     ///         <item><c>InReview</c> would have its next action CHANGED by the ask, from the re-review that is the
     ///             right answer to a reviewer that failed into a coder round nobody asked for.</item>
     ///         <item><c>AwaitingApply</c> never reaches here: the caller settles the node run <c>Succeeded</c> above,
@@ -734,7 +736,8 @@ internal sealed class DevWorkflowDevTaskExecutor
                                      operationId,
                                      DevelopmentTaskStatus.ChangesRequested,
                                      task.Version,
-                                     $"An operator retried the '{nodeRun.NodeKey}' step of the workflow driving this task, and said: {said}"),
+                                     $"An operator retried the '{nodeRun.NodeKey}' step of the workflow driving this task, and said: {said}",
+                                     OperatorDirected: true),
                                  cancellationToken)
                              .ConfigureAwait(false);
             return true;
@@ -875,12 +878,14 @@ internal sealed class DevWorkflowDevTaskExecutor
         CancellationToken cancellationToken)
     {
         var failingNodeKey = routed.NodeKey;
-        // A workflow-driven change request does NOT consume a review round. Rounds are spent ENTERING review — both
-        // TransitionTaskAsync and FinalizeValidationAsync bump CurrentReviewRound only on the InReview hop, and refuse
-        // it past the maximum — and this transition never enters review, so charging it one would take a round away
-        // from work that has not been reviewed yet. What it must not do is ask for a round that cannot finish: a task
-        // that has spent them all would run a whole coder attempt, reach validation, and be blocked at the review hop
-        // for a reason nobody can act on. So the node stands down here instead, while the reason is still legible.
+        // A workflow-driven change request does NOT consume a round. TransitionTaskAsync bumps CurrentReviewRound only
+        // on the InReview hop, and refuses it past the maximum, and this transition never enters review — so charging
+        // it one would take a round away from work nothing has judged yet. FinalizeValidationAsync DOES charge one on
+        // its failure hop, because a failed deterministic gate IS a judgement on the round, and that budget is the only
+        // thing bounding the rework loop; this ask judges nothing. What it must not do is ask for a round that cannot
+        // finish: a task that has spent them all would run a whole coder attempt and be stood down before it could
+        // reach a review, for a reason nobody can act on. So the node stands down here instead, while the reason is
+        // still legible.
         if (task.CurrentReviewRound >= task.MaxReviewRounds)
         {
             return await SettleFailureAsync(store,
@@ -890,7 +895,7 @@ internal sealed class DevWorkflowDevTaskExecutor
                     nodeRuns,
                     new DevWorkflowFailure(DevWorkflowFailureClasses.BudgetExhausted,
                         string.Create(CultureInfo.InvariantCulture,
-                            $"Node run '{failingNodeKey}' asked this task to be implemented again, and it has already used all {task.MaxReviewRounds} of its review rounds."),
+                            $"Node run '{failingNodeKey}' asked this task to be implemented again, and it has already used all {task.MaxReviewRounds} of its rounds."),
                         Output(nodeRun, task, task.Id, DevWorkflowFailureClasses.BudgetExhausted)),
                     cancellationToken)
                 .ConfigureAwait(false);

@@ -12,6 +12,8 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 internal interface IDevelopmentPatchEvidenceService
 {
     Task<DevelopmentPatchEvidence> ExportAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlySet<string>> ListChangedPathsAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -41,22 +43,7 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         ArgumentNullException.ThrowIfNull(session);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Immediately before the first HOST-side Git command, and the ordering is the control. `reset` refreshes the
-        // index and `add -A` runs clean filters, so a repository-local `core.fsmonitor` or `filter.<driver>.clean` in
-        // the workspace's own .git/config executes HERE, on the machine running the engine — and the standalone clone
-        // is what made that file agent-writable inside the jail. AgentHomeGit's -c pins close fsmonitor but
-        // cannot close filter drivers, whose names are arbitrary; removing the definitions closes both without
-        // enumerating any key. No meaningful TOCTOU: the attempt has finished and no agent command is in flight.
-        DevelopmentWorkspaceGitConfig.RestoreMinimal(session.HostWorktreePath);
-
-        _ = await RunGitExactAsync(session,
-            ["reset", "--mixed", "--quiet", "HEAD", "--"],
-            maxOutputBytes: 4096,
-            cancellationToken).ConfigureAwait(false);
-        _ = await RunGitExactAsync(session,
-            ["add", "-A", "--", "."],
-            maxOutputBytes: 4096,
-            cancellationToken).ConfigureAwait(false);
+        await StageWorkingTreeAsync(session, cancellationToken).ConfigureAwait(false);
         var patch = await RunGitExactAsync(session,
             ["diff", "--cached", "--binary", "--full-index", "--no-ext-diff", "HEAD", "--", "."],
             maxOutputBytes: _options.MaxPatchBytes,
@@ -114,6 +101,62 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
             patchBytes,
             manifestBytes,
             changedFiles);
+    }
+
+    /// <summary>
+    ///     The workspace paths that differ from the base commit right now. Shares its staging and its
+    ///     <c>--name-status</c> parse with <see cref="ExportAsync" />, so the two can never disagree about how a path
+    ///     is spelled. Unlike the export it tolerates an empty result, which is the ordinary state of a task's first
+    ///     attempt; its only size bound is <c>MaxPatchBytes</c> on the <c>--name-status</c> output, which
+    ///     <see cref="RunGitExactAsync" /> enforces.
+    /// </summary>
+    public async Task<IReadOnlySet<string>> ListChangedPathsAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        cancellationToken.ThrowIfCancellationRequested();
+        await StageWorkingTreeAsync(session, cancellationToken).ConfigureAwait(false);
+        var status = await RunGitExactAsync(session,
+            ["diff", "--cached", "--name-status", "-z", "HEAD", "--", "."],
+            maxOutputBytes: _options.MaxPatchBytes,
+            cancellationToken).ConfigureAwait(false);
+        return status.StandardOutput.Length == 0
+            ? new HashSet<string>(StringComparer.Ordinal)
+
+            // Both ends of a rename: an attempt that renames b back to a has changed a, and a caller comparing a
+            // submission against this set would otherwise refuse the one shape it exists to forgive. Protected and
+            // escaping paths are dropped silently — ExportAsync judges those at the end of the attempt, as it does now.
+            : ParseStatus(status.StandardOutput)
+              .SelectMany(static item => item.PreviousPath is null ? (string[])[item.Path] : [item.Path, item.PreviousPath])
+              .Where(static path => DevelopmentWorkspaceSecurity.Confine(path, allowRoot: false).IsAccepted)
+              .ToHashSet(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    ///     Refreshes the index so a <c>--cached</c> diff against HEAD sees the whole working tree, untracked files
+    ///     included.
+    ///     <para>
+    ///         The config restore sits immediately before the first HOST-side Git command, and the ordering is the
+    ///         control. <c>reset</c> refreshes the index and <c>add -A</c> runs clean filters, so a repository-local
+    ///         <c>core.fsmonitor</c> or <c>filter.&lt;driver&gt;.clean</c> in the workspace's own .git/config executes
+    ///         HERE, on the machine running the engine — and the standalone clone is what made that file
+    ///         agent-writable inside the jail. AgentHomeGit's -c pins close fsmonitor but cannot close filter drivers,
+    ///         whose names are arbitrary; removing the definitions closes both without enumerating any key. No
+    ///         command of THIS attempt is in flight at either caller: the export runs after the attempt finished, and
+    ///         the changed-path listing runs before the model starts. The sandbox is per task and outlives an attempt,
+    ///         so a process a previous attempt leaked can still be writing here.
+    ///     </para>
+    /// </summary>
+    private async Task StageWorkingTreeAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken)
+    {
+        DevelopmentWorkspaceGitConfig.RestoreMinimal(session.HostWorktreePath);
+        _ = await RunGitExactAsync(session,
+            ["reset", "--mixed", "--quiet", "HEAD", "--"],
+            maxOutputBytes: 4096,
+            cancellationToken).ConfigureAwait(false);
+        _ = await RunGitExactAsync(session,
+            ["add", "-A", "--", "."],
+            maxOutputBytes: 4096,
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<ExactGitResult> RunGitExactAsync(DevelopmentWorkspaceSession session,

@@ -5212,6 +5212,7 @@
 				"BudgetExhausted": "Budget aufgebraucht",
 				"Cancelled": "Abgebrochen",
 				"GateRejected": "An einer Freigabe abgelehnt",
+				"ObjectiveNotMet": "Der Agent hat das Ziel nicht erreicht",
 				"unknown": "Der Knoten ist fehlgeschlagen"
 			},
 			"gate": {
@@ -5255,7 +5256,7 @@
 				"noReport": "Noch kein Bericht.",
 				"devTask": "Entwicklungsaufgabe",
 				"openDevelopment": "Development Mode öffnen",
-				"devTaskReviewRound": "Prüfrunde {{round}}",
+				"devTaskReviewRound": "Runde {{round}}",
 				"devTaskNoStage": "Diese Aufgabe hat noch keinen Stand gemeldet.",
 				"devTaskEvidence": "Development Mode zeigt Versuche, Patch und Prüfnachweise dieser Aufgabe. Die Freigabe, mit der ein Patch übernommen wird, ist ein Gate-Knoten in diesem Workflow.",
 				"objective": "Zielvorgabe",
@@ -5298,6 +5299,7 @@
 					"BudgetExhausted": "Budget erschöpft",
 					"ToolOrCommand": "Tool oder Befehl",
 					"Rejected": "Abgelehnt",
+					"ObjectiveNotMet": "Ziel nicht erreicht",
 					"Internal": "Intern"
 				}
 			},

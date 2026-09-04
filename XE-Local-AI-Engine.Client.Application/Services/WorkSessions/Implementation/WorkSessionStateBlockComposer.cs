@@ -41,19 +41,20 @@ internal static class WorkSessionStateBlockComposer
     /// <summary>
     ///     Appended for <see cref="AgentWorkSessionKind.Workflow" /> sessions; see the call site for why.
     ///     <para>
-    ///         The stuck sentence asks for an HONEST completion rather than a quiet one, because nothing downstream
-    ///         enforces the difference: <c>DevWorkflowAgentExecutor.PollAsync</c> maps every completed session to a
-    ///         succeeded node run whatever it wrote, so a step that gives up and completes is reported to the operator
-    ///         as a success. That mapping is live finding F1 and changing it needs an operator ruling, which leaves
-    ///         this text the only thing between a stuck node and a green one — so it must not ask for the completion
-    ///         that would be read as success.
+    ///         The stuck sentence names the two things <c>DevWorkflowAgentExecutor</c> now READS out of a completed
+    ///         session before it decides the node run's fate: a task left <c>Blocked</c>, and <c>objectiveMet:false</c>
+    ///         on the completion. Either one blocks the row for a human instead of reporting a success nobody had
+    ///         (live finding F1). So this is no longer only a plea for honesty — it is the wording of a contract the
+    ///         executor enforces, and the two signals must stay named here for a model to know to leave them.
     ///     </para>
     /// </summary>
     private const string WorkflowOwnedFooter =
         " This session is driven by a development-workflow node and has no operator attached: ask_user is not available"
         + " and nothing you ask will be answered. Decide and carry on yourself. If you are genuinely stuck, mark the task"
-        + " Blocked with the reason, record a finding that says the objective was NOT met and why, and do not claim"
-        + " success in the completion summary.";
+        + " Blocked with the reason, record a finding that says the objective was NOT met and why, and call"
+        + " complete_work_session with objectiveMet false and that reason in the summary. Do not claim success in the"
+        + " completion summary. A task you marked Blocked and later worked past must be moved to Done or Dropped before"
+        + " you complete: a task left Blocked stands this step down for a human.";
 
     private const int MaxOpenTasks = 20;
     private const int MaxFindings = 15;

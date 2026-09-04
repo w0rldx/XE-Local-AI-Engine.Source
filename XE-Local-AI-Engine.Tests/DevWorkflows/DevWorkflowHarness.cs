@@ -665,6 +665,44 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         return artifactId;
     }
 
+    /// <summary>Adds one task to the node run's session in the state given, the way its <c>update_work_plan</c> would.</summary>
+    public async Task<Guid> ApplyAgentTaskAsync(Guid runId,
+        string nodeKey,
+        string title,
+        AgentWorkSessionTaskStatus status,
+        string? blockedReason = null)
+    {
+        var sessionId = await ReadSessionIdAsync(runId, nodeKey).ConfigureAwait(false);
+        var taskId = Guid.NewGuid();
+        await using var scope = Services.CreateAsyncScope();
+        _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
+                       .ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
+                           WorkSessionVersions.Any,
+                           Guid.NewGuid(),
+                           AgentWorkSessionTaskOrigin.Agent,
+                           [new WorkPlanTaskChange(taskId, WorkPlanTaskOperation.Add, Title: title, Status: status, BlockedReason: blockedReason)]))
+                       .ConfigureAwait(false);
+        return taskId;
+    }
+
+    /// <summary>
+    ///     Records the completion event the node run's session's <c>complete_work_session</c> tool would, from the
+    ///     detail JSON verbatim — so a test can also arrange the shape a build without <c>objectiveMet</c> wrote.
+    /// </summary>
+    public async Task RequestAgentCompletionAsync(Guid runId, string nodeKey, string detailJson)
+    {
+        var sessionId = await ReadSessionIdAsync(runId, nodeKey).ConfigureAwait(false);
+        await using var scope = Services.CreateAsyncScope();
+        _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
+                       .AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
+                           WorkSessionVersions.Any,
+                           WorkSessionEventTypes.CompletionRequested,
+                           Guid.NewGuid(),
+                           Outcome: null,
+                           detailJson))
+                       .ConfigureAwait(false);
+    }
+
     public async Task<IReadOnlyList<DevWorkflowArtifactSnapshot>> ReadArtifactsAsync(Guid runId)
     {
         await using var scope = Services.CreateAsyncScope();
