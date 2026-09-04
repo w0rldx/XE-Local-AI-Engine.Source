@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using System.Diagnostics;
 using System.Text.Json;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -14,6 +15,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class LlamaServerLaunchFallbackStoreTests
 {
     private const string StateFileName = "llama-launch-fallback.json";
+
+    private const string LockFileName = StateFileName + ".lock";
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -130,6 +133,49 @@ public sealed class LlamaServerLaunchFallbackStoreTests
         }
     }
 
+    [Test]
+    public async Task ContendedWriteLock_FallsBackInsteadOfThrowing()
+    {
+        using var root = new TempCacheRoot();
+        await File.WriteAllTextAsync(root.StatePath, """{"disabledOptimizedConfigs":["Cuda:q4_0"]}""");
+
+        // A sibling node process holding the cross-process write lock for longer than the retry budget. The write must
+        // degrade to the in-process merge and still land, never fault the spawn that recorded the verdict.
+        using (new FileStream(root.LockPath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None))
+        {
+            using var store = new LlamaServerLaunchFallbackStore(root.Path);
+
+            var elapsed = Stopwatch.StartNew();
+            await store.DisableOptimizedConfigAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None);
+            elapsed.Stop();
+
+            // A LOWER bound, so a loaded box can only ever overshoot it: the write must have spent the retry budget
+            // waiting for the held lock. Without it this test would also pass on a platform where FileShare.None is
+            // not enforced at all and the "contention" never happened.
+            AssertEx.True(elapsed.Elapsed >= TimeSpan.FromMilliseconds(50),
+                $"The write must contend for the held OS lock before falling back; it returned in {elapsed.ElapsedMilliseconds} ms.");
+            AssertEx.True(await store.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None));
+        }
+
+        var persisted = await ReadStateAsync(root);
+        AssertEx.Contains(persisted.DisabledOptimizedConfigs ?? [], "Cuda:q8_0");
+        AssertEx.Contains(persisted.DisabledOptimizedConfigs ?? [], "Cuda:q4_0");
+    }
+
+    [Test]
+    public async Task WriteLock_IsTakenByTheWrite_AndReleasedWithIt()
+    {
+        using var root = new TempCacheRoot();
+        using var store = new LlamaServerLaunchFallbackStore(root.Path);
+
+        await store.DisableOptimizedConfigAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q4_0, CancellationToken.None);
+
+        // Proves the write path really takes the lock (otherwise the contention test above is vacuous) and does not
+        // leak it: the file exists, and a sibling can take it exclusively straight after the write returns.
+        AssertEx.True(File.Exists(root.LockPath), "The write must take an OS lock on the sibling lock file.");
+        using var siblingLock = new FileStream(root.LockPath, FileMode.Open, FileAccess.Write, FileShare.None);
+    }
+
     private static async Task<LlamaServerLaunchFallbackState> ReadStateAsync(TempCacheRoot root)
     {
         var persisted = JsonSerializer.Deserialize<LlamaServerLaunchFallbackState>(await File.ReadAllTextAsync(root.StatePath),
@@ -149,6 +195,8 @@ public sealed class LlamaServerLaunchFallbackStoreTests
         public string Path { get; }
 
         public string StatePath => System.IO.Path.Combine(Path, StateFileName);
+
+        public string LockPath => System.IO.Path.Combine(Path, LockFileName);
 
         public void Dispose()
         {
