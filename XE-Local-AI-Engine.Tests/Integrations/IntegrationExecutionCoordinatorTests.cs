@@ -601,6 +601,62 @@ public sealed class IntegrationExecutionCoordinatorTests
         }
     }
 
+    /// <summary>
+    ///     F1: the sweep's filtered set SHRINKS underneath it. Offset paging read page one, and by the time it asked
+    ///     for offset=RecoveryPageSize a row from page one had left the set — here through the already-listening
+    ///     external cancel path — so every later row had shifted down by one and the row now sitting at the boundary
+    ///     was skipped, staying non-terminal until some future restart happened to win the race. The visited-set loop
+    ///     re-reads from the top instead, so nothing can shift past it.
+    /// </summary>
+    [Test]
+    public async Task StartAsync_WhenARowLeavesTheSetBetweenTwoReads_StillTerminalizesEveryOtherRow()
+    {
+        // The ring must hold every seeded row: a refused entry leaves a row non-terminal by design, which would be
+        // indistinguishable here from the paging skip this test exists to catch.
+        using var harness = new Harness(maxTrackedExecutions: 256);
+
+        // More than one RecoveryPageSize (200), so the sweep genuinely needs a second read.
+        var seeded = new List<Guid>();
+        for (var index = 0; index < 205; index++)
+        {
+            seeded.Add(harness.SeedAccepted());
+        }
+
+        // Every row shares the harness's receive stamp, so the store's ReceivedAtUtc-then-Id ordering puts the
+        // highest id first: this is a row page one certainly held.
+        var leavesTheSet = seeded.Max();
+        harness.Executions.AfterList = call =>
+        {
+            if (call == 1)
+            {
+                harness.Executions.Complete(leavesTheSet);
+            }
+        };
+
+        await harness.Coordinator.StartAsync(CancellationToken.None);
+        await harness.Coordinator.StopAsync(CancellationToken.None);
+
+        var live = seeded.Where(id => NonTerminal.Contains(harness.Row(id).Status)).ToArray();
+        AssertEx.Empty(live, "A row that shifted down when the set shrank must still be swept, not left for a future restart.");
+
+        AssertEx.Equal(expected: 204,
+            seeded.Count(id => harness.Row(id).FailureCategory == IntegrationFailureCategories.Restart),
+            "Every row except the one that left the set is closed by this sweep as a restart casualty.");
+
+        foreach (var executionId in seeded)
+        {
+            AssertEx.True(harness.Executions.Events.Count(row => row.ExecutionId == executionId) <= 1,
+                "The visited set makes the repeated reads idempotent: one sweep, at most one terminal event per row.");
+        }
+    }
+
+    private static readonly IReadOnlySet<IntegrationExecutionStatus> NonTerminal = new HashSet<IntegrationExecutionStatus>
+    {
+        IntegrationExecutionStatus.Accepted,
+        IntegrationExecutionStatus.Queued,
+        IntegrationExecutionStatus.Running
+    };
+
     [Test]
     public async Task ExecuteAsync_WhileAnotherHolderOwnsTheLease_MovesEveryQueuedExecutionToQueued()
     {

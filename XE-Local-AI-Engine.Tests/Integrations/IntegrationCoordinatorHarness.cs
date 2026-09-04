@@ -64,7 +64,15 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     private TaskCompletionSource _leaseGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _ordinal;
 
-    public IntegrationCoordinatorHarness(int maxQueueAgeSeconds = 120, TimeProvider? timeProvider = null, int contextBudgetTokens = 12_000)
+    /// <summary>
+    ///     <paramref name="maxTrackedExecutions" /> raises the replay ring's capacity for the one suite that seeds more
+    ///     rows than its default 64 — a refused ring entry makes the startup sweep leave a row non-terminal on purpose,
+    ///     which would be indistinguishable from the paging bug such a suite is there to catch.
+    /// </summary>
+    public IntegrationCoordinatorHarness(int maxQueueAgeSeconds = 120,
+        TimeProvider? timeProvider = null,
+        int contextBudgetTokens = 12_000,
+        int? maxTrackedExecutions = null)
     {
         MaxQueueAgeSeconds = maxQueueAgeSeconds;
 
@@ -155,7 +163,12 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
                   SignalCancel();
               });
 
-        var options = Options.Create(new IntegrationOptions());
+        var options = Options.Create(maxTrackedExecutions is { } maxTracked
+            ? new IntegrationOptions
+            {
+                MaxTrackedExecutions = maxTracked
+            }
+            : new IntegrationOptions());
         _buffer = new IntegrationExecutionEventBuffer(options, TimeProvider.System);
 
         var services = new ServiceCollection();

@@ -565,6 +565,14 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
     /// <summary>Makes every paged list throw, which is how a WHOLE startup sweep fails.</summary>
     public bool ThrowOnEveryList { get; set; }
 
+    /// <summary>
+    ///     Runs AFTER each page is taken, with the 1-based read number, so a suite can shrink the filtered set between
+    ///     two of the sweep's reads — the race that makes offset paging skip a row.
+    /// </summary>
+    public Action<int>? AfterList { get; set; }
+
+    private int _listCalls;
+
     public Task<IReadOnlyList<IntegrationExecutionSnapshot>> ListAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default)
     {
         if (ThrowOnEveryList)
@@ -574,15 +582,19 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
 
         ArgumentNullException.ThrowIfNull(filter);
 
+        IReadOnlyList<IntegrationExecutionSnapshot> taken;
         lock (_gate)
         {
-            var matches = Matching(filter).OrderByDescending(static row => row.ReceivedAtUtc)
-                                          .ThenByDescending(static row => row.Id)
-                                          .Skip(filter.Offset)
-                                          .Take(filter.Limit)
-                                          .ToArray();
-            return Task.FromResult<IReadOnlyList<IntegrationExecutionSnapshot>>(matches);
+            taken = Matching(filter).OrderByDescending(static row => row.ReceivedAtUtc)
+                                    .ThenByDescending(static row => row.Id)
+                                    .Skip(filter.Offset)
+                                    .Take(filter.Limit)
+                                    .ToArray();
         }
+
+        // Outside the lock: the hook mutates rows through the double's own public helpers, which take it themselves.
+        AfterList?.Invoke(Interlocked.Increment(ref _listCalls));
+        return Task.FromResult(taken);
     }
 
     public Task<int> CountAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default)

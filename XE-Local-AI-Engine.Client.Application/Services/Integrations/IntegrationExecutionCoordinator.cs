@@ -361,58 +361,76 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
 
         // ONE paged loop over the whole non-terminal set rather than one loop per status: the filter takes a status
         // set, so three passes over the same index bought nothing.
-        var interrupted = new List<IntegrationExecutionSnapshot>();
+        //
+        // The loop is a VISITED SET over repeated reads, not offset paging, because the set shrinks underneath it.
+        // Every row this sweep terminalizes leaves the filter, and so does one the already-listening external API
+        // cancels mid-sweep; a second read at offset=RecoveryPageSize would then start past a row that had shifted
+        // down into page one, and that row would stay non-terminal forever. Re-reading from the top and letting the
+        // visited set suppress the rework cannot skip anything. Every row is added to the set BEFORE it is processed,
+        // so a row this sweep deliberately leaves non-terminal — admitted after this coordinator, or refused by the
+        // ring — cannot re-appear and spin the loop. The offset only advances past a whole page of such rows, which
+        // is what keeps the loop finite when they fill one.
+        var visited = new HashSet<Guid>();
+        var recovered = 0;
         var offset = 0;
         while (true)
         {
             var page = await store.ListAsync(new IntegrationExecutionFilter(TriggerId: null, SessionId: null, NonTerminalStatuses, RecoveryPageSize, offset), cancellationToken)
                                   .ConfigureAwait(false);
-            interrupted.AddRange(page);
-            if (page.Count < RecoveryPageSize)
+            if (page.Count == 0)
             {
                 break;
             }
 
-            offset += page.Count;
-        }
-
-        var recovered = 0;
-        foreach (var row in interrupted)
-        {
-            if (row.ReceivedAtUtc >= _constructedAtUtc)
+            var unvisited = 0;
+            foreach (var row in page)
             {
-                // Admitted after this coordinator existed, so it cannot be a leftover of the previous process: the
-                // accept path enqueues every row it commits, and this one's caller is holding its 202.
-                continue;
+                if (!visited.Add(row.Id))
+                {
+                    continue;
+                }
+
+                unvisited++;
+
+                if (row.ReceivedAtUtc >= _constructedAtUtc)
+                {
+                    // Admitted after this coordinator existed, so it cannot be a leftover of the previous process: the
+                    // accept path enqueues every row it commits, and this one's caller is holding its 202.
+                    continue;
+                }
+
+                // R3-1: seed the ring from the persisted watermark so the sweep's terminal event continues the
+                // execution's OWN numbering instead of restarting at 1 and colliding with rows already written.
+                // The watermark alone is not enough: a writer that lost the watermark race before the crash left a
+                // row whose highest EVENT sequence is above it, and seeding below that mints a terminal sequence that
+                // collides with an existing (execution_id, sequence) row on every restart forever.
+                var seedSequence = await HighestPersistedSequenceAsync(store, row, cancellationToken).ConfigureAwait(false);
+                if (!_buffer.TryCreate(row.Id, seedSequence))
+                {
+                    _logger.LogWarning("The event buffer refused a recovery entry for integration execution {ExecutionId}; it stays non-terminal for the next restart.", row.Id);
+                    continue;
+                }
+
+                var context = new ExecutionRunContext(store, row);
+                if (await TerminalizeAsync(context,
+                            NonTerminalStatuses,
+                            IntegrationExecutionStatus.Failed,
+                            IntegrationFailureCategories.Restart,
+                            "The node restarted while the execution was in flight.")
+                        .ConfigureAwait(false))
+                {
+                    recovered++;
+
+                    // The sweep is a DIFFERENT terminal path from the run's own, and it has to close per-invocation
+                    // sessions too — otherwise a session interrupted by a restart stays Active with no execution that
+                    // could ever close it. The busy guard is bypassed by construction: the row is already terminal.
+                    await ClosePerInvocationSessionAsync(scope.ServiceProvider, row).ConfigureAwait(false);
+                }
             }
 
-            // R3-1: seed the ring from the persisted watermark so the sweep's terminal event continues the
-            // execution's OWN numbering instead of restarting at 1 and colliding with rows already written.
-            // The watermark alone is not enough: a writer that lost the watermark race before the crash left a
-            // row whose highest EVENT sequence is above it, and seeding below that mints a terminal sequence that
-            // collides with an existing (execution_id, sequence) row on every restart forever.
-            var seedSequence = await HighestPersistedSequenceAsync(store, row, cancellationToken).ConfigureAwait(false);
-            if (!_buffer.TryCreate(row.Id, seedSequence))
-            {
-                _logger.LogWarning("The event buffer refused a recovery entry for integration execution {ExecutionId}; it stays non-terminal for the next restart.", row.Id);
-                continue;
-            }
-
-            var context = new ExecutionRunContext(store, row);
-            if (await TerminalizeAsync(context,
-                        NonTerminalStatuses,
-                        IntegrationExecutionStatus.Failed,
-                        IntegrationFailureCategories.Restart,
-                        "The node restarted while the execution was in flight.")
-                    .ConfigureAwait(false))
-            {
-                recovered++;
-
-                // The sweep is a DIFFERENT terminal path from the run's own, and it has to close per-invocation
-                // sessions too — otherwise a session interrupted by a restart stays Active with no execution that
-                // could ever close it. The busy guard is bypassed by construction: the row is already terminal.
-                await ClosePerInvocationSessionAsync(scope.ServiceProvider, row).ConfigureAwait(false);
-            }
+            // Found work: the set has almost certainly shrunk, so read the top again. Found none: this whole page is
+            // rows that stay non-terminal, and stepping over them is the only way past them.
+            offset = unvisited > 0 ? 0 : offset + page.Count;
         }
 
         if (recovered > 0)
