@@ -333,6 +333,18 @@ Plain `aspire stop` cleaned the tested stacks in later measurements, but the ori
 - A key/data mismatch surfaces as `AuthenticationTagMismatchException`, often looking like corruption. Before deleting data, retry with `XE_NODE_OPERATOR_SECRET_FILE=/path/to/key ./scripts/dev-start.sh`.
 - Bare IDE/Aspire starts use interactive parameters or `dotnet user-secrets set "Parameters:node-sqlite-key" …`.
 - Reuse populated model storage through `HuggingFace__ModelsDirectory`.
+- **GGUF import is desktop-only; provision a dev-run FAST/extra model via `HuggingFace__ModelsDirectory`
+  instead.** `PreviewGgufImportEndpoint`/`StartGgufImportEndpoint` (`XE-Local-AI-Engine.Client/Endpoints/ModelFit/V1/`)
+  carry `IDesktopOnlyEndpoint` and are unreachable (404/405) outside `XE_LAUNCH_MODE=desktop`, and that flag is not
+  a workaround here — it redirects the host onto the user-level data directory and abandons the isolated Aspire DB
+  (`Program.cs`, `needsLocalData` branch). Point `HuggingFace__ModelsDirectory`/`HuggingFace:ModelsDirectory` at a
+  worktree-private directory instead: hand-author its `index.json` (entries keyed `{fileName}:{quant}`, a
+  `RegistryRevision` computed with `GgufRegistryRevision.ComputeV1`, `Providers.Abstractions/Gguf/`) alongside symlinks to the real `.gguf` files,
+  so multiple models can coexist under chosen ids without a copy — this recipe is live-proven. A lighter path read
+  from code but **not** live-verified: `GgufModelRegistry.LoadEntriesAsync` (`Providers.HuggingFace/Implementation/`)
+  rescans the directory whenever `index.json` is missing/empty/corrupt and auto-registers any `.gguf` file whose
+  name `GgufQuantParser.TryParse` (`Providers.Abstractions/Gguf/`) recognises a quant token in. Prevents reaching
+  for `XE_LAUNCH_MODE=desktop` to import a FAST model and losing the isolated dev DB as a result.
 - Aspire JSON is sensitive. `aspire ps` exposes the dashboard token and `aspire describe` may expose environment/connection data. Log only the `dev-status.sh` allowlist.
 - Startup reapers clean owned stale llama/image servers. Never `pkill -f` a substring that also appears in the caller command line; kill by PID.
 
