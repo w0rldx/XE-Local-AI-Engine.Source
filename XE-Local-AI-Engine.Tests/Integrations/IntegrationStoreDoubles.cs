@@ -566,10 +566,13 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
     public bool ThrowOnEveryList { get; set; }
 
     /// <summary>
-    ///     Runs AFTER each page is taken, with the 1-based read number, so a suite can shrink the filtered set between
-    ///     two of the sweep's reads — the race that makes offset paging skip a row.
+    ///     Runs AFTER each read is taken, with the 1-based read number, so a suite can change the filtered set between
+    ///     the read and the caller's pass over it.
     /// </summary>
     public Action<int>? AfterList { get; set; }
+
+    /// <summary>How many reads have been served. The startup sweep's whole shape is "exactly one".</summary>
+    public int ListCalls => Volatile.Read(ref _listCalls);
 
     private int _listCalls;
 
@@ -592,8 +595,12 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
                                     .ToArray();
         }
 
+        // Counted unconditionally: `hook?.Invoke(Increment())` skips the increment when no hook is set, and ListCalls
+        // must be true for every suite, not only the ones that install one.
+        var call = Interlocked.Increment(ref _listCalls);
+
         // Outside the lock: the hook mutates rows through the double's own public helpers, which take it themselves.
-        AfterList?.Invoke(Interlocked.Increment(ref _listCalls));
+        AfterList?.Invoke(call);
         return Task.FromResult(taken);
     }
 

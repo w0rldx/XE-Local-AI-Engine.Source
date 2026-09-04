@@ -679,6 +679,11 @@ public sealed class IntegrationExecutionStoreTests
 
         var bySession = await store.ListAsync(new IntegrationExecutionFilter(null, tieA.SessionId, null, Limit: 10, Offset: 0)).ConfigureAwait(false);
         AssertEx.Equal(expected: 1, bySession.Count);
+
+        // The startup sweep asks for the WHOLE non-terminal set in one unpaged read. Proven against real SQLite here:
+        // Take(int.MaxValue) has to translate and execute, not throw on the LIMIT parameter.
+        var unpaged = await store.ListAsync(new IntegrationExecutionFilter(null, null, null, int.MaxValue, Offset: 0)).ConfigureAwait(false);
+        AssertEx.Equal(expected: 3, unpaged.Count);
     }
 
     /// <summary>
