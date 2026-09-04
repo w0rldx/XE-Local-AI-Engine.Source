@@ -124,11 +124,116 @@ public sealed class IntegrationExecutionEndpointTests
         AssertEx.NotEqual(page1.Items[0].Id, page2.Items[0].Id, "Page two must return a row page one did not, or history beyond the first page is unreachable.");
     }
 
+    /// <summary>
+    ///     The pager's total: the whole filtered set, not the window. A page-size-1 window over the trigger's two rows
+    ///     must still report two, or the UI is back to a "there may be more" note it cannot page with.
+    /// </summary>
+    [Test]
+    public async Task List_ReportsTheTotalForTheFilterRatherThanTheWindow()
+    {
+        using var client = Factory.CreateClient();
+        var seeded = await SeedAsync(client, "total");
+
+        using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
+            client,
+            HttpMethod.Get,
+            $"{ExecutionsRoute}?triggerId={seeded.TriggerId}&limit=1&offset=0");
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<ExecutionListBody>(IntegrationEndpointPayloads.Json));
+        AssertEx.Equal(expected: 1, body.Items.Count);
+        AssertEx.Equal(expected: 2, body.TotalCount, "The total counts the filter's rows, ignoring limit and offset.");
+    }
+
+    /// <summary>
+    ///     The server-driven Active/History chips: <c>status</c> repeats into a SET. A single value still works, because
+    ///     a one-element set is the same filter it always was.
+    /// </summary>
+    [Test]
+    public async Task List_BindsARepeatedStatusIntoASet()
+    {
+        using var client = Factory.CreateClient();
+        var seeded = await SeedAsync(client, "statusset");
+
+        // Every seeded row is Accepted, so the set that contains it matches them all and the set that does not is empty.
+        using var matching = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
+            client,
+            HttpMethod.Get,
+            $"{ExecutionsRoute}?triggerId={seeded.TriggerId}&status=Accepted&status=Running");
+        using var single = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
+            client,
+            HttpMethod.Get,
+            $"{ExecutionsRoute}?triggerId={seeded.TriggerId}&status=Accepted");
+        // The SAME set with the matching value last: a binder that kept only the first repeat would answer 0 here.
+        using var reversed = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
+            client,
+            HttpMethod.Get,
+            $"{ExecutionsRoute}?triggerId={seeded.TriggerId}&status=Running&status=Accepted");
+        using var excluded = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
+            client,
+            HttpMethod.Get,
+            $"{ExecutionsRoute}?triggerId={seeded.TriggerId}&status=Running&status=Completed");
+
+        var both = AssertEx.NotNull(await matching.Content.ReadFromJsonAsync<ExecutionListBody>(IntegrationEndpointPayloads.Json));
+        var one = AssertEx.NotNull(await single.Content.ReadFromJsonAsync<ExecutionListBody>(IntegrationEndpointPayloads.Json));
+        var none = AssertEx.NotNull(await excluded.Content.ReadFromJsonAsync<ExecutionListBody>(IntegrationEndpointPayloads.Json));
+
+        AssertEx.Equal(expected: 2, both.TotalCount, "A repeated status must widen the filter, not replace or break it.");
+        AssertEx.Equal(expected: 2, one.TotalCount, "One value is a one-element set and keeps working unchanged.");
+        var flipped = AssertEx.NotNull(await reversed.Content.ReadFromJsonAsync<ExecutionListBody>(IntegrationEndpointPayloads.Json));
+        AssertEx.Equal(expected: 2, flipped.TotalCount, "Every repeat has to reach the set, not just the first one.");
+        AssertEx.Equal(expected: 0, none.TotalCount);
+        AssertEx.Empty(none.Items);
+    }
+
+    /// <summary>
+    ///     F12: a repeated status is a caller-supplied array, so the malformed shapes are pinned rather than assumed.
+    ///     An EMPTY element is a binding failure and takes the whole parameter down with it — which is the answer that
+    ///     matters, because the alternative would be it binding as the default enum member and silently filtering on a
+    ///     status nobody asked for. Neither shape may ever reach a 500.
+    /// </summary>
+    [Test]
+    [Arguments("status=")]
+    [Arguments("status=Accepted&status=")]
+    public async Task List_RejectsAnEmptyStatusElementRatherThanBindingItToTheDefaultMember(string query)
+    {
+        using var client = Factory.CreateClient();
+
+        using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory, client, HttpMethod.Get, $"{ExecutionsRoute}?{query}");
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, $"'{query}' must be refused, not bound to a default status.");
+        var body = await response.Content.ReadAsStringAsync();
+        AssertEx.Contains(body, "status", StringComparison.Ordinal, "The problem body has to name the parameter the caller got wrong.");
+    }
+
+    /// <summary>
+    ///     Pinned, not chosen: FastEndpoints parses the enum case-INSENSITIVELY, so a lower-case status is a valid
+    ///     filter rather than a 400. Recorded here so a future binder change that starts rejecting it is a failing test
+    ///     rather than a silently broken caller.
+    /// </summary>
+    [Test]
+    public async Task List_AcceptsALowerCaseStatusBecauseTheBinderIsCaseInsensitive()
+    {
+        using var client = Factory.CreateClient();
+        var seeded = await SeedAsync(client, "lowercase");
+
+        using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
+            client,
+            HttpMethod.Get,
+            $"{ExecutionsRoute}?triggerId={seeded.TriggerId}&status=accepted");
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<ExecutionListBody>(IntegrationEndpointPayloads.Json));
+        AssertEx.Equal(expected: 2, body.TotalCount, "The lower-case value must filter exactly as the canonical casing does, not degrade to no filter.");
+    }
+
     [Test]
     [Arguments("limit=0")]
     [Arguments("limit=201")]
     [Arguments("offset=-1")]
     [Arguments("status=NotAStatus")]
+    [Arguments("status=Accepted&status=NotAStatus")]
+    [Arguments("status=Accepted&status=Accepted")]
     public async Task List_RejectsAnOutOfRangeQuery(string query)
     {
         using var client = Factory.CreateClient();
@@ -272,7 +377,7 @@ public sealed class IntegrationExecutionEndpointTests
         string? FailureSummary,
         int OutputCount);
 
-    private sealed record ExecutionListBody(IReadOnlyList<ExecutionSummaryBody> Items);
+    private sealed record ExecutionListBody(IReadOnlyList<ExecutionSummaryBody> Items, int TotalCount);
 
     private sealed record ExecutionDetailBody(ExecutionSummaryBody Execution,
         Guid PrincipalId,

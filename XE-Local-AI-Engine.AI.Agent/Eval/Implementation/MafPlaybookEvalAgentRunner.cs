@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.AI.Agent.Eval.Implementation;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 
 /// <summary>
 ///     Microsoft Agent Framework (MAF) implementation of <see cref="IPlaybookEvalAgentRunner" />. Builds a
@@ -29,6 +30,7 @@ internal sealed class MafPlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
     public async Task<string> RunAsync(IChatClient chatClient,
         string systemInstructions,
         IReadOnlyList<ChatMessage> inputTurns,
+        string? reasoningEffort = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(chatClient);
@@ -64,12 +66,22 @@ internal sealed class MafPlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
         // reflects the injected prompt, not decoding noise — the judge (DefaultPlaybookEvalJudge) already pins its
         // own Temperature=0 independently. ChatClientAgentRunOptions.ChatOptions is the same shape
         // InvocationAgentFactory uses to carry per-request ChatOptions through to the model.
+        var chatOptions = new ChatOptions
+        {
+            Temperature = 0f
+        };
+
+        // An effort is translated through the SAME matrix both production paths use, so what the eval sends a model is
+        // what a real turn at that effort would send. Assigned only when one was supplied: a null effort leaves
+        // AdditionalProperties null, which is what keeps every existing caller's request byte-identical.
+        if (reasoningEffort is not null)
+        {
+            chatOptions.AdditionalProperties = ParticipantReasoningOptions.Build(reasoningEffort, supportsThinking: true);
+        }
+
         var runOptions = new ChatClientAgentRunOptions
         {
-            ChatOptions = new ChatOptions
-            {
-                Temperature = 0f
-            }
+            ChatOptions = chatOptions
         };
         var response = await agent.RunAsync(seed, session: null, runOptions, cancellationToken).ConfigureAwait(false);
 

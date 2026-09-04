@@ -92,6 +92,9 @@ function mapParts(messageId: string, parts: NodeChatMessagePartDto[] | null | un
 				sequence,
 				noticeKind: part.name ?? "",
 				text: part.text ?? "",
+				// A notice part reuses the generic `state` member for its structured detail, the way it reuses `name`
+				// for the notice kind — the backend accumulator persists it there, with no field of its own.
+				detail: part.state ?? undefined,
 			});
 		}
 

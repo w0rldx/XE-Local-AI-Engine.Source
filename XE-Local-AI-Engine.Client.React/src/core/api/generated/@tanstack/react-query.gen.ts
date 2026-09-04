@@ -69,6 +69,7 @@ import {
 	createDevWorkflowWorkItem,
 	createEvaluation,
 	createGoldenConversation,
+	createGraphWorkflowDefinition,
 	createImageJob,
 	createIntegrationTrigger,
 	createMcpServer,
@@ -99,6 +100,7 @@ import {
 	deleteEvaluation,
 	deleteExternalProviderConnection,
 	deleteGoldenConversation,
+	deleteGraphWorkflowDefinition,
 	deleteImageModel,
 	deleteIntegrationSession,
 	deleteIntegrationTrigger,
@@ -184,6 +186,7 @@ import {
 	getGgufImportCapability,
 	getGgufImports,
 	getGgufImportStatus,
+	getGraphWorkflowDefinition,
 	getHardwareProfile,
 	getHfTokenStatus,
 	getImageJob,
@@ -269,6 +272,7 @@ import {
 	listEvaluations,
 	listExternalProviderConnections,
 	listGoldenConversations,
+	listGraphWorkflowDefinitions,
 	listImageJobs,
 	listImageModelDownloads,
 	listImageModels,
@@ -396,6 +400,7 @@ import {
 	updateDevWorkflowDefinition,
 	updateDevWorkflowRuleSet,
 	updateDevWorkflowWorkItem,
+	updateGraphWorkflowDefinition,
 	updateIntegrationTrigger,
 	updateLlamaCppRuntime,
 	updateMcpServer,
@@ -411,6 +416,7 @@ import {
 	uploadConversationFile,
 	uploadKnowledgeDocument,
 	validateExecutable,
+	validateGraphWorkflowDefinition,
 	validationProblemProbe,
 	verifyToolMock,
 } from "../sdk.gen";
@@ -558,6 +564,9 @@ import type {
 	CreateEvaluationResponse,
 	CreateGoldenConversationData,
 	CreateGoldenConversationResponse,
+	CreateGraphWorkflowDefinitionData,
+	CreateGraphWorkflowDefinitionError,
+	CreateGraphWorkflowDefinitionResponse,
 	CreateImageJobData,
 	CreateImageJobError,
 	CreateImageJobResponse,
@@ -636,6 +645,9 @@ import type {
 	DeleteExternalProviderConnectionResponse,
 	DeleteGoldenConversationData,
 	DeleteGoldenConversationResponse,
+	DeleteGraphWorkflowDefinitionData,
+	DeleteGraphWorkflowDefinitionError,
+	DeleteGraphWorkflowDefinitionResponse,
 	DeleteImageModelData,
 	DeleteImageModelError,
 	DeleteImageModelResponse,
@@ -832,6 +844,8 @@ import type {
 	GetGgufImportsResponse,
 	GetGgufImportStatusData,
 	GetGgufImportStatusResponse,
+	GetGraphWorkflowDefinitionData,
+	GetGraphWorkflowDefinitionResponse,
 	GetHardwareProfileData,
 	GetHardwareProfileResponse,
 	GetHfTokenStatusData,
@@ -1021,6 +1035,8 @@ import type {
 	ListExternalProviderConnectionsResponse,
 	ListGoldenConversationsData,
 	ListGoldenConversationsResponse,
+	ListGraphWorkflowDefinitionsData,
+	ListGraphWorkflowDefinitionsResponse,
 	ListImageJobsData,
 	ListImageJobsResponse,
 	ListImageModelDownloadsData,
@@ -1336,6 +1352,9 @@ import type {
 	UpdateDevWorkflowWorkItemData,
 	UpdateDevWorkflowWorkItemError,
 	UpdateDevWorkflowWorkItemResponse,
+	UpdateGraphWorkflowDefinitionData,
+	UpdateGraphWorkflowDefinitionError,
+	UpdateGraphWorkflowDefinitionResponse,
 	UpdateIntegrationTriggerData,
 	UpdateIntegrationTriggerError,
 	UpdateIntegrationTriggerResponse,
@@ -1371,6 +1390,9 @@ import type {
 	UploadKnowledgeDocumentResponse,
 	ValidateExecutableData,
 	ValidateExecutableResponse,
+	ValidateGraphWorkflowDefinitionData,
+	ValidateGraphWorkflowDefinitionError,
+	ValidateGraphWorkflowDefinitionResponse,
 	ValidationProblemProbeData,
 	ValidationProblemProbeError,
 	ValidationProblemProbeResponse,
@@ -6736,6 +6758,146 @@ export const startStableDiffusionCppSourceBuildMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await startStableDiffusionCppSourceBuild({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listGraphWorkflowDefinitionsQueryKey = (options?: Options<ListGraphWorkflowDefinitionsData>) =>
+	createQueryKey("listGraphWorkflowDefinitions", options);
+
+export const listGraphWorkflowDefinitionsOptions = (options?: Options<ListGraphWorkflowDefinitionsData>) =>
+	queryOptions<
+		ListGraphWorkflowDefinitionsResponse,
+		AxiosError<DefaultError>,
+		ListGraphWorkflowDefinitionsResponse,
+		ReturnType<typeof listGraphWorkflowDefinitionsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listGraphWorkflowDefinitions({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listGraphWorkflowDefinitionsQueryKey(options),
+	});
+
+export const createGraphWorkflowDefinitionMutation = (
+	options?: Partial<Options<CreateGraphWorkflowDefinitionData>>,
+): UseMutationOptions<
+	CreateGraphWorkflowDefinitionResponse,
+	AxiosError<CreateGraphWorkflowDefinitionError>,
+	Options<CreateGraphWorkflowDefinitionData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		CreateGraphWorkflowDefinitionResponse,
+		AxiosError<CreateGraphWorkflowDefinitionError>,
+		Options<CreateGraphWorkflowDefinitionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createGraphWorkflowDefinition({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteGraphWorkflowDefinitionMutation = (
+	options?: Partial<Options<DeleteGraphWorkflowDefinitionData>>,
+): UseMutationOptions<
+	DeleteGraphWorkflowDefinitionResponse,
+	AxiosError<DeleteGraphWorkflowDefinitionError>,
+	Options<DeleteGraphWorkflowDefinitionData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteGraphWorkflowDefinitionResponse,
+		AxiosError<DeleteGraphWorkflowDefinitionError>,
+		Options<DeleteGraphWorkflowDefinitionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteGraphWorkflowDefinition({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getGraphWorkflowDefinitionQueryKey = (options: Options<GetGraphWorkflowDefinitionData>) =>
+	createQueryKey("getGraphWorkflowDefinition", options);
+
+export const getGraphWorkflowDefinitionOptions = (options: Options<GetGraphWorkflowDefinitionData>) =>
+	queryOptions<
+		GetGraphWorkflowDefinitionResponse,
+		AxiosError<DefaultError>,
+		GetGraphWorkflowDefinitionResponse,
+		ReturnType<typeof getGraphWorkflowDefinitionQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getGraphWorkflowDefinition({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getGraphWorkflowDefinitionQueryKey(options),
+	});
+
+export const updateGraphWorkflowDefinitionMutation = (
+	options?: Partial<Options<UpdateGraphWorkflowDefinitionData>>,
+): UseMutationOptions<
+	UpdateGraphWorkflowDefinitionResponse,
+	AxiosError<UpdateGraphWorkflowDefinitionError>,
+	Options<UpdateGraphWorkflowDefinitionData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		UpdateGraphWorkflowDefinitionResponse,
+		AxiosError<UpdateGraphWorkflowDefinitionError>,
+		Options<UpdateGraphWorkflowDefinitionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateGraphWorkflowDefinition({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const validateGraphWorkflowDefinitionMutation = (
+	options?: Partial<Options<ValidateGraphWorkflowDefinitionData>>,
+): UseMutationOptions<
+	ValidateGraphWorkflowDefinitionResponse,
+	AxiosError<ValidateGraphWorkflowDefinitionError>,
+	Options<ValidateGraphWorkflowDefinitionData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ValidateGraphWorkflowDefinitionResponse,
+		AxiosError<ValidateGraphWorkflowDefinitionError>,
+		Options<ValidateGraphWorkflowDefinitionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await validateGraphWorkflowDefinition({
 				...options,
 				...fnOptions,
 				throwOnError: true,

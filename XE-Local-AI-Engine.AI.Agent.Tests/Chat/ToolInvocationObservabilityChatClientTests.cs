@@ -32,6 +32,56 @@ public sealed class ToolInvocationObservabilityChatClientTests
                                                             && message.Contains("approve-job", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    ///     The budget keeps the NAME only when the request offered a tool by that name. A model can emit any string in
+    ///     a function call, and what the budget's name set feeds is durable — the persisted work-session step detail,
+    ///     and from there an event detail and a node-run column — so an identifier nothing offered would be recorded as
+    ///     a tool this run reached for. The call is still counted; only the name is dropped.
+    /// </summary>
+    [Test]
+    public async Task GetStreamingResponseAsync_RecordsOnlyToolNamesTheRequestActuallyOffered()
+    {
+        using var scope = ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions());
+        var budget = ProviderCallBudget.Current!;
+        var callId = $"call-{Guid.NewGuid():N}";
+        using var innerClient = new FakeChatClient(callId, "definitely_not_offered");
+        using var sut = new ToolInvocationObservabilityChatClient(innerClient, new ListLogger<ToolInvocationObservabilityChatClient>());
+        var options = new ChatOptions
+        {
+            Tools = [AIFunctionFactory.Create(static () => "ok", "approve-job")]
+        };
+
+        await foreach (var update in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")], options))
+        {
+            GC.KeepAlive(update);
+        }
+
+        AssertEx.Empty(budget.ToolNames, "A name that resolved against no offered tool must not be recorded as a tool this run called.");
+        AssertEx.Equal(expected: 1, budget.CaptureEfficiencySnapshot().ToolCallsRequested, "The call itself still counts — it happened.");
+    }
+
+    /// <summary>The other arm: a name the request DID offer is recorded, so the gate does not simply record nothing.</summary>
+    [Test]
+    public async Task GetStreamingResponseAsync_RecordsAToolNameTheRequestOffered()
+    {
+        using var scope = ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions());
+        var budget = ProviderCallBudget.Current!;
+        var callId = $"call-{Guid.NewGuid():N}";
+        using var innerClient = new FakeChatClient(callId, "approve-job");
+        using var sut = new ToolInvocationObservabilityChatClient(innerClient, new ListLogger<ToolInvocationObservabilityChatClient>());
+        var options = new ChatOptions
+        {
+            Tools = [AIFunctionFactory.Create(static () => "ok", "approve-job")]
+        };
+
+        await foreach (var update in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")], options))
+        {
+            GC.KeepAlive(update);
+        }
+
+        AssertEx.Equal("approve-job", string.Join(",", budget.ToolNames));
+    }
+
     [Test]
     public async Task GetStreamingResponseAsync_WithFunctionCallContent_NeverLogsRawArgumentValues()
     {

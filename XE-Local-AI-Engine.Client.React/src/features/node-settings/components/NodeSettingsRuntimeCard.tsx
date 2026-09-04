@@ -8,6 +8,8 @@ import {
 	nodeSettingsRestartHint,
 } from "@/features/node-settings/components/NodeSettingsFieldPresentation";
 import {
+	KV_CACHE_TYPE_DEFAULT,
+	kvCacheTypeSelectValues,
 	type NodeSettingsFieldBounds,
 	type NodeSettingsFieldsForm,
 	requiresExternalDraftModel,
@@ -27,9 +29,30 @@ interface Props {
 	readonly onChange: <K extends keyof NodeSettingsFieldsForm>(field: K, value: NodeSettingsFieldsForm[K]) => void;
 	readonly draftModelOptions: readonly NodeSettingsModelOption[];
 	readonly keepWarmModelOptions: readonly NodeSettingsModelOption[];
+	readonly autoEffortFastModelOptions: readonly NodeSettingsModelOption[];
 }
-export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftModelOptions, keepWarmModelOptions }: Props) {
+export function NodeSettingsRuntimeCard({
+	form,
+	bounds,
+	errors,
+	onChange,
+	draftModelOptions,
+	keepWarmModelOptions,
+	autoEffortFastModelOptions,
+}: Props) {
 	const { t } = useTranslation();
+	const autoEffortFastOptions = useMemo(() => {
+		const options = [
+			{ value: "", label: t("pages.nodeSettings.fields.autoEffortFastModel.off", "Off") },
+			...autoEffortFastModelOptions,
+		];
+		// A model that was uninstalled after the setting was saved still has to be selectable, or the select would
+		// silently show "Off" for a node that is still configured.
+		if (form.autoEffortFastModelName !== "" && !options.some((option) => option.value === form.autoEffortFastModelName)) {
+			options.push({ value: form.autoEffortFastModelName, label: form.autoEffortFastModelName });
+		}
+		return options;
+	}, [autoEffortFastModelOptions, form.autoEffortFastModelName, t]);
 	const speculativeModeOptions = useMemo(
 		() =>
 			speculativeModeSelectValues.map((mode) => ({
@@ -38,6 +61,14 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 					mode === SPECULATIVE_DISABLED_MODE
 						? t("pages.nodeSettings.fields.speculativeMode.options.off", "Off")
 						: t(`pages.nodeSettings.fields.speculativeMode.options.${mode}`, mode),
+			})),
+		[t],
+	);
+	const kvCacheTypeOptions = useMemo(
+		() =>
+			kvCacheTypeSelectValues.map((type) => ({
+				value: type,
+				label: t(`pages.nodeSettings.fields.kvCacheType.options.${type}`, type),
 			})),
 		[t],
 	);
@@ -155,12 +186,30 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 					)}
 				</Text>
 				<Select
+					label={t("pages.nodeSettings.fields.kvCacheType.label", "KV cache type")}
+					description={
+						<>
+							{t(
+								"pages.nodeSettings.fields.kvCacheType.description",
+								"Changing this invalidates every frozen inference profile on this node. Each model re-explores with the new KV cache type the next time it loads, and must be benchmarked and frozen again. q4_0 trades answer quality for VRAM.",
+							)}
+							{nodeSettingsRestartHint(t, "kvCacheType")}
+						</>
+					}
+					data={kvCacheTypeOptions}
+					value={form.kvCacheType}
+					onChange={(value) => onChange("kvCacheType", value ?? KV_CACHE_TYPE_DEFAULT)}
+					allowDeselect={false}
+					error={nodeSettingsFieldError(t, errors, "kvCacheType")}
+					data-testid="node-settings-kv-cache-type"
+				/>
+				<Select
 					label={t("pages.nodeSettings.fields.speculativeMode.label", "Speculative decoding")}
 					description={
 						<>
 							{t(
 								"pages.nodeSettings.fields.speculativeMode.description",
-								"Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; draft models use additional VRAM not yet counted by capacity checks.",
+								"Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; draft models use additional VRAM not yet counted by capacity checks. DFlash and DSpark need their own draft model and are trained for larger draft blocks than the default 3 draft tokens per step (upstream uses 15 and 7); the server only clamps that value downwards, so raise it yourself.",
 							)}
 							{nodeSettingsRestartHint(t, "speculativeMode")}
 						</>
@@ -212,6 +261,21 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 						data-testid="node-settings-speculative-draft-max-tokens"
 					/>
 				) : null}
+				<Select
+					label={t("pages.nodeSettings.fields.autoEffortFastModel.label", "Fast model for automatic reasoning effort")}
+					description={t(
+						"pages.nodeSettings.fields.autoEffortFastModel.description",
+						"When a chat turn uses the automatic reasoning effort and the turn looks trivial, run it on this small llama.cpp model instead. Leave off to keep the conversation's own model and only lower the effort. Needs a second loaded-process slot; changes apply to the next message.",
+					)}
+					data={autoEffortFastOptions}
+					value={form.autoEffortFastModelName}
+					onChange={(value) => onChange("autoEffortFastModelName", value ?? "")}
+					allowDeselect={false}
+					searchable={true}
+					nothingFoundMessage={t("pages.nodeSettings.fields.autoEffortFastModel.empty", "No installed llama.cpp chat models")}
+					error={nodeSettingsFieldError(t, errors, "autoEffortFastModelName")}
+					data-testid="node-settings-auto-effort-fast-model"
+				/>
 				<NumberInput
 					label={t("pages.nodeSettings.fields.chatCacheReuse.label", "Prompt cache reuse")}
 					description={

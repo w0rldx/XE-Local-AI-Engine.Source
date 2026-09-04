@@ -75,6 +75,7 @@ public sealed partial class BenchmarkStore
                 PrimaryFlashAttentionMode = command.PrimaryLaunchIntent?.FlashAttentionMode,
                 PrimaryIntendedLaunchIdentity = command.PrimaryLaunchIntent?.IntendedLaunchIdentity,
                 PrimaryIntendedExecutableSha256 = command.PrimaryLaunchIntent?.IntendedExecutableSha256,
+                PrimaryLaunchIdentityScheme = command.PrimaryLaunchIntent?.LaunchIdentityScheme,
                 RepeatGroupId = command.RepeatGroupId,
                 RepeatIndex = command.RepeatIndex,
                 IsWarmup = command.IsWarmup,

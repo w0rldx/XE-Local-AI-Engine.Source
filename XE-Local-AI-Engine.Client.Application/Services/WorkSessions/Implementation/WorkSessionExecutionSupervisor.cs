@@ -412,6 +412,17 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             Model: run.Runtime?.ModelProfile,
             ReasoningEffort: run.Runtime?.ReasoningEffort,
             ReasoningEffortOverridesAgentPin: run.Runtime?.ReasoningEffort is { Length: > 0 },
+            // Every step of every session, whatever the caller pinned: this turn is autonomous, so the send path must
+            // never let the adaptive-effort dispatcher serve it on a model nobody chose.
+            IsWorkSessionTurn: true,
+            // GRAPH-C4-2's runtime half, handed to the turn that has to obey it rather than asked here. The node's
+            // declaration and its template's waiver ride on the runtime override, which is re-supplied on every start
+            // and resume off the run's PINNED graph — so nothing an operator edits mid-run can widen what a running
+            // session is allowed to be offered. The decision itself belongs to the send: it resolves the mutable agent
+            // definition once and judges the offer THAT resolution produced, which is the only projection a check can
+            // be sure the turn will actually use. Asked here instead, it would answer about a definition the send is
+            // free to re-resolve differently a moment later.
+            RefuseUndeclaredWrites: run.Runtime?.RefuseUndeclaredWrites == true,
             // No operator is attached to a workflow-owned session, and its embedded chat is read-only, so an ask_user
             // question could only ever go unanswered — see the flag's own comment for what that costs.
             SuppressAskUser: state.Session.Kind == AgentWorkSessionKind.Workflow);
@@ -436,6 +447,18 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         try
         {
             terminal = await DrainStepAsync(turnScope.ServiceProvider.GetRequiredService<INodeChatStreamService>(), guard, request, sessionId).ConfigureAwait(false);
+        }
+        catch (WorkSessionUndeclaredWriteException refusal)
+        {
+            // The send resolved the agent definition, saw a write/execute tool the node never declared in the offer it
+            // was about to hand the model, and stopped rather than sending it (GRAPH-C4-2). Nothing ran, so this is the
+            // gate's own row and not a step failure — and the row is what the owning run reads back, because the state
+            // it was decided from is mutable and re-deriving the cause later would answer differently.
+            //
+            // Failed rather than Paused: a paused workflow session is resumed by its owning run, so a pause would loop
+            // until the resume budget ran out and report a budget it did not really exhaust. Failed settles it once,
+            // and the run's next poll blocks the node run with this rule's own class and this sentence.
+            return await SettleWriteGateAsync(sessionId, step, refusal.Message).ConfigureAwait(false);
         }
         finally
         {
@@ -620,17 +643,19 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     ///     <see cref="WorkSessionEventDto.DetailJson" />, or <see langword="null" /> when nothing ran under a cap scope
     ///     (no budget was created, so there is nothing to report — an empty record would read as "this step was free").
     ///     <para>
-    ///         The counts come off the cap scope the step itself seeded, which is the only readable seam: the run's
-    ///         ambient <see cref="ProviderCallBudget" /> is written INSIDE the send path and an
+    ///         The counts and the tool names come off the cap scope the step itself seeded, which is the only readable
+    ///         seam: the run's ambient <see cref="ProviderCallBudget" /> is written INSIDE the send path and an
     ///         <see cref="AsyncLocal{T}" /> write does not flow back out, so <c>ProviderCallBudget.Current</c> is null
-    ///         again by the time the enumeration returns.
+    ///         again by the time the enumeration returns — and the scope itself is disposed a moment later, which is
+    ///         why this row is where the names have to land if anything is ever to read them.
     ///     </para>
     ///     <para>
-    ///         Every member is a STEP TOTAL, and the provider's own reported usage is deliberately not among them. The
-    ///         terminal event does carry <c>InputTokens</c>/<c>OutputTokens</c>, but the runner assigns
-    ///         <c>UsageSnapshot</c> per provider round rather than accumulating, so on a multi-round step those are the
-    ///         LAST round's numbers — beside a step-total call count and a step-total estimate they would read as a
-    ///         contradiction. Estimate-versus-truth is measured per round where the two halves actually match, by
+    ///         Every member is a STEP TOTAL off this scope, and the provider's own reported usage is deliberately not
+    ///         among them. The terminal event does carry <c>InputTokens</c>/<c>OutputTokens</c>, but those are the LAST
+    ///         provider round's numbers (context occupancy, which is why they are not summed), and the turn's summed
+    ///         cost goes to the run envelope instead — either way a different denominator from a step, so mixing them
+    ///         into one record would invite exactly the division nothing here supports. Estimate-versus-truth is
+    ///         measured per round where the two halves actually match, by
     ///         <c>ProviderCallBudgetChatClient</c>'s observed-usage write-back.
     ///     </para>
     /// </summary>
@@ -645,7 +670,9 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                 consumption.EstimatedInputTokens,
                 consumption.ToolCallsCompleted,
                 consumption.ProviderCallCap,
-                consumption.AttachedBudgets),
+                consumption.AttachedBudgets,
+                consumption.ToolSchemaTokens,
+                consumption.ToolNames),
             ConsumptionJsonOptions);
     }
 
@@ -783,6 +810,32 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         {
             _logger.LogWarning(exception, "Work session {SessionId} was already past {Status} when the step ended.", sessionId, target);
         }
+    }
+
+    /// <summary>
+    ///     Records the write-declaration gate's refusal against the step it stopped, then settles the session on it.
+    ///     <para>
+    ///         The sentence is written as the step row's DETAIL and not only as the session's terminal reason, because
+    ///         the development-workflow run that owns this session has to answer with <c>GRAPH-C4-2</c>'s own failure
+    ///         class and the only honest source for a historical cause is the record written when it happened. A cause
+    ///         re-derived from the agent definition's CURRENT state goes quiet the moment an operator restores or
+    ///         narrows that definition, and the node run then falls through as an ordinary retryable provider failure.
+    ///     </para>
+    /// </summary>
+    private async Task<StepOutcome> SettleWriteGateAsync(Guid sessionId, int step, string refusal)
+    {
+        _logger.LogWarning("Work session {SessionId} step {Step} was not sent: {Reason}", sessionId, step, refusal);
+        _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
+                    WorkSessionVersions.Any,
+                    WorkSessionEventTypes.StepEnded,
+                    WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.WriteGate),
+                    WorkSessionEventTypes.WriteGateOutcome,
+                    WorkSessionEventTypes.WriteGateDetail(refusal)),
+                CancellationToken.None))
+            .ConfigureAwait(false);
+        await CheckpointAsync(sessionId).ConfigureAwait(false);
+        await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, refusal).ConfigureAwait(false);
+        return StepOutcome.Settled;
     }
 
     private async Task TerminalizeFailureAsync(Guid sessionId, string reason)

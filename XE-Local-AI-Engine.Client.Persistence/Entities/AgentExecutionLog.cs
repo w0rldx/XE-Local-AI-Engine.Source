@@ -107,4 +107,41 @@ internal sealed record class AgentExecutionLog
 
     /// <summary>Unix-ms timestamp when the run started (turn open), or <c>null</c> when not known at the seam (e.g. an interrupted stream with no run state). Plaintext (structural).</summary>
     public long? StartedAtUtc { get; set; }
+
+    /// <summary>
+    ///     Estimated tool-schema tokens the turn spent, CUMULATIVE across its provider rounds, or <c>null</c> when the
+    ///     seam reported none (a memory row, or an envelope written by the restart-recovery backfill). A
+    ///     <c>long</c> because its source is: the budgeter accumulates it with <c>Interlocked.Add</c> over every round.
+    ///     Plaintext (structural) — a count, never a tool name.
+    /// </summary>
+    public long? ToolSchemaTokens { get; set; }
+
+    /// <summary>
+    ///     The largest single round's estimated tool-schema token count for the turn, or <c>null</c> when not reported.
+    ///     An <c>int</c>, matching its source (a per-round maximum, not an accumulation). Plaintext (structural).
+    /// </summary>
+    public int? MaxToolSchemaTokens { get; set; }
+
+    /// <summary>
+    ///     The tier a turn authored with reasoning effort <c>auto</c> was dispatched to (<c>fast</c>, <c>normal</c> or
+    ///     <c>deep</c>), or <c>null</c> on every other turn and every pre-migration row. A closed-vocabulary category
+    ///     label, never free text. Plaintext (structural).
+    /// </summary>
+    public string? DispatchedTier { get; set; }
+
+    /// <summary>
+    ///     The effort the turn was AUTHORED with when a dispatch happened — <c>auto</c> — or <c>null</c> otherwise. It
+    ///     is what separates the pre-<c>auto</c> population from the dispatched one in the same measurement, which a
+    ///     tier alone cannot do. Plaintext (structural).
+    /// </summary>
+    public string? AuthoredEffort { get; set; }
+
+    /// <summary>
+    ///     How many of <see cref="LatencyMs" /> the turn spent making a LOCAL runtime ready — launching
+    ///     <c>llama-server</c> and loading the model — rather than generating, or <c>null</c> when no local warm
+    ///     happened (a remote provider, Ollama, an already-resident model) and on every pre-migration row. The
+    ///     whole-turn latency starts before the warm, so <c>latency_ms - model_readiness_ms</c> is the warm-equivalent
+    ///     turn time and the only way a cold arm compares with a warm one. Plaintext (structural) — a duration.
+    /// </summary>
+    public long? ModelReadinessMs { get; set; }
 }

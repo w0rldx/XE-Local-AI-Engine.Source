@@ -360,6 +360,28 @@ public sealed class IntegrationExecutionCoordinatorTests
     }
 
     [Test]
+    public async Task Run_TerminalizesWithTheTurnTotalsAndTheWarmDurationOnTheEnvelope()
+    {
+        // The envelope is the cost ledger, and an integration run is measured exactly like a chat turn. Leaving these
+        // unset made this the one surface whose rows carried no warm time and the LAST provider round's tokens where
+        // every other row carries the turn's sum.
+        using var harness = new Harness();
+        var executionId = harness.SeedAccepted();
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        var envelope = (harness.TerminalizeRequest ?? throw new AssertionException("The assistant turn was never terminalized.")).Envelope
+                       ?? throw new AssertionException("The run wrote no envelope.");
+        AssertEx.Equal(expected: 178_576L, envelope.ModelReadinessMs);
+        AssertEx.Equal(expected: 6_000, envelope.TurnInputTokens);
+        AssertEx.Equal(expected: 60, envelope.TurnOutputTokens);
+        AssertEx.Equal(expected: 6_078, envelope.TurnTotalTokens);
+        AssertEx.Equal(expected: 18, envelope.TurnReasoningTokens);
+        AssertEx.Equal(expected: 4_096L, envelope.ToolSchemaTokens);
+        AssertEx.Equal(expected: 2_048, envelope.MaxToolSchemaTokens);
+    }
+
+    [Test]
     public async Task Run_ProducesExactlyOneTerminalEventAndOneAuditRowAtTheHighestSequence()
     {
         using var harness = new Harness();
@@ -600,6 +622,90 @@ public sealed class IntegrationExecutionCoordinatorTests
                 "One sweep, one terminal event per interrupted row.");
         }
     }
+
+    /// <summary>
+    ///     The sweep reads the non-terminal set ONCE and works that snapshot. Paging it was the bug: the set both
+    ///     shrinks (a row this sweep closes, or one the already-listening external cancel path closes) and grows, so an
+    ///     advancing offset skipped a row that shifted down behind the cursor. A stale snapshot costs nothing — the
+    ///     terminal CAS makes a row that went terminal after the read a no-op.
+    /// </summary>
+    [Test]
+    public async Task StartAsync_ReadsTheNonTerminalSetOnceAndLeavesARowThatWentTerminalAfterThatRead()
+    {
+        // The ring must hold every seeded row: a refused entry leaves a row non-terminal by design, which would be
+        // indistinguishable here from a row the sweep failed to visit.
+        using var harness = new Harness(maxTrackedExecutions: 256);
+
+        // More rows than the retired 200-row page size, so a paged sweep would need a second read and this one
+        // provably does not.
+        var seeded = new List<Guid>();
+        for (var index = 0; index < 205; index++)
+        {
+            seeded.Add(harness.SeedAccepted());
+        }
+
+        // Every row shares the harness's receive stamp, so the store's ReceivedAtUtc-then-Id ordering puts the
+        // highest id first: this is a row the snapshot certainly holds.
+        var completedAfterTheRead = seeded.Max();
+        harness.Executions.AfterList = _ => harness.Executions.Complete(completedAfterTheRead);
+
+        await harness.Coordinator.StartAsync(CancellationToken.None);
+        await harness.Coordinator.StopAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, harness.Executions.ListCalls, "One unpaged read is the whole sweep.");
+
+        var live = seeded.Where(id => NonTerminal.Contains(harness.Row(id).Status)).ToArray();
+        AssertEx.Empty(live, "Every pre-construction row in the snapshot is closed by this sweep.");
+
+        AssertEx.Equal(expected: 204,
+            seeded.Count(id => harness.Row(id).FailureCategory == IntegrationFailureCategories.Restart),
+            "Every row except the one that went terminal after the read is closed as a restart casualty.");
+
+        AssertEx.Equal(IntegrationExecutionStatus.Completed,
+            harness.Row(completedAfterTheRead).Status,
+            "The terminal CAS loses to the writer that got there first, so the sweep leaves that row exactly as it found it.");
+        AssertEx.Empty(harness.Executions.Events.Where(row => row.ExecutionId == completedAfterTheRead),
+            "A row terminalized elsewhere owns its own terminal event; the sweep must not append a second one.");
+    }
+
+    /// <summary>
+    ///     Sustained admission churn: the external listener admits a fresh row around every read. Offset paging reset
+    ///     to the top on each of those, so the sweep never finished and StartAsync never reached the hosted loop. One
+    ///     read cannot spin, and a post-construction row is never this sweep's to touch.
+    /// </summary>
+    [Test]
+    public async Task StartAsync_UnderSustainedAdmissionChurn_CompletesInOneReadAndLeavesPostConstructionRowsAlone()
+    {
+        using var harness = new Harness();
+        var interrupted = harness.SeedAccepted();
+        var admittedDuringStartup = harness.SeedLive();
+
+        var churned = new List<Guid>();
+        harness.Executions.AfterList = _ => churned.Add(harness.SeedLive());
+
+        await harness.Coordinator.StartAsync(CancellationToken.None);
+        await harness.Coordinator.StopAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, harness.Executions.ListCalls, "Churn cannot buy the sweep a second read, so it cannot spin forever.");
+        AssertEx.Equal(IntegrationExecutionStatus.Failed, harness.Row(interrupted).Status);
+        AssertEx.Equal(IntegrationFailureCategories.Restart, harness.Row(interrupted).FailureCategory);
+
+        foreach (var executionId in churned.Append(admittedDuringStartup))
+        {
+            AssertEx.Equal(IntegrationExecutionStatus.Accepted,
+                harness.Row(executionId).Status,
+                "A row admitted after this coordinator existed is live, and the accept path already enqueued it.");
+            AssertEx.Empty(harness.Executions.Events.Where(row => row.ExecutionId == executionId),
+                "The sweep must not write a terminal event for a run that has not started yet.");
+        }
+    }
+
+    private static readonly IReadOnlySet<IntegrationExecutionStatus> NonTerminal = new HashSet<IntegrationExecutionStatus>
+    {
+        IntegrationExecutionStatus.Accepted,
+        IntegrationExecutionStatus.Queued,
+        IntegrationExecutionStatus.Running
+    };
 
     [Test]
     public async Task ExecuteAsync_WhileAnotherHolderOwnsTheLease_MovesEveryQueuedExecutionToQueued()

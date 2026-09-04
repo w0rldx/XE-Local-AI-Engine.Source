@@ -35,8 +35,21 @@ internal static class AddNodeDevWorkflowsExtensions
         // The store is resolved through the publishing decorator, so no caller can commit a change without announcing
         // it. Registering the concrete type separately is what lets the decorator take it as its inner store.
         builder.Services.AddScoped<DevWorkflowStore>();
+
+        // Scoped: it reads the work-session and execution-log stores, which are scoped. The decorator below resolves
+        // it from a scope IT opens per collection rather than from the tick's scope, because a collection that
+        // overruns its deadline is abandoned and must not still be reading on the DbContext the settle then writes on.
+        builder.Services.AddScoped<IDevWorkflowNodeTelemetrySource, DevWorkflowNodeTelemetrySource>();
         builder.Services.AddScoped<IDevWorkflowStore>(services => new PublishingDevWorkflowStore(services.GetRequiredService<DevWorkflowStore>(),
-            services.GetRequiredService<IDevWorkflowEventPublisher>()));
+            services.GetRequiredService<IDevWorkflowEventPublisher>(),
+            services.GetRequiredService<IServiceScopeFactory>(),
+            services.GetRequiredService<DevWorkflowGraphCache>(),
+            services.GetRequiredService<DevWorkflowNodeTelemetryCollectionPool>(),
+            services.GetRequiredService<ILogger<PublishingDevWorkflowStore>>()));
+
+        // The admission ceiling for those collections. A SINGLETON, because the store above is scoped: a per-scope
+        // ceiling would bound nothing, since a stuck collector would simply cost another slot on the next tick.
+        builder.Services.AddSingleton<DevWorkflowNodeTelemetryCollectionPool>();
         builder.Services.TryAddSingleton<IDevWorkflowEventPublisher, NoOpDevWorkflowEventPublisher>();
         builder.Services.AddSingleton<IDevWorkflowArtifactBlobStore, ManagedDevWorkflowArtifactBlobStore>();
 

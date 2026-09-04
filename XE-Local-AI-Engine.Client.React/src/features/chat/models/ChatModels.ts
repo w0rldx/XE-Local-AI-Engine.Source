@@ -80,6 +80,10 @@ export interface ChatNoticePart {
 	noticeKind: string;
 	// Sanitized, user-facing sentence from the backend — displayed verbatim, never re-translated.
 	text: string;
+	// Optional structured detail beside the sentence: a stable machine code or short identifier naming why the notice
+	// fired (e.g. the kebab-case adaptive-effort dispatch reason). Displayed verbatim, never re-translated; undefined
+	// on notices that carry none.
+	detail?: string;
 }
 
 export type ChatMessagePart = ChatReasoningPart | ChatToolPart | ChatTextPart | ChatNoticePart;

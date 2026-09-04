@@ -335,6 +335,26 @@ public sealed class WorkerShutdownDrainServiceTests
             return Task.CompletedTask;
         }
 
+        public Task ReportToolSchemaTokensAsync(Guid invocationId, long? toolSchemaTokens, int? maxToolSchemaTokens)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task ReportTurnTelemetryAsync(Guid invocationId, long? modelReadinessMs, TurnUsageTotals? usage)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task ReportServedModelAsync(Guid invocationId, string modelUsed)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory)
         {
             return Task.CompletedTask;

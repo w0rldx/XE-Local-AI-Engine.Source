@@ -1506,6 +1506,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	minChatCacheReuse?: number;
 	maxAllowedChatCacheReuse?: number;
 	speculativeMode?: string | null;
+	kvCacheType?: string | null;
 	speculativeDraftModelName?: string | null;
 	speculativeDraftMaxTokens?: number | null;
 	minSpeculativeDraftMaxTokens?: number;
@@ -1514,6 +1515,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	minSpeculativeDraftGpuLayers?: number;
 	maxAllowedSpeculativeDraftGpuLayers?: number;
 	rerankerModelName?: string | null;
+	autoEffortFastModelName?: string | null;
 	huggingFaceDiskMarginBytes?: number | null;
 	orchestrationIdleTimeoutSeconds?: number | null;
 	minOrchestrationIdleTimeoutSeconds?: number;
@@ -1559,10 +1561,12 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	recommendedLlamaCppTag?: string | null;
 	chatCacheReuse?: number | null;
 	speculativeMode?: string | null;
+	kvCacheType?: string | null;
 	speculativeDraftModelName?: string | null;
 	speculativeDraftMaxTokens?: number | null;
 	speculativeDraftGpuLayers?: number | null;
 	rerankerModelName?: string | null;
+	autoEffortFastModelName?: string | null;
 	huggingFaceDiskMarginBytes?: number | null;
 	orchestrationIdleTimeoutSeconds?: number | null;
 	agentHomePrepareTimeoutSeconds?: number | null;
@@ -1917,6 +1921,9 @@ export type XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationRespon
 	kvQuantHeadroomGb?: number | null;
 	kvQuantFits?: boolean | null;
 	kvQuantRequiresFlashAttention?: boolean | null;
+	kvBytesPerToken?: number | null;
+	kvBytesPerTokenQuant?: string | null;
+	attentionArch?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRequest = {
@@ -2225,6 +2232,7 @@ export type XeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse = {
 	category: string;
 	effectiveRequiresApproval: boolean;
 	sessionScopeEligible: boolean;
+	unattendedBehaviour: string;
 };
 
 export type XeLocalAiEngineClientEndpointsMcpV1ListMcpServersResponse = {
@@ -2967,6 +2975,7 @@ export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationApiKeysRe
 
 export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecutionsResponse = {
 	items: Array<XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionSummaryDto>;
+	totalCount: number;
 };
 
 export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecutionsRequest = {
@@ -2975,6 +2984,7 @@ export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecution
 
 export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationSessionsResponse = {
 	items: Array<XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionResponse>;
+	totalCount: number;
 };
 
 export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationSessionsRequest = {
@@ -3278,6 +3288,104 @@ export type XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceB
 	acknowledgeCustomSourceRisk: boolean;
 };
 
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse = {
+	id?: string;
+	name?: string;
+	description?: string | null;
+	graph?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
+	graphHash?: string;
+	nodeCount?: number;
+	schemaVersion?: number;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph = {
+	schemaVersion?: number | null;
+	nodes?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphNode>;
+	edges?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphEdge>;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphNode = {
+	key?: string;
+	kind?: string;
+	label?: string | null;
+	position?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodePosition | null;
+	maxAttempts?: number | null;
+	timeoutSeconds?: number | null;
+	joinPolicy?: string | null;
+	config?: unknown;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodePosition = {
+	x?: number;
+	y?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphEdge = {
+	key?: string;
+	from?: string;
+	to?: string;
+	label?: string | null;
+	sourceHandle?: string | null;
+	condition?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowEdgeCondition | null;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowEdgeCondition = {
+	path?: string | null;
+	op?: string;
+	value?: unknown;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1CreateGraphWorkflowDefinitionRequest = {
+	name: string;
+	description?: string | null;
+	graph: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowDefinitionsResponse = {
+	definitions?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionSummaryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionSummaryResponse = {
+	id?: string;
+	name?: string;
+	description?: string | null;
+	graphHash?: string;
+	nodeCount?: number;
+	schemaVersion?: number;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1UpdateGraphWorkflowDefinitionRequest = {
+	version?: number;
+	name: string;
+	description?: string | null;
+	graph?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph | null;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionResponse = {
+	valid?: boolean;
+	errors?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse>;
+	nodeCount?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse = {
+	key?: string | null;
+	message?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionRequest = {
+	graph: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
+};
+
 export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse = {
 	revision: string;
 	connections?: Array<XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse>;
@@ -3413,6 +3521,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph
 	schemaVersion?: number;
 	nodes?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphNode>;
 	edges?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphEdge>;
+	allowUngatedWrites?: boolean | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphNode = {
@@ -3435,6 +3544,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph
 		[key: string]: string;
 	} | null;
 	toolMode?: string | null;
+	maxLoopIterations?: number | null;
 	isTemplate?: boolean | null;
 };
 
@@ -3509,6 +3619,19 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 	startedAtUtc?: number | null;
 	completedAtUtc?: number | null;
 	sequence?: number;
+	inputTokens?: number | null;
+	outputTokens?: number | null;
+	reasoningTokens?: number | null;
+	estimatedInputTokens?: number | null;
+	providerCalls?: number | null;
+	toolCalls?: number | null;
+	toolSchemaTokens?: number | null;
+	toolNames?: Array<string> | null;
+	agentTurnMs?: number | null;
+	servedModelName?: string | null;
+	route?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse | null;
+	workSessionSteps?: number | null;
+	failureClassGroup?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppliedRuleSetResponse = {
@@ -3516,6 +3639,14 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppli
 	name?: string;
 	contentSha256?: string;
 	currentContentSha256?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse = {
+	satisfied?: Array<string>;
+	dead?: Array<string>;
+	waived?: Array<string>;
+	gateAnswer?: string | null;
+	truncated?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunRequest = {
@@ -3660,6 +3791,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunRe
 	completedAtUtc?: number | null;
 	version?: number;
 	lastSequence?: number;
+	cost?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse = {
@@ -3690,6 +3822,18 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 	sequence?: number;
 	operatorRetries?: number;
 	skipWaived?: boolean | null;
+	inputTokens?: number | null;
+	outputTokens?: number | null;
+	toolCalls?: number | null;
+	validationNotApplicable?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse = {
+	inputTokens?: number | null;
+	outputTokens?: number | null;
+	toolCalls?: number | null;
+	providerCalls?: number | null;
+	agentTurnMs?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1StartDevWorkflowRunRequest = {
@@ -4470,6 +4614,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespons
 	primaryFlashAttentionMode?: string | null;
 	primaryIntendedLaunchIdentity?: string | null;
 	primaryIntendedExecutableSha256?: string | null;
+	primaryLaunchIdentitySchemeOutdated?: boolean | null;
 	primaryEffectiveLaunchIdentity?: string | null;
 	primaryEffectiveBackend?: string | null;
 	primaryPlacementOffloaded?: number | null;
@@ -5166,6 +5311,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = {
 	defaultTemporaryChat: boolean;
 	memoryExtractionEnabled: boolean;
 	disableBaseScaffold: boolean;
+	disableToolRelevanceFilter: boolean;
 	allowedSkillIds: Array<string>;
 	version: number;
 	createdAtUtc: number;
@@ -5191,6 +5337,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest =
 	defaultTemporaryChat?: boolean;
 	memoryExtractionEnabled?: boolean;
 	disableBaseScaffold?: boolean;
+	disableToolRelevanceFilter?: boolean;
 	allowedSkillIds?: Array<string> | null;
 	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadata | null;
 };
@@ -5456,6 +5603,11 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse = {
 	completionTokens?: number | null;
 	reasoningTokens?: number | null;
 	totalTokens?: number | null;
+	toolSchemaTokens?: number | null;
+	maxToolSchemaTokens?: number | null;
+	dispatchedTier?: string | null;
+	authoredEffort?: string | null;
+	modelReadinessMs?: number | null;
 	contentChunkCount?: number | null;
 	reasoningChunkCount?: number | null;
 	traceId?: string | null;
@@ -5487,6 +5639,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest =
 	defaultTemporaryChat?: boolean;
 	memoryExtractionEnabled?: boolean;
 	disableBaseScaffold?: boolean;
+	disableToolRelevanceFilter?: boolean;
 	allowedSkillIds?: Array<string> | null;
 	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadata | null;
 };
@@ -12447,7 +12600,7 @@ export type ListIntegrationExecutionsData = {
 	query?: {
 		triggerId?: string | null;
 		sessionId?: string | null;
-		status?: XeLocalAiEngineClientPersistenceEntitiesIntegrationExecutionStatus | null;
+		status?: Array<XeLocalAiEngineClientPersistenceEntitiesIntegrationExecutionStatus> | null;
 		limit?: number | null;
 		offset?: number | null;
 	};
@@ -13144,6 +13297,217 @@ export type StartStableDiffusionCppSourceBuildResponses = {
 
 export type StartStableDiffusionCppSourceBuildResponse =
 	StartStableDiffusionCppSourceBuildResponses[keyof StartStableDiffusionCppSourceBuildResponses];
+
+export type ListGraphWorkflowDefinitionsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/graph-workflows/definitions";
+};
+
+export type ListGraphWorkflowDefinitionsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListGraphWorkflowDefinitionsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowDefinitionsResponse;
+};
+
+export type ListGraphWorkflowDefinitionsResponse =
+	ListGraphWorkflowDefinitionsResponses[keyof ListGraphWorkflowDefinitionsResponses];
+
+export type CreateGraphWorkflowDefinitionData = {
+	body: XeLocalAiEngineClientEndpointsGraphWorkflowsV1CreateGraphWorkflowDefinitionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/graph-workflows/definitions";
+};
+
+export type CreateGraphWorkflowDefinitionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type CreateGraphWorkflowDefinitionError = CreateGraphWorkflowDefinitionErrors[keyof CreateGraphWorkflowDefinitionErrors];
+
+export type CreateGraphWorkflowDefinitionResponses = {
+	/**
+	 * Created
+	 */
+	201: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse;
+};
+
+export type CreateGraphWorkflowDefinitionResponse =
+	CreateGraphWorkflowDefinitionResponses[keyof CreateGraphWorkflowDefinitionResponses];
+
+export type DeleteGraphWorkflowDefinitionData = {
+	body?: never;
+	path: {
+		definitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/graph-workflows/definitions/{definitionId}";
+};
+
+export type DeleteGraphWorkflowDefinitionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type DeleteGraphWorkflowDefinitionError = DeleteGraphWorkflowDefinitionErrors[keyof DeleteGraphWorkflowDefinitionErrors];
+
+export type DeleteGraphWorkflowDefinitionResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteGraphWorkflowDefinitionResponse =
+	DeleteGraphWorkflowDefinitionResponses[keyof DeleteGraphWorkflowDefinitionResponses];
+
+export type GetGraphWorkflowDefinitionData = {
+	body?: never;
+	path: {
+		definitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/graph-workflows/definitions/{definitionId}";
+};
+
+export type GetGraphWorkflowDefinitionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type GetGraphWorkflowDefinitionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse;
+};
+
+export type GetGraphWorkflowDefinitionResponse = GetGraphWorkflowDefinitionResponses[keyof GetGraphWorkflowDefinitionResponses];
+
+export type UpdateGraphWorkflowDefinitionData = {
+	body: XeLocalAiEngineClientEndpointsGraphWorkflowsV1UpdateGraphWorkflowDefinitionRequest;
+	path: {
+		definitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/graph-workflows/definitions/{definitionId}";
+};
+
+export type UpdateGraphWorkflowDefinitionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type UpdateGraphWorkflowDefinitionError = UpdateGraphWorkflowDefinitionErrors[keyof UpdateGraphWorkflowDefinitionErrors];
+
+export type UpdateGraphWorkflowDefinitionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse;
+};
+
+export type UpdateGraphWorkflowDefinitionResponse =
+	UpdateGraphWorkflowDefinitionResponses[keyof UpdateGraphWorkflowDefinitionResponses];
+
+export type ValidateGraphWorkflowDefinitionData = {
+	body: XeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/graph-workflows/definitions/validate";
+};
+
+export type ValidateGraphWorkflowDefinitionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ValidateGraphWorkflowDefinitionError =
+	ValidateGraphWorkflowDefinitionErrors[keyof ValidateGraphWorkflowDefinitionErrors];
+
+export type ValidateGraphWorkflowDefinitionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionResponse;
+};
+
+export type ValidateGraphWorkflowDefinitionResponse =
+	ValidateGraphWorkflowDefinitionResponses[keyof ValidateGraphWorkflowDefinitionResponses];
 
 export type DeleteExternalProviderConnectionData = {
 	body?: never;

@@ -59,6 +59,32 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
     {
         ArgumentNullException.ThrowIfNull(filter);
 
+        // The Id tie-break is load-bearing: ReceivedAtUtc is a millisecond stamp, so two accepts in the same
+        // millisecond would page non-deterministically and drop or duplicate a row across pages.
+        var entities = await Matching(filter)
+                             .OrderByDescending(row => row.ReceivedAtUtc)
+                             .ThenByDescending(row => row.Id)
+                             .Skip(Math.Max(val1: 0, filter.Offset))
+                             .Take(Math.Max(val1: 0, filter.Limit))
+                             .ToListAsync(cancellationToken)
+                             .ConfigureAwait(false);
+        return [.. entities.Select(ToSnapshot)];
+    }
+
+    public Task<int> CountAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        // No Skip/Take: the total a pager labels its window with is the whole matching set, not the window.
+        return Matching(filter).CountAsync(cancellationToken);
+    }
+
+    /// <summary>
+    ///     The filter half of both reads, in ONE place: a count computed from a second copy of these predicates would
+    ///     drift from the page it labels the moment either side gained a filter.
+    /// </summary>
+    private IQueryable<IntegrationExecution> Matching(IntegrationExecutionFilter filter)
+    {
         var query = _dbContext.IntegrationExecutions.AsNoTracking();
 
         if (filter.TriggerId is { } triggerId)
@@ -71,20 +97,15 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
             query = query.Where(row => row.SessionId == sessionId);
         }
 
-        if (filter.Status is { } status)
+        if (filter.Status is { Count: > 0 } statuses)
         {
-            query = query.Where(row => row.Status == status);
+            // Materialized to an array because EF translates Enumerable.Contains over one into an IN list; the
+            // IReadOnlySet<T>.Contains the set itself offers is an interface call it cannot see through.
+            var wanted = statuses.ToArray();
+            query = query.Where(row => wanted.Contains(row.Status));
         }
 
-        // The Id tie-break is load-bearing: ReceivedAtUtc is a millisecond stamp, so two accepts in the same
-        // millisecond would page non-deterministically and drop or duplicate a row across pages.
-        var entities = await query.OrderByDescending(row => row.ReceivedAtUtc)
-                                  .ThenByDescending(row => row.Id)
-                                  .Skip(Math.Max(val1: 0, filter.Offset))
-                                  .Take(Math.Max(val1: 0, filter.Limit))
-                                  .ToListAsync(cancellationToken)
-                                  .ConfigureAwait(false);
-        return [.. entities.Select(ToSnapshot)];
+        return query;
     }
 
     public Task<int> CountActiveBySessionAsync(Guid sessionId, CancellationToken cancellationToken = default) =>

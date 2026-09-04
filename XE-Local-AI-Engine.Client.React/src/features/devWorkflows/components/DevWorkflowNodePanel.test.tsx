@@ -190,30 +190,157 @@ describe("DevWorkflowNodePanel", () => {
 
 	it("lists prior attempts from the event log, which is the only place they exist", () => {
 		const nodeRunId = devWorkflowNodeRunDetail().id;
-		renderPanel(devWorkflowNodeRunDetail({ attempt: 2, maxAttempts: 3 }), {
-			events: [
-				devWorkflowRunEvent({
-					id: "attached-1",
-					sequence: 1,
-					eventType: "worksession.attached",
-					nodeRunId,
-					detailJson: JSON.stringify({ workSessionId: sessionId, attempt: 1, sessionResumes: 0 }),
-				}),
-				devWorkflowRunEvent({
-					id: "retry-1",
-					sequence: 2,
-					eventType: "node.retry.scheduled",
-					nodeRunId,
-					outcome: "provider-error",
-				}),
-			],
-		});
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				attempt: 2,
+				maxAttempts: 3,
+				inputTokens: 1200,
+				outputTokens: 340,
+				providerCalls: 4,
+				toolCalls: 7,
+				agentTurnMs: 40_000,
+			}),
+			{
+				events: [
+					devWorkflowRunEvent({
+						id: "attached-1",
+						sequence: 1,
+						eventType: "worksession.attached",
+						nodeRunId,
+						detailJson: JSON.stringify({ workSessionId: sessionId, attempt: 1, sessionResumes: 0 }),
+					}),
+					devWorkflowRunEvent({
+						id: "retry-1",
+						sequence: 2,
+						eventType: "node.retry.scheduled",
+						nodeRunId,
+						outcome: "provider-error",
+						// The nine additive members the retry payload carries. They are the ONLY record of what the attempt
+						// they close spent: the node-run row keeps the last attempt's numbers and overwrites the rest.
+						detailJson: JSON.stringify({
+							attempt: 1,
+							inputTokens: 1000,
+							outputTokens: 200,
+							reasoningTokens: 50,
+							estimatedInputTokens: 990,
+							providerCalls: 2,
+							toolCalls: 1,
+							toolSchemaTokens: 100,
+							agentTurnMs: 30_000,
+							workSessionSteps: 2,
+						}),
+					}),
+				],
+			},
+		);
 
 		expect(screen.getByTestId("dev-workflow-node-attempt-1").textContent).toContain("provider-error");
 		// Attempt 2 is the one running: the row exists because the node-run says so, with nothing claimed about it yet.
 		expect(screen.getByTestId("dev-workflow-node-attempt-2")).toBeDefined();
 		fireEvent.click(screen.getByTestId("dev-workflow-node-attempt-session-1"));
 		expect(navigate).toHaveBeenCalledWith({ to: "/work-sessions/$sessionId", params: { sessionId } });
+
+		// What the retried attempt cost, from its own event, and what the current one cost, from the node-run row.
+		const first = screen.getByTestId("dev-workflow-node-attempt-cost-1").textContent ?? "";
+		expect(first).toContain("Input tokens 1,000");
+		expect(first).toContain("Output tokens 200");
+		expect(first).toContain("Agent turns 30s");
+		expect(screen.getByTestId("dev-workflow-node-attempt-cost-2").textContent).toContain("Input tokens 1,200");
+
+		// `total = final + retries`, which is the number an operator cannot obtain from either source alone.
+		const total = screen.getByTestId("dev-workflow-node-attempts-total").textContent ?? "";
+		expect(total).toContain("Total across attempts");
+		expect(total).toContain("Input tokens 2,200");
+		expect(total).toContain("Output tokens 540");
+		expect(total).toContain("Reasoning tokens 50");
+		expect(total).toContain("Provider calls 6");
+		expect(total).toContain("Tool calls 8");
+		// Summed in milliseconds and formatted once: 30s on the retried attempt plus 40s on the current one.
+		expect(total).toContain("Agent turns 1m 10s");
+		expect(total).not.toContain("the real total is higher");
+	});
+
+	it("draws no total for a node that spends no tokens, so a Tool retry does not get a row of zeroes", () => {
+		const nodeRunId = devWorkflowNodeRunDetail().id;
+		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Tool", attempt: 2, maxAttempts: 3 }), {
+			events: [devWorkflowRunEvent({ id: "retry-tool", sequence: 2, eventType: "node.retry.scheduled", nodeRunId })],
+		});
+
+		expect(screen.queryByTestId("dev-workflow-node-attempts-total")).toBeNull();
+	});
+
+	it("calls the total partial when an earlier attempt was billed for rounds the provider never reported usage for", () => {
+		// A context-window overflow ends the attempt after N provider calls and reports no usage for any of them, so the
+		// payload carries calls and tools with null tokens. Adding only attempt 2 would print the last attempt's tokens
+		// as if they were the whole bill.
+		const nodeRunId = devWorkflowNodeRunDetail().id;
+		renderPanel(devWorkflowNodeRunDetail({ attempt: 2, maxAttempts: 3, inputTokens: 900, outputTokens: 120, providerCalls: 3 }), {
+			events: [
+				devWorkflowRunEvent({
+					id: "retry-overflow",
+					sequence: 2,
+					eventType: "node.retry.scheduled",
+					nodeRunId,
+					outcome: "context-overflow",
+					detailJson: JSON.stringify({ attempt: 1, providerCalls: 10, toolCalls: 4, inputTokens: null, outputTokens: null }),
+				}),
+			],
+		});
+
+		const total = screen.getByTestId("dev-workflow-node-attempts-total").textContent ?? "";
+		expect(total).toContain("Provider calls 13");
+		expect(total).toContain("the real total is higher");
+	});
+
+	it("counts the last attempt in the total's honesty only once the node has settled", () => {
+		// The overflow can hit the FINAL attempt too: the node ends Failed having paid for rounds nobody has token
+		// counts for. Excluding the last row unconditionally would label that sum a complete total.
+		const nodeRunId = devWorkflowNodeRunDetail().id;
+		// Attempt 1 is fully recorded, so the last row's status is the only thing deciding the wording below.
+		const events = [
+			devWorkflowRunEvent({
+				id: "retry-a",
+				sequence: 2,
+				eventType: "node.retry.scheduled",
+				nodeRunId,
+				detailJson: JSON.stringify({ attempt: 1, inputTokens: 400, providerCalls: 2 }),
+			}),
+		];
+		renderPanel(devWorkflowNodeRunDetail({ status: "Failed", attempt: 2, maxAttempts: 3, providerCalls: 6, inputTokens: null }), {
+			events,
+		});
+		expect(screen.getByTestId("dev-workflow-node-attempts-total").textContent).toContain("the real total is higher");
+
+		// The same shape while the node is still working is not missing evidence, it is work not finished yet.
+		cleanup();
+		renderPanel(devWorkflowNodeRunDetail({ status: "Running", attempt: 2, maxAttempts: 3, providerCalls: 6, inputTokens: null }), {
+			events,
+		});
+		expect(screen.getByTestId("dev-workflow-node-attempts-total").textContent).not.toContain("the real total is higher");
+	});
+
+	it("says the total is a floor when an earlier attempt's event never loaded, rather than printing a wrong number", () => {
+		// A tail-anchored page set reaches attempt 2's retry but not attempt 1's, so attempt 1 recorded nothing. Adding
+		// the two it CAN see and calling that the total would understate what the run paid, silently.
+		const nodeRunId = devWorkflowNodeRunDetail().id;
+		renderPanel(devWorkflowNodeRunDetail({ attempt: 3, maxAttempts: 3, inputTokens: 500, providerCalls: 1 }), {
+			events: [
+				devWorkflowRunEvent({
+					id: "retry-2",
+					sequence: 9,
+					eventType: "node.retry.scheduled",
+					nodeRunId,
+					outcome: "provider-error",
+					detailJson: JSON.stringify({ attempt: 2, inputTokens: 300, providerCalls: 2 }),
+				}),
+			],
+		});
+
+		expect(screen.queryByTestId("dev-workflow-node-attempt-cost-1")).toBeNull();
+		expect(screen.getByTestId("dev-workflow-node-attempt-cost-2").textContent).toContain("Input tokens 300");
+		const total = screen.getByTestId("dev-workflow-node-attempts-total").textContent ?? "";
+		expect(total).toContain("Input tokens 800");
+		expect(total).toContain("the real total is higher");
 	});
 
 	it("still offers the transcript of an attempt whose row the store wrote in PascalCase", () => {
@@ -651,6 +778,92 @@ describe("DevWorkflowNodePanel", () => {
 		renderPanel(devWorkflowNodeRunDetail({ appliedRuleSets: [] }));
 
 		expect(screen.queryByTestId("dev-workflow-node-rule-sets")).toBeNull();
+	});
+
+	it("renders the cost section with the twelve columns, the tool chips and the route", () => {
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				status: "Succeeded",
+				queuedAtUtc: 1_000,
+				startedAtUtc: 3_000,
+				completedAtUtc: 63_000,
+				inputTokens: 1200,
+				outputTokens: 340,
+				reasoningTokens: 90,
+				estimatedInputTokens: 1150,
+				providerCalls: 4,
+				toolCalls: 7,
+				toolSchemaTokens: 320,
+				toolNames: ["read_document", "search_web", "…"],
+				agentTurnMs: 40_000,
+				servedModelName: "qwen3-27b-instruct-q4",
+				workSessionSteps: 3,
+				route: { satisfied: ["approval"], dead: ["fallback"], waived: ["excused-leaf"], gateAnswer: "Approve", truncated: true },
+			}),
+		);
+
+		expect(screen.getByTestId("dev-workflow-node-cost-input").textContent).toBe("1,200");
+		expect(screen.getByTestId("dev-workflow-node-cost-output").textContent).toBe("340");
+		expect(screen.getByTestId("dev-workflow-node-cost-reasoning").textContent).toBe("90");
+		expect(screen.getByTestId("dev-workflow-node-cost-provider-calls").textContent).toBe("4");
+		expect(screen.getByTestId("dev-workflow-node-cost-tool-calls").textContent).toBe("7");
+		expect(screen.getByTestId("dev-workflow-node-cost-schema-tokens").textContent).toBe("320");
+		expect(screen.getByTestId("dev-workflow-node-cost-steps").textContent).toBe("3");
+		expect(screen.getByTestId("dev-workflow-node-cost-served-model").textContent).toBe("qwen3-27b-instruct-q4");
+
+		// The four durations: queued, total, inside agent turns, and what is left over outside those turns.
+		expect(screen.getByTestId("dev-workflow-node-cost-queued").textContent).toBe("2s");
+		expect(screen.getByTestId("dev-workflow-node-cost-ran").textContent).toBe("1m 00s");
+		expect(screen.getByTestId("dev-workflow-node-cost-turn-time").textContent).toBe("40s");
+		expect(screen.getByTestId("dev-workflow-node-cost-outside-turn-time").textContent).toBe("20s");
+
+		// The estimate is suppressed while the real count is present: two numbers for one quantity invite addition.
+		expect(screen.queryByTestId("dev-workflow-node-cost-estimated")).toBeNull();
+
+		// The collector closes a trimmed list with "…". It is a marker, not a tool, so it must not be drawn as a chip.
+		const chips = screen.getByTestId("dev-workflow-node-cost-tool-names");
+		expect(chips.textContent).toContain("read_document");
+		expect(chips.textContent).toContain("search_web");
+		expect(screen.getByTestId("dev-workflow-node-cost-tool-names-truncated").textContent).toBe("…and more");
+
+		expect(screen.getByTestId("dev-workflow-node-cost-route-satisfied").textContent).toBe("satisfied → approval");
+		expect(screen.getByTestId("dev-workflow-node-cost-route-dead").textContent).toBe("not taken → fallback");
+		// Its own row, because a waived edge is neither of the other two: it did not admit this successor and it did
+		// not kill it either. Folding it into one of them is what would make the panel disagree with the runtime.
+		expect(screen.getByTestId("dev-workflow-node-cost-route-waived").textContent).toBe("excused → excused-leaf");
+		expect(screen.getByTestId("dev-workflow-node-cost-route-gate-answer").textContent).toContain("Approve");
+		// A shortened route MUST say so, or a two-key list reads as the whole route.
+		expect(screen.getByTestId("dev-workflow-node-cost-route-truncated")).toBeDefined();
+	});
+
+	it("draws no excused row for an ordinary route, so an empty bucket is not read as a claim", () => {
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				status: "Succeeded",
+				route: { satisfied: ["approval"], dead: [], waived: [], gateAnswer: null, truncated: false },
+			}),
+		);
+
+		expect(screen.getByTestId("dev-workflow-node-cost-route-satisfied").textContent).toBe("satisfied → approval");
+		expect(screen.queryByTestId("dev-workflow-node-cost-route-waived")).toBeNull();
+	});
+
+	it("shows the estimate only where the real input count is missing", () => {
+		renderPanel(devWorkflowNodeRunDetail({ status: "Succeeded", inputTokens: null, estimatedInputTokens: 1150 }));
+
+		expect(screen.getByTestId("dev-workflow-node-cost-estimated").textContent).toBe("1,150");
+	});
+
+	it("renders no cost section at all for a node run that recorded nothing", () => {
+		renderPanel(devWorkflowNodeRunDetail({ status: "Pending", queuedAtUtc: null, startedAtUtc: null, completedAtUtc: null }));
+
+		expect(screen.queryByTestId("dev-workflow-node-cost")).toBeNull();
+	});
+
+	it("names the failure in the cross-unit vocabulary beside the runtime's own class", () => {
+		renderPanel(devWorkflowNodeRunDetail({ status: "Failed", failureClass: "ToolCommandFailed", failureClassGroup: "ToolOrCommand" }));
+
+		expect(screen.getByTestId("dev-workflow-node-failure-group").textContent).toBe("Tool or command");
 	});
 
 	it("clamps the attempt maximum up to the attempt, so a server from before the widening never reads 'attempt 4 of 3'", () => {

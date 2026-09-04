@@ -614,6 +614,33 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     public async Task SettleAgentAsync(Guid runId, string nodeKey, AgentWorkSessionStatus status = AgentWorkSessionStatus.Completed) =>
         _ = await Agent.SettleAsync(await ReadSessionIdAsync(runId, nodeKey).ConfigureAwait(false), status).ConfigureAwait(false);
 
+    /// <summary>
+    ///     Stops the node run's session the way the write-declaration gate stops one: the step row that names the gate
+    ///     and carries the refusal sentence, then the Failed terminal (<c>GRAPH-C4-2</c>).
+    ///     <para>
+    ///         Both halves matter. The row is the durable cause the owning run reads back; a session settled without it
+    ///         is one that failed for a reason no reader can recover, which is exactly what the poll used to paper over
+    ///         by re-inspecting the agent definition as it stands NOW.
+    ///     </para>
+    /// </summary>
+    public async Task RefuseAgentWriteAsync(Guid runId, string nodeKey, string refusal)
+    {
+        var sessionId = await ReadSessionIdAsync(runId, nodeKey).ConfigureAwait(false);
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
+                           .AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
+                               WorkSessionVersions.Any,
+                               WorkSessionEventTypes.StepEnded,
+                               Guid.NewGuid(),
+                               WorkSessionEventTypes.WriteGateOutcome,
+                               WorkSessionEventTypes.WriteGateDetail(refusal)))
+                           .ConfigureAwait(false);
+        }
+
+        _ = await Agent.SettleAsync(sessionId, AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+    }
+
     /// <summary>Saves an artifact on the node run's session, the way its <c>save_artifact</c> tool would.</summary>
     public async Task<Guid> SaveAgentArtifactAsync(Guid runId, string nodeKey, string name, string content)
     {

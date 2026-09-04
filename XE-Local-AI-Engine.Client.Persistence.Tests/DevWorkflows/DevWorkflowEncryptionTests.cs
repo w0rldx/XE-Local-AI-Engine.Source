@@ -8,6 +8,24 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 public sealed class DevWorkflowEncryptionTests
 {
+    /// <summary>The thirteen cost-telemetry properties (P-C1 §4.1 plus the model-readiness split), by entity property name.</summary>
+    private static readonly string[] TelemetryPropertyNames =
+    [
+        nameof(DevWorkflowNodeRun.InputTokens),
+        nameof(DevWorkflowNodeRun.OutputTokens),
+        nameof(DevWorkflowNodeRun.ReasoningTokens),
+        nameof(DevWorkflowNodeRun.EstimatedInputTokens),
+        nameof(DevWorkflowNodeRun.ProviderCalls),
+        nameof(DevWorkflowNodeRun.ToolCalls),
+        nameof(DevWorkflowNodeRun.ToolSchemaTokens),
+        nameof(DevWorkflowNodeRun.ToolNamesJson),
+        nameof(DevWorkflowNodeRun.AgentTurnMs),
+        nameof(DevWorkflowNodeRun.ModelReadinessMs),
+        nameof(DevWorkflowNodeRun.ServedModelName),
+        nameof(DevWorkflowNodeRun.RouteJson),
+        nameof(DevWorkflowNodeRun.WorkSessionSteps)
+    ];
+
     /// <summary>T-4: nothing sensitive reaches the file as plaintext — and the deliberately plaintext title does, which is what proves the scan works.</summary>
     [Test]
     public async Task WorkflowPayloads_NeverReachTheFileAsPlaintext()
@@ -105,6 +123,61 @@ public sealed class DevWorkflowEncryptionTests
         // The title is deliberately plaintext — the list page sorts and filters on it.
         AssertEx.True(ContainsSubsequence(fileBytes, "Plain title"u8.ToArray()), "The work-item title is an indexed plaintext column.");
         AssertEx.True(ContainsSubsequence(fileBytes, "Plain rule set"u8.ToArray()), "A rule set's name is a plaintext column too — the list page sorts on it.");
+    }
+
+    /// <summary>
+    ///     The thirteen cost-telemetry columns are absent from the interceptor's tracked set, and stay that way. Two
+    ///     assertions, because either alone would pass for the wrong reason: the interceptor can only encrypt a
+    ///     <c>byte[]</c> property, so none of the thirteen may be one; and the three that carry text must be readable in
+    ///     the file, which is what proves nothing quietly started protecting them. They hold node keys, a served model
+    ///     name and tool names — structural metadata, like every other plaintext column on the row.
+    /// </summary>
+    [Test]
+    public async Task NodeRunTelemetryColumns_AreNotTracked_AndReachTheFileAsPlaintext()
+    {
+        var telemetryProperties = typeof(DevWorkflowNodeRun).GetProperties()
+                                                            .Where(property => TelemetryPropertyNames.Contains(property.Name))
+                                                            .ToList();
+        AssertEx.Equal(TelemetryPropertyNames.Length,
+            telemetryProperties.Count,
+            "Every telemetry column named here must exist on the entity — a rename must break this test, not slip past it.");
+        foreach (var property in telemetryProperties)
+        {
+            AssertEx.False(property.PropertyType == typeof(byte[]),
+                $"{property.Name} is a telemetry column: making it a byte[] is the first half of accidentally encrypting it.");
+        }
+
+        using var fixture = new DevWorkflowTestFixture();
+        var servedModel = "SERVEDMODEL-" + Guid.NewGuid().ToString("N");
+        var toolName = "TOOLNAME-" + Guid.NewGuid().ToString("N");
+        var routeKey = "ROUTEKEY-" + Guid.NewGuid().ToString("N");
+
+        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        {
+            var store = DevWorkflowTestFixture.StoreFor(context);
+            var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+            var nodeRunId = Guid.NewGuid();
+            var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "research", seed.RunVersion).ConfigureAwait(false);
+
+            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                  nodeRunId,
+                                  version,
+                                  DevWorkflowNodeRunStatus.Succeeded,
+                                  Telemetry: new DevWorkflowNodeTelemetry(InputTokens: 10,
+                                      OutputTokens: 20,
+                                      ToolCalls: 1,
+                                      ToolNamesJson: $"""["{toolName}"]""",
+                                      ServedModelName: servedModel,
+                                      RouteJson: $$"""{"satisfied":["{{routeKey}}"],"dead":[],"gateAnswer":null,"truncated":false}""")))
+                           .ConfigureAwait(false);
+        }
+
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(fixture.DatabasePath).ConfigureAwait(false);
+        foreach (var value in new[] { servedModel, toolName, routeKey })
+        {
+            AssertEx.True(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(value)),
+                $"'{value[..12]}…' is telemetry metadata and must stay plaintext — the runbook's rollups read these columns with SQL.");
+        }
     }
 
     /// <summary>T-5: re-parenting a node run onto another run, or a run onto another work item, fails the tag check.</summary>

@@ -99,7 +99,7 @@ public sealed class LocalRuntimeWarmer(
         {
             // The caller cancelled its WAIT (the detached load continues in the supervisor and warms the model for the
             // next send). Record the abandoned readiness and rethrow so the turn terminates as cancelled.
-            stream.ModelReadinessDurationMs = RecordReadiness(startedUtc, "cancelled");
+            stream.AddModelReadiness(RecordReadiness(startedUtc, "cancelled"));
             readinessActivity?.SetTag("outcome", "cancelled");
             throw;
         }
@@ -108,7 +108,7 @@ public sealed class LocalRuntimeWarmer(
             // Readiness failed (e.g. model incompatible / OOM). Record and capture it. The normal path still lets the
             // streaming send surface the real classified failure through its provider boundary; an admission-gated path
             // rethrows this captured failure before policy evaluation so a null-context refusal cannot mask it.
-            stream.ModelReadinessDurationMs = RecordReadiness(startedUtc, "failed");
+            stream.AddModelReadiness(RecordReadiness(startedUtc, "failed"));
             readinessActivity?.SetTag("outcome", "failed");
             _logger.LogWarning(exception, "Model warm failed for invocation {InvocationId}; the streaming send will surface the classified failure.", invocationId);
             return new LocalRuntimePreparationResult(EffectiveContextTokens: null,
@@ -117,7 +117,7 @@ public sealed class LocalRuntimeWarmer(
         }
 
         var durationMs = RecordReadiness(startedUtc, "ready");
-        stream.ModelReadinessDurationMs = durationMs;
+        stream.AddModelReadiness(durationMs);
         readinessActivity?.SetTag("outcome", "ready");
 
         // The model is ready: measure TTFT from HERE (the first emitted chunk records against this baseline).

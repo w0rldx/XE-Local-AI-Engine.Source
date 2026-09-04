@@ -33,7 +33,9 @@ public interface ILlamaServerLaunchPolicy
 
     /// <summary>
     ///     Records that the optimized KV-quant + flash-attention config could not reach readiness on
-    ///     <paramref name="variant" />, so future <see cref="ResolveAsync" /> calls emit the safe config for it.
+    ///     <paramref name="variant" /> at <paramref name="kvCacheType" />, so future <see cref="ResolveAsync" /> calls
+    ///     emit the safe config for that pair. A failure at one KV type says nothing about the others, so the verdict is
+    ///     scoped to the type that actually failed.
     /// </summary>
-    Task RecordOptimizedConfigFailedAsync(GpuVariant variant, CancellationToken ct);
+    Task RecordOptimizedConfigFailedAsync(GpuVariant variant, string kvCacheType, CancellationToken ct);
 }

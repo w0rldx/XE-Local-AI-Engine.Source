@@ -99,7 +99,18 @@ public sealed class NodeChatInvocationPump(
             state.StreamedThinkingChunkCount,
             CurrentTraceId(),
             state.StartedAt == default ? null : state.StartedAt.ToUnixTimeMilliseconds(),
-            provider);
+            provider,
+            state.ToolSchemaTokens,
+            state.MaxToolSchemaTokens,
+            state.DispatchedTier,
+            state.AuthoredEffort,
+            state.ModelReadinessMs,
+            // The turn TOTALS ride the envelope; the message row below keeps the last round's counts, which is what the
+            // chat context meter reads as occupancy. Two different questions, two different rows.
+            state.TurnInputTokens,
+            state.TurnOutputTokens,
+            state.TurnTotalTokens,
+            state.TurnReasoningTokens);
 
         // A cancelled turn persists NO error text — a user cancel (or an operator eject,
         // also Cancelled-category) is an outcome, not a failure, so it must not leave a red error banner on the row.

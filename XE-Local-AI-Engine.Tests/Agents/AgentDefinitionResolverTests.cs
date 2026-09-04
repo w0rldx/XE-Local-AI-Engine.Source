@@ -1158,6 +1158,34 @@ public sealed class AgentDefinitionResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_CarriesTheToolRelevanceOptOut_WithoutChangingTheProjectedToolList()
+    {
+        // The per-agent opt-out is an execution-context bit the runner reads when it seeds the relevance scope. It must
+        // reach the resolved runtime unchanged, and it must not touch the offer: the filter narrows only the array
+        // handed to the provider, so the projected tool list is identical either way.
+        var resolver = CreateResolverWithScaffold(out var store, ScaffoldText, OfferTool("GetCurrentTime"), OfferTool("read_file"));
+        var filtered = CreateDefinition(allowedTools: ["GetCurrentTime", "read_file"]);
+        var optedOut = filtered with
+        {
+            Id = Guid.NewGuid(),
+            DisableToolRelevanceFilter = true
+        };
+        store.GetByIdAsync(filtered.Id, Arg.Any<CancellationToken>()).Returns(filtered);
+        store.GetByIdAsync(optedOut.Id, Arg.Any<CancellationToken>()).Returns(optedOut);
+
+        var resolvedFiltered = await resolver.ResolveAsync(filtered.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolvedOptedOut = await resolver.ResolveAsync(optedOut.Id, "qwen3:8b").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolvedFiltered);
+        AssertEx.NotNull(resolvedOptedOut);
+        AssertEx.False(resolvedFiltered!.DisableToolRelevanceFilter, "The default follows the node setting.");
+        AssertEx.True(resolvedOptedOut!.DisableToolRelevanceFilter, "The flag round-trips onto the resolved runtime.");
+        AssertEx.True(resolvedFiltered.AllowedTools.Select(static tool => tool.Name)
+                                      .SequenceEqual(resolvedOptedOut.AllowedTools.Select(static tool => tool.Name), StringComparer.Ordinal),
+            "The opt-out must not reshape the offer — it is not an authorisation change.");
+    }
+
+    [Test]
     public async Task ResolveAsync_ScaffoldPrependsAheadOfPlaybookComposedPersona()
     {
         // Composition order: scaffold, blank line, then the FULL persona prompt (Instructions + folded-in playbook

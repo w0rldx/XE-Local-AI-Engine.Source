@@ -60,6 +60,10 @@ internal static class AddNodeWorkSessionsExtensions
         // same way.
         builder.Services.AddScoped<WorkSessionToolGate>();
 
+        // Scoped for the same reason, and resolved from the same two places: the development-workflow lane before it
+        // creates a session, and the supervisor's per-turn scope before every step it sends.
+        builder.Services.AddScoped<WorkSessionWriteDeclarationGuard>();
+
         // One instance serving three roles: the supervisor holds the in-flight runs, so a second instance would answer
         // "not running" to every stop and drive a session twice.
         builder.Services.AddSingleton<WorkSessionExecutionSupervisor>();

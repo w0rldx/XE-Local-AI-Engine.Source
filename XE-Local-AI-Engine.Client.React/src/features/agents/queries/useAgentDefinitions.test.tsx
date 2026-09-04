@@ -71,8 +71,10 @@ const domainDefinition = {
 	defaultTemporaryChat: false,
 	// The wire fixture omits memoryExtractionEnabled; the mapper degrades an absent value to true (backend default).
 	memoryExtractionEnabled: true,
-	// The wire fixture omits disableBaseScaffold; the mapper degrades an absent value to false (backend default).
+	// The wire fixture omits disableBaseScaffold and disableToolRelevanceFilter; the mapper degrades an absent value to
+	// false for both (the backend default).
 	disableBaseScaffold: false,
+	disableToolRelevanceFilter: false,
 	version: 1,
 	createdAtUtc: 1000,
 	updatedAtUtc: 2000,

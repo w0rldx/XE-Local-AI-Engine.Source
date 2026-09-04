@@ -674,11 +674,69 @@ public sealed class IntegrationExecutionStoreTests
         AssertEx.Equal(all[0].Id, page0.Single().Id);
         AssertEx.Equal(all[1].Id, page1.Single().Id);
 
-        var byStatus = await store.ListAsync(new IntegrationExecutionFilter(null, null, IntegrationExecutionStatus.Running, Limit: 10, Offset: 0)).ConfigureAwait(false);
+        var byStatus = await store.ListAsync(new IntegrationExecutionFilter(null, null, Running, Limit: 10, Offset: 0)).ConfigureAwait(false);
         AssertEx.Empty(byStatus);
 
         var bySession = await store.ListAsync(new IntegrationExecutionFilter(null, tieA.SessionId, null, Limit: 10, Offset: 0)).ConfigureAwait(false);
         AssertEx.Equal(expected: 1, bySession.Count);
+
+        // The startup sweep asks for the WHOLE non-terminal set in one unpaged read. Proven against real SQLite here:
+        // Take(int.MaxValue) has to translate and execute, not throw on the LIMIT parameter.
+        var unpaged = await store.ListAsync(new IntegrationExecutionFilter(null, null, null, int.MaxValue, Offset: 0)).ConfigureAwait(false);
+        AssertEx.Equal(expected: 3, unpaged.Count);
+    }
+
+    /// <summary>
+    ///     The two halves of a real pager: a status SET selects exactly its members, and the count answers for the whole
+    ///     matching set rather than the window — a total computed from the page would label every full page "3 of 3".
+    /// </summary>
+    [Test]
+    public async Task CountAsync_AnswersTheWholeFilteredSetAndTheStatusFilterTakesASet()
+    {
+        using var fixture = new IntegrationTestFixture();
+        var seed = await SeedAsync(fixture).ConfigureAwait(false);
+
+        await using var context = fixture.CreateContext();
+        var store = new IntegrationExecutionStore(context);
+
+        var running = NewAccept(seed) with { ReceivedAtUtc = 3_000 };
+        var stillAccepted = NewAccept(seed) with { ReceivedAtUtc = 2_000 };
+        var oldest = NewAccept(seed) with { ReceivedAtUtc = 1_000 };
+        foreach (var accept in new[] { running, stillAccepted, oldest })
+        {
+            AssertEx.True(await store.AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 8).ConfigureAwait(false));
+        }
+
+        AssertEx.True(await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(running.ExecutionId,
+                          ExpectedVersion: 0,
+                          Accepted,
+                          IntegrationExecutionStatus.Running))
+                      .ConfigureAwait(false));
+
+        var bothStatuses = new HashSet<IntegrationExecutionStatus>
+        {
+            IntegrationExecutionStatus.Accepted,
+            IntegrationExecutionStatus.Running
+        };
+
+        // A one-row window over three matching rows: the count must ignore Limit/Offset entirely.
+        AssertEx.Equal(expected: 3, await store.CountAsync(new IntegrationExecutionFilter(null, null, null, Limit: 1, Offset: 0)).ConfigureAwait(false));
+        AssertEx.Equal(expected: 3, await store.CountAsync(new IntegrationExecutionFilter(null, null, null, Limit: 10, Offset: 2)).ConfigureAwait(false));
+
+        // An empty set is "do not constrain", exactly as a null one is; anything else would match nothing.
+        AssertEx.Equal(expected: 3,
+            await store.CountAsync(new IntegrationExecutionFilter(null, null, new HashSet<IntegrationExecutionStatus>(), Limit: 10, Offset: 0)).ConfigureAwait(false));
+
+        AssertEx.Equal(expected: 1, await store.CountAsync(new IntegrationExecutionFilter(null, null, Running, Limit: 10, Offset: 0)).ConfigureAwait(false));
+        AssertEx.Equal(expected: 3, await store.CountAsync(new IntegrationExecutionFilter(null, null, bothStatuses, Limit: 10, Offset: 0)).ConfigureAwait(false));
+        AssertEx.Equal(expected: 0,
+            await store.CountAsync(new IntegrationExecutionFilter(Guid.NewGuid(), null, bothStatuses, Limit: 10, Offset: 0)).ConfigureAwait(false),
+            "The count applies every limb of the filter the page does, not only the status set.");
+
+        var set = await store.ListAsync(new IntegrationExecutionFilter(null, null, bothStatuses, Limit: 10, Offset: 0)).ConfigureAwait(false);
+        AssertEx.Equal(expected: 3, set.Count);
+        var onlyRunning = await store.ListAsync(new IntegrationExecutionFilter(null, null, Running, Limit: 10, Offset: 0)).ConfigureAwait(false);
+        AssertEx.Equal(running.ExecutionId, onlyRunning.Single().Id, "A status set must select exactly its members.");
     }
 
     [Test]

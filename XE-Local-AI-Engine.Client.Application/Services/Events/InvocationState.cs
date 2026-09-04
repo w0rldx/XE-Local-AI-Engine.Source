@@ -89,13 +89,69 @@ public sealed class InvocationState
 
     public string? ModelUsed { get; set; }
 
+    /// <summary>
+    ///     The LAST provider round's prompt tokens, not the turn's sum. A tool-calling turn is several provider requests
+    ///     and each one's prompt is the whole conversation so far, so the final round's count is what the model's
+    ///     context actually HELD when it answered — the occupancy the chat meter derives from the assistant message
+    ///     these tokens are persisted onto. What the turn COST is <see cref="TurnInputTokens" />, which the run-envelope
+    ///     row records instead. Cost sums across rounds; occupancy does not.
+    /// </summary>
     public int? InputTokens { get; set; }
 
+    /// <summary>The LAST provider round's completion tokens; see <see cref="InputTokens" /> for why it is not the sum.</summary>
     public int? OutputTokens { get; set; }
 
+    /// <summary>The LAST provider round's total tokens; see <see cref="InputTokens" /> for why it is not the sum.</summary>
     public int? TotalTokens { get; set; }
 
+    /// <summary>The LAST provider round's reasoning tokens; see <see cref="InputTokens" /> for why it is not the sum.</summary>
     public int? ReasoningTokens { get; set; }
+
+    /// <summary>
+    ///     The turn's prompt tokens SUMMED over its provider rounds — what the turn cost, as opposed to the context
+    ///     occupancy in <see cref="InputTokens" />. Reported once per turn by the runner on every terminal path and
+    ///     persisted onto the run-envelope row (never the message row). Null when the provider reported no usage, and on
+    ///     every platform/legacy turn, in which case the envelope falls back to the message's tokens.
+    /// </summary>
+    public int? TurnInputTokens { get; set; }
+
+    /// <summary>The turn's completion tokens summed over its provider rounds; null for the same reasons as <see cref="TurnInputTokens" />.</summary>
+    public int? TurnOutputTokens { get; set; }
+
+    /// <summary>The turn's total tokens summed over its provider rounds; null for the same reasons as <see cref="TurnInputTokens" />.</summary>
+    public int? TurnTotalTokens { get; set; }
+
+    /// <summary>The turn's reasoning tokens summed over its provider rounds; null for the same reasons as <see cref="TurnInputTokens" />.</summary>
+    public int? TurnReasoningTokens { get; set; }
+
+    /// <summary>
+    ///     Estimated tool-schema tokens the turn spent across all its provider rounds, read from the provider-call
+    ///     budget just before the terminal report. A count, never a tool name. Null on a turn whose runner never
+    ///     reported one (the platform path, and any stream that ended without a terminal state).
+    /// </summary>
+    public long? ToolSchemaTokens { get; set; }
+
+    /// <summary>The largest single round's estimated tool-schema token count for the turn; null for the same reasons as <see cref="ToolSchemaTokens" />.</summary>
+    public int? MaxToolSchemaTokens { get; set; }
+
+    /// <summary>
+    ///     How many of <see cref="GenerationDurationMs" /> the turn spent making a LOCAL runtime ready — launching
+    ///     <c>llama-server</c> and loading the model — rather than generating. The whole-turn clock starts before the
+    ///     warm, so a cold first turn measured 206 s against the same work's 28 s warm; subtracting this leaves the
+    ///     warm-equivalent turn time. Null whenever no local warm happened (Ollama, a remote provider, an already-warm
+    ///     runtime that reported nothing) and on every platform/legacy turn.
+    /// </summary>
+    public long? ModelReadinessMs { get; set; }
+
+    /// <summary>
+    ///     The tier reasoning effort <c>auto</c> resolved to for this turn, reported by the runner immediately after
+    ///     the dispatch (<c>fast</c>, <c>normal</c> or <c>deep</c>). Null on every turn that authored a concrete
+    ///     effort, so a reader can tell a dispatched turn from an ordinary one. A label, never a signal value.
+    /// </summary>
+    public string? DispatchedTier { get; set; }
+
+    /// <summary>The effort the turn was AUTHORED with when a dispatch happened (<c>auto</c>); null otherwise.</summary>
+    public string? AuthoredEffort { get; set; }
 
     /// <summary>
     ///     Why the model stopped generating, verbatim from <c>ChatFinishReason.Value</c> on the last streamed update
@@ -173,6 +229,15 @@ public sealed class InvocationState
             OutputTokens = OutputTokens,
             TotalTokens = TotalTokens,
             ReasoningTokens = ReasoningTokens,
+            TurnInputTokens = TurnInputTokens,
+            TurnOutputTokens = TurnOutputTokens,
+            TurnTotalTokens = TurnTotalTokens,
+            TurnReasoningTokens = TurnReasoningTokens,
+            ToolSchemaTokens = ToolSchemaTokens,
+            MaxToolSchemaTokens = MaxToolSchemaTokens,
+            ModelReadinessMs = ModelReadinessMs,
+            DispatchedTier = DispatchedTier,
+            AuthoredEffort = AuthoredEffort,
             GenerationDurationMs = GenerationDurationMs,
             FinishReason = FinishReason,
             Throughput = Throughput,

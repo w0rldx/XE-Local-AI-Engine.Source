@@ -305,6 +305,33 @@ internal sealed class DevWorkflowRetryPolicy
                 .ConfigureAwait(false);
         }
 
+        // GRAPH-C4-4: this node's own fix loop, bounded by what the definition said. Absent means no cap (ruling D9) —
+        // a parse-time default would tighten routing on every already-stored definition at run start, silently.
+        //
+        // Attempt is the right base and needs no column of its own: a node with a retryTarget never takes the
+        // same-node path, and each route re-attempts the whole descendant set including this node. An operator Retry
+        // raises the same counter and is bounded only by the run-wide budget, so it is subtracted. The count still
+        // over-attributes when two nodes route to one target and the reset bumps both rows — which errs toward
+        // blocking, the direction every budget here errs, and is why the message does not claim this node looped N
+        // times.
+        if (node.MaxLoopIterations is { } maxLoopIterations)
+        {
+            var decisions = await store.ListDecisionsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+            var loops = nodeRun.Attempt - 1 - decisions.Count(decision => decision.NodeRunId == nodeRun.Id && decision.Decision == DevWorkflowDecisionKind.Retry);
+            if (loops >= maxLoopIterations)
+            {
+                return await BlockAsync(store,
+                        run,
+                        nodeRun,
+                        DevWorkflowFailureClasses.BudgetExhausted,
+                        $"{failure.SanitizedReason} This node's fix loop has been re-run {loops} {(loops == 1 ? "time" : "times")}, which is as many as it allows "
+                        + "(invariant GRAPH-C4-4).",
+                        failure.OutputJson,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+        }
+
         // The WHOLE cascade has to fit, not just the target's own attempt. Admitting a fan-out one attempt at a time is
         // how a run spends more re-attempts than it allows by the width of its graph — the same accounting the startup
         // reconciler does for the same reason.

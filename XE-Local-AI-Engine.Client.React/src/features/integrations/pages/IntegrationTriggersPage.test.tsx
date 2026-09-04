@@ -73,8 +73,8 @@ const unknownToolAgent: IntegrationAgentOption = {
 };
 
 const toolsByName: ReadonlyMap<string, IntegrationToolFacts> = new Map([
-	["read_file", { effectiveRequiresApproval: false, category: "ReadLocal" }],
-	["run_command", { effectiveRequiresApproval: false, category: "WriteExecute" }],
+	["read_file", { effectiveRequiresApproval: false, category: "ReadLocal", unattendedBehaviour: "runs" }],
+	["run_command", { effectiveRequiresApproval: false, category: "WriteExecute", unattendedBehaviour: "runs" }],
 ]);
 
 const trigger: IntegrationTrigger = {

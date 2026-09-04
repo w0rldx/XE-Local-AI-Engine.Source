@@ -10,11 +10,13 @@ public enum NodeSettingsField
     SpeculativeMode,
     SpeculativeDraftMaxTokens,
     SpeculativeDraftGpuLayers,
+    KvCacheType,
     ChatCacheReuse,
     LlamaIdleTimeToLiveSeconds,
     KeepModelWarmModelName,
     LlamaMaxLoadedProcesses,
-    KeepModelWarmIntervalSeconds
+    KeepModelWarmIntervalSeconds,
+    AutoEffortFastModelName
 }
 
 /// <summary>A single cross-field violation: the offending field plus the operator-facing message.</summary>
@@ -65,6 +67,22 @@ public static class NodeSettingsPolicy
                 new NodeSettingsValidationError(NodeSettingsField.KeepModelWarmModelName,
                     "Keep model warm is enabled, but no model was selected.")
             ];
+        }
+
+        // The FAST model of an `auto` turn is a SECOND chat process alongside the turn's own model, so a node capped
+        // at one loaded process could never admit it — the setting would look configured and silently never apply.
+        if (!string.IsNullOrWhiteSpace(settings.AutoEffortFastModelName))
+        {
+            var maxLoadedProcessesForSwap = settings.LlamaMaxLoadedProcesses
+                                            ?? await runtimeSettings.GetLlamaMaxLoadedProcessesAsync(cancellationToken).ConfigureAwait(false);
+            if (maxLoadedProcessesForSwap < 2)
+            {
+                return
+                [
+                    new NodeSettingsValidationError(NodeSettingsField.LlamaMaxLoadedProcesses,
+                        "A fast model for automatic reasoning effort requires at least two loaded-process slots, because it runs alongside the conversation's own model.")
+                ];
+            }
         }
 
         if (settings.KeepModelWarmEnabled is not true)

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>One phase's frozen launch vector plus the intent scalars the row records beside it.</summary>
 public sealed record BenchmarkFrozenLaunch(BenchmarkLlamaRuntimeSnapshotV1 Runtime, BenchmarkRunLaunchIntent Intent);
@@ -48,7 +49,8 @@ public sealed class BenchmarkPhaseLaunchResolver(
     IGpuVariantSelector variantSelector,
     ILlamaServerLaunchCapabilityInspector launchCapabilities,
     ILlamaServerLaunchFallbackStore launchFallbackStore,
-    ILlamaServerLaunchPolicy launchPolicy) : IBenchmarkPhaseLaunchResolver
+    ILlamaServerLaunchPolicy launchPolicy,
+    LlamaServerLaunchPolicyOptions launchPolicyOptions) : IBenchmarkPhaseLaunchResolver
 {
     /// <summary>Auto stayed on f16 because the node selected a CPU llama.cpp build.</summary>
     public const string AutoReasonCpuVariant = "cpu-variant";
@@ -72,6 +74,9 @@ public sealed class BenchmarkPhaseLaunchResolver(
         launchFallbackStore ?? throw new ArgumentNullException(nameof(launchFallbackStore));
 
     private readonly ILlamaServerLaunchPolicy _launchPolicy = launchPolicy ?? throw new ArgumentNullException(nameof(launchPolicy));
+
+    private readonly LlamaServerLaunchPolicyOptions _launchPolicyOptions =
+        launchPolicyOptions ?? throw new ArgumentNullException(nameof(launchPolicyOptions));
 
     public async Task<LlamaServerLaunchCapabilities?> InspectAsync(CancellationToken cancellationToken)
     {
@@ -108,9 +113,12 @@ public sealed class BenchmarkPhaseLaunchResolver(
 
         // Auto is the only decision the fallback store participates in: an explicit pick is answered from the
         // manifest alone, so an operator can always retry a config a previous host state disabled.
+        // The store is keyed per (backend, KV type) and this class has no type of its own — it is the code CHOOSING
+        // one. It asks about the node's selected type, i.e. the type Auto would otherwise pick, which preserves the
+        // pre-slice meaning exactly: Auto avoids a config this host has proven cannot reach readiness.
         var optimizedDisabled = requestedKvCacheType is null
                                 && variant != GpuVariant.Cpu
-                                && await _launchFallbackStore.IsOptimizedConfigDisabledAsync(variant, cancellationToken).ConfigureAwait(false);
+                                && await _launchFallbackStore.IsOptimizedConfigDisabledAsync(variant, _launchPolicyOptions.KvCacheType, cancellationToken).ConfigureAwait(false);
         var (effective, source, reason) = ResolveKvCacheType(requestedKvCacheType, variant, capabilities, optimizedDisabled);
         var applied = BenchmarkKvCacheType.Apply(resolved, effective);
 
@@ -135,7 +143,10 @@ public sealed class BenchmarkPhaseLaunchResolver(
                 reason,
                 BenchmarkKvCacheType.IsQuantized(effective) ? LlamaServerLaunchProjection.FlashAttentionOn : LlamaServerLaunchProjection.FlashAttentionAuto,
                 intendedIdentity,
-                capabilities?.ManifestSha256));
+                capabilities?.ManifestSha256,
+                // Stamped once, here, at freeze. Never recomputed at execution: the snapshot carries no CPU thread
+                // inputs, so re-projecting would adopt the executing box's conditions as historical intent.
+                LlamaServerLaunchProjection.IdentitySchemeVersion));
     }
 
     /// <summary>

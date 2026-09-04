@@ -57,5 +57,23 @@ public enum TurnNoticeKind
     ///     <see cref="TurnNoticePayload.Detail" /> carries the
     ///     <c>OrchestrationDegradationReason</c> name.
     /// </summary>
-    OrchestrationDegraded = 5
+    OrchestrationDegraded = 5,
+
+    /// <summary>
+    ///     Some of the agent's tools were held back from the model this turn to save context, and the model can list
+    ///     and use them by calling <c>list_tools</c>. Counts only — the notice never names a tool. Hiding a tool is a
+    ///     context-budget optimisation and never an authorisation change: a held-back tool the model names still
+    ///     executes under exactly the same approval rules.
+    /// </summary>
+    ToolsFiltered = 6,
+
+    /// <summary>
+    ///     The turn was authored with reasoning effort <c>auto</c> and the node resolved it into a concrete tier for
+    ///     this turn — a different reasoning depth, and possibly a different (node-local, smaller) model.
+    ///     Deliberately silent on the common NORMAL, no-swap case: a notice on every ordinary turn is noise.
+    ///     <see cref="TurnNoticePayload.Detail" /> carries the stable kebab-case dispatch reason code, which names a
+    ///     RULE and never a signal value — no message length, no conversation depth, no score, and never any message
+    ///     text.
+    /// </summary>
+    EffortDispatched = 7
 }

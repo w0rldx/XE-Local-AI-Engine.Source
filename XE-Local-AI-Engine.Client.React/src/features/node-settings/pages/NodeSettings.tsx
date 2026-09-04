@@ -106,6 +106,9 @@ function useNodeSettingsModelOptions(form: NodeSettingsFieldsForm, errors: Reado
 	return {
 		draftModelOptions,
 		keepWarmModelOptions,
+		// The fast model for automatic reasoning effort takes exactly the keep-warm filter: an installed llama.cpp chat
+		// model, never a cloud id, an external id or an Ollama name. The backend refuses anything else at save.
+		autoEffortFastModelOptions: installedKeepWarmModelOptions,
 		rerankerModelOptions,
 		keepWarmModelUnavailable,
 		visibleErrors: keepWarmModelUnavailable ? { ...errors, keepModelWarmModelName: "unavailableKeepWarmModel" } : errors,
@@ -447,6 +450,7 @@ export function NodeSettings() {
 				showDeveloperFields={developerMode}
 				draftModelOptions={modelOptions.draftModelOptions}
 				keepWarmModelOptions={modelOptions.keepWarmModelOptions}
+				autoEffortFastModelOptions={modelOptions.autoEffortFastModelOptions}
 				rerankerModelOptions={modelOptions.rerankerModelOptions}
 				onDownloadRecommendedReranker={recommendedDownloads.reranker.start}
 				isDownloadRecommendedRerankerPending={recommendedDownloads.reranker.isPending}

@@ -33,7 +33,18 @@ public sealed partial class InvocationRunner
 
         public long? ModelReadyTimestamp { get; set; }
 
-        public double? ModelReadinessDurationMs { get; set; }
+        public double? ModelReadinessDurationMs { get; private set; }
+
+        /// <summary>
+        ///     Adds one local warm's duration to the turn's readiness total. SUMMED, not assigned: a turn can warm
+        ///     twice — a dispatched fast model that fails before first output is followed by a warm of the original
+        ///     model for the fallback — and an assignment charged the turn only the second warm while the whole-turn
+        ///     clock still contained both.
+        /// </summary>
+        public void AddModelReadiness(double durationMs)
+        {
+            ModelReadinessDurationMs = (ModelReadinessDurationMs ?? 0d) + durationMs;
+        }
 
         public double? FirstOutputLatencyMs { get; set; }
 
@@ -45,7 +56,26 @@ public sealed partial class InvocationRunner
 
         public StringBuilder ReasoningBuilder { get; } = new();
 
-        public UsageSnapshot? UsageSnapshot { get; set; }
+        // The turn's usage, ACCUMULATED across every provider round, for the same reason AddSegmentTimings accumulates
+        // llama-server's timings: FunctionInvokingChatClient runs the tool loop inside ONE RunStreamingAsync, so a
+        // tool-calling turn emits one UsageContent per round and last-wins recorded only the final round (measured
+        // live: a three-round turn reported prompt 2,970 against a per-round estimate of 10,722). This is what the turn
+        // COST, and it feeds the token-usage metric, the efficiency record and the run-envelope row. Private setter so
+        // the only way in is AddUsage below — an overwrite is exactly the bug this replaced.
+        public UsageSnapshot? UsageSnapshot { get; private set; }
+
+        // The LAST provider round's usage on its own. A round's prompt is the WHOLE conversation so far, not a delta, so
+        // the final round's input count is what the model's context actually HELD when it answered — the occupancy the
+        // chat meter derives from the assistant message's tokens. Summing rounds there reads as three times the context
+        // the turn ever used (10,722 shown for a real ~3,000). Cost sums; occupancy does not.
+        public UsageSnapshot? LastRoundUsage { get; private set; }
+
+        /// <summary>Records one provider round's reported usage as the last round and folds it into the turn totals.</summary>
+        public void AddUsage(UsageDetails usage)
+        {
+            LastRoundUsage = UsageSnapshot.From(usage);
+            UsageSnapshot = UsageSnapshot.Accumulate(UsageSnapshot, LastRoundUsage);
+        }
 
         // Why generation stopped, taken from the LAST streamed update that carried a finish reason: a tool-calling turn
         // ends its first segment with "tool_calls" and its final one with "stop", so last-wins is the turn's answer.
@@ -280,6 +310,24 @@ public sealed partial class InvocationRunner
             return new UsageSnapshot(inputTokens, outputTokens, reasoningTokens, totalTokens);
         }
 
+        /// <summary>
+        ///     Adds one provider round's usage to the running total. The first round simply becomes the total; every
+        ///     round after it sums member-wise, null-preserving (a member neither side reported stays null) and
+        ///     saturating at <see cref="int.MaxValue" /> so a pathological count cannot overflow the turn's total.
+        /// </summary>
+        public static UsageSnapshot Accumulate(UsageSnapshot? total, UsageSnapshot round)
+        {
+            if (total is null)
+            {
+                return round;
+            }
+
+            return new UsageSnapshot(Add(total.InputTokens, round.InputTokens),
+                Add(total.OutputTokens, round.OutputTokens),
+                Add(total.ReasoningTokens, round.ReasoningTokens),
+                Add(total.TotalTokens, round.TotalTokens));
+        }
+
         public Dictionary<string, long> ToTokenCounts()
         {
             var counts = new Dictionary<string, long>(StringComparer.Ordinal);
@@ -303,6 +351,19 @@ public sealed partial class InvocationRunner
             return values.Any(static value => value is not null)
                 ? values.Sum(static value => value ?? 0)
                 : null;
+        }
+
+        // Saturating member-wise add, mirroring ToNullableInt's clamp: two in-range rounds can still sum past
+        // int.MaxValue, and a token total must not wrap negative because a provider reported an absurd count.
+        private static int? Add(int? total, int? value)
+        {
+            if (value is null)
+            {
+                return total;
+            }
+
+            var sum = (long)(total ?? 0) + value.Value;
+            return sum > int.MaxValue ? int.MaxValue : (int)sum;
         }
 
         private static int? ToNullableInt(long? value)

@@ -62,6 +62,7 @@ function makeDefinition(overrides: Partial<AgentDefinition> = {}): AgentDefiniti
 		defaultTemporaryChat: false,
 		memoryExtractionEnabled: true,
 		disableBaseScaffold: false,
+		disableToolRelevanceFilter: false,
 		version: 1,
 		createdAtUtc: 0,
 		updatedAtUtc: 0,
@@ -137,6 +138,7 @@ const baseValues: AgentDefinitionFormValues = {
 	defaultTemporaryChat: false,
 	memoryExtractionEnabled: true,
 	disableBaseScaffold: false,
+	disableToolRelevanceFilter: false,
 	generationMetadata: null,
 };
 
@@ -350,6 +352,21 @@ describe("AgentDefinitionForm", () => {
 		fireEvent.click(screen.getByTestId("agent-form-submit"));
 
 		expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ disableBaseScaffold: true }));
+	});
+
+	it("submits disableToolRelevanceFilter true when the advanced toggle is switched on", () => {
+		// The per-agent escape from the node's tool-relevance filter: off by default (follow the node setting), and the
+		// form must round-trip it like any other advanced flag.
+		const { onSubmit } = renderForm({
+			initialValues: { name: "Helper", instructions: "Be helpful" },
+		});
+
+		const toggle = screen.getByTestId("agent-form-disable-tool-relevance-filter") as HTMLInputElement;
+		expect(toggle.checked).toBe(false);
+		fireEvent.click(toggle);
+		fireEvent.click(screen.getByTestId("agent-form-submit"));
+
+		expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ disableToolRelevanceFilter: true }));
 	});
 
 	it("hides the orchestration section for a Single definition", () => {

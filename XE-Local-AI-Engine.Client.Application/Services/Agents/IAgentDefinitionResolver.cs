@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents;
 
+using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 
@@ -84,4 +85,18 @@ public sealed record ResolvedAgentRuntime(
     bool MemoryExtractionEnabled = true,
     bool EffectiveModelIsCloud = false,
     AgentDefinitionKind Kind = AgentDefinitionKind.Single,
-    IReadOnlyList<ResolvedCustomTool>? CustomTools = null);
+    IReadOnlyList<ResolvedCustomTool>? CustomTools = null,
+    // Per-agent opt-out from the send-time tool-relevance filter. Trailing and non-config-affecting for the same reason
+    // as the members above: the filter narrows only the array handed to the provider, never the offer or the prompt.
+    //
+    // [JsonIgnore] — UNLIKE every other member here, this one is kept off the wire entirely. This record is serialized
+    // verbatim into the FROZEN v1 benchmark runtime snapshot, whose stored bytes are re-hashed to validate
+    // `configurationHash`, so a new member emitting `false` would change the bytes of every already-frozen run and
+    // every one of them would stop replaying with "configuration hash is invalid"
+    // (`BenchmarkRuntimeSnapshotV1CompatibilityTests` is the guard). Omitting it is also the honest shape: a benchmark
+    // never honours the opt-out — `BenchmarkRunExecutor.BuildPrimaryPackage` does not thread this flag into the
+    // replayed `RuntimePackage`, so every frozen run generates under the node-level filter setting whatever the agent
+    // asked for. Nothing else serializes this record; the agent-definition endpoint DTOs carry their own copy of the
+    // flag off `AgentDefinitionRecord` and are unaffected.
+    [property: JsonIgnore]
+    bool DisableToolRelevanceFilter = false);

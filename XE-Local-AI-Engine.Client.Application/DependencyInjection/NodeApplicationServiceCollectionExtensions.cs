@@ -54,6 +54,10 @@ public static class NodeApplicationServiceCollectionExtensions
         // terminalizes its own orphaned rows before the workflow dispatcher begins admitting node runs that drive them.
         builder.AddNodeDevWorkflows(configuration);
 
+        // Immediately after: the graph-workflow runtime is the same shape one slice later, and its hosted services
+        // must start behind the ones whose orphaned rows they would otherwise adopt mid-repair.
+        builder.AddNodeGraphWorkflows(configuration);
+
         // After AddNodeDevWorkflows for the same hosted-service START order reason: the coordinator this module
         // gains in the next slice must start after chat restart recovery has terminalized rows orphaned by a
         // crash, so it never adopts an execution the chat path is still repairing.

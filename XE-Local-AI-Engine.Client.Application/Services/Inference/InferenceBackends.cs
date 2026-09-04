@@ -28,4 +28,27 @@ internal static class InferenceBackends
             _ => Cpu
         };
     }
+
+    /// <summary>
+    ///     The inverse of <see cref="FromVariant" />, for the accelerated tokens only. Returns <see langword="false" /> for
+    ///     <see cref="Cpu" /> and for any unrecognized token: neither carries a GPU placement decision, so a caller that
+    ///     needs the variant in order to re-derive one has nothing to re-derive.
+    /// </summary>
+    public static bool TryGetGpuVariant(string? backend, out GpuVariant variant)
+    {
+        if (string.Equals(backend, Cuda, StringComparison.OrdinalIgnoreCase))
+        {
+            variant = GpuVariant.Cuda;
+            return true;
+        }
+
+        if (string.Equals(backend, Vulkan, StringComparison.OrdinalIgnoreCase))
+        {
+            variant = GpuVariant.Vulkan;
+            return true;
+        }
+
+        variant = GpuVariant.Cpu;
+        return false;
+    }
 }

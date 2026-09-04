@@ -273,6 +273,63 @@ public sealed class McpServerEndpointTests
     }
 
     [Test]
+    public async Task GetToolCatalog_SeparatesAskUserFromTheToolsThatFailAnUnattendedRun()
+    {
+        // effectiveRequiresApproval is TRUE for both ask_user and an ordinary approval-gated tool, but only the latter
+        // ends an unattended run: ToolApprovalCoordinator.RequestToolApprovalAsync throws ApprovalUnavailableException,
+        // while RequestUserAnswerAsync skips the park and lets the turn continue unanswered. A warning driven off the
+        // approval flag alone therefore names a tool that would not actually fail the run, which is what this splits.
+        var service = Substitute.For<IMcpServerService>();
+        var offerProvider = Substitute.For<ILocalToolOfferProvider>();
+        offerProvider.GetKnownToolsAsync(Arg.Any<CancellationToken>()).Returns([
+            new LocalToolCatalogEntry
+            {
+                Name = AskUserTool.ToolName,
+                Description = AskUserTool.Description,
+                RequiresApproval = true,
+                Source = "builtin",
+                Category = ToolCategory.ReadLocal
+            },
+            new LocalToolCatalogEntry
+            {
+                Name = "custom__fetch_url",
+                Description = "Fetches a URL the model picks.",
+                RequiresApproval = true,
+                Source = "custom",
+                Category = ToolCategory.Network
+            },
+            new LocalToolCatalogEntry
+            {
+                Name = "GetCurrentTime",
+                Description = "Returns the time.",
+                RequiresApproval = false,
+                Source = "builtin",
+                Category = ToolCategory.ReadLocal
+            }
+        ]);
+        await using var factory = CreateFactory(service, offerProvider);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, ToolCatalogRoute);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await ReadJsonAsync<ToolCatalogResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.ContainsSingle(body.Tools,
+            tool => tool.Name == AskUserTool.ToolName
+                    && tool.EffectiveRequiresApproval
+                    && tool.UnattendedBehaviour == ToolUnattendedBehaviourValues.ContinuesUnanswered);
+        AssertEx.ContainsSingle(body.Tools,
+            tool => tool.Name == "custom__fetch_url"
+                    && tool.EffectiveRequiresApproval
+                    && tool.UnattendedBehaviour == ToolUnattendedBehaviourValues.Fails);
+        AssertEx.ContainsSingle(body.Tools,
+            tool => tool.Name == "GetCurrentTime"
+                    && !tool.EffectiveRequiresApproval
+                    && tool.UnattendedBehaviour == ToolUnattendedBehaviourValues.Runs);
+    }
+
+    [Test]
     public async Task GetServerTools_WhenServerDisabled_ReturnsDisabledStatus()
     {
         var service = Substitute.For<IMcpServerService>();

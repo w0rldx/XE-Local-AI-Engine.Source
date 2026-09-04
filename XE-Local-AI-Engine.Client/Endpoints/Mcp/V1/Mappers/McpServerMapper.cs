@@ -79,6 +79,18 @@ internal static class McpServerMapper
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(approvalPolicy);
 
+        var effectiveRequiresApproval = approvalPolicy.RequiresApproval(entry.Name, entry.Category, entry.RequiresApproval);
+
+        // Matched on AskUserTool.ToolName, the same constant ToolApprovalCoordinator.IsUserQuestionRequest matches on,
+        // rather than a second list here that could drift from the branch it describes. The question arm comes FIRST:
+        // ask_user is approval-gated too, and the approval arm would otherwise claim it fails an unattended run.
+        var unattendedBehaviour = entry.Name switch
+        {
+            AskUserTool.ToolName => ToolUnattendedBehaviourValues.ContinuesUnanswered,
+            _ when effectiveRequiresApproval => ToolUnattendedBehaviourValues.Fails,
+            _ => ToolUnattendedBehaviourValues.Runs
+        };
+
         return new ToolCatalogEntryResponse
         {
             Name = entry.Name,
@@ -86,8 +98,9 @@ internal static class McpServerMapper
             RequiresApproval = entry.RequiresApproval,
             Source = entry.Source,
             Category = entry.Category.ToString(),
-            EffectiveRequiresApproval = approvalPolicy.RequiresApproval(entry.Name, entry.Category, entry.RequiresApproval),
-            SessionScopeEligible = SessionApprovalEligibility.IsToolEligible(approvalPolicy, entry.Name, entry.IsFixedCustomTool)
+            EffectiveRequiresApproval = effectiveRequiresApproval,
+            SessionScopeEligible = SessionApprovalEligibility.IsToolEligible(approvalPolicy, entry.Name, entry.IsFixedCustomTool),
+            UnattendedBehaviour = unattendedBehaviour
         };
     }
 }

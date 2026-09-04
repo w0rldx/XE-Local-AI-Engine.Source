@@ -223,7 +223,12 @@ public sealed class ListIntegrationExecutionsRequest
 
     public Guid? SessionId { get; init; }
 
-    public IntegrationExecutionStatus? Status { get; init; }
+    /// <summary>
+    ///     Repeated to filter on a SET of statuses (<c>?status=Accepted&amp;status=Queued</c>), which is how the
+    ///     operator's Active and History chips are answered server-side by one query. A single value is just a
+    ///     one-element set, and none at all does not constrain.
+    /// </summary>
+    public IReadOnlyList<IntegrationExecutionStatus>? Status { get; init; }
 
     public int? Limit { get; init; }
 
@@ -234,6 +239,13 @@ public sealed class ListIntegrationExecutionsRequest
 public sealed class ListIntegrationExecutionsResponse
 {
     public required IReadOnlyList<IntegrationExecutionSummaryDto> Items { get; init; }
+
+    /// <summary>
+    ///     How many rows the SAME filter matches in total, ignoring <c>limit</c>/<c>offset</c>. It is what lets the UI
+    ///     render a pager instead of a "there may be more" note: <see cref="Items" /> alone cannot tell a full last page
+    ///     from a page with more behind it.
+    /// </summary>
+    public required int TotalCount { get; init; }
 }
 
 /// <summary>
@@ -357,4 +369,10 @@ public sealed class ListIntegrationSessionsRequest
 public sealed class ListIntegrationSessionsResponse
 {
     public required IReadOnlyList<IntegrationSessionResponse> Items { get; init; }
+
+    /// <summary>
+    ///     How many rows the SAME filter matches in total, ignoring <c>limit</c>/<c>offset</c>, so the UI can render a
+    ///     pager rather than a bounded-window note.
+    /// </summary>
+    public required int TotalCount { get; init; }
 }

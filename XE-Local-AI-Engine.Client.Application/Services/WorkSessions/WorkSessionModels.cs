@@ -90,7 +90,9 @@ public sealed record WorkSessionCheckpointDto(
 ///         <c>StepEnded</c> and <c>StepFailed</c> carry the step's content-free consumption record —
 ///         <see cref="WorkSessionStepConsumptionDetail" />, i.e.
 ///         <c>{ "providerCalls": int, "estimatedInputTokens": long, "toolCallsCompleted": int, "providerCallCap": int,
-///         "attachedBudgets": int }</c>. It is null on a step that made no provider round at all.
+///         "attachedBudgets": int, "toolSchemaTokens": long, "toolNames": string[] }</c>. It is null on a step that
+///         made no provider round at all, and <c>toolNames</c> is absent on a row written before that member existed.
+///         Counts plus tool NAMES: no prompt, no model output, no tool argument and no tool result.
 ///     </para>
 /// </param>
 public sealed record WorkSessionEventDto(
@@ -105,12 +107,19 @@ public sealed record WorkSessionEventDto(
 
 /// <summary>
 ///     What one step spent, recorded on its <c>StepEnded</c> / <c>StepFailed</c> row so the per-step provider-call cap
-///     can be sized from what steps actually consume rather than from a guess. Counts only — no prompts, model output,
-///     tool names, arguments or results — so it is safe to persist and to show.
+///     can be sized from what steps actually consume rather than from a guess. Counts plus a bounded set of tool NAMES
+///     — no prompts, no model output, no tool arguments and no tool results — so it is safe to persist and to show.
 ///     <para>
-///         Every member is a STEP TOTAL, which is why the provider's own reported token usage is not among them: the
-///         invocation runner assigns its <c>UsageSnapshot</c> per provider round rather than accumulating, so on a
-///         multi-round step it holds the LAST round's numbers and would silently contradict the totals beside it.
+///         The names are here because this row is the only DURABLE carrier they have. The scope they are collected in
+///         is disposed at the end of the step that seeded it, and anything asking later — a Dev Workflow node run
+///         settling on a later dispatcher tick, in another scope and possibly another process — can read only what was
+///         persisted. A name is an identity, not content: a fixed id for a built-in tool and an operator-authored
+///         identifier for an MCP or custom one.
+///     </para>
+///     <para>
+///         Every member is a STEP TOTAL read off the step's own cap scope, which is why the provider's own reported
+///         token usage is not among them: it is a TURN number — the last round's counts on the message, the rounds'
+///         sum on the run envelope — and a step is not the same denominator as a turn.
 ///         Estimate-versus-truth is measured per round instead, where both halves describe the same request, by
 ///         <c>ProviderCallBudgetChatClient</c>'s observed-usage write-back into the calibration store.
 ///     </para>
@@ -138,12 +147,23 @@ public sealed record WorkSessionEventDto(
 /// <param name="AttachedBudgets">
 ///     How many invocations the step ran: 1 ordinarily, more when the turn spawned sub-agents, each with its own cap.
 /// </param>
+/// <param name="ToolSchemaTokens">
+///     Tool-schema tokens SHIPPED ACROSS ROUNDS — every round re-sends the whole offer, so this grows with the round
+///     count and is not the size of the offer.
+/// </param>
+/// <param name="ToolNames">
+///     The distinct tool names the step called, ordinal-sorted and capped at sixteen. Trailing and optional: a row
+///     written before this member existed reads back as <see langword="null" />, which means "this row predates the
+///     field", never "this step called no tools" — <paramref name="ToolCallsCompleted" /> answers that.
+/// </param>
 public sealed record WorkSessionStepConsumptionDetail(
     int ProviderCalls,
     long EstimatedInputTokens,
     int ToolCallsCompleted,
     int ProviderCallCap,
-    int AttachedBudgets);
+    int AttachedBudgets,
+    long ToolSchemaTokens = 0,
+    IReadOnlyList<string>? ToolNames = null);
 
 /// <summary>
 ///     An artifact's bytes as text. <see cref="IsBase64" /> is set for a media type the node cannot hand over as UTF-8,
@@ -162,10 +182,26 @@ public sealed record WorkSessionArtifactContent(WorkSessionArtifactDto Artifact,
 ///         lives, and it re-supplies this on every start and resume.
 ///     </para>
 /// </summary>
-public sealed record WorkSessionRuntimeOverride(string? ModelProfile, string? ReasoningEffort)
+/// <param name="ModelProfile">The model this session's turns run on, or null to leave that to the agent.</param>
+/// <param name="ReasoningEffort">The reasoning effort those turns run at, or null to leave that to the agent.</param>
+/// <param name="RefuseUndeclaredWrites">
+///     <c>GRAPH-C4-2</c>'s runtime half, carried per drive because the thing it judges is mutable. Set by a
+///     development-workflow Agent node that declares no <c>WriteExecute</c> capability and whose template waives
+///     nothing: every turn of that session must then be refused if the agent definition it re-resolves would offer a
+///     tool that writes files or runs commands. Checked once at creation it is not checked at all — the definition can
+///     be edited between two steps, or deleted so the turn falls back to the default persona and its whole offer.
+///     <para>
+///         Default <see langword="false" />, which is every other caller and today's behaviour exactly.
+///     </para>
+/// </param>
+public sealed record WorkSessionRuntimeOverride(string? ModelProfile, string? ReasoningEffort, bool RefuseUndeclaredWrites = false)
 {
-    /// <summary>Nothing pinned, which is the shape every caller but the workflow runtime has.</summary>
-    public bool IsEmpty => string.IsNullOrWhiteSpace(ModelProfile) && string.IsNullOrWhiteSpace(ReasoningEffort);
+    /// <summary>
+    ///     Nothing pinned and nothing to enforce, which is the shape every caller but the workflow runtime has. The
+    ///     refusal flag counts: a node that pins no model and no effort still has to have its turns judged, and the
+    ///     supervisor drops an override this reports empty.
+    /// </summary>
+    public bool IsEmpty => string.IsNullOrWhiteSpace(ModelProfile) && string.IsNullOrWhiteSpace(ReasoningEffort) && !RefuseUndeclaredWrites;
 }
 
 /// <summary>

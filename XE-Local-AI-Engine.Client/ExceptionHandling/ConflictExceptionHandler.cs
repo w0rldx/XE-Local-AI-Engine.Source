@@ -49,6 +49,7 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
             DevWorkflowRunInFlightException => NodeConflictProblemType.DevWorkflowRunInFlight,
             DevWorkflowInvalidTransitionException => NodeConflictProblemType.DevWorkflowInvalidTransition,
             DevWorkflowConcurrencyException => NodeConflictProblemType.DevWorkflowVersionConflict,
+            GraphWorkflowDefinitionConflictException => NodeConflictProblemType.GraphWorkflowDefinitionConflict,
             _ => (NodeConflictProblemType?)null
         };
 

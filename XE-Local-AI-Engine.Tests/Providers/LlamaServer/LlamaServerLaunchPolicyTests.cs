@@ -192,14 +192,85 @@ public sealed class LlamaServerLaunchPolicyTests
     }
 
     [Test]
+    public async Task GpuReplay_KvCacheTypeSetting_IsNotApplied()
+    {
+        // The policy never overrides a replay's KV: a frozen profile pins its own -ctk/-ctv verbatim. Under D13 that
+        // stays true AND is now unreachable in the superseded case — changing the knob stales the profile through the
+        // launch-policy fingerprint first, so a replay carrying a KV type the operator has since abandoned never runs.
+        var policy = NewPolicy(new LlamaServerLaunchPolicyOptions { KvCacheType = LlamaServerKvCacheTypes.Q4_0 });
+
+        var gpuReplay = await policy.ResolveAsync(ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Replay(ctxSize: 8192, kvTypeK: "q8_0", kvTypeV: "q8_0", flashAttn: true),
+            Allocation(8192, ProcessPlacementMode.GpuResident, source: ProcessContextAllocationSource.FrozenProfile),
+            CancellationToken.None);
+
+        AssertEx.False(gpuReplay.UseKvCacheQuantization, "a replay owns its own KV/FA — the policy must not add them.");
+        AssertEx.True(gpuReplay.RequestedContextTokens is null, "a GPU replay's -c must come from the frozen profile.");
+    }
+
+    [Test]
+    public async Task GpuExplore_NonExpertOffloadAllocation_PlanCarriesNoCpuMoe()
+    {
+        // Byte-identical default for S2: --cpu-moe follows the ADMITTED placement, so every dense model and every MoE
+        // model that fits resident keeps exactly today's argv.
+        var policy = NewPolicy(new LlamaServerLaunchPolicyOptions());
+
+        var resident = await policy.ResolveAsync(ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            Allocation(8192, ProcessPlacementMode.GpuResident),
+            CancellationToken.None);
+
+        AssertEx.False(resident.CpuMoe, "a GPU-resident placement must never emit --cpu-moe.");
+        AssertEx.Null(resident.CpuMoeLayers, "this slice never derives a partial layer count.");
+    }
+
+    [Test]
+    public async Task GpuExplore_ExpertOffloadAllocation_PlanCarriesCpuMoe()
+    {
+        var policy = NewPolicy(new LlamaServerLaunchPolicyOptions());
+
+        var offload = await policy.ResolveAsync(ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            Allocation(8192, ProcessPlacementMode.ExpertOffload),
+            CancellationToken.None);
+
+        AssertEx.True(offload.CpuMoe, "an expert-offload placement must emit the flag that makes it true.");
+    }
+
+    [Test]
+    public async Task CpuAndReplayBranches_NeverCarryCpuMoe()
+    {
+        // Neither branch can honour the flag: a CPU build has no experts to move off a GPU, and a replay pins its own
+        // -ot verbatim, so --cpu-moe and -ot can never coexist.
+        var policy = NewPolicy(new LlamaServerLaunchPolicyOptions());
+
+        var cpu = await policy.ResolveAsync(ModelRole.Chat,
+            GpuVariant.Cpu,
+            ResolvedLaunchArguments.Explore(),
+            Allocation(8192, ProcessPlacementMode.ExpertOffload),
+            CancellationToken.None);
+        var replay = await policy.ResolveAsync(ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Replay(ctxSize: 8192, overrideTensor: "exps=CPU"),
+            Allocation(8192, ProcessPlacementMode.ExpertOffload, source: ProcessContextAllocationSource.FrozenProfile),
+            CancellationToken.None);
+
+        AssertEx.False(cpu.CpuMoe, "a CPU build never emits --cpu-moe.");
+        AssertEx.False(replay.CpuMoe, "a frozen replay owns its own placement; --cpu-moe must never join its -ot.");
+    }
+
+    [Test]
     public async Task RecordOptimizedConfigFailed_PersistsThroughTheStore()
     {
         var fallbackStore = new FakeLaunchFallbackStore();
         var policy = new LlamaServerLaunchPolicy(new LlamaServerLaunchPolicyOptions(), fallbackStore);
 
-        await policy.RecordOptimizedConfigFailedAsync(GpuVariant.Vulkan, CancellationToken.None);
+        await policy.RecordOptimizedConfigFailedAsync(GpuVariant.Vulkan, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None);
 
-        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Vulkan, CancellationToken.None),
+        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Vulkan, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None),
             "recording a failed optimized config must persist through the fallback store.");
     }
 

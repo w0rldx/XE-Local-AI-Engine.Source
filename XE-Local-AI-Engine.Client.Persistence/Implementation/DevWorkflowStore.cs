@@ -137,6 +137,23 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
             {
                 throw new ArgumentOutOfRangeException(parameterName, "A node run must allow at least one attempt.");
             }
+
+            // A seed lands a row either waiting to be dispatched or already finished, and nothing between: a live status
+            // is a lane's own claim that it holds the row, and creating one with no lane behind it writes a Running row
+            // with no start time that nobody is coming back for.
+            if (seed.Status != DevWorkflowNodeRunStatus.Pending && !IsTerminal(seed.Status))
+            {
+                throw new ArgumentException($"Node run seed '{seed.NodeKey}' is seeded {seed.Status}, which is a live status no lane has taken. "
+                                            + "A seed lands Pending or terminal.", parameterName);
+            }
+
+            // An output document describes what a node run PRODUCED, so a row that has not ended cannot have one: a
+            // seed carrying both is a caller saying the row is finished while asking for it to be run.
+            if (seed.OutputJson is not null && !IsTerminal(seed.Status))
+            {
+                throw new ArgumentException($"Node run seed '{seed.NodeKey}' carries an output document but is seeded {seed.Status}. "
+                                            + "Only a seed that lands terminal may say what it produced.", parameterName);
+            }
         }
 
         if (seeds.Select(seed => seed.NodeKey).Distinct(StringComparer.Ordinal).Count() != seeds.Count)
@@ -162,15 +179,22 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
                 Attempt = 1,
                 MaxAttempts = seed.MaxAttempts,
                 SessionResumes = 0,
-                Status = DevWorkflowNodeRunStatus.Pending,
+                Status = seed.Status,
                 Sequence = NextSequence(run),
                 AgentDefinitionId = seed.AgentDefinitionId,
                 DevelopmentProjectId = seed.DevelopmentProjectId,
                 InputJson = Utf8OrNull(seed.InputJson),
+                OutputJson = Utf8OrNull(seed.OutputJson),
                 PolicyResolutionJson = Utf8OrNull(seed.PolicyResolutionJson),
                 MaterializedFromNodeRunId = seed.MaterializedFromNodeRunId,
                 MaterializationIndex = seed.MaterializationIndex,
-                CreatedAtUtc = now
+                CreatedAtUtc = now,
+
+                // A row seeded terminal never passes through a transition, so the two timestamps a reader reads a
+                // duration off are stamped here instead — both at the create, because the work it stands for took no
+                // time: it is the record that there was nothing to do.
+                StartedAtUtc = IsTerminal(seed.Status) ? now : null,
+                EndedAtUtc = IsTerminal(seed.Status) ? now : null
             });
         }
     }

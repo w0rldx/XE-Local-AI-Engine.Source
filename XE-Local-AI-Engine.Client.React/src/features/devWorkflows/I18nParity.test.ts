@@ -115,6 +115,27 @@ describe("dev-workflow enum label maps are complete in every locale", () => {
 				"unknown",
 			],
 		},
+		// C1's cross-unit failure vocabulary, projected from the ten DevWorkflow failure classes plus the two tokens only
+		// the other two arms can write. `AgentUnitFailureClassTests.TheVocabulary_IsTwelveDistinctTokens` pins the C# side
+		// at twelve; this is the other side of that claim — a token added there without a label here would reach an
+		// operator as a raw identifier, and no C# test can see a locale file.
+		{
+			section: "node.failureGroup",
+			members: [
+				"Cancelled",
+				"Timeout",
+				"Interrupted",
+				"Provider",
+				"ModelCapability",
+				"ContextExceeded",
+				"Configuration",
+				"Policy",
+				"BudgetExhausted",
+				"ToolOrCommand",
+				"Rejected",
+				"Internal",
+			],
+		},
 		// Every rule the definition editor's save gate can report. The rule NAME is the key suffix, so a rule that ships
 		// without a message renders as its own identifier in front of an operator trying to fix a graph.
 		{ section: "definition.issues", members: devWorkflowGraphRules },

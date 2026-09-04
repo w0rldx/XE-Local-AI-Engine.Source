@@ -167,6 +167,19 @@ export function AgentDefinitionModelFields({ values, modelOptions, onFieldChange
 				}}
 				data-testid="agent-form-disable-base-scaffold"
 			/>
+			<Switch
+				label={t("pages.agents.form.disableToolRelevanceFilter.label", "Always offer every tool")}
+				description={t(
+					"pages.agents.form.disableToolRelevanceFilter.description",
+					"Skip this node's tool-relevance filter for this agent, so every tool it may use is shown to the model on every round. Turn this on if the agent misses tools; it costs context on agents with many tools.",
+				)}
+				checked={values.disableToolRelevanceFilter}
+				onChange={(event) => {
+					const checked = event.currentTarget.checked;
+					onFieldChange((current) => ({ ...current, disableToolRelevanceFilter: checked }));
+				}}
+				data-testid="agent-form-disable-tool-relevance-filter"
+			/>
 		</Stack>
 	);
 }

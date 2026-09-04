@@ -129,6 +129,11 @@ function makeQuery<T>(data: T) {
 	return { data, isLoading: false, error: null };
 }
 
+/** A list page as the hook now returns it: the rows, plus the server's count of every row the filters match. */
+function makeListQuery<T>(items: readonly T[], totalCount = items.length) {
+	return makeQuery({ items, totalCount });
+}
+
 function renderPage() {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	// A FRESH element each time: re-rendering the identical one lets React bail out, and a poll test needs the page
@@ -152,11 +157,24 @@ function lastExecutionFilters(): IntegrationExecutionFilters {
 	return (calls.at(-1)?.[0] ?? {}) as IntegrationExecutionFilters;
 }
 
-/** Clicks one status chip and waits for the status the query is then asked for (undefined for the All chip). */
-async function clickStatusChip(label: string, expected: string | undefined): Promise<void> {
+/** The paging window the page most recently asked the executions list for. */
+function lastExecutionWindow(): { limit?: number; offset?: number } {
+	const calls = executionHooksMock.useIntegrationExecutions.mock.calls;
+	return (calls.at(-1)?.[1] ?? {}) as { limit?: number; offset?: number };
+}
+
+/** Every offset the page has asked for, in order — one entry per render, so repeats are expected and a CHANGE is not. */
+function requestedOffsets(): number[] {
+	return executionHooksMock.useIntegrationExecutions.mock.calls.map(
+		(call) => ((call[1] ?? {}) as { offset?: number }).offset ?? 0,
+	);
+}
+
+/** Clicks one status chip and waits for the status SET the query is then asked for (undefined for the All chip). */
+async function clickStatusChip(label: string, expected: readonly string[] | undefined): Promise<void> {
 	fireEvent.click(within(screen.getByTestId("integration-executions-status-chips")).getByText(label));
 	await waitFor(() => {
-		expect(lastExecutionFilters().status).toBe(expected);
+		expect(lastExecutionFilters().status).toEqual(expected);
 	});
 }
 
@@ -164,11 +182,11 @@ describe("IntegrationExecutionsPage", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
 		useIntegrationsUiStore.setState({ selectedExecutionId: null, selectedSessionId: null });
-		executionHooksMock.useIntegrationExecutions.mockReturnValue(makeQuery(executions));
+		executionHooksMock.useIntegrationExecutions.mockReturnValue(makeListQuery(executions));
 		executionHooksMock.useIntegrationExecution.mockReturnValue(makeQuery(undefined));
 		executionHooksMock.useIntegrationExecutionEvents.mockReturnValue(makeQuery([]));
 		executionHooksMock.useCancelIntegrationExecution.mockReturnValue(makeMutation());
-		sessionHooksMock.useIntegrationSessions.mockReturnValue(makeQuery([]));
+		sessionHooksMock.useIntegrationSessions.mockReturnValue(makeListQuery([]));
 		triggerHooksMock.useIntegrationTriggers.mockReturnValue(makeQuery(triggers));
 		confirmMock.mockResolvedValue(true);
 	});
@@ -192,12 +210,21 @@ describe("IntegrationExecutionsPage", () => {
 
 		expect(lastExecutionFilters().status).toBeUndefined();
 
-		await clickStatusChip("Accepted", "Accepted");
-		await clickStatusChip("Queued", "Queued");
-		await clickStatusChip("Running", "Running");
-		await clickStatusChip("Completed", "Completed");
-		await clickStatusChip("Failed", "Failed");
-		await clickStatusChip("Cancelled", "Cancelled");
+		await clickStatusChip("Accepted", ["Accepted"]);
+		await clickStatusChip("Queued", ["Queued"]);
+		await clickStatusChip("Running", ["Running"]);
+		await clickStatusChip("Completed", ["Completed"]);
+		await clickStatusChip("Failed", ["Failed"]);
+		await clickStatusChip("Cancelled", ["Cancelled"]);
+		await clickStatusChip("All", undefined);
+	});
+
+	// D-3: everything in flight in one click. The endpoint takes a repeated `status`, so this is one server-side
+	// question — the browser never unions three separately-paged reads.
+	it("sends the three in-flight states together for the Active chip", async () => {
+		renderPage();
+
+		await clickStatusChip("Active", ["Accepted", "Queued", "Running"]);
 		await clickStatusChip("All", undefined);
 	});
 
@@ -299,13 +326,73 @@ describe("IntegrationExecutionsPage", () => {
 		expect(screen.queryByTestId("integration-execution-category-exec-completed")).toBeNull();
 	});
 
-	it("states the window without claiming to show the latest rows, and draws no pager", () => {
+	// D-2: the response now carries `totalCount`, so the page states the real size of the filtered table instead of
+	// describing a window it could not number.
+	it("shows the server's total and asks for the first page by default", () => {
+		executionHooksMock.useIntegrationExecutions.mockReturnValue(makeListQuery(executions, 412));
 		renderPage();
 
-		const note = screen.getByTestId("integration-executions-window-note").textContent ?? "";
-		expect(note).toContain("200");
-		expect(note.toLowerCase()).not.toContain("latest");
-		expect(screen.queryByTestId("table-pagination")).toBeNull();
+		expect(screen.getByTestId("integration-executions-pagination-range").textContent).toContain("412");
+		expect(lastExecutionWindow()).toEqual({ refetchInterval: 5000, limit: 50, offset: 0 });
+		expect(screen.queryByTestId("integration-executions-window-note")).toBeNull();
+	});
+
+	// The pager bounce: the page-2 cache entry starts empty, and a hook that answered `undefined` there let the total
+	// read as 0, the page count collapse to 1 and the clamp send the operator straight back to page 1. The hooks hold
+	// the previous page over (`placeholderData: keepPreviousData`), which is the steady total these mocks stand in for.
+	it("stays on the next page once it is asked for, and never re-asks for the first one", async () => {
+		executionHooksMock.useIntegrationExecutions.mockReturnValue(makeListQuery(executions, 412));
+		const { repoll } = renderPage();
+
+		fireEvent.click(within(screen.getByTestId("integration-executions-pagination-controls")).getByText("2"));
+
+		await waitFor(() => {
+			expect(lastExecutionWindow().offset).toBe(50);
+		});
+		expect(lastExecutionWindow().limit).toBe(50);
+
+		// The page-2 response lands, and the poll that follows it must not move the operator either.
+		repoll();
+
+		const offsets = requestedOffsets();
+		expect(offsets.slice(offsets.indexOf(50))).toEqual(offsets.slice(offsets.indexOf(50)).map(() => 50));
+		expect(
+			within(screen.getByTestId("integration-executions-pagination-controls")).getByText("2").getAttribute("data-active"),
+		).toBe("true");
+	});
+
+	// A narrowed filter is a DIFFERENT list, so page 4 of the old one means nothing against it.
+	it("returns to the first page when a filter changes", async () => {
+		executionHooksMock.useIntegrationExecutions.mockReturnValue(makeListQuery(executions, 412));
+		renderPage();
+
+		fireEvent.click(within(screen.getByTestId("integration-executions-pagination-controls")).getByText("3"));
+		await waitFor(() => {
+			expect(lastExecutionWindow().offset).toBe(100);
+		});
+
+		await clickStatusChip("Failed", ["Failed"]);
+
+		expect(lastExecutionWindow().offset).toBe(0);
+	});
+
+	// The one case the pager has to recover from on its own: rows disappear under it (a session delete cascades) and
+	// the active page no longer exists.
+	it("falls back to the last page that still exists when the total shrinks below it", async () => {
+		executionHooksMock.useIntegrationExecutions.mockReturnValue(makeListQuery(executions, 412));
+		const { repoll } = renderPage();
+
+		fireEvent.click(within(screen.getByTestId("integration-executions-pagination-controls")).getByText("5"));
+		await waitFor(() => {
+			expect(lastExecutionWindow().offset).toBe(200);
+		});
+
+		executionHooksMock.useIntegrationExecutions.mockReturnValue(makeListQuery(executions, 60));
+		repoll();
+
+		await waitFor(() => {
+			expect(lastExecutionWindow().offset).toBe(50);
+		});
 	});
 
 	it("opens the detail dialog from the row's eye action", async () => {
@@ -324,12 +411,13 @@ describe("IntegrationExecutionsPage", () => {
 	// R1-11: the list poll is UNCONDITIONAL. Gating it on "any row is active" would read the very list a poll has to
 	// fetch, so a fresh node with an empty or all-terminal window would never discover a run started elsewhere.
 	it("polls the executions list even when the window is empty, which is where gating it would break", () => {
-		executionHooksMock.useIntegrationExecutions.mockReturnValue(makeQuery([]));
+		executionHooksMock.useIntegrationExecutions.mockReturnValue(makeListQuery([]));
 		renderPage();
 
-		expect(executionHooksMock.useIntegrationExecutions).toHaveBeenCalledWith(expect.anything(), {
-			refetchInterval: 5000,
-		});
+		expect(executionHooksMock.useIntegrationExecutions).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ refetchInterval: 5000 }),
+		);
 	});
 
 	it("polls the per-execution read while the run is still active", async () => {
@@ -368,7 +456,7 @@ describe("IntegrationExecutionsPage", () => {
 		});
 
 		executionHooksMock.useIntegrationExecutions.mockReturnValue(
-			makeQuery(executions.filter((row) => row.id !== "exec-completed")),
+			makeListQuery(executions.filter((row) => row.id !== "exec-completed")),
 		);
 		repoll();
 
@@ -401,9 +489,17 @@ describe("IntegrationExecutionsPage", () => {
 		expect(group.getAttribute("aria-label")).toBe("Filter executions by status");
 	});
 
+	// F5: the session dropdown is a SELECTOR, not a paged table. Reading it at the executions page size hid every
+	// session past the 50th from the filter, so a run could not be narrowed to it at all.
+	it("reads the whole session list for the filter selector, not one table page", () => {
+		renderPage();
+
+		expect(sessionHooksMock.useIntegrationSessions).toHaveBeenCalledWith({}, { limit: 200 });
+	});
+
 	it("sends the trigger and session filters to the query", async () => {
 		sessionHooksMock.useIntegrationSessions.mockReturnValue(
-			makeQuery([
+			makeListQuery([
 				{
 					id: "session-1",
 					triggerId: "trigger-1",

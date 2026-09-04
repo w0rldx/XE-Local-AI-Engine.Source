@@ -126,9 +126,18 @@ public sealed class NodeChatPartAccumulator
     ///     unconditionally — notices are fire-once events, not a requested/completed pair, so there is nothing to
     ///     collapse by id). <paramref name="kind" /> is the <c>TurnNoticeKind</c> enum name, stored in
     ///     <see cref="NodeChatMessagePart.Name" />; <paramref name="message" /> is the sanitized text, stored in
-    ///     <see cref="NodeChatMessagePart.Text" />.
+    ///     <see cref="NodeChatMessagePart.Text" />; <paramref name="detail" /> is the notice's optional sanitized
+    ///     structured detail (the dispatch reason code, the effective model name), stored in
+    ///     <see cref="NodeChatMessagePart.State" />.
+    ///     <para>
+    ///         The part record's generic members carry a per-KIND meaning — a notice part already stores the notice
+    ///         kind in <c>Name</c>, which holds a tool name on a tool part — and <c>State</c> is the free member a
+    ///         notice part has never used. Reusing it keeps the persisted <c>metadata_json</c> blob's shape, and
+    ///         therefore the wire schema, exactly as it is: a reloaded turn renders the detail its live stream showed
+    ///         without a new field on any contract.
+    ///     </para>
     /// </summary>
-    public void AppendNotice(string kind, string message, long sequence)
+    public void AppendNotice(string kind, string message, long sequence, string? detail = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(kind);
         ArgumentException.ThrowIfNullOrEmpty(message);
@@ -137,7 +146,8 @@ public sealed class NodeChatPartAccumulator
         {
             var part = new MutablePart(NodeChatMessagePartKinds.Notice, sequence)
             {
-                Name = kind
+                Name = kind,
+                State = string.IsNullOrWhiteSpace(detail) ? null : detail
             };
             part.AppendText(message);
             _parts.Add(part);

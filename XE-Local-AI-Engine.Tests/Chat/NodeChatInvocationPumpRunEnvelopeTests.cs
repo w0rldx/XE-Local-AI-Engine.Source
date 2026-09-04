@@ -4,6 +4,8 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -59,6 +61,235 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
                 && request.Envelope.StartedAtUtc == 7000L
                 && request.Envelope.Provider == AgentUsageProviders.Local
                 && request.Envelope.FailureCategory == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_CarriesTheToolSchemaTokenEstimateFromTheInvocationState()
+    {
+        // The runner reads the estimate off the provider-call budget and reports it onto the invocation state; the pump's
+        // only job is to copy it onto the envelope metadata, unchanged and unrounded. The cumulative value is a long at
+        // its source, so a value above int.MaxValue must survive this hop intact.
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        const long wideEstimate = (long)int.MaxValue + 1;
+
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Completed,
+            ModelUsed = "llama-3.1",
+            ToolSchemaTokens = wideEstimate,
+            MaxToolSchemaTokens = 4_096
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, "requested-model");
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Envelope != null
+                && request.Envelope.ToolSchemaTokens == wideEstimate
+                && request.Envelope.MaxToolSchemaTokens == 4_096),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_CarriesTheDispatchedTierFromTheInvocationState()
+    {
+        // The runner reports what `auto` resolved to onto the invocation state; the pump's only job is to copy both
+        // labels onto the envelope metadata, unchanged.
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Completed,
+            ModelUsed = "llama-3.1",
+            DispatchedTier = "fast",
+            AuthoredEffort = "auto"
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, "requested-model");
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Envelope != null
+                && request.Envelope.DispatchedTier == "fast"
+                && request.Envelope.AuthoredEffort == "auto"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_WhenTheTurnWasNotAuto_LeavesTheDispatchColumnsNull()
+    {
+        // Only an `auto` turn reports a dispatch, so an ordinary turn's envelope carries nulls — which is what makes
+        // `authored_effort IS NULL` the pre-`auto` population of the measurement.
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Completed,
+            ModelUsed = "llama-3.1"
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, "requested-model");
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Envelope != null
+                && request.Envelope.DispatchedTier == null
+                && request.Envelope.AuthoredEffort == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_CarriesTheModelReadinessDurationFromTheInvocationState()
+    {
+        // The whole-turn duration includes the local runtime's launch and model load, so the envelope has to carry the
+        // warm's own duration beside it: latency_ms minus this is the warm-equivalent turn time, and without the pair a
+        // cold arm and a warm arm cannot be compared at all.
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Completed,
+            ModelUsed = "llama-3.1",
+            GenerationDurationMs = 206_273,
+            ModelReadinessMs = 178_576
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, "requested-model");
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Envelope != null
+                && request.Envelope.DurationMs == 206_273L
+                && request.Envelope.ModelReadinessMs == 178_576L),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_WhenNoLocalRuntimeWarmed_LeavesTheModelReadinessDurationNull()
+    {
+        // A remote or already-warm turn measured no readiness, and null is what says so. Zero would read as "this turn
+        // proved a warm start", which is the one thing an unmeasured turn must not claim.
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Completed,
+            ModelUsed = "gpt-4o-mini",
+            GenerationDurationMs = 1_500
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, "requested-model");
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Envelope != null
+                && request.Envelope.ModelReadinessMs == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_CarriesTheTurnTotalsOnTheEnvelopeAndTheLastRoundOnTheMessage()
+    {
+        // The two rows answer different questions and must not be filled from the same number. The message keeps the
+        // LAST provider round's counts, which the chat context meter reads as the model's context occupancy; the
+        // envelope keeps the turn's SUM over its rounds, which is what the turn cost. Summing on the message showed a
+        // three-round turn as 10,722 tokens of context it never held.
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Completed,
+            ModelUsed = "llama-3.1",
+            InputTokens = 3_000,
+            OutputTokens = 30,
+            TotalTokens = 3_038,
+            ReasoningTokens = 8,
+            TurnInputTokens = 6_000,
+            TurnOutputTokens = 60,
+            TurnTotalTokens = 6_078,
+            TurnReasoningTokens = 18
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, "requested-model");
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.InputCount == 3_000
+                && request.OutputCount == 30
+                && request.TotalCount == 3_038
+                && request.ReasoningCount == 8
+                && request.Envelope != null
+                && request.Envelope.TurnInputTokens == 6_000
+                && request.Envelope.TurnOutputTokens == 60
+                && request.Envelope.TurnTotalTokens == 6_078
+                && request.Envelope.TurnReasoningTokens == 18),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_WhenNoTurnTotalsWereReported_LeavesThemNullSoTheEnvelopeFallsBackToTheMessage()
+    {
+        // The platform path and the restart-recovery backfill report no turn totals. Null is what tells the envelope
+        // write to keep using the message's own tokens, so those rows read exactly as they always have.
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Completed,
+            ModelUsed = "llama-3.1",
+            InputTokens = 3_000,
+            OutputTokens = 30
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, "requested-model");
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Envelope != null
+                && request.Envelope.TurnInputTokens == null
+                && request.Envelope.TurnOutputTokens == null
+                && request.Envelope.TurnTotalTokens == null
+                && request.Envelope.TurnReasoningTokens == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeInterruptedAsync_LeavesTheToolSchemaTokenEstimateNull()
+    {
+        // The interrupted/thin path has no invocation state to read the counters from, so the columns stay null rather
+        // than being manufactured as zero — which is what lets a reader tell "not measured" from "measured as none".
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence);
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        _ = await pump.TerminalizeInterruptedAsync(correlation, new NodeChatPumpCursor("partial", string.Empty), wasCancelled: false);
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Envelope != null
+                && request.Envelope.ToolSchemaTokens == null
+                && request.Envelope.MaxToolSchemaTokens == null),
             Arg.Any<CancellationToken>());
     }
 
@@ -225,6 +456,45 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
 
         AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, result.TerminalStatus);
         AssertEx.Equal(ChatStreamEventTypes.AssistantCancelled, result.EventType);
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_WhenAnAutoSwapServedTheTurn_AttributesBothTheModelAndTheProviderToTheServedModel()
+    {
+        // The runner records the served model on the invocation state after an admitted `auto` model swap. Everything
+        // downstream has to follow it: the persisted message row's model, and the provider the envelope is attributed
+        // to — which is looked up FROM that same model id, not from the model the request asked for. Attributing the
+        // fast model's tokens to the big model's provider is exactly what makes the measurement queries lie.
+        var persistence = CreatePersistence();
+        var resolver = Substitute.For<IUsageProviderResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                .Returns(callInfo => Task.FromResult(string.Equals(callInfo.Arg<string?>(), "qwen3-1.7b", StringComparison.Ordinal)
+                    ? AgentUsageProviders.Local
+                    : AgentUsageProviders.Unknown));
+        var pump = new NodeChatInvocationPump(persistence, resolver, TimeProvider.System);
+
+        var conversationId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversationId, Guid.NewGuid(), Guid.NewGuid());
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            Status = InvocationStatus.Completed,
+            ModelUsed = "qwen3-1.7b",
+            DispatchedTier = "fast",
+            AuthoredEffort = "auto",
+            StartedAt = DateTimeOffset.FromUnixTimeMilliseconds(7000)
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, "qwen3.8-27b");
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Model == "qwen3-1.7b"
+                && request.Envelope != null
+                && request.Envelope.Provider == AgentUsageProviders.Local
+                && request.Envelope.DispatchedTier == "fast"
+                && request.Envelope.AuthoredEffort == "auto"),
+            Arg.Any<CancellationToken>());
     }
 
     private static INodeChatPersistenceService CreatePersistence()

@@ -360,6 +360,13 @@ public class BenchmarkRunSummaryResponse
     public string? PrimaryIntendedLaunchIdentity { get; set; }
     public string? PrimaryIntendedExecutableSha256 { get; set; }
 
+    /// <summary>
+    ///     <c>true</c> when this run's intended identity was frozen under a launch-identity scheme this build no longer
+    ///     computes, so the two identities are NOT comparable and a difference between them is not drift. Computed by
+    ///     the server; the client never learns the scheme number. <c>null</c> when the run recorded no intent.
+    /// </summary>
+    public bool? PrimaryLaunchIdentitySchemeOutdated { get; set; }
+
     /// <summary>What the launch itself recorded. All null until the spawn reached readiness.</summary>
     public string? PrimaryEffectiveLaunchIdentity { get; set; }
 
@@ -394,7 +401,7 @@ public sealed class BenchmarkRunDetailResponse : BenchmarkRunSummaryResponse
     public long? StartedAtUtc { get; init; }
     public long? PrimaryCompletedAtUtc { get; init; }
 
-    /// <summary>The decoded launch receipt (<c>LlamaServerLaunchReceipt</c> v1), or null when none was recorded.</summary>
+    /// <summary>The decoded launch receipt (<c>LlamaServerLaunchReceipt</c>), or null when none was recorded. Its own <c>receiptVersion</c> field says which schema a stored receipt was written under.</summary>
     public JsonElement? PrimaryLaunchReceipt { get; init; }
 
     /// <summary>The decoded pre-launch environment capture (<c>RuntimeEnvironmentFactsV1</c>), or null.</summary>

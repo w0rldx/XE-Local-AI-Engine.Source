@@ -117,30 +117,20 @@ internal sealed class DevWorkflowMaterializer
 
         if (tasks.Count == 0)
         {
-            // A decomposition may legitimately answer "there is no follow-up work". The graph is left exactly as it is
-            // — the join keeps its edge from this node and fires on it — and only the marker is written, so the next
-            // tick knows this decomposition is done rather than reading its artifact again forever.
-            //
-            // The detail says so: this is the one graph.changed that changes no graph, and a consumer that refetched
-            // on the token alone would fetch the same revision back. `graphRevision` is the run's CURRENT one, which
-            // has not moved.
-            _ = await store.AppendEventAsync(new AppendDevWorkflowEventCommand(run.Id,
-                                   DevWorkflowVersions.Any,
-                                   DevWorkflowEventTypes.GraphChanged,
-                                   producer.Id,
-                                   operationId,
-                                   DetailJson: JsonSerializer.Serialize(new ExpansionDetail(producer.NodeKey,
-                                           TaskCount: 0,
-                                           package.ArtifactId,
-                                           run.GraphRevision,
-                                           RevisionBumped: false),
-                                       JsonOptions)),
-                               cancellationToken)
-                           .ConfigureAwait(false);
-            return 1;
+            return await NothingToDoAsync(store, graph, run, materialization, producer, package.ArtifactId, operationId, cancellationToken).ConfigureAwait(false);
         }
 
         var expansion = Compose(graph, run.GraphJson, node, materialization, tasks);
+
+        // The producer's route, RE-taken against the graph this expansion writes and carried into the same transaction
+        // as the rewrite. Its route was recorded when the node settled, before the clone-root edges existed — so left
+        // alone the persisted document lists the authored join edge and omits every root the next tick actually admits,
+        // which is a recorded route disagreeing with the routing that happened. No gate answer to record: a node
+        // carrying a materialization is never a HumanGate.
+        var producerRoute = DevWorkflowStateMachine.RouteJson(DevWorkflowStateMachine.RouteTaken(DevWorkflowGraph.Parse(expansion.GraphJson),
+            producer,
+            nodeRuns.ToDictionary(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal),
+            decision: null));
 
         // Read once for this expansion, after the decision to expand has been made: every clone's resolution comes off
         // the same list, and a tick that expands nothing never touches the table at all.
@@ -164,7 +154,9 @@ internal sealed class DevWorkflowMaterializer
                                        producer.Id,
                                        clone.Index))
                                ],
-                               expansion.GraphJson),
+                               expansion.GraphJson,
+                               producer.Id,
+                               producerRoute),
                            cancellationToken)
                        .ConfigureAwait(false);
         return expansion.Clones.Count;
@@ -558,6 +550,98 @@ internal sealed class DevWorkflowMaterializer
         }
     }
 
+    /// <summary>
+    ///     A decomposition that legitimately answered "there is no follow-up work" (ruling D12).
+    ///     <para>
+    ///         The graph is left exactly as it is — the join keeps its edge from this node and fires on it — and what
+    ///         is written is the commit marker plus ONE already-succeeded row per validation node in the template
+    ///         subtree. Without those rows an apply downstream would be blocked by the runtime half of
+    ///         <c>GRAPH-C4-3</c>: it asks whether a <c>Tool</c>/<c>Validate</c> node SUCCEEDED on the path this run
+    ///         took, an unmaterialized template key has no row at all, and "there was nothing to validate" would read
+    ///         as "nothing validated it". One row per such node rather than an arbitrary pick, so a template carrying
+    ///         two checks shows both as not-applicable rather than one as missing.
+    ///     </para>
+    ///     <para>
+    ///         The row can never make a run look finished: <c>GRAPH-C4-1</c>'s fourth step refuses a template-subtree
+    ///         node with no out-edge, so no key seeded here is in <c>TerminalNodeKeys</c> and the completion predicate
+    ///         still asks about a node that really ends the run.
+    ///     </para>
+    ///     <para>
+    ///         A subtree with no validation node writes no row, and then the marker is the bare event this wrote
+    ///         before D12 — there is nothing to stand for, and the apply's proof was carried by another branch whose
+    ///         validation has a real row of its own.
+    ///     </para>
+    /// </summary>
+    private static async Task<int> NothingToDoAsync(IDevWorkflowStore store,
+        DevWorkflowGraph graph,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowMaterialization materialization,
+        DevWorkflowNodeRunSnapshot producer,
+        Guid artifactId,
+        Guid operationId,
+        CancellationToken cancellationToken)
+    {
+        var checks = graph.TemplateSubtree(materialization)
+                          .Select(key => graph.Nodes[key])
+                          .Where(static node => node is { NodeType: DevWorkflowNodeType.Tool, ToolMode: DevWorkflowToolMode.Validate })
+                          .OrderBy(static node => node.NodeKey, StringComparer.Ordinal)
+                          .ToList();
+        if (checks.Count == 0)
+        {
+            // The detail says so: this is the one graph.changed that changes no graph, and a consumer that refetched
+            // on the token alone would fetch the same revision back. `graphRevision` is the run's CURRENT one, which
+            // has not moved.
+            _ = await store.AppendEventAsync(new AppendDevWorkflowEventCommand(run.Id,
+                                   DevWorkflowVersions.Any,
+                                   DevWorkflowEventTypes.GraphChanged,
+                                   producer.Id,
+                                   operationId,
+                                   DetailJson: JsonSerializer.Serialize(new ExpansionDetail(producer.NodeKey,
+                                           TaskCount: 0,
+                                           artifactId,
+                                           run.GraphRevision,
+                                           RevisionBumped: false),
+                                       JsonOptions)),
+                               cancellationToken)
+                           .ConfigureAwait(false);
+            return 1;
+        }
+
+        // Under the SAME operation id as the marker would have taken, so the replay guard is unchanged and the rows
+        // and the marker commit together: there is no window in which one exists without the other. A null GraphJson
+        // is what makes the marker node.materialized rather than graph.changed — which is the honest token here,
+        // because no graph changed.
+        _ = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(run.Id,
+                               DevWorkflowVersions.Any,
+                               operationId,
+                               [
+                                   .. checks.Select(check => new DevWorkflowNodeRunSeed(Guid.NewGuid(),
+                                       check.NodeKey,
+                                       check.NodeType,
+                                       check.MaxAttempts,
+                                       check.AgentDefinitionId,
+                                       producer.DevelopmentProjectId,
+                                       InputJson: null,
+                                       PolicyResolutionJson: null,
+                                       producer.Id,
+
+                                       // Not clone n: this row stands for ZERO clones, which is a different fact and
+                                       // the one a reader of the panel needs.
+                                       MaterializationIndex: null,
+                                       DevWorkflowNodeRunStatus.Succeeded,
+                                       JsonSerializer.Serialize(new NotApplicableOutput(DevWorkflowNodeOutputStatuses.Succeeded,
+                                               Attempt: 1,
+                                               DevWorkflowNodeOutputVerdicts.ValidationNotApplicable,
+                                               producer.NodeKey,
+                                               artifactId),
+                                           JsonOptions)))
+                               ],
+                               GraphJson: null),
+                           cancellationToken)
+                       .ConfigureAwait(false);
+        return checks.Count;
+    }
+
     private static string CloneKey(string nodeKey, string taskId) =>
         $"{nodeKey}{CloneSeparator}{taskId}";
 
@@ -616,6 +700,13 @@ internal sealed class DevWorkflowMaterializer
 
     /// <summary>What the commit marker carries when there is no expansion to describe: which node, off what, and that the graph did not move.</summary>
     private sealed record ExpansionDetail(string NodeKey, int TaskCount, Guid SourceArtifactId, int GraphRevision, bool RevisionBumped);
+
+    /// <summary>
+    ///     What a not-applicable validation row says it produced. <c>status</c> is the routing vocabulary's own
+    ///     <c>succeeded</c>, so a conditional out-edge on the template's validation node fires exactly as a real pass
+    ///     would; <c>verdict</c> is what keeps a reader from taking it for one.
+    /// </summary>
+    private sealed record NotApplicableOutput(string Status, int Attempt, string Verdict, string ProducedBy, Guid TaskPackageArtifactId);
 
     /// <summary>A decomposition whose own output it cannot use. The reason travels into the next attempt's objective.</summary>
     private sealed record RejectedOutput(string Status, int Attempt, string FailureClass, string MaterializationError);

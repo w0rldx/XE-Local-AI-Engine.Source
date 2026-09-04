@@ -333,6 +333,45 @@ public sealed class CapacityServiceTests
     }
 
     [Test]
+    public async Task Capacity_WhenTheOnlyProcessForTheKeyHasExited_DoesNotQueueOnIt()
+    {
+        // A crashed llama-server lingers in the supervisor's table until the idle reaper collects it, up to a quarter
+        // of the idle TTL. Counting the corpse as resident short-circuits this decision to QueueSameModel, telling the
+        // caller to serialize on a process that can never grant an inference lease — which is how the adaptive-effort
+        // fast-model swap stayed refused for the rest of the node's life after its process died, instead of
+        // relaunching through the ordinary ensure-running path.
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(1 * Gb),
+            RunningLlama = [new LlamaServerProcessHealth(Model, ModelRole.Chat, IsResponsive: false, "Process has exited.", HasExited: true)]
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        decision.Reservation?.Dispose();
+    }
+
+    [Test]
+    public async Task Capacity_WhenAProcessIsAliveButUnresponsive_StillQueuesOnIt()
+    {
+        // The other half of the same rule: an alive-but-wedged process still holds its VRAM, its port and its
+        // loaded-process slot, so only an EXITED entry is filtered — never an unresponsive one.
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            RunningLlama = [new LlamaServerProcessHealth(Model, ModelRole.Chat, IsResponsive: false, "Not responding to health probe.")]
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.QueueSameModel, decision.Verdict);
+    }
+
+    [Test]
     public async Task Capacity_WhenLocalSameAsRunningWithDifferentCasing_ReturnsQueueSameModel()
     {
         var harness = new Harness

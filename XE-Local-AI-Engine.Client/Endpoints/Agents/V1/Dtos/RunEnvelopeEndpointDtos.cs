@@ -57,6 +57,33 @@ public sealed class AgentRunEnvelopeResponse
 
     public int? TotalTokens { get; init; }
 
+    /// <summary>
+    ///     Estimated tool-schema tokens the turn spent, cumulative across its provider rounds; null on a row written
+    ///     before this field existed or by the restart-recovery backfill. A <c>long</c>, unlike the token members above,
+    ///     because its source counter is one.
+    /// </summary>
+    public long? ToolSchemaTokens { get; init; }
+
+    /// <summary>The largest single round's estimated tool-schema token count; null for the same reasons.</summary>
+    public int? MaxToolSchemaTokens { get; init; }
+
+    /// <summary>
+    ///     The tier reasoning effort <c>auto</c> resolved to for the turn (<c>fast</c>, <c>normal</c>, <c>deep</c>);
+    ///     null on a turn that authored a concrete effort and on a row written before this field existed.
+    /// </summary>
+    public string? DispatchedTier { get; init; }
+
+    /// <summary>The effort the turn was authored with when a dispatch happened (<c>auto</c>); null otherwise.</summary>
+    public string? AuthoredEffort { get; init; }
+
+    /// <summary>
+    ///     How much of <see cref="DurationMs" /> the turn spent making a LOCAL runtime ready (inference-server launch
+    ///     and model load) rather than generating, so a cold arm can be compared with a warm one:
+    ///     <c>DurationMs - ModelReadinessMs</c> is the warm-equivalent turn time. Null when no local warm happened
+    ///     (a remote provider, an already-warm runtime) and on a row written before this field existed.
+    /// </summary>
+    public long? ModelReadinessMs { get; init; }
+
     public int? ContentChunkCount { get; init; }
 
     public int? ReasoningChunkCount { get; init; }

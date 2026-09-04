@@ -186,6 +186,9 @@ import type {
 	CreateGoldenConversationData,
 	CreateGoldenConversationErrors,
 	CreateGoldenConversationResponses,
+	CreateGraphWorkflowDefinitionData,
+	CreateGraphWorkflowDefinitionErrors,
+	CreateGraphWorkflowDefinitionResponses,
 	CreateImageJobData,
 	CreateImageJobErrors,
 	CreateImageJobResponses,
@@ -276,6 +279,9 @@ import type {
 	DeleteGoldenConversationData,
 	DeleteGoldenConversationErrors,
 	DeleteGoldenConversationResponses,
+	DeleteGraphWorkflowDefinitionData,
+	DeleteGraphWorkflowDefinitionErrors,
+	DeleteGraphWorkflowDefinitionResponses,
 	DeleteImageModelData,
 	DeleteImageModelErrors,
 	DeleteImageModelResponses,
@@ -531,6 +537,9 @@ import type {
 	GetGgufImportStatusData,
 	GetGgufImportStatusErrors,
 	GetGgufImportStatusResponses,
+	GetGraphWorkflowDefinitionData,
+	GetGraphWorkflowDefinitionErrors,
+	GetGraphWorkflowDefinitionResponses,
 	GetHardwareProfileData,
 	GetHardwareProfileErrors,
 	GetHardwareProfileResponses,
@@ -786,6 +795,9 @@ import type {
 	ListGoldenConversationsData,
 	ListGoldenConversationsErrors,
 	ListGoldenConversationsResponses,
+	ListGraphWorkflowDefinitionsData,
+	ListGraphWorkflowDefinitionsErrors,
+	ListGraphWorkflowDefinitionsResponses,
 	ListImageJobsData,
 	ListImageJobsErrors,
 	ListImageJobsResponses,
@@ -1162,6 +1174,9 @@ import type {
 	UpdateDevWorkflowWorkItemData,
 	UpdateDevWorkflowWorkItemErrors,
 	UpdateDevWorkflowWorkItemResponses,
+	UpdateGraphWorkflowDefinitionData,
+	UpdateGraphWorkflowDefinitionErrors,
+	UpdateGraphWorkflowDefinitionResponses,
 	UpdateIntegrationTriggerData,
 	UpdateIntegrationTriggerErrors,
 	UpdateIntegrationTriggerResponses,
@@ -1207,6 +1222,9 @@ import type {
 	ValidateExecutableData,
 	ValidateExecutableErrors,
 	ValidateExecutableResponses,
+	ValidateGraphWorkflowDefinitionData,
+	ValidateGraphWorkflowDefinitionErrors,
+	ValidateGraphWorkflowDefinitionResponses,
 	ValidationProblemProbeData,
 	ValidationProblemProbeErrors,
 	ValidationProblemProbeResponses,
@@ -1332,6 +1350,8 @@ import {
 	zCreateGoldenConversationBody,
 	zCreateGoldenConversationPath,
 	zCreateGoldenConversationResponse,
+	zCreateGraphWorkflowDefinitionBody,
+	zCreateGraphWorkflowDefinitionResponse,
 	zCreateImageJobBody,
 	zCreateImageJobResponse,
 	zCreateIntegrationTriggerBody,
@@ -1401,6 +1421,8 @@ import {
 	zDeleteExternalProviderConnectionResponse,
 	zDeleteGoldenConversationPath,
 	zDeleteGoldenConversationResponse,
+	zDeleteGraphWorkflowDefinitionPath,
+	zDeleteGraphWorkflowDefinitionResponse,
 	zDeleteImageModelPath,
 	zDeleteImageModelResponse,
 	zDeleteIntegrationSessionPath,
@@ -1561,6 +1583,8 @@ import {
 	zGetGgufImportsResponse,
 	zGetGgufImportStatusPath,
 	zGetGgufImportStatusResponse,
+	zGetGraphWorkflowDefinitionPath,
+	zGetGraphWorkflowDefinitionResponse,
 	zGetHardwareProfileQuery,
 	zGetHardwareProfileResponse,
 	zGetHfTokenStatusResponse,
@@ -1709,6 +1733,7 @@ import {
 	zListExternalProviderConnectionsResponse,
 	zListGoldenConversationsPath,
 	zListGoldenConversationsResponse,
+	zListGraphWorkflowDefinitionsResponse,
 	zListImageJobsResponse,
 	zListImageModelDownloadsResponse,
 	zListImageModelsResponse,
@@ -1968,6 +1993,9 @@ import {
 	zUpdateDevWorkflowWorkItemBody,
 	zUpdateDevWorkflowWorkItemPath,
 	zUpdateDevWorkflowWorkItemResponse,
+	zUpdateGraphWorkflowDefinitionBody,
+	zUpdateGraphWorkflowDefinitionPath,
+	zUpdateGraphWorkflowDefinitionResponse,
 	zUpdateIntegrationTriggerBody,
 	zUpdateIntegrationTriggerPath,
 	zUpdateIntegrationTriggerResponse,
@@ -2010,6 +2038,8 @@ import {
 	zUploadKnowledgeDocumentResponse,
 	zValidateExecutableBody,
 	zValidateExecutableResponse,
+	zValidateGraphWorkflowDefinitionBody,
+	zValidateGraphWorkflowDefinitionResponse,
 	zValidationProblemProbeBody,
 	zValidationProblemProbeResponse,
 	zVerifyToolMockBody,
@@ -9830,6 +9860,197 @@ export const startStableDiffusionCppSourceBuild = <ThrowOnError extends boolean 
 			},
 		],
 		url: "/api/local/v1/images/runtime/source-build",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const listGraphWorkflowDefinitions = <ThrowOnError extends boolean = false>(
+	options?: Options<ListGraphWorkflowDefinitionsData, ThrowOnError>,
+): RequestResult<ListGraphWorkflowDefinitionsResponses, ListGraphWorkflowDefinitionsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListGraphWorkflowDefinitionsResponses, ListGraphWorkflowDefinitionsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListGraphWorkflowDefinitionsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/definitions",
+		...options,
+	});
+
+export const createGraphWorkflowDefinition = <ThrowOnError extends boolean = false>(
+	options: Options<CreateGraphWorkflowDefinitionData, ThrowOnError>,
+): RequestResult<CreateGraphWorkflowDefinitionResponses, CreateGraphWorkflowDefinitionErrors, ThrowOnError> =>
+	(options.client ?? client).post<CreateGraphWorkflowDefinitionResponses, CreateGraphWorkflowDefinitionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateGraphWorkflowDefinitionBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateGraphWorkflowDefinitionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/definitions",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteGraphWorkflowDefinition = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteGraphWorkflowDefinitionData, ThrowOnError>,
+): RequestResult<DeleteGraphWorkflowDefinitionResponses, DeleteGraphWorkflowDefinitionErrors, ThrowOnError> =>
+	(options.client ?? client).delete<DeleteGraphWorkflowDefinitionResponses, DeleteGraphWorkflowDefinitionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteGraphWorkflowDefinitionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteGraphWorkflowDefinitionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/definitions/{definitionId}",
+		...options,
+	});
+
+export const getGraphWorkflowDefinition = <ThrowOnError extends boolean = false>(
+	options: Options<GetGraphWorkflowDefinitionData, ThrowOnError>,
+): RequestResult<GetGraphWorkflowDefinitionResponses, GetGraphWorkflowDefinitionErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetGraphWorkflowDefinitionResponses, GetGraphWorkflowDefinitionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetGraphWorkflowDefinitionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetGraphWorkflowDefinitionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/definitions/{definitionId}",
+		...options,
+	});
+
+export const updateGraphWorkflowDefinition = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateGraphWorkflowDefinitionData, ThrowOnError>,
+): RequestResult<UpdateGraphWorkflowDefinitionResponses, UpdateGraphWorkflowDefinitionErrors, ThrowOnError> =>
+	(options.client ?? client).put<UpdateGraphWorkflowDefinitionResponses, UpdateGraphWorkflowDefinitionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUpdateGraphWorkflowDefinitionBody,
+					path: zUpdateGraphWorkflowDefinitionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUpdateGraphWorkflowDefinitionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/definitions/{definitionId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const validateGraphWorkflowDefinition = <ThrowOnError extends boolean = false>(
+	options: Options<ValidateGraphWorkflowDefinitionData, ThrowOnError>,
+): RequestResult<ValidateGraphWorkflowDefinitionResponses, ValidateGraphWorkflowDefinitionErrors, ThrowOnError> =>
+	(options.client ?? client).post<ValidateGraphWorkflowDefinitionResponses, ValidateGraphWorkflowDefinitionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zValidateGraphWorkflowDefinitionBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zValidateGraphWorkflowDefinitionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/definitions/validate",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

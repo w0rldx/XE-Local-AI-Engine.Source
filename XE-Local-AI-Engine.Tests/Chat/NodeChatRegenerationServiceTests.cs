@@ -2674,6 +2674,52 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             return Task.CompletedTask;
         }
 
+        public Task ReportToolSchemaTokensAsync(Guid invocationId, long? toolSchemaTokens, int? maxToolSchemaTokens)
+        {
+            if (CurrentInvocation is not null)
+            {
+                CurrentInvocation.ToolSchemaTokens = toolSchemaTokens;
+                CurrentInvocation.MaxToolSchemaTokens = maxToolSchemaTokens;
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task ReportTurnTelemetryAsync(Guid invocationId, long? modelReadinessMs, TurnUsageTotals? usage)
+        {
+            if (CurrentInvocation is not null)
+            {
+                CurrentInvocation.ModelReadinessMs = modelReadinessMs;
+                CurrentInvocation.TurnInputTokens = usage?.InputTokens;
+                CurrentInvocation.TurnOutputTokens = usage?.OutputTokens;
+                CurrentInvocation.TurnTotalTokens = usage?.TotalTokens;
+                CurrentInvocation.TurnReasoningTokens = usage?.ReasoningTokens;
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort)
+        {
+            if (CurrentInvocation is not null)
+            {
+                CurrentInvocation.DispatchedTier = dispatchedTier;
+                CurrentInvocation.AuthoredEffort = authoredEffort;
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task ReportServedModelAsync(Guid invocationId, string modelUsed)
+        {
+            if (CurrentInvocation is not null)
+            {
+                CurrentInvocation.ModelUsed = modelUsed;
+            }
+
+            return Task.CompletedTask;
+        }
+
         public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory)
         {
             if (CurrentInvocation is not null)

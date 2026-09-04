@@ -739,6 +739,44 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
+        // Graph Workflows take the same layout. The definition is node-scoped, so the empty conversation id plus its
+        // own id; the run binds its DEFINITION, and node runs and events bind their run, so a re-parented row fails
+        // authenticated decryption rather than reading back as another owner's.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<GraphWorkflowDefinition>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.GraphJson), Guid.Empty, entry.Entity.Id, "graph_workflow_definition_graph_json", trackedProperties);
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<GraphWorkflowRun>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.GraphJson), entry.Entity.DefinitionId, entry.Entity.Id, "graph_workflow_run_graph_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.InputJson), entry.Entity.DefinitionId, entry.Entity.Id, "graph_workflow_run_input_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.OutputJson), entry.Entity.DefinitionId, entry.Entity.Id, "graph_workflow_run_output_json",
+                trackedProperties);
+        }
+
+        // Four distinct AAD column names on one row, and not cosmetically: an edge condition routes on output_json, so
+        // if these shared a name a database writer could swap an input, an error or a decider into the output column
+        // and reroute a run without forging a ciphertext or a tag.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<GraphWorkflowNodeRun>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.InputJson), entry.Entity.RunId, entry.Entity.Id, "graph_workflow_node_run_input_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.OutputJson), entry.Entity.RunId, entry.Entity.Id, "graph_workflow_node_run_output_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.Error), entry.Entity.RunId, entry.Entity.Id, "graph_workflow_node_run_error", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.DecidedBySubject), entry.Entity.RunId, entry.Entity.Id, "graph_workflow_node_run_decided_by",
+                trackedProperties);
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<GraphWorkflowRunEvent>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.DetailJson), entry.Entity.RunId, entry.Entity.Id, "graph_workflow_run_event_detail_json",
+                trackedProperties);
+        }
+
         // The two artifact tables add nothing here on purpose: the bytes live on disk under the blob store's own AAD
         // column (dev_workflow_artifact_blob), and every column that stays in the row is structural.
 

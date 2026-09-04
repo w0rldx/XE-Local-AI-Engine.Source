@@ -115,6 +115,53 @@ public interface IWorkerEventDispatcher
 
     Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory);
 
+    /// <summary>
+    ///     Records the turn's tool-schema token estimate on the invocation state so the terminalize write can persist it
+    ///     onto the run-envelope row. Reported by the runner immediately BEFORE each terminal report, on the completed,
+    ///     cancelled and failed paths alike, because the estimate is as interesting on a turn that ran out of context as
+    ///     on one that finished. Counts only — no tool name ever reaches this seam.
+    /// </summary>
+    /// <param name="toolSchemaTokens">Cumulative estimate across the turn's provider rounds.</param>
+    /// <param name="maxToolSchemaTokens">The largest single round's estimate.</param>
+    Task ReportToolSchemaTokensAsync(Guid invocationId, long? toolSchemaTokens, int? maxToolSchemaTokens);
+
+    /// <summary>
+    ///     Records the turn-scoped facts that belong on the run-envelope row rather than on the message: how long the
+    ///     turn spent making a LOCAL runtime ready (launching <c>llama-server</c> and loading the model), and the token
+    ///     usage SUMMED over the turn's provider rounds. Reported by the runner on the completed, cancelled and failed
+    ///     paths alike, for the same reason as <see cref="ReportToolSchemaTokensAsync" />: a cold start and the tokens
+    ///     already paid for are most interesting on the turn that paid for them, however that turn ended. Durations and
+    ///     counts only — no model identity or prompt text reaches this seam.
+    /// </summary>
+    /// <param name="modelReadinessMs">Milliseconds spent in the warm phase, or null when no local warm happened.</param>
+    /// <param name="usage">
+    ///     The turn's summed usage, or null when the provider reported none. Deliberately separate from the counts on
+    ///     <see cref="ReportInvocationCompletedAsync" />, which stay the LAST round's — see <see cref="TurnUsageTotals" />.
+    /// </param>
+    Task ReportTurnTelemetryAsync(Guid invocationId, long? modelReadinessMs, TurnUsageTotals? usage);
+
+    /// <summary>
+    ///     Records what reasoning effort <c>auto</c> resolved to on the invocation state, so the terminalize write can
+    ///     persist it onto the run-envelope row. Reported by the runner immediately after the dispatch, and only on a
+    ///     turn that was authored <c>auto</c> — every other turn leaves both members null. Category labels only: the
+    ///     tier and the authored effort, never a reason code, a signal value or any message text.
+    /// </summary>
+    /// <param name="dispatchedTier">The resolved tier's name.</param>
+    /// <param name="authoredEffort">The effort the turn was authored with (<c>auto</c>).</param>
+    Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort);
+
+    /// <summary>
+    ///     Records the model that ACTUALLY served the turn, when it is not the one the runtime package named. Reported
+    ///     by the runner only once an admitted <c>auto</c> model swap has run its send, because
+    ///     <see cref="Events.InvocationState.ModelUsed" /> is seeded from the package and is what BOTH the persisted
+    ///     message row and the run envelope's provider attribution are read from — without this a swapped turn is
+    ///     recorded against a model that never saw it, and the measurement queries attribute the fast model's tokens
+    ///     and latency to the big one. A turn that falls back to the original model never reports, so its seeded value
+    ///     stands.
+    /// </summary>
+    /// <param name="modelUsed">The served model id.</param>
+    Task ReportServedModelAsync(Guid invocationId, string modelUsed);
+
     Task ReportToolCallRequestedAsync(ToolCallRequestPayload payload);
 
     Task ReportApprovalRequestedAsync(ApprovalRequestPayload payload);
@@ -152,3 +199,13 @@ public interface IWorkerEventDispatcher
     /// </summary>
     Task DispatchUserQuestionAnsweredAsync(UserQuestionAnsweredEvent evt);
 }
+
+/// <summary>
+///     A turn's token usage SUMMED over its provider rounds — what the turn COST. A tool-calling turn is several
+///     provider requests inside one run, each reporting its own usage, so the totals add up.
+///     Deliberately NOT the same numbers as <see cref="InvocationState.InputTokens" /> and friends, which stay the LAST
+///     round's: a round's prompt is the whole conversation so far, so the final round's input count is what the model's
+///     context actually HELD, and that is the occupancy the chat meter reads off the assistant message. Cost sums;
+///     occupancy does not. These totals are persisted onto the run-envelope row instead.
+/// </summary>
+public sealed record TurnUsageTotals(int? InputTokens, int? OutputTokens, int? TotalTokens, int? ReasoningTokens);

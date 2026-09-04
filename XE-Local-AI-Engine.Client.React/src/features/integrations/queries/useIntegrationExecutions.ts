@@ -1,8 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionEventDto } from "@/core/api/generated";
 import {
 	cancelIntegrationExecutionMutation,
 	getIntegrationExecutionEventsOptions,
+	getIntegrationExecutionEventsQueryKey,
 	getIntegrationExecutionOptions,
 	listIntegrationExecutionsOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
@@ -15,7 +17,7 @@ import {
 import {
 	type IntegrationExecutionFilters,
 	integrationEventLimit,
-	integrationListLimit,
+	integrationPageSize,
 } from "@/features/integrations/models/IntegrationModels";
 import { integrationInvalidationKey, integrationQueryIds } from "@/features/integrations/queries/useIntegrationTriggers";
 
@@ -28,24 +30,37 @@ interface IntegrationQueryOptions {
 	readonly refetchInterval?: number | false;
 }
 
-export function useIntegrationExecutions(filters: IntegrationExecutionFilters = {}, options: IntegrationQueryOptions = {}) {
+/** One page of a list read. Both bounds ride in the generated query key, so each page is its own cache entry. */
+interface IntegrationListOptions extends IntegrationQueryOptions {
+	readonly limit?: number;
+	readonly offset?: number;
+}
+
+/**
+ * One page of executions plus the count of rows the SAME filters match, which is what makes a page navigator
+ * honest — without it a bounded window could only be described, never numbered.
+ */
+export function useIntegrationExecutions(filters: IntegrationExecutionFilters = {}, options: IntegrationListOptions = {}) {
 	return useQuery({
 		...withResponseValidation(
 			listIntegrationExecutionsOptions({
 				query: {
 					...(filters.triggerId === undefined ? {} : { triggerId: filters.triggerId }),
 					...(filters.sessionId === undefined ? {} : { sessionId: filters.sessionId }),
-					...(filters.status === undefined ? {} : { status: filters.status }),
-					// One bounded window at the validator's maximum, always from the start of the server's ordering.
-					// The response carries no total count, so there is nothing a page navigator could honestly show.
-					limit: integrationListLimit,
-					offset: 0,
+					// A repeated parameter: one chip can stand for the three active states.
+					...(filters.status === undefined ? {} : { status: [...filters.status] }),
+					limit: options.limit ?? integrationPageSize,
+					offset: options.offset ?? 0,
 				},
 			}),
 		),
 		enabled: options.enabled ?? true,
 		refetchInterval: options.refetchInterval,
-		select: (data) => data.items.map(toIntegrationExecution),
+		// `limit`/`offset` are part of the query key, so page 2 is a cache entry with no data of its own. Without the
+		// previous page held over, `totalCount` would read as 0 for a render, the pager would compute one page, and its
+		// clamp would send the operator back to page 1 while the page-2 request was still in flight.
+		placeholderData: keepPreviousData,
+		select: (data) => ({ items: data.items.map(toIntegrationExecution), totalCount: data.totalCount }),
 	});
 }
 
@@ -60,21 +75,60 @@ export function useIntegrationExecution(executionId: string | null, options: Int
 }
 
 /**
- * The persisted timeline, always read WHOLE (`sinceSeq: 0`) rather than merged from a watermark. Only nine event
- * types are ever persisted and neither assistant type is among them, so the list is bounded by construction and a
- * full re-read each tick is cheaper than a merge. `sinceSeq` exists on the endpoint for the SSE-resume caller.
+ * The persisted timeline, read by WATERMARK until the server runs out of rows. `sinceSeq` is an EXCLUSIVE lower
+ * bound and the rows come back ascending, so a short page means "caught up" and a full one means "call again" —
+ * the contract `ListIntegrationExecutionEventsRequest` states. Asking once for the validator's maximum instead
+ * silently dropped every event past the 500th, and events ascend, so the row lost first is the terminal one that
+ * says how the run ended.
+ *
+ * A loop inside `queryFn` rather than `useInfiniteQuery` (which is what the dev-workflows event feed uses): there
+ * is no pager here. The timeline renders the whole log and re-reads it every 5 s, so one cache entry holding one
+ * ascending array keeps the `select`/`refetchInterval` contract its two consumers already have.
+ *
+ * Each refetch re-pages from sequence 0. The log is append-only and short in the ordinary case, and a re-read from
+ * the last watermark would need a merge against the previous cache entry to keep the rows it already had.
  */
 export function useIntegrationExecutionEvents(executionId: string | null, options: IntegrationQueryOptions = {}) {
 	return useQuery({
-		...withResponseValidation(
-			getIntegrationExecutionEventsOptions({
-				path: { executionId: executionId ?? "" },
-				query: { sinceSeq: 0, limit: integrationEventLimit },
-			}),
-		),
+		// The generated key for the first page's request, so this cache entry stays identifiable by the same
+		// partial-match filters every other integrations query is invalidated by.
+		queryKey: getIntegrationExecutionEventsQueryKey({
+			path: { executionId: executionId ?? "" },
+			query: { sinceSeq: 0, limit: integrationEventLimit },
+		}),
+		queryFn: async (context) => {
+			const items: XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionEventDto[] = [];
+			let sinceSeq = 0;
+			for (;;) {
+				// Each page is a full generated adapter — shared axios instance, response validation and the outer
+				// query's AbortSignal, threaded by the runtime rather than by hand. The adapter's own `queryFn` reads
+				// its request off `queryKey[0]`, so the page's key travels with it; the outer context supplies the
+				// signal. `page.queryFn` is a function here because `queryOptions()` always emits one.
+				const page = withResponseValidation(
+					getIntegrationExecutionEventsOptions({
+						path: { executionId: executionId ?? "" },
+						query: { sinceSeq, limit: integrationEventLimit },
+					}),
+				);
+				// biome-ignore lint/performance/noAwaitInLoops: watermark paging is sequential by definition — the next `sinceSeq` is read off the page before it, so there is nothing to run in parallel.
+				const data = await page.queryFn!({ ...context, queryKey: page.queryKey });
+				// The next watermark is the highest sequence this page carried, computed BEFORE the page is kept: a page
+				// reporting no higher sequence than the cursor it was given is the previous page served again, so appending
+				// it would duplicate rows the timeline keys by `sequence` as well as loop forever.
+				const nextSinceSeq = data.items.reduce((highest, event) => Math.max(highest, event.sequence), sinceSeq);
+				if (nextSinceSeq <= sinceSeq) {
+					return items;
+				}
+				items.push(...data.items);
+				if (data.items.length < integrationEventLimit) {
+					return items;
+				}
+				sinceSeq = nextSinceSeq;
+			}
+		},
 		enabled: executionId !== null && (options.enabled ?? true),
 		refetchInterval: options.refetchInterval,
-		select: (data) => data.items.map(toIntegrationExecutionEvent),
+		select: (data) => data.map(toIntegrationExecutionEvent),
 	});
 }
 

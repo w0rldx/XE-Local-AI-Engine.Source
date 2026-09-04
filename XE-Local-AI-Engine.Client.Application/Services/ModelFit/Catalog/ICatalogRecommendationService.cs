@@ -32,13 +32,25 @@ public interface ICatalogRecommendationService
 ///     <see cref="KvQuantAdvisory" /> is a purely advisory second estimate — see its own docs; it never influences
 ///     whether this candidate appears (that is always the fp16 <see cref="Estimate" />).
 /// </summary>
+/// <param name="KvBytesPerTokenAtCtx">
+///     What one token of context costs in KV-cache bytes at the request's context target, computed at
+///     <see cref="KvCacheQuant.Q8_0" /> — the chat launch default, so the figure answers "what will this cost me on
+///     this node" rather than restating the fp16 ranking estimate. <see langword="null" /> when the header cannot size
+///     the KV term; such a candidate sorts LAST on the tiebreak rather than first.
+/// </param>
+/// <param name="AttentionArchTag">
+///     The candidate's attention shape as a stable lowercase token (see <see cref="Fit.AttentionArchTag" />), for the
+///     UI. Never used as a ranking input on its own.
+/// </param>
 public sealed record CatalogRecommendationCandidate(
     ModelCatalogEntry Entry,
     GgufRepoFile File,
     MemoryFitEstimate Estimate,
     string ModelName,
     bool IsInstalled,
-    KvQuantAdvisory? KvQuantAdvisory = null);
+    KvQuantAdvisory? KvQuantAdvisory = null,
+    long? KvBytesPerTokenAtCtx = null,
+    string? AttentionArchTag = null);
 
 /// <summary>
 ///     Advisory-only estimate of the memory a candidate would need with an 8-bit (<see cref="KvCacheQuant.Q8_0" />)

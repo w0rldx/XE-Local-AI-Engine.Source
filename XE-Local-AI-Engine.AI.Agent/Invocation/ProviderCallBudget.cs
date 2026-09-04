@@ -49,7 +49,32 @@ public sealed class ProviderCallBudget
     // the counters afterwards without any new plumbing through the send path.
     private static readonly AsyncLocal<ProviderCallCapScope?> AmbientCallCap = new();
 
+    /// <summary>
+    ///     How many DISTINCT tool names one budget keeps — and, deliberately, the ONE number anything downstream caps
+    ///     to as well. Bounded here rather than at a reader, so a runaway tool loop cannot grow the set: the
+    ///     seventeenth distinct name is dropped at the source, not on the way out.
+    /// </summary>
+    internal const int MaxDistinctToolNames = 16;
+
+    /// <summary>
+    ///     How long ONE recorded tool name may be, marker included. Bounded at the source for the same reason the
+    ///     distinct-name count is: the count caps how MANY names a carrier holds, and only this caps how BIG each of
+    ///     them is. Without it a single oversized identifier reaches the persisted step detail, and from there the
+    ///     work-session event detail, unbounded — the node-run column's own 1024-character clamp is applied later and
+    ///     only on that one carrier.
+    /// </summary>
+    internal const int MaxToolNameLength = 128;
+
+    /// <summary>The last characters of a clamped name. Unmistakably not part of any real tool identifier.</summary>
+    internal const string TruncatedToolNameMarker = "…";
+
     private readonly int _maxProviderCalls;
+
+    // Names only, ordinal-sorted, bounded. The counters beside it say how MUCH a run spent; this says WHICH tools it
+    // reached for — a fixed id for a built-in and an operator-authored identifier for an MCP or custom tool, never an
+    // argument and never a result.
+    private readonly Lock _toolNameGate = new();
+    private readonly SortedSet<string> _toolNames = new(StringComparer.Ordinal);
 
     // True when the ambient per-step cap, not the configured invocation ceiling, is what _maxProviderCalls holds —
     // the one bit that tells a spent step bound apart from a runaway loop when the call count trips.
@@ -99,6 +124,21 @@ public sealed class ProviderCallBudget
 
     /// <summary>Total estimated input tokens registered so far this invocation.</summary>
     public long CumulativeInputTokens => Interlocked.Read(ref _cumulativeInputTokens);
+
+    /// <summary>
+    ///     The distinct tool names this invocation asked for, ordinal-sorted and capped at sixteen. A snapshot: the set
+    ///     keeps moving while the run does.
+    /// </summary>
+    internal IReadOnlyList<string> ToolNames
+    {
+        get
+        {
+            lock (_toolNameGate)
+            {
+                return [.. _toolNames];
+            }
+        }
+    }
 
     /// <summary>
     ///     Seeds a fresh budget scope for the current async flow and returns a disposable that restores the prior ambient
@@ -190,11 +230,40 @@ public sealed class ProviderCallBudget
         Interlocked.Add(ref _providerRoundElapsedMicroseconds, ToMicroseconds(duration));
     }
 
-    internal void RecordToolCallRequested()
+    /// <param name="toolName">
+    ///     The tool the model asked for, kept as a bounded set of distinct NAMES beside the count. The name is what
+    ///     turns "this step made nine tool calls" into "and they were these four tools", which is the question a cost
+    ///     rollup actually gets asked. Null or blank records the count alone — which is what the caller passes for a
+    ///     name that did NOT resolve against the tools the request offered, because a hallucinated identifier is a call
+    ///     the model attempted, not a tool this run reached for.
+    ///     <para>
+    ///         A resolved name is clamped to <see cref="MaxToolNameLength" /> HERE rather than at a reader, so every
+    ///         carrier downstream — the persisted step detail, the work-session event detail, the node-run column — is
+    ///         bounded by construction rather than by whichever of them happens to clamp.
+    ///     </para>
+    /// </param>
+    internal void RecordToolCallRequested(string? toolName)
     {
         Interlocked.Increment(ref _toolCallsRequested);
         var elapsedMicroseconds = ToMicroseconds(Stopwatch.GetElapsedTime(_startedTimestamp));
         Interlocked.CompareExchange(ref _firstToolRequestMicroseconds, elapsedMicroseconds, comparand: -1);
+
+        if (string.IsNullOrWhiteSpace(toolName))
+        {
+            return;
+        }
+
+        var bounded = toolName.Length <= MaxToolNameLength
+            ? toolName
+            : string.Concat(toolName.AsSpan(0, MaxToolNameLength - TruncatedToolNameMarker.Length), TruncatedToolNameMarker);
+
+        lock (_toolNameGate)
+        {
+            if (_toolNames.Count < MaxDistinctToolNames)
+            {
+                _ = _toolNames.Add(bounded);
+            }
+        }
     }
 
     internal void RecordToolCallCompleted(TimeSpan requestToResultLatency, int resultBytes, bool failed)
@@ -330,7 +399,10 @@ public sealed class ProviderCallCapScope : IDisposable
 
     /// <summary>
     ///     What the budgets created under this scope have consumed so far, or <see langword="null" /> when none was
-    ///     created (nothing ran, or the run never seeded a budget). Content-free counts only — safe to persist.
+    ///     created (nothing ran, or the run never seeded a budget). Counts plus tool IDENTITY — a bounded set of tool
+    ///     names — and nothing else: never an argument, never a result, never a prompt or a model's output. Safe to
+    ///     persist on that basis, and the reason the names are here at all is that a step's budget is disposed long
+    ///     before anything downstream can ask what the step called.
     ///     <para>
     ///         Read it AFTER the run has landed but BEFORE the scope is disposed. Reading it mid-run answers with a
     ///         moving target, and a run stopped through the cancellation registry may still be unwinding, so a
@@ -354,14 +426,28 @@ public sealed class ProviderCallCapScope : IDisposable
         var providerCalls = 0;
         var estimatedInputTokens = 0L;
         var toolCallsCompleted = 0;
-        foreach (var snapshot in budgets.Select(static budget => budget.CaptureEfficiencySnapshot()))
+        var toolSchemaTokens = 0L;
+        var toolNames = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var budget in budgets)
         {
+            var snapshot = budget.CaptureEfficiencySnapshot();
             providerCalls += snapshot.ProviderCalls;
             estimatedInputTokens += snapshot.EstimatedInputTokens;
             toolCallsCompleted += snapshot.ToolCallsCompleted;
+            toolSchemaTokens += snapshot.ToolSchemaTokens;
+
+            // Union, then re-cap: each budget is bounded on its own, so a step that spawned three sub-agents could
+            // otherwise carry three times the bound out of a scope that is meant to have one.
+            toolNames.UnionWith(budget.ToolNames);
         }
 
-        return new ProviderCallConsumption(providerCalls, estimatedInputTokens, toolCallsCompleted, MaxProviderCalls, budgets.Length);
+        return new ProviderCallConsumption(providerCalls,
+            estimatedInputTokens,
+            toolCallsCompleted,
+            MaxProviderCalls,
+            budgets.Length,
+            toolSchemaTokens,
+            [.. toolNames.Take(ProviderCallBudget.MaxDistinctToolNames)]);
     }
 
     /// <summary>
@@ -405,9 +491,10 @@ public sealed class ProviderCallCapScope : IDisposable
 }
 
 /// <summary>
-///     What one caller-capped run consumed, in counts only — never prompts, model output, tool identities, arguments,
-///     results, paths or schemas. Small enough to persist on an event row, which is what the work-session supervisor
-///     does with it so a per-step cap can be sized from recorded data rather than guessed.
+///     What one caller-capped run consumed: counts, plus the bounded set of tool NAMES it called — never prompts,
+///     model output, tool arguments, results, paths or schemas. Small enough to persist on an event row, which is what
+///     the work-session supervisor does with it so a per-step cap can be sized from recorded data rather than guessed,
+///     and so a cost rollup can answer "which tools" as well as "how many calls" once the run's budget is long gone.
 /// </summary>
 /// <param name="ProviderCalls">Raw provider rounds that were admitted (the rejected one that tripped a ceiling is not counted), summed over every attached budget.</param>
 /// <param name="EstimatedInputTokens">Estimated input tokens across those rounds — an estimate from the character profile, not the provider's count.</param>
@@ -421,12 +508,22 @@ public sealed class ProviderCallCapScope : IDisposable
 ///     each of which got its own budget and its own ceiling. Reported so nobody reads a summed call count as a
 ///     breached cap.
 /// </param>
+/// <param name="ToolSchemaTokens">
+///     Tool-schema tokens SHIPPED ACROSS ROUNDS — every round re-sends the whole offer, so this grows with the number
+///     of rounds and is not the size of the offer. The largest single round is a different number.
+/// </param>
+/// <param name="ToolNames">
+///     The distinct tool names the run called, ordinal-sorted and capped at
+///     <c>ProviderCallBudget.MaxDistinctToolNames</c> across every attached budget. Names only.
+/// </param>
 public sealed record ProviderCallConsumption(
     int ProviderCalls,
     long EstimatedInputTokens,
     int ToolCallsCompleted,
     int ProviderCallCap,
-    int AttachedBudgets);
+    int AttachedBudgets,
+    long ToolSchemaTokens = 0,
+    IReadOnlyList<string>? ToolNames = null);
 
 /// <summary>
 ///     Immutable, content-free aggregate of the expensive work performed during one root agent invocation. It contains

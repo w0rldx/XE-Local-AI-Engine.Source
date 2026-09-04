@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import type { TablePaginationFooterProps } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useTablePaginationStore } from "@/core/ui/components/TablePagination/useTablePaginationStore";
 
 // Default rows-per-page and the selectable sizes offered by the footer. Kept here so every table that opts into
@@ -98,5 +99,53 @@ export function useTablePagination<T>(items: readonly T[], options: UseTablePagi
 		pageSizeOptions,
 		setPage: setRequestedPage,
 		setPageSize,
+	};
+}
+
+/** The page state a server-paged table owns, plus the server's total. The hook derives the footer's props from it. */
+export interface ServerTablePaginationInput {
+	readonly page: number;
+	readonly pageSize: number;
+	/** Rows the CURRENT filters match on the server, not the length of the page on screen. */
+	readonly totalItems: number;
+	readonly pageSizeOptions: readonly number[];
+	readonly onPageChange: (page: number) => void;
+	readonly onPageSizeChange: (pageSize: number) => void;
+}
+
+// Footer props for a table the SERVER pages: the caller sends `limit`/`offset` with its query and passes the
+// response's total back in. The row math is the same as the client-side twin above, but the page cannot be
+// derive-clamped here — the offset that fetched the current rows was already sent — so a total that shrank below the
+// active page (a delete, not a filter change: those reset to page 1 at the call site) is corrected by asking for the
+// last page that still exists, which re-issues the query rather than leaving the operator on an empty page.
+export function useServerTablePagination({
+	page,
+	pageSize,
+	totalItems,
+	pageSizeOptions,
+	onPageChange,
+	onPageSizeChange,
+}: ServerTablePaginationInput): TablePaginationFooterProps {
+	const pageCount = Math.max(1, Math.ceil(totalItems / pageSize));
+	// The clamp lands on the NEXT render, so every number here is computed from the page that will actually be shown.
+	// Reading the raw page instead rendered "201–60 of 60" for the frame in between.
+	const activePage = Math.min(Math.max(1, page), pageCount);
+
+	useEffect(() => {
+		if (page > pageCount) {
+			onPageChange(pageCount);
+		}
+	}, [onPageChange, page, pageCount]);
+
+	return {
+		page: activePage,
+		pageCount,
+		pageSize,
+		totalItems,
+		firstItemIndex: totalItems === 0 ? 0 : (activePage - 1) * pageSize + 1,
+		lastItemIndex: Math.min(activePage * pageSize, totalItems),
+		pageSizeOptions,
+		onPageChange,
+		onPageSizeChange,
 	};
 }

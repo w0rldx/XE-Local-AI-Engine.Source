@@ -268,13 +268,19 @@ public sealed class ProcessContextAllocationResolver(
     /// </summary>
     private static KvCacheQuant? NormalizeKvCacheQuant(string? kvCacheType)
     {
-        var candidate = kvCacheType?.Trim();
-        if (string.Equals(candidate, "q8_0", StringComparison.OrdinalIgnoreCase))
+        // The token vocabulary belongs to LlamaServerKvCacheTypes; an unrecognized one normalizes away and reserves
+        // fp16 bytes, so a type added there without a mapping here is conservative rather than wrong.
+        if (!LlamaServerKvCacheTypes.TryNormalize(kvCacheType, out var normalized) || normalized is null)
+        {
+            return null;
+        }
+
+        if (string.Equals(normalized, LlamaServerKvCacheTypes.Q8_0, StringComparison.Ordinal))
         {
             return KvCacheQuant.Q8_0;
         }
 
-        return string.Equals(candidate, "q4_0", StringComparison.OrdinalIgnoreCase) ? KvCacheQuant.Q4_0 : null;
+        return string.Equals(normalized, LlamaServerKvCacheTypes.Q4_0, StringComparison.Ordinal) ? KvCacheQuant.Q4_0 : null;
     }
 
     private async Task<ProcessContextAllocation?> ResolveCoreAsync(string key,
@@ -493,7 +499,9 @@ public sealed class ProcessContextAllocationResolver(
             attention: new GgufAttentionShape(facts.AttentionKeyLength,
                 facts.AttentionValueLength,
                 facts.SlidingWindow,
-                facts.SlidingWindowPattern),
+                facts.SlidingWindowPattern,
+                facts.AttentionKeyLengthMla,
+                facts.AttentionValueLengthMla),
             nativeQuantFormat: QuantLadder.IsNativeFormat(quant));
     }
 

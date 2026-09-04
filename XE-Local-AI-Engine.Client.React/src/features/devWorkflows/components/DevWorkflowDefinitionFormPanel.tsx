@@ -10,10 +10,12 @@ import {
 	Paper,
 	Select,
 	Stack,
+	Switch,
 	Table,
 	Text,
 	Textarea,
 	TextInput,
+	Tooltip,
 } from "@mantine/core";
 import { IconAlertTriangle, IconArchive, IconArrowDown, IconArrowUp, IconPlus, IconTrash } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
@@ -23,7 +25,12 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { readDevWorkflowConflict } from "@/features/devWorkflows/api/DevWorkflowConflict";
-import { validateDevWorkflowGraph } from "@/features/devWorkflows/models/DevWorkflowDefinitionValidation";
+import {
+	devWorkflowCapabilityReasonMaxLength,
+	devWorkflowEffectsOf,
+	devWorkflowNodeEffects,
+	validateDevWorkflowGraph,
+} from "@/features/devWorkflows/models/DevWorkflowDefinitionValidation";
 import {
 	type DevWorkflowGraph,
 	type DevWorkflowGraphEdge,
@@ -37,8 +44,11 @@ import {
 	useDevWorkflowModelOptions,
 } from "@/features/devWorkflows/queries/useDevWorkflows";
 
-/** The agent surface's own set ("none" plus graded efforts); an unset effort means the provider default. */
-const reasoningEfforts = ["none", "low", "medium", "high"] as const;
+/**
+ * The agent surface's own set ("none" plus graded efforts, plus "auto"); an unset effort means the provider default.
+ * "auto" is resolved per turn by the node into one of the others.
+ */
+const reasoningEfforts = ["none", "low", "medium", "high", "auto"] as const;
 
 /** `DevWorkflowGraph.cs`'s own default is `All` for an absent policy, so those are the only two members. */
 const joinPolicies = ["All", "Any"] as const;
@@ -108,6 +118,10 @@ export function DevWorkflowDefinitionFormPanel({ definitionId }: DevWorkflowDefi
 	const [nodeRows, setNodeRows] = useState<readonly DraftRow<DevWorkflowGraphNode>[]>([]);
 	const [edgeRows, setEdgeRows] = useState<readonly DraftRow<DevWorkflowGraphEdge>[]>([]);
 	const [schemaVersion, setSchemaVersion] = useState(1);
+	// The graph-level waiver of GRAPH-C4-2, held as a boolean and sent back as `true` or not at all: a template that
+	// never waived anything must not GAIN an explicit `false`, which would rewrite a stored document to say something
+	// it never said.
+	const [allowUngatedWrites, setAllowUngatedWrites] = useState(false);
 	const [saveError, setSaveError] = useState<string | undefined>(undefined);
 	const [isConflict, setIsConflict] = useState(false);
 
@@ -119,6 +133,7 @@ export function DevWorkflowDefinitionFormPanel({ definitionId }: DevWorkflowDefi
 	useEffect(() => {
 		setName(definition?.name ?? "");
 		setSchemaVersion(definition?.graph?.schemaVersion ?? 1);
+		setAllowUngatedWrites(definition?.graph?.allowUngatedWrites === true);
 		setNodeRows((definition?.graph?.nodes ?? []).map(toRow));
 		setEdgeRows((definition?.graph?.edges ?? []).map(toRow));
 		setSaveError(undefined);
@@ -130,8 +145,13 @@ export function DevWorkflowDefinitionFormPanel({ definitionId }: DevWorkflowDefi
 	// reports), and Mantine refuses a Select whose options repeat a value.
 	const nodeKeyOptions = [...new Set(nodes.map((node) => node.nodeKey ?? "").filter((key) => key.length > 0))];
 	const graph: DevWorkflowGraph = useMemo(
-		() => ({ schemaVersion, nodes: nodeRows.map((row) => row.value), edges: edgeRows.map((row) => row.value) }),
-		[schemaVersion, nodeRows, edgeRows],
+		() => ({
+			schemaVersion,
+			nodes: nodeRows.map((row) => row.value),
+			edges: edgeRows.map((row) => row.value),
+			allowUngatedWrites: allowUngatedWrites ? true : undefined,
+		}),
+		[schemaVersion, nodeRows, edgeRows, allowUngatedWrites],
 	);
 	const issues = useMemo(() => validateDevWorkflowGraph(graph), [graph]);
 
@@ -229,6 +249,18 @@ export function DevWorkflowDefinitionFormPanel({ definitionId }: DevWorkflowDefi
 				<Badge size="sm" variant="light" color="gray" data-testid="dev-workflow-definition-form-version">
 					{t("pages.devWorkflows.definition.version", "v{{version}}", { version: definition?.version ?? 1 })}
 				</Badge>
+				{/* The waiver is the TEMPLATE saying once, and in writing, that a node here may write to the repository
+				    with no operator asked — rather than each node quietly opting itself out. */}
+				<Switch
+					label={t("pages.devWorkflows.definition.allowUngatedWrites", "Allow ungated writes")}
+					description={t(
+						"pages.devWorkflows.definition.allowUngatedWritesHelp",
+						"Lets a node in this template write to the repository without a human gate on every path into it.",
+					)}
+					checked={allowUngatedWrites}
+					onChange={(event) => setAllowUngatedWrites(event.currentTarget.checked)}
+					data-testid="dev-workflow-definition-allow-ungated-writes"
+				/>
 				<Button
 					variant="light"
 					color="red"
@@ -582,14 +614,95 @@ function NodeCard({
 						data={nodeKeyOptions.filter((key) => key !== nodeKey)}
 						value={node.retryTarget ?? null}
 						clearable={true}
-						onChange={(value) => onPatch({ retryTarget: value })}
+						// The cap counts routes to a retry target, so clearing the target takes the cap with it: the server
+						// refuses a `maxLoopIterations` on a node that routes none, and leaving it behind would 400 a save
+						// over a field the form had just hidden.
+						onChange={(value) => onPatch(value ? { retryTarget: value } : { retryTarget: null, maxLoopIterations: null })}
 						data-testid={`dev-workflow-definition-node-retry-target-${index}`}
 					/>
+					{node.retryTarget ? (
+						<NumberInput
+							label={t("pages.devWorkflows.definition.maxLoopIterations", "Fix-loop cap")}
+							placeholder={t("pages.devWorkflows.definition.maxLoopIterationsPlaceholder", "No cap")}
+							description={t(
+								"pages.devWorkflows.definition.maxLoopIterationsHelp",
+								"How many times this node may route back before the run stops and asks you. An operator retry does not count.",
+							)}
+							value={node.maxLoopIterations ?? ""}
+							min={1}
+							allowDecimal={false}
+							onChange={(value) => onPatch({ maxLoopIterations: toOptionalNumber(value) })}
+							data-testid={`dev-workflow-definition-node-max-loops-${index}`}
+						/>
+					) : null}
 				</Group>
 
-				{/* Round-tripped, never edited. These three are authoring the RUNTIME dispatches on — an apply node's
-				    gating chain, a decomposition's child budget — and a form that offered them would have to mirror
-				    server rules this one deliberately does not. Shown so the operator knows they are there. */}
+				{/* An AGENT node is the only one whose reach is declared: every other type says what it does in the node
+				    itself, and the server refuses a declaration anywhere else. A declared write then needs a human gate on
+				    every path into this node, or the template's own waiver. */}
+				{(node.nodeType ?? "Agent") === "Agent" ? (
+					<Stack gap={4}>
+						<MultiSelect
+							label={t("pages.devWorkflows.definition.requiredCapabilities", "Declared capabilities")}
+							description={t(
+								"pages.devWorkflows.definition.requiredCapabilitiesHint",
+								"What this node's agent is allowed to do beyond reading. Declaring a write needs a human gate on every path into it.",
+							)}
+							// The wire tokens themselves, like the operator and command pickers beside them: this field is a
+							// declaration in the server's own vocabulary, and the sentence that explains each one is the badge
+							// below and the tooltip on it.
+							data={[...devWorkflowNodeEffects]}
+							value={Object.keys(node.requiredCapabilities ?? {})}
+							clearable={true}
+							onChange={(values) => onPatch({ requiredCapabilities: withCapabilities(node.requiredCapabilities, values) })}
+							data-testid={`dev-workflow-definition-node-capabilities-${index}`}
+						/>
+						{Object.entries(node.requiredCapabilities ?? {}).map(([effect, reason], reasonIndex) => (
+							<TextInput
+								key={effect}
+								label={t("pages.devWorkflows.definition.capabilityReason", "Why {{effect}}?", { effect })}
+								value={reason ?? ""}
+								maxLength={devWorkflowCapabilityReasonMaxLength}
+								// A declared effect widens what the node may do, so the definition has to say what for —
+								// the server refuses an empty one, and this is where the operator can still see why.
+								error={
+									(reason ?? "").trim().length === 0
+										? t("pages.devWorkflows.definition.capabilityReasonRequired", "A declared capability needs a reason.")
+										: undefined
+								}
+								onChange={(event) =>
+									onPatch({
+										requiredCapabilities: { ...(node.requiredCapabilities ?? {}), [effect]: event.currentTarget.value },
+									})
+								}
+								data-testid={`dev-workflow-definition-node-capability-reason-${reasonIndex}-${index}`}
+							/>
+						))}
+					</Stack>
+				) : null}
+
+				{/* What this node can CHANGE, derived the way the invariants derive it — declared for an Agent and read
+				    off the node for every other type. Not a second opinion the operator has to reconcile with the 400. */}
+				<Group gap="xs" wrap="wrap" data-testid={`dev-workflow-definition-node-effects-${index}`}>
+					{devWorkflowEffectsOf(node).map((effect) => (
+						<Tooltip
+							key={effect}
+							label={
+								node.requiredCapabilities?.[effect] ??
+								t("pages.devWorkflows.definition.effectDerived", "Follows from what this node runs.")
+							}
+							withArrow={true}
+						>
+							<Badge size="xs" variant="light" color="gray">
+								{t(`pages.devWorkflows.definition.effects.${effect}`, effect)}
+							</Badge>
+						</Tooltip>
+					))}
+				</Group>
+
+				{/* Round-tripped, never edited. Both are authoring the RUNTIME dispatches on — an apply node's gating
+				    chain, a decomposition's child budget — and a form that offered them would have to mirror server rules
+				    this one deliberately does not. Shown so the operator knows they are there. */}
 				<Group gap="xs" wrap="wrap" data-testid={`dev-workflow-definition-node-readonly-${index}`}>
 					{node.toolMode ? (
 						<Badge size="xs" variant="outline" color="gray">
@@ -601,13 +714,6 @@ function NodeCard({
 							{t("pages.devWorkflows.definition.materialization", "materializes {{template}} (max {{max}})", {
 								template: node.materialization.templateNodeKey ?? "",
 								max: node.materialization.maxChildren ?? 0,
-							})}
-						</Badge>
-					) : null}
-					{node.requiredCapabilities && Object.keys(node.requiredCapabilities).length > 0 ? (
-						<Badge size="xs" variant="outline" color="gray">
-							{t("pages.devWorkflows.definition.requiredCapabilities", "requires {{count}} capability(s)", {
-								count: Object.keys(node.requiredCapabilities).length,
 							})}
 						</Badge>
 					) : null}
@@ -711,6 +817,21 @@ function EdgeRow({
 			</Table.Td>
 		</Table.Tr>
 	);
+}
+
+/**
+ * The declared set after the picker changed: a capability that was already there keeps the reason its author wrote, and
+ * a newly picked one starts empty so the operator is the one who says why. Answers `null` for an empty set, which is
+ * how the wire says "declares nothing" — an empty object would be a document saying something it does not mean.
+ */
+function withCapabilities(
+	current: { readonly [key: string]: string } | null | undefined,
+	effects: readonly string[],
+): { readonly [key: string]: string } | null {
+	if (effects.length === 0) {
+		return null;
+	}
+	return Object.fromEntries(effects.map((effect) => [effect, current?.[effect] ?? ""]));
 }
 
 /** Mantine's NumberInput answers "" for an emptied field; the wire wants `null` there, not `NaN` and not `0`. */

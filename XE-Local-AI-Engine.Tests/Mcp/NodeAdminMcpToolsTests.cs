@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Mcp;
 
+using System.ComponentModel;
 using System.Reflection;
 using System.Security.Claims;
 using System.Text.Json;
@@ -59,6 +60,7 @@ public sealed class NodeAdminMcpToolsTests
 
     private static readonly string[] ExpectedSettingsParameters =
     [
+        "auto_effort_fast_model_name",
         "chat_cache_reuse",
         "default_model_name",
         "enable_tools",
@@ -66,6 +68,7 @@ public sealed class NodeAdminMcpToolsTests
         "keep_model_warm_enabled",
         "keep_model_warm_interval_seconds",
         "keep_model_warm_model_name",
+        "kv_cache_type",
         "llama_idle_time_to_live_seconds",
         "llama_max_loaded_processes",
         "max_message_request_timeout_seconds",
@@ -90,7 +93,7 @@ public sealed class NodeAdminMcpToolsTests
     }
 
     [Test]
-    public void UpdateNodeSettings_ExposesOnlyTheExactSixteenFieldWhitelist()
+    public void UpdateNodeSettings_ExposesOnlyTheExactSeventeenFieldWhitelist()
     {
         var method = AssertEx.NotNull(typeof(NodeAdminMcpTools).GetMethod(nameof(NodeAdminMcpTools.UpdateNodeSettingsAsync)));
         var names = method.GetParameters()
@@ -98,6 +101,14 @@ public sealed class NodeAdminMcpToolsTests
                           .Select(static parameter => parameter.Name!)
                           .OrderBy(static name => name, StringComparer.Ordinal)
                           .ToArray();
+
+        // The tool DESCRIPTION states the field count, and an agent reads that description as the contract. It had
+        // already drifted once — a seventeenth field was whitelisted while the sentence still promised sixteen — so
+        // the number is DERIVED from the parameter list here rather than restated, and the next field added fails this
+        // test until the sentence is corrected too.
+        var description = AssertEx.NotNull(method.GetCustomAttribute<DescriptionAttribute>()).Description;
+        AssertEx.True(description.Contains($"{names.Length}-field", StringComparison.Ordinal),
+            $"update_node_settings advertises \"{description}\" but exposes {names.Length} fields.");
 
         AssertEx.Equal(string.Join('|', ExpectedSettingsParameters), string.Join('|', names));
         AssertEx.False(names.Any(static name => name.Contains("custom", StringComparison.OrdinalIgnoreCase)
@@ -286,7 +297,7 @@ public sealed class NodeAdminMcpToolsTests
     }
 
     [Test]
-    public void AgenticSettings_AllSixteenPropertiesHaveStableSnakeCaseWireNames()
+    public void AgenticSettings_AllSeventeenPropertiesHaveStableSnakeCaseWireNames()
     {
         var mapped = typeof(NodeSettingsAgenticPatch).GetProperties()
                                                      .Select(static property => McpAdminWireNames.SettingsArgument(property.Name))
@@ -946,6 +957,18 @@ public sealed class NodeAdminMcpToolsTests
             1,
             null);
 
+    // The switch throws on an unmapped member, and a validation error is the only thing that reaches it — so a new
+    // whitelisted setting whose arm was forgotten turns an operator's rejection into a 500 on the one path that was
+    // supposed to explain what they got wrong. Asked over the enum, so the next member cannot regress it either.
+    [Test]
+    public void SettingsField_NamesEveryNodeSettingsField()
+    {
+        foreach (var field in Enum.GetValues<NodeSettingsField>())
+        {
+            AssertEx.NotEmpty(McpAdminWireNames.SettingsField(field), $"{field} has no snake_case name on the MCP surface.");
+        }
+    }
+
     private static DevWorkflowNodeRunSnapshot NodeRun(string nodeKey, DevWorkflowNodeRunStatus status) =>
         new(Guid.NewGuid(),
             Guid.NewGuid(),
@@ -999,7 +1022,7 @@ public sealed class NodeAdminMcpToolsTests
             10);
 
     private static NodeSettingsAgenticView SettingsView(string model) =>
-        new(model, null, null, null, null, null, null, null, null, 600, null, null, null, null, null, null);
+        new(model, null, null, null, null, null, null, null, null, 600, null, null, null, null, null, null, null, null);
 
     private static IEnumerable<(MethodInfo Method, McpServerToolAttribute? Attribute)> ToolMethods() =>
         typeof(NodeAdminMcpTools).GetMethods(BindingFlags.Instance | BindingFlags.Public)

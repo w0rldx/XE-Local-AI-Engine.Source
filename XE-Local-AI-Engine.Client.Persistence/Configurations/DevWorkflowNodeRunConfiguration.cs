@@ -37,6 +37,25 @@ internal sealed class DevWorkflowNodeRunConfiguration : IEntityTypeConfiguration
         builder.Property(entity => entity.MaterializationIndex).HasColumnName("materialization_index");
         builder.Property(entity => entity.FailureClass).HasColumnName("failure_class").HasMaxLength(64);
         builder.Property(entity => entity.TerminalReason).HasColumnName("terminal_reason").HasMaxLength(1024);
+
+        // Cost telemetry: plaintext like every other structural column on this row. The three payload columns above are
+        // the only encrypted ones, and no interceptor entry is added for these — they are counts, a served model name,
+        // tool names and node keys. No index either: every read is by run_id, which ux_dev_workflow_node_runs_run_node
+        // already covers, or a whole-table rollup from the runbook.
+        builder.Property(entity => entity.InputTokens).HasColumnName("input_tokens");
+        builder.Property(entity => entity.OutputTokens).HasColumnName("output_tokens");
+        builder.Property(entity => entity.ReasoningTokens).HasColumnName("reasoning_tokens");
+        builder.Property(entity => entity.EstimatedInputTokens).HasColumnName("estimated_input_tokens");
+        builder.Property(entity => entity.ProviderCalls).HasColumnName("provider_calls");
+        builder.Property(entity => entity.ToolCalls).HasColumnName("tool_calls");
+        builder.Property(entity => entity.ToolSchemaTokens).HasColumnName("tool_schema_tokens");
+        builder.Property(entity => entity.ToolNamesJson).HasColumnName("tool_names_json").HasMaxLength(1024);
+        builder.Property(entity => entity.AgentTurnMs).HasColumnName("agent_turn_ms");
+        builder.Property(entity => entity.ModelReadinessMs).HasColumnName("model_readiness_ms");
+        builder.Property(entity => entity.ServedModelName).HasColumnName("served_model_name").HasMaxLength(256);
+        builder.Property(entity => entity.RouteJson).HasColumnName("route_json").HasMaxLength(1024);
+        builder.Property(entity => entity.WorkSessionSteps).HasColumnName("work_session_steps");
+
         builder.Property(entity => entity.QueuedAtUtc).HasColumnName("queued_at_utc");
         builder.Property(entity => entity.StartedAtUtc).HasColumnName("started_at_utc");
         builder.Property(entity => entity.EndedAtUtc).HasColumnName("ended_at_utc");

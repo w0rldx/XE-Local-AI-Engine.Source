@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
 	deleteIntegrationSessionMutation,
@@ -6,26 +6,33 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toIntegrationSession } from "@/features/integrations/models/IntegrationMappers";
-import { type IntegrationSessionFilters, integrationListLimit } from "@/features/integrations/models/IntegrationModels";
+import { type IntegrationSessionFilters, integrationPageSize } from "@/features/integrations/models/IntegrationModels";
 import { integrationInvalidationKey, integrationQueryIds } from "@/features/integrations/queries/useIntegrationTriggers";
 
-// Server state for integration sessions. Both filters are server-side for the same reason the executions filters are:
-// the list is a bounded window, so narrowing it in the browser would hide sessions that match the filter but fall
-// outside the window.
+// Server state for integration sessions. Both filters AND the paging are server-side for the same reason: the list is
+// one page of the server's ordering, so narrowing or slicing it in the browser would hide sessions that match the
+// filter but fall on another page.
 
-export function useIntegrationSessions(filters: IntegrationSessionFilters = {}) {
+/** One page of sessions plus the count of rows the same filters match, which is what the pager numbers. */
+export function useIntegrationSessions(
+	filters: IntegrationSessionFilters = {},
+	options: { readonly limit?: number; readonly offset?: number } = {},
+) {
 	return useQuery({
 		...withResponseValidation(
 			listIntegrationSessionsOptions({
 				query: {
 					...(filters.triggerId === undefined ? {} : { triggerId: filters.triggerId }),
 					...(filters.status === undefined ? {} : { status: filters.status }),
-					limit: integrationListLimit,
-					offset: 0,
+					limit: options.limit ?? integrationPageSize,
+					offset: options.offset ?? 0,
 				},
 			}),
 		),
-		select: (data) => data.items.map(toIntegrationSession),
+		// The page bound is part of the query key, so page 2 starts empty; holding the previous page keeps `totalCount`
+		// non-zero and stops the pager's clamp from bouncing back to page 1 mid-request.
+		placeholderData: keepPreviousData,
+		select: (data) => ({ items: data.items.map(toIntegrationSession), totalCount: data.totalCount }),
 	});
 }
 
