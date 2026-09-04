@@ -9,6 +9,7 @@ import {
 	type DevWorkflowNodeRunSummaryResponse,
 	type DevWorkflowNodeStatus,
 	devWorkflowAttemptCounts,
+	formatDevWorkflowDuration,
 	toDevWorkflowNodeStatus,
 	toDevWorkflowNodeType,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
@@ -17,19 +18,6 @@ export interface DevWorkflowNodeRunTableProps {
 	readonly nodes: readonly DevWorkflowNodeRunSummaryResponse[];
 	readonly selectedNodeRunId?: string;
 	readonly onSelect: (nodeRunId: string) => void;
-}
-
-/** "12s" / "4m 12s" / "1h 04m". The unit letters are the same abbreviations the benchmark tables already print. */
-function formatDuration(milliseconds: number): string {
-	const totalSeconds = Math.max(0, Math.round(milliseconds / 1000));
-	if (totalSeconds < 60) {
-		return `${totalSeconds}s`;
-	}
-	const minutes = Math.floor(totalSeconds / 60);
-	if (minutes < 60) {
-		return `${minutes}m ${String(totalSeconds % 60).padStart(2, "0")}s`;
-	}
-	return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
 }
 
 /**
@@ -66,14 +54,14 @@ function statusLine(
 			return node.queuedAtUtc
 				? t("pages.devWorkflows.nodes.queuedFor", "{{reason}} · queued for {{duration}}", {
 						reason,
-						duration: formatDuration(now - node.queuedAtUtc),
+						duration: formatDevWorkflowDuration(now - node.queuedAtUtc),
 					})
 				: reason;
 		}
 		case "Running":
 			return node.startedAtUtc
 				? t("pages.devWorkflows.nodes.runningFor", "running for {{duration}}", {
-						duration: formatDuration(now - node.startedAtUtc),
+						duration: formatDevWorkflowDuration(now - node.startedAtUtc),
 					})
 				: t("pages.devWorkflows.nodes.running", "running");
 		case "WaitingForApproval":
@@ -86,10 +74,31 @@ function statusLine(
 		default:
 			return node.startedAtUtc && node.completedAtUtc
 				? t("pages.devWorkflows.nodes.took", "took {{duration}}", {
-						duration: formatDuration(node.completedAtUtc - node.startedAtUtc),
+						duration: formatDevWorkflowDuration(node.completedAtUtc - node.startedAtUtc),
 					})
 				: t("pages.devWorkflows.nodes.finished", "finished");
 	}
+}
+
+/**
+ * What the node run's LAST attempt cost, in the two numbers a row has space for. A dash is "nothing was reported" —
+ * a structural node, a row from before this was collected, or a collection that could not run — and never zero,
+ * which would claim the attempt was free. Earlier attempts are not here: the row keeps the last one only.
+ */
+function costLine(node: DevWorkflowNodeRunSummaryResponse, t: TFunction): string {
+	const parts: string[] = [];
+	if (node.inputTokens != null || node.outputTokens != null) {
+		parts.push(
+			t("pages.devWorkflows.nodes.costTokens", "{{input}} / {{output}} tok", {
+				input: node.inputTokens?.toLocaleString() ?? "–",
+				output: node.outputTokens?.toLocaleString() ?? "–",
+			}),
+		);
+	}
+	if (node.toolCalls != null) {
+		parts.push(t("pages.devWorkflows.nodes.costToolCalls", "{{count}} tool calls", { count: node.toolCalls }));
+	}
+	return parts.length === 0 ? "—" : parts.join(" · ");
 }
 
 /**
@@ -119,6 +128,7 @@ export function DevWorkflowNodeRunTable({ nodes, selectedNodeRunId, onSelect }: 
 						<Table.Th>{t("pages.devWorkflows.nodes.columnNode", "Node")}</Table.Th>
 						<Table.Th>{t("pages.devWorkflows.nodes.columnStatus", "Status")}</Table.Th>
 						<Table.Th>{t("pages.devWorkflows.nodes.columnDetail", "Detail")}</Table.Th>
+						<Table.Th>{t("pages.devWorkflows.nodes.columnCost", "Cost")}</Table.Th>
 					</Table.Tr>
 				</Table.Thead>
 				<Table.Tbody>
@@ -196,6 +206,11 @@ export function DevWorkflowNodeRunTable({ nodes, selectedNodeRunId, onSelect }: 
 											</Text>
 										) : null}
 									</Stack>
+								</Table.Td>
+								<Table.Td>
+									<Text size="xs" c="dimmed" data-testid={`dev-workflow-node-cost-${node.id}`}>
+										{costLine(node, t)}
+									</Text>
 								</Table.Td>
 							</Table.Tr>
 						);

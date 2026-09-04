@@ -33269,6 +33269,68 @@
           },
           "sequence": {
             "type": "integer"
+          },
+          "inputTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "outputTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "reasoningTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "estimatedInputTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "providerCalls": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "toolCalls": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "toolSchemaTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "toolNames": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "agentTurnMs": {
+            "type": "integer",
+            "nullable": true
+          },
+          "servedModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "route": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse"
+              }
+            ]
+          },
+          "workSessionSteps": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "failureClassGroup": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -33289,6 +33351,37 @@
           "currentContentSha256": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "satisfied": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dead": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "waived": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "gateAnswer": {
+            "type": "string",
+            "nullable": true
+          },
+          "truncated": {
+            "type": "boolean"
           }
         }
       },
@@ -33743,6 +33836,9 @@
           },
           "lastSequence": {
             "type": "integer"
+          },
+          "cost": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse"
           }
         }
       },
@@ -33854,6 +33950,47 @@
           },
           "skipWaived": {
             "type": "boolean",
+            "nullable": true
+          },
+          "inputTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "outputTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "toolCalls": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "inputTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "outputTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "toolCalls": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "providerCalls": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "agentTurnMs": {
+            "type": "integer",
             "nullable": true
           }
         }

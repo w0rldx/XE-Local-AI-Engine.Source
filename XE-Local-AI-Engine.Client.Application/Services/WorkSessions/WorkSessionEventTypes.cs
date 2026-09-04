@@ -12,14 +12,17 @@ internal static class WorkSessionEventTypes
 
     /// <summary>
     ///     The step ended on a provider or runtime failure. The outcome carries the sanitized reason, and the detail
-    ///     carries what the step spent (<c>WorkSessionStepConsumptionDetail</c>).
+    ///     carries what the step spent (<c>WorkSessionStepConsumptionDetail</c>) — counts plus the names of the tools it
+    ///     called, and nothing else.
     /// </summary>
     public const string StepFailed = "StepFailed";
 
     /// <summary>
     ///     The step's turn ended without a fault, and the row carries what it spent
-    ///     (<c>WorkSessionStepConsumptionDetail</c>) — which is why it is written for EVERY such step and not only for
-    ///     the clipped ones: a record that exists only when a bound trips measures the bound rather than the work.
+    ///     (<c>WorkSessionStepConsumptionDetail</c>: counts plus the names of the tools it called) — which is why it is
+    ///     written for EVERY such step and not only for the clipped ones: a record that exists only when a bound trips
+    ///     measures the bound rather than the work. It is also the only durable place those tool names survive, because
+    ///     the scope they are collected in is disposed when the step ends.
     ///     <para>
     ///         The outcome tells them apart. <c>Completed</c> is an ordinary step. Anything else names what stopped it:
     ///         <c>ProviderCallBudget</c>, the per-step provider-call cap, or <c>ToolGate</c>, the allow-list check that

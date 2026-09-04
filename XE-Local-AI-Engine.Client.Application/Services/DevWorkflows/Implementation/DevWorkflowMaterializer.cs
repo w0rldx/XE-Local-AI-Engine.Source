@@ -142,6 +142,16 @@ internal sealed class DevWorkflowMaterializer
 
         var expansion = Compose(graph, run.GraphJson, node, materialization, tasks);
 
+        // The producer's route, RE-taken against the graph this expansion writes and carried into the same transaction
+        // as the rewrite. Its route was recorded when the node settled, before the clone-root edges existed — so left
+        // alone the persisted document lists the authored join edge and omits every root the next tick actually admits,
+        // which is a recorded route disagreeing with the routing that happened. No gate answer to record: a node
+        // carrying a materialization is never a HumanGate.
+        var producerRoute = DevWorkflowStateMachine.RouteJson(DevWorkflowStateMachine.RouteTaken(DevWorkflowGraph.Parse(expansion.GraphJson),
+            producer,
+            nodeRuns.ToDictionary(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal),
+            decision: null));
+
         // Read once for this expansion, after the decision to expand has been made: every clone's resolution comes off
         // the same list, and a tick that expands nothing never touches the table at all.
         var enabledRuleSets = await store.ListEnabledRuleSetsAsync(cancellationToken).ConfigureAwait(false);
@@ -164,7 +174,9 @@ internal sealed class DevWorkflowMaterializer
                                        producer.Id,
                                        clone.Index))
                                ],
-                               expansion.GraphJson),
+                               expansion.GraphJson,
+                               producer.Id,
+                               producerRoute),
                            cancellationToken)
                        .ConfigureAwait(false);
         return expansion.Clones.Count;

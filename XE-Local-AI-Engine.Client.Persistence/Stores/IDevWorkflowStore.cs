@@ -158,7 +158,48 @@ public sealed record DevWorkflowNodeRunSnapshot(
     long? QueuedAtUtc,
     long? StartedAtUtc,
     long? EndedAtUtc,
-    long CreatedAtUtc);
+    long CreatedAtUtc,
+
+    // The twelve cost-telemetry columns, trailing and optional so a caller composing a node run by hand — a test, a
+    // fake store — keeps compiling and reads back exactly what a row written before this slice reads back: nulls.
+    long? InputTokens = null,
+    long? OutputTokens = null,
+    long? ReasoningTokens = null,
+    long? EstimatedInputTokens = null,
+    int? ProviderCalls = null,
+    int? ToolCalls = null,
+    long? ToolSchemaTokens = null,
+    string? ToolNamesJson = null,
+    long? AgentTurnMs = null,
+    string? ServedModelName = null,
+    string? RouteJson = null,
+    int? WorkSessionSteps = null);
+
+/// <summary>
+///     What one node-run attempt spent and where it routed, collected at the terminal-or-blocked transition and applied
+///     to the row by <see cref="IDevWorkflowStore.TransitionNodeRunAsync" />. Every member is optional: a member left
+///     null leaves its column untouched, which is how a node run with no work session and no development task still
+///     records a route beside twelve nulls.
+///     <para>
+///         Metadata only — counts, a served model name, structural node keys and tool NAMES. No prompt, no tool
+///         argument, no tool result and no transcript may ever be added here.
+///         <see cref="RouteJson" /> and <see cref="ToolNamesJson" /> arrive already serialized because this record
+///         crosses into persistence, where neither the graph projection nor the collector's name set is visible.
+///     </para>
+/// </summary>
+public sealed record DevWorkflowNodeTelemetry(
+    long? InputTokens = null,
+    long? OutputTokens = null,
+    long? ReasoningTokens = null,
+    long? EstimatedInputTokens = null,
+    int? ProviderCalls = null,
+    int? ToolCalls = null,
+    long? ToolSchemaTokens = null,
+    string? ToolNamesJson = null,
+    long? AgentTurnMs = null,
+    string? ServedModelName = null,
+    string? RouteJson = null,
+    int? WorkSessionSteps = null);
 
 public sealed record DevWorkflowRunEventSnapshot(
     Guid Id,
@@ -379,13 +420,21 @@ public sealed record DevWorkflowNodeRunSeed(
 ///     Creates node-runs on a run. A non-null <see cref="GraphJson" /> also rewrites the run's pinned graph and bumps
 ///     its revision in the same transaction — the dynamic-expansion path, recorded as <c>graph.changed</c>. A null one
 ///     is the initial materialization at run start, where the graph is already pinned and unchanged.
+///     <para>
+///         <see cref="RouteJson" /> re-records the route of the node run that PRODUCED this expansion, against the
+///         rewritten graph and inside the same transaction. Its route was computed when it settled, which was before
+///         the clone-root edges existed — so left alone it would list the authored join edge and omit every root the
+///         next tick actually admits. Both members are set together or not at all; a route needs a row to land on.
+///     </para>
 /// </summary>
 public sealed record MaterializeDevWorkflowNodesCommand(
     Guid RunId,
     long ExpectedVersion,
     Guid OperationId,
     IReadOnlyList<DevWorkflowNodeRunSeed> NodeRuns,
-    string? GraphJson = null);
+    string? GraphJson = null,
+    Guid? RouteNodeRunId = null,
+    string? RouteJson = null);
 
 /// <summary>
 ///     A node-run status move. <see cref="IncrementAttempt" /> is the retry-in-place path; the row is never duplicated.
@@ -424,7 +473,11 @@ public sealed record TransitionDevWorkflowNodeRunCommand(
     bool IncrementAttempt = false,
     bool ClearWorkSession = false,
     string? Outcome = null,
-    DevWorkflowWorkItemStatus? WorkItemStatus = null);
+    DevWorkflowWorkItemStatus? WorkItemStatus = null,
+
+    // What the attempt this move settles cost. Set by the publishing decorator on a terminal, Blocked or
+    // WaitingForApproval move and by nothing else, so no call site has to remember it.
+    DevWorkflowNodeTelemetry? Telemetry = null);
 
 /// <summary>
 ///     One cross-node retry route, as the single decision it is: the <c>node.retry.routed</c> event that records it and

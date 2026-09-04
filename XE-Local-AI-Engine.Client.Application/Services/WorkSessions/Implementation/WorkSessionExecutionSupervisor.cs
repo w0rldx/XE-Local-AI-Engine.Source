@@ -620,10 +620,11 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     ///     <see cref="WorkSessionEventDto.DetailJson" />, or <see langword="null" /> when nothing ran under a cap scope
     ///     (no budget was created, so there is nothing to report — an empty record would read as "this step was free").
     ///     <para>
-    ///         The counts come off the cap scope the step itself seeded, which is the only readable seam: the run's
-    ///         ambient <see cref="ProviderCallBudget" /> is written INSIDE the send path and an
+    ///         The counts and the tool names come off the cap scope the step itself seeded, which is the only readable
+    ///         seam: the run's ambient <see cref="ProviderCallBudget" /> is written INSIDE the send path and an
     ///         <see cref="AsyncLocal{T}" /> write does not flow back out, so <c>ProviderCallBudget.Current</c> is null
-    ///         again by the time the enumeration returns.
+    ///         again by the time the enumeration returns — and the scope itself is disposed a moment later, which is
+    ///         why this row is where the names have to land if anything is ever to read them.
     ///     </para>
     ///     <para>
     ///         Every member is a STEP TOTAL, and the provider's own reported usage is deliberately not among them. The
@@ -645,7 +646,9 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                 consumption.EstimatedInputTokens,
                 consumption.ToolCallsCompleted,
                 consumption.ProviderCallCap,
-                consumption.AttachedBudgets),
+                consumption.AttachedBudgets,
+                consumption.ToolSchemaTokens,
+                consumption.ToolNames),
             ConsumptionJsonOptions);
     }
 

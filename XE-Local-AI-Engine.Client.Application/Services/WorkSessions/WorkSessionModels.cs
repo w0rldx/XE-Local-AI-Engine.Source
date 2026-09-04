@@ -84,10 +84,12 @@ public sealed record WorkSessionCheckpointDto(
 ///     matching on <paramref name="EventType" />, and must tolerate a shape it does not know.
 ///     <para>
 ///         Two shapes are defined today. <c>CompletionRequested</c> carries <c>{ "summary": string }</c>.
-///         <c>StepEnded</c> and <c>StepFailed</c> carry the step's content-free consumption record —
+///         <c>StepEnded</c> and <c>StepFailed</c> carry the step's consumption record —
 ///         <see cref="WorkSessionStepConsumptionDetail" />, i.e.
 ///         <c>{ "providerCalls": int, "estimatedInputTokens": long, "toolCallsCompleted": int, "providerCallCap": int,
-///         "attachedBudgets": int }</c>. It is null on a step that made no provider round at all.
+///         "attachedBudgets": int, "toolSchemaTokens": long, "toolNames": string[] }</c>. It is null on a step that
+///         made no provider round at all, and <c>toolNames</c> is absent on a row written before that member existed.
+///         Counts plus tool NAMES: no prompt, no model output, no tool argument and no tool result.
 ///     </para>
 /// </param>
 public sealed record WorkSessionEventDto(
@@ -102,8 +104,15 @@ public sealed record WorkSessionEventDto(
 
 /// <summary>
 ///     What one step spent, recorded on its <c>StepEnded</c> / <c>StepFailed</c> row so the per-step provider-call cap
-///     can be sized from what steps actually consume rather than from a guess. Counts only — no prompts, model output,
-///     tool names, arguments or results — so it is safe to persist and to show.
+///     can be sized from what steps actually consume rather than from a guess. Counts plus a bounded set of tool NAMES
+///     — no prompts, no model output, no tool arguments and no tool results — so it is safe to persist and to show.
+///     <para>
+///         The names are here because this row is the only DURABLE carrier they have. The scope they are collected in
+///         is disposed at the end of the step that seeded it, and anything asking later — a Dev Workflow node run
+///         settling on a later dispatcher tick, in another scope and possibly another process — can read only what was
+///         persisted. A name is an identity, not content: a fixed id for a built-in tool and an operator-authored
+///         identifier for an MCP or custom one.
+///     </para>
 ///     <para>
 ///         Every member is a STEP TOTAL, which is why the provider's own reported token usage is not among them: the
 ///         invocation runner assigns its <c>UsageSnapshot</c> per provider round rather than accumulating, so on a
@@ -135,12 +144,23 @@ public sealed record WorkSessionEventDto(
 /// <param name="AttachedBudgets">
 ///     How many invocations the step ran: 1 ordinarily, more when the turn spawned sub-agents, each with its own cap.
 /// </param>
+/// <param name="ToolSchemaTokens">
+///     Tool-schema tokens SHIPPED ACROSS ROUNDS — every round re-sends the whole offer, so this grows with the round
+///     count and is not the size of the offer.
+/// </param>
+/// <param name="ToolNames">
+///     The distinct tool names the step called, ordinal-sorted and capped at sixteen. Trailing and optional: a row
+///     written before this member existed reads back as <see langword="null" />, which means "this row predates the
+///     field", never "this step called no tools" — <paramref name="ToolCallsCompleted" /> answers that.
+/// </param>
 public sealed record WorkSessionStepConsumptionDetail(
     int ProviderCalls,
     long EstimatedInputTokens,
     int ToolCallsCompleted,
     int ProviderCallCap,
-    int AttachedBudgets);
+    int AttachedBudgets,
+    long ToolSchemaTokens = 0,
+    IReadOnlyList<string>? ToolNames = null);
 
 /// <summary>
 ///     An artifact's bytes as text. <see cref="IsBase64" /> is set for a media type the node cannot hand over as UTF-8,

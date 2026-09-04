@@ -234,7 +234,19 @@ internal sealed partial class DevWorkflowStore
             nodeRun.QueuedAtUtc,
             nodeRun.StartedAtUtc,
             nodeRun.EndedAtUtc,
-            nodeRun.CreatedAtUtc);
+            nodeRun.CreatedAtUtc,
+            nodeRun.InputTokens,
+            nodeRun.OutputTokens,
+            nodeRun.ReasoningTokens,
+            nodeRun.EstimatedInputTokens,
+            nodeRun.ProviderCalls,
+            nodeRun.ToolCalls,
+            nodeRun.ToolSchemaTokens,
+            nodeRun.ToolNamesJson,
+            nodeRun.AgentTurnMs,
+            nodeRun.ServedModelName,
+            nodeRun.RouteJson,
+            nodeRun.WorkSessionSteps);
 
     private static DevWorkflowArtifactSnapshot ArtifactSnapshot(DevWorkflowArtifact artifact, IReadOnlyDictionary<Guid, int> latestVersions) =>
         new(artifact.Id,

@@ -5062,7 +5062,8 @@
 				"startFailed": "Der Lauf konnte nicht gestartet werden.",
 				"startRun": "Lauf starten",
 				"waitingOnYou_one": "{{count}} wartet auf Sie",
-				"waitingOnYou_other": "{{count}} warten auf Sie"
+				"waitingOnYou_other": "{{count}} warten auf Sie",
+				"cost": "{{input}} / {{output}} Tok. · {{tools}} Tool-Aufrufe, nur letzte Versuche"
 			},
 			"delete": {
 				"open": "Löschen",
@@ -5098,7 +5099,11 @@
 				"appliesPatches": "wendet Patches an",
 				"materializedOf": "erzeugt · {{index}} von {{count}}",
 				"staleInputs": "Veraltete Eingaben",
-				"agentWithModel": "{{agent}} · {{model}}"
+				"agentWithModel": "{{agent}} · {{model}}",
+				"columnCost": "Kosten",
+				"costTokens": "{{input}} / {{output}} Tok.",
+				"costToolCalls_one": "{{count}} Tool-Aufruf",
+				"costToolCalls_other": "{{count}} Tool-Aufrufe"
 			},
 			"events": {
 				"title": "Ereignisse",
@@ -5247,7 +5252,47 @@
 				"devTaskNoStage": "Diese Aufgabe hat noch keinen Stand gemeldet.",
 				"devTaskEvidence": "Development Mode zeigt Versuche, Patch und Prüfnachweise dieser Aufgabe. Die Freigabe, mit der ein Patch übernommen wird, ist ein Gate-Knoten in diesem Workflow.",
 				"objective": "Zielvorgabe",
-				"cascadeRerun": "Dieser Knoten läuft erneut, weil „{{node}}“ fehlgeschlagen ist und der Lauf die davon abhängige Arbeit wiederholt."
+				"cascadeRerun": "Dieser Knoten läuft erneut, weil „{{node}}“ fehlgeschlagen ist und der Lauf die davon abhängige Arbeit wiederholt.",
+				"cost": {
+					"title": "Kosten",
+					"none": "Für diesen Versuch wurde nichts erfasst.",
+					"tokensIn": "Eingabe-Tokens",
+					"tokensOut": "Ausgabe-Tokens",
+					"reasoning": "Reasoning-Tokens",
+					"estimated": "Geschätzte Eingabe-Tokens",
+					"providerCalls": "Provider-Aufrufe",
+					"toolCalls": "Tool-Aufrufe",
+					"schemaTokens": "Tool-Schema-Tokens",
+					"steps": "Arbeitssitzungs-Schritte",
+					"servedModel": "Bedient von",
+					"queuedFor": "In der Warteschlange",
+					"ranFor": "Laufzeit",
+					"turnTime": "Agent-Turns",
+					"outsideTurnTime": "Außerhalb der Turns",
+					"toolNames": "Aufgerufene Tools",
+					"toolNamesTruncated": "…und weitere",
+					"route": "Genommener Weg",
+					"routeTruncated": "gekürzt",
+					"routeSatisfied": "erfüllt → {{nodes}}",
+					"routeDead": "nicht genommen → {{nodes}}",
+					"routeWaived": "entschuldigt → {{nodes}}",
+					"gateAnswer": "beantwortet mit {{answer}}",
+					"routeGateNote": "Eine erfüllte Kante bedeutet, dass ihre Bedingung zutraf, nicht dass der Nachfolger lief — ein Join kann trotzdem über eine tote Geschwisterkante übersprungen werden. Eine entschuldigte Kante lässt das übersprungene Node stehen, ohne einen All-Join zu töten, admittiert aber für sich allein niemanden."
+				},
+				"failureGroup": {
+					"Cancelled": "Abgebrochen",
+					"Timeout": "Zeitüberschreitung",
+					"Interrupted": "Unterbrochen",
+					"Provider": "Provider",
+					"ModelCapability": "Modellfähigkeit",
+					"ContextExceeded": "Kontext überschritten",
+					"Configuration": "Konfiguration",
+					"Policy": "Richtlinie",
+					"BudgetExhausted": "Budget erschöpft",
+					"ToolOrCommand": "Tool oder Befehl",
+					"Rejected": "Abgelehnt",
+					"Internal": "Intern"
+				}
 			},
 			"validation": {
 				"loadFailed": "Der Bericht dieses Knotens konnte nicht geladen werden.",

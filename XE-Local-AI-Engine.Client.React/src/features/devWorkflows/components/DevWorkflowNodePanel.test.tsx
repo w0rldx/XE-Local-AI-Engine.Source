@@ -653,6 +653,92 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.queryByTestId("dev-workflow-node-rule-sets")).toBeNull();
 	});
 
+	it("renders the cost section with the twelve columns, the tool chips and the route", () => {
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				status: "Succeeded",
+				queuedAtUtc: 1_000,
+				startedAtUtc: 3_000,
+				completedAtUtc: 63_000,
+				inputTokens: 1200,
+				outputTokens: 340,
+				reasoningTokens: 90,
+				estimatedInputTokens: 1150,
+				providerCalls: 4,
+				toolCalls: 7,
+				toolSchemaTokens: 320,
+				toolNames: ["read_document", "search_web", "…"],
+				agentTurnMs: 40_000,
+				servedModelName: "qwen3-27b-instruct-q4",
+				workSessionSteps: 3,
+				route: { satisfied: ["approval"], dead: ["fallback"], waived: ["excused-leaf"], gateAnswer: "Approve", truncated: true },
+			}),
+		);
+
+		expect(screen.getByTestId("dev-workflow-node-cost-input").textContent).toBe("1,200");
+		expect(screen.getByTestId("dev-workflow-node-cost-output").textContent).toBe("340");
+		expect(screen.getByTestId("dev-workflow-node-cost-reasoning").textContent).toBe("90");
+		expect(screen.getByTestId("dev-workflow-node-cost-provider-calls").textContent).toBe("4");
+		expect(screen.getByTestId("dev-workflow-node-cost-tool-calls").textContent).toBe("7");
+		expect(screen.getByTestId("dev-workflow-node-cost-schema-tokens").textContent).toBe("320");
+		expect(screen.getByTestId("dev-workflow-node-cost-steps").textContent).toBe("3");
+		expect(screen.getByTestId("dev-workflow-node-cost-served-model").textContent).toBe("qwen3-27b-instruct-q4");
+
+		// The four durations: queued, total, inside agent turns, and what is left over outside those turns.
+		expect(screen.getByTestId("dev-workflow-node-cost-queued").textContent).toBe("2s");
+		expect(screen.getByTestId("dev-workflow-node-cost-ran").textContent).toBe("1m 00s");
+		expect(screen.getByTestId("dev-workflow-node-cost-turn-time").textContent).toBe("40s");
+		expect(screen.getByTestId("dev-workflow-node-cost-outside-turn-time").textContent).toBe("20s");
+
+		// The estimate is suppressed while the real count is present: two numbers for one quantity invite addition.
+		expect(screen.queryByTestId("dev-workflow-node-cost-estimated")).toBeNull();
+
+		// The collector closes a trimmed list with "…". It is a marker, not a tool, so it must not be drawn as a chip.
+		const chips = screen.getByTestId("dev-workflow-node-cost-tool-names");
+		expect(chips.textContent).toContain("read_document");
+		expect(chips.textContent).toContain("search_web");
+		expect(screen.getByTestId("dev-workflow-node-cost-tool-names-truncated").textContent).toBe("…and more");
+
+		expect(screen.getByTestId("dev-workflow-node-cost-route-satisfied").textContent).toBe("satisfied → approval");
+		expect(screen.getByTestId("dev-workflow-node-cost-route-dead").textContent).toBe("not taken → fallback");
+		// Its own row, because a waived edge is neither of the other two: it did not admit this successor and it did
+		// not kill it either. Folding it into one of them is what would make the panel disagree with the runtime.
+		expect(screen.getByTestId("dev-workflow-node-cost-route-waived").textContent).toBe("excused → excused-leaf");
+		expect(screen.getByTestId("dev-workflow-node-cost-route-gate-answer").textContent).toContain("Approve");
+		// A shortened route MUST say so, or a two-key list reads as the whole route.
+		expect(screen.getByTestId("dev-workflow-node-cost-route-truncated")).toBeDefined();
+	});
+
+	it("draws no excused row for an ordinary route, so an empty bucket is not read as a claim", () => {
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				status: "Succeeded",
+				route: { satisfied: ["approval"], dead: [], waived: [], gateAnswer: null, truncated: false },
+			}),
+		);
+
+		expect(screen.getByTestId("dev-workflow-node-cost-route-satisfied").textContent).toBe("satisfied → approval");
+		expect(screen.queryByTestId("dev-workflow-node-cost-route-waived")).toBeNull();
+	});
+
+	it("shows the estimate only where the real input count is missing", () => {
+		renderPanel(devWorkflowNodeRunDetail({ status: "Succeeded", inputTokens: null, estimatedInputTokens: 1150 }));
+
+		expect(screen.getByTestId("dev-workflow-node-cost-estimated").textContent).toBe("1,150");
+	});
+
+	it("renders no cost section at all for a node run that recorded nothing", () => {
+		renderPanel(devWorkflowNodeRunDetail({ status: "Pending", queuedAtUtc: null, startedAtUtc: null, completedAtUtc: null }));
+
+		expect(screen.queryByTestId("dev-workflow-node-cost")).toBeNull();
+	});
+
+	it("names the failure in the cross-unit vocabulary beside the runtime's own class", () => {
+		renderPanel(devWorkflowNodeRunDetail({ status: "Failed", failureClass: "ToolCommandFailed", failureClassGroup: "ToolOrCommand" }));
+
+		expect(screen.getByTestId("dev-workflow-node-failure-group").textContent).toBe("Tool or command");
+	});
+
 	it("clamps the attempt maximum up to the attempt, so an operator-granted retry never reads 'attempt 4 of 3'", () => {
 		renderPanel(devWorkflowNodeRunDetail({ attempt: 4, maxAttempts: 3 }));
 

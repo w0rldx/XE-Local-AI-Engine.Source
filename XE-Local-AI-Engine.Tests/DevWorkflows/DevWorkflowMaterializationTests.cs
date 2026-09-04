@@ -343,6 +343,46 @@ public sealed class DevWorkflowMaterializationTests
         AssertEx.Contains(AssertEx.NotNull(marker.DetailJson),
             "\"revisionBumped\":false",
             message: "the one graph.changed that changes no graph says so, or a consumer refetches and gets the same revision back.");
+
+        // Nothing rewrote the graph, so nothing re-records the route either: it keeps the shape it settled with.
+        var route = AssertEx.NotNull(DevWorkflowNodeRunDocuments.TryParseRoute((await harness.ReadNodeRunAsync(runId, "decompose").ConfigureAwait(false)).RouteJson));
+        AssertEx.Equal("join", string.Join(", ", route.Satisfied), "the authored edge is the whole route, because it is still the whole graph.");
+        AssertEx.Empty(route.Dead);
+        AssertEx.Empty(route.Waived);
+    }
+
+    /// <summary>
+    ///     A materializing producer's route is recorded against the graph its expansion WROTE, not the one it settled on.
+    ///     <para>
+    ///         The route is computed when a node settles, and a decomposition settles a whole tick before the clone-root
+    ///         edges exist. Left at that, the persisted document names the authored join edge and omits every root the
+    ///         next tick actually admits — a recorded route disagreeing with the routing that happened, which is the one
+    ///         thing §4.2 says it may never do. So the producer's route is re-taken inside the materialization
+    ///         transaction, against the rewritten graph.
+    ///     </para>
+    ///     <para>
+    ///         Two INDEPENDENT tasks, because a <c>dependsOn</c> chain hangs only the first root off the decomposition
+    ///         and a one-root assertion would be satisfied by the pre-expansion graph as well.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ADecompositionsRouteNamesTheCloneRootsItsExpansionAdmitted()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await DecomposeAsync(harness, TwoIndependentTasks).ConfigureAwait(false);
+
+        // One tick settles the decomposition AND expands it, which is why the stale document was never observable
+        // between the two — and why nothing caught it. The assertion is on what the tick leaves behind.
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+
+        var route = AssertEx.NotNull(DevWorkflowNodeRunDocuments.TryParseRoute((await harness.ReadNodeRunAsync(runId, "decompose").ConfigureAwait(false)).RouteJson));
+        AssertEx.Equal("implement#alpha, implement#beta, join",
+            string.Join(", ", route.Satisfied.OrderBy(static key => key, StringComparer.Ordinal)),
+            "both clone roots the expansion wired to the decomposition, and the authored join edge it kept — which is what EdgeState "
+            + "answers for each of them once the rewritten graph is the run's.");
+        AssertEx.Empty(route.Dead);
+        AssertEx.Empty(route.Waived);
+        AssertEx.False(route.Truncated);
     }
 
     /// <summary>

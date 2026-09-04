@@ -4159,6 +4159,14 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowApp
 	currentContentSha256: z.string().nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse = z.object({
+	satisfied: z.array(z.string()).optional(),
+	dead: z.array(z.string()).optional(),
+	waived: z.array(z.string()).optional(),
+	gateAnswer: z.string().nullish(),
+	truncated: z.boolean().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunDetailResponse = z.object({
 	id: z.guid().optional(),
 	runId: z.guid().optional(),
@@ -4207,6 +4215,31 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNod
 	startedAtUtc: z.int().nullish(),
 	completedAtUtc: z.int().nullish(),
 	sequence: z.int().optional(),
+	inputTokens: z.int().nullish(),
+	outputTokens: z.int().nullish(),
+	reasoningTokens: z.int().nullish(),
+	estimatedInputTokens: z.int().nullish(),
+	providerCalls: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	toolCalls: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	toolSchemaTokens: z.int().nullish(),
+	toolNames: z.array(z.string()).nullish(),
+	agentTurnMs: z.int().nullish(),
+	servedModelName: z.string().nullish(),
+	route: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse.nullish(),
+	workSessionSteps: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	failureClassGroup: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunRequest = z.record(z.string(), z.never());
@@ -4399,6 +4432,29 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNod
 	completedAtUtc: z.int().nullish(),
 	sequence: z.int().optional(),
 	skipWaived: z.boolean().nullish(),
+	inputTokens: z.int().nullish(),
+	outputTokens: z.int().nullish(),
+	toolCalls: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse = z.object({
+	inputTokens: z.int().nullish(),
+	outputTokens: z.int().nullish(),
+	toolCalls: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	providerCalls: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	agentTurnMs: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse = z.object({
@@ -4441,6 +4497,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRun
 	completedAtUtc: z.int().nullish(),
 	version: z.int().optional(),
 	lastSequence: z.int().optional(),
+	cost: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse.optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1StartDevWorkflowRunRequest = z.object({

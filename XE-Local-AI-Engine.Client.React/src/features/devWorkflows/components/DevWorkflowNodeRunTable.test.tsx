@@ -176,6 +176,54 @@ describe("DevWorkflowNodeRunTable", () => {
 		expect(onSelect).toHaveBeenCalledWith(devWorkflowTestIds.nodeRun);
 	});
 
+	it("prints what a settled row's last attempt cost", () => {
+		renderWithProviders(
+			<DevWorkflowNodeRunTable
+				nodes={[devWorkflowNodeRunSummary({ status: "Succeeded", inputTokens: 1200, outputTokens: 340, toolCalls: 7 })]}
+				onSelect={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByTestId(`dev-workflow-node-cost-${devWorkflowTestIds.nodeRun}`).textContent).toBe("1,200 / 340 tok · 7 tool calls");
+	});
+
+	// One tool call is not "1 tool calls". The key is a plural family, so it needs both forms in every locale or
+	// i18next falls back to the base key and the row reads as a bug.
+	it("counts a single tool call in the singular", () => {
+		renderWithProviders(
+			<DevWorkflowNodeRunTable
+				nodes={[devWorkflowNodeRunSummary({ status: "Succeeded", inputTokens: null, outputTokens: null, toolCalls: 1 })]}
+				onSelect={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByTestId(`dev-workflow-node-cost-${devWorkflowTestIds.nodeRun}`).textContent).toBe("1 tool call");
+	});
+
+	// A structural node, a row from before the columns existed, and a collection that could not run all read the same
+	// way. Zero would be a lie about all three: it claims the attempt was free.
+	it("prints a dash, never a zero, for a row that reported no cost", () => {
+		renderWithProviders(
+			<DevWorkflowNodeRunTable
+				nodes={[devWorkflowNodeRunSummary({ status: "Succeeded", inputTokens: null, outputTokens: null, toolCalls: null })]}
+				onSelect={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByTestId(`dev-workflow-node-cost-${devWorkflowTestIds.nodeRun}`).textContent).toBe("—");
+	});
+
+	it("prints the half it has when only one side was measured", () => {
+		renderWithProviders(
+			<DevWorkflowNodeRunTable
+				nodes={[devWorkflowNodeRunSummary({ status: "Succeeded", inputTokens: null, outputTokens: 340, toolCalls: null })]}
+				onSelect={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByTestId(`dev-workflow-node-cost-${devWorkflowTestIds.nodeRun}`).textContent).toBe("– / 340 tok");
+	});
+
 	it("renders an empty state rather than an empty table", () => {
 		renderWithProviders(<DevWorkflowNodeRunTable nodes={[]} onSelect={vi.fn()} />);
 

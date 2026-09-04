@@ -559,6 +559,192 @@ public sealed class DevWorkflowRunEndpointTests
         AssertEx.False(root.GetProperty("hasRejectBranch").GetBoolean());
     }
 
+    /// <summary>
+    ///     The drill-down carries all twelve cost columns, and the two documents arrive PARSED: the route as its own
+    ///     object and the tool names as an array. The route document is produced by the runtime's own writer here, so
+    ///     writer and reader are pinned to one shape rather than to two spellings of it.
+    ///     <para>
+    ///         <c>servedModelName</c> and <c>modelLabel</c> are both present and different on purpose — the receipt and
+    ///         the request are two answers, and a pane that showed only one would be unable to say they disagreed.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task GetNodeRun_CarriesTheTwelveCostColumnsWithBothDocumentsParsed()
+    {
+        var store = Store();
+        store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(ResearchNodeRunWithCost());
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var root = document.RootElement;
+        AssertEx.Equal(expected: 1200L, root.GetProperty("inputTokens").GetInt64());
+        AssertEx.Equal(expected: 340L, root.GetProperty("outputTokens").GetInt64());
+        AssertEx.Equal(expected: 90L, root.GetProperty("reasoningTokens").GetInt64());
+        AssertEx.Equal(expected: 1150L, root.GetProperty("estimatedInputTokens").GetInt64());
+        AssertEx.Equal(expected: 4, root.GetProperty("providerCalls").GetInt32());
+        AssertEx.Equal(expected: 7, root.GetProperty("toolCalls").GetInt32());
+        AssertEx.Equal(expected: 320L, root.GetProperty("toolSchemaTokens").GetInt64());
+        AssertEx.Equal(expected: 8100L, root.GetProperty("agentTurnMs").GetInt64());
+        AssertEx.Equal(expected: 3, root.GetProperty("workSessionSteps").GetInt32());
+
+        AssertEx.Equal("qwen3-27b-instruct-q4", root.GetProperty("servedModelName").GetString(), "the receipt: what actually served the last turn.");
+        AssertEx.Equal("qwen", root.GetProperty("modelLabel").GetString(), "and the request: the node's own pin, which is a different question.");
+
+        var toolNames = root.GetProperty("toolNames").EnumerateArray().Select(static value => value.GetString()).ToList();
+        AssertEx.Equal("read_document,search_web,…", string.Join(",", toolNames), "an array, ending in the truncation marker the collector wrote.");
+
+        var route = root.GetProperty("route");
+        AssertEx.Equal("approval", string.Join(",", route.GetProperty("satisfied").EnumerateArray().Select(static value => value.GetString())));
+        AssertEx.Equal("dead-end", string.Join(",", route.GetProperty("dead").EnumerateArray().Select(static value => value.GetString())));
+        AssertEx.Equal("excused", string.Join(",", route.GetProperty("waived").EnumerateArray().Select(static value => value.GetString())));
+        AssertEx.Equal("Approve", route.GetProperty("gateAnswer").GetString());
+        AssertEx.True(route.GetProperty("truncated").GetBoolean(), "a trimmed route has to reach the reader as trimmed, or a short list reads as the whole one.");
+        AssertEx.Equal("ToolOrCommand", root.GetProperty("failureClassGroup").GetString(), "and the failure class arrives in the cross-unit vocabulary too.");
+    }
+
+    /// <summary>
+    ///     A node run written before this slice — which is every row already in an operator's database — answers null
+    ///     for all twelve rather than zero. Zero would say the attempt cost nothing.
+    /// </summary>
+    [Test]
+    public async Task GetNodeRun_OnARowFromBeforeTheSlice_AnswersNullForEveryCostMember()
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var root = document.RootElement;
+        foreach (var member in new[]
+                 {
+                     "inputTokens", "outputTokens", "reasoningTokens", "estimatedInputTokens", "providerCalls", "toolCalls", "toolSchemaTokens",
+                     "toolNames", "agentTurnMs", "servedModelName", "route", "workSessionSteps", "failureClassGroup"
+                 })
+        {
+            AssertEx.Equal(JsonValueKind.Null, root.GetProperty(member).ValueKind, $"'{member}' has nothing to report on a legacy row, which is not zero.");
+        }
+    }
+
+    /// <summary>An unreadable document costs the node its route, never the drill-down its response.</summary>
+    [Test]
+    public async Task GetNodeRun_WithAnUnreadableRouteDocument_AnswersNoRouteRatherThanFailing()
+    {
+        var store = Store();
+        store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(GateNodeRun() with
+        {
+            RouteJson = "{ this was hand-edited",
+            ToolNamesJson = "[oops"
+        });
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(JsonValueKind.Null, document.RootElement.GetProperty("route").ValueKind);
+        AssertEx.Equal(JsonValueKind.Null, document.RootElement.GetProperty("toolNames").ValueKind);
+    }
+
+    /// <summary>
+    ///     The parseable-but-partial case, which the unreadable one above does not cover. A document that omits a list
+    ///     deserialises it as null, and the generated client validates the response with zod, whose <c>.optional()</c>
+    ///     accepts a missing member and rejects a null one — so an absent list has to reach the wire as an empty array
+    ///     or one hand-edited column costs the whole drill-down. Same for a null element inside the tool names.
+    /// </summary>
+    [Test]
+    public async Task GetNodeRun_WithAPartialRouteDocument_AnswersEmptyListsRatherThanNulls()
+    {
+        var store = Store();
+        store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(GateNodeRun() with
+        {
+            RouteJson = """{"gateAnswer":"Approve","truncated":false}""",
+            ToolNamesJson = """["read_document",null]"""
+        });
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var route = document.RootElement.GetProperty("route");
+        AssertEx.Equal(JsonValueKind.Array, route.GetProperty("satisfied").ValueKind, "an absent list is an empty list, never a null the client's zod schema rejects.");
+        AssertEx.Equal(expected: 0, route.GetProperty("satisfied").GetArrayLength());
+        AssertEx.Equal(JsonValueKind.Array, route.GetProperty("dead").ValueKind);
+        AssertEx.Equal(expected: 0, route.GetProperty("dead").GetArrayLength());
+        AssertEx.Equal(JsonValueKind.Array, route.GetProperty("waived").ValueKind, "a row written before the waived bucket existed reads back as an empty list, not a null.");
+        AssertEx.Equal(expected: 0, route.GetProperty("waived").GetArrayLength());
+        AssertEx.Equal("Approve", route.GetProperty("gateAnswer").GetString(), "and the members the document DID carry survive.");
+
+        var toolNames = document.RootElement.GetProperty("toolNames").EnumerateArray().Select(static value => value.GetString()).ToList();
+        AssertEx.Equal("read_document", string.Join(",", toolNames), "a null entry is dropped rather than shipped into an array of strings.");
+    }
+
+    /// <summary>
+    ///     The run rollup, summed over the node runs the composer already loads — no extra query — plus the three
+    ///     headline numbers on each node summary. A member nothing reported stays null all the way up.
+    /// </summary>
+    [Test]
+    public async Task GetRun_SumsTheNodeRunCostAndCarriesTheHeadlineNumbersPerNode()
+    {
+        var store = Store();
+        var research = ResearchNodeRunWithCost() with
+        {
+            Id = ResearchNodeRunId,
+            Sequence = 2
+        };
+        var gate = GateNodeRun() with
+        {
+            InputTokens = 300,
+            ToolCalls = 1,
+            ProviderCalls = 2
+        };
+        await using var factory = EnabledFactory(store, RunService(new DevWorkflowRunDetail(RunSnapshot(), [research, gate], PendingDecisionCount: 1, GateNodeRunId)));
+
+        using var response = await SendAsync(factory, "GET", Run).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var cost = document.RootElement.GetProperty("cost");
+        AssertEx.Equal(expected: 1500L, cost.GetProperty("inputTokens").GetInt64(), "1200 + 300.");
+        AssertEx.Equal(expected: 340L, cost.GetProperty("outputTokens").GetInt64(), "only one node reported any.");
+        AssertEx.Equal(expected: 8, cost.GetProperty("toolCalls").GetInt32());
+        AssertEx.Equal(expected: 6, cost.GetProperty("providerCalls").GetInt32());
+        AssertEx.Equal(expected: 8100L, cost.GetProperty("agentTurnMs").GetInt64());
+
+        var summary = document.RootElement.GetProperty("nodes").EnumerateArray().Single(node => node.GetProperty("nodeKey").GetString() == "research");
+        AssertEx.Equal(expected: 1200L, summary.GetProperty("inputTokens").GetInt64());
+        AssertEx.Equal(expected: 340L, summary.GetProperty("outputTokens").GetInt64());
+        AssertEx.Equal(expected: 7, summary.GetProperty("toolCalls").GetInt32());
+    }
+
+    /// <summary>A run whose nodes measured nothing says "nobody measured" rather than "zero", every member of it.</summary>
+    [Test]
+    public async Task GetRun_WhenNoNodeRunReportedAnything_LeavesTheRollupNull()
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", Run).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        using var document = JsonDocument.Parse(body);
+        var cost = document.RootElement.GetProperty("cost");
+        foreach (var member in new[] { "inputTokens", "outputTokens", "toolCalls", "providerCalls", "agentTurnMs" })
+        {
+            AssertEx.Equal(JsonValueKind.Null, cost.GetProperty(member).ValueKind, $"'{member}' was never measured on this run.");
+        }
+    }
+
     [Test]
     public async Task GetNodeRun_WhenTheSessionIsGone_SaysSoAndDoesNotReachForTheConversation()
     {
@@ -1170,6 +1356,32 @@ public sealed class DevWorkflowRunEndpointTests
             StartedAtUtc: 14,
             EndedAtUtc: null,
             CreatedAtUtc: 10);
+
+    /// <summary>
+    ///     The agent node run, carrying the twelve as a real settle would have written them. The route document is
+    ///     built with the RUNTIME's own writer, so this test cannot pass against a reader that invented its own shape.
+    /// </summary>
+    private static DevWorkflowNodeRunSnapshot ResearchNodeRunWithCost() =>
+        GateNodeRun() with
+        {
+            NodeKey = "research",
+            NodeType = DevWorkflowNodeType.Agent,
+            Status = DevWorkflowNodeRunStatus.Failed,
+            PendingDecisionKind = null,
+            FailureClass = DevWorkflowFailureClasses.ToolCommandFailed,
+            InputTokens = 1200,
+            OutputTokens = 340,
+            ReasoningTokens = 90,
+            EstimatedInputTokens = 1150,
+            ProviderCalls = 4,
+            ToolCalls = 7,
+            ToolSchemaTokens = 320,
+            ToolNamesJson = """["read_document","search_web","…"]""",
+            AgentTurnMs = 8100,
+            ServedModelName = "qwen3-27b-instruct-q4",
+            RouteJson = DevWorkflowStateMachine.RouteJson(new DevWorkflowRoute(["approval"], ["dead-end"], ["excused"], "Approve", Truncated: true)),
+            WorkSessionSteps = 3
+        };
 
     private static DevWorkflowArtifactSnapshot Artifact(string mediaType = "text/markdown", long sizeBytes = 10) =>
         new(ArtifactId,

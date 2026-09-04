@@ -29,9 +29,10 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
         // durations are near-zero: the tool already executed below this hop before the response returned; the
         // outcome/name/result-hash are still accurate. Request-to-result latency comes from the streaming path.)
         var pending = new Dictionary<string, RequestedCall>(StringComparer.Ordinal);
+        var offered = OfferedToolNames(options);
         foreach (var message in response.Messages)
         {
-            ObserveContents(message.Contents, pending);
+            ObserveContents(message.Contents, pending, offered);
         }
 
         return response;
@@ -48,15 +49,23 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
         // each call to exactly one requested span/log and one completion span. The interval is deliberately named
         // request-to-result latency: it can include remaining argument generation and middleware work before execution.
         var pending = new Dictionary<string, RequestedCall>(StringComparer.Ordinal);
+        var offered = OfferedToolNames(options);
 
         await foreach (var update in base.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
         {
-            ObserveContents(update.Contents, pending);
+            ObserveContents(update.Contents, pending, offered);
             yield return update;
         }
     }
 
-    private void ObserveContents(IList<AIContent>? contents, Dictionary<string, RequestedCall> pending)
+    /// <summary>
+    ///     The names this request actually OFFERED the model, or null when it offered none. Built once per response
+    ///     rather than per content, and used for one decision only: whether a requested name is a tool that exists.
+    /// </summary>
+    private static HashSet<string>? OfferedToolNames(ChatOptions? options) =>
+        options?.Tools is { Count: > 0 } tools ? new HashSet<string>(tools.Select(static tool => tool.Name), StringComparer.Ordinal) : null;
+
+    private void ObserveContents(IList<AIContent>? contents, Dictionary<string, RequestedCall> pending, HashSet<string>? offered)
     {
         if (contents is null || contents.Count == 0)
         {
@@ -68,7 +77,7 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
             switch (content)
             {
                 case FunctionCallContent functionCall:
-                    ObserveRequested(functionCall, pending);
+                    ObserveRequested(functionCall, pending, offered);
                     break;
                 case FunctionResultContent functionResult:
                     ObserveCompleted(functionResult, pending);
@@ -77,7 +86,7 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
         }
     }
 
-    private void ObserveRequested(FunctionCallContent functionCall, Dictionary<string, RequestedCall> pending)
+    private void ObserveRequested(FunctionCallContent functionCall, Dictionary<string, RequestedCall> pending, HashSet<string>? offered)
     {
         // A call's argument fragments stream under one CallId; record + span it exactly once. A repeat CallId is a
         // streamed fragment (or a duplicate in the completed message list), not a new call.
@@ -86,7 +95,14 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
             return;
         }
 
-        ProviderCallBudget.Current?.RecordToolCallRequested();
+        // The NAME is recorded only when it resolves against the tools this request offered. A model can emit any
+        // string here, and what the budget's name set feeds is durable: the persisted step detail, and from there a
+        // work-session event detail and a node-run column. A name nothing offered would be recorded as a tool this run
+        // reached for, which it is not — so the call is still counted (null records the count alone) and the identifier
+        // is dropped. The span and the log below keep it, because an attempted call nobody offered is exactly the thing
+        // an operator reading the trace needs to see.
+        var resolved = offered is not null && offered.Contains(functionCall.Name);
+        ProviderCallBudget.Current?.RecordToolCallRequested(resolved ? functionCall.Name : null);
 
         // Names the model's REQUEST to call a tool (a FunctionCallContent observed on the response), NOT the tool's
         // execution: this hop sits above UseFunctionInvocation, so the delegate has not run yet and this span's
