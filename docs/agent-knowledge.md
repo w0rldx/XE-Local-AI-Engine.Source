@@ -178,6 +178,14 @@ The assembly guard deliberately snapshots after a runner's own build and before 
 
 Do not wrap the whole project validator in one outer lock: its internally locked trees would become pass-throughs and regain unsafe parallel build/test overlap. Prevention and detection must remain separate layers.
 
+### After ANY failed build, rebuild to green before trusting a `--no-build` gate
+
+A build that fails in project B leaves B's output directory untouched, including B's copies of dependencies that did compile, so a `--no-build` test run loads a pre-change copy of a product assembly that itself built fresh. Prevents grading old code as new (2026-09-04: three real passes read as failures in a shared worktree after another agent's compile error). Authority: reproduced from scratch with a two-project solution; `scripts/assembly-guard.sh` cannot see it (it compares output before/after a run, not output already stale at start).
+
+### A full test-suite run can poison its own worktree's generated NuGet props
+
+A fixture that restores under an isolated `HOME` rewrites `obj/*.nuget.g.props` with a since-deleted package root; the next Release build fails `CS0006` on every analyzer assembly. It looks exactly like the MSBuild node-reuse trap, but the cure is `dotnet restore` with `NUGET_PACKAGES` pinned to the real store, not a build-server shutdown. Authority: reproduced in the S5 worktree 2026-09-04.
+
 ### Never classify a cancellation from a `CancellationToken.Register` callback
 
 Registration callbacks race disposal and execute synchronously. They may signal/kill, but must not own terminal classification or throw the final exception. Classify after the awaited operation observes authoritative cancellation state.
@@ -996,6 +1004,10 @@ The 60-second stream-idle watchdog covers time inside tool handlers. Human waits
 
 `StreamIdleWatchdog.WithIdleTimeout` wraps the whole streaming call, including function execution. The human wait must occur after a `ToolApprovalRequestContent` terminates that segment. Delegate-scope inbound MCP, schedulers, and children strip approval-required tools because they cannot answer. Agentic-scope root inbound execution is the only auto-approval exception and requires the audit record to succeed **before** invocation.
 
+### A tool handler that throws does NOT end the turn on Microsoft.Extensions.AI 10.9.0
+
+The loop runs a further provider round; what the throw destroys is the handler's sentence, replaced by the pipeline's fixed `Error: Function failed.` (`IncludeDetailedErrors` is left `false`), so the model retries blind. Prevents the wrong inference that returning instead of throwing is about turn lifetime. Authority: measured with a standalone probe against the pinned package; `EmitOutputToolHandler.ExecuteAsync` carried the wrong claim until 4d7ee3ea.
+
 ### MAF traps
 
 - `ChatClientAgentOptions` has no `Instructions`; use `ChatOptions.Instructions`.
@@ -1194,6 +1206,10 @@ Monaco stays behind shared `CodeEditor`: import `editor.api` and chosen Monarch 
 
 
 A bounded Mantine `NumberInput`/`Slider` that distinguishes “unset” from override needs a post-mount `ready` guard before persistence. Mantine can emit min/default on mount and overwrite a deliberate null. Capability flags for file/image chat input remain static client constants; do not wait for a backend capabilities endpoint that is not part of this contract.
+
+### hey-api's generated `queryFn` builds its request from `queryKey[0]`, not from the options it closed over
+
+Re-using a generated `*Options()` adapter for a different page inside a hand-written `queryFn` must pass that page's own `queryKey` in the context (`page.queryFn({ ...context, queryKey: page.queryKey })`), or every call re-requests the first page and a watermark loop never advances. Authority: `useIntegrationExecutionEvents` rework, pinned by `useIntegrationExecutions.test.tsx` ("calls the generated adapter once per page…").
 
 ### Races and flashes
 
