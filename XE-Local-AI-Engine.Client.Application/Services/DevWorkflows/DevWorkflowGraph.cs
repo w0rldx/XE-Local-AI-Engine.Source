@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>How a node with more than one inbound edge waits. The whole of the join semantics.</summary>
 internal enum DevWorkflowJoinPolicy
@@ -478,7 +479,9 @@ internal sealed class DevWorkflowGraph
         var effects = new HashSet<DevWorkflowNodeEffect>();
         foreach (var capability in declared.EnumerateObject())
         {
-            if (!Enum.TryParse<DevWorkflowNodeEffect>(capability.Name, ignoreCase: true, out var effect))
+            // By NAME: Enum.TryParse would take "3" and declare an effect no member has, which every later
+            // capability check reads as a value it does not know rather than as the refusal an author can act on.
+            if (!GraphWorkflowTokens.TryParseName<DevWorkflowNodeEffect>(capability.Name, out var effect))
             {
                 throw new DevWorkflowValidationException($"Node '{nodeKey}' declares an unknown capability '{capability.Name}'; "
                                                          + $"expected one of {string.Join(", ", Enum.GetNames<DevWorkflowNodeEffect>())}.");
@@ -1269,9 +1272,14 @@ internal sealed class DevWorkflowGraph
         };
     }
 
+    /// <summary>
+    ///     A required enum member BY NAME. Never <c>Enum.TryParse</c> on its own: that accepts a numeric token, so
+    ///     <c>"nodeType": "3"</c> would parse into a value no member has and reach the per-type config table as a
+    ///     missing key rather than as the refusal an author can read.
+    /// </summary>
     private static TEnum RequiredEnum<TEnum>(JsonElement element, string name, string owner)
         where TEnum : struct, Enum =>
-        Enum.TryParse<TEnum>(OptionalString(element, name), ignoreCase: true, out var parsed)
+        GraphWorkflowTokens.TryParseName<TEnum>(OptionalString(element, name), out var parsed)
             ? parsed
             : throw new DevWorkflowValidationException($"{char.ToUpperInvariant(owner[0])}{owner[1..]} needs a '{name}' from {string.Join(", ", Enum.GetNames<TEnum>())}.");
 
@@ -1284,7 +1292,7 @@ internal sealed class DevWorkflowGraph
             return fallback;
         }
 
-        return Enum.TryParse<TEnum>(raw, ignoreCase: true, out var parsed)
+        return GraphWorkflowTokens.TryParseName<TEnum>(raw, out var parsed)
             ? parsed
             : throw new DevWorkflowValidationException($"Node '{nodeKey}' has an unknown '{name}' of '{raw}'; expected one of {string.Join(", ", Enum.GetNames<TEnum>())}.");
     }

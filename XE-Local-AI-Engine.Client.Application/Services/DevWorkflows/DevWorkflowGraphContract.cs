@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>
 ///     The three questions the API layer asks about a stored graph, answered by the SAME parser, condition evaluator
@@ -32,9 +33,14 @@ public static class DevWorkflowGraphContract
     ///     A graph node's <c>toolMode</c> in the parser's own spelling, so what is STORED is canonical whatever casing
     ///     an author sent. A value the parser would reject is handed back untouched — refusing it is
     ///     <see cref="ValidateAndCountNodes" />'s job, and quietly rewriting it would hide the mistake.
+    ///     <para>
+    ///         By NAME, for that same reason: <c>Enum.TryParse</c> takes a numeric token, so <c>"1"</c> would be
+    ///         REWRITTEN into <c>Apply</c> and stored as the mode the author never wrote, past the refusal the parser
+    ///         is there to give.
+    ///     </para>
     /// </summary>
     public static string? CanonicalToolMode(string? toolMode) =>
-        Enum.TryParse<DevWorkflowToolMode>(toolMode, ignoreCase: true, out var parsed) ? parsed.ToString() : toolMode;
+        GraphWorkflowTokens.TryParseName<DevWorkflowToolMode>(toolMode, out var parsed) ? parsed.ToString() : toolMode;
 
     /// <summary>
     ///     Which decisions a node run in <paramref name="status" /> can take: a gate's three answers and <c>Skip</c>
