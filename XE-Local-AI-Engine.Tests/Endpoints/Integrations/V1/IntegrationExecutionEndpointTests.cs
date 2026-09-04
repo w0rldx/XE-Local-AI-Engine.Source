@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.Integrations.V1;
 
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Integrations;
@@ -182,6 +185,30 @@ public sealed class IntegrationExecutionEndpointTests
         using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory, client, HttpMethod.Post, $"{ExecutionsRoute}/{Guid.NewGuid()}/cancel");
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    /// <summary>
+    ///     The three codes the three tests above prove at runtime must also be the three the SPEC declares: the
+    ///     generated client is built from this metadata, so an endpoint that answers 202/404/409 while declaring the
+    ///     framework's default 204 ships a client that cannot branch on the conflict and expects a code that never
+    ///     arrives.
+    /// </summary>
+    [Test]
+    public void Cancel_DeclaresTheThreeCodesItAnswers_AndNoDefault204()
+    {
+        var declared = Factory.Services.GetRequiredService<EndpointDataSource>()
+                              .Endpoints
+                              .OfType<RouteEndpoint>()
+                              .Where(static endpoint => endpoint.RoutePattern.RawText?.EndsWith("integrations/executions/{executionId}/cancel", StringComparison.Ordinal) == true)
+                              .SelectMany(static endpoint => endpoint.Metadata.OfType<IProducesResponseTypeMetadata>())
+                              .Select(static metadata => metadata.StatusCode)
+                              .ToHashSet();
+
+        AssertEx.NotEmpty(declared, "The operator cancel route must be mapped, or there is no contract to assert.");
+        AssertEx.Contains(declared, StatusCodes.Status202Accepted, "Cancellation is REQUESTED, so the success code is 202.");
+        AssertEx.Contains(declared, StatusCodes.Status404NotFound, "An unknown execution id is a 404 and the client has to know it.");
+        AssertEx.Contains(declared, StatusCodes.Status409Conflict, "An already-terminal row is a 409, and a generated client that does not declare it cannot type its error branch.");
+        AssertEx.False(declared.Contains(StatusCodes.Status204NoContent), "This endpoint never sends 204; the framework's default has to be cleared or the spec promises a code that never arrives.");
     }
 
     private async Task<Seeded> SeedAsync(HttpClient client, string prefix)
