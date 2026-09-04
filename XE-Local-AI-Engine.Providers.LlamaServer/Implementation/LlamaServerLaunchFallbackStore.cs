@@ -13,6 +13,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     write then move-with-overwrite, owner-only (0600) permissions on non-Windows. An in-memory snapshot backs the
 ///     read so <see cref="IsOptimizedConfigDisabledAsync" /> never touches disk on the spawn hot path after the first
 ///     load; the snapshot is refreshed under the same lock on every write.
+///     Legacy backend-only entries (written before the store was keyed by KV type) are ignored on load and dropped from
+///     the file on the first read, so an old un-keyed verdict can no longer make the node's KV-cache-type setting inert.
 /// </remarks>
 public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackStore, IDisposable
 {
@@ -27,7 +29,7 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
     private readonly string _statePath;
 
     // Null until first load; then the authoritative in-memory snapshot of disabled "{Variant}:{kvType}" keys
-    // (case-insensitive). A legacy backend-only entry is kept as the bare "{Variant}" and disables every KV type on it.
+    // (case-insensitive).
     private HashSet<string>? _disabled;
 
     /// <summary>Creates the store under <paramref name="cacheRoot" /> (defaulting to the shared app cache root).</summary>
@@ -48,12 +50,8 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var disabled = _disabled ??= await LoadAsync(ct).ConfigureAwait(false);
-
-            // A legacy entry names the backend alone. It was written when one verdict covered every KV type, so it must
-            // keep covering every KV type — reading it as "only the current type" would silently re-enable a config this
-            // host already proved cannot reach readiness.
-            return disabled.Contains(variant.ToString()) || disabled.Contains(PairKey(variant, kvCacheType));
+            var disabled = await EnsureLoadedAsync(ct).ConfigureAwait(false);
+            return disabled.Contains(PairKey(variant, kvCacheType));
         }
         finally
         {
@@ -67,7 +65,7 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var disabled = _disabled ??= await LoadAsync(ct).ConfigureAwait(false);
+            var disabled = await EnsureLoadedAsync(ct).ConfigureAwait(false);
             if (!disabled.Add(PairKey(variant, kvCacheType)))
             {
                 return; // Already recorded — idempotent no-op, no re-write.
@@ -84,27 +82,51 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
     private static string PairKey(GpuVariant variant, string kvCacheType) =>
         string.Concat(variant.ToString(), ":", (kvCacheType ?? string.Empty).Trim());
 
-    private async Task<HashSet<string>> LoadAsync(CancellationToken ct)
+    /// <summary>Loads the snapshot once, dropping any legacy un-keyed entries from the file on that first read.</summary>
+    /// <remarks>Callers already hold <see cref="_lock" />, which is what makes the one-time rewrite safe.</remarks>
+    private async Task<HashSet<string>> EnsureLoadedAsync(CancellationToken ct)
+    {
+        if (_disabled is { } cached)
+        {
+            return cached;
+        }
+
+        var (disabled, hadLegacy) = await LoadAsync(ct).ConfigureAwait(false);
+        _disabled = disabled;
+        if (hadLegacy)
+        {
+            try
+            {
+                await PersistAsync(disabled, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // An unwritable cache root must not fault a spawn: the snapshot above is already clean, and the next
+                // process start repeats the drop.
+            }
+        }
+
+        return disabled;
+    }
+
+    private async Task<(HashSet<string> Disabled, bool HadLegacy)> LoadAsync(CancellationToken ct)
     {
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var hadLegacy = false;
         if (!File.Exists(_statePath))
         {
-            return set;
+            return (set, hadLegacy);
         }
 
         try
         {
             await using var stream = File.OpenRead(_statePath);
             var state = await JsonSerializer.DeserializeAsync<LlamaServerLaunchFallbackState>(stream, SerializerOptions, ct).ConfigureAwait(false);
-            if (state?.DisabledOptimizedVariants is { } variants)
-            {
-                // Legacy, backend-only entries. Read for back-compat and never written again; each disables every KV
-                // type on its backend, which preserves the pre-slice behaviour across an upgrade.
-                foreach (var name in variants.Where(static name => !string.IsNullOrWhiteSpace(name)))
-                {
-                    set.Add(name);
-                }
-            }
+
+            // Legacy, backend-only entries carry no KV type, so they cannot say which config failed. They are ignored
+            // and the file is rewritten without them rather than being read as "every KV type on this backend", which
+            // made the node's KV-cache-type setting inert on any host that recorded one.
+            hadLegacy = state?.DisabledOptimizedVariants is { Count: > 0 };
 
             if (state?.DisabledOptimizedConfigs is { } configs)
             {
@@ -123,18 +145,15 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
             // Unreadable → treat as nothing disabled.
         }
 
-        return set;
+        return (set, hadLegacy);
     }
 
     private async Task PersistAsync(HashSet<string> disabled, CancellationToken ct)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_statePath)!);
 
-        // Legacy backend-only entries are preserved verbatim in their own list so an older build still reads them; every
-        // new entry is a "{Variant}:{kvType}" pair and goes only into the pair list.
-        var legacy = disabled.Where(static key => !key.Contains(':', StringComparison.Ordinal)).ToArray();
-        var pairs = disabled.Where(static key => key.Contains(':', StringComparison.Ordinal)).ToArray();
-        var state = new LlamaServerLaunchFallbackState(legacy, pairs);
+        // Every entry is a "{Variant}:{kvType}" pair; the legacy list is always written empty.
+        var state = new LlamaServerLaunchFallbackState([], [.. disabled]);
         var tempPath = _statePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
@@ -196,8 +215,9 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
 
 /// <summary>Persisted shape for <see cref="LlamaServerLaunchFallbackStore" />: the launch configs proven unable to reach readiness.</summary>
 /// <param name="DisabledOptimizedVariants">
-///     LEGACY, read-only: backend names (<see cref="GpuVariant" />) recorded before the store was keyed by KV type. An
-///     entry here disables every KV type on that backend. Nothing writes to this list any more.
+///     LEGACY: backend names (<see cref="GpuVariant" />) recorded before the store was keyed by KV type. The property
+///     exists only so an old file still deserializes — the entries are ignored and dropped on the first read, and this
+///     list is always written empty.
 /// </param>
 /// <param name="DisabledOptimizedConfigs">
 ///     <c>"{Variant}:{kvType}"</c> keys whose KV-quant + flash-attention config failed readiness. A <c>q4_0</c> failure
