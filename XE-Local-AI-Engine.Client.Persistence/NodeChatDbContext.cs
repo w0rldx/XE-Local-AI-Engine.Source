@@ -189,6 +189,14 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<IntegrationExecutionEvent> IntegrationExecutionEvents => Set<IntegrationExecutionEvent>();
 
+    internal DbSet<GraphWorkflowDefinition> GraphWorkflowDefinitions => Set<GraphWorkflowDefinition>();
+
+    internal DbSet<GraphWorkflowRun> GraphWorkflowRuns => Set<GraphWorkflowRun>();
+
+    internal DbSet<GraphWorkflowNodeRun> GraphWorkflowNodeRuns => Set<GraphWorkflowNodeRun>();
+
+    internal DbSet<GraphWorkflowRunEvent> GraphWorkflowRunEvents => Set<GraphWorkflowRunEvent>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     /// <summary>
@@ -475,5 +483,9 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new IntegrationSessionConfiguration());
         modelBuilder.ApplyConfiguration(new IntegrationExecutionConfiguration());
         modelBuilder.ApplyConfiguration(new IntegrationExecutionEventConfiguration());
+        modelBuilder.ApplyConfiguration(new GraphWorkflowDefinitionConfiguration());
+        modelBuilder.ApplyConfiguration(new GraphWorkflowRunConfiguration());
+        modelBuilder.ApplyConfiguration(new GraphWorkflowNodeRunConfiguration());
+        modelBuilder.ApplyConfiguration(new GraphWorkflowRunEventConfiguration());
     }
 }
