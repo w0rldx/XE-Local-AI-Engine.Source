@@ -1,8 +1,14 @@
 namespace XE_Local_AI_Engine.Tests.Integrations;
 
+using Microsoft.Extensions.AI;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Integrations;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using Harness = XE_Local_AI_Engine.Tests.Integrations.IntegrationCoordinatorHarness;
 
@@ -196,6 +202,221 @@ public sealed class IntegrationContinuationTests
         await harness.Coordinator.StopAsync(CancellationToken.None);
 
         AssertEx.Equal(IntegrationSessionStatus.Closed, harness.Session().Status);
+    }
+
+    [Test]
+    public async Task ATurnsCompletedToolCallIsPersistedOnItsAssistantRow()
+    {
+        // Half of the continuation contract: nothing can be replayed that was never written. The accumulator rides the
+        // SAME lifecycle event the stream mapper does, so a run that calls a tool leaves a part behind.
+        using var harness = new Harness();
+        harness.DuringRun = (running, package) => RaiseToolCall(running, package.InvocationId, "call-1", "list_files", "{\"path\":\".\"}", "a.txt\nb.txt");
+        var executionId = harness.SeedAccepted();
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        var parts = AssertEx.NotNull(AssertEx.NotNull(harness.TerminalizeRequest).Parts, "The terminal persist must carry the run's tool parts.");
+        var part = parts.Single();
+        AssertEx.Equal(NodeChatMessagePartKinds.Tool, part.Kind);
+        AssertEx.Equal("call-1", part.ToolCallId);
+        AssertEx.Equal("list_files", part.Name);
+        AssertEx.Equal(NodeChatToolPartStates.Received, part.State, "The requested phase must collapse into the completed one, not stay open.");
+        AssertEx.Equal("a.txt\nb.txt", part.Result);
+    }
+
+    [Test]
+    public async Task ATurnThatCallsNoToolPersistsNoParts()
+    {
+        // Null, not an empty list: the persistence contract reads null as "leave the existing parts untouched" and an
+        // empty list as a positive claim that the turn had none.
+        using var harness = new Harness();
+
+        await harness.Coordinator.ProcessOneAsync(harness.SeedAccepted(), CancellationToken.None);
+
+        AssertEx.Null(AssertEx.NotNull(harness.TerminalizeRequest).Parts);
+    }
+
+    [Test]
+    public async Task ALifecycleEventWithNoToolCallIdIsDroppedRatherThanFaultingTheRun()
+    {
+        // The accumulator throws on an empty call id and InvocationRunner.ResolveToolCallCardId can yield one. A payload
+        // that cannot be correlated into a call/result pair is dropped; the run still completes.
+        using var harness = new Harness();
+        harness.DuringRun = (running, package) => RaiseToolCall(running, package.InvocationId, callId: string.Empty, "list_files", args: null, "a.txt");
+
+        var executionId = harness.SeedAccepted();
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        AssertEx.Equal(IntegrationExecutionStatus.Completed, harness.Row(executionId).Status);
+        AssertEx.Null(AssertEx.NotNull(harness.TerminalizeRequest).Parts);
+    }
+
+    [Test]
+    public async Task ACallerManagedContinuationReplaysTheCallItsResultAndThenTheTurnsText()
+    {
+        // The other half: the persisted part becomes a real FunctionCallContent / FunctionResultContent pair, in the
+        // order the model performed them, ahead of the answer it wrote afterwards.
+        using var harness = new Harness();
+        harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
+        harness.OfferedTools = [Harness.Tool("list_files", XE_Local_AI_Engine.AI.Agent.Tools.ToolCategory.ReadLocal)];
+        harness.AddHistory("user", "list the files");
+        harness.AddHistory("assistant", "there are two files", [Harness.CompletedToolPart("call-1", "list_files", "{\"path\":\".\"}", "a.txt\nb.txt")]);
+
+        await harness.Coordinator.ProcessOneAsync(harness.SeedAccepted(), CancellationToken.None);
+
+        var assistant = Context(harness).Single(message => message.Role == MessageRole.Assistant);
+        var exchange = AssertEx.NotNull(assistant.ToolExchanges, "A caller-managed continuation must carry the session's completed tool exchanges.").Single();
+        AssertEx.Equal("call-1", exchange.CallId);
+        AssertEx.Equal("list_files", exchange.Name);
+        AssertEx.Equal("{\"path\":\".\"}", exchange.ArgumentsJson);
+        AssertEx.Equal("a.txt\nb.txt", exchange.Result);
+        AssertEx.False(exchange.IsError);
+
+        var messages = InvocationRunner.BuildChatMessages(AssertEx.NotNull(harness.CapturedPackage)).ToList();
+        var callIndex = messages.FindIndex(static message => message.Contents.OfType<FunctionCallContent>().Any());
+        AssertEx.True(callIndex >= 0, "The replayed call must reach the model as a FunctionCallContent.");
+
+        var call = messages[callIndex].Contents.OfType<FunctionCallContent>().Single();
+        AssertEx.Equal(ChatRole.Assistant, messages[callIndex].Role);
+        AssertEx.Equal("list_files", call.Name);
+        AssertEx.Equal(expected: 1, messages[callIndex].Contents.Count, "A call-only assistant message must carry no text part.");
+
+        AssertEx.Equal(ChatRole.Tool, messages[callIndex + 1].Role);
+        var result = messages[callIndex + 1].Contents.OfType<FunctionResultContent>().Single();
+        AssertEx.Equal("call-1", result.CallId);
+        AssertEx.Equal("a.txt\nb.txt", result.Result?.ToString());
+
+        AssertEx.Equal(ChatRole.Assistant, messages[callIndex + 2].Role);
+        AssertEx.Equal("there are two files", messages[callIndex + 2].Contents.OfType<TextContent>().Single().Text);
+    }
+
+    [Test]
+    public async Task APerInvocationContinuationReplaysNoToolHistory()
+    {
+        // The gate: only a caller-managed session asks for tool history. A per-invocation run starts fresh, and chat's
+        // behaviour is unchanged for the same reason.
+        using var harness = new Harness();
+        harness.AddHistory("assistant", "there are two files", [Harness.CompletedToolPart("call-1", "list_files", args: null, "a.txt")]);
+
+        await harness.Coordinator.ProcessOneAsync(harness.SeedAccepted(), CancellationToken.None);
+
+        AssertEx.True(Context(harness).All(message => message.ToolExchanges is null));
+    }
+
+    [Test]
+    public async Task ARequestedButNeverCompletedCallIsNotReplayed()
+    {
+        // An orphan FunctionCallContent with no result is worse than none: it invites the model to wait for an answer
+        // that never comes.
+        using var harness = new Harness();
+        harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
+        harness.AddHistory("assistant",
+            "I started reading",
+            [
+                Harness.CompletedToolPart("call-1", "list_files", args: null, "a.txt", sequence: 0),
+                Harness.RequestedToolPart("call-2", "read_file", "{\"path\":\"a.txt\"}", sequence: 1)
+            ]);
+
+        await harness.Coordinator.ProcessOneAsync(harness.SeedAccepted(), CancellationToken.None);
+
+        var assistant = Context(harness).Single(message => message.Role == MessageRole.Assistant);
+        var exchange = AssertEx.NotNull(assistant.ToolExchanges).Single();
+        AssertEx.Equal("call-1", exchange.CallId, "Only the completed call is replayable; the requested-only one has no result to pair with.");
+    }
+
+    [Test]
+    public async Task AFailedTurnsCompletedToolCallIsStillReplayed()
+    {
+        // The ADR amendment, as a test. A run that called a tool and then died left a REAL side effect; dropping the
+        // turn because its status is not Completed is exactly the hole tool-history replay exists to close — and it has
+        // no text at all, so the ordinary content filter would drop it twice over.
+        using var harness = new Harness();
+        harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
+        harness.AddHistory("assistant",
+            string.Empty,
+            [Harness.CompletedToolPart("call-1", "save_artifact", "{\"name\":\"s6.txt\"}", "saved")],
+            NodeChatMessageStatusValues.Failed);
+
+        await harness.Coordinator.ProcessOneAsync(harness.SeedAccepted(), CancellationToken.None);
+
+        var assistant = Context(harness).Single(message => message.Role == MessageRole.Assistant);
+        AssertEx.Equal("call-1", AssertEx.NotNull(assistant.ToolExchanges).Single().CallId);
+
+        var messages = InvocationRunner.BuildChatMessages(AssertEx.NotNull(harness.CapturedPackage));
+        AssertEx.Equal(expected: 1, messages.Count(message => message.Contents.OfType<FunctionCallContent>().Any()));
+        AssertEx.False(messages.Any(message => message.Contents.OfType<TextContent>().Any(text => string.IsNullOrEmpty(text.Text))),
+            "A turn with no text of its own must emit no trailing message, not an empty text part.");
+    }
+
+    [Test]
+    public async Task TwoCallsInOneTurn_StayTwoWithDistinctIdsAndCollapseWhenTheProviderGaveNone()
+    {
+        // Pins the observed behaviour of both shapes rather than asserting a preference. With ids, two calls are two
+        // exchanges. Without, InvocationRunner.ResolveToolCallCardId substitutes the TOOL NAME as the id, so the
+        // accumulator's collapse-by-id makes two calls to one tool a single part — the last result wins.
+        using var distinct = new Harness();
+        distinct.DuringRun = (running, package) =>
+        {
+            RaiseToolCall(running, package.InvocationId, "call-1", "list_files", "{\"path\":\"a\"}", "a.txt");
+            RaiseToolCall(running, package.InvocationId, "call-2", "list_files", "{\"path\":\"b\"}", "b.txt");
+        };
+
+        await distinct.Coordinator.ProcessOneAsync(distinct.SeedAccepted(), CancellationToken.None);
+        var distinctParts = AssertEx.NotNull(AssertEx.NotNull(distinct.TerminalizeRequest).Parts);
+        AssertEx.Equal(expected: 2, distinctParts.Count);
+        AssertEx.Equal("a.txt", distinctParts[0].Result);
+        AssertEx.Equal("b.txt", distinctParts[1].Result);
+
+        using var collapsed = new Harness();
+        collapsed.DuringRun = (running, package) =>
+        {
+            RaiseToolCall(running, package.InvocationId, "list_files", "list_files", "{\"path\":\"a\"}", "a.txt");
+            RaiseToolCall(running, package.InvocationId, "list_files", "list_files", "{\"path\":\"b\"}", "b.txt");
+        };
+
+        await collapsed.Coordinator.ProcessOneAsync(collapsed.SeedAccepted(), CancellationToken.None);
+        var collapsedParts = AssertEx.NotNull(AssertEx.NotNull(collapsed.TerminalizeRequest).Parts);
+        AssertEx.Equal(expected: 1, collapsedParts.Count, "Without a provider call id the tool name is the id, so the second call collapses into the first part.");
+        AssertEx.Equal("b.txt", collapsedParts[0].Result);
+        AssertEx.Equal("{\"path\":\"a\"}", collapsedParts[0].Args, "The requested phase owns the arguments; the completed phase only fills the result.");
+    }
+
+    [Test]
+    public async Task AnOversizedHistoricalResultIsExcerptedBeforeItRidesTheContinuation()
+    {
+        // Bounded at PROJECTION time, so one huge result cannot ride every later continuation whole.
+        using var harness = new Harness();
+        harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
+        var result = new string('r', ConversationContextBudgetOptions.DefaultHistoricalToolResultExcerptChars + 500);
+        harness.AddHistory("assistant", "read it", [Harness.CompletedToolPart("call-1", "read_file", args: null, result)]);
+
+        await harness.Coordinator.ProcessOneAsync(harness.SeedAccepted(), CancellationToken.None);
+
+        var assistant = Context(harness).Single(message => message.Role == MessageRole.Assistant);
+        var replayed = AssertEx.NotNull(AssertEx.NotNull(assistant.ToolExchanges).Single().Result);
+        AssertEx.True(replayed.Length < result.Length, $"An oversized result must be excerpted, not replayed whole ({replayed.Length} of {result.Length}).");
+        AssertEx.Contains(replayed, "500 chars omitted");
+    }
+
+    private static void RaiseToolCall(Harness harness, Guid invocationId, string callId, string toolName, string? args, string? result)
+    {
+        harness.Dispatcher.ToolCallLifecycleChanged += Raise.EventWith(new ToolCallLifecycleChangedEventArgs(new ToolCallLifecyclePayload
+        {
+            InvocationId = invocationId,
+            ToolCallId = callId,
+            ToolName = toolName,
+            Phase = ToolCallLifecyclePhase.Requested,
+            Arguments = args
+        }));
+
+        harness.Dispatcher.ToolCallLifecycleChanged += Raise.EventWith(new ToolCallLifecycleChangedEventArgs(new ToolCallLifecyclePayload
+        {
+            InvocationId = invocationId,
+            ToolCallId = callId,
+            ToolName = toolName,
+            Phase = ToolCallLifecyclePhase.Completed,
+            Result = result
+        }));
     }
 
     private static IReadOnlyList<ConversationMessageDto> Context(Harness harness) =>

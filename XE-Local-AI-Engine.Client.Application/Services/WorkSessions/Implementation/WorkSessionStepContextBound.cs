@@ -90,7 +90,9 @@ internal sealed class WorkSessionStepContextBound(
         int budgetTokens,
         string? effectiveModel = null,
         CancellationToken cancellationToken = default,
-        int keepVerbatimExchanges = SessionKeepVerbatim)
+        int keepVerbatimExchanges = SessionKeepVerbatim,
+        bool includeToolHistory = false,
+        int toolResultExcerptChars = ConversationContextBudgetOptions.DefaultHistoricalToolResultExcerptChars)
     {
         if (budgetTokens <= 0)
         {
@@ -104,7 +106,7 @@ internal sealed class WorkSessionStepContextBound(
         }
 
         var modelName = effectiveModel ?? ResolveTranscriptModel(conversation);
-        var projected = Project(conversation, _estimator, modelName);
+        var projected = Project(conversation, _estimator, modelName, includeToolHistory, toolResultExcerptChars);
         var effectiveBudget = TokenEstimatorCalibrationStore.ApplyObservedCorrection(budgetTokens, _estimator.ResolveObservedCorrection(modelName));
         if (projected <= effectiveBudget)
         {
@@ -153,7 +155,11 @@ internal sealed class WorkSessionStepContextBound(
     ///     while nothing has repointed the session or moved the node default since, and is therefore a fallback for
     ///     when no upcoming model is resolvable rather than the primary source.
     /// </param>
-    internal static int Project(NodeChatConversationDto conversation, ITokenEstimator estimator, string? modelName = null)
+    internal static int Project(NodeChatConversationDto conversation,
+        ITokenEstimator estimator,
+        string? modelName = null,
+        bool includeToolHistory = false,
+        int toolResultExcerptChars = ConversationContextBudgetOptions.DefaultHistoricalToolResultExcerptChars)
     {
         ArgumentNullException.ThrowIfNull(conversation);
         ArgumentNullException.ThrowIfNull(estimator);
@@ -170,10 +176,23 @@ internal sealed class WorkSessionStepContextBound(
 
         foreach (var message in selected)
         {
-            if (string.IsNullOrWhiteSpace(message.Content)
-                || !string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
+            // The SAME projection the send path applies, so the estimate counts what the turn will actually carry: with
+            // tool history on, a turn's completed exchanges are replayed as real function contents (both estimators
+            // count those natively), and a turn kept only for them is kept here too.
+            var exchanges = includeToolHistory
+                ? ConversationContextBuilder.ProjectSendableToolExchanges(message, toolResultExcerptChars)
+                : null;
+
+            var sendable = !string.IsNullOrWhiteSpace(message.Content)
+                           && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal);
+            if (!sendable && exchanges is null)
             {
                 continue;
+            }
+
+            if (exchanges is { Count: > 0 })
+            {
+                ConversationToolExchangeMessages.Append(messages, exchanges);
             }
 
             var contents = new List<AIContent>(capacity: 2);
@@ -182,7 +201,16 @@ internal sealed class WorkSessionStepContextBound(
                 contents.Add(new TextReasoningContent(message.Reasoning));
             }
 
-            contents.Add(new TextContent(message.Content));
+            if (!string.IsNullOrEmpty(message.Content))
+            {
+                contents.Add(new TextContent(message.Content));
+            }
+
+            if (contents.Count == 0)
+            {
+                continue;
+            }
+
             messages.Add(new ChatMessage(string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? ChatRole.Assistant : ChatRole.User,
                 contents));
         }

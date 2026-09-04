@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -124,6 +125,135 @@ public sealed class ConversationContextBuilderTests
         AssertEx.Contains(context.Select(message => message.Content), "recent question");
         AssertEx.Equal("the new turn", context[^1].Content);
     }
+
+    [Test]
+    public void Build_WithToolHistoryOff_IsUnchangedByPersistedToolParts()
+    {
+        // The gate. Chat and every per-invocation run take the default, and for them a turn's persisted parts are a
+        // render record and nothing else — including the Completed/blank filter, which must still drop the turn a
+        // caller-managed continuation would keep.
+        var conversationId = Guid.NewGuid();
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "user", "list the files"),
+            Message(conversationId, sequence: 1, "assistant", "there are two files") with
+            {
+                Parts = [CompletedToolPart("call-1", "list_files")]
+            },
+            Message(conversationId, sequence: 2, "assistant", "  ", status: NodeChatMessageStatusValues.Failed) with
+            {
+                Parts = [CompletedToolPart("call-2", "save_artifact")]
+            }
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history),
+            Message(conversationId, sequence: 3, "user", "now"),
+            selectedPath: null,
+            attachmentContext: null);
+
+        AssertEx.Equal(expected: 3, context.Count, "A failed, blank turn stays dropped with the flag off, parts or no parts.");
+        AssertEx.True(context.All(static message => message.ToolExchanges is null));
+    }
+
+    [Test]
+    public void Build_WithToolHistoryOn_ProjectsCompletedPartsInSequenceOrderAndKeepsTheTurnThatOnlyHasThem()
+    {
+        var conversationId = Guid.NewGuid();
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "assistant", "there are two files") with
+            {
+                Parts =
+                [
+                    CompletedToolPart("call-2", "read_file", sequence: 2, result: "second"),
+                    CompletedToolPart("call-1", "list_files", sequence: 1, result: "first"),
+                    RequestedToolPart("call-3", "write_file")
+                ]
+            },
+            Message(conversationId, sequence: 1, "assistant", "   ", status: NodeChatMessageStatusValues.Cancelled) with
+            {
+                Parts = [CompletedToolPart("call-4", "save_artifact", result: "saved", isError: true)]
+            }
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history),
+            Message(conversationId, sequence: 2, "user", "now"),
+            selectedPath: null,
+            attachmentContext: null,
+            imageContext: null,
+            knowledgeContext: null,
+            includeToolHistory: true);
+
+        AssertEx.Equal(expected: 3, context.Count, "A cancelled, blank turn that completed a tool call is kept: the side effect is real.");
+
+        var exchanges = AssertEx.NotNull(context[0].ToolExchanges);
+        AssertEx.Equal(expected: 2, exchanges.Count, "A requested-only part has no result to pair with and is not replayed.");
+        AssertEx.Equal("call-1", exchanges[0].CallId, "Exchanges follow the part SEQUENCE, not the persisted list order.");
+        AssertEx.Equal("call-2", exchanges[1].CallId);
+
+        var failed = AssertEx.NotNull(context[1].ToolExchanges).Single();
+        AssertEx.Equal("call-4", failed.CallId);
+        AssertEx.True(failed.IsError, "A failed tool result is replayed as one; the model acted on that text either way.");
+    }
+
+    [Test]
+    public void Build_WithToolHistoryOn_ExcerptsAnOversizedResultToTheConfiguredCap()
+    {
+        var conversationId = Guid.NewGuid();
+        var result = new string('r', count: 120);
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "assistant", "read it") with
+            {
+                Parts = [CompletedToolPart("call-1", "read_file", result: result)]
+            }
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history),
+            Message(conversationId, sequence: 1, "user", "now"),
+            selectedPath: null,
+            attachmentContext: null,
+            imageContext: null,
+            knowledgeContext: null,
+            includeToolHistory: true,
+            toolResultExcerptChars: 20);
+
+        var replayed = AssertEx.NotNull(AssertEx.NotNull(context[0].ToolExchanges).Single().Result);
+        AssertEx.True(replayed.StartsWith(new string('r', count: 20), StringComparison.Ordinal));
+        AssertEx.Contains(replayed, "100 chars omitted");
+    }
+
+    [Test]
+    public void Build_ExcerptCapDefault_MatchesTheBudgetersOwn()
+    {
+        // The parameter default is a copy of the options default so a static builder needs no DI. This is the pin that
+        // the copy cannot drift: one truncation of a result must read the same wherever it happened.
+        AssertEx.Equal(new ConversationContextBudgetOptions().HistoricalToolResultExcerptChars,
+            ConversationContextBudgetOptions.DefaultHistoricalToolResultExcerptChars);
+    }
+
+    private static NodeChatMessagePart CompletedToolPart(string callId,
+        string name,
+        int sequence = 0,
+        string? result = "ok",
+        bool isError = false) =>
+        new(NodeChatMessagePartKinds.Tool,
+            sequence,
+            Text: null,
+            callId,
+            name,
+            isError ? NodeChatToolPartStates.Failed : NodeChatToolPartStates.Received,
+            Args: "{}",
+            result);
+
+    private static NodeChatMessagePart RequestedToolPart(string callId, string name, int sequence = 3) =>
+        new(NodeChatMessagePartKinds.Tool,
+            sequence,
+            Text: null,
+            callId,
+            name,
+            NodeChatToolPartStates.Waiting,
+            Args: "{}");
 
     private static NodeChatConversationDto Conversation(Guid conversationId,
         IReadOnlyList<NodeChatPersistedMessageDto> messages,

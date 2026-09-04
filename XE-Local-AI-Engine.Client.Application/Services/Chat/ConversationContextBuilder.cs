@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 
 /// <summary>
 ///     Builds the ordered <see cref="ConversationMessageDto" /> context one turn SENDS, from the conversation as it is
@@ -21,7 +22,9 @@ internal static class ConversationContextBuilder
         IReadOnlyDictionary<Guid, Guid>? selectedPath,
         ConversationMessageDto? attachmentContext,
         ConversationMessageDto? imageContext = null,
-        ConversationMessageDto? knowledgeContext = null)
+        ConversationMessageDto? knowledgeContext = null,
+        bool includeToolHistory = false,
+        int toolResultExcerptChars = ConversationContextBudgetOptions.DefaultHistoricalToolResultExcerptChars)
     {
         // Collapse variant siblings to the selected path FIRST (one variant per group, newest by default), then
         // apply the existing content/status filters. Without this every regenerated sibling would be sent as
@@ -78,20 +81,103 @@ internal static class ConversationContextBuilder
         }
 
         var history = selected
-                      .Where(static message => !string.IsNullOrWhiteSpace(message.Content)
-                                               && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
+                      .Where(message => IsSendable(message) || (includeToolHistory && HasCompletedToolPart(message)))
                       .Concat([userMessage])
                       .OrderBy(anchorSequence)
-                      .Select((message, index) => new ConversationMessageDto
+                      .Select((message, index) =>
                       {
-                          Id = message.MessageId,
-                          Role = string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? MessageRole.Assistant : MessageRole.User,
-                          Content = message.Content,
-                          Thinking = message.Reasoning,
-                          ModelUsed = message.Model,
-                          SortOrder = index + leadingContext.Count
+                          var isAssistant = string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase);
+                          return new ConversationMessageDto
+                          {
+                              Id = message.MessageId,
+                              Role = isAssistant ? MessageRole.Assistant : MessageRole.User,
+                              Content = message.Content,
+                              Thinking = message.Reasoning,
+                              ModelUsed = message.Model,
+                              SortOrder = index + leadingContext.Count,
+                              ToolExchanges = includeToolHistory && isAssistant ? ProjectToolExchanges(message, toolResultExcerptChars) : null
+                          };
                       });
 
         return leadingContext.Count == 0 ? history.ToList() : leadingContext.Concat(history).ToList();
+    }
+
+    /// <summary>
+    ///     The unchanged send filter: a completed, content-bearing turn. Kept as its own predicate so the tool-history
+    ///     branch reads as an ADDITION to it rather than a rewrite of it — with the flag off the two together are the
+    ///     original expression exactly.
+    /// </summary>
+    private static bool IsSendable(NodeChatPersistedMessageDto message) =>
+        !string.IsNullOrWhiteSpace(message.Content)
+        && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal);
+
+    /// <summary>
+    ///     Whether an ASSISTANT turn carries at least one completed tool part. Such a turn is kept even when it is
+    ///     <c>Failed</c>/<c>Cancelled</c> or its text is blank: a run that called a tool and then died left a real side
+    ///     effect, and hiding it is exactly the hole replaying tool history exists to close.
+    /// </summary>
+    private static bool HasCompletedToolPart(NodeChatPersistedMessageDto message) =>
+        string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase)
+        && message.Parts is { Count: > 0 } parts
+        && parts.Any(IsCompletedToolPart);
+
+    /// <summary>
+    ///     The exchange list <see cref="Build" /> would attach to this persisted turn with tool history on, or null when
+    ///     it carries none. Internal so the step bound's projection measures exactly what the send path will carry
+    ///     rather than a second, quietly diverging idea of it.
+    /// </summary>
+    internal static IReadOnlyList<ConversationToolExchange>? ProjectSendableToolExchanges(NodeChatPersistedMessageDto message, int toolResultExcerptChars) =>
+        string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase)
+            ? ProjectToolExchanges(message, toolResultExcerptChars)
+            : null;
+
+    /// <summary>
+    ///     Projects an assistant turn's persisted tool parts into the replayable exchanges, ordered by the part sequence
+    ///     the accumulator stamped. A requested-but-never-completed part is skipped: an orphan call with no result is
+    ///     worse than no call at all. Each result is capped here, at projection time, so a single huge historical result
+    ///     cannot ride every later continuation unbounded — with the same marker the context budgeter uses, so one
+    ///     result truncated twice does not read as two different results.
+    /// </summary>
+    private static IReadOnlyList<ConversationToolExchange>? ProjectToolExchanges(NodeChatPersistedMessageDto message, int toolResultExcerptChars)
+    {
+        if (message.Parts is not { Count: > 0 } parts)
+        {
+            return null;
+        }
+
+        List<ConversationToolExchange>? exchanges = null;
+        foreach (var part in parts.OrderBy(static part => part.Sequence))
+        {
+            if (!IsCompletedToolPart(part))
+            {
+                continue;
+            }
+
+            (exchanges ??= []).Add(new ConversationToolExchange(part.ToolCallId!,
+                part.Name ?? string.Empty,
+                part.Args,
+                ExcerptResult(part.Result, toolResultExcerptChars),
+                string.Equals(part.State, NodeChatToolPartStates.Failed, StringComparison.Ordinal)));
+        }
+
+        return exchanges;
+    }
+
+    /// <summary>
+    ///     A tool part that reached a terminal state and carries the call id the replayed pair correlates on. The
+    ///     accumulator refuses an empty id, but a legacy part persisted before that guard existed can still carry one.
+    /// </summary>
+    private static bool IsCompletedToolPart(NodeChatMessagePart part) =>
+        string.Equals(part.Kind, NodeChatMessagePartKinds.Tool, StringComparison.Ordinal)
+        && !string.IsNullOrEmpty(part.ToolCallId)
+        && (string.Equals(part.State, NodeChatToolPartStates.Received, StringComparison.Ordinal)
+            || string.Equals(part.State, NodeChatToolPartStates.Failed, StringComparison.Ordinal));
+
+    private static string? ExcerptResult(string? result, int toolResultExcerptChars)
+    {
+        var excerptChars = Math.Max(val1: 0, toolResultExcerptChars);
+        return result is null || result.Length <= excerptChars
+            ? result
+            : ConversationContextBudgeter.Excerpt(result, excerptChars, result.Length - excerptChars);
     }
 }

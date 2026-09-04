@@ -275,6 +275,77 @@ public sealed class WorkSessionStepContextBoundTests
     }
 
     [Test]
+    public void Project_CountsReplayedToolExchangesOnlyWhenToolHistoryIsOn()
+    {
+        // The bound decides the fold from this number, so it has to count what the turn will actually SEND. With tool
+        // history off (chat, and every per-invocation run) a turn's persisted parts are invisible here, exactly as they
+        // are invisible to the send path.
+        var estimator = new HeuristicTokenEstimator();
+        var messages = new List<NodeChatPersistedMessageDto>
+        {
+            Message(sequence: 0, "user", "list the files"),
+            Message(sequence: 1, "assistant", "there are two files") with
+            {
+                Parts = [ToolPart("call-1", "list_files", new string('r', 1_200))]
+            }
+        };
+
+        var off = WorkSessionStepContextBound.Project(Conversation(messages), estimator);
+        var on = WorkSessionStepContextBound.Project(Conversation(messages), estimator, modelName: null, includeToolHistory: true);
+
+        AssertEx.True(on > off + 200,
+            $"A replayed 1,200-character tool result is real input and must be counted; the projection moved from {off} to {on}.");
+    }
+
+    [Test]
+    public void Project_WithToolHistoryOn_CountsATurnKeptOnlyForItsCompletedToolCall()
+    {
+        // The keep rule the send path applies: a failed, blank turn that completed a tool call is still replayed, so the
+        // estimate cannot pretend it is absent.
+        var estimator = new HeuristicTokenEstimator();
+        var failedWithSideEffect = Message(sequence: 0, "assistant", string.Empty) with
+        {
+            Status = NodeChatMessageStatusValues.Failed,
+            Parts = [ToolPart("call-1", "save_artifact", new string('r', 1_200))]
+        };
+
+        var counted = WorkSessionStepContextBound.Project(Conversation([failedWithSideEffect]), estimator, modelName: null, includeToolHistory: true);
+        var ignored = WorkSessionStepContextBound.Project(Conversation([failedWithSideEffect]), estimator);
+
+        AssertEx.Equal(expected: 0, ignored, "With the flag off the turn is dropped by the ordinary content/status filter.");
+        AssertEx.True(counted > 200, $"The replayed exchange is the whole of that turn's cost and must be counted, projected {counted}.");
+    }
+
+    [Test]
+    public void Project_WithToolHistoryOn_CountsTheExcerptedResult_NotTheWholeOne()
+    {
+        var estimator = new HeuristicTokenEstimator();
+        var messages = new List<NodeChatPersistedMessageDto>
+        {
+            Message(sequence: 0, "assistant", "read it") with
+            {
+                Parts = [ToolPart("call-1", "read_file", new string('r', 8_000))]
+            }
+        };
+
+        var capped = WorkSessionStepContextBound.Project(Conversation(messages), estimator, modelName: null, includeToolHistory: true, toolResultExcerptChars: 100);
+        var uncapped = WorkSessionStepContextBound.Project(Conversation(messages), estimator, modelName: null, includeToolHistory: true, toolResultExcerptChars: 8_000);
+
+        AssertEx.True(capped < uncapped / 2,
+            $"The estimate must measure the EXCERPTED result the send path carries, not the whole one; {capped} vs {uncapped}.");
+    }
+
+    private static NodeChatMessagePart ToolPart(string callId, string name, string result) =>
+        new(NodeChatMessagePartKinds.Tool,
+            Sequence: 0,
+            Text: null,
+            callId,
+            name,
+            NodeChatToolPartStates.Received,
+            Args: "{}",
+            result);
+
+    [Test]
     public void Project_WhenAMessageIsNotCompleted_LeavesItOut()
     {
         var estimator = new HeuristicTokenEstimator();

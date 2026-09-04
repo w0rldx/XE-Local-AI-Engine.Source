@@ -84,14 +84,15 @@ public sealed class RuntimePackageValidator : IRuntimePackageValidator
         var maxMessageSizeBytes = enforceMessageSizeCap ? _securityOptions.MaxMessageSizeKb * 1024 : int.MaxValue;
 
         // A vision (image-only) turn legitimately carries blank text — its payload is the image parts — so blank content
-        // is a fault ONLY when the message has no images to stand in for it. Null-byte and the size cap still apply to
-        // whatever text IS present.
+        // is a fault ONLY when the message has no images to stand in for it. A replayed tool-history turn earns the same
+        // exemption for the same reason: a run that called a tool and then died left a real side effect whose record is
+        // the exchanges, not the (absent) text. Null-byte and the size cap still apply to whatever text IS present.
         var invalidMessageCount = conversationContext
             .Count(message =>
             {
                 var content = message.Content;
-                var hasImages = message.Images is { Count: > 0 };
-                return (string.IsNullOrWhiteSpace(content) && !hasImages) ||
+                var hasNonTextPayload = message.Images is { Count: > 0 } || message.ToolExchanges is { Count: > 0 };
+                return (string.IsNullOrWhiteSpace(content) && !hasNonTextPayload) ||
                        ContainsNullByte(content) ||
                        Encoding.UTF8.GetByteCount(content) > maxMessageSizeBytes;
             });

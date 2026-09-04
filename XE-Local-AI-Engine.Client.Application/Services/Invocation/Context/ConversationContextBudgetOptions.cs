@@ -11,6 +11,14 @@ public sealed class ConversationContextBudgetOptions
     public const string SectionName = "Agent:ConversationContextBudget";
 
     /// <summary>
+    ///     The default of <see cref="HistoricalToolResultExcerptChars" />, exposed as a constant so the callers that
+    ///     apply the same cap before the budgeter ever sees the round — <c>ConversationContextBuilder.Build</c>'s tool
+    ///     history projection and the step bound's estimate of it — can carry it as a parameter default instead of
+    ///     re-typing the number and drifting from it.
+    /// </summary>
+    public const int DefaultHistoricalToolResultExcerptChars = 2000;
+
+    /// <summary>
     ///     Minimum number of output tokens reserved from the context window before history is measured, so the model
     ///     always has room to answer. The runner takes the larger of this floor and any explicit per-send
     ///     max-output-tokens override.
@@ -32,7 +40,7 @@ public sealed class ConversationContextBudgetOptions
     ///     appended) before whole turns are dropped. Zero collapses an oversized historical tool result to just the
     ///     marker.
     /// </summary>
-    public int HistoricalToolResultExcerptChars { get; set; } = 2000;
+    public int HistoricalToolResultExcerptChars { get; set; } = DefaultHistoricalToolResultExcerptChars;
 
     /// <summary>
     ///     Fallback context-window size (in tokens) used when the package carries no explicit <c>num_ctx</c> override, so

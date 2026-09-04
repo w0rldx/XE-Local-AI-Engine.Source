@@ -202,6 +202,9 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         {
             RecentMessagesToKeepVerbatim = ChatKeepVerbatim
         }));
+        // The historical tool-result excerpt cap a caller-managed continuation replays under, read from the SAME options
+        // the context budgeter measures with so one result truncated twice reads as one result.
+        services.AddSingleton<IOptions<ConversationContextBudgetOptions>>(_ => Options.Create(new ConversationContextBudgetOptions()));
         services.AddSingleton(_ => new WorkSessionStepContextBound(Persistence,
             Compaction,
             new HeuristicTokenEstimator(new TokenEstimatorCalibrationStore()),
@@ -352,6 +355,45 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         {
             Sequence = History.Count
         });
+
+    /// <summary>
+    ///     One turn ahead of the seed carrying the persisted PARTS and status a real turn has. The continuation suite
+    ///     needs both: replayed tool history is read off an assistant row's parts, and a run that failed after a
+    ///     completed tool call still has to carry them.
+    /// </summary>
+    public void AddHistory(string role, string content, IReadOnlyList<NodeChatMessagePart>? parts, string? status = null) =>
+        History.Add(Message(Guid.NewGuid(), role, content) with
+        {
+            Sequence = History.Count,
+            Parts = parts,
+            Status = status ?? NodeChatMessageStatusValues.Completed
+        });
+
+    /// <summary>A tool part as the accumulator persists a COMPLETED one: the requested phase collapsed into its result.</summary>
+    public static NodeChatMessagePart CompletedToolPart(string callId,
+        string name,
+        string? args,
+        string? result,
+        int sequence = 0,
+        bool isError = false) =>
+        new(NodeChatMessagePartKinds.Tool,
+            sequence,
+            Text: null,
+            callId,
+            name,
+            isError ? NodeChatToolPartStates.Failed : NodeChatToolPartStates.Received,
+            args,
+            result);
+
+    /// <summary>A tool part that never left the requested phase — the shape a continuation must NOT replay.</summary>
+    public static NodeChatMessagePart RequestedToolPart(string callId, string name, string? args, int sequence = 0) =>
+        new(NodeChatMessagePartKinds.Tool,
+            sequence,
+            Text: null,
+            callId,
+            name,
+            NodeChatToolPartStates.Waiting,
+            args);
 
     public bool RaiseTerminalState { get; set; } = true;
 
