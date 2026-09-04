@@ -139,6 +139,8 @@
 		"devWorkflows": "Workflow Runs",
 		"integrationsGroup": "Integrations",
 		"integrationTriggers": "Triggers",
+		"integrationSessions": "Sessions",
+		"integrationExecutions": "Executions",
 		"integrationKeys": "API Keys"
 	},
 	"chat": {

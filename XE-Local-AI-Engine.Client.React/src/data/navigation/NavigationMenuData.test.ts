@@ -107,6 +107,8 @@ describe("navigationLinks", () => {
 		expect(integrations?.to).toBeUndefined();
 		expect(integrations?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.integrationTriggers,
+			nodeRoutePaths.integrationSessions,
+			nodeRoutePaths.integrationExecutions,
 			nodeRoutePaths.integrationKeys,
 		]);
 

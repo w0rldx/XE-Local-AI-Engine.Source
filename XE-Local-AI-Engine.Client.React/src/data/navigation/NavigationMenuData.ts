@@ -147,6 +147,8 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.integrationsGroup",
 		links: [
 			{ translationKey: "navigation.integrationTriggers", to: nodeRoutePaths.integrationTriggers, capability: "integrations" },
+			{ translationKey: "navigation.integrationSessions", to: nodeRoutePaths.integrationSessions, capability: "integrations" },
+			{ translationKey: "navigation.integrationExecutions", to: nodeRoutePaths.integrationExecutions, capability: "integrations" },
 			{ translationKey: "navigation.integrationKeys", to: nodeRoutePaths.integrationKeys, capability: "integrations" },
 		],
 	},
