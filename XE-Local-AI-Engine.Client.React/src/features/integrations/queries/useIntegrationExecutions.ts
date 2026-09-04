@@ -81,14 +81,16 @@ export function useIntegrationExecutionEvents(executionId: string | null, option
 /**
  * Cancellation is REQUESTED, not applied: the endpoint answers 202 and a running turn stops when it observes the
  * token, so the row leaves its active status on a later poll rather than on this response. A 409 means the execution
- * already reached a terminal state, which the invalidation below resolves by showing what it actually became.
+ * already reached a terminal state, so it invalidates for the same reason a 202 does — the row on screen is the stale
+ * one that provoked the request. `onSettled` rather than `onSuccess` because the refetch is right for BOTH outcomes,
+ * and a refetch after any other failure only re-reads a list this page already polls every few seconds.
  */
 export function useCancelIntegrationExecution() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
 		...withResponseValidation(cancelIntegrationExecutionMutation()),
-		onSuccess: () =>
+		onSettled: () =>
 			queryClient.invalidateQueries({ queryKey: integrationInvalidationKey(integrationQueryIds.listExecutions) }),
 	});
 }

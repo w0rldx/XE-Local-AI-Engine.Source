@@ -37,6 +37,7 @@ export function IntegrationSessionList({ sessions, isMutating, onView, onDelete 
 					<Table.Tr>
 						<Table.Th>{t("pages.integrations.sessions.list.columns.id", "Session")}</Table.Th>
 						<Table.Th>{t("pages.integrations.sessions.list.columns.trigger", "Trigger")}</Table.Th>
+						<Table.Th>{t("pages.integrations.sessions.list.columns.principal", "Principal")}</Table.Th>
 						<Table.Th>{t("pages.integrations.sessions.list.columns.status", "Status")}</Table.Th>
 						<Table.Th>{t("pages.integrations.sessions.list.columns.created", "Created")}</Table.Th>
 						<Table.Th>{t("pages.integrations.sessions.list.columns.lastActivity", "Last activity")}</Table.Th>
@@ -59,6 +60,18 @@ export function IntegrationSessionList({ sessions, isMutating, onView, onDelete 
 										? t("pages.integrations.sessions.list.deletedTrigger", "Deleted trigger")
 										: session.triggerName}
 								</Text>
+							</Table.Td>
+							<Table.Td>
+								{/* The OWNING integrator, rendered like every other principal on this surface: shortened, with
+								    the full identity in the tooltip. Not the agent — a key rotation keeps the principal. */}
+								<Tooltip label={session.principalId}>
+									<Code
+										data-testid={`integration-session-principal-${session.id}`}
+										title={session.principalId}
+									>
+										{shortPrincipalId(session.principalId)}
+									</Code>
+								</Tooltip>
 							</Table.Td>
 							<Table.Td>
 								<IntegrationSessionStatusBadge

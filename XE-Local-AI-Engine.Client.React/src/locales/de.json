@@ -5465,6 +5465,7 @@
 					"columns": {
 						"id": "Sitzung",
 						"trigger": "Trigger",
+						"principal": "Prinzipal",
 						"status": "Status",
 						"created": "Erstellt",
 						"lastActivity": "Letzte Aktivität",
@@ -5564,6 +5565,7 @@
 					"load": "Integrations-Ausführungen konnten nicht geladen werden.",
 					"events": "Der Ausführungsverlauf konnte nicht geladen werden.",
 					"cancel": "Die Ausführung konnte nicht abgebrochen werden.",
+					"cancelConflict": "Diese Ausführung war bereits beendet.",
 					"detail": "Die Audit-Details der Ausführung konnten nicht geladen werden."
 				}
 			},
