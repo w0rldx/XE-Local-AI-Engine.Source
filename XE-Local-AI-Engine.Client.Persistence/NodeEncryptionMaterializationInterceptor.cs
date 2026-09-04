@@ -459,6 +459,41 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     executionEvent.Id,
                     "integration_execution_event_detail_json");
                 break;
+            case GraphWorkflowDefinition graphDefinition:
+                graphDefinition.GraphJson = NodePayloadProtector.Decrypt(graphDefinition.GraphJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    graphDefinition.Id,
+                    "graph_workflow_definition_graph_json");
+                break;
+            case GraphWorkflowRun graphRun:
+                // The owning definition sits in the conversation slot, so a run row re-parented onto another definition
+                // fails the tag check here rather than reading back as that definition's executed graph.
+                graphRun.GraphJson = NodePayloadProtector.Decrypt(graphRun.GraphJson,
+                    context.NodeEncryptionKey.Span,
+                    graphRun.DefinitionId,
+                    graphRun.Id,
+                    "graph_workflow_run_graph_json");
+                graphRun.InputJson = DecryptIfPresent(graphRun.InputJson, context.NodeEncryptionKey.Span, graphRun.DefinitionId, graphRun.Id, "graph_workflow_run_input_json");
+                graphRun.OutputJson =
+                    DecryptIfPresent(graphRun.OutputJson, context.NodeEncryptionKey.Span, graphRun.DefinitionId, graphRun.Id, "graph_workflow_run_output_json");
+                break;
+            case GraphWorkflowNodeRun graphNodeRun:
+                graphNodeRun.InputJson =
+                    DecryptIfPresent(graphNodeRun.InputJson, context.NodeEncryptionKey.Span, graphNodeRun.RunId, graphNodeRun.Id, "graph_workflow_node_run_input_json");
+                graphNodeRun.OutputJson =
+                    DecryptIfPresent(graphNodeRun.OutputJson, context.NodeEncryptionKey.Span, graphNodeRun.RunId, graphNodeRun.Id, "graph_workflow_node_run_output_json");
+                graphNodeRun.Error = DecryptIfPresent(graphNodeRun.Error, context.NodeEncryptionKey.Span, graphNodeRun.RunId, graphNodeRun.Id, "graph_workflow_node_run_error");
+                graphNodeRun.DecidedBySubject = DecryptIfPresent(graphNodeRun.DecidedBySubject,
+                    context.NodeEncryptionKey.Span,
+                    graphNodeRun.RunId,
+                    graphNodeRun.Id,
+                    "graph_workflow_node_run_decided_by");
+                break;
+            case GraphWorkflowRunEvent graphEvent:
+                graphEvent.DetailJson =
+                    DecryptIfPresent(graphEvent.DetailJson, context.NodeEncryptionKey.Span, graphEvent.RunId, graphEvent.Id, "graph_workflow_run_event_detail_json");
+                break;
         }
 
         return entity;

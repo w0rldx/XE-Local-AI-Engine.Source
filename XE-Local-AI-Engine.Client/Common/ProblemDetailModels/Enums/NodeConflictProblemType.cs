@@ -105,5 +105,18 @@ public enum NodeConflictProblemType
     ///     The work item already has a run in flight, and v1 allows one at a time. Starting another, or deleting the
     ///     work item, waits for that run to finish or cancels it first.
     /// </summary>
-    DevWorkflowRunInFlight
+    DevWorkflowRunInFlight,
+
+    /// <summary>
+    ///     Both ways a graph-workflow definition write can lose, under one member because from the client's side they
+    ///     are one story — somebody else got there first: a stale <c>version</c> on an update, and a delete refused
+    ///     while a live run still pins the definition. Refresh the definition, or cancel the run, and retry.
+    ///     <para>
+    ///         APPENDED deliberately. This enum crosses the wire as the member's NAME — <c>ConflictExceptionHandler</c>
+    ///         writes <c>conflictType.Value.ToString()</c> — so appending leaves every name that already ships
+    ///         unchanged, and leaves the ordinals a client may have persisted unchanged with them. Inserting a member
+    ///         above this one would shift both.
+    ///     </para>
+    /// </summary>
+    GraphWorkflowDefinitionConflict
 }

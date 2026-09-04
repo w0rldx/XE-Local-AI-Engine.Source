@@ -67,6 +67,7 @@ namespace XE_Local_AI_Engine.Client
     using XE_Local_AI_Engine.Client.Services.Auth;
     using XE_Local_AI_Engine.Client.Services.Development;
     using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+    using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
     using XE_Local_AI_Engine.Client.Services.Integrations;
     using XE_Local_AI_Engine.Client.Services.Proxy;
     using XE_Local_AI_Engine.Client.Services.WorkSessions;
@@ -320,6 +321,7 @@ namespace XE_Local_AI_Engine.Client
             var isDevelopmentModeEnabled = builder.Configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true);
             var areWorkSessionsEnabled = builder.Configuration.GetValue($"{WorkSessionOptions.Section}:Enabled", defaultValue: false);
             var areDevWorkflowsEnabled = builder.Configuration.GetValue($"{DevWorkflowOptions.Section}:Enabled", defaultValue: false);
+            var areGraphWorkflowsEnabled = builder.Configuration.GetValue($"{GraphWorkflowOptions.Section}:Enabled", defaultValue: false);
             builder.AddServices(builder.Configuration);
 
             // App self-update (Velopack + anonymous public GitHub releases). Desktop-mode only: off the flag this registers nothing and the
@@ -560,6 +562,26 @@ namespace XE_Local_AI_Engine.Client
                 app.Use(async (context, next) =>
                 {
                     if (context.Request.Path.StartsWithSegments(devWorkflowPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.Response.StatusCode = StatusCodes.Status404NotFound;
+                        return;
+                    }
+
+                    await next(context).ConfigureAwait(false);
+                });
+            }
+
+            if (!areGraphWorkflowsEnabled)
+            {
+                // The graph-workflow family holds the same posture as the two blocks above. Its endpoints and hub stay
+                // DISCOVERED with the feature off, so the OpenAPI document — and the client generated from it — is
+                // identical on every node; only behaviour is gated, and it is gated here. Registered ahead of local API
+                // security and authentication so the switch answers 404 before anything else can answer 403, which is
+                // what keeps it from being probed by status code.
+                var graphWorkflowPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.GraphWorkflows.Root}");
+                app.Use(async (context, next) =>
+                {
+                    if (context.Request.Path.StartsWithSegments(graphWorkflowPath, StringComparison.OrdinalIgnoreCase))
                     {
                         context.Response.StatusCode = StatusCodes.Status404NotFound;
                         return;

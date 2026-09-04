@@ -922,6 +922,32 @@ public static class LocalApiRoutes
         public const string Hub = "/api/local/v1/development-workflows/hub";
     }
 
+    /// <summary>
+    ///     Graph workflows: operator-authored definitions and the runs started from them.
+    ///     <para>
+    ///         The whole surface is gated on <c>GraphWorkflows:Enabled</c> by request-path middleware in <c>Program</c>
+    ///         that answers 404 for anything under <see cref="Root" />, which is why the prefix is a constant rather
+    ///         than spelled at each route. Later slices add the run, event, decision and hub paths under the same root,
+    ///         so the gate already covers them.
+    ///     </para>
+    /// </summary>
+    public static class GraphWorkflows
+    {
+        public const string Root = "graph-workflows";
+
+        /// <summary>The definition collection: GET lists without the graph blob, POST validates the graph and stores it.</summary>
+        public const string Definitions = "graph-workflows/definitions";
+
+        /// <summary>GET / PUT with the version it was edited from / DELETE, which 409s while a live run pins the definition.</summary>
+        public const string DefinitionById = "graph-workflows/definitions/{definitionId}";
+
+        /// <summary>
+        ///     Validation without saving: the editor asks the RUNTIME's own parser whether a graph would route, so the
+        ///     answer it draws is the answer a run would get rather than a second implementation of the same rules.
+        /// </summary>
+        public const string DefinitionsValidate = "graph-workflows/definitions/validate";
+    }
+
     public static class Automation
     {
         public const string Commands = "automation/commands";
