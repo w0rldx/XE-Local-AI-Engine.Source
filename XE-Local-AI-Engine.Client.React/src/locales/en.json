@@ -5505,7 +5505,8 @@
 					"trigger": "Trigger",
 					"session": "Session",
 					"allTriggers": "All triggers",
-					"allSessions": "All sessions"
+					"allSessions": "All sessions",
+					"statusGroup": "Filter executions by status"
 				},
 				"list": {
 					"loading": "Loading executions…",
@@ -5544,7 +5545,13 @@
 					"requestId": "Request id",
 					"keyPrefix": "Key",
 					"outputBytes": "Output bytes",
-					"noEvents": "No events recorded for this execution."
+					"noEvents": "No events recorded for this execution.",
+					"loading": "Loading timeline…",
+					"toolOk": "ok",
+					"toolError": "error",
+					"tokens": "{{count}} tokens",
+					"showOutput": "Show output payload",
+					"hideOutput": "Hide output payload"
 				},
 				"cancel": {
 					"title": "Cancel execution",
@@ -5554,7 +5561,8 @@
 				"errors": {
 					"load": "Could not load integration executions.",
 					"events": "Could not load the execution timeline.",
-					"cancel": "Could not cancel the execution."
+					"cancel": "Could not cancel the execution.",
+					"detail": "Could not load the execution audit detail."
 				}
 			},
 			"keys": {

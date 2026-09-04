@@ -50,10 +50,11 @@ export function useIntegrationExecutions(filters: IntegrationExecutionFilters = 
 }
 
 /** The per-execution audit record (principal, request id, key prefix) the list projection does not carry. */
-export function useIntegrationExecution(executionId: string | null) {
+export function useIntegrationExecution(executionId: string | null, options: IntegrationQueryOptions = {}) {
 	return useQuery({
 		...withResponseValidation(getIntegrationExecutionOptions({ path: { executionId: executionId ?? "" } })),
-		enabled: executionId !== null,
+		enabled: executionId !== null && (options.enabled ?? true),
+		refetchInterval: options.refetchInterval,
 		select: toIntegrationExecutionDetail,
 	});
 }

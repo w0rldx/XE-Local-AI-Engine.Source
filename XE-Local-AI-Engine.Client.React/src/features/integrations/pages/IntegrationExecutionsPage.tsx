@@ -149,7 +149,12 @@ export function IntegrationExecutionsPage() {
 						value={filters.status ?? ALL_VALUE}
 						onChange={(value) => handleStatusChange(value as string)}
 					>
-						<Group gap={4} data-testid="integration-executions-status-chips">
+						<Group
+							gap={4}
+							role="group"
+							aria-label={t("pages.integrations.executions.filters.statusGroup", "Filter executions by status")}
+							data-testid="integration-executions-status-chips"
+						>
 							<Chip value={ALL_VALUE} data-testid="integration-executions-status-all">
 								{t("pages.integrations.executions.filters.allStatuses", "All")}
 							</Chip>
@@ -209,9 +214,15 @@ export function IntegrationExecutionsPage() {
 			</SectionCard>
 
 			{/* Rendered only while a row is selected, so closing the dialog unmounts its two queries and stops their
-			    poll rather than leaving them refetching behind a hidden modal. */}
-			{selectedExecution === null ? null : (
-				<IntegrationExecutionDetailDialog execution={selectedExecution} onClose={() => selectExecution(null)} />
+			    poll rather than leaving them refetching behind a hidden modal. It is mounted on the SELECTED ID, not on
+			    the row found in the current window: a poll returning a window without that row must not close it. */}
+			{selectedExecutionId === null ? null : (
+				<IntegrationExecutionDetailDialog
+					key={selectedExecutionId}
+					executionId={selectedExecutionId}
+					listExecution={selectedExecution}
+					onClose={() => selectExecution(null)}
+				/>
 			)}
 		</PageShell>
 	);

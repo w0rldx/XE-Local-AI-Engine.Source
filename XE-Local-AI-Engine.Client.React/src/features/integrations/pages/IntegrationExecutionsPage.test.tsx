@@ -106,6 +106,17 @@ const executions: IntegrationExecution[] = [
 	execution({ id: "exec-unknown", status: "Failed", failureCategory: "a-category-this-client-has-never-seen" }),
 ];
 
+/** The per-execution audit read, which carries the whole record and so outranks the row found in the list window. */
+const detail = {
+	execution: execution({ id: "exec-completed", outputCount: 2 }),
+	principalId: "principal-0000-0000-0000-000000000001",
+	keyPrefix: "xeint_ab",
+	requestId: "req-1",
+	invocationId: "inv-1",
+	outputBytes: 512,
+	stopRequestedAtUtc: null,
+};
+
 function makeMutation() {
 	return { mutate: vi.fn(), isPending: false, error: null };
 }
@@ -116,15 +127,19 @@ function makeQuery<T>(data: T) {
 
 function renderPage() {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-	return render(
+	// A FRESH element each time: re-rendering the identical one lets React bail out, and a poll test needs the page
+	// to actually read its hooks again.
+	const tree = () => (
 		<MantineProvider>
 			<ConfirmProvider>
 				<QueryClientProvider client={queryClient}>
 					<IntegrationExecutionsPage />
 				</QueryClientProvider>
 			</ConfirmProvider>
-		</MantineProvider>,
+		</MantineProvider>
 	);
+	const result = render(tree());
+	return { ...result, repoll: () => result.rerender(tree()) };
 }
 
 /** The filters the page most recently asked the executions list for. */
@@ -266,6 +281,86 @@ describe("IntegrationExecutionsPage", () => {
 		expect(executionHooksMock.useIntegrationExecutionEvents).toHaveBeenCalledWith("exec-completed", {
 			refetchInterval: 5000,
 		});
+	});
+
+	// R1-11: the list poll is UNCONDITIONAL. Gating it on "any row is active" would read the very list a poll has to
+	// fetch, so a fresh node with an empty or all-terminal window would never discover a run started elsewhere.
+	it("polls the executions list even when the window is empty, which is where gating it would break", () => {
+		executionHooksMock.useIntegrationExecutions.mockReturnValue(makeQuery([]));
+		renderPage();
+
+		expect(executionHooksMock.useIntegrationExecutions).toHaveBeenCalledWith(expect.anything(), {
+			refetchInterval: 5000,
+		});
+	});
+
+	it("polls the per-execution read while the run is still active", async () => {
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("integration-execution-view-exec-running"));
+
+		await waitFor(() => {
+			expect(screen.getByTestId("integration-execution-detail")).toBeTruthy();
+		});
+		expect(executionHooksMock.useIntegrationExecution).toHaveBeenCalledWith("exec-running", {
+			refetchInterval: 5000,
+		});
+	});
+
+	it("leaves the per-execution read unpolled once the run is terminal", async () => {
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("integration-execution-view-exec-completed"));
+
+		await waitFor(() => {
+			expect(screen.getByTestId("integration-execution-detail")).toBeTruthy();
+		});
+		expect(executionHooksMock.useIntegrationExecution).toHaveBeenCalledWith("exec-completed", {
+			refetchInterval: undefined,
+		});
+	});
+
+	it("keeps the open dialog when the next poll returns a window without its row", async () => {
+		executionHooksMock.useIntegrationExecution.mockReturnValue(makeQuery(detail));
+		const { repoll } = renderPage();
+
+		fireEvent.click(screen.getByTestId("integration-execution-view-exec-completed"));
+		await waitFor(() => {
+			expect(screen.getByTestId("integration-execution-detail")).toBeTruthy();
+		});
+
+		executionHooksMock.useIntegrationExecutions.mockReturnValue(
+			makeQuery(executions.filter((row) => row.id !== "exec-completed")),
+		);
+		repoll();
+
+		expect(screen.queryByTestId("integration-execution-row-exec-completed")).toBeNull();
+		expect(screen.getByTestId("integration-execution-detail")).toBeTruthy();
+		expect(screen.getByTestId("integration-execution-request-id").textContent).toBe("req-1");
+	});
+
+	it("says so when the per-execution read fails, rather than just omitting the principal", async () => {
+		executionHooksMock.useIntegrationExecution.mockReturnValue({
+			data: undefined,
+			isLoading: false,
+			error: new Error("boom"),
+		});
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("integration-execution-view-exec-completed"));
+
+		await waitFor(() => {
+			expect(screen.getByTestId("integration-execution-detail-error")).toBeTruthy();
+		});
+		expect(screen.queryByTestId("integration-execution-principal")).toBeNull();
+	});
+
+	it("names the status chip group for a screen reader", () => {
+		renderPage();
+
+		const group = screen.getByTestId("integration-executions-status-chips");
+		expect(group.getAttribute("role")).toBe("group");
+		expect(group.getAttribute("aria-label")).toBe("Filter executions by status");
 	});
 
 	it("sends the trigger and session filters to the query", async () => {

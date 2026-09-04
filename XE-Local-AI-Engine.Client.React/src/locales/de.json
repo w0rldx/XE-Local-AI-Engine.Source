@@ -5505,7 +5505,8 @@
 					"trigger": "Trigger",
 					"session": "Sitzung",
 					"allTriggers": "Alle Trigger",
-					"allSessions": "Alle Sitzungen"
+					"allSessions": "Alle Sitzungen",
+					"statusGroup": "Ausführungen nach Status filtern"
 				},
 				"list": {
 					"loading": "Ausführungen werden geladen…",
@@ -5544,7 +5545,13 @@
 					"requestId": "Anfrage-ID",
 					"keyPrefix": "Schlüssel",
 					"outputBytes": "Ausgabebytes",
-					"noEvents": "Für diese Ausführung wurden keine Ereignisse aufgezeichnet."
+					"noEvents": "Für diese Ausführung wurden keine Ereignisse aufgezeichnet.",
+					"loading": "Verlauf wird geladen…",
+					"toolOk": "ok",
+					"toolError": "Fehler",
+					"tokens": "{{count}} Tokens",
+					"showOutput": "Ausgabe-Payload anzeigen",
+					"hideOutput": "Ausgabe-Payload ausblenden"
 				},
 				"cancel": {
 					"title": "Ausführung abbrechen",
@@ -5554,7 +5561,8 @@
 				"errors": {
 					"load": "Integrations-Ausführungen konnten nicht geladen werden.",
 					"events": "Der Ausführungsverlauf konnte nicht geladen werden.",
-					"cancel": "Die Ausführung konnte nicht abgebrochen werden."
+					"cancel": "Die Ausführung konnte nicht abgebrochen werden.",
+					"detail": "Die Audit-Details der Ausführung konnten nicht geladen werden."
 				}
 			},
 			"keys": {
