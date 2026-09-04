@@ -16,7 +16,7 @@ export type AgentDefinitionKind = "Single" | "Orchestrator";
 export const agentDefinitionKinds: readonly AgentDefinitionKind[] = ["Single", "Orchestrator"];
 
 // Reasoning effort reuses the chat surface's union so the agent form and the composer stay in lockstep.
-export const agentReasoningEfforts: readonly ReasoningEffort[] = ["none", "low", "medium", "high"];
+export const agentReasoningEfforts: readonly ReasoningEffort[] = ["none", "low", "medium", "high", "auto"];
 
 // Domain view-model for an agent definition. Tool config is exposed as typed structures (the wire DTO keeps
 // allowedToolNames as a list and toolApprovals as a map); timestamps are epoch milliseconds (long on the wire).

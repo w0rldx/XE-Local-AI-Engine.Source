@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -67,6 +67,7 @@ interface RenderOverrides {
 	onChange?: ReturnType<typeof vi.fn>;
 	errors?: Record<string, string>;
 	keepWarmModelOptions?: NodeSettingsFieldsCardProps["keepWarmModelOptions"];
+	autoEffortFastModelOptions?: NodeSettingsFieldsCardProps["autoEffortFastModelOptions"];
 }
 
 function renderCard(
@@ -85,6 +86,7 @@ function renderCard(
 				showDeveloperFields={false}
 				draftModelOptions={[]}
 				keepWarmModelOptions={overrides.keepWarmModelOptions ?? []}
+				autoEffortFastModelOptions={overrides.autoEffortFastModelOptions ?? []}
 				rerankerModelOptions={[]}
 				onDownloadRecommendedReranker={onDownload}
 				isDownloadRecommendedRerankerPending={overrides.isDownloadRecommendedRerankerPending ?? false}
@@ -97,6 +99,48 @@ function renderCard(
 	);
 	return { onDownload, onDownloadEmbedding, onChange };
 }
+
+describe("NodeSettingsFieldsCard — fast model for automatic reasoning effort", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+		vi.clearAllMocks();
+	});
+
+	afterEach(() => cleanup());
+
+	it("defaults to Off and offers only the llama.cpp chat models it was given", () => {
+		renderCard({ autoEffortFastModelOptions: [{ value: "qwen3-1.7b", label: "qwen3-1.7b" }] });
+
+		const select = screen.getByTestId("node-settings-auto-effort-fast-model") as HTMLInputElement;
+		expect(select.value).toBe("Off");
+
+		fireEvent.click(select);
+		// Scoped to this select's own listbox: the reranker select on the same card also offers an "Off" entry.
+		const listbox = screen.getByRole("listbox", { name: "Fast model for automatic reasoning effort", hidden: true });
+		expect(within(listbox).getByRole("option", { name: "Off", hidden: true })).toBeTruthy();
+		expect(within(listbox).getByRole("option", { name: "qwen3-1.7b", hidden: true })).toBeTruthy();
+	});
+
+	it("edits the selection through the generic onChange", () => {
+		const { onChange } = renderCard({ autoEffortFastModelOptions: [{ value: "qwen3-1.7b", label: "qwen3-1.7b" }] });
+
+		fireEvent.click(screen.getByTestId("node-settings-auto-effort-fast-model"));
+		fireEvent.click(screen.getByText("qwen3-1.7b"));
+
+		expect(onChange).toHaveBeenCalledWith("autoEffortFastModelName", "qwen3-1.7b");
+	});
+
+	it("keeps a stored model selectable after it was uninstalled", () => {
+		// Without the synthetic entry the select would silently read "Off" for a node that is still configured.
+		renderCard({
+			form: { ...toNodeSettingsFieldsForm(undefined), autoEffortFastModelName: "deleted-model" },
+			autoEffortFastModelOptions: [],
+		});
+
+		fireEvent.click(screen.getByTestId("node-settings-auto-effort-fast-model"));
+		expect(screen.getByRole("option", { name: "deleted-model", hidden: true })).toBeTruthy();
+	});
+});
 
 describe("NodeSettingsFieldsCard — keep model warm", () => {
 	beforeEach(() => {

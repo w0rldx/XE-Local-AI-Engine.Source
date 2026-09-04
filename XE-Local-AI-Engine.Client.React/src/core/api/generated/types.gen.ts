@@ -1514,6 +1514,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	minSpeculativeDraftGpuLayers?: number;
 	maxAllowedSpeculativeDraftGpuLayers?: number;
 	rerankerModelName?: string | null;
+	autoEffortFastModelName?: string | null;
 	huggingFaceDiskMarginBytes?: number | null;
 	orchestrationIdleTimeoutSeconds?: number | null;
 	minOrchestrationIdleTimeoutSeconds?: number;
@@ -1563,6 +1564,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	speculativeDraftMaxTokens?: number | null;
 	speculativeDraftGpuLayers?: number | null;
 	rerankerModelName?: string | null;
+	autoEffortFastModelName?: string | null;
 	huggingFaceDiskMarginBytes?: number | null;
 	orchestrationIdleTimeoutSeconds?: number | null;
 	agentHomePrepareTimeoutSeconds?: number | null;
@@ -5457,6 +5459,8 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse = {
 	totalTokens?: number | null;
 	toolSchemaTokens?: number | null;
 	maxToolSchemaTokens?: number | null;
+	dispatchedTier?: string | null;
+	authoredEffort?: string | null;
 	contentChunkCount?: number | null;
 	reasoningChunkCount?: number | null;
 	traceId?: string | null;

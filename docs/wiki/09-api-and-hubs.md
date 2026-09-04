@@ -107,7 +107,7 @@ has no dual-valid window. Authentication emits the bounded `xe:mcp_scope` and
 tools for delegate and all 23 for agentic. Direct calls to unauthorized admin tools are rejected too.
 
 The admin class calls application services directly — no internal HTTP hop — for node/runtime
-status, runtime acquisition, GGUF pull lifecycle, model delete/default selection, the exact 16-field
+status, runtime acquisition, GGUF pull lifecycle, model delete/default selection, the exact 17-field
 node-settings whitelist, and saved-agent CRUD. The canonical names and inputs are drift-tested
 against [`references/mcp-tools.md`](../../skills/xe-local-ai-engine/references/mcp-tools.md).
 

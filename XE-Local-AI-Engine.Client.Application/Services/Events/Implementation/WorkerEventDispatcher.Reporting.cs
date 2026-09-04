@@ -90,6 +90,38 @@ public sealed partial class WorkerEventDispatcher
         return Task.CompletedTask;
     }
 
+    public Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(dispatchedTier);
+        ArgumentException.ThrowIfNullOrWhiteSpace(authoredEffort);
+
+        // A no-op when the id is not the current invocation, exactly like the reports above.
+        UpdateInvocation(invocationId,
+            state =>
+            {
+                state.DispatchedTier = dispatchedTier;
+                state.AuthoredEffort = authoredEffort;
+                return state;
+            });
+
+        return Task.CompletedTask;
+    }
+
+    public Task ReportServedModelAsync(Guid invocationId, string modelUsed)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelUsed);
+
+        // A no-op when the id is not the current invocation, exactly like the reports above.
+        UpdateInvocation(invocationId,
+            state =>
+            {
+                state.ModelUsed = modelUsed;
+                return state;
+            });
+
+        return Task.CompletedTask;
+    }
+
     public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(failureMessage);

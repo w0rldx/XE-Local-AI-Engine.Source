@@ -48,6 +48,54 @@ public sealed class ListRunEnvelopesEndpointTests
         AssertEx.Null(unmeasuredRow.MaxToolSchemaTokens);
     }
 
+    [Test]
+    public async Task ListRunEnvelopes_ReturnsTheDispatchLabels_AndNullWhenTheTurnWasNotAuto()
+    {
+        var conversationId = Guid.NewGuid();
+        var dispatched = await SeedDispatchEnvelopeAsync(conversationId, dispatchedTier: "fast", authoredEffort: "auto").ConfigureAwait(false);
+        var ordinary = await SeedDispatchEnvelopeAsync(conversationId, dispatchedTier: null, authoredEffort: null).ConfigureAwait(false);
+
+        using var client = Factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/local/v1/agents/run-envelopes?conversationId={conversationId}");
+        Factory.AddNodeBearerToken(request);
+        request.Headers.Add("Origin", "http://localhost");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        var payload = AssertEx.NotNull(await JsonSerializer.DeserializeAsync<ListRunEnvelopesResponse>(stream, JsonOptions).ConfigureAwait(false));
+
+        var dispatchedRow = payload.Items.Single(row => row.Id == dispatched);
+        AssertEx.Equal("fast", dispatchedRow.DispatchedTier);
+        AssertEx.Equal("auto", dispatchedRow.AuthoredEffort);
+
+        var ordinaryRow = payload.Items.Single(row => row.Id == ordinary);
+        AssertEx.Null(ordinaryRow.DispatchedTier);
+        AssertEx.Null(ordinaryRow.AuthoredEffort);
+    }
+
+    private async Task<Guid> SeedDispatchEnvelopeAsync(Guid conversationId, string? dispatchedTier, string? authoredEffort)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var id = Guid.NewGuid();
+        var createdAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        _ = await dbContext.Database.ExecuteSqlAsync($"""
+                                                      INSERT INTO agent_execution_logs
+                                                          (id, record_kind, schema_version, agent_definition_id, conversation_id, message_id, invocation_id,
+                                                           model_name, provider, config_hash, terminal_status, latency_ms, success, created_at_utc,
+                                                           dispatched_tier, authored_effort)
+                                                      VALUES ({id}, {(int)AgentExecutionLogRecordKind.ChatRunEnvelope}, {AgentRunEnvelope.CurrentSchemaVersion},
+                                                              {Guid.NewGuid()}, {conversationId}, {Guid.NewGuid()}, {Guid.NewGuid()},
+                                                              'llama-3.1', 'local', '', 'completed', 1500, 1, {createdAtUtc},
+                                                              {dispatchedTier}, {authoredEffort});
+                                                      """).ConfigureAwait(false);
+
+        return id;
+    }
+
     // Seeded through raw parameterized SQL rather than the DbSet: the entity type is internal to the persistence
     // assembly, and there is no store API that writes a run-envelope row (the real write is the terminalize command's
     // own statement, covered separately). Every value is a bound parameter.

@@ -259,6 +259,61 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    [Arguments(true, false)]
+    [Arguments(false, true)]
+    public async Task SendMessageAsync_WhenTheTurnIsAWorkSessionStep_NeverAllowsAnAutoModelSwap(bool isWorkSessionTurn, bool expectedAllowAutoModelSwap)
+    {
+        // The exact shape ruling 2 closes: a development-workflow node that authors NEITHER a model nor an effort, on
+        // an agent that pins neither, with no tools — swap-eligible on every other signal. The work-session supervisor
+        // sets IsWorkSessionTurn on every step whatever the node authored, so the graph's step is never served by a
+        // model its author did not choose. The same send WITHOUT the flag is an ordinary chat turn and stays eligible.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
+            Substitute.For<IConversationSandboxStager>(),
+            Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           IsWorkSessionTurn: isWorkSessionTurn)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.True(runner.CaptureObserved, "Expected the send to reach the runner.");
+        AssertEx.Equal(expectedAllowAutoModelSwap, runner.LastAllowAutoModelSwap);
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenReasoningEffortOmitted_LeavesRuntimePackageReasoningNull()
     {
         var conversationId = Guid.NewGuid();
@@ -4682,6 +4737,10 @@ public sealed class NodeChatStreamServiceTests
         // runtime package (or stays null when none was selected).
         public SamplingOptions? LastSamplingOptions { get; private set; }
 
+        // The model-selection provenance carried on the runtime package; the work-session test asserts a supervised
+        // step never hands the dispatcher permission to replace the model.
+        public bool LastAllowAutoModelSwap { get; private set; }
+
         public bool CaptureObserved { get; private set; }
         public int ActiveInvocationCount => 0;
 
@@ -4690,6 +4749,7 @@ public sealed class NodeChatStreamServiceTests
             LastReasoningEffort = context.Package.ReasoningEffort;
             LastAllowedTools = context.Package.AllowedTools;
             LastSamplingOptions = context.Package.SamplingOptions;
+            LastAllowAutoModelSwap = context.Package.AllowAutoModelSwap;
             CaptureObserved = true;
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1).ConfigureAwait(false);
@@ -4929,6 +4989,27 @@ public sealed class NodeChatStreamServiceTests
             {
                 CurrentInvocation.ToolSchemaTokens = toolSchemaTokens;
                 CurrentInvocation.MaxToolSchemaTokens = maxToolSchemaTokens;
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort)
+        {
+            if (CurrentInvocation is not null)
+            {
+                CurrentInvocation.DispatchedTier = dispatchedTier;
+                CurrentInvocation.AuthoredEffort = authoredEffort;
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task ReportServedModelAsync(Guid invocationId, string modelUsed)
+        {
+            if (CurrentInvocation is not null)
+            {
+                CurrentInvocation.ModelUsed = modelUsed;
             }
 
             return Task.CompletedTask;

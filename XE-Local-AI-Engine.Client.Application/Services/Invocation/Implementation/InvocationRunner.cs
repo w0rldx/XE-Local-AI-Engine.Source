@@ -27,6 +27,7 @@ using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
@@ -41,6 +42,13 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed partial class InvocationRunner : IInvocationRunner
 {
     private const string OrchestrationFailureMessage = "Orchestration run failed.";
+
+    // The effort a swapped turn falls back to when the fast model goes missing before its first token. It is the FAST
+    // tier's own graded level, so the re-run keeps the tier the dispatcher chose and only gives up the model.
+    private const string FallbackDispatchEffort = "low";
+
+    /// <summary>The authored effort that opens the dispatch path, and the value persisted as <c>authored_effort</c>.</summary>
+    private const string AutoReasoningEffort = "auto";
 
     // A new local turn admitted after shutdown drain has begun. Surfaced as a clean Cancelled-category
     // failure — the node is going away — rather than being run into a drain that has already stopped waiting for it.
@@ -82,6 +90,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly ProviderResilienceOptions _resilienceOptions;
     private readonly IRuntimePackageValidator _runtimePackageValidator;
+
+    // A SINGLETON service, so this runner may hold it. The reasoning-effort dispatcher it opens a scope for is SCOPED
+    // (two of its dependencies are), and a singleton may not capture that under any wrapper — Lazy<T> defers
+    // construction but never opens a scope, which is exactly the captive dependency ValidateScopes exists to catch.
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ToolApprovalCoordinator _toolApprovalCoordinator;
 
     private readonly SpawnOptions _spawnOptions;
@@ -115,6 +128,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ApiToolCallBridge apiToolCallBridge,
         InvocationLifecycleTracker lifecycleTracker,
         IExternalProviderRegistry externalProviderRegistry,
+        IServiceScopeFactory scopeFactory,
         ILogger<InvocationRunner> logger)
     {
         _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
@@ -150,6 +164,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ArgumentNullException.ThrowIfNull(spawnOptions);
         _spawnOptions = spawnOptions.Value;
         _externalProviderRegistry = externalProviderRegistry ?? throw new ArgumentNullException(nameof(externalProviderRegistry));
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         // The migrated default model + the response-size / pending-tool-call caps are read once at singleton
@@ -267,6 +282,80 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             var resolvedModel = modelResolution.Model;
 
+            // Reasoning effort `auto`: resolve it into a concrete {model, effort} for THIS turn, here,
+            // between model resolution and the local warm — so an admitted small-model swap is warmed instead of the
+            // resolved model, rather than being reacted to after a warm that silently swallows its failure.
+            //
+            // The single Normalize(...) is "auto" guard below is the whole byte-identical story for every other
+            // effort: no scope, no dispatcher resolution, no request allocation, no node-side lookup. The package
+            // builder has already normalised, so the comparison is exact.
+            //
+            // The scope is declared FIRST so `using`'s reverse-order disposal releases it LAST — after the ledger
+            // reservation produced by the CapacityService that lives inside it. A plain nullable IServiceScope (not
+            // AsyncServiceScope, whose `default` cannot be disposed safely) keeps the non-`auto` path a legal no-op.
+            using var dispatchScope = ReasoningEffortNormalizer.Normalize(package.ReasoningEffort) is AutoReasoningEffort
+                ? _scopeFactory.CreateScope()
+                : null;
+
+            ReasoningDispatchDecision? dispatchDecision = null;
+            if (dispatchScope is not null)
+            {
+                dispatchDecision = await dispatchScope.ServiceProvider
+                                                      .GetRequiredService<IReasoningEffortDispatcher>()
+                                                      .DispatchAsync(BuildDispatchRequest(package, resolvedModel), invocationToken)
+                                                      .ConfigureAwait(false);
+            }
+
+            // The model the turn was AUTHORISED for, and its capability flags, captured before the dispatch block can
+            // rewrite any of them. The send-boundary retry below restores exactly these.
+            var originalModel = resolvedModel;
+            var originalSupportsThinking = package.SupportsThinking;
+            var originalReasoningBudgetEnforceable = package.ReasoningBudgetEnforceable;
+            using var fastReservation = dispatchDecision?.CapacityReservation;
+            if (dispatchDecision is { } dispatched)
+            {
+                resolvedModel = dispatched.Model;
+
+                // `package with { ... }` copies ConfigHash verbatim: the hash folds the AUTHORED effort, so two turns
+                // of one conversation that dispatch to different tiers still share one hash and a resume is never
+                // invalidated by a dispatch difference. Sampling is untouched: no tier caps the turn's output (see
+                // ReasoningDispatchDecision.MaxOutputTokens), so a dispatched turn's send is shaped exactly like a
+                // non-`auto` one.
+                package = package with
+                {
+                    ReasoningEffort = dispatched.Effort,
+                    SupportsThinking = dispatched.SupportsThinking,
+                    ReasoningBudgetEnforceable = dispatched.ReasoningBudgetEnforceable
+                };
+
+                // Onto the invocation state, so the terminalize write persists what `auto` resolved to with the
+                // envelope row. Two category labels: the tier, and the authored effort — which is `auto` by the
+                // branch condition above, and is what separates the dispatched population from the pre-`auto` one in
+                // the same query. Only an `auto` turn reaches this line, so every other turn's envelope carries nulls.
+                await dispatcher.ReportEffortDispatchAsync(package.InvocationId, ReasoningTierLabels.For(dispatched.Tier), AutoReasoningEffort).ConfigureAwait(false);
+            }
+
+            var modelWasSwapped = dispatchDecision is { } swapCandidate
+                                  && !string.Equals(swapCandidate.Model, originalModel, StringComparison.Ordinal);
+
+            // The one server-side record of what `auto` decided. The dispatcher itself takes no logger by design (its
+            // inputs are the user's message and the turn's shape), so the decision is logged here, from its OUTPUT
+            // only: the tier, the stable kebab-case reason code, and whether the model was replaced. No signal value —
+            // no message length, no conversation depth, no score — and no model name or message text ever reaches this
+            // line, which is what keeps it inside the slice's logging invariant.
+            if (dispatchDecision is { } logged)
+            {
+                _logger.LogInformation("Reasoning effort 'auto' dispatched for invocation {InvocationId}: tier {Tier}, reason {ReasonCode}, model swapped {ModelWasSwapped}.",
+                    package.InvocationId, ReasoningTierLabels.For(logged.Tier), logged.ReasonCode, modelWasSwapped);
+            }
+
+            // The retry below re-enters RunSingleAgentAsync, which owns the tool-relevance drain and its ToolsFiltered
+            // notice — running it twice would emit that notice twice. A swap requires OfferedToolCount == 0, so a
+            // swapped turn offers no tools and the drain is a no-op; this makes that dependency explicit instead of
+            // load-bearing-by-coincidence. If a future gate ever admits a swap on a tool-bearing turn, the retry
+            // switches itself off rather than double-emitting.
+            var swapRetryEligible = modelWasSwapped && package.AllowedTools.Count == 0;
+
             // Shared streaming state for both the single-agent and orchestration paths: the response/reasoning
             // accumulators, the byte caps, the monotonic sequence counters, and the terminal usage snapshot. Both
             // branches feed this through the same Emit* helpers so the transport, size cap, dispatcher reporting, and
@@ -291,6 +380,20 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     BuildModelSubstitutedNoticeMessage(modelResolution.RequestedModel, resolvedModel)).ConfigureAwait(false);
             }
 
+            // Surface what `auto` resolved to, for the same reason: a decision the user did not make must be visible.
+            // Deliberately silent on a NORMAL, no-swap turn — that is the common case and a notice on every ordinary
+            // turn is noise. The detail is the reason CODE only; no signal value ever reaches this seam.
+            // A SWAPPED turn is deliberately silent here: it may still fall back to the original model at the send
+            // boundary below, and a turn must carry exactly ONE effort notice. Its notice is emitted once the send has
+            // resolved — either naming the model that actually served, or naming the fallback.
+            if (dispatchDecision is { } announced && announced.Tier != ReasoningTier.Normal && !modelWasSwapped)
+            {
+                await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
+                                   BuildEffortDispatchedNoticeMessage(announced.Tier, announced.Effort, resolvedModel, swapped: false),
+                                   announced.ReasonCode)
+                               .ConfigureAwait(false);
+            }
+
             // Seed the per-root-invocation spawn context (Depth 0) for this turn so the spawn_subagent tool (when the
             // agent calls it) enforces the fan-out and cloud-spawn caps against ONE shared root. The context flows as an
             // AsyncLocal into the function-invocation pipeline that runs the tool body; disposal restores the prior
@@ -303,7 +406,14 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // later sends. A node-local or cloud model resolves nothing and the scope is inert.
             // The scope is opened HERE rather than inside the resolver: the ambient set is an AsyncLocal, and a write
             // to one inside an async method never reaches that method's caller.
-            var turnPins = await ExternalProviderInvocationPin.ResolveAsync(_externalProviderRegistry, resolvedModel, invocationToken).ConfigureAwait(false);
+            // BOTH models, not just the dispatched one: the send-boundary retry below switches `resolvedModel` back to
+            // the original inside THIS scope, and a pin it never resolved leaves that fallback send falling through to
+            // the transport's weaker unpinned check — the Local->Cloud / endpoint edit this pin exists to refuse. On a
+            // non-`auto` turn, and on an `auto` turn that did not swap, the two are the same id and the resolver
+            // de-duplicates, so the pin set is exactly what it was before.
+            var turnPins = await ExternalProviderInvocationPin
+                                 .ResolveAsync(_externalProviderRegistry, [resolvedModel, originalModel], invocationToken)
+                                 .ConfigureAwait(false);
             using var externalBindingPin = ExternalProviderBindingPinScope.Begin(turnPins);
 
             // Seed the active conversation id into the same root tool-loop scope so the AgentHome tool gateway can stage
@@ -324,6 +434,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // budgeter sizes history against the real window rather than the configured default (see
             // TurnPolicy.WithEffectiveContext for the precedence). The same value is threaded into the agent definition
             // below so the INNER provider-round budgeter (num_ctx side channel) resolves the identical window.
+            // Captured BEFORE the fold so the send-boundary retry can re-derive the ORIGINAL model's policy from the
+            // ORIGINAL model's own warm. Reusing the swapped model's policy would measure a 20k conversation against a
+            // 4k fast-model window and drop history the authorised model would have kept.
+            var preWarmPolicy = turnPolicy;
             turnPolicy = turnPolicy.WithEffectiveContext(effectiveContextTokens);
 
             if (context.GenerationAdmissionPolicy is { } admissionPolicy)
@@ -362,7 +476,77 @@ public sealed partial class InvocationRunner : IInvocationRunner
             }
             else
             {
-                await RunSingleAgentAsync(package, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken).ConfigureAwait(false);
+                try
+                {
+                    await RunSingleAgentAsync(package, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken).ConfigureAwait(false);
+
+                    // A swap served the turn. Announce it now, once, naming the model that actually ran. Every other
+                    // turn already emitted its notice (or is a silent NORMAL one) before the send.
+                    if (modelWasSwapped && dispatchDecision is { } served)
+                    {
+                        // The invocation state was seeded with the model the PACKAGE named, and both the persisted
+                        // message row and the envelope's provider attribution read it from there — so a swapped turn
+                        // that does not correct it is recorded, and measured, against a model that never saw it.
+                        await dispatcher.ReportServedModelAsync(package.InvocationId, resolvedModel).ConfigureAwait(false);
+                        await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
+                                           BuildEffortDispatchedNoticeMessage(served.Tier, served.Effort, resolvedModel, swapped: true),
+                                           served.ReasonCode)
+                                       .ConfigureAwait(false);
+                    }
+                }
+                catch (Exception) when (swapRetryEligible && !stream.FirstOutputRecorded && !invocationToken.IsCancellationRequested)
+                {
+                    // The fast model went away between the capacity probe and the send: profiling took its process, an
+                    // eject drained it, it was uninstalled, or it would not fit. Nothing has reached the client yet, so
+                    // re-run once on the model the turn was actually authorised for. Keyed on "nothing streamed"
+                    // rather than an exception type on purpose — one condition covers every way a swapped model can go
+                    // missing and cannot rot when a provider's messages change.
+                    //
+                    // RELEASE THE FAST RESERVATION FIRST. It books the small model's bytes and, on an Allow verdict,
+                    // holds a launch admission and one of the loaded-process slots. Carrying it into the re-run
+                    // double-books the ledger against a model that is no longer being loaded and can starve the
+                    // original model's own self-heal spawn on a node at the process cap — the exact failure this retry
+                    // exists to avoid. Dispose is idempotent, so the `using` at turn end is a no-op after this.
+                    fastReservation?.Dispose();
+                    resolvedModel = originalModel;
+                    package = package with
+                    {
+                        ReasoningEffort = FallbackDispatchEffort,
+                        SupportsThinking = originalSupportsThinking,
+                        ReasoningBudgetEnforceable = originalReasoningBudgetEnforceable
+                    };
+
+                    // Re-warm the ORIGINAL model and re-derive its window. The policy and effective-context above were
+                    // both measured against the fast model's launched window; carrying them into the re-run would size
+                    // this turn's history — and the agent definition's num_ctx — against a window this model never had.
+                    var retryRuntime = await _localRuntimeWarmer.PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken).ConfigureAwait(false);
+                    var retryContextTokens = retryRuntime.EffectiveContextTokens;
+                    var retryPolicy = preWarmPolicy.WithEffectiveContext(retryContextTokens);
+
+                    await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
+                                       BuildEffortDispatchedNoticeMessage(ReasoningTier.Fast, FallbackDispatchEffort, resolvedModel, swapped: false),
+                                       ReasoningDispatchReasons.FastModelUnavailable)
+                                   .ConfigureAwait(false);
+
+                    // Exactly once. A second failure is a real failure and fails the turn normally.
+                    await RunSingleAgentAsync(package, resolvedModel, transport, stream, retryPolicy, retryContextTokens, invocationToken).ConfigureAwait(false);
+                }
+                catch (Exception) when (modelWasSwapped && dispatchDecision is { } failedSwap)
+                {
+                    // The swapped send failed with no fallback available — it had already streamed, or the turn offers
+                    // tools, or the turn is being cancelled. The ruling is exactly ONE effort notice per turn and the
+                    // pre-send announcement was deliberately withheld for swapped turns, so without this the reader is
+                    // told nothing at all about a turn whose model was silently replaced. The notice names the model
+                    // that actually served; the FAILURE is reported by the outer handler, as for any other turn.
+                    //
+                    // No served-model report here: the turn produced no answer to attribute, and the fast model may
+                    // have died before its first token. The seeded (authorised) model stays on the failed row.
+                    await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
+                                       BuildEffortDispatchedNoticeMessage(failedSwap.Tier, failedSwap.Effort, resolvedModel, swapped: true),
+                                       failedSwap.ReasonCode)
+                                   .ConfigureAwait(false);
+                    throw;
+                }
             }
 
             // Read the whole-turn wall-clock duration once. The same value rides every completion transport (encrypted

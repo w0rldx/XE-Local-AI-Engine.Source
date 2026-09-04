@@ -26225,6 +26225,10 @@
             "type": "string",
             "nullable": true
           },
+          "autoEffortFastModelName": {
+            "type": "string",
+            "nullable": true
+          },
           "huggingFaceDiskMarginBytes": {
             "type": "integer",
             "nullable": true
@@ -26417,6 +26421,10 @@
             "nullable": true
           },
           "rerankerModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "autoEffortFastModelName": {
             "type": "string",
             "nullable": true
           },
@@ -39867,6 +39875,14 @@
           "maxToolSchemaTokens": {
             "type": "integer",
             "format": "int32",
+            "nullable": true
+          },
+          "dispatchedTier": {
+            "type": "string",
+            "nullable": true
+          },
+          "authoredEffort": {
+            "type": "string",
             "nullable": true
           },
           "contentChunkCount": {

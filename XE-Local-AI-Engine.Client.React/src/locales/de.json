@@ -179,7 +179,8 @@
 			"toolDisabled": "Tool deaktiviert",
 			"historyTruncated": "Verlauf gekürzt",
 			"orchestrationDegraded": "Orchestrierung nicht verwendet",
-			"toolsFiltered": "Tools gefiltert"
+			"toolsFiltered": "Tools gefiltert",
+			"effortDispatched": "Reasoning-Aufwand aufgelöst"
 		},
 		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus."
 	},
@@ -652,7 +653,8 @@
 				"low": "Niedrig",
 				"medium": "Mittel",
 				"high": "Hoch",
-				"xhigh": "Höchste"
+				"xhigh": "Höchste",
+				"auto": "Auto"
 			},
 			"newConversation": "Neuer normaler Chat",
 			"newEncryptedConversation": "Neuer verschlüsselter Chat",
@@ -1896,6 +1898,12 @@
 					"downloadInFlight": "Der empfohlene Reranker ({{model}}) wird bereits heruntergeladen.",
 					"downloadError": "Der Download des empfohlenen Rerankers konnte nicht gestartet werden."
 				},
+				"autoEffortFastModel": {
+					"label": "Schnelles Modell für automatische Denkintensität",
+					"description": "Wenn eine Chat-Runde die automatische Denkintensität verwendet und die Runde einfach wirkt, wird sie stattdessen auf diesem kleinen llama.cpp-Modell ausgeführt. Aus lassen, um das Modell der Unterhaltung zu behalten und nur die Denkintensität zu senken. Benötigt einen zweiten Prozess-Slot; Änderungen gelten ab der nächsten Nachricht.",
+					"off": "Aus",
+					"empty": "Keine installierten llama.cpp-Chatmodelle"
+				},
 				"embeddingModel": {
 					"downloadRecommended": "Empfohlenes Embedding-Modell herunterladen",
 					"recommendedHelp": "Erforderlich für die Wissensdatenbank: Ohne Embedding-Modell können Dokumente nicht indexiert werden. Empfohlen: nomic-embed-text-v1.5 (~274 MB).",
@@ -2511,7 +2519,8 @@
 						"none": "Keiner",
 						"low": "Niedrig",
 						"medium": "Mittel",
-						"high": "Hoch"
+						"high": "Hoch",
+						"auto": "Auto"
 					}
 				},
 				"tools": {

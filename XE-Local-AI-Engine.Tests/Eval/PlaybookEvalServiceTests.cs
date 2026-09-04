@@ -520,6 +520,7 @@ public sealed class PlaybookEvalServiceTests
         public Task<string> RunAsync(IChatClient chatClient,
             string systemInstructions,
             IReadOnlyList<ChatMessage> inputTurns,
+            string? reasoningEffort = null,
             CancellationToken cancellationToken = default)
         {
             var text = systemInstructions.Contains(CandidateBehavior, StringComparison.Ordinal)
@@ -540,6 +541,7 @@ public sealed class PlaybookEvalServiceTests
         public Task<string> RunAsync(IChatClient chatClient,
             string systemInstructions,
             IReadOnlyList<ChatMessage> inputTurns,
+            string? reasoningEffort = null,
             CancellationToken cancellationToken = default)
         {
             if (systemInstructions.Contains(CandidateBehavior, StringComparison.Ordinal))

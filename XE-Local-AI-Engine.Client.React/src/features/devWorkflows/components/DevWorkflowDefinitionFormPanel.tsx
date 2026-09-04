@@ -37,8 +37,11 @@ import {
 	useDevWorkflowModelOptions,
 } from "@/features/devWorkflows/queries/useDevWorkflows";
 
-/** The agent surface's own set ("none" plus graded efforts); an unset effort means the provider default. */
-const reasoningEfforts = ["none", "low", "medium", "high"] as const;
+/**
+ * The agent surface's own set ("none" plus graded efforts, plus "auto"); an unset effort means the provider default.
+ * "auto" is resolved per turn by the node into one of the others.
+ */
+const reasoningEfforts = ["none", "low", "medium", "high", "auto"] as const;
 
 /** `DevWorkflowGraph.cs`'s own default is `All` for an absent policy, so those are the only two members. */
 const joinPolicies = ["All", "Any"] as const;

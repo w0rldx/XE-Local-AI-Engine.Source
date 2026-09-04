@@ -330,6 +330,24 @@ describe("node chat mapper", () => {
 		]);
 	});
 
+	it("maps a persisted notice part's detail from the member the accumulator reuses for it (State -> detail)", () => {
+		// A notice part carries its structured detail in the generic `state` member, the way it carries its kind in
+		// `name`. Reading it here is what keeps a reloaded turn identical to the live one it replaced.
+		const message = mapSingleMessage({
+			parts: [
+				{
+					kind: "notice",
+					sequence: 1,
+					name: "EffortDispatched",
+					text: "Reasoning effort 'auto' resolved to Fast (low) for this turn.",
+					state: "fast-model-unset",
+				},
+			],
+		});
+
+		expect(message.parts?.[0]).toMatchObject({ kind: "notice", noticeKind: "EffortDispatched", detail: "fast-model-unset" });
+	});
+
 	it("skips an unknown part kind so a forward-compat backend addition never breaks rendering", () => {
 		const message = mapSingleMessage({
 			parts: [

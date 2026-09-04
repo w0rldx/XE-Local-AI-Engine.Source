@@ -213,7 +213,11 @@ public sealed record AgentRunEnvelopeMetadata(
     // Counts only — never a tool name. Trailing optional so every existing construction site compiles unchanged, and
     // null on the thin interrupted/cancel path that has no invocation state to read them from.
     long? ToolSchemaTokens = null,
-    int? MaxToolSchemaTokens = null);
+    int? MaxToolSchemaTokens = null,
+    // What reasoning effort `auto` resolved to for the turn: the tier label and the authored effort. Trailing optional
+    // for the same reason as the pair above, and null on every turn that authored a concrete effort.
+    string? DispatchedTier = null,
+    string? AuthoredEffort = null);
 
 public sealed record NodeChatCancelRequest(
     NodeChatMessageCorrelation Correlation,

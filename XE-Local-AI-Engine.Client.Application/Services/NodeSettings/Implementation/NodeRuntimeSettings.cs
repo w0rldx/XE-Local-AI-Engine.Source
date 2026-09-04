@@ -186,6 +186,9 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     public async Task<string?> GetRerankerModelNameAsync(CancellationToken cancellationToken = default) =>
         ResolveRerankerModelName(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
+    public async Task<string?> GetAutoEffortFastModelNameAsync(CancellationToken cancellationToken = default) =>
+        ResolveAutoEffortFastModelName(await LoadAsync(cancellationToken).ConfigureAwait(false));
+
     public string GetDefaultModelName() =>
         ResolveDefaultModelName(LoadStored());
 
@@ -301,6 +304,9 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     // Reranking has no appsettings section: the stored name is the only source, blank → null (off).
     private static string? ResolveRerankerModelName(StoredNodeSettings stored) =>
         string.IsNullOrWhiteSpace(stored.RerankerModelName) ? null : stored.RerankerModelName;
+
+    private static string? ResolveAutoEffortFastModelName(StoredNodeSettings stored) =>
+        string.IsNullOrWhiteSpace(stored.AutoEffortFastModelName) ? null : stored.AutoEffortFastModelName;
 
     private async Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken)
     {

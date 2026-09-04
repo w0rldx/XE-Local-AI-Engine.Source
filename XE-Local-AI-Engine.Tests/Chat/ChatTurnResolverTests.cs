@@ -222,7 +222,31 @@ public sealed class ChatTurnResolverTests
         AssertEx.False(resolution.ReasoningBudgetEnforceable, "with no pin the active model's flag is the turn's flag");
     }
 
-    private static async Task<ChatTurnResolution> ResolveWithPinAsync(bool activeModelEnforceable, bool? pinnedModelEnforceable)
+    // The ONE turn shape a dispatcher model swap is allowed on: the node's default model ran because nobody asked for
+    // a specific one. Named for the permission, so this is the only case that may return true.
+    [Test]
+    public async Task Resolve_WhenNoPickAndNoPin_AllowsAutoModelSwap()
+    {
+        var resolution = await ResolveWithPinAsync(activeModelEnforceable: true, pinnedModelEnforceable: null);
+
+        AssertEx.True(resolution.AllowAutoModelSwap, "no explicit pick and no honored pin means the node chose the model, so it may be swapped");
+    }
+
+    // Both pinned shapes clear the permission: an explicit user pick and an honored agent pin are each a request for
+    // THAT model, and the dispatcher must not answer it with a different one.
+    [Test]
+    [Arguments(true, null)]
+    [Arguments(false, true)]
+    public async Task Resolve_WhenUserPickedOrAgentPinned_DisallowsAutoModelSwap(bool userPickedConcreteModel, bool? pinnedModelEnforceable)
+    {
+        var resolution = await ResolveWithPinAsync(activeModelEnforceable: true, pinnedModelEnforceable, userPickedConcreteModel);
+
+        AssertEx.False(resolution.AllowAutoModelSwap, "a pinned model — picked by the user or honored from the agent definition — is never swapped");
+    }
+
+    private static async Task<ChatTurnResolution> ResolveWithPinAsync(bool activeModelEnforceable,
+        bool? pinnedModelEnforceable,
+        bool userPickedConcreteModel = false)
     {
         const string ActiveModel = "active-gguf";
         const string PinnedModel = "pinned-gguf";
@@ -258,7 +282,7 @@ public sealed class ChatTurnResolverTests
             requiresInstalledChatModel: false,
             effectiveAgentId: agentId,
             retrievalQuery: null,
-            userPickedConcreteModel: false,
+            userPickedConcreteModel,
             CancellationToken.None);
     }
 

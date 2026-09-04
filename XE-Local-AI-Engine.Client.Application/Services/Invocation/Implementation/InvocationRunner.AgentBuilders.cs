@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
@@ -214,6 +215,45 @@ public sealed partial class InvocationRunner
         return string.IsNullOrWhiteSpace(requestedModel)
             ? $"The requested model could not be verified; this turn ran on the node's default model '{fallbackModel}' instead."
             : $"Model '{requestedModel}' could not be verified; this turn ran on the node's default model '{fallbackModel}' instead.";
+    }
+
+    /// <summary>
+    ///     Sanitized, user-facing text for a <see cref="TurnNoticeKind.EffortDispatched" /> notice. Names the tier, the
+    ///     concrete effort it resolved to, and the model only when it was actually replaced. Carries no signal value:
+    ///     WHY the tier was chosen rides the notice's reason-code detail, which names a rule rather than a measurement.
+    /// </summary>
+    private static string BuildEffortDispatchedNoticeMessage(ReasoningTier tier, string effort, string model, bool swapped)
+    {
+        var resolved = $"Reasoning effort 'auto' resolved to {tier} ({effort}) for this turn.";
+
+        return swapped ? resolved + $" This turn ran on '{model}'." : resolved;
+    }
+
+    /// <summary>
+    ///     Maps the runtime package onto the inputs the reasoning-effort dispatcher may read. Every field has one
+    ///     named source here, so nothing is invented at the seam — and nothing that is an IMMUTABLE constraint
+    ///     (approval policy, egress gates, path guards, the sandbox, tool authorisation) can be reached from it.
+    /// </summary>
+    private static ReasoningDispatchRequest BuildDispatchRequest(RuntimePackage package, string resolvedModel)
+    {
+        // ONE guarded lookup shared by the text and the attachment flag, so the two can never disagree and an empty or
+        // assistant-only context cannot throw: both degrade to "no text, no attachments", which scores Normal.
+        var latestUser = package.ConversationContext
+                                .OrderByDescending(static message => message.SortOrder)
+                                .FirstOrDefault(static message => message.Role == MessageRole.User);
+
+        return new ReasoningDispatchRequest(resolvedModel,
+            package.SupportsThinking,
+            package.ReasoningBudgetEnforceable,
+            package.AllowAutoModelSwap,
+            package.OrchestrationSpec is not null,
+            package.ConversationContext.Count,
+            latestUser?.Content ?? string.Empty,
+            latestUser?.Images is { Count: > 0 },
+            package.AllowedTools.Count,
+            package.Skills is { Count: > 0 },
+            package.ResponseJsonSchema is not null,
+            package.IsUnattended);
     }
 
     /// <summary>

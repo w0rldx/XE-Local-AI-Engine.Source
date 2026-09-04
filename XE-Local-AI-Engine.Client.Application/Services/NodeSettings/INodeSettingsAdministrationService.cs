@@ -35,6 +35,7 @@ public sealed record NodeSettingsAgenticPatch
     public int? SpeculativeDraftMaxTokens { get; init; }
     public int? SpeculativeDraftGpuLayers { get; init; }
     public string? RerankerModelName { get; init; }
+    public string? AutoEffortFastModelName { get; init; }
 }
 
 public sealed record NodeSettingsAgenticView(
@@ -53,7 +54,8 @@ public sealed record NodeSettingsAgenticView(
     string? SpeculativeDraftModelName,
     int? SpeculativeDraftMaxTokens,
     int? SpeculativeDraftGpuLayers,
-    string? RerankerModelName);
+    string? RerankerModelName,
+    string? AutoEffortFastModelName);
 
 public sealed record NodeSettingsAdministrationResult(
     bool Updated,

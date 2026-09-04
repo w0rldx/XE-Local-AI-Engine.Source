@@ -179,7 +179,8 @@
 			"toolDisabled": "Tool disabled",
 			"historyTruncated": "History truncated",
 			"orchestrationDegraded": "Orchestration not used",
-			"toolsFiltered": "Tools filtered"
+			"toolsFiltered": "Tools filtered",
+			"effortDispatched": "Reasoning effort resolved"
 		},
 		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting."
 	},
@@ -652,7 +653,8 @@
 				"low": "Low",
 				"medium": "Medium",
 				"high": "High",
-				"xhigh": "Highest"
+				"xhigh": "Highest",
+				"auto": "Auto"
 			},
 			"newConversation": "New plain chat",
 			"newEncryptedConversation": "New encrypted chat",
@@ -1896,6 +1898,12 @@
 					"downloadInFlight": "The recommended reranker ({{model}}) is already downloading.",
 					"downloadError": "Could not start the recommended reranker download."
 				},
+				"autoEffortFastModel": {
+					"label": "Fast model for automatic reasoning effort",
+					"description": "When a chat turn uses the automatic reasoning effort and the turn looks trivial, run it on this small llama.cpp model instead. Leave off to keep the conversation's own model and only lower the effort. Needs a second loaded-process slot; changes apply to the next message.",
+					"off": "Off",
+					"empty": "No installed llama.cpp chat models"
+				},
 				"embeddingModel": {
 					"downloadRecommended": "Download recommended embedding model",
 					"recommendedHelp": "Required for the knowledge base: without an embedding model, documents cannot be indexed. Recommended: nomic-embed-text-v1.5 (~274 MB).",
@@ -2511,7 +2519,8 @@
 						"none": "None",
 						"low": "Low",
 						"medium": "Medium",
-						"high": "High"
+						"high": "High",
+						"auto": "Auto"
 					}
 				},
 				"tools": {

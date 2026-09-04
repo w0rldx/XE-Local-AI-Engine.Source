@@ -248,7 +248,7 @@ public sealed class NodeAdminMcpTools(
             _nodeSettingsAdministrationService.GetAgenticViewAsync(cancellationToken));
 
     [McpServerTool(Name = "update_node_settings")]
-    [Description("Apply a partial update to the exact restricted 16-field agentic node-settings whitelist.")]
+    [Description("Apply a partial update to the exact restricted 17-field agentic node-settings whitelist.")]
 #pragma warning disable IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public async Task<McpNodeSettingsUpdateResponse> UpdateNodeSettingsAsync(CancellationToken cancellationToken,
         string? default_model_name = null,
@@ -266,7 +266,8 @@ public sealed class NodeAdminMcpTools(
         string? speculative_draft_model_name = null,
         int? speculative_draft_max_tokens = null,
         int? speculative_draft_gpu_layers = null,
-        string? reranker_model_name = null)
+        string? reranker_model_name = null,
+        string? auto_effort_fast_model_name = null)
 #pragma warning restore IDE1006
     {
         var arguments = AuditArguments(("default_model_name", default_model_name),
@@ -284,7 +285,8 @@ public sealed class NodeAdminMcpTools(
             ("speculative_draft_model_name", speculative_draft_model_name),
             ("speculative_draft_max_tokens", speculative_draft_max_tokens),
             ("speculative_draft_gpu_layers", speculative_draft_gpu_layers),
-            ("reranker_model_name", reranker_model_name));
+            ("reranker_model_name", reranker_model_name),
+            ("auto_effort_fast_model_name", auto_effort_fast_model_name));
         return await InvokeAuditedAsync("update_node_settings", arguments, async () =>
         {
             var result = await _nodeSettingsAdministrationService.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
@@ -304,7 +306,8 @@ public sealed class NodeAdminMcpTools(
                 SpeculativeDraftModelName = speculative_draft_model_name,
                 SpeculativeDraftMaxTokens = speculative_draft_max_tokens,
                 SpeculativeDraftGpuLayers = speculative_draft_gpu_layers,
-                RerankerModelName = reranker_model_name
+                RerankerModelName = reranker_model_name,
+                AutoEffortFastModelName = auto_effort_fast_model_name
             }, cancellationToken).ConfigureAwait(false);
             return result.ToResponse();
         }, static response => !response.Updated).ConfigureAwait(false);

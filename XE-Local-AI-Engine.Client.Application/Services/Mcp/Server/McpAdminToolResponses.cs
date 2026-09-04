@@ -312,6 +312,7 @@ internal static class McpAdminWireNames
             nameof(NodeSettingsAgenticPatch.SpeculativeDraftMaxTokens) => "speculative_draft_max_tokens",
             nameof(NodeSettingsAgenticPatch.SpeculativeDraftGpuLayers) => "speculative_draft_gpu_layers",
             nameof(NodeSettingsAgenticPatch.RerankerModelName) => "reranker_model_name",
+            nameof(NodeSettingsAgenticPatch.AutoEffortFastModelName) => "auto_effort_fast_model_name",
             _ => throw new ArgumentOutOfRangeException(nameof(propertyName), propertyName, "Unknown agentic settings property.")
         };
 }

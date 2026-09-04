@@ -228,6 +228,28 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 		expect(sent?.graph?.nodes?.[0]?.reasoningEffort).toBe("medium");
 	});
 
+	it("offers auto in the per-node reasoning effort menu and sends it as written", async () => {
+		// The node is agent-bound, so its turn always carries a pinned model: authoring `auto` buys the effort ladder
+		// and never a model swap. All the form has to do is stop hiding the token.
+		let sent: { graph?: DevWorkflowGraph } | undefined;
+		server.use(
+			...optionRoutes(),
+			definitionRoute(),
+			http.put(localApiPath(`development-workflows/definitions/${definitionId}`), async ({ request }) => {
+				sent = (await request.json()) as typeof sent;
+				return HttpResponse.json({ id: definitionId, name: "Research → Plan → Approval", version: 4 });
+			}),
+		);
+		renderPanel();
+
+		fireEvent.click(await screen.findByTestId("dev-workflow-definition-node-effort-0"));
+		fireEvent.click(screen.getByText("auto"));
+		fireEvent.click(screen.getByTestId("dev-workflow-definition-save"));
+
+		await waitFor(() => expect(sent).toBeDefined());
+		expect(sent?.graph?.nodes?.[0]?.reasoningEffort).toBe("auto");
+	});
+
 	it("refuses to save a graph the server would reject, naming the node instead of waiting for a 400", async () => {
 		let putCalls = 0;
 		server.use(

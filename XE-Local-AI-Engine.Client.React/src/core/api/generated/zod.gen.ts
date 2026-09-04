@@ -1832,6 +1832,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
 	rerankerModelName: z.string().nullish(),
+	autoEffortFastModelName: z.string().nullish(),
 	huggingFaceDiskMarginBytes: z.int().nullish(),
 	orchestrationIdleTimeoutSeconds: z
 		.int()
@@ -1958,6 +1959,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
 	rerankerModelName: z.string().nullish(),
+	autoEffortFastModelName: z.string().nullish(),
 	huggingFaceDiskMarginBytes: z.int().nullish(),
 	orchestrationIdleTimeoutSeconds: z
 		.int()
@@ -6799,6 +6801,8 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse = z
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
+	dispatchedTier: z.string().nullish(),
+	authoredEffort: z.string().nullish(),
 	contentChunkCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })

@@ -64,6 +64,20 @@ public sealed class DevWorkflowGraphTests
         AssertEx.Equal("High", graph.Nodes["only"].ReasoningEffort, "the effort travels to the provider as written; only its membership is checked.");
     }
 
+    /// <summary>
+    ///     A node may author <c>auto</c>: the vocabulary is the agent surface's, and that surface accepts it. The node
+    ///     is agent-bound, so its turn always carries a pinned model — the effort ladder applies, the model swap never
+    ///     does — which needs no node-specific rule, only that the parser stops refusing the token.
+    /// </summary>
+    [Test]
+    public void ParseNode_WhenReasoningEffortIsAuto_IsAccepted()
+    {
+        var graph = DevWorkflowGraph.Parse(
+            """{"schemaVersion":1,"nodes":[{"nodeKey":"only","nodeType":"Agent","reasoningEffort":"auto"}],"edges":[]}""");
+
+        AssertEx.Equal("auto", graph.Nodes["only"].ReasoningEffort);
+    }
+
     [Test]
     public void Parse_WithNeitherPin_LeavesBothToTheBoundAgent()
     {

@@ -358,6 +358,35 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.Equal("high", codexEffort);
     }
 
+    // Defence in depth for the `auto` reasoning effort. `auto` is resolved into a concrete tier by the node's
+    // invocation runner BEFORE the definition is built, so this factory must never see it. If one ever leaks past the
+    // runner, it must behave exactly as any UNRECOGNIZED value already does — think:true (reason), no budget marker,
+    // no Codex effort, no external marker — so nothing new can reach a provider wire.
+    [Test]
+    public async Task CreateAsync_WhenEffortIsAuto_ProducesTheUnrecognizedValueBehaviour()
+    {
+        var definition = new InvocationAgentDefinition("qwen3:8b",
+            "Be helpful.",
+            [],
+            [],
+            "auto");
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var chatOptions = ((ChatClientAgentRunOptions)context.RunOptions!).ChatOptions!;
+        var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
+
+        AssertEx.True(additionalProperties.TryGetValue<bool>("think", out var thinkValue));
+        AssertEx.Equal(expected: true, thinkValue);
+        AssertEx.False(additionalProperties.ContainsKey(InvocationAgentFactory.LlamaDisableThinkingMarkerKey));
+        AssertEx.False(additionalProperties.ContainsKey(InvocationAgentFactory.LlamaReasoningBudgetMarkerKey));
+        AssertEx.False(additionalProperties.ContainsKey(ReasoningOptionsResolver.CodexReasoningEffortKey));
+        AssertEx.False(additionalProperties.ContainsKey(ReasoningOptionsResolver.ExternalReasoningEffortMarkerKey));
+    }
+
     [Test]
     public async Task CreateAsync_ThinkingCapableReasoningNone_SetsLlamaDisableThinkingMarker()
     {

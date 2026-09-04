@@ -151,6 +151,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("agent_definition_id");
 
+                    b.Property<string>("AuthoredEffort")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("authored_effort");
+
                     b.Property<int?>("CompletionTokens")
                         .HasColumnType("INTEGER")
                         .HasColumnName("completion_tokens");
@@ -171,6 +175,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<long>("CreatedAtUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("created_at_utc");
+
+                    b.Property<string>("DispatchedTier")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("dispatched_tier");
 
                     b.Property<string>("ErrorClass")
                         .HasColumnType("TEXT")

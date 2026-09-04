@@ -15,4 +15,11 @@ public sealed class PlaybookEvalOptions
 
     /// <summary>Upper bound on golden cases evaluated per run (batch-cost guard; truncation is logged, never silent).</summary>
     public int MaxGoldenCases { get; set; } = 25;
+
+    /// <summary>
+    ///     Reasoning effort for the eval run, from the ordinary vocabulary (never <c>auto</c>). Null by default, which
+    ///     leaves the run exactly as it was before this setting existed; a value is forwarded to
+    ///     <c>IPlaybookEvalAgentRunner.RunAsync</c> so a sweep can compare one effort against another.
+    /// </summary>
+    public string? ReasoningEffort { get; set; }
 }

@@ -131,7 +131,7 @@ Spawned children retain the ordinary curated tool surface and do not inherit thi
 For an agentic key, begin with `get_status`. Acquire a runtime with
 `start_runtime_acquisition`/`get_runtime_acquisition` when needed; acquire a model with
 `start_model_pull`/`get_model_pull`, then `set_default_model` before the first run. Do not enable
-custom tools through settings: `CustomToolsEnabled` is intentionally outside the 16-field whitelist.
+custom tools through settings: `CustomToolsEnabled` is intentionally outside the 17-field whitelist.
 
 Results are capped at 24,000 characters and report `result_truncated` when clipped. Durable result
 payloads expire after 24 hours. The complete current tool contract is in

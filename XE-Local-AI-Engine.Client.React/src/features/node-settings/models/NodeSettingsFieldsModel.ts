@@ -178,6 +178,8 @@ export interface NodeSettingsFieldsForm {
 	chatCacheReuse: number | string;
 	// Knowledge-base reranker (empty = reranking off)
 	rerankerModelName: string;
+	// Node-local model a FAST `auto` reasoning-effort turn may be moved onto (empty = no swap, ladder only)
+	autoEffortFastModelName: string;
 	// Per-model usage cost rates (USD per 1M tokens), edited as ordered rows and reduced to the stored map on save.
 	usageRates: UsageRateRow[];
 	// Developer-only
@@ -211,6 +213,7 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	speculativeDraftMaxTokens: 3,
 	chatCacheReuse: 256,
 	rerankerModelName: "",
+	autoEffortFastModelName: "",
 	usageRates: [],
 	orchestrationIdleTimeoutSeconds: 120,
 	agentHomePrepareTimeoutSeconds: 900,
@@ -257,6 +260,7 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 		speculativeDraftMaxTokens: numberOr(response.speculativeDraftMaxTokens, nodeSettingsFieldDefaults.speculativeDraftMaxTokens),
 		chatCacheReuse: numberOr(response.chatCacheReuse, nodeSettingsFieldDefaults.chatCacheReuse),
 		rerankerModelName: response.rerankerModelName ?? "",
+		autoEffortFastModelName: response.autoEffortFastModelName ?? "",
 		usageRates: toUsageRateRows(response.usageRates),
 		orchestrationIdleTimeoutSeconds: numberOr(
 			response.orchestrationIdleTimeoutSeconds,
@@ -588,6 +592,13 @@ export function buildNodeSettingsRequest(
 	// null = reranking disabled). Sent whenever it differs from the baseline, including a switch back to "Off".
 	if (form.rerankerModelName !== baseline.rerankerModelName) {
 		body.rerankerModelName = form.rerankerModelName.trim();
+	}
+
+	// Fast model for automatic reasoning effort — same shape as the reranker: empty string is the "Off" signal the
+	// backend Normalize maps to null. Deliberately NOT restart-gated: the dispatcher reads it per send, so a save
+	// applies to the very next turn.
+	if (form.autoEffortFastModelName !== baseline.autoEffortFastModelName) {
+		body.autoEffortFastModelName = form.autoEffortFastModelName.trim();
 	}
 
 	// Usage rates — an editable per-model rate map. Validated to non-negative numbers with non-empty names; an invalid

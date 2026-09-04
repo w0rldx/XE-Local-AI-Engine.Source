@@ -121,4 +121,18 @@ internal sealed record class AgentExecutionLog
     ///     An <c>int</c>, matching its source (a per-round maximum, not an accumulation). Plaintext (structural).
     /// </summary>
     public int? MaxToolSchemaTokens { get; set; }
+
+    /// <summary>
+    ///     The tier a turn authored with reasoning effort <c>auto</c> was dispatched to (<c>fast</c>, <c>normal</c> or
+    ///     <c>deep</c>), or <c>null</c> on every other turn and every pre-migration row. A closed-vocabulary category
+    ///     label, never free text. Plaintext (structural).
+    /// </summary>
+    public string? DispatchedTier { get; set; }
+
+    /// <summary>
+    ///     The effort the turn was AUTHORED with when a dispatch happened — <c>auto</c> — or <c>null</c> otherwise. It
+    ///     is what separates the pre-<c>auto</c> population from the dispatched one in the same measurement, which a
+    ///     tier alone cannot do. Plaintext (structural).
+    /// </summary>
+    public string? AuthoredEffort { get; set; }
 }

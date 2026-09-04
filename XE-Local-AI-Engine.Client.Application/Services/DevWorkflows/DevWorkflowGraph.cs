@@ -72,9 +72,10 @@ internal sealed class DevWorkflowGraph
     /// <summary>
     ///     The reasoning efforts a node may name, which are the ones an agent definition may pin
     ///     (<c>AgentDefinitionService</c>'s own list) — the override has to be sayable in the same vocabulary as the
-    ///     pin it replaces. Not an enum: this travels to the provider as the string it is written as.
+    ///     pin it replaces. Not an enum: this travels to the provider as the string it is written as, except
+    ///     <c>auto</c>, which the node resolves per turn into one of the others before anything is sent.
     /// </summary>
-    private static readonly string[] ReasoningEfforts = ["none", "low", "medium", "high"];
+    private static readonly string[] ReasoningEfforts = ["none", "low", "medium", "high", "auto"];
 
     /// <summary>Defaults for a node that names none. Human waits and inline decisions get one try; work gets three.</summary>
     private const int DefaultWorkNodeMaxAttempts = 3;

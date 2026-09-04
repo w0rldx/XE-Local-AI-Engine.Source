@@ -16,11 +16,12 @@ describe("resolveAvailableReasoningEfforts", () => {
 			"medium",
 			"high",
 			"xhigh",
+			"auto",
 		]);
 	});
 
 	it("offers the graded set for a model advertising the thinking capability", () => {
-		expect(resolveAvailableReasoningEfforts(option({ isReasoningModel: true }))).toEqual(["none", "low", "medium", "high"]);
+		expect(resolveAvailableReasoningEfforts(option({ isReasoningModel: true }))).toEqual(["none", "low", "medium", "high", "auto"]);
 	});
 
 	it("offers the binary set for a non-reasoning model and for no selection at all", () => {
@@ -49,7 +50,7 @@ describe("resolveAvailableReasoningEfforts", () => {
 			option({ provider: "external", isReasoningModel: true, isReasoningEffortCapable: true }),
 		);
 
-		expect(efforts).toEqual(["none", "low", "medium", "high"]);
+		expect(efforts).toEqual(["none", "low", "medium", "high", "auto"]);
 	});
 
 	it("treats an undeclared capability as no answer, leaving every other provider on its usual path", () => {
@@ -60,6 +61,17 @@ describe("resolveAvailableReasoningEfforts", () => {
 			"low",
 			"medium",
 			"high",
+			"auto",
 		]);
+	});
+
+	// `auto` is resolved by the NODE into a concrete tier, and the node's fast tier is a graded level. A binary model
+	// has no graded ladder to resolve into, so the composer must never put `auto` in front of one.
+	it("does not offer auto for a binary model", () => {
+		expect(resolveAvailableReasoningEfforts(option({ isReasoningModel: false }))).not.toContain("auto");
+		expect(resolveAvailableReasoningEfforts(undefined)).not.toContain("auto");
+		expect(
+			resolveAvailableReasoningEfforts(option({ isReasoningModel: false, isNativeReasoningModel: true })),
+		).not.toContain("auto");
 	});
 });

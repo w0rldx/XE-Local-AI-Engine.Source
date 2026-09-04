@@ -20,7 +20,9 @@ internal sealed class AgentDefinitionService(
         "low",
         "none",
         "medium",
-        "high"
+        "high",
+        // Resolved per turn by the invocation runner's reasoning-effort dispatcher, never sent to a provider as-is.
+        "auto"
     };
 
     private readonly ILocalToolOfferProvider _localToolOfferProvider = localToolOfferProvider ?? throw new ArgumentNullException(nameof(localToolOfferProvider));
@@ -94,7 +96,7 @@ internal sealed class AgentDefinitionService(
 
         if (!string.IsNullOrWhiteSpace(input.ReasoningEffort) && !ValidReasoningEfforts.Contains(input.ReasoningEffort))
         {
-            throw new AgentDefinitionValidationException($"ReasoningEffort '{input.ReasoningEffort}' is not one of low, none, medium, high.");
+            throw new AgentDefinitionValidationException($"ReasoningEffort '{input.ReasoningEffort}' is not one of low, none, medium, high, auto.");
         }
 
         var allowedToolNames = new HashSet<string>(input.AllowedToolNames, StringComparer.Ordinal);

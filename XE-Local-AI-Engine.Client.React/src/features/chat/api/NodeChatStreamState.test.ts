@@ -1183,6 +1183,7 @@ describe("node chat stream state", () => {
 				sequence: 5,
 				noticeKind: "ModelSubstituted",
 				noticeMessage: "Switched to a smaller model to fit available memory.",
+				noticeDetail: "qwen3-1.7b",
 				content: null,
 				delta: null,
 			}),
@@ -1197,6 +1198,8 @@ describe("node chat stream state", () => {
 		expect(parts[2]).toMatchObject({
 			kind: "notice",
 			noticeKind: "ModelSubstituted",
+			// The payload's structured detail reaches the part instead of being dropped at the mapper.
+			detail: "qwen3-1.7b",
 			text: "Switched to a smaller model to fit available memory.",
 		});
 		// The turn's status/content must stay untouched by the notice event.

@@ -125,6 +125,28 @@ public interface IWorkerEventDispatcher
     /// <param name="maxToolSchemaTokens">The largest single round's estimate.</param>
     Task ReportToolSchemaTokensAsync(Guid invocationId, long? toolSchemaTokens, int? maxToolSchemaTokens);
 
+    /// <summary>
+    ///     Records what reasoning effort <c>auto</c> resolved to on the invocation state, so the terminalize write can
+    ///     persist it onto the run-envelope row. Reported by the runner immediately after the dispatch, and only on a
+    ///     turn that was authored <c>auto</c> — every other turn leaves both members null. Category labels only: the
+    ///     tier and the authored effort, never a reason code, a signal value or any message text.
+    /// </summary>
+    /// <param name="dispatchedTier">The resolved tier's name.</param>
+    /// <param name="authoredEffort">The effort the turn was authored with (<c>auto</c>).</param>
+    Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort);
+
+    /// <summary>
+    ///     Records the model that ACTUALLY served the turn, when it is not the one the runtime package named. Reported
+    ///     by the runner only once an admitted <c>auto</c> model swap has run its send, because
+    ///     <see cref="Events.InvocationState.ModelUsed" /> is seeded from the package and is what BOTH the persisted
+    ///     message row and the run envelope's provider attribution are read from — without this a swapped turn is
+    ///     recorded against a model that never saw it, and the measurement queries attribute the fast model's tokens
+    ///     and latency to the big one. A turn that falls back to the original model never reports, so its seeded value
+    ///     stands.
+    /// </summary>
+    /// <param name="modelUsed">The served model id.</param>
+    Task ReportServedModelAsync(Guid invocationId, string modelUsed);
+
     Task ReportToolCallRequestedAsync(ToolCallRequestPayload payload);
 
     Task ReportApprovalRequestedAsync(ApprovalRequestPayload payload);
