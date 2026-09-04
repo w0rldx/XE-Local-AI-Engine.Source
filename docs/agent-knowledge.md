@@ -178,6 +178,14 @@ The assembly guard deliberately snapshots after a runner's own build and before 
 
 Do not wrap the whole project validator in one outer lock: its internally locked trees would become pass-throughs and regain unsafe parallel build/test overlap. Prevention and detection must remain separate layers.
 
+### A Dev-mode sandbox run leaves MSBuild worker nodes holding a dead `NUGET_PACKAGES`
+
+Development Mode gives each sandboxed task its own `NUGET_PACKAGES` under the task's runtime directory. On the process provider those `dotnet` children are host processes, and MSBuild's reusable worker nodes (`MSBuild.dll /nodemode:1`) outlive them with that per-task path still in their environment. A later `dotnet restore` anywhere on this box can attach to one and write the by-then-deleted path into `obj/*.dgspec.json`, after which the build fails naming a `/tmp/xe-…/nuget` directory nothing asked for: **NU5037** during the graph-workflows S0 merge, **CS0006** in the session after it.
+
+- Recover with `dotnet build-server shutdown`, then `MSBUILDDISABLENODEREUSE=1 NUGET_PACKAGES=$HOME/.nuget/packages dotnet restore --force`.
+- Prefix long-lived agent shells with the same two variables; the dead path is inherited, not typed.
+- The writer was `DevelopmentWorkspaceTools.BuildEnvironment`, which now sets `MSBUILDDISABLENODEREUSE=1` alongside the per-task `NUGET_PACKAGES`. `DevelopmentMountBrokerTests` asserts it.
+
 ### Never classify a cancellation from a `CancellationToken.Register` callback
 
 Registration callbacks race disposal and execute synchronously. They may signal/kill, but must not own terminal classification or throw the final exception. Classify after the awaited operation observes authoritative cancellation state.
