@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -473,6 +474,28 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         //    gets a plausible Completed from an agent that quietly lost a capability its configuration says it has, and
         //    neither the caller nor the response can tell. Left in the offer, ToolApprovalCoordinator sees IsUnattended,
         //    writes its unattended-unavailable audit row and fails the run by name.
+        // 4d. emit_output, unioned in AFTER the definition's offer ∩ AllowedToolNames intersection and BEFORE the agent
+        //     is constructed — the exact seam ask_user uses, and for the same reason: delivering a result to the caller
+        //     that started this run is a property of running an integration execution, not a per-agent permission.
+        //
+        //     The approval flag is recomposed through the node policy HERE, because this is the only place it can be:
+        //     the offer provider hands out the raw declared flag and consults no policy, and InvocationToolResolver
+        //     reads the flag the offer carries rather than asking the policy itself. So a node that requires approval
+        //     for ReadLocal tightens this tool too, and the run then fails CLOSED at the first call — an operator who
+        //     declares that ReadLocal needs a human cannot be handed a silent exception on the one surface reachable
+        //     from outside the node.
+        var approvalPolicy = services.GetRequiredService<IToolApprovalPolicy>();
+        var offerProvider = services.GetRequiredService<ILocalToolOfferProvider>();
+        AllowedToolDto[] offeredTools =
+        [
+            .. resolved.AllowedTools,
+            .. offerProvider.GetIntegrationOutputOffer()
+                            .Select(tool => tool with
+                            {
+                                RequiresApproval = approvalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
+                            })
+        ];
+
         var messageId = Guid.NewGuid();
         var package = services.GetRequiredService<ILocalChatRuntimePackageBuilder>()
                               .Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
@@ -482,7 +505,7 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                                   effectiveModel,
                                   resolved.AgentDefinitionVersion,
                                   LocalChatLoopbackDefaults.ClientNodeId,
-                                  resolved.AllowedTools,
+                                  offeredTools,
                                   RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
                                   Timeouts: new TimeoutSettings
                                   {

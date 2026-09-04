@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Integrations;
 
+using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -344,6 +345,72 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
     ///     suites, which only ever seed rows an earlier accept already committed.
     /// </summary>
     public FakeIntegrationSessionStore? Sessions { get; set; }
+
+    /// <summary>Makes the next output append throw, which is the "the database is failing" half of the tool's contract.</summary>
+    public bool ThrowOnNextOutputAppend { get; set; }
+
+    /// <summary>Signalled before the output append commits, so a suite can observe what the tool has published so far.</summary>
+    public TaskCompletionSource? BlockOutputAppendUntil { get; set; }
+
+    /// <summary>
+    ///     A store-side aggregate cap TIGHTER than the one the caller passes, which is the only way to drive the
+    ///     in-transaction refusal: on a healthy node the tool's own pre-check always gets there first.
+    /// </summary>
+    public long? OutputCapOverride { get; set; }
+
+    public Task<IntegrationExecutionSnapshot?> FindActiveBySessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            return Task.FromResult(_rows.FirstOrDefault(row => row.SessionId == sessionId && row.Status == IntegrationExecutionStatus.Running));
+        }
+    }
+
+    /// <summary>
+    ///     Reproduces the real store's in-transaction check-and-reserve: the store MEASURES the plaintext envelope and
+    ///     refuses without writing anything when the aggregate cap would be exceeded. A double that merely recorded the
+    ///     call could not tell a correct pre-check from a missing one.
+    /// </summary>
+    public async Task<bool> AppendOutputEventAsync(IntegrationEventAppend append, long maxOutputBytesPerExecution, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(append);
+
+        if (BlockOutputAppendUntil is { } gate)
+        {
+            await gate.Task.ConfigureAwait(false);
+        }
+
+        lock (_gate)
+        {
+            if (ThrowOnNextOutputAppend)
+            {
+                ThrowOnNextOutputAppend = false;
+                throw new SqliteException("database is locked", errorCode: 5);
+            }
+
+            var length = (long)Encoding.UTF8.GetByteCount(append.DetailJson ?? string.Empty);
+            var index = _rows.FindIndex(row => row.Id == append.ExecutionId);
+            if (index < 0)
+            {
+                throw new InvalidOperationException($"Integration execution '{append.ExecutionId}' does not exist.");
+            }
+
+            var row = _rows[index];
+            if (row.OutputBytes + length > (OutputCapOverride ?? maxOutputBytesPerExecution))
+            {
+                return false;
+            }
+
+            _rows[index] = row with
+            {
+                OutputBytes = row.OutputBytes + length,
+                OutputCount = row.OutputCount + 1,
+                LastSequence = Math.Max(row.LastSequence, append.Sequence)
+            };
+            AddEvent(append);
+            return true;
+        }
+    }
 
     /// <summary>Moves a row to a terminal status without replaying a whole run, so a suite can free a busy session.</summary>
     public void Complete(Guid executionId)

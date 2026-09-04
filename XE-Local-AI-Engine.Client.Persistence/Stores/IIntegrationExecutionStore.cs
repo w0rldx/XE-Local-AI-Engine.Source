@@ -213,6 +213,33 @@ public interface IIntegrationExecutionStore
     Task<int> CountActiveBySessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     The session's currently <c>Running</c> execution, or <see langword="null" />. This is how <c>emit_output</c>
+    ///     turns the ambient conversation id into the execution its payload belongs to: a session runs at most one
+    ///     execution at a time, and the returned snapshot carries the <c>OutputBytes</c> counter the tool's aggregate
+    ///     pre-check reads fresh on every call.
+    /// </summary>
+    Task<IntegrationExecutionSnapshot?> FindActiveBySessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     <see cref="AppendEventAsync" />'s insert plus the three things an <c>external.output</c> row must share its
+    ///     transaction with: the PLAINTEXT byte check-and-reserve, the <c>OutputBytes</c> increment, and the
+    ///     <c>OutputCount</c> increment.
+    ///     <para>
+    ///         The caller passes the CAP, never a byte count: the store computes
+    ///         <c>Encoding.UTF8.GetByteCount(append.DetailJson)</c> itself, so the number checked and the number added
+    ///         agree by construction. Returns <see langword="false" /> with NOTHING written when
+    ///         <c>OutputBytes + length</c> would exceed the cap. That refusal is the authoritative bound; the tool's own
+    ///         pre-check exists only to keep a refusal from ever reaching the event buffer.
+    ///     </para>
+    ///     <para>
+    ///         Nothing here reads <c>length(detail_json)</c>. That column is an encrypted BLOB, so a <c>SUM</c> over it
+    ///         would measure ciphertext against a plaintext cap — which is why the counter is a column rather than a
+    ///         query.
+    ///     </para>
+    /// </summary>
+    Task<bool> AppendOutputEventAsync(IntegrationEventAppend append, long maxOutputBytesPerExecution, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     One <c>SaveChanges</c>. Returns <see langword="false" /> WITHOUT writing when the row is missing, the version
     ///     is stale, or the current status is outside the command's expected set.
     ///     <para>

@@ -257,6 +257,74 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         }
     }
 
+    public async Task<IntegrationExecutionSnapshot?> FindActiveBySessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        // A session runs at most one execution at a time — the accept path's per-session gate is what guarantees it —
+        // so FirstOrDefault is a statement about that invariant rather than a tolerance for two.
+        var entity = await _dbContext.IntegrationExecutions.AsNoTracking()
+                                     .Where(row => row.SessionId == sessionId && row.Status == IntegrationExecutionStatus.Running)
+                                     .OrderByDescending(row => row.ReceivedAtUtc)
+                                     .FirstOrDefaultAsync(cancellationToken)
+                                     .ConfigureAwait(false);
+        return entity is null ? null : ToSnapshot(entity);
+    }
+
+    public async Task<bool> AppendOutputEventAsync(IntegrationEventAppend append, long maxOutputBytesPerExecution, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(append);
+
+        if (append.DetailJson is null)
+        {
+            throw new ArgumentException("An external.output event must carry its composed payload.", nameof(append));
+        }
+
+        // The store measures, so the number CHECKED and the number ADDED cannot disagree with each other or with the
+        // caller's own pre-check. Plaintext UTF-8, never the encrypted column's length.
+        var length = (long)Encoding.UTF8.GetByteCount(append.DetailJson);
+
+        var entity = await _dbContext.IntegrationExecutions.SingleOrDefaultAsync(row => row.Id == append.ExecutionId, cancellationToken).ConfigureAwait(false)
+                     ?? throw new InvalidOperationException($"Integration execution '{append.ExecutionId}' does not exist.");
+
+        // Check-and-reserve INSIDE the transaction that inserts the row. This is the authoritative cap; over it,
+        // nothing at all is written — not the event, not either counter.
+        if (entity.OutputBytes + length > maxOutputBytesPerExecution)
+        {
+            return false;
+        }
+
+        _ = _dbContext.IntegrationExecutionEvents.Add(new IntegrationExecutionEvent
+        {
+            Id = append.EventId,
+            ExecutionId = append.ExecutionId,
+            Sequence = append.Sequence,
+            EventType = append.EventType,
+            DetailJson = Encoding.UTF8.GetBytes(append.DetailJson),
+            OccurredAtUtc = append.OccurredAtUtc
+        });
+
+        entity.OutputBytes += length;
+        entity.OutputCount++;
+
+        // MAX, never a plain assignment: the coordinator's own appends and this one can commit out of order, and a
+        // slower writer must not move the watermark backwards.
+        entity.LastSequence = Math.Max(entity.LastSequence, append.Sequence);
+        await MoveSessionWatermarkAsync(entity.SessionId, append.Sequence, append.OccurredAtUtc, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateException)
+        {
+            // The mutated entity and the pending event stay tracked otherwise, and the next call on this scoped context
+            // would replay them on its own save.
+            _dbContext.ChangeTracker.Clear();
+            throw;
+        }
+
+        return true;
+    }
+
     public async Task<IReadOnlyList<IntegrationExecutionEventSnapshot>> ListEventsAsync(Guid executionId,
         long sinceSequence,
         int limit,

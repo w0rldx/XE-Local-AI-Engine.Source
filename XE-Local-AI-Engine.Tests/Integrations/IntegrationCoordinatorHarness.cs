@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -183,6 +184,10 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
             Compaction,
             new HeuristicTokenEstimator(new TokenEstimatorCalibrationStore()),
             NullLogger<WorkSessionStepContextBound>.Instance));
+        // A REAL offer provider and a settable approval policy: WHICH tools the coordinator unions in, and what the
+        // node policy then does to their approval flag, are the assertions.
+        services.AddSingleton<ILocalToolOfferProvider>(IntegrationToolOfferFactory.Create());
+        services.AddSingleton<IToolApprovalPolicy>(_ => ToolApprovalPolicy);
         services.AddSingleton<IIntegrationApiKeyStore>(_keys);
         services.AddSingleton(TriggerService);
         services.AddSingleton(_ => new IntegrationSessionService(_sessions,
@@ -217,6 +222,12 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     public IntegrationSessionGate SessionGate { get; } = new();
 
     public IIntegrationTriggerService TriggerService { get; } = Substitute.For<IIntegrationTriggerService>();
+
+    /// <summary>
+    ///     The node's approval policy. Permissive by default — the identity compose, so the default path is unchanged —
+    ///     and swappable for the fail-closed case where an operator tightens ReadLocal.
+    /// </summary>
+    public IToolApprovalPolicy ToolApprovalPolicy { get; set; } = new PermissiveToolApprovalPolicy();
 
     /// <summary>The coordinator's own queue, so a test can drive the hosted loop instead of calling into it.</summary>
     public Channel<Guid> Queue { get; }

@@ -6,7 +6,9 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Integrations;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
+using XE_Local_AI_Engine.Client.Services.Integrations.Tools.Implementation;
 
 internal static class AddNodeIntegrationsExtensions
 {
@@ -81,6 +83,12 @@ internal static class AddNodeIntegrationsExtensions
             serviceProvider.GetRequiredService<TimeProvider>(),
             serviceProvider.GetRequiredService<ILogger<IntegrationExecutionQueryService>>()));
         builder.Services.AddScoped<IntegrationExternalAccess>();
+
+        // The emit_output handler. Registering it surfaces the tool in the RESOLUTION seam only; whether a run may ever
+        // call it is decided by the OFFER, which holds it out of every projection and lets the coordinator union it in.
+        // Singleton because ClientLocalToolRegistry captures the handler enumerable once at construction; it opens its
+        // own scope per call for the scoped stores.
+        builder.Services.AddSingleton<IClientLocalToolHandler, EmitOutputToolHandler>();
 
         // The single consumer of that channel. Hosted, so its startup sweep runs before the loop reads an id, and so
         // the loop stops with the host.
