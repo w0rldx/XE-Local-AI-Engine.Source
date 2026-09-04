@@ -4391,6 +4391,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNod
 	startedAtUtc: z.int().nullish(),
 	completedAtUtc: z.int().nullish(),
 	sequence: z.int().optional(),
+	skipWaived: z.boolean().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse = z.object({

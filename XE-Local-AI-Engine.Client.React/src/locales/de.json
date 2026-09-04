@@ -4970,6 +4970,8 @@
 				"satisfied": "erfüllt",
 				"dead": "tot – dieser Zweig trägt den Join nicht",
 				"deadAll": "tot – der Join wird übersprungen, sobald nichts mehr offen ist",
+				"waivedAll": "übersprungen – der Join läuft weiter, wenn ein Geschwisterzweig erfolgreich war",
+				"skipped": "übersprungen",
 				"notMaterialized": "noch nicht angelegt",
 				"template": "Vorlage – wird pro Aufgabe erzeugt"
 			},

@@ -393,7 +393,22 @@ public sealed record DevWorkflowNodeRunSummaryResponse(
     bool HasStaleInputs,
     long? StartedAtUtc,
     long? CompletedAtUtc,
-    long Sequence);
+    long Sequence,
+    /// <summary>
+    ///     For a <c>Skipped</c> row only: whether the state machine WAIVES this skip, so a downstream <c>All</c> join
+    ///     carries on past it as long as a sibling arrived. <c>false</c> means the skip is dead and the join will skip
+    ///     with it; <c>null</c> means the question does not apply — any other status — or that the pinned graph could
+    ///     not be routed to answer it.
+    ///     <para>
+    ///         Computed on the SERVER because it cannot be read off this row. A skip an operator chose and one that
+    ///         cascaded off a Failed ancestor are the same status, and the ancestor that decides which is which is not
+    ///         necessarily among the join's own dependencies — so a client judging by status alone tells an operator
+    ///         the join carries on in exactly the case where the runtime skips it. The verdict comes from the same
+    ///         predicate the dispatcher admits by (<c>DevWorkflowStateMachine.WaivedSkipNodeKeys</c>), which is what
+    ///         stops the two from drifting.
+    ///     </para>
+    /// </summary>
+    bool? SkipWaived);
 
 /// <summary>
 ///     The drill-down. <see cref="WorkSessionId" /> is the whole of the agent view: it links out to the EXISTING

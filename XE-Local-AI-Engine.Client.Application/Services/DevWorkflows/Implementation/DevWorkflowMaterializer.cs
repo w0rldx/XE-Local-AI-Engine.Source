@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Development;
 
 /// <summary>
 ///     Expands a decomposition into the work it decided on: one clone of the template subtree per task, wired into the
@@ -319,6 +320,14 @@ internal sealed class DevWorkflowMaterializer
             return $"Expanding {tasks.Count} tasks would take this run past the {maxNodeRunsPerRun} node runs it may carry.";
         }
 
+        // Whether the template carries a DevTask ANYWHERE decides whether a task has to name the files it changes: that
+        // is the node type whose clone becomes a Development coder attempt, and the "must export a patch" contract is
+        // the attempt's, not the decomposition's. The whole subtree rather than its root, because a custom template is
+        // free to root itself in an Agent that briefs a DevTask below it — and there the coder that cannot finish on an
+        // empty patch is exactly as real, just one node further down. Read once, because it cannot differ between tasks
+        // of one package.
+        var subtreeHasDevTask = graph.TemplateSubtreeHasDevTask(materialization);
+
         var ids = new HashSet<string>(StringComparer.Ordinal);
 
         // Every clone key this package WOULD take, against the task that first claimed it. Built as the loop goes,
@@ -342,6 +351,32 @@ internal sealed class DevWorkflowMaterializer
             if (!ids.Add(task.Id))
             {
                 return $"The task package names '{task.Id}' twice, and two tasks cannot share one identity.";
+            }
+
+            // A template carrying a DevTask only. There a task becomes a Development coder attempt, and that attempt
+            // cannot finish without exporting a NON-EMPTY patch: a slice with nothing to change — a survey, a style
+            // profile, a verification — is refused, re-attempted twice more, refused twice more, and then blocks the
+            // run in front of a human. Live, four runs went that way. 'changes' is the one signal the package carries
+            // that there IS something to change, so a package that names none is handed straight back to the node that
+            // wrote it, while it is still cheap to fix. A template with no DevTask in it keeps the old contract: its
+            // clones are ordinary sessions with no patch to export and nothing this would be judging.
+            if (subtreeHasDevTask)
+            {
+                var changes = (task.Changes ?? []).Where(static change => !string.IsNullOrWhiteSpace(change)).ToList();
+                if (changes.Count == 0)
+                {
+                    return $"Task '{task.Id}' names no file it will add or edit in 'changes', so there is nothing for a coder to implement. "
+                           + "A task must change code; fold reading or surveying into the task that needs it.";
+                }
+
+                // The workspace confinement the coder's own tools enforce, asked here instead: an absolute path, one
+                // that climbs out of the workspace, or one under protected Git state is a file the coder would be
+                // refused for touching, so the decomposition is told now rather than three attempts later.
+                if (changes.Find(static change => !DevelopmentWorkspaceSecurity.Confine(change, allowRoot: false).IsAccepted) is { } unusable)
+                {
+                    return $"Task '{task.Id}' names '{unusable}' in 'changes', which is not a file a coder could touch: "
+                           + "every entry must be a path relative to the repository root, with no leading slash, no '..' above it and nothing under '.git'.";
+                }
             }
 
             // Not enforced anywhere yet: the child brief carries the title, the requirements and the acceptance
@@ -454,7 +489,7 @@ internal sealed class DevWorkflowMaterializer
         var wired = new HashSet<(string From, string To)>();
         foreach (var (task, index) in tasks.Select(static (task, index) => (task, index + 1)))
         {
-            var brief = JsonSerializer.Serialize(new DevTaskBrief(Present(task.Title), task.Goal!, Criteria(task.AcceptanceCriteria)), JsonOptions);
+            var brief = JsonSerializer.Serialize(new DevTaskBrief(Present(task.Title), RequirementsFor(task), Criteria(task.AcceptanceCriteria)), JsonOptions);
             foreach (var key in subtree.OrderBy(static key => key, StringComparer.Ordinal))
             {
                 var clone = (JsonObject)templates[key].DeepClone();
@@ -526,6 +561,24 @@ internal sealed class DevWorkflowMaterializer
     private static string CloneKey(string nodeKey, string taskId) =>
         $"{nodeKey}{CloneSeparator}{taskId}";
 
+    /// <summary>
+    ///     What the coder is told to implement: the task's goal, and the files the decomposition said it would touch.
+    ///     <para>
+    ///         Folded into the requirements rather than carried as a field of its own, because <c>requirements</c> is
+    ///         the whole of what the implementation lane renders to the coder — a second field would have to be
+    ///         threaded through the brief, the executor's own reader and the Development task before it reached a
+    ///         prompt, to say something a sentence says here. It is guidance, not a boundary: nothing refuses a coder
+    ///         for touching a file this does not name.
+    ///     </para>
+    /// </summary>
+    private static string RequirementsFor(TaskPackageItem task)
+    {
+        var changes = (task.Changes ?? []).Where(static change => !string.IsNullOrWhiteSpace(change)).ToList();
+        return changes.Count == 0
+            ? task.Goal!
+            : string.Concat(task.Goal, Environment.NewLine, Environment.NewLine, "Files this task will add or edit: ", string.Join(", ", changes));
+    }
+
     private static string? Present(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;
 
@@ -538,6 +591,7 @@ internal sealed class DevWorkflowMaterializer
         string? Id,
         string? Title,
         string? Goal,
+        IReadOnlyList<string>? Changes,
         IReadOnlyList<string>? AllowedPaths,
         IReadOnlyList<string>? DependsOn,
         IReadOnlyList<string>? AcceptanceCriteria);
