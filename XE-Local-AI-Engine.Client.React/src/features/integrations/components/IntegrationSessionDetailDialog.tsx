@@ -11,7 +11,7 @@ import {
 	IntegrationExecutionStatusBadge,
 	IntegrationSessionStatusBadge,
 } from "@/features/integrations/components/IntegrationStatusBadge";
-import type { IntegrationSession } from "@/features/integrations/models/IntegrationModels";
+import { type IntegrationSession, integrationListLimit } from "@/features/integrations/models/IntegrationModels";
 import { useIntegrationExecutions } from "@/features/integrations/queries/useIntegrationExecutions";
 
 interface IntegrationSessionDetailDialogProps {
@@ -23,8 +23,10 @@ interface IntegrationSessionDetailDialogProps {
 export function IntegrationSessionDetailDialog({ session, onClose }: IntegrationSessionDetailDialogProps) {
 	const { t } = useTranslation();
 
-	const executionsQuery = useIntegrationExecutions({ sessionId: session.id });
-	const executions = executionsQuery.data ?? [];
+	// The dialog lists this session's executions unpaged: it is a detail view of one session, and a session that
+	// outgrows a page is a case for the executions table's own pager, filtered by this session.
+	const executionsQuery = useIntegrationExecutions({ sessionId: session.id }, { limit: integrationListLimit });
+	const executions = executionsQuery.data?.items ?? [];
 
 	const executionsError = executionsQuery.error
 		? apiErrorMessage(

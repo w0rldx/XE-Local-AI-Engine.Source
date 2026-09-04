@@ -5465,7 +5465,6 @@
 					"deletedTrigger": "Gelöschter Trigger",
 					"viewAria": "Sitzungsdetails anzeigen",
 					"deleteAria": "Sitzung löschen",
-					"windowNote": "Zeigt bis zu {{limit}} zuletzt aktive Sitzungen. Grenzen Sie nach Trigger oder Status ein, um ältere Einträge zu erreichen.",
 					"columns": {
 						"id": "Sitzung",
 						"trigger": "Trigger",
@@ -5509,6 +5508,7 @@
 				"subtitle": "Unbeaufsichtigte Läufe, die ein Integrator über einen Trigger gestartet hat. Brechen Sie einen aktiven Lauf ab oder öffnen Sie einen, um seinen aufgezeichneten Verlauf zu lesen.",
 				"filters": {
 					"allStatuses": "Alle",
+					"activeStatuses": "Aktiv",
 					"trigger": "Trigger",
 					"session": "Sitzung",
 					"allTriggers": "Alle Trigger",
@@ -5520,7 +5520,6 @@
 					"empty": "Keine Ausführungen entsprechen diesen Filtern.",
 					"viewAria": "Ausführungsdetails anzeigen",
 					"cancelAria": "Ausführung abbrechen",
-					"windowNote": "Zeigt bis zu {{limit}} zuletzt eingegangene Ausführungen. Grenzen Sie nach Trigger, Sitzung oder Status ein, um ältere Einträge zu erreichen.",
 					"columns": {
 						"trigger": "Trigger",
 						"session": "Sitzung",

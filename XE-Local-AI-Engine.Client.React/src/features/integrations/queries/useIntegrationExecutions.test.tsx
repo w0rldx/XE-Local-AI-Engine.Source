@@ -46,10 +46,60 @@ function listRoute(): URLSearchParams[] {
 						outputCount: 0,
 					},
 				],
+				totalCount: 412,
 			});
 		}),
 	);
 	return requests;
+}
+
+/** The row id one page of {@link deferredListRoute} carries, which is how a test tells the pages apart. */
+function executionIdAtOffset(offset: number): string {
+	return `44444444-4444-4444-8444-${String(offset).padStart(12, "0")}`;
+}
+
+/**
+ * The list served BY PAGE, with page two held until the test releases it. `limit`/`offset` are part of the query key,
+ * so page two is a cache entry with no data of its own — this is the window in which the pager used to read a total
+ * of 0 and clamp the operator back to page one.
+ */
+function deferredListRoute(): { requests: URLSearchParams[]; releasePageTwo: () => void } {
+	const requests: URLSearchParams[] = [];
+	// `Promise.withResolvers` would say this in one line, but the project's lib target is below es2024.
+	let releasePageTwo!: () => void;
+	const pageTwo = new Promise<void>((resolve) => {
+		releasePageTwo = resolve;
+	});
+	server.use(
+		http.get(localApiPath("integrations/executions"), async ({ request }) => {
+			const params = new URL(request.url).searchParams;
+			requests.push(params);
+			const offset = Number(params.get("offset") ?? "0");
+			if (offset > 0) {
+				await pageTwo;
+			}
+			// The id is a guid because the response schema validates it as one; the offset rides in its last block so
+			// each page is identifiable.
+			return HttpResponse.json({
+				items: [
+					{
+						id: executionIdAtOffset(offset),
+						triggerId,
+						sessionId,
+						status: "Completed",
+						receivedAtUtc: 1_700_000_000_000,
+						startedAtUtc: null,
+						endedAtUtc: null,
+						failureCategory: null,
+						failureSummary: null,
+						outputCount: 0,
+					},
+				],
+				totalCount: 412,
+			});
+		}),
+	);
+	return { requests, releasePageTwo };
 }
 
 function eventRow(sequence: number, eventType = "execution.accepted"): Record<string, unknown> {
@@ -113,7 +163,7 @@ describe("useIntegrationExecutions", () => {
 		await waitFor(() => {
 			expect(result.current.data).toBeDefined();
 		});
-		expect(result.current.data?.[0]).toEqual({
+		expect(result.current.data?.items[0]).toEqual({
 			id: executionId,
 			triggerId,
 			sessionId,
@@ -127,7 +177,19 @@ describe("useIntegrationExecutions", () => {
 		});
 	});
 
-	it("sends the bounded window and no filter on the default read", async () => {
+	it("surfaces the server's total, which is what a pager can honestly number", async () => {
+		listRoute();
+		const { wrapper } = harness();
+
+		const { result } = renderHook(() => useIntegrationExecutions(), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.data).toBeDefined();
+		});
+		expect(result.current.data?.totalCount).toBe(412);
+	});
+
+	it("sends the default page and no filter on the default read", async () => {
 		const requests = listRoute();
 		const { wrapper } = harness();
 
@@ -136,7 +198,7 @@ describe("useIntegrationExecutions", () => {
 		await waitFor(() => {
 			expect(requests).toHaveLength(1);
 		});
-		expect(firstQuery(requests).get("limit")).toBe("200");
+		expect(firstQuery(requests).get("limit")).toBe("50");
 		expect(firstQuery(requests).get("offset")).toBe("0");
 		expect(firstQuery(requests).get("status")).toBeNull();
 		expect(firstQuery(requests).get("triggerId")).toBeNull();
@@ -147,7 +209,7 @@ describe("useIntegrationExecutions", () => {
 		const requests = listRoute();
 		const { wrapper } = harness();
 
-		renderHook(() => useIntegrationExecutions({ triggerId, sessionId, status: "Running" }), { wrapper });
+		renderHook(() => useIntegrationExecutions({ triggerId, sessionId, status: ["Running"] }), { wrapper });
 
 		await waitFor(() => {
 			expect(requests).toHaveLength(1);
@@ -155,6 +217,33 @@ describe("useIntegrationExecutions", () => {
 		expect(firstQuery(requests).get("triggerId")).toBe(triggerId);
 		expect(firstQuery(requests).get("sessionId")).toBe(sessionId);
 		expect(firstQuery(requests).get("status")).toBe("Running");
+	});
+
+	// The Active chip: three states in ONE read, as a repeated parameter, rather than a union assembled in the browser
+	// out of pages that would each have their own count.
+	it("sends a status SET as a repeated query parameter", async () => {
+		const requests = listRoute();
+		const { wrapper } = harness();
+
+		renderHook(() => useIntegrationExecutions({ status: ["Accepted", "Queued", "Running"] }), { wrapper });
+
+		await waitFor(() => {
+			expect(requests).toHaveLength(1);
+		});
+		expect(firstQuery(requests).getAll("status")).toEqual(["Accepted", "Queued", "Running"]);
+	});
+
+	it("asks the server for the page it was given, not the first one", async () => {
+		const requests = listRoute();
+		const { wrapper } = harness();
+
+		renderHook(() => useIntegrationExecutions({}, { limit: 25, offset: 75 }), { wrapper });
+
+		await waitFor(() => {
+			expect(requests).toHaveLength(1);
+		});
+		expect(firstQuery(requests).get("limit")).toBe("25");
+		expect(firstQuery(requests).get("offset")).toBe("75");
 	});
 
 	it("reads a short event page in one request, from sequence zero, at the endpoint's maximum page size", async () => {
@@ -202,25 +291,22 @@ describe("useIntegrationExecutions", () => {
 
 	// Every refetch re-pages from the start: the cache entry is the WHOLE log, so a poll that resumed from the last
 	// watermark would replace it with just the tail.
-	it("re-pages from sequence zero on the refetch poll", async () => {
+	// Driven by an explicit refetch rather than `refetchInterval`: the timer version leaves a poll running past the
+	// test and its late request lands in the NEXT test's recorder.
+	it("re-pages from sequence zero on every refetch", async () => {
 		const requests = pagedEventsRoute(600);
 		const { wrapper } = harness();
 
-		const { result } = renderHook(() => useIntegrationExecutionEvents(executionId, { refetchInterval: 20 }), {
-			wrapper,
-		});
+		const { result } = renderHook(() => useIntegrationExecutionEvents(executionId), { wrapper });
 
 		await waitFor(() => {
 			expect(result.current.data).toHaveLength(600);
 		});
-		// The poll keeps firing, so this pins the SHAPE of the traffic — every read restarts at 0 and walks to 500 —
-		// rather than an exact request count a timer race would make flaky.
-		await waitFor(() => {
-			expect(requests.length).toBeGreaterThanOrEqual(4);
-		});
-		for (const [index, request] of requests.entries()) {
-			expect(request.get("sinceSeq")).toBe(index % 2 === 0 ? "0" : "500");
-		}
+
+		await result.current.refetch();
+
+		expect(requests.map((request) => request.get("sinceSeq"))).toEqual(["0", "500", "0", "500"]);
+		expect(result.current.data).toHaveLength(600);
 	});
 
 	it("does not read events until an execution is selected", async () => {
@@ -233,6 +319,38 @@ describe("useIntegrationExecutions", () => {
 			expect(result.current.isLoading).toBe(false);
 		});
 		expect(requests).toHaveLength(0);
+	});
+
+	// The pager bounce: page two's cache entry starts empty, so a hook that answered `undefined` there let the page
+	// read a total of 0, compute one page, and clamp back to page one while the offset-50 request was in flight.
+	it("holds the previous page's rows and total while the next page loads", async () => {
+		const { requests, releasePageTwo } = deferredListRoute();
+		const { wrapper } = harness();
+
+		const { result, rerender } = renderHook(
+			({ offset }: { offset: number }) => useIntegrationExecutions({}, { limit: 50, offset }),
+			{ wrapper, initialProps: { offset: 0 } },
+		);
+
+		await waitFor(() => {
+			expect(result.current.data?.items.at(0)?.id).toBe(executionIdAtOffset(0));
+		});
+
+		rerender({ offset: 50 });
+
+		await waitFor(() => {
+			expect(requests).toHaveLength(2);
+		});
+		expect(requests.at(1)?.get("offset")).toBe("50");
+		expect(result.current.data?.totalCount).toBe(412);
+		expect(result.current.data?.items.at(0)?.id).toBe(executionIdAtOffset(0));
+
+		releasePageTwo();
+
+		await waitFor(() => {
+			expect(result.current.data?.items.at(0)?.id).toBe(executionIdAtOffset(50));
+		});
+		expect(result.current.data?.totalCount).toBe(412);
 	});
 
 	it("refetches the list after a cancellation is accepted", async () => {

@@ -7,6 +7,8 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
+import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
+import { useServerTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { IntegrationSessionDetailDialog } from "@/features/integrations/components/IntegrationSessionDetailDialog";
@@ -15,7 +17,8 @@ import {
 	type IntegrationSession,
 	type IntegrationSessionFilters,
 	type IntegrationSessionStatus,
-	integrationListLimit,
+	integrationPageSize,
+	integrationPageSizeOptions,
 	integrationSessionStatuses,
 } from "@/features/integrations/models/IntegrationModels";
 import {
@@ -28,14 +31,29 @@ import { useIntegrationsUiStore } from "@/features/integrations/stores/Integrati
 const ALL_VALUE = "__all__";
 
 /**
- * Caller-managed conversations an integrator holds across invocations. BOTH filters are server-side: the list is a
- * bounded window, so narrowing it in the browser would hide sessions that match the filter but fall outside it.
+ * Caller-managed conversations an integrator holds across invocations. BOTH filters and the paging are server-side:
+ * the response is one page of the server's ordering, so narrowing or slicing it in the browser would hide sessions
+ * that match the filter but fall on another page. The response's `totalCount` is what the pager numbers.
  */
 export function IntegrationSessionsPage() {
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
 
 	const [filters, setFilters] = useState<IntegrationSessionFilters>({});
+	const [page, setPage] = useState(1);
+	const [pageSize, setPageSize] = useState(integrationPageSize);
+
+	// Both filters are server parameters, so a narrowed list is a different list and page 4 of the old one is
+	// meaningless against it. A new page size renumbers the pages for the same reason.
+	const applyFilters = useCallback((next: (current: IntegrationSessionFilters) => IntegrationSessionFilters) => {
+		setFilters(next);
+		setPage(1);
+	}, []);
+
+	const handlePageSizeChange = useCallback((next: number) => {
+		setPageSize(next);
+		setPage(1);
+	}, []);
 
 	const selectedSessionId = useIntegrationsUiStore((state) => state.selectedSessionId);
 	const selectSession = useIntegrationsUiStore((state) => state.actions.selectSession);
@@ -46,12 +64,22 @@ export function IntegrationSessionsPage() {
 		};
 	}, [selectSession]);
 
-	const sessionsQuery = useIntegrationSessions(filters);
+	const sessionsQuery = useIntegrationSessions(filters, { limit: pageSize, offset: (page - 1) * pageSize });
 	const triggersQuery = useIntegrationTriggers();
 	const deleteMutation = useDeleteIntegrationSession();
 
-	const sessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data]);
+	const sessions = useMemo(() => sessionsQuery.data?.items ?? [], [sessionsQuery.data]);
 	const triggers = useMemo(() => triggersQuery.data ?? [], [triggersQuery.data]);
+
+	// Deleting the last session on a page is the one case the pager has to recover from on its own.
+	const pagination = useServerTablePagination({
+		page,
+		pageSize,
+		totalItems: sessionsQuery.data?.totalCount ?? 0,
+		pageSizeOptions: integrationPageSizeOptions,
+		onPageChange: setPage,
+		onPageSizeChange: handlePageSizeChange,
+	});
 
 	const selectedSession = sessions.find((session) => session.id === selectedSessionId) ?? null;
 
@@ -74,16 +102,22 @@ export function IntegrationSessionsPage() {
 		[t],
 	);
 
-	const handleTriggerChange = useCallback((value: string | null): void => {
-		setFilters((current) => ({ ...current, triggerId: value === null || value === ALL_VALUE ? undefined : value }));
-	}, []);
+	const handleTriggerChange = useCallback(
+		(value: string | null): void => {
+			applyFilters((current) => ({ ...current, triggerId: value === null || value === ALL_VALUE ? undefined : value }));
+		},
+		[applyFilters],
+	);
 
-	const handleStatusChange = useCallback((value: string | null): void => {
-		setFilters((current) => ({
-			...current,
-			status: value === null || value === ALL_VALUE ? undefined : (value as IntegrationSessionStatus),
-		}));
-	}, []);
+	const handleStatusChange = useCallback(
+		(value: string | null): void => {
+			applyFilters((current) => ({
+				...current,
+				status: value === null || value === ALL_VALUE ? undefined : (value as IntegrationSessionStatus),
+			}));
+		},
+		[applyFilters],
+	);
 
 	const handleDelete = useCallback(
 		async (session: IntegrationSession) => {
@@ -159,14 +193,6 @@ export function IntegrationSessionsPage() {
 					/>
 				</Group>
 
-				<Text size="sm" c="dimmed" data-testid="integration-sessions-window-note">
-					{t("pages.integrations.sessions.list.windowNote", {
-						defaultValue:
-							"Showing up to {{limit}} most recently active sessions. Narrow by trigger or status to reach older records.",
-						limit: integrationListLimit,
-					})}
-				</Text>
-
 				{sessionsQuery.isLoading ? (
 					<Group gap="sm">
 						<Loader size="sm" />
@@ -179,12 +205,15 @@ export function IntegrationSessionsPage() {
 					</Alert>
 				) : null}
 				{!(sessionsQuery.isLoading || loadError) ? (
-					<IntegrationSessionList
-						sessions={sessions}
-						isMutating={deleteMutation.isPending}
-						onView={(session) => selectSession(session.id)}
-						onDelete={handleDelete}
-					/>
+					<>
+						<IntegrationSessionList
+							sessions={sessions}
+							isMutating={deleteMutation.isPending}
+							onView={(session) => selectSession(session.id)}
+							onDelete={handleDelete}
+						/>
+						<TablePaginationFooter {...pagination} data-testid="integration-sessions-pagination" />
+					</>
 				) : null}
 			</SectionCard>
 

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
 	getIntegrationExecutionEvents,
@@ -19,7 +19,7 @@ import {
 import {
 	type IntegrationExecutionFilters,
 	integrationEventLimit,
-	integrationListLimit,
+	integrationPageSize,
 } from "@/features/integrations/models/IntegrationModels";
 import { integrationInvalidationKey, integrationQueryIds } from "@/features/integrations/queries/useIntegrationTriggers";
 
@@ -32,24 +32,37 @@ interface IntegrationQueryOptions {
 	readonly refetchInterval?: number | false;
 }
 
-export function useIntegrationExecutions(filters: IntegrationExecutionFilters = {}, options: IntegrationQueryOptions = {}) {
+/** One page of a list read. Both bounds ride in the generated query key, so each page is its own cache entry. */
+interface IntegrationListOptions extends IntegrationQueryOptions {
+	readonly limit?: number;
+	readonly offset?: number;
+}
+
+/**
+ * One page of executions plus the count of rows the SAME filters match, which is what makes a page navigator
+ * honest — without it a bounded window could only be described, never numbered.
+ */
+export function useIntegrationExecutions(filters: IntegrationExecutionFilters = {}, options: IntegrationListOptions = {}) {
 	return useQuery({
 		...withResponseValidation(
 			listIntegrationExecutionsOptions({
 				query: {
 					...(filters.triggerId === undefined ? {} : { triggerId: filters.triggerId }),
 					...(filters.sessionId === undefined ? {} : { sessionId: filters.sessionId }),
-					...(filters.status === undefined ? {} : { status: filters.status }),
-					// One bounded window at the validator's maximum, always from the start of the server's ordering.
-					// The response carries no total count, so there is nothing a page navigator could honestly show.
-					limit: integrationListLimit,
-					offset: 0,
+					// A repeated parameter: one chip can stand for the three active states.
+					...(filters.status === undefined ? {} : { status: [...filters.status] }),
+					limit: options.limit ?? integrationPageSize,
+					offset: options.offset ?? 0,
 				},
 			}),
 		),
 		enabled: options.enabled ?? true,
 		refetchInterval: options.refetchInterval,
-		select: (data) => data.items.map(toIntegrationExecution),
+		// `limit`/`offset` are part of the query key, so page 2 is a cache entry with no data of its own. Without the
+		// previous page held over, `totalCount` would read as 0 for a render, the pager would compute one page, and its
+		// clamp would send the operator back to page 1 while the page-2 request was still in flight.
+		placeholderData: keepPreviousData,
+		select: (data) => ({ items: data.items.map(toIntegrationExecution), totalCount: data.totalCount }),
 	});
 }
 

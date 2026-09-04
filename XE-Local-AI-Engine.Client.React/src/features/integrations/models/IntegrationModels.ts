@@ -136,10 +136,19 @@ export interface IntegrationAgentOption {
 	readonly toolApprovals: Readonly<Record<string, boolean>>;
 }
 
+/**
+ * What reaching a tool does to a run with nobody behind it. Read verbatim off the catalog's closed value set
+ * (`ToolUnattendedBehaviourValues`) and NOT derivable from the approval flag: `ask_user` is approval-gated too, but an
+ * unattended run continues past it with the question unanswered. A value this client does not know stays a plain
+ * string and is treated as failing, which is the safe direction.
+ */
+export const integrationToolContinuesUnanswered = "continuesUnanswered";
+
 /** The catalog facts the approval banner and the CallerManaged preflight both read, keyed by tool name. */
 export interface IntegrationToolFacts {
 	readonly effectiveRequiresApproval: boolean;
 	readonly category: string;
+	readonly unattendedBehaviour: string;
 }
 
 /** Lifecycle state of one execution. `Queued` appears only when the run actually waited for the node's lease. */
@@ -161,8 +170,19 @@ export const integrationExecutionStatuses: readonly IntegrationExecutionStatus[]
  * a run started elsewhere would never appear.
  */
 export function isActiveExecutionStatus(status: IntegrationExecutionStatus): boolean {
-	return status === "Accepted" || status === "Queued" || status === "Running";
+	return activeIntegrationExecutionStatuses.includes(status);
 }
+
+/**
+ * The three states a run passes through before it terminalises. They travel together as ONE filter chip: the endpoint
+ * takes a repeated `status` parameter, so "everything in flight" is a question the server can answer rather than a
+ * union the browser would have to assemble out of a bounded window.
+ */
+export const activeIntegrationExecutionStatuses: readonly IntegrationExecutionStatus[] = [
+	"Accepted",
+	"Queued",
+	"Running",
+];
 
 /** Lifecycle state of one caller-managed session. */
 export type IntegrationSessionStatus = "Active" | "Closed";
@@ -171,11 +191,19 @@ export const integrationSessionStatuses: readonly IntegrationSessionStatus[] = [
 
 /**
  * The maximum both list validators accept (ListIntegrationExecutionsRequestValidator.MaxLimit and
- * ListIntegrationSessionsRequestValidator.MaxLimit). Neither list response carries a total count, so the pages ask
- * for one bounded window at this size and say so, rather than drawing a page navigator over a count they would have
- * to invent.
+ * ListIntegrationSessionsRequestValidator.MaxLimit), and therefore the largest page the pager may ask for.
  */
 export const integrationListLimit = 200;
+
+/**
+ * Rows per page on first render, and the reason the list is paged at all: both list responses now carry a
+ * `totalCount`, so the tables ask for a page an operator can actually read and let the pager reach the rest. 200 rows
+ * behind a page navigator would be a pager nobody uses.
+ */
+export const integrationPageSize = 50;
+
+/** Sizes the pager offers, capped by what the list validators accept. */
+export const integrationPageSizeOptions: readonly number[] = [25, 50, 100, integrationListLimit];
 
 /**
  * The maximum ListIntegrationExecutionEventsRequestValidator accepts, and therefore the timeline's PAGE size: the
@@ -246,7 +274,8 @@ export interface IntegrationSession {
 export interface IntegrationExecutionFilters {
 	readonly triggerId?: string;
 	readonly sessionId?: string;
-	readonly status?: IntegrationExecutionStatus;
+	/** A SET, sent as a repeated `status` parameter. One chip can therefore stand for the three active states. */
+	readonly status?: readonly IntegrationExecutionStatus[];
 }
 
 export interface IntegrationSessionFilters {
