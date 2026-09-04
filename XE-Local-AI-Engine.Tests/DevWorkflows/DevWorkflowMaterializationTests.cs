@@ -118,6 +118,151 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>
+    ///     A DevTask slice that names no file it will change is refused before it ever reaches a coder. That coder has
+    ///     to export a NON-EMPTY patch to finish, so a "survey the code" or "capture the conventions" slice is refused,
+    ///     re-attempted twice, refused twice more and then blocks the run in front of a human — three sessions and two
+    ///     hours to learn what the package already said. Live, four runs went exactly that way.
+    /// </summary>
+    [Test]
+    public async Task ADevTaskSliceThatNamesNoFileItWillChangeIsRefusedRatherThanSentToACoderThatCannotFinish()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await DecomposeAsync(harness,
+                              """[{"id":"survey","title":"Survey the style","goal":"Read the calculator and capture the style profile."}]""",
+                              DevWorkflowGraphs.DecompositionIntoDevTasks)
+                          .ConfigureAwait(false);
+
+        // Two quiescent passes, as every other refusal here: the first hands the complaint back to the node, the second
+        // — after the re-attempt saves nothing new — stands it down.
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var decompose = await harness.ReadNodeRunAsync(runId, "decompose").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, decompose.Status, $"the row settled on {decompose.Status} rather than cloning a slice nobody can finish.");
+        AssertEx.Equal(DevWorkflowFailureClasses.Configuration, decompose.FailureClass);
+        var reason = AssertEx.NotNull(decompose.TerminalReason);
+        AssertEx.Contains(reason, "'survey'", message: "the refusal names the task, or the re-attempt has nothing to correct.");
+        AssertEx.Contains(reason, "names no file it will add or edit in 'changes'");
+        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).Count, "a refused package clones nothing.");
+    }
+
+    /// <summary>
+    ///     A path a coder would be refused for touching is refused here instead. The workspace confinement is enforced
+    ///     at the attempt either way; asking it of the package costs one call and saves the three attempts it would take
+    ///     to discover that "/etc/passwd" is not a file in the workspace.
+    /// </summary>
+    [Test]
+    public async Task ADevTaskSliceWhoseChangesLeaveTheWorkspaceIsRefused()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await DecomposeAsync(harness,
+                              """[{"id":"alpha","goal":"Add the method.","changes":["/etc/passwd"]}]""",
+                              DevWorkflowGraphs.DecompositionIntoDevTasks)
+                          .ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var decompose = await harness.ReadNodeRunAsync(runId, "decompose").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, decompose.Status);
+        AssertEx.Contains(AssertEx.NotNull(decompose.TerminalReason), "/etc/passwd", message: "and it names the entry, not merely the task.");
+    }
+
+    /// <summary>
+    ///     The accepted shape, whole: a DevTask package that names its files clones per task and the files reach the
+    ///     coder. They ride in <c>requirements</c> because that is the entire brief the implementation lane renders —
+    ///     a field of its own would say the same thing through three more seams.
+    /// </summary>
+    [Test]
+    public async Task ADevTaskSliceCarriesTheFilesItNamedIntoTheCodersBrief()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await DecomposeAsync(harness,
+                              """
+                              [
+                                { "id": "alpha", "title": "Add Square", "goal": "Add a Square method.", "changes": ["src/Calc/Calculator.cs", "tests/CalculatorSquareTests.cs"] },
+                                { "id": "beta", "title": "Add Cube", "goal": "Add a Cube method.", "changes": ["src/Calc/Calculator.cs"] }
+                              ]
+                              """,
+                              DevWorkflowGraphs.DecompositionIntoDevTasks)
+                          .ConfigureAwait(false);
+
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+
+        var alpha = AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "implement#alpha").ConfigureAwait(false)).InputJson);
+        AssertEx.Contains(alpha, "Add a Square method.", message: "the goal is still the whole of what the task asks for.");
+        AssertEx.Contains(alpha, "Files this task will add or edit: src/Calc/Calculator.cs, tests/CalculatorSquareTests.cs");
+
+        var beta = AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "implement#beta").ConfigureAwait(false)).InputJson);
+        AssertEx.Contains(beta, "Files this task will add or edit: src/Calc/Calculator.cs", message: "each child is told its OWN files.");
+        AssertEx.False(beta.Contains("CalculatorSquareTests", StringComparison.Ordinal), $"and only its own: {beta}");
+    }
+
+    /// <summary>
+    ///     The rule follows the DevTask, not the template's root. A custom template is free to root itself in an Agent
+    ///     that writes the brief and put the coder one node below it — and there the attempt that cannot finish on an
+    ///     empty patch is exactly as real, so reading only the root would wave the package straight past it.
+    /// </summary>
+    [Test]
+    public async Task ADevTaskBelowAnAgentRootStillRequiresChanges()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await DecomposeAsync(harness,
+                              """[{"id":"survey","title":"Survey the style","goal":"Read the calculator and capture the style profile."}]""",
+                              DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask)
+                          .ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var decompose = await harness.ReadNodeRunAsync(runId, "decompose").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, decompose.Status, $"the row settled on {decompose.Status} rather than cloning a coder that cannot finish.");
+        AssertEx.Contains(AssertEx.NotNull(decompose.TerminalReason), "names no file it will add or edit in 'changes'");
+        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).Count, "a refused package clones nothing.");
+    }
+
+    /// <summary>The same template with the files named: the rule is a gate on the package, not a refusal of the shape.</summary>
+    [Test]
+    public async Task ADevTaskBelowAnAgentRootMaterializesOnceItNamesItsChanges()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await DecomposeAsync(harness,
+                              """[{"id":"alpha","title":"Add Square","goal":"Add a Square method.","changes":["src/Calc/Calculator.cs"]}]""",
+                              DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask)
+                          .ConfigureAwait(false);
+
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "decompose").ConfigureAwait(false)).Status);
+        AssertEx.Contains(AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "implement#alpha").ConfigureAwait(false)).InputJson),
+            "Files this task will add or edit: src/Calc/Calculator.cs",
+            message: "and the coder below the Agent root is told the files, exactly as a DevTask-rooted clone is.");
+    }
+
+    /// <summary>
+    ///     The rule is the DevTask lane's, so a template with no DevTask in it at all is untouched by it. An Agent clone
+    ///     is an ordinary work session with no patch to export and nothing "changes" would be describing, and a package
+    ///     written for one has never had to name a file — refusing it would break every template that is not the seeded
+    ///     one.
+    /// </summary>
+    [Test]
+    public async Task AnAgentRootedDecompositionStillMaterializesWithoutChanges()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await DecomposeAsync(harness, TwoTasks).ConfigureAwait(false);
+
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "decompose").ConfigureAwait(false)).Status);
+        AssertEx.Contains(AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "implement#alpha").ConfigureAwait(false)).InputJson),
+            "\"requirements\":\"Parse the manifest.\"",
+            message: "and the brief is exactly what it was, with no file line invented for a package that named none.");
+    }
+
+    /// <summary>
     ///     R6, the staleness rule: the tick that materializes STOPS there. Everything below it in a tick judges node runs
     ///     against a parsed graph, and this one has just been replaced — so the assertion is that the next tick re-parses
     ///     and that nothing was admitted against the graph that no longer describes the run.
@@ -472,15 +617,14 @@ public sealed class DevWorkflowMaterializationTests
     /// <summary>
     ///     N4: skipping one slice's validation must not settle the run's tail over a sibling that is still working.
     ///     <para>
-    ///         A dead inbound edge already decides what an <c>All</c> join will DO — it can never fire, so it is skipped
-    ///         — but deciding it early skipped the join, and everything after it, while the second slice's
-    ///         implementation was still running. What the state machine rules is asserted in both halves here: the
-    ///         sibling is untouched and the join WAITS for it, and once it lands the join skips, because a Skipped
-    ///         inbound edge is Dead and an <c>All</c> join over a dead edge has nothing left to fire on.
+    ///         Settling the join the moment one branch was skipped took the integration stage over a slice the run had
+    ///         not finished. What the state machine rules is asserted in both halves here: the sibling is untouched and
+    ///         the join WAITS for it, and once it lands the join SUCCEEDS — per C1 an operator's skip over healthy
+    ///         ancestors is Waived rather than Dead, and an <c>All</c> join fires on the branch that did land.
     ///     </para>
     /// </summary>
     [Test]
-    public async Task SkippingOneSlicesValidationLeavesItsSiblingAloneAndTheJoinWaitsForIt()
+    public async Task SkippingOneSlicesValidationLeavesItsSiblingAloneAndTheJoinWaitsThenFiresOnIt()
     {
         await using var harness = new DevWorkflowHarness();
         harness.Tools.Answer("validate#alpha", FakeDevWorkflowToolCommands.Failing());
@@ -504,8 +648,8 @@ public sealed class DevWorkflowMaterializationTests
             "skipping one slice's validation reaches its own descendants and nothing else — the sibling was never downstream of it.");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Pending,
             (await harness.ReadNodeRunAsync(runId, "join").ConfigureAwait(false)).Status,
-            "and the join WAITS: it cannot fire, but settling that in front of live work skips the integration stage over a slice "
-            + "the run has not finished.");
+            "and the join WAITS: its other branch is still live, and answering before that lands would settle the integration stage "
+            + "over a slice the run has not finished.");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "verify").ConfigureAwait(false)).Status);
 
         await harness.SettleAgentAsync(runId, "implement#beta").ConfigureAwait(false);
@@ -514,11 +658,15 @@ public sealed class DevWorkflowMaterializationTests
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded,
             (await harness.ReadNodeRunAsync(runId, "validate#beta").ConfigureAwait(false)).Status,
             "the sibling ran to its own answer.");
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Skipped,
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded,
             (await harness.ReadNodeRunAsync(runId, "join").ConfigureAwait(false)).Status,
-            "and only THEN does the join answer, with the answer C1 already ruled: a Skipped source kills its out-edge, and an All "
-            + "join over a dead edge is skipped rather than satisfied by the branch that did land.");
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Skipped, (await harness.ReadNodeRunAsync(runId, "verify").ConfigureAwait(false)).Status);
+            "and only THEN does the join answer, with the answer C1 ruled: an operator's skip over ancestors that all succeeded is "
+            + "WAIVED rather than dead, so an All join fires on the branch that did land instead of throwing it away.");
+        AssertEx.False((await harness.ReadNodeRunAsync(runId, "verify").ConfigureAwait(false)).Status is DevWorkflowNodeRunStatus.Pending or DevWorkflowNodeRunStatus.Skipped,
+            "and the verification is asked to judge what the run DID produce, rather than being skipped with it.");
+        AssertEx.Contains(AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "validate#alpha").ConfigureAwait(false)).TerminalReason),
+            "Skipped by an operator",
+            message: "the excused slice says who excused it, which is what the verification's skipped-steps block reads.");
     }
 
     /// <summary>

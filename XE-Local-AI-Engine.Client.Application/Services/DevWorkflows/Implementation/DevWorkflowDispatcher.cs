@@ -49,6 +49,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     /// </summary>
     private const int SweepPageSize = 500;
 
+    /// <summary>
+    ///     How much of an operator's decision comment reaches the node run's <c>terminal_reason</c>. The column holds
+    ///     1024 and the comment is free text a person typed, so it is cut here rather than at the store's rejection —
+    ///     a decision that could not be applied because someone was verbose is the wrong way for a run to stop.
+    /// </summary>
+    private const int MaxDecisionComment = 500;
+
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -584,7 +591,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                                    target,
                                    OutputJson: outputJson,
                                    FailureClass: target == DevWorkflowNodeRunStatus.Failed ? DevWorkflowFailureClasses.GateRejected : null,
-                                   TerminalReason: target == DevWorkflowNodeRunStatus.Failed ? "A human abandoned this node run." : null,
+                                   TerminalReason: DecidedReason(target, settled.Comment),
                                    IncrementAttempt: incrementAttempt,
 
                                    // A retry gets a NEW session: resuming the one that just failed resumes the context
@@ -645,6 +652,21 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         // anywhere" by evaluating these same edges against this same document before the operator clicks.
         static string Output(DevWorkflowDecisionKind decision) =>
             DevWorkflowStateMachine.GateOutputJson(decision);
+
+        // What a person's decision leaves on the row. A Skip used to leave nothing, and it is the one terminal that
+        // most needs a reason: an All join now carries on past a skipped leaf, so the node downstream is handed the
+        // skip as evidence and has only this string to say WHY the work it was expecting is not there. The operator's
+        // own words are the whole of that why, so they travel — bounded, because the column is 1024 and a comment is
+        // free text an operator typed.
+        static string? DecidedReason(DevWorkflowNodeRunStatus target, string? comment) =>
+            target switch
+            {
+                DevWorkflowNodeRunStatus.Failed => "A human abandoned this node run.",
+                DevWorkflowNodeRunStatus.Skipped when comment?.Trim() is { Length: > 0 } said =>
+                    $"Skipped by an operator: {DevWorkflowStateMachine.Bounded(said, MaxDecisionComment)}",
+                DevWorkflowNodeRunStatus.Skipped => "Skipped by an operator.",
+                _ => null
+            };
     }
 
     /// <summary>
@@ -838,10 +860,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
             if (admission == DevWorkflowNodeAdmission.Skip)
             {
+                // Named, not bare. A cascade writes as many Skipped rows as it reaches, and without the cause on each
+                // one an operator reading the tail cannot tell which row was the decision and which followed it.
                 _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
                                        nodeRun.Id,
                                        DevWorkflowVersions.Any,
-                                       DevWorkflowNodeRunStatus.Skipped),
+                                       DevWorkflowNodeRunStatus.Skipped,
+                                       TerminalReason: DevWorkflowStateMachine.SkipReason(node, graph, byKey)),
                                    cancellationToken)
                                .ConfigureAwait(false);
                 written++;

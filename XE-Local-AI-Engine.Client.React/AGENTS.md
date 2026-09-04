@@ -1,41 +1,41 @@
-# AGENTS.md
+# AGENTS.md — React client
 
-## Approval Gates
-
-Do not edit files, run mutating commands, perform infrastructure changes, or clean up files before an approved plan.
-
-For failures, stop and report the failing command/output before attempting fixes.
+Frontend-only rules. The root [`AGENTS.md`](../AGENTS.md) holds the working rules, the backend gate and the
+runtime commands; the full frontend conventions are in
+[`docs/wiki/16-code-conventions.md`](../docs/wiki/16-code-conventions.md) and
+[`docs/wiki/10-react-client.md`](../docs/wiki/10-react-client.md).
 
 ## Validation
 
-Backend:
+Run from this directory; `dotnet tool restore --tool-manifest ../dotnet-tools.json` once first.
 
-- `dotnet restore XE-Local-AI-Engine.slnx`
-- `dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore`
-- `dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1`
+```bash
+pnpm install --frozen-lockfile
+pnpm run validate              # lint + knip + signalr:check + depcruise (what CI runs; not bare lint)
+pnpm run test:coverage:check   # full vitest run with thresholds (pnpm test = same suite without coverage)
+pnpm run test:tooling          # node --test scripts/*.test.mjs
+pnpm run build
+pnpm audit --prod --audit-level=high
+```
 
-The Release configuration and serial test-module setting are required. The root [`AGENTS.md`](../AGENTS.md#validation) is authoritative for these commands and explains why CI's per-project test loop differs. Use the repository build lock and assembly guard described there; never overlap a backend build with `dotnet test --no-build`.
+- `pnpm run lint` is the typecheck (`tsc --noEmit` + Biome + Stylelint + the `currentTarget` guard).
+- After a backend contract change: `pnpm run openapi:check` regenerates the hey-api client and fails on drift.
+  Commit the regenerated `openapi/` and `src/core/api/generated/`; never hand-edit them. Against a running
+  desktop backend: `OPENAPI_SPEC_URL=<spec-url> pnpm run openapi:check:live`.
+- After a dependency change: `pnpm run licenses:check`; on dependency-update branches `pnpm run dependencies:refresh`.
+- Knip and dependency-cruiser are no-growth baselines. Fix the code, do not widen the baseline without saying so.
+- `pnpm run doctor` (react-doctor) and `pnpm run spellCheck` are advisory, not gates.
+- E2E (`scripts/run-e2e-local.sh`, from the repo root) is ask-gated unless the task targets E2E behavior.
 
-Frontend:
+## Conventions
 
-- `cd XE-Local-AI-Engine.Client.React`
-- `pnpm install --frozen-lockfile`
-- `pnpm run lint`
-- `pnpm test`
-- `pnpm run test:tooling`
-- `pnpm run build`
-
-`pnpm validate` additionally runs Knip, the SignalR proxy synchronization check, and the dependency architecture baseline. Backend contract changes must run `pnpm openapi:check`; a running desktop backend can be checked with `OPENAPI_SPEC_URL=<absolute-spec-url> pnpm openapi:check:live`.
-
-E2E is ask-gated unless the task specifically targets E2E behavior.
-
-## Parallel Work
-
-For parallel implementation tasks, prefer git worktrees under `.tmp/worktrees/` and avoid multiple tasks claiming the same file unless explicitly approved.
-
-## Durable Memory
-
-Agents may propose updates to project intelligence or standards, but durable context promotion requires human architect approval.
+- Feature folders under `src/features/<feature>/`; shared code under `src/core/`.
+- Data layer is the generated hey-api client only; no hand-written axios calls. Server state lives in TanStack
+  Query and is never mirrored into a store; Zustand holds UI-only state with atomic selectors (no `useShallow`).
+- Forms are manual: Mantine + `useState` + Zod on submit. No form library.
+- User-facing strings go through react-i18next keys. Adding a language: [`docs/translating.md`](../docs/translating.md).
+- Some lint suppressions are load-bearing (the SignalR hub hooks and chat adapters; listed in wiki 16). Do not "fix" them.
+- An `await import()` inside `it()` counts against `testTimeout`; hoist imports.
 
 <!-- CODEGRAPH_START -->
 ## CodeGraph
