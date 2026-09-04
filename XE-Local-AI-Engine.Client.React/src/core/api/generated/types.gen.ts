@@ -2225,6 +2225,7 @@ export type XeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse = {
 	category: string;
 	effectiveRequiresApproval: boolean;
 	sessionScopeEligible: boolean;
+	unattendedBehaviour: string;
 };
 
 export type XeLocalAiEngineClientEndpointsMcpV1ListMcpServersResponse = {
@@ -2967,6 +2968,7 @@ export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationApiKeysRe
 
 export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecutionsResponse = {
 	items: Array<XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionSummaryDto>;
+	totalCount: number;
 };
 
 export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecutionsRequest = {
@@ -2975,6 +2977,7 @@ export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecution
 
 export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationSessionsResponse = {
 	items: Array<XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionResponse>;
+	totalCount: number;
 };
 
 export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationSessionsRequest = {
@@ -12447,7 +12450,7 @@ export type ListIntegrationExecutionsData = {
 	query?: {
 		triggerId?: string | null;
 		sessionId?: string | null;
-		status?: XeLocalAiEngineClientPersistenceEntitiesIntegrationExecutionStatus | null;
+		status?: Array<XeLocalAiEngineClientPersistenceEntitiesIntegrationExecutionStatus> | null;
 		limit?: number | null;
 		offset?: number | null;
 	};
