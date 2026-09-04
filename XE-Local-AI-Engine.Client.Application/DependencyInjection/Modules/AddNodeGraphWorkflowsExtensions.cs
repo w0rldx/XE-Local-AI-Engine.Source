@@ -2,7 +2,9 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 
 internal static class AddNodeGraphWorkflowsExtensions
 {
@@ -31,6 +33,13 @@ internal static class AddNodeGraphWorkflowsExtensions
         // The floors under the budgets and the one relation between two of them, neither of which a data annotation
         // can express. Failing them at startup beats meeting them once per node run.
         builder.Services.AddSingleton<IValidateOptions<GraphWorkflowOptions>, GraphWorkflowOptionsValidator>();
+
+        // Scoped, like every store that reaches the DbContext. No publishing decorator in this slice: S0 has nothing to
+        // announce — the definition half writes no run anybody is watching. S1 wraps this registration when it does.
+        builder.Services.AddScoped<IGraphWorkflowStore, GraphWorkflowStore>();
+
+        // The one write seam. Scoped because the store it drives is, and because a validation answer is per-request.
+        builder.Services.AddScoped<IGraphWorkflowDefinitionService, GraphWorkflowDefinitionService>();
 
         return builder;
     }

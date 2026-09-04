@@ -173,6 +173,28 @@ internal static class GraphWorkflowGraphs
                                    }
                                    """;
 
+    /// <summary>
+    ///     Structurally sound — one Start, one End, acyclic, everything reachable — and wrong in two per-node ways at
+    ///     once: an Agent naming a reasoning effort nothing offers, and an Agent whose config carries a Tool node's
+    ///     member. Both accumulate against their own node key, which is what a multi-error refusal has to prove.
+    /// </summary>
+    public const string TwoNodeConfigErrors = """
+                                              {
+                                                "schemaVersion": 1,
+                                                "nodes": [
+                                                  { "key": "start", "kind": "Start", "config": {} },
+                                                  { "key": "a", "kind": "Agent", "config": { "instructions": "Judge it.", "reasoningEffort": "extreme" } },
+                                                  { "key": "b", "kind": "Agent", "config": { "instructions": "Ship it.", "toolName": "read_file" } },
+                                                  { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                ],
+                                                "edges": [
+                                                  { "key": "e1", "from": "start", "to": "a" },
+                                                  { "key": "e2", "from": "a", "to": "b" },
+                                                  { "key": "e3", "from": "b", "to": "done" }
+                                                ]
+                                              }
+                                              """;
+
     /// <summary>Two End nodes, so "the run reached an end" is not the same question as "the last node succeeded".</summary>
     public const string TwoEnds = """
                                   {
