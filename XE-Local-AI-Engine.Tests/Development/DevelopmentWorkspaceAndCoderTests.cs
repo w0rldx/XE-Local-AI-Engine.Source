@@ -1112,6 +1112,11 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         AssertEx.Contains(second.Prompt, "Files in this shared workspace that already differ from the base commit");
         AssertEx.Contains(second.Prompt, "README.md");
+
+        // get_diff has to SHOW the work the prompt points at. It diffed against the index until 2026-09-04, and the
+        // index equals the worktree from the moment an attempt starts, so it answered "nothing" for every carried file.
+        AssertEx.Contains(second.DiffAtStart, "--- a/README.md");
+        AssertEx.Contains(second.DiffAtStart, "+changed");
     }
 
     /// <summary>
@@ -1456,6 +1461,9 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     {
         public string? Prompt { get; private set; }
 
+        /// <summary>What get_diff showed this attempt BEFORE it changed anything.</summary>
+        public string? DiffAtStart { get; private set; }
+
         public async Task<DevelopmentCoderModelResult> RunAsync(string modelId,
             string prompt,
             IDevelopmentWorkspaceTools tools,
@@ -1467,6 +1475,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         {
             ArgumentNullException.ThrowIfNull(tools);
             Prompt = prompt;
+            DiffAtStart = await tools.GetDiffAsync(cancellationToken).ConfigureAwait(false);
             if (patch is not null)
             {
                 _ = await tools.ApplyPatchAsync(patch, cancellationToken).ConfigureAwait(false);
