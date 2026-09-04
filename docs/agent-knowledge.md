@@ -1008,6 +1008,10 @@ The 60-second stream-idle watchdog covers time inside tool handlers. Human waits
 
 The loop runs a further provider round; what the throw destroys is the handler's sentence, replaced by the pipeline's fixed `Error: Function failed.` (`IncludeDetailedErrors` is left `false`), so the model retries blind. Prevents the wrong inference that returning instead of throwing is about turn lifetime. Authority: measured with a standalone probe against the pinned package; `EmitOutputToolHandler.ExecuteAsync` carried the wrong claim until 4d7ee3ea.
 
+### Persisted chat parts are a render/reload record, not model context
+
+A persisted `NodeChatMessagePart` reaches the model only through `ConversationContextBuilder.Build(includeToolHistory: true)` → `ConversationMessageDto.ToolExchanges` → `InvocationRunner.BuildChatMessages`, and only the integration execution coordinator asks for it, for a `CallerManaged` session. Chat has written those parts since long before any of this and never replayed one. Prevents assuming a continued turn "sees" its own tool calls because the SPA renders them — the S6 kickoff assumed chat already replayed parts, and it never did, so half of D-7 was new code rather than plumbing. Authority: `IntegrationContinuationTests.ACallerManagedContinuationReplaysTheCallItsResultAndThenTheTurnsText`, this pass 2026-09-04.
+
 ### MAF traps
 
 - `ChatClientAgentOptions` has no `Instructions`; use `ChatOptions.Instructions`.

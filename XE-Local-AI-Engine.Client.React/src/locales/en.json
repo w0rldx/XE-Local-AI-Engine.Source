@@ -5543,8 +5543,7 @@
 					"displayNameTooLong": "The display name is longer than the 128-character limit.",
 					"descriptionTooLong": "The description is longer than the 1024-character limit.",
 					"targetRequired": "A target agent is required.",
-					"inputKindRequired": "Select at least one accepted input kind.",
-					"sessionPolicyTools": "A caller-managed session is not allowed for an agent that can call side-effecting tools: {{tools}}. Choose a new session per call, or remove those tools from the agent."
+					"inputKindRequired": "Select at least one accepted input kind."
 				},
 				"approvalWarning": {
 					"title": "Approval-requiring tools",

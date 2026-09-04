@@ -126,10 +126,11 @@ public sealed class IntegrationContinuationTests
     }
 
     [Test]
-    public async Task WhenTheAgentGainsANonReadLocalToolAfterTheTriggerWasSaved_TheRunFailsSessionPolicy()
+    public async Task WhenTheAgentGainsANonReadLocalToolAfterTheTriggerWasSaved_TheRunProceeds()
     {
-        // Ruling R4-9(a) at RUN time, against the offer the package would actually carry. The trigger passed its
-        // save-time check; the agent's tools changed afterwards, and a caller-managed session persists no tool history.
+        // ADR 0008 R6-1, at RUN time. Ruling R4-9(a) used to terminalize this row with `session-policy` before the
+        // runner was ever reached, because a caller-managed session persisted no tool history. It persists and replays
+        // it now, so a write-capable agent is an ordinary caller-managed target and the run happens.
         using var harness = new Harness();
         harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
         harness.OfferedTools =
@@ -141,25 +142,8 @@ public sealed class IntegrationContinuationTests
         await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
 
         var row = harness.Row(executionId);
-        AssertEx.Equal(IntegrationExecutionStatus.Failed, row.Status);
-        AssertEx.Equal(IntegrationFailureCategories.SessionPolicy, row.FailureCategory);
-        AssertEx.Equal(expected: 0, harness.RunCount, "Nothing may run: the point is that the side-effecting agent never starts.");
-    }
-
-    [Test]
-    public async Task APerInvocationTriggerIsNeverJudgedByTheCallerManagedRule()
-    {
-        // A per-invocation run starts fresh every time, so it carries no history a missing tool call could make wrong.
-        using var harness = new Harness();
-        harness.OfferedTools =
-        [
-            Harness.Tool("write_file", XE_Local_AI_Engine.AI.Agent.Tools.ToolCategory.WriteExecute)
-        ];
-        var executionId = harness.SeedAccepted();
-
-        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
-
-        AssertEx.Equal(IntegrationExecutionStatus.Completed, harness.Row(executionId).Status);
+        AssertEx.Equal(IntegrationExecutionStatus.Completed, row.Status);
+        AssertEx.Null(row.FailureCategory);
         AssertEx.Equal(expected: 1, harness.RunCount);
     }
 
@@ -288,6 +272,32 @@ public sealed class IntegrationContinuationTests
 
         AssertEx.Equal(ChatRole.Assistant, messages[callIndex + 2].Role);
         AssertEx.Equal("there are two files", messages[callIndex + 2].Contents.OfType<TextContent>().Single().Text);
+    }
+
+    [Test]
+    public async Task AWriteExecuteToolsCallAndResultAreReplayedLikeAnyOther()
+    {
+        // The category-blind half of ADR 0008 R6-1. The replayed exchange is what lets turn 2 know the artifact was
+        // ALREADY saved; without it the model reads only its own prose about having saved one and can save it twice.
+        using var harness = new Harness();
+        harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
+        harness.OfferedTools = [Harness.Tool("save_artifact", XE_Local_AI_Engine.AI.Agent.Tools.ToolCategory.WriteExecute)];
+        harness.AddHistory("user", "save the count");
+        harness.AddHistory("assistant", "saved it", [Harness.CompletedToolPart("call-1", "save_artifact", "{\"name\":\"s6.txt\"}", "saved s6.txt")]);
+
+        var executionId = harness.SeedAccepted();
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        AssertEx.Equal(IntegrationExecutionStatus.Completed, harness.Row(executionId).Status);
+        var assistant = Context(harness).Single(message => message.Role == MessageRole.Assistant);
+        var exchange = AssertEx.NotNull(assistant.ToolExchanges, "A WriteExecute call is replayed on the same path a ReadLocal one is.").Single();
+        AssertEx.Equal("save_artifact", exchange.Name);
+        AssertEx.Equal("saved s6.txt", exchange.Result);
+
+        var messages = InvocationRunner.BuildChatMessages(AssertEx.NotNull(harness.CapturedPackage)).ToList();
+        var call = messages.SelectMany(static message => message.Contents).OfType<FunctionCallContent>().Single();
+        AssertEx.Equal("save_artifact", call.Name);
+        AssertEx.Equal("saved s6.txt", messages.SelectMany(static message => message.Contents).OfType<FunctionResultContent>().Single().Result?.ToString());
     }
 
     [Test]

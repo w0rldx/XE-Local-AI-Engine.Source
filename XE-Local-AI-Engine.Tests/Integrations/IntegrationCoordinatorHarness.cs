@@ -215,11 +215,9 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         services.AddSingleton(FenceSeeds);
         services.AddSingleton<IToolApprovalPolicy>(_ => ToolApprovalPolicy);
         services.AddSingleton<IIntegrationApiKeyStore>(_keys);
-        services.AddSingleton(TriggerService);
         services.AddSingleton(_ => new IntegrationSessionService(_sessions,
             Executions,
             _triggers,
-            TriggerService,
             new IntegrationExternalAccess(Executions, _sessions, _keys),
             Persistence,
             SessionGate,
@@ -246,8 +244,6 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     public RecordingCompactionService Compaction { get; } = new();
 
     public IntegrationSessionGate SessionGate { get; } = new();
-
-    public IIntegrationTriggerService TriggerService { get; } = Substitute.For<IIntegrationTriggerService>();
 
     /// <summary>
     ///     The prior-outputs fence seed. Fixed rather than derived from a node key, so the fenced block is byte-stable
@@ -482,7 +478,7 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     public IntegrationSessionSnapshot Session() =>
         _sessions.Rows.Single(row => row.Id == SessionId);
 
-    /// <summary>One offered tool in the resolved runtime, so a suite can put a non-ReadLocal tool in front of the rule.</summary>
+    /// <summary>One offered tool in the resolved runtime, so a suite can give the run a tool of a chosen category.</summary>
     public static AllowedToolDto Tool(string name, XE_Local_AI_Engine.AI.Agent.Tools.ToolCategory category) =>
         new()
         {

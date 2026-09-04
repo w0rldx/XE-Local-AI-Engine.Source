@@ -492,10 +492,9 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         // Ruling D2 scopes V1 to a saved SINGLE agent. This package carries no OrchestrationSpec — the scheduler's
         // run-agent shape it is modelled on carries none either — so InvocationRunner would take RunSingleAgentAsync
         // and an orchestrator would report Completed having run none of its participants, none of its routing and none
-        // of its handoffs. Rejected rather than orchestrated: the offer emit_output is unioned into is the ROOT's, the
-        // caller-managed read-only rule judges the ROOT's tools, and both would have to be pushed across every
-        // participant before an orchestrated integration run could be honest. Checked here as well as at save because
-        // a definition's Kind can change after the trigger was written.
+        // of its handoffs. Rejected rather than orchestrated: the offer emit_output is unioned into is the ROOT's, and
+        // that would have to be pushed across every participant before an orchestrated integration run could be
+        // honest. Checked here as well as at save because a definition's Kind can change after the trigger was written.
         if (definition.Kind != AgentDefinitionKind.Single)
         {
             await TerminalizeBeforeRunAsync(context,
@@ -605,21 +604,6 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
             await TerminalizeBeforeRunAsync(context,
                     IntegrationFailureCategories.TriggerUnavailable,
                     "The trigger's target agent is an orchestrator, which external integrations do not run.")
-                .ConfigureAwait(false);
-            return;
-        }
-
-        // 4b. Ruling R4-9(a), judged against the offer this package will actually carry rather than a second resolve
-        //     that could disagree. The trigger was checked at save, but an agent definition's tools can change
-        //     afterwards, and this is the last point that sees them as they are now. A caller-managed session persists
-        //     the seed and the final assistant text and nothing else, so a continued run cannot tell an action it
-        //     already performed from prose describing one — safe only while the agent can perform none.
-        if (trigger.SessionPolicy == IntegrationSessionPolicy.CallerManaged
-            && !IIntegrationTriggerService.AllowsCallerManaged(resolved.AllowedTools))
-        {
-            await TerminalizeBeforeRunAsync(context,
-                    IntegrationFailureCategories.SessionPolicy,
-                    "The trigger's agent now offers a tool outside ToolCategory.ReadLocal, which a caller-managed session cannot host.")
                 .ConfigureAwait(false);
             return;
         }
