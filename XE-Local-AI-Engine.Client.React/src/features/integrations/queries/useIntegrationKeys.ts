@@ -9,9 +9,11 @@ import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toIntegrationApiKey } from "@/features/integrations/models/IntegrationMappers";
 import { integrationInvalidationKey, integrationQueryIds } from "@/features/integrations/queries/useIntegrationTriggers";
 
-// Server state for the integration API keys surface. The generate response carries the show-once plaintext, which is
-// NEVER cached or stored: the panel captures it in the mutation's onSuccess callback and holds it in component
-// state, because the node persists only a SHA-256 digest and can never supply it again.
+// Server state for the integration API keys surface. The generate response carries the show-once plaintext, which the
+// panel captures in the mutation's onSuccess callback and holds in component state, because the node persists only a
+// SHA-256 digest and can never supply it again. Nothing here may outlive that: the plaintext is the mutation's `data`,
+// so it sits in TanStack's MutationCache until the entry is collected. `gcTime: 0` plus the page's `reset()` right
+// after the capture drops it on the next tick instead of leaving it there for the default five-minute gc window.
 
 export function useIntegrationKeys() {
 	return useQuery({
@@ -29,6 +31,9 @@ export function useGenerateIntegrationApiKey() {
 
 	return useMutation({
 		...withResponseValidation(generateIntegrationApiKeyMutation()),
+		// Collect the entry the moment the page's `reset()` detaches this observer. Resetting alone only removes the
+		// observer; without a zero gc time the plaintext-bearing `data` stays in the cache for the default window.
+		gcTime: 0,
 		onSuccess: () => invalidateKeys(queryClient),
 	});
 }

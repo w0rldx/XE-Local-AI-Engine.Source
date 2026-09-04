@@ -20,6 +20,10 @@ interface EventDetail {
 	readonly ok?: boolean;
 	readonly category?: string | null;
 	readonly summary?: string | null;
+	// The pre-unification `execution.failed` spelling. Rows written before the writer moved to `{category, summary}`
+	// are still in the store and must keep rendering, so both spellings are read.
+	readonly failureCategory?: string | null;
+	readonly failureSummary?: string | null;
 	readonly tokens?: number;
 	readonly durationMs?: number;
 	readonly contentType?: string;
@@ -109,10 +113,13 @@ function detailLine(eventType: string, detail: EventDetail | null, t: TFunction)
 						});
 			return [duration, tokens].filter((part) => part !== null).join(" · ") || null;
 		}
-		case "execution.failed":
+		case "execution.failed": {
 			// Both parts render verbatim. The category is a closed backend set and the summary is content-free by
 			// construction, so neither is translated and neither needs redacting.
-			return [detail.category ?? null, detail.summary ?? null].filter((part) => part !== null).join(" — ") || null;
+			const category = detail.category ?? detail.failureCategory ?? null;
+			const summary = detail.summary ?? detail.failureSummary ?? null;
+			return [category, summary].filter((part) => part !== null).join(" — ") || null;
+		}
 		default:
 			return null;
 	}

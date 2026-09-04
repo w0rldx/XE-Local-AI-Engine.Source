@@ -41,7 +41,8 @@ export function IntegrationKeysPage() {
 	}, [closeKeyDialog]);
 
 	// The ONLY place the plaintext key ever lives. It is captured in the mutation's onSuccess callback and held in
-	// component state — never a store, never the query cache — so unmounting or navigating away drops it, which is
+	// component state — never a store, never the query cache, and not the mutation cache either once the capture
+	// resets it — so unmounting or navigating away drops it, which is
 	// the honest lifetime for a value the node can no longer supply. Deliberately NOT cleared on a query refetch:
 	// the list invalidation a successful generate fires lands while the operator is still reading the key.
 	const [revealedKey, setRevealedKey] = useState<string | null>(null);
@@ -63,6 +64,11 @@ export function IntegrationKeysPage() {
 					onSuccess: (response) => {
 						setRevealedKey(response.key);
 						closeKeyDialog();
+						// The response IS the mutation's cached `data`, so the plaintext would otherwise sit in the
+						// MutationCache long after the panel is gone. Now that it is captured, drop the cache entry —
+						// paired with the hook's `gcTime: 0` this leaves component state as its only home. Safe here
+						// because this callback runs after the success is dispatched, so no pending state is discarded.
+						generateMutation.reset();
 					},
 				},
 			);

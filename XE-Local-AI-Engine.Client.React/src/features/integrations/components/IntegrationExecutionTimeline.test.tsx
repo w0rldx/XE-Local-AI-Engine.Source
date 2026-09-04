@@ -213,6 +213,29 @@ describe("IntegrationExecutionTimeline", () => {
 		);
 	});
 
+	// The detailJson below is copied verbatim from a real captured row (s4-live-evidence/failed-execution-events.json).
+	// Rows persisted before the writer unified on `{category, summary}` carry `{failureCategory, failureSummary}`, and
+	// the earlier fixture — this client's own brief shape — is exactly why the mismatch reached a live run unnoticed.
+	it("renders a failure detail written in the pre-unification failureCategory/failureSummary shape", () => {
+		renderWithMantine(
+			<IntegrationExecutionTimeline
+				events={[
+					event({
+						sequence: 3,
+						eventType: "execution.failed",
+						detailJson:
+							'{"failureCategory":"approval-required","failureSummary":"approval required in an unattended run: run_python"}',
+					}),
+				]}
+				isLoading={false}
+			/>,
+		);
+
+		expect(screen.getByTestId("integration-execution-event-3").textContent).toContain(
+			"approval-required — approval required in an unattended run: run_python",
+		);
+	});
+
 	it("omits the token count a provider never reported rather than printing a null", () => {
 		renderWithMantine(
 			<IntegrationExecutionTimeline
