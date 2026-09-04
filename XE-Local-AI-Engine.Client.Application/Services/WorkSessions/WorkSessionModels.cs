@@ -114,9 +114,9 @@ public sealed record WorkSessionEventDto(
 ///         identifier for an MCP or custom one.
 ///     </para>
 ///     <para>
-///         Every member is a STEP TOTAL, which is why the provider's own reported token usage is not among them: the
-///         invocation runner assigns its <c>UsageSnapshot</c> per provider round rather than accumulating, so on a
-///         multi-round step it holds the LAST round's numbers and would silently contradict the totals beside it.
+///         Every member is a STEP TOTAL read off the step's own cap scope, which is why the provider's own reported
+///         token usage is not among them: it is the TURN's number, accumulated by the invocation runner across the
+///         turn's provider rounds and written to the run envelope, and a step is not the same denominator as a turn.
 ///         Estimate-versus-truth is measured per round instead, where both halves describe the same request, by
 ///         <c>ProviderCallBudgetChatClient</c>'s observed-usage write-back into the calibration store.
 ///     </para>

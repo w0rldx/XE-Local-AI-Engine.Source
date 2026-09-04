@@ -340,6 +340,11 @@ public sealed class WorkerShutdownDrainServiceTests
             return Task.CompletedTask;
         }
 
+        public Task ReportModelReadinessAsync(Guid invocationId, long? modelReadinessMs)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort)
         {
             return Task.CompletedTask;

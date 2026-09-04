@@ -90,6 +90,19 @@ public sealed partial class WorkerEventDispatcher
         return Task.CompletedTask;
     }
 
+    public Task ReportModelReadinessAsync(Guid invocationId, long? modelReadinessMs)
+    {
+        // A no-op when the id is not the current invocation, exactly like the reports above.
+        UpdateInvocation(invocationId,
+            state =>
+            {
+                state.ModelReadinessMs = modelReadinessMs;
+                return state;
+            });
+
+        return Task.CompletedTask;
+    }
+
     public Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dispatchedTier);

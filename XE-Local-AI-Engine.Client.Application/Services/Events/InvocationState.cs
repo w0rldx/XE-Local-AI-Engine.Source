@@ -108,6 +108,15 @@ public sealed class InvocationState
     public int? MaxToolSchemaTokens { get; set; }
 
     /// <summary>
+    ///     How many of <see cref="GenerationDurationMs" /> the turn spent making a LOCAL runtime ready — launching
+    ///     <c>llama-server</c> and loading the model — rather than generating. The whole-turn clock starts before the
+    ///     warm, so a cold first turn measured 206 s against the same work's 28 s warm; subtracting this leaves the
+    ///     warm-equivalent turn time. Null whenever no local warm happened (Ollama, a remote provider, an already-warm
+    ///     runtime that reported nothing) and on every platform/legacy turn.
+    /// </summary>
+    public long? ModelReadinessMs { get; set; }
+
+    /// <summary>
     ///     The tier reasoning effort <c>auto</c> resolved to for this turn, reported by the runner immediately after
     ///     the dispatch (<c>fast</c>, <c>normal</c> or <c>deep</c>). Null on every turn that authored a concrete
     ///     effort, so a reader can tell a dispatched turn from an ordinary one. A label, never a signal value.
@@ -195,6 +204,7 @@ public sealed class InvocationState
             ReasoningTokens = ReasoningTokens,
             ToolSchemaTokens = ToolSchemaTokens,
             MaxToolSchemaTokens = MaxToolSchemaTokens,
+            ModelReadinessMs = ModelReadinessMs,
             DispatchedTier = DispatchedTier,
             AuthoredEffort = AuthoredEffort,
             GenerationDurationMs = GenerationDurationMs,

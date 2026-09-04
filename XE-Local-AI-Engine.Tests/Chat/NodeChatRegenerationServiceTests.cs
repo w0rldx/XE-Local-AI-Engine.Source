@@ -2685,6 +2685,16 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             return Task.CompletedTask;
         }
 
+        public Task ReportModelReadinessAsync(Guid invocationId, long? modelReadinessMs)
+        {
+            if (CurrentInvocation is not null)
+            {
+                CurrentInvocation.ModelReadinessMs = modelReadinessMs;
+            }
+
+            return Task.CompletedTask;
+        }
+
         public Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort)
         {
             if (CurrentInvocation is not null)

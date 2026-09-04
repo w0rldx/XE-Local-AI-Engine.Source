@@ -248,12 +248,13 @@ internal sealed partial class DevWorkflowStore
         nodeRun.ToolSchemaTokens = telemetry.ToolSchemaTokens ?? nodeRun.ToolSchemaTokens;
         nodeRun.ToolNamesJson = telemetry.ToolNamesJson ?? nodeRun.ToolNamesJson;
         nodeRun.AgentTurnMs = telemetry.AgentTurnMs ?? nodeRun.AgentTurnMs;
+        nodeRun.ModelReadinessMs = telemetry.ModelReadinessMs ?? nodeRun.ModelReadinessMs;
         nodeRun.ServedModelName = telemetry.ServedModelName ?? nodeRun.ServedModelName;
         nodeRun.RouteJson = telemetry.RouteJson ?? nodeRun.RouteJson;
         nodeRun.WorkSessionSteps = telemetry.WorkSessionSteps ?? nodeRun.WorkSessionSteps;
     }
 
-    /// <summary>Empties all twelve cost columns, which is what a re-attempt's clean slate means for them.</summary>
+    /// <summary>Empties all thirteen cost columns, which is what a re-attempt's clean slate means for them.</summary>
     private static void ClearTelemetry(DevWorkflowNodeRun nodeRun)
     {
         nodeRun.InputTokens = null;
@@ -265,6 +266,7 @@ internal sealed partial class DevWorkflowStore
         nodeRun.ToolSchemaTokens = null;
         nodeRun.ToolNamesJson = null;
         nodeRun.AgentTurnMs = null;
+        nodeRun.ModelReadinessMs = null;
         nodeRun.ServedModelName = null;
         nodeRun.RouteJson = null;
         nodeRun.WorkSessionSteps = null;

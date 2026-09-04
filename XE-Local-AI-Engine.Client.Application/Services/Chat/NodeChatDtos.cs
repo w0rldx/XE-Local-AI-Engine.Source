@@ -217,7 +217,12 @@ public sealed record AgentRunEnvelopeMetadata(
     // What reasoning effort `auto` resolved to for the turn: the tier label and the authored effort. Trailing optional
     // for the same reason as the pair above, and null on every turn that authored a concrete effort.
     string? DispatchedTier = null,
-    string? AuthoredEffort = null);
+    string? AuthoredEffort = null,
+    // How much of DurationMs went into making a LOCAL runtime ready (llama-server launch + model load) rather than
+    // generating. The whole-turn clock starts before the warm, so a cold turn's duration is dominated by it; recording
+    // the two separately is what makes a cold arm comparable with a warm one. Null when no local warm happened
+    // (Ollama, a remote provider) and on the thin interrupted/cancel path. A duration only — no model identity.
+    long? ModelReadinessMs = null);
 
 public sealed record NodeChatCancelRequest(
     NodeChatMessageCorrelation Correlation,

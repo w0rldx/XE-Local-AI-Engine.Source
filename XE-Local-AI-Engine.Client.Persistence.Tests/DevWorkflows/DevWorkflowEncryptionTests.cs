@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 public sealed class DevWorkflowEncryptionTests
 {
-    /// <summary>The twelve cost-telemetry properties of P-C1 §4.1, by entity property name.</summary>
+    /// <summary>The thirteen cost-telemetry properties (P-C1 §4.1 plus the model-readiness split), by entity property name.</summary>
     private static readonly string[] TelemetryPropertyNames =
     [
         nameof(DevWorkflowNodeRun.InputTokens),
@@ -20,6 +20,7 @@ public sealed class DevWorkflowEncryptionTests
         nameof(DevWorkflowNodeRun.ToolSchemaTokens),
         nameof(DevWorkflowNodeRun.ToolNamesJson),
         nameof(DevWorkflowNodeRun.AgentTurnMs),
+        nameof(DevWorkflowNodeRun.ModelReadinessMs),
         nameof(DevWorkflowNodeRun.ServedModelName),
         nameof(DevWorkflowNodeRun.RouteJson),
         nameof(DevWorkflowNodeRun.WorkSessionSteps)
@@ -125,9 +126,9 @@ public sealed class DevWorkflowEncryptionTests
     }
 
     /// <summary>
-    ///     The twelve cost-telemetry columns are absent from the interceptor's tracked set, and stay that way. Two
+    ///     The thirteen cost-telemetry columns are absent from the interceptor's tracked set, and stay that way. Two
     ///     assertions, because either alone would pass for the wrong reason: the interceptor can only encrypt a
-    ///     <c>byte[]</c> property, so none of the twelve may be one; and the three that carry text must be readable in
+    ///     <c>byte[]</c> property, so none of the thirteen may be one; and the three that carry text must be readable in
     ///     the file, which is what proves nothing quietly started protecting them. They hold node keys, a served model
     ///     name and tool names — structural metadata, like every other plaintext column on the row.
     /// </summary>

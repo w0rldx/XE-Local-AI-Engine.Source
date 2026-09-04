@@ -126,6 +126,16 @@ public interface IWorkerEventDispatcher
     Task ReportToolSchemaTokensAsync(Guid invocationId, long? toolSchemaTokens, int? maxToolSchemaTokens);
 
     /// <summary>
+    ///     Records how long the turn spent making a LOCAL runtime ready (launching <c>llama-server</c> and loading the
+    ///     model) on the invocation state, so the terminalize write can persist it onto the run-envelope row beside the
+    ///     whole-turn duration. Reported by the runner on the completed, cancelled and failed paths alike, for the same
+    ///     reason as <see cref="ReportToolSchemaTokensAsync" />: a cold start is most interesting on the turn that paid
+    ///     for it, however that turn ended. A duration only — no model identity reaches this seam.
+    /// </summary>
+    /// <param name="modelReadinessMs">Milliseconds spent in the warm phase, or null when no local warm happened.</param>
+    Task ReportModelReadinessAsync(Guid invocationId, long? modelReadinessMs);
+
+    /// <summary>
     ///     Records what reasoning effort <c>auto</c> resolved to on the invocation state, so the terminalize write can
     ///     persist it onto the run-envelope row. Reported by the runner immediately after the dispatch, and only on a
     ///     turn that was authored <c>auto</c> — every other turn leaves both members null. Category labels only: the

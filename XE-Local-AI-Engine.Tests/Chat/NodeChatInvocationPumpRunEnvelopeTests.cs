@@ -149,6 +149,61 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
     }
 
     [Test]
+    public async Task TerminalizeAsync_CarriesTheModelReadinessDurationFromTheInvocationState()
+    {
+        // The whole-turn duration includes the local runtime's launch and model load, so the envelope has to carry the
+        // warm's own duration beside it: latency_ms minus this is the warm-equivalent turn time, and without the pair a
+        // cold arm and a warm arm cannot be compared at all.
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Completed,
+            ModelUsed = "llama-3.1",
+            GenerationDurationMs = 206_273,
+            ModelReadinessMs = 178_576
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, "requested-model");
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Envelope != null
+                && request.Envelope.DurationMs == 206_273L
+                && request.Envelope.ModelReadinessMs == 178_576L),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_WhenNoLocalRuntimeWarmed_LeavesTheModelReadinessDurationNull()
+    {
+        // A remote or already-warm turn measured no readiness, and null is what says so. Zero would read as "this turn
+        // proved a warm start", which is the one thing an unmeasured turn must not claim.
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Completed,
+            ModelUsed = "gpt-4o-mini",
+            GenerationDurationMs = 1_500
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, "requested-model");
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Envelope != null
+                && request.Envelope.ModelReadinessMs == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task TerminalizeInterruptedAsync_LeavesTheToolSchemaTokenEstimateNull()
     {
         // The interrupted/thin path has no invocation state to read the counters from, so the columns stay null rather

@@ -64,7 +64,7 @@ internal sealed class DevWorkflowNodeRun
     public string? FailureClass { get; set; }
     public string? TerminalReason { get; set; }
 
-    // Cost telemetry: twelve nullable, plaintext, metadata-only columns saying what this node run SPENT and where it
+    // Cost telemetry: thirteen nullable, plaintext, metadata-only columns saying what this node run SPENT and where it
     // routed — counts, a served model name, structural node keys and tool NAMES, never a prompt, an argument, a result
     // or a transcript. Written once, at the terminal-or-blocked transition, through the one store decorator every call
     // site crosses; nothing reads them to decide anything. Attempt increments in place, so they describe the LAST
@@ -106,6 +106,14 @@ internal sealed class DevWorkflowNodeRun
     ///     (queueing before the session started, the node's own settle work), not the tool loop.
     /// </summary>
     public long? AgentTurnMs { get; set; }
+
+    /// <summary>
+    ///     How much of <see cref="AgentTurnMs" /> was a LOCAL runtime warming — <c>llama-server</c> launching and the
+    ///     model loading — summed over the same envelopes, so <c>AgentTurnMs - ModelReadinessMs</c> is the
+    ///     warm-equivalent turn time. Null when no turn of this attempt warmed a local runtime, which is not the same
+    ///     as zero: zero would claim the attempt proved a warm start.
+    /// </summary>
+    public long? ModelReadinessMs { get; set; }
 
     /// <summary>What the provider actually SERVED, off the envelope. Beside the authored pin, never instead of it: a pin is a request, not a receipt.</summary>
     public string? ServedModelName { get; set; }

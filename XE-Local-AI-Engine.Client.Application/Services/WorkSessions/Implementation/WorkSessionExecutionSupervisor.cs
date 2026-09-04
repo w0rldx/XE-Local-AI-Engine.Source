@@ -650,12 +650,12 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     ///         why this row is where the names have to land if anything is ever to read them.
     ///     </para>
     ///     <para>
-    ///         Every member is a STEP TOTAL, and the provider's own reported usage is deliberately not among them. The
-    ///         terminal event does carry <c>InputTokens</c>/<c>OutputTokens</c>, but the runner assigns
-    ///         <c>UsageSnapshot</c> per provider round rather than accumulating, so on a multi-round step those are the
-    ///         LAST round's numbers — beside a step-total call count and a step-total estimate they would read as a
-    ///         contradiction. Estimate-versus-truth is measured per round where the two halves actually match, by
-    ///         <c>ProviderCallBudgetChatClient</c>'s observed-usage write-back.
+    ///         Every member is a STEP TOTAL off this scope, and the provider's own reported usage is deliberately not
+    ///         among them. The terminal event does carry <c>InputTokens</c>/<c>OutputTokens</c>, but those are the
+    ///         TURN's numbers — the runner accumulates <c>UsageSnapshot</c> across the turn's provider rounds — and a
+    ///         turn is a different denominator from a step, so mixing them into one record would invite exactly the
+    ///         division nothing here supports. Estimate-versus-truth is measured per round where the two halves
+    ///         actually match, by <c>ProviderCallBudgetChatClient</c>'s observed-usage write-back.
     ///     </para>
     /// </summary>
     private static string? ComposeStepConsumptionDetail(ProviderCallCapScope? capScope)

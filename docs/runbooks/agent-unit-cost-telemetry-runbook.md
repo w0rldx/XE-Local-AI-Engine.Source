@@ -74,6 +74,8 @@ SELECT n.node_type,
        SUM(n.tool_schema_tokens) AS tool_schema_tokens,
        SUM(n.provider_calls) AS provider_calls, SUM(n.tool_calls) AS tool_calls,
        SUM(n.agent_turn_ms) AS agent_turn_ms,
+       SUM(n.model_readiness_ms) AS model_readiness_ms,
+       SUM(n.agent_turn_ms) - COALESCE(SUM(n.model_readiness_ms), 0) AS warm_equivalent_turn_ms,
        SUM(n.ended_at_utc - n.started_at_utc)  AS run_ms,
        SUM(n.started_at_utc - n.queued_at_utc) AS queued_ms,
        SUM((n.ended_at_utc - n.started_at_utc) - COALESCE(n.agent_turn_ms, 0)) AS outside_turn_ms
@@ -90,7 +92,7 @@ WHERE e.run_id IN (UPPER(:runIds)) AND e.event_type = 'node.retry.scheduled';
 -- Per-node detail. Report medians and full spread, never a mean over a handful of rows.
 SELECT n.node_key, n.served_model_name, n.attempt, n.status, n.failure_class,
        n.input_tokens, n.output_tokens, n.tool_calls, n.tool_schema_tokens,
-       n.agent_turn_ms, n.ended_at_utc - n.started_at_utc AS run_ms, n.route_json
+       n.agent_turn_ms, n.model_readiness_ms, n.ended_at_utc - n.started_at_utc AS run_ms, n.route_json
 FROM dev_workflow_node_runs n WHERE n.run_id IN (UPPER(:runIds)) ORDER BY n.node_key, n.attempt;
 
 -- Route stability: did the change move the run through a different path?
@@ -136,10 +138,12 @@ WHERE n.run_id IN (UPPER(:runIds)) AND n.failure_class IS NOT NULL GROUP BY fail
    `command.Resets`), so every reset is offered a collection *while that budget lasts* and, once it is spent, the
    remaining resets are forwarded unenriched with no collection started at all — those attempts get no
    `node.retry.scheduled` cost vector, and the retry-arm total below under-counts by exactly them; **a multi-round
-   turn writes ONE chat-run envelope**, and `input_tokens` / `output_tokens` / `reasoning_tokens` are summed over
-   ENVELOPES (`DevWorkflowNodeTelemetrySource.CollectEnvelopesAsync` adds one `PromptTokens` per envelope), so that
-   one envelope reports what the provider said on it and NOT the sum over the turn's provider rounds — three settled
-   agent nodes of 3, 5 and 7 provider calls each wrote exactly one envelope; and **at most four
+   turn still writes ONE chat-run envelope**, and `input_tokens` / `output_tokens` / `reasoning_tokens` are summed
+   over ENVELOPES (`DevWorkflowNodeTelemetrySource.CollectEnvelopesAsync` adds one `PromptTokens` per envelope) —
+   that one envelope now carries the SUM over the turn's provider rounds, because the runner accumulates the usage
+   each round reports instead of keeping the last (`InvocationRunner.StreamState.AddUsage`), so the shortfall this
+   entry used to name is gone; a row written before that fix still holds the last round only, which is why an old
+   run's `input_tokens` is not comparable with a new one's; and **at most four
    cost collections run at once per application** (`DevWorkflowNodeTelemetryCollectionPool`, a container singleton), so a
    settle arriving while four stuck collectors hold the pool is forwarded unmeasured the same way. Both losses are
    silent in the data and loud in the log — grep for `cost-collection slots are in use` and `outlived its`.
@@ -160,10 +164,11 @@ WHERE n.run_id IN (UPPER(:runIds)) AND n.failure_class IS NOT NULL GROUP BY fail
    bucket existed simply omits `waived`, which reads back as the empty list it means.
 7. `tool_schema_tokens` is schema tokens **shipped across rounds**, not schema size. A tool-schema *budget* would
    be the size; this column is what those schemas cost to send, summed over every round of the attempt.
-   **Never compare it against `input_tokens`, and never divide one into the other**: this column, `provider_calls`
-   and `tool_calls` are summed per ROUND off the work-session step rows, while `input_tokens` is summed per
-   ENVELOPE (rule 3), so the denominators differ and `tool_schema_tokens` larger than `input_tokens` is the
-   expected reading of a multi-round turn, not a collector bug.
+   **Never divide it into `input_tokens`**: this column, `provider_calls` and `tool_calls` are summed per ROUND off
+   the work-session step rows, while `input_tokens` is summed per ENVELOPE (rule 3) — one envelope per turn, however
+   many rounds the turn ran — so the two are not the same denominator even now that the envelope's own number is
+   round-cumulative. On a row written since that fix `tool_schema_tokens` larger than `input_tokens` is a real
+   finding worth reading; on an older row it is the expected artefact of a multi-round turn, not a collector bug.
 8. **The recipe cannot be re-run over runs older than the envelope retention window** (30 days,
    `AgentExecutionLogRetentionOptions.RetentionDays`): `dev_workflow_node_runs` outlives `agent_execution_logs`, so
    a collector bug is unrecoverable for old runs. Snapshot query output per arm at measurement time.
@@ -184,10 +189,14 @@ WHERE n.run_id IN (UPPER(:runIds)) AND n.failure_class IS NOT NULL GROUP BY fail
     split; the node drill-down does not either, where the two rows read "Agent turns" and "Outside the turns".
     **On the first turn against a cold runtime it also contains the inference-server launch and the model load.**
     The same node, same model and same 3 provider calls measured 206,273 ms cold against 27,697 ms warm — 7.4x,
-    none of it the agent. Compare it only between arms that started in the same runtime state (rule 9).
+    none of it the agent. `model_readiness_ms` now separates that launch/load time out: it is the same warm phase
+    summed over the same envelopes, so **`agent_turn_ms - model_readiness_ms` is the warm-equivalent turn time** and
+    is what a cold arm and a warm arm compare on. It is NULL, never zero, when no turn warmed a local runtime (a
+    remote provider, Ollama, an already-resident model) and on every row written before the column existed — so
+    treat a null as unmeasured rather than as a proven warm start, and still record the runtime state (rule 9).
 
 **Defaults by question.** *Did model routing change what it cost?* — tokens and `run_ms` grouped by
 `served_model_name`. *Did tool-schema filtering pay for itself?* — `tool_schema_tokens` per node run, with
 `tool_calls` beside it as the "did filtering break tool use" guard. *Did the run take a different path?* — the route
-query. *Did a serving change move latency?* — `agent_turn_ms` at fixed token counts, which moves with the tool loop
-as well as with the provider (rule 11).
+query. *Did a serving change move latency?* — `agent_turn_ms` minus `model_readiness_ms` at fixed token counts, which
+moves with the tool loop as well as with the provider (rule 11).

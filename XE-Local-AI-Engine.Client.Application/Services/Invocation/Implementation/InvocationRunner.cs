@@ -236,6 +236,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
         using var providerBudgetScope = ProviderCallBudget.BeginScope(_providerCallBudgetOptions, harnessStartedTimestamp);
         var providerBudget = ProviderCallBudget.Current!;
 
+        // Declared ahead of the terminal-telemetry local function below, which reads the readiness duration off it: a
+        // local function may only capture a local that is already in scope where it is written.
+        StreamState? stream = null;
+
         // The turn's tool-schema token estimate, onto the invocation state so the terminalize write persists it with
         // the envelope row. CaptureEfficiencySnapshot is a pure counter read, so calling it once per terminal path is
         // free; it is reported on the failed and cancelled paths too, because the number is most interesting on a turn
@@ -245,16 +249,22 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // on the two failure paths it would replace the real classification with its own. The shipped dispatcher
         // cannot throw (UpdateInvocation is a logged no-op for an unknown id), which is exactly why swallowing costs
         // nothing and why the guard is worth having against a future one that can.
-        async Task ReportToolSchemaEstimateAsync()
+        // The model-readiness duration rides the SAME helper for the same three-path reason: the cold start it measures
+        // sits inside the whole-turn clock, so a turn that failed after a 200 s model load must still be able to say so.
+        // Null on every turn with no local warm (Ollama, a remote provider), which is what the column means.
+        async Task ReportTerminalTelemetryAsync()
         {
             try
             {
                 var efficiency = providerBudget.CaptureEfficiencySnapshot();
                 await dispatcher.ReportToolSchemaTokensAsync(package.InvocationId, efficiency.ToolSchemaTokens, efficiency.MaximumToolSchemaTokens).ConfigureAwait(false);
+                await dispatcher.ReportModelReadinessAsync(package.InvocationId,
+                                   stream?.ModelReadinessDurationMs is { } readinessMs ? (long)readinessMs : null)
+                               .ConfigureAwait(false);
             }
             catch (Exception exception)
             {
-                _logger.LogWarning(exception, "Could not report the tool-schema token estimate for invocation {InvocationId}; the turn's outcome is unaffected.", package.InvocationId);
+                _logger.LogWarning(exception, "Could not report the terminal telemetry for invocation {InvocationId}; the turn's outcome is unaffected.", package.InvocationId);
             }
         }
 
@@ -268,7 +278,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
         var toolRelevanceActive = _toolRelevanceOptions.Enabled && !package.DisableToolRelevanceFilter;
         using var toolRelevanceScope = ToolRelevanceScope.BeginScope(toolRelevanceActive,
             toolRelevanceActive ? _toolRelevanceCoreSet.GetCoreToolNames() : FrozenSet<string>.Empty);
-        StreamState? stream = null;
         string? invocationOutcome = null;
 
         try
@@ -606,7 +615,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 }, invocationToken).ConfigureAwait(false);
             }
 
-            await ReportToolSchemaEstimateAsync().ConfigureAwait(false);
+            await ReportTerminalTelemetryAsync().ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(package.InvocationId,
                 stream.UsageSnapshot?.InputTokens,
                 stream.UsageSnapshot?.OutputTokens,
@@ -632,7 +641,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // a cancel is an outcome, not a failure. An invocation-level timeout ("watchdog") is additionally surfaced as a
             // Timeout failure below via ReportInvocationFailedAsync — the two metrics answer different questions.
             NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", InvocationLifecycleTracker.ClassifyCancellationMetricCategory(cancellationOrigin)));
-            await ReportToolSchemaEstimateAsync().ConfigureAwait(false);
+            await ReportTerminalTelemetryAsync().ConfigureAwait(false);
             await dispatcher.ReportInvocationFailedAsync(package.InvocationId, cancellationMessage, failureCategory).ConfigureAwait(false);
             if (shouldSendHubMessages)
             {
@@ -651,7 +660,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", "operator_eject"));
             }
 
-            await ReportToolSchemaEstimateAsync().ConfigureAwait(false);
+            await ReportTerminalTelemetryAsync().ConfigureAwait(false);
             await dispatcher.ReportInvocationFailedAsync(package.InvocationId, message, failureCategory).ConfigureAwait(false);
             if (shouldSendHubMessages)
             {
@@ -1048,13 +1057,16 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
                 if (usage is not null)
                 {
-                    stream.UsageSnapshot = UsageSnapshot.From(usage);
-                    _logger.LogDebug("Received terminal usage for invocation {InvocationId}: input={InputTokens}, output={OutputTokens}, reasoning={ReasoningTokens}, total={TotalTokens}.",
+                    // ACCUMULATED, not assigned — same reason as AddSegmentTimings above: one UsageContent arrives per
+                    // provider round inside the single RunStreamingAsync, so last-wins reported only the final round.
+                    stream.AddUsage(usage);
+                    var cumulativeUsage = stream.UsageSnapshot!;
+                    _logger.LogDebug("Received cumulative usage for invocation {InvocationId}: input={InputTokens}, output={OutputTokens}, reasoning={ReasoningTokens}, total={TotalTokens}.",
                         package.InvocationId,
-                        stream.UsageSnapshot.InputTokens,
-                        stream.UsageSnapshot.OutputTokens,
-                        stream.UsageSnapshot.ReasoningTokens,
-                        stream.UsageSnapshot.TotalTokens);
+                        cumulativeUsage.InputTokens,
+                        cumulativeUsage.OutputTokens,
+                        cumulativeUsage.ReasoningTokens,
+                        cumulativeUsage.TotalTokens);
                 }
 
                 if (thinkingBuilder is { Length: > 0 })

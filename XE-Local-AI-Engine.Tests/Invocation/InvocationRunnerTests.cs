@@ -414,6 +414,87 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenSeveralProviderRoundsReportUsage_SumsTheirTokenCounts()
+    {
+        // A tool-calling turn is several llama-server requests inside ONE RunStreamingAsync (FunctionInvokingChatClient
+        // runs that loop internally), and each round reports its own usage. Recording the LAST one under-reported the
+        // turn by every round but the final: measured live at prompt 2,970 against a per-round estimate of 10,722.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender,
+            eventDispatcher: dispatcher,
+            agentUpdates: CreateUpdatesWithUsage((Text: "round one", Usage: new UsageDetails
+                {
+                    InputTokenCount = 1_000,
+                    OutputTokenCount = 10,
+                    ReasoningTokenCount = 4,
+                    TotalTokenCount = 1_014
+                }),
+                (Text: "round two", Usage: new UsageDetails
+                {
+                    InputTokenCount = 2_000,
+                    OutputTokenCount = 20,
+                    ReasoningTokenCount = 6,
+                    TotalTokenCount = 2_026
+                }),
+                (Text: "round three", Usage: new UsageDetails
+                {
+                    InputTokenCount = 3_000,
+                    OutputTokenCount = 30,
+                    ReasoningTokenCount = 8,
+                    TotalTokenCount = 3_038
+                })));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunPlainAsync(runner, package);
+
+        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
+        AssertEx.Equal(expected: 6_000, sender.SentCompletions[0].InputTokens);
+        AssertEx.Equal(expected: 60, sender.SentCompletions[0].OutputTokens);
+        AssertEx.Equal(expected: 18, sender.SentCompletions[0].ReasoningTokens);
+        AssertEx.Equal(expected: 6_078, sender.SentCompletions[0].TokensUsed);
+        await dispatcher.Received(1)
+                        .ReportInvocationCompletedAsync(package.InvocationId,
+                            Arg.Is<int?>(6_000),
+                            Arg.Is<int?>(60),
+                            Arg.Is<int?>(6_078),
+                            Arg.Is<int?>(18),
+                            Arg.Any<long?>(),
+                            Arg.Any<string?>(),
+                            Arg.Any<InvocationThroughput?>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenSummedUsageExceedsInt32_SaturatesInsteadOfWrapping()
+    {
+        // Each round is comfortably inside int range; their SUM is not. The accumulator must clamp exactly as a single
+        // oversized round does, rather than wrap negative and report a turn that consumed less than nothing.
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender,
+            agentUpdates: CreateUpdatesWithUsage((Text: "first", Usage: new UsageDetails
+                {
+                    InputTokenCount = int.MaxValue - 10,
+                    OutputTokenCount = 5,
+                    TotalTokenCount = int.MaxValue - 5
+                }),
+                (Text: "second", Usage: new UsageDetails
+                {
+                    InputTokenCount = 100,
+                    OutputTokenCount = 5,
+                    TotalTokenCount = 105
+                })));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunPlainAsync(runner, package);
+
+        AssertEx.Empty(sender.SentFailures);
+        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
+        AssertEx.Equal(expected: int.MaxValue, sender.SentCompletions[0].InputTokens);
+        AssertEx.Equal(expected: 10, sender.SentCompletions[0].OutputTokens);
+        AssertEx.Equal(expected: int.MaxValue, sender.SentCompletions[0].TokensUsed);
+    }
+
+    [Test]
     public async Task RunAsync_WhenPlainContextAndAgentRuntimeThrows_SendsPlainInvocationFailed()
     {
         var sender = new MockHubMessageSender();
@@ -1207,6 +1288,58 @@ public sealed class InvocationRunnerTests
         AssertEx.True(ordered.Length >= 2, "Both the warm and stream events should have fired.");
         AssertEx.Equal("warm", ordered[0]); // readiness precedes generation.
         AssertEx.Contains(ordered, "stream");
+    }
+
+    [Test]
+    public async Task RunAsync_LocalLlamaCppModel_ReportsTheModelReadinessDurationOntoTheInvocationState()
+    {
+        // The whole-turn clock starts BEFORE the warm above, so a cold first turn's duration is mostly llama-server
+        // launching and the model loading (measured live: 206 s cold against 27 s warm for the same work). The warm
+        // phase's own duration therefore has to reach the invocation state, or the persisted turn time cannot be split.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ProviderName.Returns(LlamaServerProviderConstants.ProviderName);
+        provider.WarmModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(LlamaServerProviderConstants.ProviderName));
+        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(provider));
+
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, providerResolver: resolver, agentUpdates: CreateUpdates("ok"));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1)
+                        .ReportModelReadinessAsync(package.InvocationId, Arg.Is<long?>(static value => value >= 0));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenNoLocalRuntimeWarms_ReportsNoModelReadinessDuration()
+    {
+        // Null, not zero: a remote or Ollama turn warmed nothing, and zero would claim it proved a warm start.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ProviderName.Returns(OllamaLocalModelProvider.OllamaProviderName);
+
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(OllamaLocalModelProvider.OllamaProviderName));
+        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(provider));
+
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, providerResolver: resolver, agentUpdates: CreateUpdates("ok"));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1)
+                        .ReportModelReadinessAsync(package.InvocationId, Arg.Is<long?>(static value => value == null));
     }
 
     [Test]
