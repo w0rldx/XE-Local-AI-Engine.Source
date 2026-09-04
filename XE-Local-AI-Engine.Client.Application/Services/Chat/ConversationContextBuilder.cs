@@ -70,6 +70,11 @@ internal static class ConversationContextBuilder
             });
         }
 
+        // The ids of turns kept below the compaction cutoff ONLY for their tool exchanges. Such a turn contributes its
+        // actions and nothing else: the synopsis already carries whatever prose it had, so replaying the text as well
+        // would say the same thing twice. Null while nothing is compacted, which is the ordinary case.
+        HashSet<Guid>? exchangeOnlySurvivors = null;
+
         // Non-destructive compaction: when a synopsis covers messages up to a sequence, send it in their place and drop
         // those older messages from the verbatim history. The originals remain persisted — this only shapes what is sent,
         // and the newest turns beyond the covered sequence are always kept verbatim. The synopsis message itself is
@@ -77,8 +82,21 @@ internal static class ConversationContextBuilder
         if (CompactionContextResolver.Resolve(conversation, leadingContext.Count) is { } compaction)
         {
             leadingContext.Add(compaction.Summary);
-            selected = [.. selected.Where(message => anchorSequence(message) > compaction.CoveredSequence
-                                                     || SurvivesCompactionForToolHistory(message, includeToolHistory))];
+            var kept = new List<NodeChatPersistedMessageDto>(selected.Count);
+            foreach (var message in selected)
+            {
+                if (anchorSequence(message) > compaction.CoveredSequence)
+                {
+                    kept.Add(message);
+                }
+                else if (SurvivesCompactionForToolHistory(message, includeToolHistory))
+                {
+                    kept.Add(message);
+                    _ = (exchangeOnlySurvivors ??= []).Add(message.MessageId);
+                }
+            }
+
+            selected = kept;
         }
 
         var history = selected
@@ -88,12 +106,13 @@ internal static class ConversationContextBuilder
                       .Select((message, index) =>
                       {
                           var isAssistant = string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase);
+                          var exchangeOnly = exchangeOnlySurvivors?.Contains(message.MessageId) == true;
                           return new ConversationMessageDto
                           {
                               Id = message.MessageId,
                               Role = isAssistant ? MessageRole.Assistant : MessageRole.User,
-                              Content = message.Content,
-                              Thinking = message.Reasoning,
+                              Content = exchangeOnly ? string.Empty : message.Content,
+                              Thinking = exchangeOnly ? null : message.Reasoning,
                               ModelUsed = message.Model,
                               SortOrder = index + leadingContext.Count,
                               ToolExchanges = includeToolHistory && isAssistant ? ProjectToolExchanges(message, toolResultExcerptChars) : null
@@ -113,14 +132,14 @@ internal static class ConversationContextBuilder
         && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal);
 
     /// <summary>
-    ///     Whether a turn at or below the compaction cutoff outlives it anyway. The synopsis summarizes SENDABLE text
-    ///     only, so it never saw the actions a turn took: a turn the summarizer skipped — blank, failed or cancelled —
-    ///     that nonetheless completed a tool call would otherwise have its one real record erased by the fold. A
-    ///     sendable turn stays folded: its text IS in the synopsis, and re-sending it verbatim would say the same thing
-    ///     twice.
+    ///     Whether a turn at or below the compaction cutoff outlives it anyway. The synopsis is PROSE — it summarizes
+    ///     text and never records the actions a turn took — so ANY turn that completed a tool call survives the fold for
+    ///     its exchanges, whatever its status and whether or not the summarizer read its text. A survivor that WAS
+    ///     sendable survives for its exchanges alone: <see cref="Build" /> blanks its content and reasoning, because the
+    ///     synopsis already carries them and re-sending them verbatim would say the same thing twice.
     /// </summary>
     internal static bool SurvivesCompactionForToolHistory(NodeChatPersistedMessageDto message, bool includeToolHistory) =>
-        includeToolHistory && !IsSendable(message) && HasCompletedToolPart(message);
+        includeToolHistory && HasCompletedToolPart(message);
 
     /// <summary>
     ///     Whether an ASSISTANT turn carries at least one completed tool part. Such a turn is kept even when it is

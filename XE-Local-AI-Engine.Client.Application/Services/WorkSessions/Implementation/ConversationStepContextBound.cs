@@ -99,7 +99,12 @@ internal sealed class ConversationStepContextBound(
             return;
         }
 
-        var conversation = await _persistence.GetConversationForTurnAsync(conversationId, cancellationToken).ConfigureAwait(false);
+        // With tool history on this takes the FULL read: the parts the projection has to count live in the same
+        // metadata_json blob the capped turn read omits for every non-user row the synopsis covers, so the capped read
+        // would measure a transcript smaller than the one the turn sends — the exact failure this bound prevents.
+        var conversation = includeToolHistory
+            ? await _persistence.GetConversationAsync(conversationId, cancellationToken).ConfigureAwait(false)
+            : await _persistence.GetConversationForTurnAsync(conversationId, cancellationToken).ConfigureAwait(false);
         if (conversation is null)
         {
             return;
@@ -168,14 +173,31 @@ internal sealed class ConversationStepContextBound(
         var selected = SelectedPathResolver.Resolve(conversation.Messages, conversation.SelectedPath);
 
         var messages = new List<ChatMessage>(selected.Count + 1);
+
+        // The turns the send path keeps below the cutoff ONLY for their exchanges: it blanks their text and reasoning,
+        // so counting either here would measure a request the turn will not send.
+        HashSet<Guid>? exchangeOnlySurvivors = null;
         if (CompactionContextResolver.Resolve(conversation, sortOrder: 0) is { } compaction)
         {
             messages.Add(new ChatMessage(ChatRole.User, compaction.Summary.Content));
 
-            // The SAME cutoff exemption the send path applies: a turn the synopsis could not have covered but that
-            // completed a tool call survives the fold, so the estimate counts what the turn will actually carry.
-            selected = [.. selected.Where(message => anchorSequence(message) > compaction.CoveredSequence
-                                                     || ConversationContextBuilder.SurvivesCompactionForToolHistory(message, includeToolHistory))];
+            // The SAME cutoff exemption the send path applies: a turn that completed a tool call survives the fold for
+            // its exchanges, so the estimate counts what the turn will actually carry.
+            var kept = new List<NodeChatPersistedMessageDto>(selected.Count);
+            foreach (var message in selected)
+            {
+                if (anchorSequence(message) > compaction.CoveredSequence)
+                {
+                    kept.Add(message);
+                }
+                else if (ConversationContextBuilder.SurvivesCompactionForToolHistory(message, includeToolHistory))
+                {
+                    kept.Add(message);
+                    _ = (exchangeOnlySurvivors ??= []).Add(message.MessageId);
+                }
+            }
+
+            selected = kept;
         }
 
         foreach (var message in selected)
@@ -187,6 +209,7 @@ internal sealed class ConversationStepContextBound(
                 ? ConversationContextBuilder.ProjectSendableToolExchanges(message, toolResultExcerptChars)
                 : null;
 
+            var exchangeOnly = exchangeOnlySurvivors?.Contains(message.MessageId) == true;
             var sendable = !string.IsNullOrWhiteSpace(message.Content)
                            && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal);
             if (!sendable && exchanges is null)
@@ -200,12 +223,12 @@ internal sealed class ConversationStepContextBound(
             }
 
             var contents = new List<AIContent>(capacity: 2);
-            if (!string.IsNullOrEmpty(message.Reasoning))
+            if (!exchangeOnly && !string.IsNullOrEmpty(message.Reasoning))
             {
                 contents.Add(new TextReasoningContent(message.Reasoning));
             }
 
-            if (!string.IsNullOrEmpty(message.Content))
+            if (!exchangeOnly && !string.IsNullOrEmpty(message.Content))
             {
                 contents.Add(new TextContent(message.Content));
             }

@@ -338,6 +338,37 @@ public sealed class ConversationStepContextBoundTests
     }
 
     [Test]
+    public void Project_WithToolHistoryOn_CountsACoveredSendableTurnsExchangesButNotItsText()
+    {
+        // A COMPLETED turn below the cutoff that also called a tool survives for its exchange alone: the send path
+        // blanks its text and reasoning because the synopsis already carries them. Counting the text here would measure
+        // a request the turn does not send, and the bound would fold early on prose that is not there.
+        var estimator = new HeuristicTokenEstimator();
+        var completedWithSideEffect = Message(sequence: 0, "assistant", new string('t', 4_000), new string('k', 4_000)) with
+        {
+            Parts = [ToolPart("call-1", "save_artifact", "saved")]
+        };
+        var conversation = Conversation([completedWithSideEffect, Message(sequence: 1, "user", "recent")], "SYNOPSIS", coversToSequence: 0);
+
+        var counted = ConversationStepContextBound.Project(conversation, estimator, modelName: null, includeToolHistory: true);
+        var exchangeOnly = ConversationStepContextBound.Project(Conversation(
+                [
+                    Message(sequence: 0, "assistant", string.Empty) with
+                    {
+                        Parts = [ToolPart("call-1", "save_artifact", "saved")]
+                    },
+                    Message(sequence: 1, "user", "recent")
+                ],
+                "SYNOPSIS",
+                coversToSequence: 0),
+            estimator,
+            modelName: null,
+            includeToolHistory: true);
+
+        AssertEx.Equal(exchangeOnly, counted, "The covered turn's 8,000 characters of text and reasoning are folded away; only its exchange is counted.");
+    }
+
+    [Test]
     public void Project_WithToolHistoryOn_CountsTheExcerptedResult_NotTheWholeOne()
     {
         var estimator = new HeuristicTokenEstimator();

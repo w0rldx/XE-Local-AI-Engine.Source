@@ -382,6 +382,38 @@ public sealed class IntegrationContinuationTests
     }
 
     [Test]
+    public async Task ACompactionSummaryCoveringACompletedToolTurnReplaysItsExchangeWithoutItsProse()
+    {
+        // The half a status filter hides, end to end. A COMPLETED turn that wrote prose AND saved an artifact sits below
+        // the cutoff: the synopsis carries the prose, and nothing carries the call — so folding it whole is how turn 2
+        // reads only "I saved it" and saves it a second time. It survives for its exchange, with its text folded away.
+        // It also proves the read: the parts live in the metadata blob the CAPPED turn read blanks for exactly this row.
+        using var harness = new Harness();
+        harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
+        harness.OfferedTools = [Harness.Tool("save_artifact", XE_Local_AI_Engine.AI.Agent.Tools.ToolCategory.WriteExecute)];
+        harness.AddHistory("assistant",
+            "I saved the artifact",
+            [Harness.CompletedToolPart("call-1", "save_artifact", "{\"name\":\"s6.txt\"}", "saved s6.txt")]);
+        harness.CompactionSummary = "SYNOPSIS";
+        harness.CompactionCoversToSequence = 0;
+
+        await harness.Coordinator.ProcessOneAsync(harness.SeedAccepted(), CancellationToken.None);
+
+        var context = Context(harness);
+        AssertEx.Contains(context, static message => message.Content.Contains("SYNOPSIS", StringComparison.Ordinal));
+        var assistant = context.Single(static message => message.Role == MessageRole.Assistant);
+        AssertEx.Equal("call-1", AssertEx.NotNull(assistant.ToolExchanges, "A completed call is a record the prose synopsis cannot carry.").Single().CallId);
+        AssertEx.Equal(string.Empty, assistant.Content, "The synopsis already carries this turn's prose.");
+
+        var messages = InvocationRunner.BuildChatMessages(AssertEx.NotNull(harness.CapturedPackage)).ToList();
+        AssertEx.Equal(expected: 1, messages.SelectMany(static message => message.Contents).OfType<FunctionCallContent>().Count());
+        AssertEx.False(messages.SelectMany(static message => message.Contents)
+                               .OfType<TextContent>()
+                               .Any(static text => text.Text.Contains("I saved the artifact", StringComparison.Ordinal)),
+            "The folded prose must not ride the turn a second time alongside the synopsis.");
+    }
+
+    [Test]
     public async Task TwoCallsInOneTurn_StayTwoExchanges_WithOrWithoutProviderCallIds()
     {
         // Two calls are two parts either way. With provider ids the accumulator keys on them directly; with a blank

@@ -131,8 +131,8 @@ public sealed class ConversationContextBuilderTests
     {
         // The compaction cutoff drops every row at or below it, and the summarizer only ever saw COMPLETED, non-blank
         // text — so a run that called save_artifact and then died had its one record of that action erased twice over:
-        // once by the summarizer skipping it, once by the cutoff. The exemption is narrow on purpose: a sendable row
-        // below the cutoff stays folded, because its text IS the synopsis.
+        // once by the summarizer skipping it, once by the cutoff. A sendable row below the cutoff keeps its exchanges the
+        // same way but loses its text, because that text IS the synopsis; the covered-sendable test below pins that half.
         var conversationId = Guid.NewGuid();
         var history = new[]
         {
@@ -156,6 +156,64 @@ public sealed class ConversationContextBuilderTests
         AssertEx.Equal("call-1", replayed.CallId, "The synopsis never saw the action, so the cutoff must not erase it.");
         AssertEx.False(context.Any(message => message.Content.Contains("save it", StringComparison.Ordinal)),
             "Everything else the synopsis covers stays folded.");
+    }
+
+    [Test]
+    public void Build_WithToolHistoryOn_KeepsACoveredSendableTurnsExchangesAndDropsItsText()
+    {
+        // The other half, and the one a status filter hides. A turn that COMPLETED, wrote prose AND called a tool has a
+        // structured record of that call which the prose-only synopsis cannot carry. Folding the turn whole loses that
+        // record, and replaying it whole says the prose twice. So it survives for its exchanges alone, text and
+        // reasoning blank.
+        var conversationId = Guid.NewGuid();
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "user", "save it"),
+            Message(conversationId, sequence: 1, "assistant", "I saved the artifact") with
+            {
+                Reasoning = "deciding to save",
+                Parts = [CompletedToolPart("call-1", "save_artifact")]
+            },
+            Message(conversationId, sequence: 2, "user", "recent question")
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history, "SYNOPSIS", coversToSequence: 1),
+            Message(conversationId, sequence: 3, "user", "the new turn"),
+            selectedPath: null,
+            attachmentContext: null,
+            imageContext: null,
+            knowledgeContext: null,
+            includeToolHistory: true);
+
+        var survivor = context.Single(static message => message.Role == MessageRole.Assistant);
+        AssertEx.Equal("call-1", AssertEx.NotNull(survivor.ToolExchanges, "A completed tool call is a record the synopsis cannot carry.").Single().CallId);
+        AssertEx.Equal(string.Empty, survivor.Content, "The synopsis already carries this turn's prose; re-sending it would say it twice.");
+        AssertEx.Null(survivor.Thinking);
+    }
+
+    [Test]
+    public void Build_WithToolHistoryOff_LeavesACoveredSendableToolBearingTurnFolded()
+    {
+        // The flag-off path stays byte-identical: no exchanges, and the covered turn is dropped whole rather than kept
+        // as a blank one.
+        var conversationId = Guid.NewGuid();
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "user", "save it"),
+            Message(conversationId, sequence: 1, "assistant", "I saved the artifact") with
+            {
+                Parts = [CompletedToolPart("call-1", "save_artifact")]
+            },
+            Message(conversationId, sequence: 2, "user", "recent question")
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history, "SYNOPSIS", coversToSequence: 1),
+            Message(conversationId, sequence: 3, "user", "the new turn"),
+            selectedPath: null,
+            attachmentContext: null);
+
+        AssertEx.False(context.Any(static message => message.Role == MessageRole.Assistant),
+            "With the flag off the covered span is dropped whole, parts or no parts.");
     }
 
     [Test]

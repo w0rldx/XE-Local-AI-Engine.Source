@@ -112,7 +112,8 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
                 });
         Dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
                   .Returns(callInfo => _leaseRequest = AcquireLeaseAsync(callInfo.Arg<CancellationToken>()));
-        Persistence.GetConversationForTurnAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(_ => BuildConversation());
+        Persistence.GetConversationAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(_ => BuildConversation(capPayloads: false));
+        Persistence.GetConversationForTurnAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(_ => BuildConversation(capPayloads: true));
         Persistence.CreateAssistantPlaceholderAsync(Arg.Any<NodeChatCreateAssistantPlaceholderRequest>(), Arg.Any<CancellationToken>())
                    .Returns(callInfo =>
                    {
@@ -585,7 +586,13 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         return _lease;
     }
 
-    private NodeChatConversationDto? BuildConversation()
+    /// <param name="capPayloads">
+    ///     Whether to model the load-side cap the SQL turn read applies: with a synopsis in place it selects both
+    ///     <c>content</c> AND <c>metadata_json</c> as NULL for every NON-user row at or below the covered sequence, and
+    ///     the persisted tool PARTS live in <c>metadata_json</c>. A fake that returned parts on both reads would let a
+    ///     continuation test pass against a read production never performs.
+    /// </param>
+    private NodeChatConversationDto? BuildConversation(bool capPayloads)
     {
         if (HideConversation)
         {
@@ -599,13 +606,31 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
                                   Sequence = History.Count + index
                               })
                               .ToArray();
+        IReadOnlyList<NodeChatPersistedMessageDto> messages = [.. History, .. seeds];
+        if (capPayloads && !string.IsNullOrEmpty(CompactionSummary) && CompactionCoversToSequence is { } coveredSequence)
+        {
+            messages =
+            [
+                .. messages.Select(message => string.Equals(message.Role, "user", StringComparison.OrdinalIgnoreCase) || message.Sequence > coveredSequence
+                    ? message
+                    : message with
+                    {
+                        Content = string.Empty,
+                        Reasoning = null,
+                        Model = null,
+                        MetadataJson = null,
+                        Parts = null
+                    })
+            ];
+        }
+
         return new NodeChatConversationDto(ConversationId,
             "sensor-ingest",
             UserId: null,
             CreatedAtUtc: 0,
             LastSeenUtc: 0,
             Purged: false,
-            [.. History, .. seeds],
+            messages,
             CompactionSummary: CompactionSummary,
             CompactionSummaryCoversToSequence: CompactionCoversToSequence);
     }

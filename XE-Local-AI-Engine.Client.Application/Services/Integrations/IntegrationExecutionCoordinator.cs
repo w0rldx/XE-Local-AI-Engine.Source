@@ -571,7 +571,13 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         //     before the conversation and the seed are written, so a row can be real and have nothing to run. Do not
         //     repair it — the seed text is not recoverable from the row, and a run against an empty seed is a worse
         //     outcome than a clean failure.
-        var conversation = await persistence.GetConversationForTurnAsync(session.ConversationId, runToken).ConfigureAwait(false);
+        //     A caller-managed continuation takes the FULL read, not the capped turn read: its persisted tool parts live
+        //     in the same metadata_json blob the turn read omits for every non-user row the synopsis already covers, so
+        //     under a compacted session the capped read would hand the builder survivor rows with no parts and the
+        //     replay would silently be empty. Every other policy keeps the cap — it has no tool history to replay.
+        var conversation = replaysToolHistory
+            ? await persistence.GetConversationAsync(session.ConversationId, runToken).ConfigureAwait(false)
+            : await persistence.GetConversationForTurnAsync(session.ConversationId, runToken).ConfigureAwait(false);
         var seed = conversation?.Messages.FirstOrDefault(message => message.MessageId == executionId);
         if (conversation is null || seed is null)
         {
