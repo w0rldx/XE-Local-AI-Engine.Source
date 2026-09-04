@@ -67,6 +67,7 @@ namespace XE_Local_AI_Engine.Client
     using XE_Local_AI_Engine.Client.Services.Auth;
     using XE_Local_AI_Engine.Client.Services.Development;
     using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+    using XE_Local_AI_Engine.Client.Services.Integrations;
     using XE_Local_AI_Engine.Client.Services.Proxy;
     using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
@@ -692,6 +693,48 @@ namespace XE_Local_AI_Engine.Client
                    static (HttpContext context, LocalModelProxyForwarder forwarder) => forwarder.ForwardEmbeddingsAsync(context))
                .RequireAuthorization(NodeAuthorizationPolicies.LocalModelProxy)
                .RequireRateLimiting(NodeAuthRateLimits.LocalModelProxyPolicy);
+
+            // The inbound EXTERNAL integration API. Hand-mapped here (like MapMcp and the model proxy) for the same
+            // load-bearing reasons: (1) the paths sit INSIDE /api/local/v1 so LocalApiSecurityMiddleware's loopback
+            // peer + Host + Origin gate already covers them — moving them out of the prefix would silently drop that
+            // gate and leave the bearer key as the ONLY control; (2) the request/response is an external integration
+            // envelope, not a node DTO, so it must NOT appear in the OpenAPI document or the generated React SDK. The
+            // IntegrationApi policy accepts ONLY the integration key scheme, never the operator's JWT, the MCP key or
+            // the proxy key.
+            //
+            // The route-level rate limit is the COARSE PER-IP abuse ceiling; per-principal fairness is the limiter the
+            // handler consults after authentication, which is the only place a principal exists to partition on.
+            var integrationRoutePrefix = $"/{LocalApiRoutes.Prefix}/";
+
+            // Composition-time value with ONE authority: endpoint metadata is baked at map time, so the cap must not
+            // come from an IOptions<IntegrationOptions> instance resolved per request — that would be a second source
+            // that can disagree with what the route already carries. Read from configuration here, the same shape the
+            // rate-limit permit constants use.
+            var integrationMaxRequestBodyBytes = app.Configuration.GetValue(
+                $"{IntegrationOptions.Section}:{nameof(IntegrationOptions.MaxRequestBodyBytes)}",
+                defaultValue: 1024L * 1024L);
+
+            app.MapPost(integrationRoutePrefix + LocalApiRoutes.IntegrationApi.Invoke,
+                   static (HttpContext context, IntegrationApiHandler handler) => handler.InvokeAsync(context))
+               .RequireAuthorization(NodeAuthorizationPolicies.IntegrationApi)
+               .RequireRateLimiting(NodeAuthRateLimits.IntegrationApiPolicy)
+               .WithMetadata(new IntegrationRequestSizeLimit(integrationMaxRequestBodyBytes));
+            app.MapGet(integrationRoutePrefix + LocalApiRoutes.IntegrationApi.ExecutionById,
+                   static (HttpContext context, IntegrationApiHandler handler) => handler.GetExecutionAsync(context))
+               .RequireAuthorization(NodeAuthorizationPolicies.IntegrationApi)
+               .RequireRateLimiting(NodeAuthRateLimits.IntegrationApiPolicy);
+            app.MapGet(integrationRoutePrefix + LocalApiRoutes.IntegrationApi.ExecutionEvents,
+                   static (HttpContext context, IntegrationApiHandler handler) => handler.GetExecutionEventsAsync(context))
+               .RequireAuthorization(NodeAuthorizationPolicies.IntegrationApi)
+               .RequireRateLimiting(NodeAuthRateLimits.IntegrationApiPolicy);
+            app.MapPost(integrationRoutePrefix + LocalApiRoutes.IntegrationApi.ExecutionCancel,
+                   static (HttpContext context, IntegrationApiHandler handler) => handler.CancelExecutionAsync(context))
+               .RequireAuthorization(NodeAuthorizationPolicies.IntegrationApi)
+               .RequireRateLimiting(NodeAuthRateLimits.IntegrationApiPolicy);
+            app.MapGet(integrationRoutePrefix + LocalApiRoutes.IntegrationApi.SessionById,
+                   static (HttpContext context, IntegrationApiHandler handler) => handler.GetSessionAsync(context))
+               .RequireAuthorization(NodeAuthorizationPolicies.IntegrationApi)
+               .RequireRateLimiting(NodeAuthRateLimits.IntegrationApiPolicy);
 
             if (!app.Environment.IsProduction())
             {

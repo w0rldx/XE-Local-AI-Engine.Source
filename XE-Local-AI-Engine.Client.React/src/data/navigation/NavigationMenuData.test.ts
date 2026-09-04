@@ -32,6 +32,7 @@ describe("navigationLinks", () => {
 			"models",
 			"settings",
 			"automation",
+			"integrations",
 			"preview",
 			"benchmarks",
 			"training",
@@ -56,6 +57,7 @@ describe("navigationLinks", () => {
 			"models",
 			"settings",
 			"automation",
+			"integrations",
 			"preview",
 			"benchmarks",
 			"training",
@@ -97,6 +99,22 @@ describe("navigationLinks", () => {
 		expect(gatedPreview?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.development)).toBe(false);
 		// It must not reappear as a top-level entry either.
 		expect(gatedLinks.some((link) => link.id === "development")).toBe(false);
+	});
+
+	it("ships the External Integrations group on by default and hides it whole when the capability is compiled off", async () => {
+		const integrations = navigationLinks.find((link) => link.id === "integrations");
+
+		expect(integrations?.to).toBeUndefined();
+		expect(integrations?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.integrationTriggers,
+			nodeRoutePaths.integrationSessions,
+			nodeRoutePaths.integrationExecutions,
+			nodeRoutePaths.integrationKeys,
+		]);
+
+		// Every child carries the same capability, so the generic empty-group filter removes the whole group.
+		const { navigationLinks: gatedLinks } = await mockCapabilities({ integrations: false });
+		expect(gatedLinks.some((link) => link.id === "integrations")).toBe(false);
 	});
 
 	it("makes each group a pure toggle (no own route) with its children carrying the routes", () => {

@@ -40,7 +40,7 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
     ///     </para>
     ///     <para>
     ///         <strong>Why it is output-equivalent.</strong> Only two consumers read a turn conversation's messages, and
-    ///         each provably ignores the omitted payloads: <c>BuildConversationContext</c> drops every message at or below
+    ///         each provably ignores the omitted payloads: <c>ConversationContextBuilder.Build</c> drops every message at or below
     ///         the covered sequence outright (that IS the compaction filter), and <c>CollectUserTurns</c> keeps only
     ///         <c>role == "user"</c> messages, which the cap never touches at any sequence. Message STRUCTURE — id,
     ///         sequence, role, variant group, timestamps — is always loaded in full, so
@@ -93,7 +93,7 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                     ? (int?)null
                     : conversationReader.GetInt32(14);
 
-                // The cap fires only under the SAME condition BuildConversationContext uses to drop the covered
+                // The cap fires only under the SAME condition ConversationContextBuilder.Build uses to drop the covered
                 // messages — a non-empty synopsis AND a covered sequence — so a conversation that has never been
                 // compacted loads byte-for-byte what it always did.
                 var omitNonUserPayloadsAtOrBelowSequence = capPayloadsToCompactionBoundary && compactionSummary is { Length: > 0 }
@@ -137,7 +137,7 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                                           SELECT mi.message_id FROM messages mi
                                           WHERE mi.conversation_id = c.conversation_id
                                           ORDER BY mi.sequence DESC LIMIT 1)
-                                      WHERE c.purged = 0 AND c.archived = 0
+                                      WHERE c.purged = 0 AND c.archived = 0 AND c.kind = 'chat'
                                       ORDER BY c.is_pinned DESC, c.last_seen_utc DESC
                                       LIMIT $limit;
                                       """;
@@ -160,7 +160,7 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                                           SELECT mi.message_id FROM messages mi
                                           WHERE mi.conversation_id = c.conversation_id
                                           ORDER BY mi.sequence DESC LIMIT 1)
-                                      WHERE c.purged = 0
+                                      WHERE c.purged = 0 AND c.kind = 'chat'
                                       ORDER BY c.is_pinned DESC, c.last_seen_utc DESC
                                       LIMIT $limit;
                                       """;

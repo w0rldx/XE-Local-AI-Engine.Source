@@ -26,6 +26,15 @@ internal sealed record class NodeConversation
     public string Origin { get; set; } = NodeChatOrigin.Local;
 
     /// <summary>
+    ///     What created this conversation, and therefore whether the chat list shows it: one of
+    ///     <see cref="NodeConversationKind" />. Defaults to <c>chat</c>, and the migration backfills
+    ///     <c>work-session</c> onto every conversation an <see cref="AgentWorkSession" /> owns. The two
+    ///     conversation LIST queries filter on it; by-id reads, purge and retention stay unfiltered on purpose.
+    ///     Plaintext (structural).
+    /// </summary>
+    public string Kind { get; set; } = NodeConversationKind.Chat;
+
+    /// <summary>
     ///     When this conversation was created by branching another, the source conversation id. Null for
     ///     conversations that were not branched. Provenance only — branched rows are independent
     ///     (Origin=Local) and never sync back.

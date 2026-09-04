@@ -78,6 +78,23 @@ public interface ILocalToolOfferProvider
     Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsForProfileAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     The ONE built-in tool an integration execution is additionally offered, and the only way to reach it.
+    ///     <c>emit_output</c> is held out of every other projection here — the whole offer, the profile pool, and both
+    ///     known-tool catalogs — so it never reaches chat, the scheduler, a benchmark, MCP, a sub-agent, or the
+    ///     agent-editor tool picker, and an agent definition cannot grant it. Delivering a result to the caller is a
+    ///     property of RUNNING an integration execution, not a per-agent permission, which is exactly the seam
+    ///     <c>ask_user</c> uses.
+    ///     <para>
+    ///         <b>The approval flag on the returned descriptor is the raw declared one and the CALLER must compose it.</b>
+    ///         This provider consults no <c>IToolApprovalPolicy</c> anywhere, and the union is the only place this
+    ///         tool's flag can be composed — so the integration coordinator recomposes it through the node policy before
+    ///         the agent is constructed. A node that tightens <c>ReadLocal</c> therefore tightens this tool with it, and
+    ///         an unattended run fails closed at the first call rather than losing the capability silently.
+    ///     </para>
+    /// </summary>
+    IReadOnlyList<AllowedToolDto> GetIntegrationOutputOffer();
+
+    /// <summary>
     ///     The names of every catalog tool, independent of model capability gating. This is the canonical set of tool
     ///     names that exist on the node; the agent-definition CRUD validation uses it to warn (not fail) when a
     ///     definition references a name that is not in the catalog, and the agent-management UI reuses it as the tool

@@ -39,6 +39,11 @@ import { Route as LayoutToolsRouteImport } from './routes/_layout/tools'
 import { Route as LayoutUsageRouteImport } from './routes/_layout/usage'
 import { Route as LayoutDevelopmentWorkflowsIndexRouteImport } from './routes/_layout/development-workflows.index'
 import { Route as LayoutDevelopmentWorkflowsWorkItemIdRouteImport } from './routes/_layout/development-workflows.$workItemId'
+import { Route as LayoutIntegrationsIndexRouteImport } from './routes/_layout/integrations.index'
+import { Route as LayoutIntegrationsExecutionsRouteImport } from './routes/_layout/integrations.executions'
+import { Route as LayoutIntegrationsKeysRouteImport } from './routes/_layout/integrations.keys'
+import { Route as LayoutIntegrationsSessionsRouteImport } from './routes/_layout/integrations.sessions'
+import { Route as LayoutIntegrationsTriggersRouteImport } from './routes/_layout/integrations.triggers'
 import { Route as LayoutTrainingIndexRouteImport } from './routes/_layout/training.index'
 import { Route as LayoutTrainingComparisonsRouteImport } from './routes/_layout/training.comparisons'
 import { Route as LayoutTrainingDatasetsRouteImport } from './routes/_layout/training.datasets'
@@ -197,6 +202,34 @@ const LayoutDevelopmentWorkflowsWorkItemIdRoute =
     path: '/development-workflows/$workItemId',
     getParentRoute: () => LayoutRoute,
   } as any)
+const LayoutIntegrationsIndexRoute = LayoutIntegrationsIndexRouteImport.update({
+  id: '/integrations/',
+  path: '/integrations/',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutIntegrationsExecutionsRoute =
+  LayoutIntegrationsExecutionsRouteImport.update({
+    id: '/integrations/executions',
+    path: '/integrations/executions',
+    getParentRoute: () => LayoutRoute,
+  } as any)
+const LayoutIntegrationsKeysRoute = LayoutIntegrationsKeysRouteImport.update({
+  id: '/integrations/keys',
+  path: '/integrations/keys',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutIntegrationsSessionsRoute =
+  LayoutIntegrationsSessionsRouteImport.update({
+    id: '/integrations/sessions',
+    path: '/integrations/sessions',
+    getParentRoute: () => LayoutRoute,
+  } as any)
+const LayoutIntegrationsTriggersRoute =
+  LayoutIntegrationsTriggersRouteImport.update({
+    id: '/integrations/triggers',
+    path: '/integrations/triggers',
+    getParentRoute: () => LayoutRoute,
+  } as any)
 const LayoutTrainingIndexRoute = LayoutTrainingIndexRouteImport.update({
   id: '/training/',
   path: '/training/',
@@ -254,10 +287,15 @@ export interface FileRoutesByFullPath {
   '/tools': typeof LayoutToolsRoute
   '/usage': typeof LayoutUsageRoute
   '/development-workflows/$workItemId': typeof LayoutDevelopmentWorkflowsWorkItemIdRoute
+  '/integrations/executions': typeof LayoutIntegrationsExecutionsRoute
+  '/integrations/keys': typeof LayoutIntegrationsKeysRoute
+  '/integrations/sessions': typeof LayoutIntegrationsSessionsRoute
+  '/integrations/triggers': typeof LayoutIntegrationsTriggersRoute
   '/training/comparisons': typeof LayoutTrainingComparisonsRoute
   '/training/datasets': typeof LayoutTrainingDatasetsRoute
   '/work-sessions/$sessionId': typeof LayoutWorkSessionsSessionIdRoute
   '/development-workflows/': typeof LayoutDevelopmentWorkflowsIndexRoute
+  '/integrations/': typeof LayoutIntegrationsIndexRoute
   '/training/': typeof LayoutTrainingIndexRoute
   '/work-sessions/': typeof LayoutWorkSessionsIndexRoute
 }
@@ -290,10 +328,15 @@ export interface FileRoutesByTo {
   '/usage': typeof LayoutUsageRoute
   '/': typeof LayoutIndexRoute
   '/development-workflows/$workItemId': typeof LayoutDevelopmentWorkflowsWorkItemIdRoute
+  '/integrations/executions': typeof LayoutIntegrationsExecutionsRoute
+  '/integrations/keys': typeof LayoutIntegrationsKeysRoute
+  '/integrations/sessions': typeof LayoutIntegrationsSessionsRoute
+  '/integrations/triggers': typeof LayoutIntegrationsTriggersRoute
   '/training/comparisons': typeof LayoutTrainingComparisonsRoute
   '/training/datasets': typeof LayoutTrainingDatasetsRoute
   '/work-sessions/$sessionId': typeof LayoutWorkSessionsSessionIdRoute
   '/development-workflows': typeof LayoutDevelopmentWorkflowsIndexRoute
+  '/integrations': typeof LayoutIntegrationsIndexRoute
   '/training': typeof LayoutTrainingIndexRoute
   '/work-sessions': typeof LayoutWorkSessionsIndexRoute
 }
@@ -328,10 +371,15 @@ export interface FileRoutesById {
   '/_layout/usage': typeof LayoutUsageRoute
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/development-workflows/$workItemId': typeof LayoutDevelopmentWorkflowsWorkItemIdRoute
+  '/_layout/integrations/executions': typeof LayoutIntegrationsExecutionsRoute
+  '/_layout/integrations/keys': typeof LayoutIntegrationsKeysRoute
+  '/_layout/integrations/sessions': typeof LayoutIntegrationsSessionsRoute
+  '/_layout/integrations/triggers': typeof LayoutIntegrationsTriggersRoute
   '/_layout/training/comparisons': typeof LayoutTrainingComparisonsRoute
   '/_layout/training/datasets': typeof LayoutTrainingDatasetsRoute
   '/_layout/work-sessions/$sessionId': typeof LayoutWorkSessionsSessionIdRoute
   '/_layout/development-workflows/': typeof LayoutDevelopmentWorkflowsIndexRoute
+  '/_layout/integrations/': typeof LayoutIntegrationsIndexRoute
   '/_layout/training/': typeof LayoutTrainingIndexRoute
   '/_layout/work-sessions/': typeof LayoutWorkSessionsIndexRoute
 }
@@ -366,10 +414,15 @@ export interface FileRouteTypes {
     | '/tools'
     | '/usage'
     | '/development-workflows/$workItemId'
+    | '/integrations/executions'
+    | '/integrations/keys'
+    | '/integrations/sessions'
+    | '/integrations/triggers'
     | '/training/comparisons'
     | '/training/datasets'
     | '/work-sessions/$sessionId'
     | '/development-workflows/'
+    | '/integrations/'
     | '/training/'
     | '/work-sessions/'
   fileRoutesByTo: FileRoutesByTo
@@ -402,10 +455,15 @@ export interface FileRouteTypes {
     | '/usage'
     | '/'
     | '/development-workflows/$workItemId'
+    | '/integrations/executions'
+    | '/integrations/keys'
+    | '/integrations/sessions'
+    | '/integrations/triggers'
     | '/training/comparisons'
     | '/training/datasets'
     | '/work-sessions/$sessionId'
     | '/development-workflows'
+    | '/integrations'
     | '/training'
     | '/work-sessions'
   id:
@@ -439,10 +497,15 @@ export interface FileRouteTypes {
     | '/_layout/usage'
     | '/_layout/'
     | '/_layout/development-workflows/$workItemId'
+    | '/_layout/integrations/executions'
+    | '/_layout/integrations/keys'
+    | '/_layout/integrations/sessions'
+    | '/_layout/integrations/triggers'
     | '/_layout/training/comparisons'
     | '/_layout/training/datasets'
     | '/_layout/work-sessions/$sessionId'
     | '/_layout/development-workflows/'
+    | '/_layout/integrations/'
     | '/_layout/training/'
     | '/_layout/work-sessions/'
   fileRoutesById: FileRoutesById
@@ -665,6 +728,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutDevelopmentWorkflowsWorkItemIdRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/integrations/': {
+      id: '/_layout/integrations/'
+      path: '/integrations'
+      fullPath: '/integrations/'
+      preLoaderRoute: typeof LayoutIntegrationsIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/integrations/executions': {
+      id: '/_layout/integrations/executions'
+      path: '/integrations/executions'
+      fullPath: '/integrations/executions'
+      preLoaderRoute: typeof LayoutIntegrationsExecutionsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/integrations/keys': {
+      id: '/_layout/integrations/keys'
+      path: '/integrations/keys'
+      fullPath: '/integrations/keys'
+      preLoaderRoute: typeof LayoutIntegrationsKeysRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/integrations/sessions': {
+      id: '/_layout/integrations/sessions'
+      path: '/integrations/sessions'
+      fullPath: '/integrations/sessions'
+      preLoaderRoute: typeof LayoutIntegrationsSessionsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/integrations/triggers': {
+      id: '/_layout/integrations/triggers'
+      path: '/integrations/triggers'
+      fullPath: '/integrations/triggers'
+      preLoaderRoute: typeof LayoutIntegrationsTriggersRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/training/': {
       id: '/_layout/training/'
       path: '/training'
@@ -730,10 +828,15 @@ interface LayoutRouteChildren {
   LayoutUsageRoute: typeof LayoutUsageRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
   LayoutDevelopmentWorkflowsWorkItemIdRoute: typeof LayoutDevelopmentWorkflowsWorkItemIdRoute
+  LayoutIntegrationsExecutionsRoute: typeof LayoutIntegrationsExecutionsRoute
+  LayoutIntegrationsKeysRoute: typeof LayoutIntegrationsKeysRoute
+  LayoutIntegrationsSessionsRoute: typeof LayoutIntegrationsSessionsRoute
+  LayoutIntegrationsTriggersRoute: typeof LayoutIntegrationsTriggersRoute
   LayoutTrainingComparisonsRoute: typeof LayoutTrainingComparisonsRoute
   LayoutTrainingDatasetsRoute: typeof LayoutTrainingDatasetsRoute
   LayoutWorkSessionsSessionIdRoute: typeof LayoutWorkSessionsSessionIdRoute
   LayoutDevelopmentWorkflowsIndexRoute: typeof LayoutDevelopmentWorkflowsIndexRoute
+  LayoutIntegrationsIndexRoute: typeof LayoutIntegrationsIndexRoute
   LayoutTrainingIndexRoute: typeof LayoutTrainingIndexRoute
   LayoutWorkSessionsIndexRoute: typeof LayoutWorkSessionsIndexRoute
 }
@@ -766,10 +869,15 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutIndexRoute: LayoutIndexRoute,
   LayoutDevelopmentWorkflowsWorkItemIdRoute:
     LayoutDevelopmentWorkflowsWorkItemIdRoute,
+  LayoutIntegrationsExecutionsRoute: LayoutIntegrationsExecutionsRoute,
+  LayoutIntegrationsKeysRoute: LayoutIntegrationsKeysRoute,
+  LayoutIntegrationsSessionsRoute: LayoutIntegrationsSessionsRoute,
+  LayoutIntegrationsTriggersRoute: LayoutIntegrationsTriggersRoute,
   LayoutTrainingComparisonsRoute: LayoutTrainingComparisonsRoute,
   LayoutTrainingDatasetsRoute: LayoutTrainingDatasetsRoute,
   LayoutWorkSessionsSessionIdRoute: LayoutWorkSessionsSessionIdRoute,
   LayoutDevelopmentWorkflowsIndexRoute: LayoutDevelopmentWorkflowsIndexRoute,
+  LayoutIntegrationsIndexRoute: LayoutIntegrationsIndexRoute,
   LayoutTrainingIndexRoute: LayoutTrainingIndexRoute,
   LayoutWorkSessionsIndexRoute: LayoutWorkSessionsIndexRoute,
 }

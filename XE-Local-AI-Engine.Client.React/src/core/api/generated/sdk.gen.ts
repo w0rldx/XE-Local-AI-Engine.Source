@@ -78,6 +78,9 @@ import type {
 	CancelImageModelDownloadData,
 	CancelImageModelDownloadErrors,
 	CancelImageModelDownloadResponses,
+	CancelIntegrationExecutionData,
+	CancelIntegrationExecutionErrors,
+	CancelIntegrationExecutionResponses,
 	CancelLlamaCppSourceBuildData,
 	CancelLlamaCppSourceBuildErrors,
 	CancelLlamaCppSourceBuildResponses,
@@ -186,6 +189,9 @@ import type {
 	CreateImageJobData,
 	CreateImageJobErrors,
 	CreateImageJobResponses,
+	CreateIntegrationTriggerData,
+	CreateIntegrationTriggerErrors,
+	CreateIntegrationTriggerResponses,
 	CreateMcpServerData,
 	CreateMcpServerErrors,
 	CreateMcpServerResponses,
@@ -273,6 +279,12 @@ import type {
 	DeleteImageModelData,
 	DeleteImageModelErrors,
 	DeleteImageModelResponses,
+	DeleteIntegrationSessionData,
+	DeleteIntegrationSessionErrors,
+	DeleteIntegrationSessionResponses,
+	DeleteIntegrationTriggerData,
+	DeleteIntegrationTriggerErrors,
+	DeleteIntegrationTriggerResponses,
 	DeleteKnowledgeDocumentData,
 	DeleteKnowledgeDocumentErrors,
 	DeleteKnowledgeDocumentResponses,
@@ -399,6 +411,9 @@ import type {
 	FreezeInferenceProfileData,
 	FreezeInferenceProfileErrors,
 	FreezeInferenceProfileResponses,
+	GenerateIntegrationApiKeyData,
+	GenerateIntegrationApiKeyErrors,
+	GenerateIntegrationApiKeyResponses,
 	GenerateLocalModelProxyApiKeyData,
 	GenerateLocalModelProxyApiKeyErrors,
 	GenerateLocalModelProxyApiKeyResponses,
@@ -531,6 +546,18 @@ import type {
 	GetImageRuntimeStatusData,
 	GetImageRuntimeStatusErrors,
 	GetImageRuntimeStatusResponses,
+	GetIntegrationExecutionData,
+	GetIntegrationExecutionErrors,
+	GetIntegrationExecutionEventsData,
+	GetIntegrationExecutionEventsErrors,
+	GetIntegrationExecutionEventsResponses,
+	GetIntegrationExecutionResponses,
+	GetIntegrationSessionData,
+	GetIntegrationSessionErrors,
+	GetIntegrationSessionResponses,
+	GetIntegrationTriggerData,
+	GetIntegrationTriggerErrors,
+	GetIntegrationTriggerResponses,
 	GetInvocationMonitorData,
 	GetInvocationMonitorErrors,
 	GetInvocationMonitorResponses,
@@ -771,6 +798,18 @@ import type {
 	ListInferenceProfilesData,
 	ListInferenceProfilesErrors,
 	ListInferenceProfilesResponses,
+	ListIntegrationApiKeysData,
+	ListIntegrationApiKeysErrors,
+	ListIntegrationApiKeysResponses,
+	ListIntegrationExecutionsData,
+	ListIntegrationExecutionsErrors,
+	ListIntegrationExecutionsResponses,
+	ListIntegrationSessionsData,
+	ListIntegrationSessionsErrors,
+	ListIntegrationSessionsResponses,
+	ListIntegrationTriggersData,
+	ListIntegrationTriggersErrors,
+	ListIntegrationTriggersResponses,
 	ListKnowledgeDocumentsData,
 	ListKnowledgeDocumentsErrors,
 	ListKnowledgeDocumentsResponses,
@@ -988,6 +1027,9 @@ import type {
 	ReviewTrainingSampleData,
 	ReviewTrainingSampleErrors,
 	ReviewTrainingSampleResponses,
+	RevokeIntegrationApiKeyData,
+	RevokeIntegrationApiKeyErrors,
+	RevokeIntegrationApiKeyResponses,
 	RevokeLocalModelProxyApiKeyData,
 	RevokeLocalModelProxyApiKeyErrors,
 	RevokeLocalModelProxyApiKeyResponses,
@@ -1120,6 +1162,9 @@ import type {
 	UpdateDevWorkflowWorkItemData,
 	UpdateDevWorkflowWorkItemErrors,
 	UpdateDevWorkflowWorkItemResponses,
+	UpdateIntegrationTriggerData,
+	UpdateIntegrationTriggerErrors,
+	UpdateIntegrationTriggerResponses,
 	UpdateLlamaCppRuntimeData,
 	UpdateLlamaCppRuntimeErrors,
 	UpdateLlamaCppRuntimeResponses,
@@ -1217,6 +1262,8 @@ import {
 	zCancelImageJobResponse,
 	zCancelImageModelDownloadBody,
 	zCancelImageModelDownloadResponse,
+	zCancelIntegrationExecutionPath,
+	zCancelIntegrationExecutionResponse,
 	zCancelLlamaCppSourceBuildResponse,
 	zCancelNodeBindingResponse,
 	zCancelNodeChatMessageBody,
@@ -1288,6 +1335,8 @@ import {
 	zCreateGoldenConversationResponse,
 	zCreateImageJobBody,
 	zCreateImageJobResponse,
+	zCreateIntegrationTriggerBody,
+	zCreateIntegrationTriggerResponse,
 	zCreateMcpServerBody,
 	zCreateMcpServerResponse,
 	zCreateNodeChatConversationBody,
@@ -1355,6 +1404,10 @@ import {
 	zDeleteGoldenConversationResponse,
 	zDeleteImageModelPath,
 	zDeleteImageModelResponse,
+	zDeleteIntegrationSessionPath,
+	zDeleteIntegrationSessionResponse,
+	zDeleteIntegrationTriggerPath,
+	zDeleteIntegrationTriggerResponse,
 	zDeleteKnowledgeDocumentPath,
 	zDeleteKnowledgeDocumentResponse,
 	zDeleteLocalModelPath,
@@ -1437,6 +1490,8 @@ import {
 	zExportTrainingDatasetResponse,
 	zFreezeInferenceProfileBody,
 	zFreezeInferenceProfileResponse,
+	zGenerateIntegrationApiKeyBody,
+	zGenerateIntegrationApiKeyResponse,
 	zGenerateLocalModelProxyApiKeyResponse,
 	zGenerateMcpServerApiKeyBody,
 	zGenerateMcpServerApiKeyResponse,
@@ -1514,6 +1569,15 @@ import {
 	zGetImageJobResponse,
 	zGetImageModelCatalogResponse,
 	zGetImageRuntimeStatusResponse,
+	zGetIntegrationExecutionEventsPath,
+	zGetIntegrationExecutionEventsQuery,
+	zGetIntegrationExecutionEventsResponse,
+	zGetIntegrationExecutionPath,
+	zGetIntegrationExecutionResponse,
+	zGetIntegrationSessionPath,
+	zGetIntegrationSessionResponse,
+	zGetIntegrationTriggerPath,
+	zGetIntegrationTriggerResponse,
 	zGetInvocationMonitorResponse,
 	zGetKnowledgeDocumentPath,
 	zGetKnowledgeDocumentResponse,
@@ -1650,6 +1714,12 @@ import {
 	zListImageModelDownloadsResponse,
 	zListImageModelsResponse,
 	zListInferenceProfilesResponse,
+	zListIntegrationApiKeysResponse,
+	zListIntegrationExecutionsQuery,
+	zListIntegrationExecutionsResponse,
+	zListIntegrationSessionsQuery,
+	zListIntegrationSessionsResponse,
+	zListIntegrationTriggersResponse,
 	zListKnowledgeDocumentsQuery,
 	zListKnowledgeDocumentsResponse,
 	zListLocalModelsResponse,
@@ -1795,6 +1865,8 @@ import {
 	zReviewTrainingSampleBody,
 	zReviewTrainingSamplePath,
 	zReviewTrainingSampleResponse,
+	zRevokeIntegrationApiKeyPath,
+	zRevokeIntegrationApiKeyResponse,
 	zRevokeLocalModelProxyApiKeyResponse,
 	zRevokeMcpServerApiKeyResponse,
 	zRunPlaybookActionEvalPath,
@@ -1897,6 +1969,9 @@ import {
 	zUpdateDevWorkflowWorkItemBody,
 	zUpdateDevWorkflowWorkItemPath,
 	zUpdateDevWorkflowWorkItemResponse,
+	zUpdateIntegrationTriggerBody,
+	zUpdateIntegrationTriggerPath,
+	zUpdateIntegrationTriggerResponse,
 	zUpdateLlamaCppRuntimeBody,
 	zUpdateLlamaCppRuntimeResponse,
 	zUpdateMcpServerBody,
@@ -8654,6 +8729,464 @@ export const getInvocationMonitor = <ThrowOnError extends boolean = false>(
 			},
 		],
 		url: "/api/local/v1/invocations",
+		...options,
+	});
+
+export const cancelIntegrationExecution = <ThrowOnError extends boolean = false>(
+	options: Options<CancelIntegrationExecutionData, ThrowOnError>,
+): RequestResult<CancelIntegrationExecutionResponses, CancelIntegrationExecutionErrors, ThrowOnError> =>
+	(options.client ?? client).post<CancelIntegrationExecutionResponses, CancelIntegrationExecutionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zCancelIntegrationExecutionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zCancelIntegrationExecutionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/executions/{executionId}/cancel",
+		...options,
+	});
+
+export const listIntegrationTriggers = <ThrowOnError extends boolean = false>(
+	options?: Options<ListIntegrationTriggersData, ThrowOnError>,
+): RequestResult<ListIntegrationTriggersResponses, ListIntegrationTriggersErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListIntegrationTriggersResponses, ListIntegrationTriggersErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListIntegrationTriggersResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/triggers",
+		...options,
+	});
+
+export const createIntegrationTrigger = <ThrowOnError extends boolean = false>(
+	options: Options<CreateIntegrationTriggerData, ThrowOnError>,
+): RequestResult<CreateIntegrationTriggerResponses, CreateIntegrationTriggerErrors, ThrowOnError> =>
+	(options.client ?? client).post<CreateIntegrationTriggerResponses, CreateIntegrationTriggerErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateIntegrationTriggerBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateIntegrationTriggerResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/triggers",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteIntegrationSession = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteIntegrationSessionData, ThrowOnError>,
+): RequestResult<DeleteIntegrationSessionResponses, DeleteIntegrationSessionErrors, ThrowOnError> =>
+	(options.client ?? client).delete<DeleteIntegrationSessionResponses, DeleteIntegrationSessionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteIntegrationSessionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteIntegrationSessionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/sessions/{sessionId}",
+		...options,
+	});
+
+export const getIntegrationSession = <ThrowOnError extends boolean = false>(
+	options: Options<GetIntegrationSessionData, ThrowOnError>,
+): RequestResult<GetIntegrationSessionResponses, GetIntegrationSessionErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetIntegrationSessionResponses, GetIntegrationSessionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetIntegrationSessionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetIntegrationSessionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/sessions/{sessionId}",
+		...options,
+	});
+
+export const deleteIntegrationTrigger = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteIntegrationTriggerData, ThrowOnError>,
+): RequestResult<DeleteIntegrationTriggerResponses, DeleteIntegrationTriggerErrors, ThrowOnError> =>
+	(options.client ?? client).delete<DeleteIntegrationTriggerResponses, DeleteIntegrationTriggerErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteIntegrationTriggerPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteIntegrationTriggerResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/triggers/{triggerId}",
+		...options,
+	});
+
+export const getIntegrationTrigger = <ThrowOnError extends boolean = false>(
+	options: Options<GetIntegrationTriggerData, ThrowOnError>,
+): RequestResult<GetIntegrationTriggerResponses, GetIntegrationTriggerErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetIntegrationTriggerResponses, GetIntegrationTriggerErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetIntegrationTriggerPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetIntegrationTriggerResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/triggers/{triggerId}",
+		...options,
+	});
+
+export const updateIntegrationTrigger = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateIntegrationTriggerData, ThrowOnError>,
+): RequestResult<UpdateIntegrationTriggerResponses, UpdateIntegrationTriggerErrors, ThrowOnError> =>
+	(options.client ?? client).put<UpdateIntegrationTriggerResponses, UpdateIntegrationTriggerErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUpdateIntegrationTriggerBody,
+					path: zUpdateIntegrationTriggerPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUpdateIntegrationTriggerResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/triggers/{triggerId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const listIntegrationApiKeys = <ThrowOnError extends boolean = false>(
+	options?: Options<ListIntegrationApiKeysData, ThrowOnError>,
+): RequestResult<ListIntegrationApiKeysResponses, ListIntegrationApiKeysErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListIntegrationApiKeysResponses, ListIntegrationApiKeysErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListIntegrationApiKeysResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/keys",
+		...options,
+	});
+
+export const generateIntegrationApiKey = <ThrowOnError extends boolean = false>(
+	options: Options<GenerateIntegrationApiKeyData, ThrowOnError>,
+): RequestResult<GenerateIntegrationApiKeyResponses, GenerateIntegrationApiKeyErrors, ThrowOnError> =>
+	(options.client ?? client).post<GenerateIntegrationApiKeyResponses, GenerateIntegrationApiKeyErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zGenerateIntegrationApiKeyBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGenerateIntegrationApiKeyResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/keys",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const getIntegrationExecution = <ThrowOnError extends boolean = false>(
+	options: Options<GetIntegrationExecutionData, ThrowOnError>,
+): RequestResult<GetIntegrationExecutionResponses, GetIntegrationExecutionErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetIntegrationExecutionResponses, GetIntegrationExecutionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetIntegrationExecutionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetIntegrationExecutionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/executions/{executionId}",
+		...options,
+	});
+
+export const getIntegrationExecutionEvents = <ThrowOnError extends boolean = false>(
+	options: Options<GetIntegrationExecutionEventsData, ThrowOnError>,
+): RequestResult<GetIntegrationExecutionEventsResponses, GetIntegrationExecutionEventsErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetIntegrationExecutionEventsResponses, GetIntegrationExecutionEventsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetIntegrationExecutionEventsPath,
+					query: zGetIntegrationExecutionEventsQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetIntegrationExecutionEventsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/executions/{executionId}/events",
+		...options,
+	});
+
+export const listIntegrationExecutions = <ThrowOnError extends boolean = false>(
+	options?: Options<ListIntegrationExecutionsData, ThrowOnError>,
+): RequestResult<ListIntegrationExecutionsResponses, ListIntegrationExecutionsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListIntegrationExecutionsResponses, ListIntegrationExecutionsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zListIntegrationExecutionsQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListIntegrationExecutionsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/executions",
+		...options,
+	});
+
+export const listIntegrationSessions = <ThrowOnError extends boolean = false>(
+	options?: Options<ListIntegrationSessionsData, ThrowOnError>,
+): RequestResult<ListIntegrationSessionsResponses, ListIntegrationSessionsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListIntegrationSessionsResponses, ListIntegrationSessionsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zListIntegrationSessionsQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListIntegrationSessionsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/sessions",
+		...options,
+	});
+
+export const revokeIntegrationApiKey = <ThrowOnError extends boolean = false>(
+	options: Options<RevokeIntegrationApiKeyData, ThrowOnError>,
+): RequestResult<RevokeIntegrationApiKeyResponses, RevokeIntegrationApiKeyErrors, ThrowOnError> =>
+	(options.client ?? client).delete<RevokeIntegrationApiKeyResponses, RevokeIntegrationApiKeyErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zRevokeIntegrationApiKeyPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zRevokeIntegrationApiKeyResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/keys/{keyId}",
 		...options,
 	});
 

@@ -86,7 +86,9 @@
 		},
 		"confirmation": "Confirmation",
 		"workerNode": "Worker Node",
-		"hide": "Hide"
+		"hide": "Hide",
+		"copy": "Copy",
+		"copied": "Copied"
 	},
 	"theme": {
 		"title": "Theme",
@@ -134,7 +136,12 @@
 		"trainingDatasets": "Datasets",
 		"trainingComparisons": "Comparisons",
 		"workSessions": "Work Sessions",
-		"devWorkflows": "Workflow Runs"
+		"devWorkflows": "Workflow Runs",
+		"integrationsGroup": "Integrations",
+		"integrationTriggers": "Triggers",
+		"integrationSessions": "Sessions",
+		"integrationExecutions": "Executions",
+		"integrationKeys": "API Keys"
 	},
 	"chat": {
 		"thoughts": "Thoughts",
@@ -5352,6 +5359,277 @@
 				"runs": "Runs",
 				"ruleSets": "Rule sets",
 				"templates": "Templates"
+			}
+		},
+		"integrations": {
+			"triggers": {
+				"title": "Integration triggers",
+				"subtitle": "A trigger is a named external entry point that runs a saved agent unattended over the loopback integration API.",
+				"createButton": "Create trigger",
+				"list": {
+					"loading": "Loading integration triggers…",
+					"empty": "No integration triggers yet. Create one to get started.",
+					"enabledAria": "Toggle {{name}}",
+					"editAria": "Edit {{name}}",
+					"deleteAria": "Delete {{name}}",
+					"columns": {
+						"name": "Name",
+						"displayName": "Display name",
+						"target": "Target agent",
+						"sessionPolicy": "Session policy",
+						"inputs": "Accepted inputs",
+						"enabled": "Enabled",
+						"actions": "Actions"
+					}
+				},
+				"editor": {
+					"createTitle": "Create trigger",
+					"editTitle": "Edit trigger"
+				},
+				"form": {
+					"name": {
+						"label": "Name",
+						"description": "The external identifier callers use to invoke this trigger. It cannot be changed later.",
+						"placeholder": "sensor-hub-ingest"
+					},
+					"displayName": {
+						"label": "Display name",
+						"placeholder": "Sensor hub ingest"
+					},
+					"description": {
+						"label": "Description",
+						"placeholder": "Optional short summary"
+					},
+					"enabled": {
+						"label": "Enabled",
+						"description": "A disabled trigger rejects every invocation."
+					},
+					"targetAgent": {
+						"label": "Target agent",
+						"description": "The saved agent this trigger runs, unattended, for every invocation.",
+						"placeholder": "Select an agent"
+					},
+					"sessionPolicy": {
+						"label": "Session policy",
+						"description": "Whether every invocation starts a fresh conversation or the caller keeps one across calls.",
+						"options": {
+							"PerInvocation": "New session per call",
+							"CallerManaged": "Caller-managed session"
+						}
+					},
+					"acceptedInputs": {
+						"label": "Accepted inputs",
+						"description": "The payload kinds an invocation may send. At least one is required.",
+						"options": {
+							"Text": "Text",
+							"Json": "JSON"
+						}
+					},
+					"toolCatalog": {
+						"loading": "Loading the tool catalog. Tool facts are unknown until it arrives.",
+						"failed": "The tool catalog could not be loaded. Every tool counts as approval-requiring and side-effecting until it can be read."
+					}
+				},
+				"validation": {
+					"nameFormat": "Use 2-64 lowercase letters, digits or hyphens, starting with a letter or digit.",
+					"displayNameRequired": "A display name is required.",
+					"displayNameTooLong": "The display name is longer than the 128-character limit.",
+					"descriptionTooLong": "The description is longer than the 1024-character limit.",
+					"targetRequired": "A target agent is required.",
+					"inputKindRequired": "Select at least one accepted input kind.",
+					"sessionPolicyTools": "A caller-managed session is not allowed for an agent that can call side-effecting tools: {{tools}}. Choose a new session per call, or remove those tools from the agent."
+				},
+				"approvalWarning": {
+					"title": "Approval-requiring tools",
+					"body": "This agent may call tools that need manual approval. Integration runs are unattended and fail instead of asking, so a run that reaches one of these tools ends with an error.",
+					"toolsLabel": "Tools: {{tools}}"
+				},
+				"delete": {
+					"title": "Delete trigger",
+					"description": "Delete '{{name}}'? Callers using it start receiving 404 responses. This cannot be undone."
+				},
+				"errors": {
+					"load": "Could not load integration triggers.",
+					"save": "Could not save the trigger.",
+					"delete": "Could not delete the trigger.",
+					"missing": "This trigger no longer exists. Close the editor and reload the list."
+				}
+			},
+			"sessions": {
+				"title": "Integration sessions",
+				"subtitle": "Conversations a caller-managed trigger keeps across invocations. Deleting one removes its conversation and every execution that ran on it.",
+				"list": {
+					"loading": "Loading sessions…",
+					"empty": "No sessions match these filters yet.",
+					"deletedTrigger": "Deleted trigger",
+					"viewAria": "View session details",
+					"deleteAria": "Delete session",
+					"windowNote": "Showing up to {{limit}} most recently active sessions. Narrow by trigger or status to reach older records.",
+					"columns": {
+						"id": "Session",
+						"trigger": "Trigger",
+						"status": "Status",
+						"created": "Created",
+						"lastActivity": "Last activity",
+						"executions": "Executions",
+						"actions": "Actions"
+					}
+				},
+				"filters": {
+					"trigger": "Trigger",
+					"status": "Status",
+					"allTriggers": "All triggers",
+					"allStatuses": "All statuses"
+				},
+				"status": {
+					"Active": "Active",
+					"Closed": "Closed"
+				},
+				"detail": {
+					"title": "Session detail",
+					"agent": "Agent",
+					"executionsTitle": "Executions on this session",
+					"noExecutions": "No executions have run on this session."
+				},
+				"delete": {
+					"title": "Delete session",
+					"description": "Delete this session? Its conversation, its executions and their recorded events are removed. This cannot be undone.",
+					"action": "Delete"
+				},
+				"errors": {
+					"load": "Could not load integration sessions.",
+					"delete": "Could not delete the session. Cancel its active executions first.",
+					"executions": "Could not load this session's executions."
+				}
+			},
+			"executions": {
+				"title": "Integration executions",
+				"subtitle": "Unattended runs an integrator started through a trigger. Cancel an active run, or open one to read its recorded timeline.",
+				"filters": {
+					"allStatuses": "All",
+					"trigger": "Trigger",
+					"session": "Session",
+					"allTriggers": "All triggers",
+					"allSessions": "All sessions",
+					"statusGroup": "Filter executions by status"
+				},
+				"list": {
+					"loading": "Loading executions…",
+					"empty": "No executions match these filters yet.",
+					"viewAria": "View execution details",
+					"cancelAria": "Cancel execution",
+					"windowNote": "Showing up to {{limit}} most recently received executions. Narrow by trigger, session or status to reach older records.",
+					"columns": {
+						"trigger": "Trigger",
+						"session": "Session",
+						"execution": "Execution",
+						"status": "Status",
+						"received": "Received",
+						"started": "Started",
+						"ended": "Ended",
+						"duration": "Duration",
+						"outputs": "Outputs",
+						"actions": "Actions"
+					}
+				},
+				"status": {
+					"Accepted": "Accepted",
+					"Queued": "Queued",
+					"Running": "Running",
+					"Completed": "Completed",
+					"Failed": "Failed",
+					"Cancelled": "Cancelled"
+				},
+				"detail": {
+					"title": "Execution detail",
+					"timelineTitle": "Timeline",
+					"outputTitle": "Output payload",
+					"failureTitle": "Failure",
+					"failureCategory": "Failure category",
+					"principal": "Principal",
+					"requestId": "Request id",
+					"keyPrefix": "Key",
+					"outputBytes": "Output bytes",
+					"noEvents": "No events recorded for this execution.",
+					"loading": "Loading timeline…",
+					"toolOk": "ok",
+					"toolError": "error",
+					"tokens": "{{count}} tokens",
+					"showOutput": "Show output payload",
+					"hideOutput": "Hide output payload"
+				},
+				"cancel": {
+					"title": "Cancel execution",
+					"description": "Request cancellation of this execution? A running turn stops once it observes the request, so the row may stay active for a moment.",
+					"action": "Cancel execution"
+				},
+				"errors": {
+					"load": "Could not load integration executions.",
+					"events": "Could not load the execution timeline.",
+					"cancel": "Could not cancel the execution.",
+					"detail": "Could not load the execution audit detail."
+				}
+			},
+			"keys": {
+				"title": "Integration API keys",
+				"subtitle": "Credentials an integrator presents to the loopback integration API. Only a one-way hash is stored, so a key is shown once when you generate it.",
+				"generateButton": "Generate key",
+				"list": {
+					"loading": "Loading integration API keys…",
+					"empty": "No API keys yet. Generate one to let an integrator connect.",
+					"allTriggers": "All triggers",
+					"neverUsed": "Never used yet",
+					"revokedBadge": "Revoked",
+					"revokeAria": "Revoke {{label}}",
+					"columns": {
+						"prefix": "Key",
+						"principal": "Principal",
+						"label": "Label",
+						"triggers": "Allowed triggers",
+						"created": "Created",
+						"lastUsed": "Last used",
+						"revoked": "Revoked",
+						"actions": "Actions"
+					}
+				},
+				"generate": {
+					"title": "Generate API key",
+					"label": "Label",
+					"labelPlaceholder": "sensor-hub",
+					"triggersLabel": "Allowed triggers",
+					"triggersDescription": "The triggers this key may invoke. Pick at least one.",
+					"submit": "Generate",
+					"principal": {
+						"label": "Integrator identity",
+						"description": "Keys sharing an identity own the same sessions and executions. Reuse an identity to rotate or add a credential for an existing integrator.",
+						"newIdentity": "New identity"
+					},
+					"allTriggers": {
+						"label": "Allow all triggers",
+						"description": "This key may invoke every trigger on this node, including triggers created later."
+					},
+					"validation": {
+						"labelRequired": "A label is required.",
+						"labelTooLong": "The label is longer than the 128-character limit.",
+						"triggersRequired": "Select at least one trigger, or turn on Allow all triggers."
+					}
+				},
+				"reveal": {
+					"title": "Copy this key now",
+					"warning": "This is the only time this key will be shown. It is not stored and cannot be recovered — if you lose it you must generate a new one and update the client that uses it.",
+					"dismiss": "I have copied it"
+				},
+				"revoke": {
+					"title": "Revoke API key",
+					"description": "Revoke '{{label}}'? Any client still using it stops working immediately. This cannot be undone.",
+					"action": "Revoke"
+				},
+				"errors": {
+					"load": "Could not load integration API keys.",
+					"generate": "Could not generate the key.",
+					"revoke": "Could not revoke the key.",
+					"triggersLoad": "Could not load the trigger list, so the allowed-triggers picker is empty."
+				}
 			}
 		}
 	},

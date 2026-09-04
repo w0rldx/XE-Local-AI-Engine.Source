@@ -33,14 +33,14 @@ public sealed class AddConversationListIndexMigrationTests
 
     private const string ActiveQuery = $"""
                                         SELECT c.conversation_id {ListJoin}
-                                        WHERE c.purged = 0 AND c.archived = 0
+                                        WHERE c.purged = 0 AND c.archived = 0 AND c.kind = 'chat'
                                         ORDER BY c.is_pinned DESC, c.last_seen_utc DESC
                                         LIMIT 50;
                                         """;
 
     private const string AllQuery = $"""
                                      SELECT c.conversation_id {ListJoin}
-                                     WHERE c.purged = 0
+                                     WHERE c.purged = 0 AND c.kind = 'chat'
                                      ORDER BY c.is_pinned DESC, c.last_seen_utc DESC
                                      LIMIT 50;
                                      """;

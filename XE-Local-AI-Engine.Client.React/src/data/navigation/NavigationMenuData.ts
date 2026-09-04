@@ -9,6 +9,7 @@ import {
 	IconHome,
 	IconListDetails,
 	IconMessageCircle,
+	IconPlug,
 	IconPlugConnected,
 	IconRobot,
 	IconSchool,
@@ -37,7 +38,8 @@ type NavigationCapabilityKey =
 	| "benchmarks"
 	| "training"
 	| "workSessions"
-	| "devWorkflows";
+	| "devWorkflows"
+	| "integrations";
 
 interface INavigationNestedLink {
 	translationKey: string;
@@ -133,6 +135,21 @@ const allNavigationLinks: INavigationLink[] = [
 			{ translationKey: "navigation.mcp", to: nodeRoutePaths.mcp, capability: "mcpServers" },
 			{ translationKey: "navigation.scheduler", to: nodeRoutePaths.scheduler, capability: "scheduler" },
 			{ translationKey: "navigation.tools", to: nodeRoutePaths.tools },
+		],
+	},
+	// External Integrations group: every child carries the same `integrations` capability, so the generic
+	// empty-group filter below drops the whole group when the capability is compiled off. The group entry itself has
+	// no `to` — /integrations is a real URL prefix, but its index route only redirects (see routes/_layout/
+	// integrations.index.tsx), so the children carry the routes.
+	{
+		id: "integrations",
+		icon: IconPlug,
+		translationKey: "navigation.integrationsGroup",
+		links: [
+			{ translationKey: "navigation.integrationTriggers", to: nodeRoutePaths.integrationTriggers, capability: "integrations" },
+			{ translationKey: "navigation.integrationSessions", to: nodeRoutePaths.integrationSessions, capability: "integrations" },
+			{ translationKey: "navigation.integrationExecutions", to: nodeRoutePaths.integrationExecutions, capability: "integrations" },
+			{ translationKey: "navigation.integrationKeys", to: nodeRoutePaths.integrationKeys, capability: "integrations" },
 		],
 	},
 	// Preview group: collects experimental / preview features under one menu point. Open Canvas (the MAF workflow

@@ -3888,6 +3888,340 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.ToTable("inference_profiles", (string)null);
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.IntegrationApiKey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AllowedTriggerIdsJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("allowed_trigger_ids_json");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<byte[]>("KeyHash")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("key_hash");
+
+                    b.Property<string>("KeyPrefix")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("key_prefix");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("label");
+
+                    b.Property<long?>("LastUsedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("last_used_at_utc");
+
+                    b.Property<Guid>("PrincipalId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("principal_id");
+
+                    b.Property<long?>("RevokedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("revoked_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KeyPrefix")
+                        .IsUnique()
+                        .HasDatabaseName("ux_integration_api_keys_prefix");
+
+                    b.ToTable("integration_api_keys", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.IntegrationExecution", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long?>("EndedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ended_at_utc");
+
+                    b.Property<string>("FailureCategory")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("failure_category");
+
+                    b.Property<string>("FailureSummary")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("failure_summary");
+
+                    b.Property<Guid>("InvocationId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("invocation_id");
+
+                    b.Property<string>("KeyPrefix")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("key_prefix");
+
+                    b.Property<long>("LastSequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("last_sequence");
+
+                    b.Property<long>("OutputBytes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("output_bytes");
+
+                    b.Property<int>("OutputCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("output_count");
+
+                    b.Property<Guid>("PrincipalId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("principal_id");
+
+                    b.Property<long>("ReceivedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("received_at_utc");
+
+                    b.Property<byte[]>("RequestFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("BLOB")
+                        .HasColumnName("request_fingerprint");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("request_id");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("session_id");
+
+                    b.Property<long?>("StartedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<long?>("StopRequestedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("stop_requested_at_utc");
+
+                    b.Property<Guid>("TriggerId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("trigger_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId")
+                        .HasDatabaseName("ix_integration_executions_session");
+
+                    b.HasIndex("TriggerId")
+                        .HasDatabaseName("ix_integration_executions_trigger");
+
+                    b.HasIndex("PrincipalId", "RequestId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_integration_executions_principal_request");
+
+                    b.HasIndex("Status", "ReceivedAtUtc")
+                        .HasDatabaseName("ix_integration_executions_status_received");
+
+                    b.ToTable("integration_executions", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.IntegrationExecutionEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("DetailJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("detail_json");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("event_type");
+
+                    b.Property<Guid>("ExecutionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("execution_id");
+
+                    b.Property<long>("OccurredAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExecutionId", "Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("ux_integration_execution_events_execution_sequence");
+
+                    b.ToTable("integration_execution_events", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.IntegrationSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AgentDefinitionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("agent_definition_id");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("conversation_id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<int>("ExecutionCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("execution_count");
+
+                    b.Property<long>("LastActivityUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("last_activity_utc");
+
+                    b.Property<long>("LastSequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("last_sequence");
+
+                    b.Property<Guid>("PrincipalId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("principal_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TriggerId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("trigger_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_integration_sessions_conversation_id");
+
+                    b.HasIndex("TriggerId")
+                        .HasDatabaseName("ix_integration_sessions_trigger");
+
+                    b.HasIndex("Status", "LastActivityUtc")
+                        .HasDatabaseName("ix_integration_sessions_status_activity");
+
+                    b.ToTable("integration_sessions", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.IntegrationTrigger", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AcceptedInputKinds")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("accepted_input_kinds");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("description");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("display_name");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("enabled");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<string>("SessionPolicy")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("session_policy");
+
+                    b.Property<Guid>("TargetAgentDefinitionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("target_agent_definition_id");
+
+                    b.Property<string>("TargetKind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("target_kind");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Enabled")
+                        .HasDatabaseName("ix_integration_triggers_enabled");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ux_integration_triggers_name");
+
+                    b.ToTable("integration_triggers", (string)null);
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.KnowledgeChunkVector", b =>
                 {
                     b.Property<Guid>("ChunkId")
@@ -4983,6 +5317,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(false)
                         .HasColumnName("is_pinned");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("chat")
+                        .HasColumnName("kind");
 
                     b.Property<long>("LastSeenUtc")
                         .HasColumnType("INTEGER")
@@ -6681,6 +7023,15 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.AgentDefinition", null)
                         .WithMany()
                         .HasForeignKey("AgentDefinitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.IntegrationExecutionEvent", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.IntegrationExecution", null)
+                        .WithMany()
+                        .HasForeignKey("ExecutionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

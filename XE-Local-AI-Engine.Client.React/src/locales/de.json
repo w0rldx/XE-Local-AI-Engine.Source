@@ -86,7 +86,9 @@
 		},
 		"confirmation": "Bestätigung",
 		"workerNode": "Worker-Node",
-		"hide": "Ausblenden"
+		"hide": "Ausblenden",
+		"copy": "Kopieren",
+		"copied": "Kopiert"
 	},
 	"theme": {
 		"title": "Design",
@@ -134,7 +136,12 @@
 		"trainingDatasets": "Datensätze",
 		"trainingComparisons": "Vergleiche",
 		"workSessions": "Arbeitssitzungen",
-		"devWorkflows": "Workflow-Läufe"
+		"devWorkflows": "Workflow-Läufe",
+		"integrationsGroup": "Integrationen",
+		"integrationTriggers": "Trigger",
+		"integrationSessions": "Sitzungen",
+		"integrationExecutions": "Ausführungen",
+		"integrationKeys": "API-Schlüssel"
 	},
 	"chat": {
 		"thoughts": "Gedanken",
@@ -5352,6 +5359,277 @@
 				"runs": "Läufe",
 				"ruleSets": "Regelsätze",
 				"templates": "Vorlagen"
+			}
+		},
+		"integrations": {
+			"triggers": {
+				"title": "Integrations-Trigger",
+				"subtitle": "Ein Trigger ist ein benannter externer Einstiegspunkt, der einen gespeicherten Agenten unbeaufsichtigt über die Loopback-Integrations-API ausführt.",
+				"createButton": "Trigger erstellen",
+				"list": {
+					"loading": "Integrations-Trigger werden geladen…",
+					"empty": "Noch keine Integrations-Trigger. Erstellen Sie einen, um zu beginnen.",
+					"enabledAria": "{{name}} umschalten",
+					"editAria": "{{name}} bearbeiten",
+					"deleteAria": "{{name}} löschen",
+					"columns": {
+						"name": "Name",
+						"displayName": "Anzeigename",
+						"target": "Ziel-Agent",
+						"sessionPolicy": "Sitzungsrichtlinie",
+						"inputs": "Akzeptierte Eingaben",
+						"enabled": "Aktiv",
+						"actions": "Aktionen"
+					}
+				},
+				"editor": {
+					"createTitle": "Trigger erstellen",
+					"editTitle": "Trigger bearbeiten"
+				},
+				"form": {
+					"name": {
+						"label": "Name",
+						"description": "Die externe Kennung, mit der Aufrufer diesen Trigger aufrufen. Sie kann später nicht geändert werden.",
+						"placeholder": "sensor-hub-ingest"
+					},
+					"displayName": {
+						"label": "Anzeigename",
+						"placeholder": "Sensor-Hub-Aufnahme"
+					},
+					"description": {
+						"label": "Beschreibung",
+						"placeholder": "Optionale kurze Zusammenfassung"
+					},
+					"enabled": {
+						"label": "Aktiv",
+						"description": "Ein deaktivierter Trigger weist jeden Aufruf ab."
+					},
+					"targetAgent": {
+						"label": "Ziel-Agent",
+						"description": "Der gespeicherte Agent, den dieser Trigger bei jedem Aufruf unbeaufsichtigt ausführt.",
+						"placeholder": "Agent auswählen"
+					},
+					"sessionPolicy": {
+						"label": "Sitzungsrichtlinie",
+						"description": "Ob jeder Aufruf eine neue Unterhaltung startet oder der Aufrufer eine über mehrere Aufrufe hinweg behält.",
+						"options": {
+							"PerInvocation": "Neue Sitzung pro Aufruf",
+							"CallerManaged": "Vom Aufrufer verwaltete Sitzung"
+						}
+					},
+					"acceptedInputs": {
+						"label": "Akzeptierte Eingaben",
+						"description": "Die Nutzdatenarten, die ein Aufruf senden darf. Mindestens eine ist erforderlich.",
+						"options": {
+							"Text": "Text",
+							"Json": "JSON"
+						}
+					},
+					"toolCatalog": {
+						"loading": "Der Werkzeugkatalog wird geladen. Bis dahin sind die Werkzeugangaben unbekannt.",
+						"failed": "Der Werkzeugkatalog konnte nicht geladen werden. Bis er gelesen werden kann, gilt jedes Werkzeug als freigabepflichtig und mit Nebenwirkungen."
+					}
+				},
+				"validation": {
+					"nameFormat": "Verwenden Sie 2-64 Kleinbuchstaben, Ziffern oder Bindestriche, beginnend mit einem Buchstaben oder einer Ziffer.",
+					"displayNameRequired": "Ein Anzeigename ist erforderlich.",
+					"displayNameTooLong": "Der Anzeigename überschreitet die Grenze von 128 Zeichen.",
+					"descriptionTooLong": "Die Beschreibung überschreitet die Grenze von 1024 Zeichen.",
+					"targetRequired": "Ein Ziel-Agent ist erforderlich.",
+					"inputKindRequired": "Wählen Sie mindestens eine akzeptierte Eingabeart aus.",
+					"sessionPolicyTools": "Eine vom Aufrufer verwaltete Sitzung ist für einen Agenten mit Werkzeugen mit Nebenwirkungen nicht zulässig: {{tools}}. Wählen Sie „Neue Sitzung pro Aufruf“ oder entfernen Sie diese Werkzeuge aus dem Agenten."
+				},
+				"approvalWarning": {
+					"title": "Werkzeuge mit Freigabepflicht",
+					"body": "Dieser Agent kann Werkzeuge aufrufen, die eine manuelle Freigabe benötigen. Integrationsläufe laufen unbeaufsichtigt und fragen nicht nach, daher endet ein Lauf mit einem Fehler, sobald er eines dieser Werkzeuge erreicht.",
+					"toolsLabel": "Werkzeuge: {{tools}}"
+				},
+				"delete": {
+					"title": "Trigger löschen",
+					"description": "„{{name}}“ löschen? Aufrufer, die ihn verwenden, erhalten anschließend 404-Antworten. Dies kann nicht rückgängig gemacht werden."
+				},
+				"errors": {
+					"load": "Integrations-Trigger konnten nicht geladen werden.",
+					"save": "Der Trigger konnte nicht gespeichert werden.",
+					"delete": "Der Trigger konnte nicht gelöscht werden.",
+					"missing": "Dieser Trigger existiert nicht mehr. Schließen Sie den Editor und laden Sie die Liste neu."
+				}
+			},
+			"sessions": {
+				"title": "Integrations-Sitzungen",
+				"subtitle": "Unterhaltungen, die ein Trigger mit vom Aufrufer verwalteter Sitzung über mehrere Aufrufe hinweg behält. Beim Löschen werden die Unterhaltung und alle darin ausgeführten Läufe entfernt.",
+				"list": {
+					"loading": "Sitzungen werden geladen…",
+					"empty": "Keine Sitzungen entsprechen diesen Filtern.",
+					"deletedTrigger": "Gelöschter Trigger",
+					"viewAria": "Sitzungsdetails anzeigen",
+					"deleteAria": "Sitzung löschen",
+					"windowNote": "Zeigt bis zu {{limit}} zuletzt aktive Sitzungen. Grenzen Sie nach Trigger oder Status ein, um ältere Einträge zu erreichen.",
+					"columns": {
+						"id": "Sitzung",
+						"trigger": "Trigger",
+						"status": "Status",
+						"created": "Erstellt",
+						"lastActivity": "Letzte Aktivität",
+						"executions": "Ausführungen",
+						"actions": "Aktionen"
+					}
+				},
+				"filters": {
+					"trigger": "Trigger",
+					"status": "Status",
+					"allTriggers": "Alle Trigger",
+					"allStatuses": "Alle Status"
+				},
+				"status": {
+					"Active": "Aktiv",
+					"Closed": "Geschlossen"
+				},
+				"detail": {
+					"title": "Sitzungsdetails",
+					"agent": "Agent",
+					"executionsTitle": "Ausführungen in dieser Sitzung",
+					"noExecutions": "In dieser Sitzung wurden noch keine Ausführungen gestartet."
+				},
+				"delete": {
+					"title": "Sitzung löschen",
+					"description": "Diese Sitzung löschen? Ihre Unterhaltung, ihre Ausführungen und deren aufgezeichnete Ereignisse werden entfernt. Das kann nicht rückgängig gemacht werden.",
+					"action": "Löschen"
+				},
+				"errors": {
+					"load": "Integrations-Sitzungen konnten nicht geladen werden.",
+					"delete": "Die Sitzung konnte nicht gelöscht werden. Brechen Sie zuerst ihre aktiven Ausführungen ab.",
+					"executions": "Die Ausführungen dieser Sitzung konnten nicht geladen werden."
+				}
+			},
+			"executions": {
+				"title": "Integrations-Ausführungen",
+				"subtitle": "Unbeaufsichtigte Läufe, die ein Integrator über einen Trigger gestartet hat. Brechen Sie einen aktiven Lauf ab oder öffnen Sie einen, um seinen aufgezeichneten Verlauf zu lesen.",
+				"filters": {
+					"allStatuses": "Alle",
+					"trigger": "Trigger",
+					"session": "Sitzung",
+					"allTriggers": "Alle Trigger",
+					"allSessions": "Alle Sitzungen",
+					"statusGroup": "Ausführungen nach Status filtern"
+				},
+				"list": {
+					"loading": "Ausführungen werden geladen…",
+					"empty": "Keine Ausführungen entsprechen diesen Filtern.",
+					"viewAria": "Ausführungsdetails anzeigen",
+					"cancelAria": "Ausführung abbrechen",
+					"windowNote": "Zeigt bis zu {{limit}} zuletzt eingegangene Ausführungen. Grenzen Sie nach Trigger, Sitzung oder Status ein, um ältere Einträge zu erreichen.",
+					"columns": {
+						"trigger": "Trigger",
+						"session": "Sitzung",
+						"execution": "Ausführung",
+						"status": "Status",
+						"received": "Eingegangen",
+						"started": "Gestartet",
+						"ended": "Beendet",
+						"duration": "Dauer",
+						"outputs": "Ausgaben",
+						"actions": "Aktionen"
+					}
+				},
+				"status": {
+					"Accepted": "Angenommen",
+					"Queued": "In Warteschlange",
+					"Running": "Läuft",
+					"Completed": "Abgeschlossen",
+					"Failed": "Fehlgeschlagen",
+					"Cancelled": "Abgebrochen"
+				},
+				"detail": {
+					"title": "Ausführungsdetails",
+					"timelineTitle": "Verlauf",
+					"outputTitle": "Ausgabe-Payload",
+					"failureTitle": "Fehler",
+					"failureCategory": "Fehlerkategorie",
+					"principal": "Prinzipal",
+					"requestId": "Anfrage-ID",
+					"keyPrefix": "Schlüssel",
+					"outputBytes": "Ausgabebytes",
+					"noEvents": "Für diese Ausführung wurden keine Ereignisse aufgezeichnet.",
+					"loading": "Verlauf wird geladen…",
+					"toolOk": "ok",
+					"toolError": "Fehler",
+					"tokens": "{{count}} Tokens",
+					"showOutput": "Ausgabe-Payload anzeigen",
+					"hideOutput": "Ausgabe-Payload ausblenden"
+				},
+				"cancel": {
+					"title": "Ausführung abbrechen",
+					"description": "Abbruch dieser Ausführung anfordern? Ein laufender Durchgang stoppt, sobald er die Anforderung bemerkt, daher kann die Zeile noch kurz aktiv bleiben.",
+					"action": "Ausführung abbrechen"
+				},
+				"errors": {
+					"load": "Integrations-Ausführungen konnten nicht geladen werden.",
+					"events": "Der Ausführungsverlauf konnte nicht geladen werden.",
+					"cancel": "Die Ausführung konnte nicht abgebrochen werden.",
+					"detail": "Die Audit-Details der Ausführung konnten nicht geladen werden."
+				}
+			},
+			"keys": {
+				"title": "Integrations-API-Schlüssel",
+				"subtitle": "Anmeldedaten, die ein Integrator der Loopback-Integrations-API vorlegt. Es wird nur ein Einweg-Hash gespeichert, daher wird ein Schlüssel nur einmal bei der Erstellung angezeigt.",
+				"generateButton": "Schlüssel erstellen",
+				"list": {
+					"loading": "Integrations-API-Schlüssel werden geladen…",
+					"empty": "Noch keine API-Schlüssel. Erstellen Sie einen, damit sich ein Integrator verbinden kann.",
+					"allTriggers": "Alle Trigger",
+					"neverUsed": "Noch nie verwendet",
+					"revokedBadge": "Widerrufen",
+					"revokeAria": "{{label}} widerrufen",
+					"columns": {
+						"prefix": "Schlüssel",
+						"principal": "Prinzipal",
+						"label": "Bezeichnung",
+						"triggers": "Erlaubte Trigger",
+						"created": "Erstellt",
+						"lastUsed": "Zuletzt verwendet",
+						"revoked": "Widerrufen",
+						"actions": "Aktionen"
+					}
+				},
+				"generate": {
+					"title": "API-Schlüssel erstellen",
+					"label": "Bezeichnung",
+					"labelPlaceholder": "sensor-hub",
+					"triggersLabel": "Erlaubte Trigger",
+					"triggersDescription": "Die Trigger, die dieser Schlüssel aufrufen darf. Wählen Sie mindestens einen aus.",
+					"submit": "Erstellen",
+					"principal": {
+						"label": "Integrator-Identität",
+						"description": "Schlüssel mit derselben Identität besitzen dieselben Sitzungen und Ausführungen. Verwenden Sie eine Identität erneut, um einen Schlüssel für einen bestehenden Integrator zu wechseln oder zu ergänzen.",
+						"newIdentity": "Neue Identität"
+					},
+					"allTriggers": {
+						"label": "Alle Trigger erlauben",
+						"description": "Dieser Schlüssel darf jeden Trigger dieses Knotens aufrufen, auch später erstellte."
+					},
+					"validation": {
+						"labelRequired": "Eine Bezeichnung ist erforderlich.",
+						"labelTooLong": "Die Bezeichnung überschreitet die Grenze von 128 Zeichen.",
+						"triggersRequired": "Wählen Sie mindestens einen Trigger aus oder aktivieren Sie „Alle Trigger erlauben“."
+					}
+				},
+				"reveal": {
+					"title": "Kopieren Sie diesen Schlüssel jetzt",
+					"warning": "Dies ist das einzige Mal, dass dieser Schlüssel angezeigt wird. Er wird nicht gespeichert und kann nicht wiederhergestellt werden — wenn Sie ihn verlieren, müssen Sie einen neuen erstellen und den Client aktualisieren, der ihn verwendet.",
+					"dismiss": "Ich habe ihn kopiert"
+				},
+				"revoke": {
+					"title": "API-Schlüssel widerrufen",
+					"description": "„{{label}}“ widerrufen? Jeder Client, der ihn noch verwendet, funktioniert sofort nicht mehr. Dies kann nicht rückgängig gemacht werden.",
+					"action": "Widerrufen"
+				},
+				"errors": {
+					"load": "Integrations-API-Schlüssel konnten nicht geladen werden.",
+					"generate": "Der Schlüssel konnte nicht erstellt werden.",
+					"revoke": "Der Schlüssel konnte nicht widerrufen werden.",
+					"triggersLoad": "Die Trigger-Liste konnte nicht geladen werden, daher ist die Auswahl der erlaubten Trigger leer."
+				}
 			}
 		}
 	},

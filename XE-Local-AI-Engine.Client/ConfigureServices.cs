@@ -38,6 +38,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.Images;
+using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
@@ -314,7 +315,11 @@ public static class ConfigureServices
                // Third scheme, applied ONLY by the LocalModelProxy policy on the inbound OpenAI-compatible model proxy.
                // Independent of both JWT bearer and the MCP key so an external tool that consumes only the raw model
                // never gains the operator's admin reach nor the MCP client's agent-tool reach.
-               .AddScheme<AuthenticationSchemeOptions, LocalModelProxyApiKeyAuthenticationHandler>(LocalModelProxyApiKeyAuthenticationHandler.SchemeName, configureOptions: null);
+               .AddScheme<AuthenticationSchemeOptions, LocalModelProxyApiKeyAuthenticationHandler>(LocalModelProxyApiKeyAuthenticationHandler.SchemeName, configureOptions: null)
+               // Fourth scheme, applied ONLY by the IntegrationApi policy on the hand-mapped external integration
+               // routes. Independent of all three above so an integrator gains neither the operator's admin reach, the
+               // MCP client's tool reach, nor the proxy client's raw-model reach.
+               .AddScheme<AuthenticationSchemeOptions, IntegrationApiKeyAuthenticationHandler>(IntegrationApiKeyAuthenticationHandler.SchemeName, configureOptions: null);
         builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
                .Configure<IOptions<NodeAuthOptions>, INodeJwtKeyProvider>((options, nodeAuthOptions, jwtKeyProvider) =>
                {
@@ -412,6 +417,14 @@ public static class ConfigureServices
             options.AddPolicy(NodeAuthorizationPolicies.LocalModelProxy,
                 policy => policy.AddAuthenticationSchemes(LocalModelProxyApiKeyAuthenticationHandler.SchemeName)
                                 .RequireAuthenticatedUser());
+
+            // The external integration API accepts ONLY the integration key scheme. One scheme, no role and no claim
+            // requirement: the key IS the authorization, and every finer-grained decision (which triggers this key may
+            // invoke, which rows this principal owns) is made against the freshly re-read key row rather than against a
+            // claim minted at authentication time.
+            options.AddPolicy(NodeAuthorizationPolicies.IntegrationApi,
+                policy => policy.AddAuthenticationSchemes(IntegrationApiKeyAuthenticationHandler.SchemeName)
+                                .RequireAuthenticatedUser());
         });
         builder.Services.AddAntiforgery();
 
@@ -419,6 +432,14 @@ public static class ConfigureServices
         // catalog and streams one response. The client has an INFINITE timeout because a long generation must not be
         // severed by a client-side timeout — the caller's disconnect (request-abort) is the cancellation signal instead.
         builder.Services.AddScoped<LocalModelProxyForwarder>();
+
+        // The external integration API's hand-mapped handler, scoped like the proxy forwarder for the same reason: its
+        // collaborators are scoped stores and application services.
+        builder.Services.AddScoped<IntegrationApiHandler>();
+
+        // Singleton: it owns the process-wide open-stream semaphore, and a scoped one would give every request its own
+        // cap, which is no cap at all.
+        builder.Services.AddSingleton<IntegrationSseWriter>();
         builder.Services.AddHttpClient(LocalModelProxyForwarder.HttpClientName)
                .ConfigureHttpClient(static client => client.Timeout = Timeout.InfiniteTimeSpan);
 
@@ -435,6 +456,20 @@ public static class ConfigureServices
         var authPermitLimit = isTestingEnvironment ? 10_000 : 10;
         var mcpPermitLimit = isTestingEnvironment ? 100_000 : 120;
         var proxyPermitLimit = isTestingEnvironment ? 100_000 : 6_000;
+
+        // The external integration API's COARSE PER-IP CEILING — 6,000/min, the proxy's number for the proxy's reason.
+        // Deliberately NOT IntegrationOptions.RateLimitPerMinute (600): that is the PER-PRINCIPAL budget and it is
+        // spent by IntegrationPrincipalRateLimiter inside the handler, where a principal exists to partition on. Read
+        // from configuration so a test host can lower it; computed here, outside the lambda, like the three above.
+        var integrationPermitLimit = isTestingEnvironment
+            ? 100_000
+            : builder.Configuration.GetValue($"{IntegrationOptions.Section}:{nameof(IntegrationOptions.IpRateLimitPerMinute)}", defaultValue: 6_000);
+
+        // Registered through a factory so the CONTAINER disposes it: an undisposed PartitionedRateLimiter roots its
+        // replenishment timer and, through it, the whole host graph — the leak documented a few lines above.
+        builder.Services.AddSingleton(_ => new IntegrationPrincipalRateLimiter(
+            builder.Configuration.GetValue($"{IntegrationOptions.Section}:{nameof(IntegrationOptions.RateLimitPerMinute)}", defaultValue: 600)));
+
         builder.Services.AddRateLimiter(options =>
         {
             options.AddPolicy(NodeAuthRateLimits.AuthPolicy, httpContext =>
@@ -474,6 +509,20 @@ public static class ConfigureServices
                     {
                         AutoReplenishment = true,
                         PermitLimit = proxyPermitLimit,
+                        QueueLimit = 0,
+                        Window = TimeSpan.FromMinutes(1)
+                    }));
+
+            // External integration API. Same shared IP partition function as the three above, deliberately: this
+            // middleware runs BEFORE UseAuthentication, so no integration claim exists at partition time and a
+            // claim-reading partition function would ship with a branch that can never fire. Per-principal fairness is
+            // IntegrationPrincipalRateLimiter, plus the per-principal admission cap inside the accept transaction.
+            options.AddPolicy(NodeAuthRateLimits.IntegrationApiPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(GetRateLimitPartitionKey(httpContext),
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        AutoReplenishment = true,
+                        PermitLimit = integrationPermitLimit,
                         QueueLimit = 0,
                         Window = TimeSpan.FromMinutes(1)
                     }));

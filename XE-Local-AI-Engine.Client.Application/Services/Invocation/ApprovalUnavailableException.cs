@@ -15,6 +15,15 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation;
 /// </summary>
 public sealed class ApprovalUnavailableException : InvalidOperationException
 {
+    /// <summary>
+    ///     The fixed prefix of the reason this exception carries. It is a constant rather than a literal at the throw
+    ///     site because the runner CLASSIFIES this failure rather than letting it escape, and surfaces the reason
+    ///     verbatim as the terminal error — so a caller that has to tell "this agent needs a capability it cannot have
+    ///     unattended" apart from "something broke" has only the message to go on. One authority, so the two cannot
+    ///     drift.
+    /// </summary>
+    public const string UnattendedReasonPrefix = "approval required in an unattended run: ";
+
     public ApprovalUnavailableException(string message)
         : base(message)
     {
