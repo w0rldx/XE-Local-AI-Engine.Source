@@ -115,9 +115,9 @@ describe("dev-workflow enum label maps are complete in every locale", () => {
 				"unknown",
 			],
 		},
-		// C1's cross-unit failure vocabulary, projected from the ten DevWorkflow failure classes plus the two tokens only
-		// the other two arms can write. `AgentUnitFailureClassTests.TheVocabulary_IsTwelveDistinctTokens` pins the C# side
-		// at twelve; this is the other side of that claim — a token added there without a label here would reach an
+		// C1's cross-unit failure vocabulary, projected from the eleven DevWorkflow failure classes plus the two tokens only
+		// the other two arms can write. `AgentUnitFailureClassTests.TheVocabulary_IsThirteenDistinctTokens` pins the C# side
+		// at thirteen; this is the other side of that claim — a token added there without a label here would reach an
 		// operator as a raw identifier, and no C# test can see a locale file.
 		{
 			section: "node.failureGroup",
@@ -133,6 +133,7 @@ describe("dev-workflow enum label maps are complete in every locale", () => {
 				"BudgetExhausted",
 				"ToolOrCommand",
 				"Rejected",
+				"ObjectiveNotMet",
 				"Internal",
 			],
 		},

@@ -5299,6 +5299,7 @@
 					"BudgetExhausted": "Budget erschöpft",
 					"ToolOrCommand": "Tool oder Befehl",
 					"Rejected": "Abgelehnt",
+					"ObjectiveNotMet": "Ziel nicht erreicht",
 					"Internal": "Intern"
 				}
 			},

@@ -107,7 +107,8 @@ SELECT CASE n.failure_class
          WHEN 'GateRejected'  THEN 'Rejected'      WHEN 'BudgetExhausted'   THEN 'BudgetExhausted'
          WHEN 'Configuration' THEN 'Configuration' WHEN 'Policy'            THEN 'Policy'
          WHEN 'Timeout'       THEN 'Timeout'       WHEN 'Interrupted'       THEN 'Interrupted'
-         WHEN 'Cancelled'     THEN 'Cancelled'     ELSE 'Internal' END AS failure_group,
+         WHEN 'Cancelled'     THEN 'Cancelled'     WHEN 'ObjectiveNotMet'   THEN 'ObjectiveNotMet'
+         ELSE 'Internal' END AS failure_group,
        COUNT(*) AS n
 FROM dev_workflow_node_runs n
 WHERE n.run_id IN (UPPER(:runIds)) AND n.failure_class IS NOT NULL GROUP BY failure_group;

@@ -5299,6 +5299,7 @@
 					"BudgetExhausted": "Budget exhausted",
 					"ToolOrCommand": "Tool or command",
 					"Rejected": "Rejected",
+					"ObjectiveNotMet": "Objective not met",
 					"Internal": "Internal"
 				}
 			},

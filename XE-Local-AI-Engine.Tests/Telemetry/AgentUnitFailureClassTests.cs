@@ -27,7 +27,7 @@ public sealed class AgentUnitFailureClassTests
                        .Select(static field => (string)field.GetRawConstantValue()!)
                        .ToList();
 
-        AssertEx.Equal(expected: 10, declared.Count, "The vocabulary is closed; a change to its size is a change to this table.");
+        AssertEx.Equal(expected: 11, declared.Count, "The vocabulary is closed; a change to its size is a change to this table.");
         var unmapped = declared.Where(static failureClass => !AgentUnitFailureClass.ByDevWorkflowFailureClass.ContainsKey(failureClass)).ToList();
         AssertEx.Empty(unmapped, $"These failure classes have no cross-unit group: {string.Join(", ", unmapped)}.");
     }
@@ -43,6 +43,7 @@ public sealed class AgentUnitFailureClassTests
     [Arguments(DevWorkflowFailureClasses.BudgetExhausted, AgentUnitFailureClass.BudgetExhausted)]
     [Arguments(DevWorkflowFailureClasses.ToolCommandFailed, AgentUnitFailureClass.ToolOrCommand)]
     [Arguments(DevWorkflowFailureClasses.GateRejected, AgentUnitFailureClass.Rejected)]
+    [Arguments(DevWorkflowFailureClasses.ObjectiveNotMet, AgentUnitFailureClass.ObjectiveNotMet)]
     [Arguments(DevWorkflowFailureClasses.Internal, AgentUnitFailureClass.Internal)]
     public void ADevWorkflowFailureClass_MapsToItsGroup(string failureClass, string expected) =>
         AssertEx.Equal(expected, AgentUnitFailureClass.FromDevWorkflowFailureClass(failureClass));
@@ -70,11 +71,11 @@ public sealed class AgentUnitFailureClassTests
     ///     The vocabulary is closed, and its size is the number of i18n keys the client ships under
     ///     <c>pages.devWorkflows.node.failureGroup</c>. A token added here without one shows the reader a raw
     ///     identifier, so the count is pinned on both sides: this test owns the C# half, and the client's
-    ///     <c>src/features/devWorkflows/I18nParity.test.ts</c> names the same twelve tokens against <c>en.json</c>
+    ///     <c>src/features/devWorkflows/I18nParity.test.ts</c> names the same thirteen tokens against <c>en.json</c>
     ///     while its parity block carries them into every other locale.
     /// </summary>
     [Test]
-    public void TheVocabulary_IsTwelveDistinctTokens()
+    public void TheVocabulary_IsThirteenDistinctTokens()
     {
         var tokens = typeof(AgentUnitFailureClass)
                      .GetFields(BindingFlags.Public | BindingFlags.Static)
@@ -82,7 +83,7 @@ public sealed class AgentUnitFailureClassTests
                      .Select(static field => (string)field.GetRawConstantValue()!)
                      .ToList();
 
-        AssertEx.Equal(expected: 12, tokens.Count);
+        AssertEx.Equal(expected: 13, tokens.Count);
         AssertEx.Equal(tokens.Count, tokens.Distinct(StringComparer.Ordinal).Count(), "Two names for one token would split a report's buckets.");
     }
 }
