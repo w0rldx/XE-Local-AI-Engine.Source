@@ -739,11 +739,17 @@ internal sealed class DevWorkflowDevTaskExecutor
                              .ConfigureAwait(false);
             return true;
         }
-        catch (Exception exception) when (exception is DevelopmentConcurrencyException or DevelopmentInvalidTransitionException)
+        catch (DevelopmentConcurrencyException)
         {
             // Something else moved the task between this tick's read and its ask — an operator in the Development
             // views, or a sibling tick. Nothing is owed, and the operation id is still unwritten: the next tick reads
             // what the task became and asks again if that is still the right thing to do.
+            //
+            // ONLY the concurrency case. TransitionTaskAsync checks the version BEFORE legality, so a task whose
+            // status moved always surfaces here rather than as an invalid transition — which means an invalid
+            // transition is a broken invariant in the table above, not a race. Swallowing it would start the coder
+            // round unbriefed and call that success; propagating it stalls this node run loudly (the dispatcher's
+            // AdvanceSafelyAsync logs it at Error and re-derives from unchanged rows next tick).
             return false;
         }
     }

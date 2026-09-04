@@ -124,6 +124,13 @@ public sealed class WorkSessionStateBlockTests
         AssertEx.Contains(block, "no operator attached");
         AssertEx.True(block.IndexOf(AskUserTool.ToolName, StringComparison.Ordinal) > block.IndexOf(UntrustedContentFraming.EndMarkerPrefix, StringComparison.Ordinal),
             "The notice is an instruction the model must follow, so it belongs after the untrusted fence closes.");
+
+        // The stuck instruction must not end in "complete the session": the executor maps every completed session to a
+        // succeeded node run, so telling a stuck step to complete is telling it to report success it did not have.
+        AssertEx.Contains(block, "objective was NOT met");
+        AssertEx.Contains(block, "do not claim success");
+        AssertEx.False(block.Contains("then complete the session", StringComparison.Ordinal),
+            "A stuck step that completes is reported to the operator as a success, so the prompt must not ask for it.");
     }
 
     [Test]

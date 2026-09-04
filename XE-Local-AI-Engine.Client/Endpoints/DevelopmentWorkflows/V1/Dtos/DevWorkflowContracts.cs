@@ -395,11 +395,13 @@ public sealed record DevWorkflowNodeRunSummaryResponse(
     long? CompletedAtUtc,
     long Sequence,
     /// <summary>
-    ///     How many times an operator has retried this node run. A human retry is allowed AT the cap and buys one more
-    ///     attempt, so <see cref="MaxAttempts" /> already includes them: the cap the DEFINITION declared is
+    ///     How many attempts an operator has bought this node run. A human retry is allowed AT the cap and raises
+    ///     <see cref="MaxAttempts" /> by one in place, so the cap the DEFINITION declared is
     ///     <c>maxAttempts - operatorRetries</c>, and a client that shows the raw pair says "attempt 4 of 4" for a node
-    ///     whose definition allows three. Counted server-side off the run's decision rows, which are the record of the
-    ///     widening.
+    ///     whose definition allows three. Measured server-side as the distance <c>maxAttempts</c> has travelled from
+    ///     the cap the run's pinned graph declares — the widening is its own record — so a Retry that was recorded but
+    ///     never spent, and one from before widening existed, both count nothing. Zero when the pinned graph cannot be
+    ///     parsed.
     /// </summary>
     int OperatorRetries,
     /// <summary>
@@ -456,11 +458,13 @@ public sealed record DevWorkflowNodeRunDetailResponse(
     string? TerminalReason,
     IReadOnlyList<DevWorkflowDecisionResponse> Decisions,
     /// <summary>
-    ///     How many times an operator has retried this node run. A human retry is allowed AT the cap and buys one more
-    ///     attempt, so <see cref="MaxAttempts" /> already includes them: the cap the DEFINITION declared is
+    ///     How many attempts an operator has bought this node run. A human retry is allowed AT the cap and raises
+    ///     <see cref="MaxAttempts" /> by one in place, so the cap the DEFINITION declared is
     ///     <c>maxAttempts - operatorRetries</c>, and a client that shows the raw pair says "attempt 4 of 4" for a node
-    ///     whose definition allows three. Counted server-side off the run's decision rows, which are the record of the
-    ///     widening.
+    ///     whose definition allows three. Measured server-side as the distance <c>maxAttempts</c> has travelled from
+    ///     the cap the run's pinned graph declares — the widening is its own record — so a Retry that was recorded but
+    ///     never spent, and one from before widening existed, both count nothing. Zero when the pinned graph cannot be
+    ///     parsed.
     /// </summary>
     int OperatorRetries,
     long? StartedAtUtc,

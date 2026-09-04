@@ -45,6 +45,25 @@ public sealed class DevWorkflowRunEndpointTests
                                         "edges":[{"from":"research","to":"approval"}]}
                                        """;
 
+    /// <summary>
+    ///     <see cref="SampleGraph" /> plus the two nodes the operator-retry test needs DECLARED: a node key the pinned
+    ///     graph does not carry answers zero whatever its row says, which would make those cases pass without ever
+    ///     subtracting anything.
+    /// </summary>
+    private const string RetryGraph = """
+                                      {"schemaVersion":1,
+                                       "nodes":[{"nodeKey":"research","nodeType":"Agent","label":"Research","agentSeedSlug":"researcher","modelProfile":"qwen","maxAttempts":3},
+                                                {"nodeKey":"approval","nodeType":"HumanGate","label":"Approve the plan","instructions":"Read the plan, then answer."},
+                                                {"nodeKey":"verify","nodeType":"Agent","label":"Verify","agentSeedSlug":"researcher","modelProfile":"qwen","maxAttempts":3},
+                                                {"nodeKey":"package","nodeType":"Agent","label":"Package","agentSeedSlug":"researcher","modelProfile":"qwen","maxAttempts":3},
+                                                {"nodeKey":"implement","nodeType":"Agent","label":"Implement","agentSeedSlug":"researcher","modelProfile":"qwen","maxAttempts":3},
+                                                {"nodeKey":"implement#add-negate-tests","nodeType":"Agent","label":"Implement","agentSeedSlug":"researcher","modelProfile":"qwen","maxAttempts":3},
+                                                {"nodeKey":"implement#tidy-up","nodeType":"Agent","label":"Implement","agentSeedSlug":"researcher","modelProfile":"qwen","maxAttempts":3}],
+                                       "edges":[{"from":"research","to":"approval"},{"from":"approval","to":"verify"},{"from":"verify","to":"package"},
+                                                {"from":"package","to":"implement"},{"from":"implement","to":"implement#add-negate-tests"},
+                                                {"from":"implement","to":"implement#tidy-up"}]}
+                                      """;
+
     [Test]
     [Arguments("GET", Runs)]
     [Arguments("POST", WorkItemRuns)]
@@ -1029,19 +1048,49 @@ public sealed class DevWorkflowRunEndpointTests
         var untouched = WorkNodeRun(2, "approval", DevWorkflowNodeRunStatus.Pending);
 
         // A Retry recorded but NOT yet settled: the decision row is written against the attempt it answered, and the
-        // dispatcher widens and increments on a later tick — indefinitely later while the run is paused.
+        // dispatcher widens and increments on a later tick — indefinitely later while the run is paused. The row is
+        // still at the cap its definition declared, which is the whole answer.
         var unapplied = WorkNodeRun(3, "verify", DevWorkflowNodeRunStatus.Blocked) with
         {
             Attempt = 3,
             MaxAttempts = 3
         };
-        var runs = RunService(new DevWorkflowRunDetail(RunSnapshot(), [retried, untouched, unapplied], PendingDecisionCount: 1, BlockingGateNodeRunId: null));
+
+        // A row persisted BEFORE widening shipped: its Retry moved no cap at all, so a count of decision rows reported
+        // a widening that never happened and the client rendered a cap one BELOW the definition's.
+        var preUpgrade = WorkNodeRun(4, "package", DevWorkflowNodeRunStatus.Running) with
+        {
+            Attempt = 2,
+            MaxAttempts = 3
+        };
+        // A materialized clone, which is the node M3 and M4 were observed on. Its key is not the template's, but the
+        // materializer deep-clones the template node INTO the graph and the expansion is persisted to the run, so the
+        // pinned graph declares it with the template's own cap and no template hop is needed to find it.
+        var widenedClone = WorkNodeRun(5, "implement#add-negate-tests", DevWorkflowNodeRunStatus.Running) with
+        {
+            Attempt = 4,
+            MaxAttempts = 4,
+            MaterializedFromNodeRunId = retried.Id,
+            MaterializationIndex = 1
+        };
+        var untouchedClone = WorkNodeRun(6, "implement#tidy-up", DevWorkflowNodeRunStatus.Pending) with
+        {
+            Attempt = 1,
+            MaxAttempts = 3,
+            MaterializedFromNodeRunId = retried.Id,
+            MaterializationIndex = 2
+        };
+        var runs = RunService(new DevWorkflowRunDetail(RunSnapshot() with { GraphJson = RetryGraph },
+            [retried, untouched, unapplied, preUpgrade, widenedClone, untouchedClone],
+            PendingDecisionCount: 1,
+            BlockingGateNodeRunId: null));
         var store = Store();
         _ = store.ListDecisionsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                  .Returns([
                      Decision(retried.Id, attempt: 3, DevWorkflowDecisionKind.Retry),
                      Decision(untouched.Id, attempt: 1, DevWorkflowDecisionKind.Skip),
-                     Decision(unapplied.Id, attempt: 3, DevWorkflowDecisionKind.Retry)
+                     Decision(unapplied.Id, attempt: 3, DevWorkflowDecisionKind.Retry),
+                     Decision(preUpgrade.Id, attempt: 1, DevWorkflowDecisionKind.Retry)
                  ]);
         await using var factory = EnabledFactory(store, runs);
 
@@ -1054,11 +1103,18 @@ public sealed class DevWorkflowRunEndpointTests
                             .EnumerateArray()
                             .ToDictionary(static node => node.GetProperty("nodeKey").GetString()!, static node => node.GetProperty("operatorRetries").GetInt32());
 
-        AssertEx.Equal(expected: 1, nodes["research"], "one APPLIED Retry bought one attempt, so the declared cap is 4 - 1 = 3.");
-        AssertEx.Equal(expected: 0, nodes["approval"], "a decision that is not a Retry buys nothing, and a node nobody retried counts none.");
+        AssertEx.Equal(expected: 1, nodes["research"], "the row's cap has moved one past the definition's 3, which is one bought attempt.");
+        AssertEx.Equal(expected: 0, nodes["approval"], "a node whose cap is where its definition left it bought nothing.");
         AssertEx.Equal(expected: 0,
             nodes["verify"],
-            "the retry is recorded against the attempt still on the row, so nothing has been widened yet and subtracting one would show a cap below the definition's.");
+            "the Retry is recorded but not yet spent, so the cap has not moved and subtracting one would show a cap below the definition's.");
+        AssertEx.Equal(expected: 0,
+            nodes["package"],
+            "and a row from before widening existed carries a Retry that moved no cap, so counting its decision rows would invent one.");
+        AssertEx.Equal(expected: 1,
+            nodes["implement#add-negate-tests"],
+            "a widened CLONE reads its cap off the clone node the expansion wrote into the graph, or it renders attempt 4 of 4 for a definition that allows three.");
+        AssertEx.Equal(expected: 0, nodes["implement#tidy-up"], "and a clone nobody retried is still at the cap its template declared.");
     }
 
     /// <summary>The drill-down answers the same count, off the decisions it already lists on the same response.</summary>
@@ -1084,6 +1140,34 @@ public sealed class DevWorkflowRunEndpointTests
         AssertEx.Equal(expected: 1,
             document.RootElement.GetProperty("operatorRetries").GetInt32(),
             "the panel needs the same subtraction the card does, or the two disagree about the declared cap.");
+    }
+
+    /// <summary>The drill-down answers the same count for a MATERIALIZED clone, whose key only the expansion declares.</summary>
+    [Test]
+    public async Task GetNodeRun_CountsTheAttemptsAnOperatorBoughtAMaterializedClone()
+    {
+        var store = Store();
+        _ = store.GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(RunSnapshot() with { GraphJson = RetryGraph });
+        _ = store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>())
+                 .Returns(GateNodeRun() with
+                 {
+                     NodeKey = "implement#add-negate-tests",
+                     NodeType = DevWorkflowNodeType.Agent,
+                     Attempt = 4,
+                     MaxAttempts = 4,
+                     MaterializedFromNodeRunId = Guid.NewGuid(),
+                     MaterializationIndex = 1
+                 });
+        await using var factory = EnabledFactory(store, RunService());
+
+        using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 1,
+            document.RootElement.GetProperty("operatorRetries").GetInt32(),
+            "the panel for a clone has to subtract the same widening the card does, or the two disagree about the declared cap.");
     }
 
     private static DevWorkflowDecisionSnapshot Decision(Guid nodeRunId, int attempt, DevWorkflowDecisionKind decision) =>
