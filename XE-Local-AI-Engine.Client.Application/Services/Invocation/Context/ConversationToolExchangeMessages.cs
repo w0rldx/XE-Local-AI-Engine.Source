@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Models;
 ///     <see cref="ChatRole.Tool" /> message carrying its <see cref="FunctionResultContent" />.
 ///     <para>
 ///         Shared rather than written twice on purpose. <c>InvocationRunner.BuildChatMessages</c> is what the model
-///         actually receives, and <c>WorkSessionStepContextBound.Project</c> is the estimate the fold decision rests on;
+///         actually receives, and <c>ConversationStepContextBound.Project</c> is the estimate the fold decision rests on;
 ///         a second rendering here would make the bound measure something the turn does not send, which is precisely the
 ///         failure the bound exists to prevent.
 ///     </para>

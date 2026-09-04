@@ -557,7 +557,7 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         //     exists to prevent. The excerpt cap is the same one the builder applies below, read from the same options.
         var replaysToolHistory = trigger.SessionPolicy == IntegrationSessionPolicy.CallerManaged;
         var toolResultExcerptChars = services.GetRequiredService<IOptions<ConversationContextBudgetOptions>>().Value.HistoricalToolResultExcerptChars;
-        await services.GetRequiredService<WorkSessionStepContextBound>()
+        await services.GetRequiredService<ConversationStepContextBound>()
                       .ApplyAsync(session.ConversationId,
                           _options.ContextBudgetTokens,
                           effectiveModel,

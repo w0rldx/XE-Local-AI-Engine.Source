@@ -21,7 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     reasoning verbatim, and its own knowledge-base reads can spend 16k tokens on a single document — on 2026-08-24 a
 ///     27B model at a 65,536-token window went over at step 5. The bound folds the older turns before the send.
 /// </summary>
-public sealed class WorkSessionStepContextBoundTests
+public sealed class ConversationStepContextBoundTests
 {
     [Test]
     public async Task Loop_WhenTheProjectedTranscriptExceedsTheBudget_ForcesCompactionWithASessionKeepWindow()
@@ -52,7 +52,7 @@ public sealed class WorkSessionStepContextBoundTests
         AssertEx.Equal(expected: 1, fake.Requests.Count);
         var forced = compaction.Calls.Where(call => call.ConversationId == session.ConversationId && call.KeepVerbatim is not null).ToList();
         AssertEx.NotEmpty(forced, "An over-budget step boundary must fold the session conversation before it sends.");
-        AssertEx.Equal(WorkSessionStepContextBound.SessionKeepVerbatim,
+        AssertEx.Equal(ConversationStepContextBound.SessionKeepVerbatim,
             forced[0].KeepVerbatim,
             "The forced fold keeps one step verbatim, not the configured chat window.");
     }
@@ -259,9 +259,9 @@ public sealed class WorkSessionStepContextBoundTests
             Message(sequence: 2, "user", new string('d', 400))
         };
 
-        var whole = WorkSessionStepContextBound.Project(Conversation(messages), estimator);
-        var covered = WorkSessionStepContextBound.Project(Conversation(messages, "SYNOPSIS", coversToSequence: 1), estimator);
-        var withoutReasoning = WorkSessionStepContextBound.Project(Conversation([messages[0], Message(sequence: 1, "assistant", new string('b', 400)), messages[2]]),
+        var whole = ConversationStepContextBound.Project(Conversation(messages), estimator);
+        var covered = ConversationStepContextBound.Project(Conversation(messages, "SYNOPSIS", coversToSequence: 1), estimator);
+        var withoutReasoning = ConversationStepContextBound.Project(Conversation([messages[0], Message(sequence: 1, "assistant", new string('b', 400)), messages[2]]),
             estimator);
 
         AssertEx.True(whole > 1_800, $"~8,800 characters of history should project well past 1,800 tokens, projected {whole}.");
@@ -290,8 +290,8 @@ public sealed class WorkSessionStepContextBoundTests
             }
         };
 
-        var off = WorkSessionStepContextBound.Project(Conversation(messages), estimator);
-        var on = WorkSessionStepContextBound.Project(Conversation(messages), estimator, modelName: null, includeToolHistory: true);
+        var off = ConversationStepContextBound.Project(Conversation(messages), estimator);
+        var on = ConversationStepContextBound.Project(Conversation(messages), estimator, modelName: null, includeToolHistory: true);
 
         AssertEx.True(on > off + 200,
             $"A replayed 1,200-character tool result is real input and must be counted; the projection moved from {off} to {on}.");
@@ -309,8 +309,8 @@ public sealed class WorkSessionStepContextBoundTests
             Parts = [ToolPart("call-1", "save_artifact", new string('r', 1_200))]
         };
 
-        var counted = WorkSessionStepContextBound.Project(Conversation([failedWithSideEffect]), estimator, modelName: null, includeToolHistory: true);
-        var ignored = WorkSessionStepContextBound.Project(Conversation([failedWithSideEffect]), estimator);
+        var counted = ConversationStepContextBound.Project(Conversation([failedWithSideEffect]), estimator, modelName: null, includeToolHistory: true);
+        var ignored = ConversationStepContextBound.Project(Conversation([failedWithSideEffect]), estimator);
 
         AssertEx.Equal(expected: 0, ignored, "With the flag off the turn is dropped by the ordinary content/status filter.");
         AssertEx.True(counted > 200, $"The replayed exchange is the whole of that turn's cost and must be counted, projected {counted}.");
@@ -328,8 +328,8 @@ public sealed class WorkSessionStepContextBoundTests
             }
         };
 
-        var capped = WorkSessionStepContextBound.Project(Conversation(messages), estimator, modelName: null, includeToolHistory: true, toolResultExcerptChars: 100);
-        var uncapped = WorkSessionStepContextBound.Project(Conversation(messages), estimator, modelName: null, includeToolHistory: true, toolResultExcerptChars: 8_000);
+        var capped = ConversationStepContextBound.Project(Conversation(messages), estimator, modelName: null, includeToolHistory: true, toolResultExcerptChars: 100);
+        var uncapped = ConversationStepContextBound.Project(Conversation(messages), estimator, modelName: null, includeToolHistory: true, toolResultExcerptChars: 8_000);
 
         AssertEx.True(capped < uncapped / 2,
             $"The estimate must measure the EXCERPTED result the send path carries, not the whole one; {capped} vs {uncapped}.");
@@ -357,8 +357,8 @@ public sealed class WorkSessionStepContextBoundTests
             Status = NodeChatMessageStatusValues.Streaming
         };
 
-        var withStreaming = WorkSessionStepContextBound.Project(Conversation([completed, streaming]), estimator);
-        var withoutStreaming = WorkSessionStepContextBound.Project(Conversation([completed]), estimator);
+        var withStreaming = ConversationStepContextBound.Project(Conversation([completed, streaming]), estimator);
+        var withoutStreaming = ConversationStepContextBound.Project(Conversation([completed]), estimator);
 
         AssertEx.Equal(withoutStreaming, withStreaming, "The send path drops non-completed messages, so the projection must too.");
     }
@@ -373,8 +373,8 @@ public sealed class WorkSessionStepContextBoundTests
         store.SetDivisor(SessionModel, charsPerToken: 2);
         var estimator = new HeuristicTokenEstimator(store);
 
-        var calibrated = WorkSessionStepContextBound.Project(Conversation(TranscriptOn(SessionModel)), estimator);
-        var uncalibrated = WorkSessionStepContextBound.Project(Conversation(TranscriptOn("a-model-nothing-was-measured-for")), estimator);
+        var calibrated = ConversationStepContextBound.Project(Conversation(TranscriptOn(SessionModel)), estimator);
+        var uncalibrated = ConversationStepContextBound.Project(Conversation(TranscriptOn("a-model-nothing-was-measured-for")), estimator);
 
         AssertEx.True(calibrated > uncalibrated,
             $"A model measured at two characters per token must project more tokens for the same transcript than the chars/4 default; {calibrated} vs {uncalibrated}.");
@@ -388,8 +388,8 @@ public sealed class WorkSessionStepContextBoundTests
         var estimator = new HeuristicTokenEstimator(store);
         var transcript = Conversation(TranscriptOn("a-model-nothing-was-measured-for"));
 
-        var explicitly = WorkSessionStepContextBound.Project(transcript, estimator, SessionModel);
-        var derived = WorkSessionStepContextBound.Project(transcript, estimator);
+        var explicitly = ConversationStepContextBound.Project(transcript, estimator, SessionModel);
+        var derived = ConversationStepContextBound.Project(transcript, estimator);
 
         AssertEx.True(explicitly > derived,
             $"An explicitly supplied model must win over the one derived from the transcript; {explicitly} vs {derived}.");
@@ -403,8 +403,8 @@ public sealed class WorkSessionStepContextBoundTests
         var estimator = new HeuristicTokenEstimator(store);
 
         // A first step has no assistant message to read a model off, and must not throw or guess one.
-        var firstStep = WorkSessionStepContextBound.Project(Conversation([Message(sequence: 0, "user", new string('a', 4_000))]), estimator);
-        var plain = WorkSessionStepContextBound.Project(Conversation([Message(sequence: 0, "user", new string('a', 4_000))]), new HeuristicTokenEstimator());
+        var firstStep = ConversationStepContextBound.Project(Conversation([Message(sequence: 0, "user", new string('a', 4_000))]), estimator);
+        var plain = ConversationStepContextBound.Project(Conversation([Message(sequence: 0, "user", new string('a', 4_000))]), new HeuristicTokenEstimator());
 
         AssertEx.Equal(plain, firstStep);
     }
@@ -421,7 +421,7 @@ public sealed class WorkSessionStepContextBoundTests
         AssertEx.True(correction > 1.0, $"The fixture needs an above-neutral correction to mean anything; measured {correction}.");
 
         var conversation = Conversation(TranscriptOn(SessionModel));
-        var projected = WorkSessionStepContextBound.Project(conversation, new HeuristicTokenEstimator(store), SessionModel);
+        var projected = ConversationStepContextBound.Project(conversation, new HeuristicTokenEstimator(store), SessionModel);
 
         // A budget that the projection fits under uncalibrated, but not once the correction tightens it.
         var budget = projected + 1;
@@ -442,7 +442,7 @@ public sealed class WorkSessionStepContextBoundTests
         // session compares against exactly the number the operator configured.
         var conversation = Conversation(TranscriptOn(SessionModel));
         var store = new TokenEstimatorCalibrationStore();
-        var projected = WorkSessionStepContextBound.Project(conversation, new HeuristicTokenEstimator(store), SessionModel);
+        var projected = ConversationStepContextBound.Project(conversation, new HeuristicTokenEstimator(store), SessionModel);
 
         var atBudget = await RunBoundAsync(conversation, projected, store).ConfigureAwait(false);
         var overBudget = await RunBoundAsync(conversation, projected - 1, store).ConfigureAwait(false);
@@ -464,7 +464,7 @@ public sealed class WorkSessionStepContextBoundTests
         AssertEx.Equal(1.0, store.ResolveObservedCorrection(SessionModel), "The transcript's model must stay uncalibrated, or the pair below proves nothing.");
 
         var conversation = Conversation(TranscriptOn(SessionModel));
-        var projected = WorkSessionStepContextBound.Project(conversation, new HeuristicTokenEstimator(store), UpcomingModel);
+        var projected = ConversationStepContextBound.Project(conversation, new HeuristicTokenEstimator(store), UpcomingModel);
         var budget = projected + 1;
         AssertEx.True(TokenEstimatorCalibrationStore.ApplyObservedCorrection(budget, correction) < projected,
             "The fixture's budget must straddle the upcoming model's correction.");
@@ -486,8 +486,8 @@ public sealed class WorkSessionStepContextBoundTests
         var estimator = new HeuristicTokenEstimator(store);
         var conversation = Conversation(TranscriptOn(SessionModel));
 
-        var calibrated = WorkSessionStepContextBound.Project(conversation, estimator, SessionModel);
-        var uncalibrated = WorkSessionStepContextBound.Project(conversation, estimator, UpcomingModel);
+        var calibrated = ConversationStepContextBound.Project(conversation, estimator, SessionModel);
+        var uncalibrated = ConversationStepContextBound.Project(conversation, estimator, UpcomingModel);
         AssertEx.True(calibrated > uncalibrated, $"The fixture needs the two models to project differently; {calibrated} vs {uncalibrated}.");
 
         // A budget the uncalibrated projection sits exactly at - so only the transcript model's divisor exceeds it.
@@ -509,10 +509,10 @@ public sealed class WorkSessionStepContextBoundTests
                        .Returns(Task.FromResult<NodeChatConversationDto?>(conversation));
         var compaction = new RecordingCompactionService();
 
-        var sut = new WorkSessionStepContextBound(persistence,
+        var sut = new ConversationStepContextBound(persistence,
             compaction,
             new HeuristicTokenEstimator(store),
-            NullLogger<WorkSessionStepContextBound>.Instance);
+            NullLogger<ConversationStepContextBound>.Instance);
         await sut.ApplyAsync(conversation.ConversationId, budgetTokens, effectiveModel).ConfigureAwait(false);
         return compaction;
     }

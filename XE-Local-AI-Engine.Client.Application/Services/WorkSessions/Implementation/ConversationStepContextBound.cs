@@ -24,11 +24,11 @@ using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 ///         the raw transcript is the expendable half.
 ///     </para>
 /// </summary>
-internal sealed class WorkSessionStepContextBound(
+internal sealed class ConversationStepContextBound(
     INodeChatPersistenceService persistence,
     IConversationCompactionService compaction,
     ITokenEstimator estimator,
-    ILogger<WorkSessionStepContextBound> logger)
+    ILogger<ConversationStepContextBound> logger)
 {
     /// <summary>
     ///     What a forced session compaction keeps verbatim: the previous step's state block and its answer. Two is the
@@ -39,7 +39,7 @@ internal sealed class WorkSessionStepContextBound(
 
     private readonly IConversationCompactionService _compaction = compaction ?? throw new ArgumentNullException(nameof(compaction));
     private readonly ITokenEstimator _estimator = estimator ?? throw new ArgumentNullException(nameof(estimator));
-    private readonly ILogger<WorkSessionStepContextBound> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ILogger<ConversationStepContextBound> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly INodeChatPersistenceService _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
 
     /// <summary>

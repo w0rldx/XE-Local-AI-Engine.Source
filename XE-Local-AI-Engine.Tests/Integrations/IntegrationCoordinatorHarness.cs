@@ -205,10 +205,10 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         // The historical tool-result excerpt cap a caller-managed continuation replays under, read from the SAME options
         // the context budgeter measures with so one result truncated twice reads as one result.
         services.AddSingleton<IOptions<ConversationContextBudgetOptions>>(_ => Options.Create(new ConversationContextBudgetOptions()));
-        services.AddSingleton(_ => new WorkSessionStepContextBound(Persistence,
+        services.AddSingleton(_ => new ConversationStepContextBound(Persistence,
             Compaction,
             new HeuristicTokenEstimator(new TokenEstimatorCalibrationStore()),
-            NullLogger<WorkSessionStepContextBound>.Instance));
+            NullLogger<ConversationStepContextBound>.Instance));
         // A REAL offer provider and a settable approval policy: WHICH tools the coordinator unions in, and what the
         // node policy then does to their approval flag, are the assertions.
         services.AddSingleton<ILocalToolOfferProvider>(IntegrationToolOfferFactory.Create());

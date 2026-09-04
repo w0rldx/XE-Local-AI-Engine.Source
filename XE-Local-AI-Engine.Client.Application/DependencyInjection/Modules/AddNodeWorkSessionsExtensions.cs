@@ -53,7 +53,7 @@ internal static class AddNodeWorkSessionsExtensions
         builder.Services.AddScoped<WorkSessionCheckpointComposer>();
 
         // Scoped: it reads the conversation through the scoped chat persistence, from the supervisor's per-turn scope.
-        builder.Services.AddScoped<WorkSessionStepContextBound>();
+        builder.Services.AddScoped<ConversationStepContextBound>();
 
         // Scoped for the same reason: it reads the agent definition through the scoped store. Resolved by the REST
         // service on create/repoint AND by the supervisor's per-turn scope, so both judge a session's tool gates the
