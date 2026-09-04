@@ -5336,6 +5336,20 @@ public sealed class NodeChatStreamServiceTests
             return Task.CompletedTask;
         }
 
+        public Task ReportTurnTelemetryAsync(Guid invocationId, long? modelReadinessMs, TurnUsageTotals? usage)
+        {
+            if (CurrentInvocation is not null)
+            {
+                CurrentInvocation.ModelReadinessMs = modelReadinessMs;
+                CurrentInvocation.TurnInputTokens = usage?.InputTokens;
+                CurrentInvocation.TurnOutputTokens = usage?.OutputTokens;
+                CurrentInvocation.TurnTotalTokens = usage?.TotalTokens;
+                CurrentInvocation.TurnReasoningTokens = usage?.ReasoningTokens;
+            }
+
+            return Task.CompletedTask;
+        }
+
         public Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort)
         {
             if (CurrentInvocation is not null)

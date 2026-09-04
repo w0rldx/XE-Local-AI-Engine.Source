@@ -76,6 +76,14 @@ public sealed class AgentRunEnvelopeResponse
     /// <summary>The effort the turn was authored with when a dispatch happened (<c>auto</c>); null otherwise.</summary>
     public string? AuthoredEffort { get; init; }
 
+    /// <summary>
+    ///     How much of <see cref="DurationMs" /> the turn spent making a LOCAL runtime ready (inference-server launch
+    ///     and model load) rather than generating, so a cold arm can be compared with a warm one:
+    ///     <c>DurationMs - ModelReadinessMs</c> is the warm-equivalent turn time. Null when no local warm happened
+    ///     (a remote provider, an already-warm runtime) and on a row written before this field existed.
+    /// </summary>
+    public long? ModelReadinessMs { get; init; }
+
     public int? ContentChunkCount { get; init; }
 
     public int? ReasoningChunkCount { get; init; }

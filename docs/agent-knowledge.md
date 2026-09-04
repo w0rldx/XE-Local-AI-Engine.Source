@@ -341,6 +341,18 @@ Plain `aspire stop` cleaned the tested stacks in later measurements, but the ori
 - A key/data mismatch surfaces as `AuthenticationTagMismatchException`, often looking like corruption. Before deleting data, retry with `XE_NODE_OPERATOR_SECRET_FILE=/path/to/key ./scripts/dev-start.sh`.
 - Bare IDE/Aspire starts use interactive parameters or `dotnet user-secrets set "Parameters:node-sqlite-key" …`.
 - Reuse populated model storage through `HuggingFace__ModelsDirectory`.
+- **GGUF import is desktop-only; provision a dev-run FAST/extra model via `HuggingFace__ModelsDirectory`
+  instead.** `PreviewGgufImportEndpoint`/`StartGgufImportEndpoint` (`XE-Local-AI-Engine.Client/Endpoints/ModelFit/V1/`)
+  carry `IDesktopOnlyEndpoint` and are unreachable (404/405) outside `XE_LAUNCH_MODE=desktop`, and that flag is not
+  a workaround here — it redirects the host onto the user-level data directory and abandons the isolated Aspire DB
+  (`Program.cs`, `needsLocalData` branch). Point `HuggingFace__ModelsDirectory`/`HuggingFace:ModelsDirectory` at a
+  worktree-private directory instead: hand-author its `index.json` (entries keyed `{fileName}:{quant}`, a
+  `RegistryRevision` computed with `GgufRegistryRevision.ComputeV1`, `Providers.Abstractions/Gguf/`) alongside symlinks to the real `.gguf` files,
+  so multiple models can coexist under chosen ids without a copy — this recipe is live-proven. A lighter path read
+  from code but **not** live-verified: `GgufModelRegistry.LoadEntriesAsync` (`Providers.HuggingFace/Implementation/`)
+  rescans the directory whenever `index.json` is missing/empty/corrupt and auto-registers any `.gguf` file whose
+  name `GgufQuantParser.TryParse` (`Providers.Abstractions/Gguf/`) recognises a quant token in. Prevents reaching
+  for `XE_LAUNCH_MODE=desktop` to import a FAST model and losing the isolated dev DB as a result.
 - Aspire JSON is sensitive. `aspire ps` exposes the dashboard token and `aspire describe` may expose environment/connection data. Log only the `dev-status.sh` allowlist.
 - Startup reapers clean owned stale llama/image servers. Never `pkill -f` a substring that also appears in the caller command line; kill by PID.
 
@@ -400,7 +412,7 @@ A dependency-manifest change returns the retryable `dependency_manifest_changed`
 
 A missing `-ngl` is correct in explore and a defect in replay. `BuildLaunchSpec` receives the central `LlamaServerLaunchPlan`; do not scatter defaults back into supervisors/call sites. `--fit` and explicit placement cannot coexist, while `-c/-fa/-ctk/-ctv` may coexist with fit.
 
-**Optimized launch fallback:** GPU normal launch tries `-fa on -ctk q8_0 -ctv q8_0`. On readiness failure it retries **once** without explicit KV types and with `-fa auto`. Persist `llama-launch-fallback.json` per backend only if the safe retry succeeds; a broken model must not poison later launches. Frozen profiles bypass fallback. Capacity/advisor estimates stay f16-conservative because the safe path may run.
+**Optimized launch fallback:** GPU normal launch tries `-fa on -ctk q8_0 -ctv q8_0`. On readiness failure it retries **once** without explicit KV types and with `-fa auto`. Persist `llama-launch-fallback.json` per (backend, KV type) only if the safe retry succeeds; a broken model must not poison later launches. Legacy un-keyed entries (bare backend names) are ignored and dropped from the file on the first read. Frozen profiles bypass fallback. Capacity/advisor estimates stay f16-conservative because the safe path may run.
 
 Every normal spawn pins `--no-warmup --parallel 1`; default parallelism multiplies KV reservations and warmup can consume the readiness budget. Every role receives explicit context. CPU never replays a GPU profile. After readiness, read `/props.default_generation_settings.n_ctx`, store it on the running process, and feed it to both `TurnPolicy.ContextCapacityTokens` and inner `num_ctx`; a per-send override still wins, while unknown providers use 8192. Do not substitute train context or requested context for the launched/effective process window.
 

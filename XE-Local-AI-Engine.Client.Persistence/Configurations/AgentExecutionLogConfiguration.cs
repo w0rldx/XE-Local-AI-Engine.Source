@@ -109,6 +109,12 @@ internal sealed class AgentExecutionLogConfiguration : IEntityTypeConfiguration<
         builder.Property(entity => entity.AuthoredEffort)
                .HasColumnName("authored_effort");
 
+        // Cold-start telemetry, nullable with no backfill: a pre-migration row, and every turn that warmed no local
+        // runtime, simply reports null — which is why it must NOT default to zero, since zero would claim the turn
+        // proved a warm start.
+        builder.Property(entity => entity.ModelReadinessMs)
+               .HasColumnName("model_readiness_ms");
+
         // The paged list-by-agent read filters by agent and orders newest-first, so index the pair. No FK to
         // agent_definitions: a run log is diagnostic telemetry that should outlive the definition (mirrors the no-FK
         // conversation->definition choice), so deleting an agent must not cascade-delete its execution history.

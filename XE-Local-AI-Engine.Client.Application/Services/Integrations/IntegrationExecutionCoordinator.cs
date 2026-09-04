@@ -1114,6 +1114,9 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
             // The envelope is not optional: SummarizeTokenUsageAsync reads only kind-1 rows, so omitting it would make
             // an external surface the one path that can silently burn tokens invisibly. The kind-3 audit row does not
             // fill that gap — it carries a terminal status and a latency, not the token columns.
+            // The trailing telemetry members mirror NodeChatInvocationPump.TerminalizeAsync: an integration run is the
+            // same turn measured the same way, so leaving them unset made this surface the one path whose rows carry no
+            // warm time, no tool-schema estimate and the LAST round's tokens where every other row carries the turn's.
             var envelope = new AgentRunEnvelopeMetadata(state.InvocationId,
                 durationMs,
                 state.FailureCategory?.ToString(),
@@ -1121,7 +1124,16 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                 state.StreamedThinkingChunkCount,
                 Activity.Current?.TraceId.ToString(),
                 state.StartedAt == default ? null : state.StartedAt.ToUnixTimeMilliseconds(),
-                provider);
+                provider,
+                ToolSchemaTokens: state.ToolSchemaTokens,
+                MaxToolSchemaTokens: state.MaxToolSchemaTokens,
+                DispatchedTier: state.DispatchedTier,
+                AuthoredEffort: state.AuthoredEffort,
+                ModelReadinessMs: state.ModelReadinessMs,
+                TurnInputTokens: state.TurnInputTokens,
+                TurnOutputTokens: state.TurnOutputTokens,
+                TurnTotalTokens: state.TurnTotalTokens,
+                TurnReasoningTokens: state.TurnReasoningTokens);
 
             // Carried to the terminal event: `execution.completed` is `{tokens?, durationMs}`, and this is the one
             // place both numbers exist.

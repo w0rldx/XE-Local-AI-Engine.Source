@@ -135,4 +135,13 @@ internal sealed record class AgentExecutionLog
     ///     tier alone cannot do. Plaintext (structural).
     /// </summary>
     public string? AuthoredEffort { get; set; }
+
+    /// <summary>
+    ///     How many of <see cref="LatencyMs" /> the turn spent making a LOCAL runtime ready — launching
+    ///     <c>llama-server</c> and loading the model — rather than generating, or <c>null</c> when no local warm
+    ///     happened (a remote provider, Ollama, an already-resident model) and on every pre-migration row. The
+    ///     whole-turn latency starts before the warm, so <c>latency_ms - model_readiness_ms</c> is the warm-equivalent
+    ///     turn time and the only way a cold arm compares with a warm one. Plaintext (structural) — a duration.
+    /// </summary>
+    public long? ModelReadinessMs { get; set; }
 }

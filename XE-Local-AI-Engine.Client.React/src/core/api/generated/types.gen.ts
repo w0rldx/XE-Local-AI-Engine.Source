@@ -5613,6 +5613,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse = {
 	maxToolSchemaTokens?: number | null;
 	dispatchedTier?: string | null;
 	authoredEffort?: string | null;
+	modelReadinessMs?: number | null;
 	contentChunkCount?: number | null;
 	reasoningChunkCount?: number | null;
 	traceId?: string | null;

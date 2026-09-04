@@ -360,6 +360,28 @@ public sealed class IntegrationExecutionCoordinatorTests
     }
 
     [Test]
+    public async Task Run_TerminalizesWithTheTurnTotalsAndTheWarmDurationOnTheEnvelope()
+    {
+        // The envelope is the cost ledger, and an integration run is measured exactly like a chat turn. Leaving these
+        // unset made this the one surface whose rows carried no warm time and the LAST provider round's tokens where
+        // every other row carries the turn's sum.
+        using var harness = new Harness();
+        var executionId = harness.SeedAccepted();
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        var envelope = (harness.TerminalizeRequest ?? throw new AssertionException("The assistant turn was never terminalized.")).Envelope
+                       ?? throw new AssertionException("The run wrote no envelope.");
+        AssertEx.Equal(expected: 178_576L, envelope.ModelReadinessMs);
+        AssertEx.Equal(expected: 6_000, envelope.TurnInputTokens);
+        AssertEx.Equal(expected: 60, envelope.TurnOutputTokens);
+        AssertEx.Equal(expected: 6_078, envelope.TurnTotalTokens);
+        AssertEx.Equal(expected: 18, envelope.TurnReasoningTokens);
+        AssertEx.Equal(expected: 4_096L, envelope.ToolSchemaTokens);
+        AssertEx.Equal(expected: 2_048, envelope.MaxToolSchemaTokens);
+    }
+
+    [Test]
     public async Task Run_ProducesExactlyOneTerminalEventAndOneAuditRowAtTheHighestSequence()
     {
         using var harness = new Harness();

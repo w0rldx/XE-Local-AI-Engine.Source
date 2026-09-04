@@ -30,7 +30,7 @@ public sealed class DevWorkflowAttemptCostTests
                                          }
                                          """;
 
-    /// <summary>The nine members of §4.1 that ADD UP across attempts, as their JSON names.</summary>
+    /// <summary>The ten members of §4.1 (plus model_readiness_ms) that ADD UP across attempts, as their JSON names.</summary>
     private static readonly string[] AdditiveMembers =
     [
         "inputTokens",
@@ -41,7 +41,8 @@ public sealed class DevWorkflowAttemptCostTests
         "toolCalls",
         "toolSchemaTokens",
         "agentTurnMs",
-        "workSessionSteps"
+        "workSessionSteps",
+        "modelReadinessMs"
     ];
 
     /// <summary>The three that do not: a route belongs to one settle, a model name is not a quantity, names do not sum.</summary>
@@ -136,7 +137,7 @@ public sealed class DevWorkflowAttemptCostTests
     /// <summary>
     ///     T10: fail, fail, succeed — the node row carries attempt three alone, the two retry events carry attempts one
     ///     and two, and <c>row + snapshot₁ + snapshot₂</c> equals what the three attempts actually spent, for every one
-    ///     of the nine additive members. A reflection assertion pins the member list against the telemetry record
+    ///     of the ten additive members. A reflection assertion pins the member list against the telemetry record
     ///     itself, so a column added to it later cannot quietly stop being carried.
     /// </summary>
     [Test]
@@ -287,6 +288,7 @@ public sealed class DevWorkflowAttemptCostTests
             "toolSchemaTokens" => row.ToolSchemaTokens ?? 0,
             "agentTurnMs" => row.AgentTurnMs ?? 0,
             "workSessionSteps" => row.WorkSessionSteps ?? 0,
+            "modelReadinessMs" => row.ModelReadinessMs ?? 0,
             _ => throw new AssertionException($"'{member}' is not an additive telemetry column.")
         };
 

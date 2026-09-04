@@ -159,7 +159,16 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
                       StartedAt = DateTimeOffset.UnixEpoch,
                       CompletedAt = DateTimeOffset.UnixEpoch,
                       GenerationDurationMs = 12,
-                      TotalTokens = TerminalTotalTokens
+                      TotalTokens = TerminalTotalTokens,
+                      // Turn-scoped telemetry the runner reports on every terminal path. Fixed values so the envelope
+                      // projection can be asserted: an integration run has to carry them like any other turn.
+                      ToolSchemaTokens = 4_096L,
+                      MaxToolSchemaTokens = 2_048,
+                      ModelReadinessMs = 178_576L,
+                      TurnInputTokens = 6_000,
+                      TurnOutputTokens = 60,
+                      TurnTotalTokens = 6_078,
+                      TurnReasoningTokens = 18
                   }));
                   SignalCancel();
               });

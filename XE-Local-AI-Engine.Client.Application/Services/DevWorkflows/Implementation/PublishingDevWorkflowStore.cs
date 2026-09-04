@@ -547,7 +547,7 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
     ///     <para>
     ///         The members come from the telemetry record itself minus the three that cannot be added up — the route,
     ///         the served model and the tool names. A column added to that record later therefore rides here
-    ///         automatically, or it is not additive; nothing enumerates the nine by hand.
+    ///         automatically, or it is not additive; nothing enumerates the ten by hand.
     ///     </para>
     /// </summary>
     private static string? MergeAttemptCost(string detailJson, DevWorkflowNodeTelemetry telemetry)

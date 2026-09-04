@@ -369,6 +369,65 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         AssertEx.Equal(new string('m', 256), served, "And it is the FRONT of the name that is kept, not a hash of it.");
     }
 
+    /// <summary>
+    ///     The cold start is summed across the attempt's envelopes and kept BESIDE the turn time rather than subtracted
+    ///     from it: <c>agent_turn_ms</c> stays the whole-turn wall clock, and the difference is the warm-equivalent
+    ///     time. A cold first turn measured 206 s against the same work's 28 s warm, so an arm measured cold and one
+    ///     measured warm are otherwise a 7x latency regression that never happened.
+    /// </summary>
+    [Test]
+    public async Task ModelReadinessMs_IsSummedAcrossTheAttemptsEnvelopes()
+    {
+        var conversationId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var sessions = Substitute.For<IAgentWorkSessionStore>();
+        sessions.GetAsync(sessionId, Arg.Any<CancellationToken>()).Returns(Session(sessionId, conversationId));
+        sessions.ListEventsAsync(sessionId, Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns([]);
+
+        var logs = Substitute.For<IAgentExecutionLogStore>();
+        logs.ListRunEnvelopesAsync(conversationId, Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns([
+                Envelope(conversationId, "llama-3.1", durationMs: 206_273, modelReadinessMs: 178_576),
+                Envelope(conversationId, "llama-3.1", durationMs: 27_697, modelReadinessMs: null),
+                Envelope(conversationId, "llama-3.1", durationMs: 4_030, modelReadinessMs: 1_200)
+            ]);
+
+        var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs)
+                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None)
+                                               .ConfigureAwait(false));
+
+        AssertEx.Equal(expected: 238_000L, collected.AgentTurnMs, "The whole-turn clock is unchanged: it still sums every envelope's own duration.");
+        AssertEx.Equal(expected: 179_776L, collected.ModelReadinessMs, "The warm phases of the turns that had one sum; a turn that warmed nothing adds nothing.");
+    }
+
+    /// <summary>
+    ///     Null, not zero, when no turn of the attempt warmed a local runtime — a remote or already-warm conversation
+    ///     measured no cold start, and zero would claim it proved a warm one.
+    /// </summary>
+    [Test]
+    public async Task ModelReadinessMs_IsNullWhenNoEnvelopeMeasuredAWarm()
+    {
+        var conversationId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var sessions = Substitute.For<IAgentWorkSessionStore>();
+        sessions.GetAsync(sessionId, Arg.Any<CancellationToken>()).Returns(Session(sessionId, conversationId));
+        sessions.ListEventsAsync(sessionId, Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns([]);
+
+        var logs = Substitute.For<IAgentExecutionLogStore>();
+        logs.ListRunEnvelopesAsync(conversationId, Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns([
+                Envelope(conversationId, "gpt-4o-mini", durationMs: 900, modelReadinessMs: null),
+                Envelope(conversationId, "gpt-4o-mini", durationMs: 1_100, modelReadinessMs: null)
+            ]);
+
+        var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs)
+                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None)
+                                               .ConfigureAwait(false));
+
+        AssertEx.Equal(expected: 2_000L, collected.AgentTurnMs, "The turns still happened and still took time.");
+        AssertEx.Null(collected.ModelReadinessMs, "None of them warmed a local runtime, which is not the same as warming one in no time.");
+    }
+
     private static AgentWorkSessionSnapshot Session(Guid sessionId, Guid conversationId) =>
         new(sessionId,
             "Research",
@@ -386,7 +445,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
             UpdatedAtUtc: 0,
             Version: 1);
 
-    private static AgentRunEnvelopeRecord Envelope(Guid conversationId, string modelName) =>
+    private static AgentRunEnvelopeRecord Envelope(Guid conversationId, string modelName, long durationMs = 10, long? modelReadinessMs = null) =>
         new(Guid.NewGuid(),
             SchemaVersion: 1,
             Guid.NewGuid(),
@@ -399,7 +458,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
             "Completed",
             Success: true,
             FailureCategory: null,
-            DurationMs: 10,
+            durationMs,
             PromptTokens: 1,
             CompletionTokens: 2,
             ReasoningTokens: null,
@@ -408,7 +467,8 @@ public sealed class DevWorkflowNodeRunTelemetryTests
             ReasoningChunkCount: null,
             TraceId: null,
             StartedAtUtc: null,
-            CreatedAtUtc: 0);
+            CreatedAtUtc: 0,
+            ModelReadinessMs: modelReadinessMs);
 
     private static DevWorkflowNodeRunSnapshot NodeRunWithSession(Guid sessionId) =>
         new(Guid.NewGuid(),

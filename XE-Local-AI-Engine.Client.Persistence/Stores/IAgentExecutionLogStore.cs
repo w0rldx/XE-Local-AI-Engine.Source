@@ -148,8 +148,10 @@ public static class AgentRunEnvelope
     ///     null on rows written by the restart-recovery backfill, which supplies no generation detail.
     ///     v5: added dispatched_tier / authored_effort — what reasoning effort <c>auto</c> resolved to for the turn.
     ///     Nullable; null on every turn not authored <c>auto</c> and on rows written by the restart-recovery backfill.
+    ///     v6: added model_readiness_ms — how much of latency_ms was the local runtime warm rather than generation.
+    ///     Nullable; null on every turn that warmed no local runtime and on rows written by the restart-recovery backfill.
     /// </summary>
-    public const int CurrentSchemaVersion = 5;
+    public const int CurrentSchemaVersion = 6;
 }
 
 /// <summary>
@@ -256,7 +258,11 @@ public sealed record AgentRunEnvelopeRecord(
     // it. Both null on every turn that authored a concrete effort, which is what makes `authored_effort IS NULL` the
     // before-population of the measurement in P-C2 section 8.
     string? DispatchedTier = null,
-    string? AuthoredEffort = null);
+    string? AuthoredEffort = null,
+    // How much of DurationMs was the LOCAL runtime warm (llama-server launch + model load) rather than generation.
+    // Null when nothing warmed locally and on every pre-migration row; DurationMs minus this is the warm-equivalent
+    // turn time, which is the only way an arm measured cold compares with one measured warm.
+    long? ModelReadinessMs = null);
 
 /// <summary>
 ///     Typed projection of a persisted execution-log row. Metadata only — no message content. <see cref="ErrorClass" />
