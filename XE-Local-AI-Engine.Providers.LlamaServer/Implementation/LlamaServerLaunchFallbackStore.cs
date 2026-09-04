@@ -152,6 +152,15 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_statePath)!);
 
+        // The file is USER-level, so several node processes share it and each write replaces the whole document. Fold
+        // whatever is on disk back in first, or a sibling process's verdict is silently dropped. Legacy names are
+        // ignored by the load, so they stay dropped.
+        // ponytail: the re-read is guarded by the in-process lock only, so a sibling write landing between it and the
+        // File.Move below is still lost. Accepted — a lost verdict costs one failed spawn that re-records it. Upgrade
+        // path: hold an OS file lock (FileShare.None on the state file) across the read and the move.
+        var (onDisk, _) = await LoadAsync(ct).ConfigureAwait(false);
+        disabled.UnionWith(onDisk);
+
         // Every entry is a "{Variant}:{kvType}" pair; the legacy list is always written empty.
         var state = new LlamaServerLaunchFallbackState([], [.. disabled]);
         var tempPath = _statePath + "." + Guid.NewGuid().ToString("N") + ".tmp";

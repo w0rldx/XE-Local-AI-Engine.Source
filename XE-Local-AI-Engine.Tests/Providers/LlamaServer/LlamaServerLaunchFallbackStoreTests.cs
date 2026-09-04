@@ -79,6 +79,30 @@ public sealed class LlamaServerLaunchFallbackStoreTests
     }
 
     [Test]
+    public async Task ForeignWriteBetweenLoadAndPersist_IsMergedNotOverwritten()
+    {
+        using var root = new TempCacheRoot();
+        await File.WriteAllTextAsync(root.StatePath, """{"disabledOptimizedConfigs":["Cuda:q4_0"]}""");
+        using (var store = new LlamaServerLaunchFallbackStore(root.Path))
+        {
+            // Load the snapshot, then let another node process record its own verdict into the shared user-level file.
+            AssertEx.True(await store.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q4_0, CancellationToken.None));
+            await File.WriteAllTextAsync(root.StatePath, """{"disabledOptimizedConfigs":["Cuda:q4_0","Vulkan:q8_0"]}""");
+
+            await store.DisableOptimizedConfigAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None);
+
+            AssertEx.True(await store.IsOptimizedConfigDisabledAsync(GpuVariant.Vulkan, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None),
+                "The foreign verdict must survive this process's write.");
+            AssertEx.True(await store.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None));
+        }
+
+        var persisted = await ReadStateAsync(root);
+        AssertEx.Contains(persisted.DisabledOptimizedConfigs ?? [], "Cuda:q4_0");
+        AssertEx.Contains(persisted.DisabledOptimizedConfigs ?? [], "Vulkan:q8_0");
+        AssertEx.Contains(persisted.DisabledOptimizedConfigs ?? [], "Cuda:q8_0");
+    }
+
+    [Test]
     public async Task UnwritableStateFile_IsToleratedOnTheReadPath()
     {
         if (OperatingSystem.IsWindows())
