@@ -252,8 +252,11 @@ describe("DevWorkflowNodePanel", () => {
 		expect(total).toContain("Total across attempts");
 		expect(total).toContain("Input tokens 2,200");
 		expect(total).toContain("Output tokens 540");
+		expect(total).toContain("Reasoning tokens 50");
 		expect(total).toContain("Provider calls 6");
 		expect(total).toContain("Tool calls 8");
+		// Summed in milliseconds and formatted once: 30s on the retried attempt plus 40s on the current one.
+		expect(total).toContain("Agent turns 1m 10s");
 		expect(total).not.toContain("the real total is higher");
 	});
 

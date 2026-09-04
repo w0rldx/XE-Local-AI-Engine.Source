@@ -32,10 +32,11 @@ const closingEventTypes: readonly string[] = [
 ];
 
 /**
- * The ten ADDITIVE members a `node.retry.scheduled` payload carries — the same ten the settled node-run row carries,
- * under the same names, so a total is `final + retries` and nothing else. `servedModelName`, `toolNames` and `route`
- * are deliberately NOT here: they describe one attempt's shape rather than a quantity, and carrying them per attempt
- * would invite a sum that means nothing.
+ * The nine ADDITIVE members the settled node-run row carries — the same names on a `node.retry.scheduled` payload, so
+ * a total is `final + retries` and nothing else. `servedModelName`, `toolNames` and `route` are deliberately NOT here:
+ * they describe one attempt's shape rather than a quantity, and carrying them per attempt would invite a sum that
+ * means nothing. The retry payload carries a TENTH additive member, `modelReadinessMs`, which the panel does not read
+ * until the node-run detail DTO exposes it — without the final attempt's share it could only ever be a partial sum.
  */
 export interface DevWorkflowAttemptCost {
 	readonly inputTokens?: number | null;
@@ -47,7 +48,6 @@ export interface DevWorkflowAttemptCost {
 	readonly toolSchemaTokens?: number | null;
 	readonly agentTurnMs?: number | null;
 	readonly workSessionSteps?: number | null;
-	readonly modelReadinessMs?: number | null;
 }
 
 /** Read both to populate an attempt and to ask whether one recorded anything at all. */
@@ -61,7 +61,6 @@ export const devWorkflowAttemptCostFields = [
 	"toolSchemaTokens",
 	"agentTurnMs",
 	"workSessionSteps",
-	"modelReadinessMs",
 ] as const satisfies readonly (keyof DevWorkflowAttemptCost)[];
 
 export interface DevWorkflowNodeAttempt extends DevWorkflowAttemptCost {

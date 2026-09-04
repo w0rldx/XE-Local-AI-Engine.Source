@@ -69,19 +69,22 @@ export function DevWorkflowNodeAttempts({ attempts, nodeRun }: DevWorkflowNodeAt
 	// carries its cost yet.
 	const rows = attempts.map((attempt) => {
 		const cost: DevWorkflowAttemptCost = nodeRun && attempt.attempt === nodeRun.attempt ? nodeRun : attempt;
-		// Four of the ten members have no place on the one-line summary, so a row carrying only those has a record
+		// Three of the nine members have no place on the one-line summary, so a row carrying only those has a record
 		// but nothing to print. The line is gated on the printable text, never on the record.
 		return { attempt, cost, summary: costSummary(t, cost) };
 	});
-	const sum = (name: "inputTokens" | "outputTokens" | "providerCalls" | "toolCalls") => {
+	// Every member the summary can print, or the total silently drops what the rows above it show.
+	const sum = (name: keyof DevWorkflowAttemptCost) => {
 		const values = rows.map((row) => row.cost[name]).filter((value): value is number => typeof value === "number");
 		return values.length > 0 ? values.reduce((total, value) => total + value, 0) : undefined;
 	};
 	const totalSummary = costSummary(t, {
 		inputTokens: sum("inputTokens"),
 		outputTokens: sum("outputTokens"),
+		reasoningTokens: sum("reasoningTokens"),
 		providerCalls: sum("providerCalls"),
 		toolCalls: sum("toolCalls"),
+		agentTurnMs: sum("agentTurnMs"),
 	});
 	// An EARLIER attempt that recorded nothing is an attempt the loaded event pages never reached, which makes the sum
 	// a floor rather than the total. The last row is not that: it is the attempt still running, which has simply not
