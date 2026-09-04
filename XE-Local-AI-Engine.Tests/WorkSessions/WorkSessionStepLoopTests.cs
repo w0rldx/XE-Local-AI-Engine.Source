@@ -820,6 +820,39 @@ public sealed class WorkSessionStepLoopTests
         AssertEx.False(fake.Requests[0].ReasoningEffortOverridesAgentPin);
         AssertEx.True(fake.Requests[0].IsWorkSessionTurn,
             "an unpinned session is still a supervised step, so the adaptive-effort swap must stay refused on it.");
+        AssertEx.False(fake.Requests[0].SuppressAskUser,
+            "An operator-driven session keeps ask_user: there is someone attached to the embedded chat to answer it.");
+    }
+
+    [Test]
+    public async Task Loop_WhenTheSessionIsWorkflowOwned_SendsEveryStepWithAskUserSuppressed()
+    {
+        // A workflow node has no operator attached and its embedded chat is read-only, so an ask_user question could
+        // only ever go unanswered — burning the node-wide pending-tool-call age or, sooner, the park guard that pauses
+        // the whole run. The send therefore has to withdraw the tool, and the kind is the only signal that says so.
+        var sessionId = Guid.NewGuid();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                new RecordingWorkSessionEventPublisher())
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId, AgentWorkSessionKind.Workflow).ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantDelta, ChatStreamEventTypes.AssistantCompleted]));
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Completed).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 2, fake.Requests.Count);
+        foreach (var request in fake.Requests)
+        {
+            AssertEx.True(request.SuppressAskUser, "Every step of a workflow-owned session is sent without ask_user, not just the first.");
+        }
     }
 
     private static FakeNodeChatStreamService ResolveStream(TestServerWebAppFactory factory, ref FakeNodeChatStreamService? stream)

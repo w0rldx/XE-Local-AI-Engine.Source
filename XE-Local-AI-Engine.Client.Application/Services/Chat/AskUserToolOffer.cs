@@ -71,6 +71,51 @@ internal static class AskUserToolOffer
         ];
     }
 
+    /// <summary>
+    ///     Drops <c>ask_user</c> from a resolved tool list — this class's union, undone for the ONE turn that must not
+    ///     carry the tool. It lives here so the two halves cannot drift: whatever counts as <c>ask_user</c> for the
+    ///     union counts as <c>ask_user</c> for the withdrawal.
+    ///     <para>
+    ///         The caller is the workflow-owned work-session send. See <c>NodeChatStreamRequest.SuppressAskUser</c> for
+    ///         why that turn, and only that turn, has no operator behind it. A <c>null</c> list (the turn offers no
+    ///         tools at all) and a list that never carried the tool are both returned unchanged, so the ordinary path
+    ///         allocates nothing.
+    ///     </para>
+    /// </summary>
+    public static IReadOnlyList<AllowedToolDto>? Withdraw(IReadOnlyList<AllowedToolDto>? allowedTools)
+    {
+        return allowedTools is null || !allowedTools.Any(IsAskUser)
+            ? allowedTools
+            : [.. allowedTools.Where(static tool => !IsAskUser(tool))];
+    }
+
+    /// <summary>
+    ///     The same withdrawal for an orchestration. Each participant carries its OWN projected tool list on the
+    ///     compiled spec rather than on the send's single allowed-tool list, so filtering that list alone would leave
+    ///     every participant of a workflow node bound to an Orchestrator agent still able to park on a question.
+    ///     Returned unchanged when no participant was offered the tool, which keeps that path allocation-free. It does
+    ///     not keep the config hash stable: the hash is computed over projected values, not references, so a spec that
+    ///     DID carry the tool hashes differently once it is gone — see <c>NodeChatStreamRequest.SuppressAskUser</c>.
+    /// </summary>
+    public static OrchestrationSpec? Withdraw(OrchestrationSpec? spec)
+    {
+        if (spec is null || !spec.Participants.Any(static participant => participant.Tools.Any(IsAskUser)))
+        {
+            return spec;
+        }
+
+        return spec with
+        {
+            Participants =
+            [
+                .. spec.Participants.Select(static participant => participant with
+                {
+                    Tools = [.. participant.Tools.Where(static tool => !IsAskUser(tool))]
+                })
+            ]
+        };
+    }
+
     private static bool IsAskUser(AllowedToolDto tool)
     {
         return string.Equals(tool.Name, AskUserTool.ToolName, StringComparison.Ordinal);

@@ -104,6 +104,44 @@ public sealed class WorkSessionStateBlockTests
         AssertEx.Equal(active.Id, AssertEx.NotNull(WorkSessionStateBlockComposer.ResolveCurrentTask(state), "An Active task is always the current one.").Id);
     }
 
+    [Test]
+    public void Compose_WhenTheSessionIsWorkflowOwned_TellsTheModelAskUserIsGone()
+    {
+        // The send withdraws the tool for these sessions, and the seeded personas still tell the model to use it — an
+        // installed row keeps the instructions it was seeded with. Without this line the model calls a function it was
+        // never offered.
+        var workflow = StateWith() with
+        {
+            Session = Session() with
+            {
+                Kind = AgentWorkSessionKind.Workflow
+            }
+        };
+
+        var block = WorkSessionStateBlockComposer.Compose(workflow, step: 1, maxStepsPerRun: 25);
+
+        AssertEx.Contains(block, AskUserTool.ToolName);
+        AssertEx.Contains(block, "no operator attached");
+        AssertEx.True(block.IndexOf(AskUserTool.ToolName, StringComparison.Ordinal) > block.IndexOf(UntrustedContentFraming.EndMarkerPrefix, StringComparison.Ordinal),
+            "The notice is an instruction the model must follow, so it belongs after the untrusted fence closes.");
+
+        // The stuck instruction must not end in "complete the session": the executor maps every completed session to a
+        // succeeded node run, so telling a stuck step to complete is telling it to report success it did not have.
+        AssertEx.Contains(block, "objective was NOT met");
+        AssertEx.Contains(block, "do not claim success");
+        AssertEx.False(block.Contains("then complete the session", StringComparison.Ordinal),
+            "A stuck step that completes is reported to the operator as a success, so the prompt must not ask for it.");
+    }
+
+    [Test]
+    public void Compose_WhenTheSessionIsOperatorDriven_SaysNothingAboutAskUser()
+    {
+        var block = WorkSessionStateBlockComposer.Compose(StateWith(), step: 1, maxStepsPerRun: 25);
+
+        AssertEx.False(block.Contains(AskUserTool.ToolName, StringComparison.Ordinal),
+            "An operator-driven session keeps the tool, so nothing in its step prompt may say otherwise.");
+    }
+
     private static WorkSessionState StateWith(IReadOnlyList<WorkSessionTaskSnapshot>? tasks = null,
         IReadOnlyList<WorkSessionFindingSnapshot>? findings = null,
         IReadOnlyList<WorkSessionArtifactSnapshot>? artifacts = null,

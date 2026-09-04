@@ -212,7 +212,10 @@ public sealed class NodeChatStreamService(
         // carries; every other turn resolves it right here, exactly where it always did.
         var toolOffer = declaredWriteOffer ?? await ResolveToolOfferAsync(request, resolution, cancellationToken).ConfigureAwait(false);
         var offerTools = toolOffer.OfferTools;
-        var allowedTools = toolOffer.AllowedTools;
+        // The ask_user withdrawal, applied to the single FINAL list rather than to each of the resolvers that union the
+        // tool in, so it holds whichever of them produced this turn's offer. The orchestration participants' own lists
+        // ride the compiled spec instead of this one and are filtered where the package is built.
+        var allowedTools = request.SuppressAskUser ? AskUserToolOffer.Withdraw(toolOffer.AllowedTools) : toolOffer.AllowedTools;
 
         var attachmentsAllowed = AreAttachmentsAllowed(resolution);
         await ReportPreRunNoticesAsync(request, resolution, offerTools, attachmentsAllowed, requestId, cancellationToken).ConfigureAwait(false);
@@ -784,7 +787,7 @@ public sealed class NodeChatStreamService(
                 InvocationTimeoutSeconds = invocationTimeoutSeconds
             },
             ReasoningEffort: EffectiveReasoningEffort(request, resolved?.ReasoningEffort),
-            OrchestrationSpec: resolution.Orchestration?.Spec,
+            OrchestrationSpec: request.SuppressAskUser ? AskUserToolOffer.Withdraw(resolution.Orchestration?.Spec) : resolution.Orchestration?.Spec,
             SupportsThinking: resolution.SupportsThinking,
             SamplingOptions: request.SamplingOptions,
             Skills: resolved?.Skills,

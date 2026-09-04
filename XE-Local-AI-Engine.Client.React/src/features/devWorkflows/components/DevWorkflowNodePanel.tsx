@@ -26,6 +26,7 @@ import {
 	type DevWorkflowRunEventResponse,
 	type DevWorkflowRunResponse,
 	devWorkflowAttemptCounts,
+	devWorkflowAttemptLabel,
 	formatDevWorkflowDuration,
 	isSettledDevWorkflowNodeStatus,
 	toDevWorkflowNodeStatus,
@@ -113,10 +114,9 @@ export function DevWorkflowNodePanel({
 							{t(`pages.devWorkflows.nodeType.${nodeType}`, nodeType)}
 						</Badge>
 						<Text size="xs" c="dimmed">
-							{t(
-								"pages.devWorkflows.nodes.attempt",
-								"attempt {{attempt}} of {{maxAttempts}}",
-								devWorkflowAttemptCounts(nodeRun.attempt, nodeRun.maxAttempts),
+							{devWorkflowAttemptLabel(
+								t,
+								devWorkflowAttemptCounts(nodeRun.attempt, nodeRun.maxAttempts, nodeRun.operatorRetries),
 							)}
 						</Text>
 						{/* Two different facts, deliberately side by side. A node that survived an engine restart is the whole

@@ -452,6 +452,16 @@ public sealed record DevWorkflowNodeRunSummaryResponse(
     long? CompletedAtUtc,
     long Sequence,
     /// <summary>
+    ///     How many attempts an operator has bought this node run. A human retry is allowed AT the cap and raises
+    ///     <see cref="MaxAttempts" /> by one in place, so the cap the DEFINITION declared is
+    ///     <c>maxAttempts - operatorRetries</c>, and a client that shows the raw pair says "attempt 4 of 4" for a node
+    ///     whose definition allows three. Measured server-side as the distance <c>maxAttempts</c> has travelled from
+    ///     the cap the run's pinned graph declares — the widening is its own record — so a Retry that was recorded but
+    ///     never spent, and one from before widening existed, both count nothing. Zero when the pinned graph cannot be
+    ///     parsed.
+    /// </summary>
+    int OperatorRetries,
+    /// <summary>
     ///     For a <c>Skipped</c> row only: whether the state machine WAIVES this skip, so a downstream <c>All</c> join
     ///     carries on past it as long as a sibling arrived. <c>false</c> means the skip is dead and the join will skip
     ///     with it; <c>null</c> means the question does not apply — any other status — or that the pinned graph could
@@ -520,6 +530,16 @@ public sealed record DevWorkflowNodeRunDetailResponse(
     string? FailureClass,
     string? TerminalReason,
     IReadOnlyList<DevWorkflowDecisionResponse> Decisions,
+    /// <summary>
+    ///     How many attempts an operator has bought this node run. A human retry is allowed AT the cap and raises
+    ///     <see cref="MaxAttempts" /> by one in place, so the cap the DEFINITION declared is
+    ///     <c>maxAttempts - operatorRetries</c>, and a client that shows the raw pair says "attempt 4 of 4" for a node
+    ///     whose definition allows three. Measured server-side as the distance <c>maxAttempts</c> has travelled from
+    ///     the cap the run's pinned graph declares — the widening is its own record — so a Retry that was recorded but
+    ///     never spent, and one from before widening existed, both count nothing. Zero when the pinned graph cannot be
+    ///     parsed.
+    /// </summary>
+    int OperatorRetries,
     long? StartedAtUtc,
     long? CompletedAtUtc,
     long Sequence,

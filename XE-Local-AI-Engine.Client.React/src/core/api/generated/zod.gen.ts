@@ -3544,6 +3544,7 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionResp
 	id: z.guid(),
 	triggerId: z.guid(),
 	triggerName: z.string(),
+	principalId: z.guid(),
 	agentDefinitionId: z.guid(),
 	status: zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionStatus,
 	createdAtUtc: z.int(),
@@ -4218,6 +4219,11 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNod
 	failureClass: z.string().nullish(),
 	terminalReason: z.string().nullish(),
 	decisions: z.array(zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse).optional(),
+	operatorRetries: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
 	startedAtUtc: z.int().nullish(),
 	completedAtUtc: z.int().nullish(),
 	sequence: z.int().optional(),
@@ -4437,6 +4443,11 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNod
 	startedAtUtc: z.int().nullish(),
 	completedAtUtc: z.int().nullish(),
 	sequence: z.int().optional(),
+	operatorRetries: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
 	skipWaived: z.boolean().nullish(),
 	inputTokens: z.int().nullish(),
 	outputTokens: z.int().nullish(),
@@ -8734,11 +8745,6 @@ export const zGetInvocationMonitorResponse = zXeLocalAiEngineClientEndpointsInvo
 export const zCancelIntegrationExecutionPath = z.object({
 	executionId: z.string(),
 });
-
-/**
- * No Content
- */
-export const zCancelIntegrationExecutionResponse = z.void();
 
 /**
  * Success

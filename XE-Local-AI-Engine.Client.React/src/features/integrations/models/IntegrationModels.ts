@@ -230,6 +230,8 @@ export interface IntegrationSession {
 	readonly id: string;
 	readonly triggerId: string;
 	readonly triggerName: string;
+	/** The integrator that owns the session. Stable across a key rotation, so it is the identity, not the credential. */
+	readonly principalId: string;
 	readonly agentDefinitionId: string;
 	readonly status: IntegrationSessionStatus;
 	readonly createdAtUtc: number;

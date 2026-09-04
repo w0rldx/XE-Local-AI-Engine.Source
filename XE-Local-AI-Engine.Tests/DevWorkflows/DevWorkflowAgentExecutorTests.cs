@@ -1550,4 +1550,36 @@ public sealed class DevWorkflowAgentExecutorTests
                 Category = ToolCategory.WriteExecute
             })
         ];
+
+    /// <summary>
+    ///     FU2-3: what the operator typed when they retried the node reaches the objective the retried attempt runs on,
+    ///     under a heading of its own. It used to reach the decision row and stop there — the model was handed a
+    ///     byte-identical brief and did the same thing again, with the person's correction visible only in the panel.
+    /// </summary>
+    [Test]
+    public async Task AnAgentNodeRetriedByAnOperator_IsToldWhatTheySaid()
+    {
+        // A host of its own: this reads the fake agent's Objectives list by position.
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        for (var failure = 1; failure <= 3; failure++)
+        {
+            await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        }
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Status);
+
+        await harness.DecideAsync(runId, "research", DevWorkflowDecisionKind.Retry, comment: "Read the llama-server launch args before you answer.")
+                     .ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var objective = harness.Agent.Objectives[^1];
+        AssertEx.Contains(objective, "## Operator retry");
+        AssertEx.Contains(objective, "Read the llama-server launch args before you answer.");
+        AssertEx.False(objective.Contains("operatorRetryAttempt", StringComparison.Ordinal),
+            "the bookkeeping member is scaffolding, not something to read out to a model.");
+    }
 }

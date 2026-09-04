@@ -422,7 +422,10 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             // definition once and judges the offer THAT resolution produced, which is the only projection a check can
             // be sure the turn will actually use. Asked here instead, it would answer about a definition the send is
             // free to re-resolve differently a moment later.
-            RefuseUndeclaredWrites: run.Runtime?.RefuseUndeclaredWrites == true);
+            RefuseUndeclaredWrites: run.Runtime?.RefuseUndeclaredWrites == true,
+            // No operator is attached to a workflow-owned session, and its embedded chat is read-only, so an ask_user
+            // question could only ever go unanswered — see the flag's own comment for what that costs.
+            SuppressAskUser: state.Session.Kind == AgentWorkSessionKind.Workflow);
 
         // Tighten the tool-result ceiling for this step, seeded BEFORE the enumeration starts so the value flows into
         // the invocation's async context (the send path calls the runner inline, not through a detached Task). The

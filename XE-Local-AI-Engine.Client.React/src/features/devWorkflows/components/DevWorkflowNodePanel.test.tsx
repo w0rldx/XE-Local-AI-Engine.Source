@@ -739,11 +739,27 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.getByTestId("dev-workflow-node-failure-group").textContent).toBe("Tool or command");
 	});
 
-	it("clamps the attempt maximum up to the attempt, so an operator-granted retry never reads 'attempt 4 of 3'", () => {
+	it("clamps the attempt maximum up to the attempt, so a server from before the widening never reads 'attempt 4 of 3'", () => {
 		renderPanel(devWorkflowNodeRunDetail({ attempt: 4, maxAttempts: 3 }));
 
 		expect(screen.getByTestId("dev-workflow-node-panel-label").closest("[data-testid='dev-workflow-node-panel']")?.textContent).toContain(
 			"attempt 4 of 4",
+		);
+	});
+
+	it("names the declared cap and the capacity an operator added, not who started this attempt", () => {
+		renderPanel(devWorkflowNodeRunDetail({ attempt: 4, maxAttempts: 4, operatorRetries: 1 }));
+
+		expect(screen.getByTestId("dev-workflow-node-panel-label").closest("[data-testid='dev-workflow-node-panel']")?.textContent).toContain(
+			"attempt 4 of 4 (cap 3, +1 from an operator retry)",
+		);
+	});
+
+	it("sums the capacity once more than one retry widened the cap", () => {
+		renderPanel(devWorkflowNodeRunDetail({ attempt: 5, maxAttempts: 5, operatorRetries: 2 }));
+
+		expect(screen.getByTestId("dev-workflow-node-panel-label").closest("[data-testid='dev-workflow-node-panel']")?.textContent).toContain(
+			"attempt 5 of 5 (cap 3, +2 from operator retries)",
 		);
 	});
 });

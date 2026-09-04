@@ -661,8 +661,97 @@ internal sealed class DevWorkflowDevTaskExecutor
             return 0;
         }
 
+        // The person who retried this node said WHY, and the coder about to redo the round is the one who needs to
+        // hear it. It travels the same route a routed rejection does, and for the same reason: a task's own change
+        // request is the one channel Dev Mode composes a coder prompt out of. The node run is not settled — the next
+        // poll finds the task at ChangesRequested, where the ordinary next-action path starts the round it was going
+        // to start anyway.
+        if (await CarryOperatorRetryAsync(development, run, nodeRun, projectId, task, attempts, cancellationToken).ConfigureAwait(false))
+        {
+            return 1;
+        }
+
         return await StartNextActionAsync(store, graph, run, nodeRun, nodeRuns, development, management, projectId, taskId, task, attempts.Count, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Hands the operator's reason for retrying this node run to the task's next coder round, and answers whether
+    ///     it wrote one.
+    ///     <para>
+    ///         Only from <c>InProgress</c> with a coder attempt that did NOT succeed, which is where a blocked-then-
+    ///         retried implementation lands: the next action there is a coder round either way, so the change request
+    ///         adds the sentence without changing what the retry does. Every other case is a KNOWN HOLE — the retry
+    ///         still happens, the operator's sentence simply does not reach a coder — and each is deliberate:
+    ///     </para>
+    ///     <list type="bullet">
+    ///         <item><c>InProgress</c> whose last coder attempt SUCCEEDED is on its way to deterministic validation;
+    ///             asking for changes would throw that round and its evidence away.</item>
+    ///         <item><c>Ready</c> and <c>Planned</c> have no round to brief — nothing has been implemented yet.</item>
+    ///         <item><c>ChangesRequested</c> already carries a reviewer's own feedback, and overwriting it would
+    ///             replace the verdict the round exists to answer.</item>
+    ///         <item><c>InReview</c> would have its next action CHANGED by the ask, from the re-review that is the
+    ///             right answer to a reviewer that failed into a coder round nobody asked for.</item>
+    ///         <item><c>AwaitingApply</c> never reaches here: the caller settles the node run <c>Succeeded</c> above,
+    ///             because an approved implementation waiting to be applied is still a true claim.</item>
+    ///         <item><c>Blocked</c> never reaches here either — the caller stands the node run down first — and the
+    ///             task's transition table has no outbound edge from it, so nothing could be written anyway.</item>
+    ///         <item><c>Validation</c> is Dev Mode's own supervisor window and holds no attempt; <c>Completed</c> and
+    ///             <c>Cancelled</c> are settled above. None of the three is a round anything can brief.</item>
+    ///     </list>
+    ///     <para>
+    ///         One ask per (node run, ATTEMPT), and the ledger is what enforces it: the reason stays on the inputs for
+    ///         the life of the attempt, and the round asked for walks the task back through <c>InProgress</c> without
+    ///         starting an attempt this node run is answerable for — so without the operation id that tick would ask a
+    ///         second time and loop the task back to <c>ChangesRequested</c> for as long as the poll continues. The
+    ///         reason itself is scoped by attempt on the way in, so a later automatic re-attempt quotes nobody.
+    ///     </para>
+    /// </summary>
+    private static async Task<bool> CarryOperatorRetryAsync(IDevelopmentStore development,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        Guid projectId,
+        DevelopmentTaskSnapshot task,
+        IReadOnlyList<DevelopmentAttemptSnapshot> attempts,
+        CancellationToken cancellationToken)
+    {
+        if (DevWorkflowNodeInputs.OperatorRetryReasonFor(nodeRun.InputJson, nodeRun.Attempt) is not { } said
+            || task.Status != DevelopmentTaskStatus.InProgress
+            || attempts.LastOrDefault(static attempt => attempt.Role == DevelopmentAttemptRole.Coder) is { Status: DevelopmentAttemptStatus.Succeeded })
+        {
+            return false;
+        }
+
+        var operationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "devtask-operator-retry");
+        if (await development.FindOperationAsync(projectId, operationId, DevelopmentOperationPhases.Completed, cancellationToken).ConfigureAwait(false) is not null)
+        {
+            return false;
+        }
+
+        try
+        {
+            _ = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(task.Id,
+                                     operationId,
+                                     DevelopmentTaskStatus.ChangesRequested,
+                                     task.Version,
+                                     $"An operator retried the '{nodeRun.NodeKey}' step of the workflow driving this task, and said: {said}"),
+                                 cancellationToken)
+                             .ConfigureAwait(false);
+            return true;
+        }
+        catch (DevelopmentConcurrencyException)
+        {
+            // Something else moved the task between this tick's read and its ask — an operator in the Development
+            // views, or a sibling tick. Nothing is owed, and the operation id is still unwritten: the next tick reads
+            // what the task became and asks again if that is still the right thing to do.
+            //
+            // ONLY the concurrency case. TransitionTaskAsync checks the version BEFORE legality, so a task whose
+            // status moved always surfaces here rather than as an invalid transition — which means an invalid
+            // transition is a broken invariant in the table above, not a race. Swallowing it would start the coder
+            // round unbriefed and call that success; propagating it stalls this node run loudly (the dispatcher's
+            // AdvanceSafelyAsync logs it at Error and re-derives from unchanged rows next tick).
+            return false;
+        }
     }
 
     /// <summary>

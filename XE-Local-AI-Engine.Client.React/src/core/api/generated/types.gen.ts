@@ -2958,6 +2958,7 @@ export type XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionRespon
 	id: string;
 	triggerId: string;
 	triggerName: string;
+	principalId: string;
 	agentDefinitionId: string;
 	status: XeLocalAiEngineClientPersistenceEntitiesIntegrationSessionStatus;
 	createdAtUtc: number;
@@ -3513,6 +3514,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 	failureClass?: string | null;
 	terminalReason?: string | null;
 	decisions?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse>;
+	operatorRetries?: number;
 	startedAtUtc?: number | null;
 	completedAtUtc?: number | null;
 	sequence?: number;
@@ -3717,6 +3719,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 	startedAtUtc?: number | null;
 	completedAtUtc?: number | null;
 	sequence?: number;
+	operatorRetries?: number;
 	skipWaived?: boolean | null;
 	inputTokens?: number | null;
 	outputTokens?: number | null;
@@ -12132,16 +12135,21 @@ export type CancelIntegrationExecutionErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type CancelIntegrationExecutionError = CancelIntegrationExecutionErrors[keyof CancelIntegrationExecutionErrors];
 
 export type CancelIntegrationExecutionResponses = {
 	/**
-	 * No Content
+	 * Accepted
 	 */
-	204: void;
+	202: unknown;
 };
-
-export type CancelIntegrationExecutionResponse = CancelIntegrationExecutionResponses[keyof CancelIntegrationExecutionResponses];
 
 export type ListIntegrationTriggersData = {
 	body?: never;

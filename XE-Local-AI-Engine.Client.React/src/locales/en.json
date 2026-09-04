@@ -5095,6 +5095,8 @@
 				"took": "took {{duration}}",
 				"finished": "finished",
 				"attempt": "attempt {{attempt}} of {{maxAttempts}}",
+				"attemptOperatorRetry_one": "attempt {{attempt}} of {{maxAttempts}} (cap {{cap}}, +1 from an operator retry)",
+				"attemptOperatorRetry_other": "attempt {{attempt}} of {{maxAttempts}} (cap {{cap}}, +{{count}} from operator retries)",
 				"materialized": "generated",
 				"appliesPatches": "applies patches",
 				"materializedOf": "generated · {{index}} of {{count}}",
@@ -5216,6 +5218,8 @@
 				"evidence": "What you are deciding on",
 				"commentLabel": "Comment",
 				"commentHint": "Required when you reject or ask for changes.",
+				"commentHintRetry": "Required when you reject or ask for changes. A retry reason is passed to the next attempt.",
+				"commentHintRetryDevTask": "Required when you reject or ask for changes. A retry reason is handed to the next coder round when the implementation is being reworked.",
 				"history": "Decisions",
 				"decidedMeta": "attempt {{attempt}} · {{subject}} · {{when}}",
 				"unknownSubject": "unknown",
@@ -5571,6 +5575,7 @@
 					"columns": {
 						"id": "Session",
 						"trigger": "Trigger",
+						"principal": "Principal",
 						"status": "Status",
 						"created": "Created",
 						"lastActivity": "Last activity",
@@ -5670,6 +5675,7 @@
 					"load": "Could not load integration executions.",
 					"events": "Could not load the execution timeline.",
 					"cancel": "Could not cancel the execution.",
+					"cancelConflict": "This execution had already finished.",
 					"detail": "Could not load the execution audit detail."
 				}
 			},

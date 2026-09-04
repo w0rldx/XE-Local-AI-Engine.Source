@@ -24,6 +24,7 @@ import {
 	type DevWorkflowNodeStatus,
 	type DevWorkflowNodeType,
 	devWorkflowAttemptCounts,
+	devWorkflowAttemptLabel,
 	isDevWorkflowNodeInProgress,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
 
@@ -145,10 +146,9 @@ export function DevWorkflowNodeCard({ id, data, selected }: NodeProps<DevWorkflo
 				) : null}
 				{showsAttempt ? (
 					<Text size="xs" c="dimmed" data-testid={`dev-workflow-graph-node-attempt-${id}`}>
-						{t(
-							"pages.devWorkflows.nodes.attempt",
-							"attempt {{attempt}} of {{maxAttempts}}",
-							devWorkflowAttemptCounts(nodeData.attempt, nodeData.maxAttempts),
+						{devWorkflowAttemptLabel(
+							t,
+							devWorkflowAttemptCounts(nodeData.attempt, nodeData.maxAttempts, nodeData.operatorRetries),
 						)}
 					</Text>
 				) : null}

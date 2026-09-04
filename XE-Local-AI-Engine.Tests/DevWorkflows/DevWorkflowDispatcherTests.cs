@@ -953,4 +953,111 @@ public sealed class DevWorkflowDispatcherTests
             "and the tail behind the join runs, which is what the live run lost.");
         AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
     }
+
+    /// <summary>
+    ///     FU2-3: an operator's Retry buys ONE more attempt and says why. Both halves used to be lost — the comment
+    ///     reached the durable decision row and nothing else, and the attempt went past a cap that never moved, so the
+    ///     row read "attempt 4 of 3" as though the runtime had broken its own budget.
+    /// </summary>
+    [Test]
+    public async Task AnOperatorRetryWithAReason_WidensTheCapByOneAndCarriesTheReasonOntoTheNextAttempt()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        // Three failures spend the node's declared cap, which is where a human is asked.
+        for (var failure = 1; failure <= 3; failure++)
+        {
+            await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        }
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
+        AssertEx.Equal(expected: 3, blocked.Attempt);
+        AssertEx.Equal(expected: 3, blocked.MaxAttempts);
+
+        await harness.DecideAsync(runId, "research", DevWorkflowDecisionKind.Retry, comment: "The model kept picking the wrong file; start from src/inference.")
+                     .ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var retried = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(expected: 4, retried.Attempt);
+        AssertEx.Equal(expected: 4, retried.MaxAttempts, "a human retry is allowed AT the cap and buys exactly one more attempt, so the cap moves with it.");
+        var input = AssertEx.NotNull(retried.InputJson, "the reason has to reach the document the next attempt is composed from.");
+        AssertEx.Contains(input, "operatorRetryReason");
+        AssertEx.Contains(input, "start from src/inference");
+        AssertEx.Contains(input, "\"operatorRetryAttempt\":4", message: "scoped to the attempt the decision started, so no later re-attempt quotes it.");
+    }
+
+    /// <summary>
+    ///     A Retry with nothing typed still buys the attempt; there is simply no sentence to carry. And a SILENT retry
+    ///     after a spoken one must not leave the spoken one standing: the reason belongs to the attempt it was typed
+    ///     for, so the next objective would otherwise quote a person who said nothing about that try.
+    /// </summary>
+    [Test]
+    public async Task AnOperatorRetryWithNoComment_StillWidensTheCapAndDropsThePreviousReason()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        for (var failure = 1; failure <= 3; failure++)
+        {
+            await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        }
+
+        await harness.DecideAsync(runId, "research", DevWorkflowDecisionKind.Retry, comment: "Start from src/inference.").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        AssertEx.Contains(AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).InputJson), "Start from src/inference.");
+
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "research", DevWorkflowDecisionKind.Retry).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var retried = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(expected: 5, retried.Attempt);
+        AssertEx.Equal(expected: 5, retried.MaxAttempts, "a silent retry buys its attempt exactly as a spoken one does.");
+        AssertEx.False((retried.InputJson ?? string.Empty).Contains("operatorRetryReason", StringComparison.Ordinal),
+            "nothing was said this time, so the last person's sentence must not be handed to this attempt.");
+    }
+
+    /// <summary>
+    ///     Each Retry buys ONE attempt, not an unbounded exemption: the second widening is what proves the cap tracks
+    ///     the decisions rather than being switched off by the first of them.
+    /// </summary>
+    [Test]
+    public async Task ASecondOperatorRetry_WidensTheCapAgain()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        for (var failure = 1; failure <= 3; failure++)
+        {
+            await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        }
+
+        await harness.DecideAsync(runId, "research", DevWorkflowDecisionKind.Retry, comment: "Once more.").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        // The widened cap is now spent too, so the fourth failure asks the same person again.
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var spent = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, spent.Status, "one retry buys one attempt, and the cap is what says so.");
+        AssertEx.Equal(expected: 4, spent.Attempt);
+        AssertEx.Equal(expected: 4, spent.MaxAttempts);
+
+        await harness.DecideAsync(runId, "research", DevWorkflowDecisionKind.Retry, comment: "And again.").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var again = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(expected: 5, again.Attempt);
+        AssertEx.Equal(expected: 5, again.MaxAttempts);
+    }
 }

@@ -195,6 +195,7 @@ export function toIntegrationSession(
 		id: dto.id,
 		triggerId: dto.triggerId,
 		triggerName: dto.triggerName,
+		principalId: dto.principalId,
 		agentDefinitionId: dto.agentDefinitionId,
 		status: dto.status,
 		createdAtUtc: dto.createdAtUtc,

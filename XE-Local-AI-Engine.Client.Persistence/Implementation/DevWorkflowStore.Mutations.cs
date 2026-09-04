@@ -123,6 +123,22 @@ internal sealed partial class DevWorkflowStore
         var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken).ConfigureAwait(false);
         var now = Now();
 
+        if (command.WidenMaxAttempts)
+        {
+            // An operator's Retry is allowed AT the cap and buys exactly one more attempt, so the cap moves with it.
+            // In place, like the attempt beside it: without this the row reads "attempt 4 of 3" — the runtime saying
+            // it broke its own budget where in fact a human granted one more try — and every automatic check that
+            // compares Attempt against MaxAttempts would refuse the attempt the person just paid for.
+            //
+            // From the ATTEMPT when that is already past the cap, which is the shape a row persisted before widening
+            // shipped can be in: an old operator Retry spent an attempt without moving the cap, so 4-of-3 incremented
+            // to 5-of-4 and stayed one over for ever. Catching the cap up first grants the attempt instead of chasing
+            // it. Saturating, because a definition may declare int.MaxValue and wrapping to negative would refuse
+            // every attempt the node has left rather than buying it one more.
+            var floor = Math.Max(nodeRun.MaxAttempts, nodeRun.Attempt);
+            nodeRun.MaxAttempts = floor < int.MaxValue ? floor + 1 : int.MaxValue;
+        }
+
         if (command.IncrementAttempt)
         {
             // In place: the node-run is one row per node key for its whole life, and the per-attempt history
@@ -512,6 +528,16 @@ internal sealed partial class DevWorkflowStore
             async run =>
             {
                 var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken).ConfigureAwait(false);
+
+                // What the caller validated against, re-read under the transaction. Checked BEFORE the one-per-attempt
+                // rule below, which reads the row's CURRENT attempt and so would see a moved row as simply undecided.
+                if ((command.ExpectedAttempt is { } expectedAttempt && nodeRun.Attempt != expectedAttempt)
+                    || (command.ExpectedStatus is { } expectedStatus && nodeRun.Status != expectedStatus))
+                {
+                    throw new DevWorkflowConcurrencyException($"Node run '{nodeRun.Id}' is attempt {nodeRun.Attempt} and {nodeRun.Status}, "
+                                                              + $"but the {command.Decision} was taken on attempt {command.ExpectedAttempt} "
+                                                              + $"and {command.ExpectedStatus}.");
+                }
 
                 // One decision per node-run ATTEMPT: a node-run legitimately accumulates several over its life, but not
                 // two for the same try. The standing one is loaded rather than merely counted, because the caller that

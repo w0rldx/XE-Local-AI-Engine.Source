@@ -78,9 +78,20 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
 
     /// <summary>
     ///     Every POLICY refusal returns a sentence the model can act on, because a throw inside the function-invocation
-    ///     pipeline ends the turn. The ONE deliberate exception is a persistence FAILURE, which throws on purpose: that
-    ///     is what makes an unbacked frame unrepeatable — the run terminalizes <c>Failed</c> / <c>internal-failure</c>
-    ///     and there is no next call that could publish a second one.
+    ///     pipeline DESTROYS that sentence: MEAI's <c>FunctionInvokingChatClient</c> catches the exception and hands the
+    ///     model its own fixed <c>Error: Function failed.</c> instead, with no detail at all under the pipeline's
+    ///     <c>IncludeDetailedErrors=false</c> default. (Measured on MEAI 10.9.0: the throw does NOT end the turn — the
+    ///     loop runs a further provider round — so the model would simply retry the same call, blind to why it failed.)
+    ///     The ONE deliberate exception is a persistence FAILURE, which throws on purpose: that is what makes an
+    ///     unbacked frame unrepeatable — the run terminalizes <c>Failed</c> / <c>internal-failure</c> and there is no
+    ///     next call that could publish a second one.
+    ///     <para>
+    ///         Because a refusal is a normal RETURN, the pipeline reports the call as successful and
+    ///         <c>IntegrationStreamEventMapper</c> would put <c>ok:true</c> on the caller's
+    ///         <c>tool.completed</c> frame. That is why the acknowledgement below opens with
+    ///         <see cref="EmitOutputToolDefinition.DeliveredPrefix" />: it is the only outcome signal that survives the
+    ///         pipeline, and the mapper grades this one tool on it.
+    ///     </para>
     /// </summary>
     public async Task<string> ExecuteAsync(string jsonArguments, CancellationToken cancellationToken = default)
     {
@@ -240,7 +251,7 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
         }
 
         _buffer.Publish(emitted);
-        return $"Output delivered to the caller ({plaintextBytes} bytes, {contentType}). Do not repeat it in your reply.";
+        return $"{EmitOutputToolDefinition.DeliveredPrefix} ({plaintextBytes} bytes, {contentType}). Do not repeat it in your reply.";
     }
 
     private string AggregateCapRefusal(long delivered) =>

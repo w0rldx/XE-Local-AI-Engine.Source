@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { getErrorStatus } from "@/core/api/errors/RetryClassification";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -111,14 +112,21 @@ export function IntegrationExecutionsPage() {
 				cancelMutation.mutate(
 					{ path: { executionId: execution.id } },
 					{
-						// A 409 means the run reached a terminal state first — a race, not an operator error. The message
-						// the backend sends says so, and the next poll shows what the run actually became.
+						// A 409 means the run reached a terminal state first — a race, not an operator error. The
+						// backend's own text for it is a FastEndpoints validation problem whose only readable field is a
+						// generic English title, so this case gets its own localized sentence instead. The refetch that
+						// replaces the stale row rides on the mutation's onSettled.
 						onError: (error) =>
 							toast.error(
-								apiErrorMessage(
-									error,
-									t("pages.integrations.executions.errors.cancel", "Could not cancel the execution."),
-								),
+								getErrorStatus(error) === 409
+									? t(
+											"pages.integrations.executions.errors.cancelConflict",
+											"This execution had already finished.",
+										)
+									: apiErrorMessage(
+											error,
+											t("pages.integrations.executions.errors.cancel", "Could not cancel the execution."),
+										),
 							),
 					},
 				);

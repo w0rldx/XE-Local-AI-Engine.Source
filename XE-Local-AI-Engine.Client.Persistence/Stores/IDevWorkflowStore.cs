@@ -494,7 +494,14 @@ public sealed record TransitionDevWorkflowNodeRunCommand(
 
     // What the attempt this move settles cost. Set by the publishing decorator on a terminal, Blocked or
     // WaitingForApproval move and by nothing else, so no call site has to remember it.
-    DevWorkflowNodeTelemetry? Telemetry = null);
+    DevWorkflowNodeTelemetry? Telemetry = null,
+    /// <summary>
+    ///     Buys the node run exactly one more attempt, by raising the cap its own row carries. Set only by an
+    ///     operator's <c>Retry</c>, which is allowed AT the cap and widens it by one each time it is used — so
+    ///     <c>Attempt</c> never exceeds the row's own <c>MaxAttempts</c>, and the retry policy's cap check goes on
+    ///     meaning what it says instead of the run reporting that it broke its own budget.
+    /// </summary>
+    bool WidenMaxAttempts = false);
 
 /// <summary>
 ///     One cross-node retry route, as the single decision it is: the <c>node.retry.routed</c> event that records it and
@@ -565,7 +572,19 @@ public sealed record RecordDevWorkflowDecisionCommand(
     string? Comment = null,
     string? PayloadJson = null,
     string? DecidedBySubject = null,
-    int? MaxTotalAttempts = null);
+    int? MaxTotalAttempts = null,
+    /// <summary>
+    ///     The attempt the caller VALIDATED this decision against, re-checked inside the recording transaction.
+    ///     <c>ExpectedVersion</c> is <c>Any</c> here — an answer is about a node run rather than about the run's
+    ///     sequence — so this pair is the only thing between a decision and a routed reset that moved the row after
+    ///     the caller read it: the answer would otherwise be stamped with whatever attempt the reset left behind,
+    ///     orphaned on a fresh <c>Pending</c> try nobody was asked about, or recorded against the old attempt and
+    ///     later counted by the run composer's <c>operatorRetries</c> for a widening that never happened.
+    ///     <c>null</c> skips the check, for a caller with nothing to compare.
+    /// </summary>
+    int? ExpectedAttempt = null,
+    /// <summary>The status the caller validated against, checked with <see cref="ExpectedAttempt" />.</summary>
+    DevWorkflowNodeRunStatus? ExpectedStatus = null);
 
 public sealed record AppendDevWorkflowEventCommand(
     Guid RunId,

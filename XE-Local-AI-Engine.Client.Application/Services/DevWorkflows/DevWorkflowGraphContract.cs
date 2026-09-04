@@ -113,6 +113,30 @@ public static class DevWorkflowGraphContract
     }
 
     /// <summary>
+    ///     The attempt cap each node's DEFINITION declares, keyed by node key, with the parser's own per-node-type
+    ///     default applied — so this and <c>DevWorkflowGraph</c> cannot disagree about a node that omits
+    ///     <c>maxAttempts</c>. It is the number a node run's <c>MaxAttempts</c> started at, before any operator Retry
+    ///     widened it in place, which makes the difference between the two the record of the widening itself.
+    ///     <para>
+    ///         Answers EMPTY for a graph that cannot be parsed, for the reason <see cref="TemplateNodeKeys" /> does:
+    ///         this is a read path and an unroutable run is the one an operator most needs to open. A key that is
+    ///         missing means the reader has nothing to compare against, not that the cap is zero.
+    ///     </para>
+    /// </summary>
+    public static IReadOnlyDictionary<string, int> DeclaredMaxAttempts(string graphJson)
+    {
+        try
+        {
+            return DevWorkflowGraph.Parse(graphJson)
+                                   .Nodes.ToDictionary(static entry => entry.Key, static entry => entry.Value.MaxAttempts, StringComparer.Ordinal);
+        }
+        catch (DevWorkflowValidationException)
+        {
+            return new Dictionary<string, int>(StringComparer.Ordinal);
+        }
+    }
+
+    /// <summary>
     ///     Which of a run's skipped node runs the state machine WAIVES, so the API can send the verdict instead of the
     ///     browser guessing it: a skip an operator chose is excused and a downstream <c>All</c> join carries on past it,
     ///     while a skip that cascaded off a Failed ancestor or a branch nothing routed down is dead and the join will

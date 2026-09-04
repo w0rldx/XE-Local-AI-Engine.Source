@@ -133,6 +133,33 @@ describe("DevWorkflowHumanGatePanel", () => {
 		expect(screen.getByTestId("dev-workflow-gate-Abandon")).toBeDefined();
 	});
 
+	it("promises the comment reaches the retried work only on the node types that actually read it", () => {
+		const retryGate = { status: "Blocked", allowedDecisions: ["Retry", "Abandon"] };
+
+		const agent = renderPanel(gateNode({ ...retryGate, nodeType: "Agent" }));
+
+		expect(screen.getByTestId("dev-workflow-gate-panel").textContent).toContain("A retry reason is passed to the next attempt.");
+		agent.unmount();
+
+		const devTask = renderPanel(gateNode({ ...retryGate, nodeType: "DevTask" }));
+
+		expect(screen.getByTestId("dev-workflow-gate-panel").textContent).toContain(
+			"handed to the next coder round when the implementation is being reworked.",
+		);
+		devTask.unmount();
+
+		// A Tool node never reads the comment, so it gets the plain hint and no promise at all.
+		const tool = renderPanel(gateNode({ ...retryGate, nodeType: "Tool" }));
+
+		expect(screen.getByTestId("dev-workflow-gate-panel").textContent).toContain("Required when you reject or ask for changes.");
+		expect(screen.getByTestId("dev-workflow-gate-panel").textContent).not.toContain("A retry reason");
+		tool.unmount();
+
+		renderPanel(gateNode({ nodeType: "Agent", allowedDecisions: ["Approve", "Reject"] }));
+
+		expect(screen.getByTestId("dev-workflow-gate-panel").textContent).not.toContain("A retry reason");
+	});
+
 	it("renders ONLY the decisions the server allows, so no button can come back a 409", () => {
 		renderPanel(gateNode({ allowedDecisions: ["Approve", "Reject"] }));
 

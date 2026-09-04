@@ -554,13 +554,29 @@ internal sealed class DevWorkflowAgentExecutor
         // it would like. Without this the bounded phase would fill the budget and the unbounded one would then push
         // straight past it.
         var inputSection = new StringBuilder();
-        if (ReadInput(nodeRun.InputJson) is { Count: > 0 } input)
+
+        // The operator's retry reason is lifted OUT of the generic member list and given its own sentence: a person
+        // who retried this step and said why is not one more anonymous input line, and read as one it is the line a
+        // model is most likely to skim past. Only for the attempt their decision started — the reader is scoped by
+        // attempt, so a later automatic re-attempt composes an objective with no complaint in it at all.
+        var input = ReadInput(nodeRun.InputJson)
+                    .Where(static entry => entry.Name is not (DevWorkflowNodeInputs.OperatorRetryReason or DevWorkflowNodeInputs.OperatorRetryAttempt))
+                    .ToList();
+        if (input.Count > 0)
         {
             _ = inputSection.AppendLine().AppendLine("## What was asked");
             foreach (var (name, value) in input)
             {
                 _ = inputSection.AppendLine(CultureInfo.InvariantCulture, $"- {name}: {value}");
             }
+        }
+
+        if (DevWorkflowNodeInputs.OperatorRetryReasonFor(nodeRun.InputJson, nodeRun.Attempt) is { } operatorRetry)
+        {
+            _ = inputSection.AppendLine()
+                            .AppendLine("## Operator retry")
+                            .AppendLine("The operator retried this step and said:")
+                            .AppendLine(operatorRetry);
         }
 
         // The fair share, the visible truncation marker and the dropped-with-a-warning are DevWorkflowPolicyText's,

@@ -5095,6 +5095,8 @@
 				"took": "dauerte {{duration}}",
 				"finished": "abgeschlossen",
 				"attempt": "Versuch {{attempt}} von {{maxAttempts}}",
+				"attemptOperatorRetry_one": "Versuch {{attempt}} von {{maxAttempts}} (Limit {{cap}}, +1 durch Operator-Wiederholung)",
+				"attemptOperatorRetry_other": "Versuch {{attempt}} von {{maxAttempts}} (Limit {{cap}}, +{{count}} durch Operator-Wiederholungen)",
 				"materialized": "erzeugt",
 				"appliesPatches": "wendet Patches an",
 				"materializedOf": "erzeugt · {{index}} von {{count}}",
@@ -5216,6 +5218,8 @@
 				"evidence": "Worüber Sie entscheiden",
 				"commentLabel": "Kommentar",
 				"commentHint": "Erforderlich, wenn Sie ablehnen oder Änderungen anfordern.",
+				"commentHintRetry": "Erforderlich, wenn Sie ablehnen oder Änderungen anfordern. Die Begründung wird an den nächsten Versuch übergeben.",
+				"commentHintRetryDevTask": "Erforderlich, wenn Sie ablehnen oder Änderungen anfordern. Die Begründung wird an die nächste Coder-Runde übergeben, wenn die Implementierung überarbeitet wird.",
 				"history": "Entscheidungen",
 				"decidedMeta": "Versuch {{attempt}} · {{subject}} · {{when}}",
 				"unknownSubject": "unbekannt",
@@ -5571,6 +5575,7 @@
 					"columns": {
 						"id": "Sitzung",
 						"trigger": "Trigger",
+						"principal": "Prinzipal",
 						"status": "Status",
 						"created": "Erstellt",
 						"lastActivity": "Letzte Aktivität",
@@ -5670,6 +5675,7 @@
 					"load": "Integrations-Ausführungen konnten nicht geladen werden.",
 					"events": "Der Ausführungsverlauf konnte nicht geladen werden.",
 					"cancel": "Die Ausführung konnte nicht abgebrochen werden.",
+					"cancelConflict": "Diese Ausführung war bereits beendet.",
 					"detail": "Die Audit-Details der Ausführung konnten nicht geladen werden."
 				}
 			},

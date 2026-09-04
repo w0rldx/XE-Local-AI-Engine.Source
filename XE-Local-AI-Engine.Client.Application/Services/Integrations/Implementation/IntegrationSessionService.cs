@@ -283,6 +283,7 @@ public sealed class IntegrationSessionService
         new(session.Id,
             session.TriggerId,
             triggerName,
+            session.PrincipalId,
             session.AgentDefinitionId,
             session.Status,
             session.CreatedAtUtc,
