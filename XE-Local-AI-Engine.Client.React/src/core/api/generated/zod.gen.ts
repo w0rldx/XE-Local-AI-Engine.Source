@@ -4197,6 +4197,11 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNod
 	failureClass: z.string().nullish(),
 	terminalReason: z.string().nullish(),
 	decisions: z.array(zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse).optional(),
+	operatorRetries: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
 	startedAtUtc: z.int().nullish(),
 	completedAtUtc: z.int().nullish(),
 	sequence: z.int().optional(),
@@ -4391,6 +4396,11 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNod
 	startedAtUtc: z.int().nullish(),
 	completedAtUtc: z.int().nullish(),
 	sequence: z.int().optional(),
+	operatorRetries: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
 	skipWaived: z.boolean().nullish(),
 });
 

@@ -585,14 +585,45 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                 continue;
             }
 
+            // What the operator SAID travels with the attempt their decision starts, not only into the decision row a
+            // panel lists. Merged into the node run's inputs exactly as a routed failure is, because that document is
+            // where both lanes already read the next attempt's brief from — the agent objective composes it, and the
+            // DevTask lane turns it into the coder's change request. Bounded like every other decision comment: the
+            // text is free-form and a prompt is the wrong place to discover that.
+            // EVERY Retry goes through the merge, including one typed with nothing in the box: the merge is also what
+            // DROPS an earlier retry's reason, and a silent Retry that skipped it would leave the previous operator's
+            // sentence on the row for a try they said nothing about.
+            Action<Utf8JsonWriter>? writeRetryReason = settled.Comment?.Trim() is { Length: > 0 } retried
+                ? writer =>
+                {
+                    writer.WriteString(DevWorkflowNodeInputs.OperatorRetryReason, DevWorkflowStateMachine.Bounded(retried, MaxDecisionComment));
+
+                    // The attempt this reason is FOR. Without it the members would be read again by every later
+                    // automatic re-attempt, quoting a person who said nothing about that try.
+                    writer.WriteNumber(DevWorkflowNodeInputs.OperatorRetryAttempt, nodeRun.Attempt + 1);
+                }
+                : null;
+            var retryInput = incrementAttempt ? DevWorkflowNodeInputs.Merge(nodeRun.InputJson, writeRetryReason) : null;
+
             _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
                                    nodeRun.Id,
                                    DevWorkflowVersions.Any,
                                    target,
                                    OutputJson: outputJson,
+                                   InputJson: retryInput,
                                    FailureClass: target == DevWorkflowNodeRunStatus.Failed ? DevWorkflowFailureClasses.GateRejected : null,
                                    TerminalReason: DecidedReason(target, settled.Comment),
                                    IncrementAttempt: incrementAttempt,
+
+                                   // EVERY Retry widens the cap by one, not only a Retry at the cap — that is the
+                                   // ruling as written, and the simpler rule to explain to the person clicking it.
+                                   // So a Retry at attempt 1 of 3 leaves a node that can now reach 4 on its own, and
+                                   // that fourth try is an ORDINARY automatic re-attempt: the operator's reason is
+                                   // scoped to the one attempt their decision started, so the attempt they bought
+                                   // carries it and nothing after it does. What still bounds all of this is the
+                                   // run-wide MaxTotalAttempts budget, which counts an operator's re-attempt and an
+                                   // automatic one alike and which no widening touches. Nothing else sets this flag.
+                                   WidenMaxAttempts: incrementAttempt,
 
                                    // A retry gets a NEW session: resuming the one that just failed resumes the context
                                    // that failed with it. Releasing it here is also what stops the fresh attempt being

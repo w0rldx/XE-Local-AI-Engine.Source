@@ -3504,6 +3504,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 	failureClass?: string | null;
 	terminalReason?: string | null;
 	decisions?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse>;
+	operatorRetries?: number;
 	startedAtUtc?: number | null;
 	completedAtUtc?: number | null;
 	sequence?: number;
@@ -3686,6 +3687,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 	startedAtUtc?: number | null;
 	completedAtUtc?: number | null;
 	sequence?: number;
+	operatorRetries?: number;
 	skipWaived?: boolean | null;
 };
 

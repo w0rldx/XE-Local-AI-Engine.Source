@@ -38,6 +38,23 @@ internal static class WorkSessionStateBlockComposer
     /// <summary>The prefix the frontend collapses these synthetic user turns by. Do not change it without changing that.</summary>
     public const string BlockPrefix = "[work session state";
 
+    /// <summary>
+    ///     Appended for <see cref="AgentWorkSessionKind.Workflow" /> sessions; see the call site for why.
+    ///     <para>
+    ///         The stuck sentence asks for an HONEST completion rather than a quiet one, because nothing downstream
+    ///         enforces the difference: <c>DevWorkflowAgentExecutor.PollAsync</c> maps every completed session to a
+    ///         succeeded node run whatever it wrote, so a step that gives up and completes is reported to the operator
+    ///         as a success. That mapping is live finding F1 and changing it needs an operator ruling, which leaves
+    ///         this text the only thing between a stuck node and a green one — so it must not ask for the completion
+    ///         that would be read as success.
+    ///     </para>
+    /// </summary>
+    private const string WorkflowOwnedFooter =
+        " This session is driven by a development-workflow node and has no operator attached: ask_user is not available"
+        + " and nothing you ask will be answered. Decide and carry on yourself. If you are genuinely stuck, mark the task"
+        + " Blocked with the reason, record a finding that says the objective was NOT met and why, and do not claim"
+        + " success in the completion summary.";
+
     private const int MaxOpenTasks = 20;
     private const int MaxFindings = 15;
     private const int MaxFindingCharacters = 400;
@@ -124,6 +141,16 @@ internal static class WorkSessionStateBlockComposer
 
         var footer = "\nContinue the objective. Record what you learn with record_finding, keep the plan current with "
                      + "update_work_plan, and call complete_work_session when the objective is met.";
+
+        // The send withdraws ask_user from a workflow-owned session's tool offer (NodeChatStreamRequest.SuppressAskUser),
+        // so say so here rather than leaving the model to discover it: the seeded personas' instructions still point at
+        // the tool, and an installed row keeps the text it was seeded with — the seeder skips a slug it already wrote.
+        // Without this line the model calls a function it was never offered and can loop on that until the step's
+        // provider-call cap.
+        if (state.Session.Kind == AgentWorkSessionKind.Workflow)
+        {
+            footer += WorkflowOwnedFooter;
+        }
 
         return header + UntrustedContentFraming.WrapDocument(body.ToString(), []) + footer;
     }

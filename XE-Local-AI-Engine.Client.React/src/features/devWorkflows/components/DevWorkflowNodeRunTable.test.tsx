@@ -121,6 +121,19 @@ describe("DevWorkflowNodeRunTable", () => {
 		expect(screen.getByTestId(`dev-workflow-node-attempt-${devWorkflowTestIds.nodeRun}`).textContent).toBe("attempt 3 of 3");
 	});
 
+	it("says how much capacity an operator added rather than crediting them with this attempt", () => {
+		renderWithProviders(
+			<DevWorkflowNodeRunTable
+				nodes={[devWorkflowNodeRunSummary({ status: "Blocked", attempt: 4, maxAttempts: 4, operatorRetries: 1 })]}
+				onSelect={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByTestId(`dev-workflow-node-attempt-${devWorkflowTestIds.nodeRun}`).textContent).toBe(
+			"attempt 4 of 4 (cap 3, +1 from an operator retry)",
+		);
+	});
+
 	it("names the nodes a Pending row is waiting on, by label rather than by node key", () => {
 		renderWithProviders(
 			<DevWorkflowNodeRunTable

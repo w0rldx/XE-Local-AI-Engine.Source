@@ -805,6 +805,104 @@ public sealed class DevWorkflowRunServiceTests
             throw new NotSupportedException();
     }
 
+    /// <summary>
+    ///     The attempt and status every refusal above was judged against travel ON the command, so the store can
+    ///     re-check them inside the transaction that writes the decision. Everything the service validates is read
+    ///     outside that transaction and under <c>ExpectedVersion.Any</c>, so passing nothing here would leave the
+    ///     store's own guard switched off while every other test still passed.
+    /// </summary>
+    [Test]
+    public async Task DecidingANodeRun_TellsTheStoreWhichAttemptTheAnswerWasJudgedAgainst()
+    {
+        var runId = Guid.NewGuid();
+        var nodeRunId = Guid.NewGuid();
+        var blocked = BlockedNodeRun(runId, nodeRunId);
+        var store = Substitute.For<IDevWorkflowStore>();
+        _ = store.GetRunAsync(runId, Arg.Any<CancellationToken>()).Returns(RunAt(runId));
+        _ = store.FindDecisionByOperationAsync(runId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((DevWorkflowDecisionSnapshot?)null);
+        _ = store.GetNodeRunAsync(nodeRunId, Arg.Any<CancellationToken>()).Returns(blocked);
+        _ = store.ListNodeRunsAsync(runId, Arg.Any<CancellationToken>()).Returns([blocked]);
+
+        // The write is the last thing this exercises: throwing out of it captures the command without a compose pass
+        // over rows no substitute has.
+        RecordDevWorkflowDecisionCommand? written = null;
+        _ = store.RecordDecisionAsync(Arg.Any<RecordDevWorkflowDecisionCommand>(), Arg.Any<CancellationToken>())
+                 .Returns<DevWorkflowMutationResult>(call =>
+                 {
+                     written = call.Arg<RecordDevWorkflowDecisionCommand>();
+                     throw new DevWorkflowNotFoundException("Stopped at the write.");
+                 });
+
+        var service = new DevWorkflowRunService(store,
+            new NoOpDispatcherSignal(),
+            new RecordingWorkSessionLifecycle(Guid.Empty),
+            Substitute.For<IDevWorkflowArtifactBlobStore>(),
+            Options.Create(new DevWorkflowOptions()),
+            NullLogger<DevWorkflowRunService>.Instance);
+
+        _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(() => service.DecideAsync(runId,
+                                nodeRunId,
+                                Guid.NewGuid(),
+                                DevWorkflowDecisionKind.Retry,
+                                "Try it again.",
+                                payloadJson: null,
+                                "operator@localhost.test"))
+                            .ConfigureAwait(false);
+
+        var command = AssertEx.NotNull(written);
+        AssertEx.Equal(blocked.Attempt, command.ExpectedAttempt, "the answer names the attempt it was judged against, or the store cannot tell a moved row from a fresh one.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, command.ExpectedStatus);
+    }
+
+    /// <summary>A run the substituted store answers with, carrying only what <c>DecideAsync</c> reads off it.</summary>
+    private static DevWorkflowRunSnapshot RunAt(Guid runId) =>
+        new(runId,
+            WorkItemId: Guid.NewGuid(),
+            DefinitionId: Guid.NewGuid(),
+            DefinitionVersion: 1,
+            DefinitionGraphHash: "hash",
+            GateOnly,
+            GraphRevision: 0,
+            DevWorkflowRunStatus.Running,
+            LastSequence: 3,
+            FailureClass: null,
+            TerminalReason: null,
+            StartedAtUtc: 1,
+            EndedAtUtc: null,
+            CreatedAtUtc: 1,
+            UpdatedAtUtc: 1,
+            Version: 2);
+
+    /// <summary>A node run standing where an operator Retry is legal: blocked, on an attempt that has been spent.</summary>
+    private static DevWorkflowNodeRunSnapshot BlockedNodeRun(Guid runId, Guid nodeRunId) =>
+        new(nodeRunId,
+            runId,
+            "implement",
+            DevWorkflowNodeType.DevTask,
+            Attempt: 3,
+            MaxAttempts: 3,
+            SessionResumes: 0,
+            DevWorkflowNodeRunStatus.Blocked,
+            QueueReason: null,
+            PendingDecisionKind: null,
+            Sequence: 2,
+            WorkSessionId: null,
+            WorkSessionAvailable: false,
+            AgentDefinitionId: null,
+            DevelopmentProjectId: null,
+            DevelopmentTaskId: null,
+            InputJson: null,
+            OutputJson: null,
+            PolicyResolutionJson: null,
+            MaterializedFromNodeRunId: null,
+            MaterializationIndex: null,
+            FailureClass: null,
+            TerminalReason: null,
+            QueuedAtUtc: null,
+            StartedAtUtc: 1,
+            EndedAtUtc: null,
+            CreatedAtUtc: 1);
+
     private sealed class NoOpDispatcherSignal : IDevWorkflowDispatcherSignal
     {
         public void Signal(Guid runId)

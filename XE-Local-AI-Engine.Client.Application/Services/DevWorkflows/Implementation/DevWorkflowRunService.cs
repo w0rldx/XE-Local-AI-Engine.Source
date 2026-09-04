@@ -244,7 +244,12 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
                                 comment,
                                 payloadJson,
                                 decidedBySubject,
-                                decision == DevWorkflowDecisionKind.Retry ? _options.MaxTotalAttempts : null),
+                                decision == DevWorkflowDecisionKind.Retry ? _options.MaxTotalAttempts : null,
+
+                                // The row this answer was validated against. Everything above read `nodeRun` outside
+                                // the recording transaction, so the write re-checks the pair rather than trusting it.
+                                nodeRun.Attempt,
+                                nodeRun.Status),
                             cancellationToken)
                         .ConfigureAwait(false);
 

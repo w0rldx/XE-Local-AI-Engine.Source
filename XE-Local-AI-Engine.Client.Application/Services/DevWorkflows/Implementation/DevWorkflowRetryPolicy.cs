@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
 using System.Collections.Concurrent;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -657,86 +656,35 @@ internal sealed class DevWorkflowRetryPolicy
         {
             // A transient retry landing in the MIDDLE of a genuine fix loop. Overwriting priorFailure here would leave
             // the routed node's name with this node's own count-less output under it, so the rework request that
-            // follows quotes a verdict it can no longer evidence. Both members stay as the route wrote them.
-            return inputJson!;
+            // follows quotes a verdict it can no longer evidence. Both members stay as the route wrote them — and the
+            // merge still runs, because an operator's retry reason belongs to the attempt they retried and nothing
+            // else, this one included.
+            return DevWorkflowNodeInputs.Merge(inputJson, write: null);
         }
 
-        using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer))
-        {
-            writer.WriteStartObject();
-            using (var existing = Parse(inputJson))
+        return DevWorkflowNodeInputs.Merge(inputJson,
+            writer =>
             {
-                if (existing is not null)
+                if (fromNodeKey is not null)
                 {
-                    foreach (var property in existing.RootElement.EnumerateObject()
-                                                     .Where(property => property.Name != "priorFailure"
-                                                                        && (fromNodeKey is null
-                                                                            || property.Name is not ("priorFailureNode" or "priorFailureAttempt"))))
+                    writer.WriteString("priorFailureNode", fromNodeKey);
+                    if (fromAttempt is { } attempt)
                     {
-                        property.WriteTo(writer);
+                        writer.WriteNumber("priorFailureAttempt", attempt);
                     }
                 }
-            }
 
-            if (fromNodeKey is not null)
-            {
-                writer.WriteString("priorFailureNode", fromNodeKey);
-                if (fromAttempt is { } attempt)
-                {
-                    writer.WriteNumber("priorFailureAttempt", attempt);
-                }
-            }
-
-            writer.WritePropertyName("priorFailure");
-            using (var output = Parse(outputJson))
-            {
-                if (output is null)
-                {
-                    writer.WriteStringValue(outputJson);
-                }
-                else
-                {
-                    output.RootElement.WriteTo(writer);
-                }
-            }
-
-            writer.WriteEndObject();
-        }
-
-        return Encoding.UTF8.GetString(buffer.ToArray());
+                writer.WritePropertyName("priorFailure");
+                DevWorkflowNodeInputs.WriteJsonOrString(writer, outputJson);
+            },
+            fromNodeKey is null ? ["priorFailure"] : ["priorFailure", "priorFailureNode", "priorFailureAttempt"]);
     }
 
     /// <summary>Whether these inputs already name the node whose verdict routed the run back to them.</summary>
     private static bool CarriesRoutedFailure(string? inputJson)
     {
-        using var existing = Parse(inputJson);
+        using var existing = DevWorkflowNodeInputs.Parse(inputJson);
         return existing is not null && existing.RootElement.TryGetProperty("priorFailureNode", out _);
-    }
-
-    /// <summary>A JSON object, or null when there is none or the text is not one this can carry through.</summary>
-    private static JsonDocument? Parse(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return null;
-        }
-
-        try
-        {
-            var document = JsonDocument.Parse(json);
-            if (document.RootElement.ValueKind == JsonValueKind.Object)
-            {
-                return document;
-            }
-
-            document.Dispose();
-            return null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
     }
 
     private static RetryDetail DetailFor(DevWorkflowNodeRunSnapshot nodeRun, DevWorkflowFailure failure) =>

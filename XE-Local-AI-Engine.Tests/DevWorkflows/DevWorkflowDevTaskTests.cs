@@ -1164,6 +1164,60 @@ public sealed class DevWorkflowDevTaskTests
             $"the '{shape}' terminal must revoke the policy it was dispatched with, once.");
     }
 
+    /// <summary>
+    ///     FU2-3, the load-bearing half: the operator's reason for retrying a BLOCKED implementation node reaches the
+    ///     coder round the retry starts, through the task's own change request — which is the one channel Dev Mode
+    ///     composes a coder prompt out of. Observed live on 2026-09-02 as the opposite: a workspace policy refusal
+    ///     blocked the node, the operator retried it saying exactly what to do differently, and the next round was
+    ///     handed the same three fields the refused one was.
+    ///     <para>
+    ///         And asked ONCE. The reason stays on the node run's inputs for the life of the attempt, so without the
+    ///         ledger operation id behind it every poll tick would ask for another round.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AnOperatorRetryOfABlockedDevTask_TellsTheNextCoderRoundWhatTheySaid()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+
+        // One refusal blocks the node with the task left InProgress behind a FAILED coder attempt, which is where a
+        // retried implementation node lands. Nothing is held after it: the round the change request asks for has to
+        // actually run, because the tick that walks the task back through InProgress is the one that re-reaches the
+        // guard, and a held attempt would return at the "something is already working" check long before it.
+        harness.Chain.RefuseNextAttemptsOnPolicy(1);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var blocked = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status);
+
+        await harness.DecideAsync(runId, "implement", DevWorkflowDecisionKind.Retry, comment: "Do not add a test file; extend the existing negate tests.")
+                     .ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var retried = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(expected: 2, retried.Attempt);
+        AssertEx.Equal(expected: 3, retried.MaxAttempts, "the retry bought the attempt it is spending.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded,
+            retried.Status,
+            $"the round the retry asked for ran to AwaitingApply: {retried.TerminalReason ?? retried.OutputJson}");
+
+        var feedback = AssertEx.NotNull((await ReadCoderSnapshotAsync(harness, taskId).ConfigureAwait(false)).PreviousRoundFeedback,
+            "the round the operator paid for must be told what they said, or it redoes exactly what was refused.");
+        AssertEx.Contains(feedback, "extend the existing negate tests");
+        AssertEx.Contains(feedback, "implement", message: "and which step of the workflow the person was answering.");
+
+        // The tick after the asked-for round walks the task back to InProgress with no attempt this node run is
+        // answerable for, so it reaches the guard a SECOND time on the same attempt with the reason still on its
+        // inputs. Only the ledger operation id stops it asking again — without it the task loops back to
+        // ChangesRequested for as long as the dispatcher keeps polling, and the round count below climbs with it.
+        AssertEx.Equal(expected: 1,
+            harness.Chain.Actions.Count(static action => action == nameof(DevelopmentTaskStatus.ChangesRequested)),
+            $"the change request is one-shot per attempt: {string.Join(", ", harness.Chain.Actions)}");
+    }
+
     private static DevWorkflowHarness NewHarness(TimeProvider? clock = null) =>
         DevWorkflowHarness.WithAScriptedChain(clock);
 

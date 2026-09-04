@@ -637,7 +637,9 @@ internal static class DevWorkflowStateMachine
         {
             DevWorkflowDecisionKind.Approve or DevWorkflowDecisionKind.Reject or DevWorkflowDecisionKind.RequestChanges => DevWorkflowNodeRunStatus.Succeeded,
 
-            // Forced: a human retry ignores MaxAttempts, and only the run-wide attempt budget still bounds it.
+            // Forced: a human retry is legal AT the cap, and pays for it by RAISING the row's MaxAttempts by one
+            // (TransitionDevWorkflowNodeRunCommand.WidenMaxAttempts), so the attempt never exceeds the cap it is
+            // measured against. Beyond that only the run-wide attempt budget bounds it.
             DevWorkflowDecisionKind.Retry => DevWorkflowNodeRunStatus.Pending,
             DevWorkflowDecisionKind.Skip => DevWorkflowNodeRunStatus.Skipped,
             _ => DevWorkflowNodeRunStatus.Failed
