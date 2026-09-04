@@ -10803,6 +10803,795 @@
         ]
       }
     },
+    "/api/local/v1/integrations/executions/{executionId}/cancel": {
+      "post": {
+        "tags": [
+          "Integrations"
+        ],
+        "operationId": "cancelIntegrationExecution",
+        "parameters": [
+          {
+            "name": "executionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/integrations/triggers": {
+      "post": {
+        "tags": [
+          "Integrations"
+        ],
+        "operationId": "createIntegrationTrigger",
+        "requestBody": {
+          "x-name": "CreateIntegrationTriggerRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1CreateIntegrationTriggerRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationTriggerView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Integrations"
+        ],
+        "operationId": "listIntegrationTriggers",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1ListIntegrationTriggersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/integrations/sessions/{sessionId}": {
+      "delete": {
+        "tags": [
+          "Integrations"
+        ],
+        "operationId": "deleteIntegrationSession",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Integrations"
+        ],
+        "operationId": "getIntegrationSession",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationSessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/integrations/triggers/{triggerId}": {
+      "delete": {
+        "tags": [
+          "Integrations"
+        ],
+        "operationId": "deleteIntegrationTrigger",
+        "parameters": [
+          {
+            "name": "triggerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Integrations"
+        ],
+        "operationId": "getIntegrationTrigger",
+        "parameters": [
+          {
+            "name": "triggerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationTriggerView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Integrations"
+        ],
+        "operationId": "updateIntegrationTrigger",
+        "parameters": [
+          {
+            "name": "triggerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UpdateIntegrationTriggerRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1UpdateIntegrationTriggerRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationTriggerView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/integrations/keys": {
+      "post": {
+        "tags": [
+          "Integrations"
+        ],
+        "operationId": "generateIntegrationApiKey",
+        "requestBody": {
+          "x-name": "GenerateIntegrationApiKeyRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1GenerateIntegrationApiKeyRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1GenerateIntegrationApiKeyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Integrations"
+        ],
+        "operationId": "listIntegrationApiKeys",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1ListIntegrationApiKeysResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/integrations/executions/{executionId}": {
+      "get": {
+        "tags": [
+          "Integrations"
+        ],
+        "operationId": "getIntegrationExecution",
+        "parameters": [
+          {
+            "name": "executionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationExecutionDetailDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/integrations/executions/{executionId}/events": {
+      "get": {
+        "tags": [
+          "Integrations"
+        ],
+        "operationId": "getIntegrationExecutionEvents",
+        "parameters": [
+          {
+            "name": "executionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sinceSeq",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "nullable": true
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1ListIntegrationExecutionEventsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/integrations/executions": {
+      "get": {
+        "tags": [
+          "Integrations"
+        ],
+        "operationId": "listIntegrationExecutions",
+        "parameters": [
+          {
+            "name": "triggerId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            }
+          },
+          {
+            "name": "sessionId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "nullable": true,
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesIntegrationExecutionStatus"
+                }
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1ListIntegrationExecutionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/integrations/sessions": {
+      "get": {
+        "tags": [
+          "Integrations"
+        ],
+        "operationId": "listIntegrationSessions",
+        "parameters": [
+          {
+            "name": "triggerId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "nullable": true,
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesIntegrationSessionStatus"
+                }
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1ListIntegrationSessionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/integrations/keys/{keyId}": {
+      "delete": {
+        "tags": [
+          "Integrations"
+        ],
+        "operationId": "revokeIntegrationApiKey",
+        "parameters": [
+          {
+            "name": "keyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/images/models/browse": {
       "get": {
         "tags": [
@@ -30104,6 +30893,558 @@
           "traceId": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationTriggerView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "displayName",
+          "enabled",
+          "targetKind",
+          "targetAgentDefinitionId",
+          "sessionPolicy",
+          "acceptedInputKinds",
+          "createdAtUtc",
+          "updatedAtUtc",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "targetKind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesIntegrationTargetKind"
+          },
+          "targetAgentDefinitionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "sessionPolicy": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesIntegrationSessionPolicy"
+          },
+          "acceptedInputKinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesIntegrationTargetKind": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Agent"
+        ],
+        "enum": [
+          "Agent"
+        ]
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesIntegrationSessionPolicy": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "PerInvocation",
+          "CallerManaged"
+        ],
+        "enum": [
+          "PerInvocation",
+          "CallerManaged"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1CreateIntegrationTriggerRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "displayName",
+          "targetAgentDefinitionId",
+          "acceptedInputKinds"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9-]{1,63}$",
+            "nullable": false
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "targetKind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesIntegrationTargetKind"
+          },
+          "targetAgentDefinitionId": {
+            "type": "string",
+            "format": "guid",
+            "minLength": 1,
+            "nullable": false
+          },
+          "sessionPolicy": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesIntegrationSessionPolicy"
+          },
+          "acceptedInputKinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1GenerateIntegrationApiKeyResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "view"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "view": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationApiKeyView"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationApiKeyView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "principalId",
+          "keyPrefix",
+          "label",
+          "createdAtUtc"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "principalId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "keyPrefix": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "allowedTriggerIds": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "lastUsedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "revokedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1GenerateIntegrationApiKeyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 0,
+            "nullable": false
+          },
+          "allowedTriggerIds": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          "principalId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationExecutionDetailDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "execution",
+          "principalId",
+          "keyPrefix",
+          "requestId",
+          "invocationId",
+          "outputBytes",
+          "lastSequence",
+          "version"
+        ],
+        "properties": {
+          "execution": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationExecutionSummaryDto"
+          },
+          "principalId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "keyPrefix": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "invocationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "outputBytes": {
+            "type": "integer"
+          },
+          "lastSequence": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "stopRequestedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationExecutionSummaryDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "triggerId",
+          "sessionId",
+          "status",
+          "receivedAtUtc",
+          "outputCount"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "triggerId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesIntegrationExecutionStatus"
+          },
+          "receivedAtUtc": {
+            "type": "integer"
+          },
+          "startedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "endedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "failureCategory": {
+            "type": "string",
+            "nullable": true
+          },
+          "failureSummary": {
+            "type": "string",
+            "nullable": true
+          },
+          "outputCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesIntegrationExecutionStatus": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Accepted",
+          "Queued",
+          "Running",
+          "Completed",
+          "Failed",
+          "Cancelled"
+        ],
+        "enum": [
+          "Accepted",
+          "Queued",
+          "Running",
+          "Completed",
+          "Failed",
+          "Cancelled"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1ListIntegrationExecutionEventsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationExecutionEventDto"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationExecutionEventDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "executionId",
+          "sequence",
+          "eventType",
+          "occurredAtUtc"
+        ],
+        "properties": {
+          "executionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "sequence": {
+            "type": "integer"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "detailJson": {
+            "type": "string",
+            "nullable": true
+          },
+          "occurredAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1ListIntegrationExecutionEventsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationSessionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "triggerId",
+          "triggerName",
+          "agentDefinitionId",
+          "status",
+          "createdAtUtc",
+          "lastActivityUtc",
+          "executionCount"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "triggerId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "triggerName": {
+            "type": "string"
+          },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesIntegrationSessionStatus"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "lastActivityUtc": {
+            "type": "integer"
+          },
+          "executionCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesIntegrationSessionStatus": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Active",
+          "Closed"
+        ],
+        "enum": [
+          "Active",
+          "Closed"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1ListIntegrationApiKeysResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationApiKeyView"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1ListIntegrationExecutionsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationExecutionSummaryDto"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1ListIntegrationExecutionsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1ListIntegrationSessionsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationSessionResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1ListIntegrationSessionsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1ListIntegrationTriggersResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationTriggerView"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsIntegrationsV1UpdateIntegrationTriggerRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "displayName",
+          "targetAgentDefinitionId",
+          "acceptedInputKinds",
+          "expectedVersion"
+        ],
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "targetAgentDefinitionId": {
+            "type": "string",
+            "format": "guid",
+            "minLength": 1,
+            "nullable": false
+          },
+          "sessionPolicy": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesIntegrationSessionPolicy"
+          },
+          "acceptedInputKinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
           }
         }
       },

@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Models;
 /// <summary>
 ///     Resolves a conversation's non-destructive compaction synopsis into the ONE synthetic context message that
 ///     replaces the covered history, shared by every path that assembles a turn's context (the send path's
-///     <c>NodeChatStreamService.BuildConversationContext</c> and the regenerate path's
+///     <c>ConversationContextBuilder.Build</c> and the regenerate path's
 ///     <c>NodeChatRegenerationService.BuildRegenerationContext</c>). Both must splice identically: a compacted
 ///     conversation that regenerates would otherwise re-send the verbatim messages the synopsis already replaced.
 ///     <para>

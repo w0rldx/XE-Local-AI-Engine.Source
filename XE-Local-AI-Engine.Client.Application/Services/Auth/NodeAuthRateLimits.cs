@@ -24,4 +24,13 @@ public static class NodeAuthRateLimits
     ///     from hammering the node unbounded.
     /// </summary>
     public const string LocalModelProxyPolicy = "LocalModelProxyRateLimit";
+
+    /// <summary>
+    ///     The COARSE PER-IP ABUSE CEILING on the external integration API, not a fairness control — do not "tighten"
+    ///     it back down to <c>IntegrationOptions.RateLimitPerMinute</c>. It runs before authentication and partitions
+    ///     by remote IP, and the surface is loopback-only, so every key and every local process share one bucket; sized
+    ///     at the per-principal budget it would be a denial of service against the node's own integrators. Fairness
+    ///     lives in <c>IntegrationPrincipalRateLimiter</c>, consulted inside the handler where a principal exists.
+    /// </summary>
+    public const string IntegrationApiPolicy = "IntegrationApiRateLimit";
 }

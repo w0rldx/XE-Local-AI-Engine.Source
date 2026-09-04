@@ -592,7 +592,7 @@ public sealed class NodeChatRegenerationService(
 
         // The synthetic context messages (knowledge-base grounding, then the compaction synopsis) are prepended so the
         // model reads them before the conversation history — same order and rationale as the send path
-        // (NodeChatStreamService.BuildConversationContext). They take the first slots and the history shifts down by
+        // (ConversationContextBuilder.Build). They take the first slots and the history shifts down by
         // their count; empty on a plain, uncompacted rerun.
         var leadingContext = new List<ConversationMessageDto>(capacity: 2);
         if (knowledgeContext is not null)

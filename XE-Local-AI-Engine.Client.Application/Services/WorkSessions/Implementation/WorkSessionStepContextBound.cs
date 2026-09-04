@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
@@ -67,10 +68,29 @@ internal sealed class WorkSessionStepContextBound(
     ///     or the gate could not be read) falls back to the transcript's model.
     /// </param>
     /// <param name="cancellationToken">Cancels the reads; the compaction itself is the caller's own token.</param>
+    /// <param name="keepVerbatimExchanges">
+    ///     How many of the newest messages a forced fold keeps verbatim. The default is the work-session floor of two,
+    ///     so the supervisor's call site is byte-identical, and it exists because a work-session step rebuilds its state
+    ///     block from the database every step — the transcript beyond the previous step carries nothing the model still
+    ///     needs.
+    ///     <para>
+    ///         An integration session has no state block: its transcript IS the session state. Folded to two, the first
+    ///         turn over budget would collapse a caller-managed session to a synopsis plus the last exchange and delete
+    ///         the continuation the feature exists to deliver — so the integration coordinator passes the CHAT window
+    ///         instead. It sits LAST, after the token, deliberately: an <c>int</c> inserted before it rebinds the
+    ///         supervisor's fourth positional argument (<c>CancellationToken.None</c>) and does not compile.
+    ///     </para>
+    /// </param>
+    [SuppressMessage("Design", "CA1068:CancellationToken parameters must come last",
+        Justification =
+            "The keep window has to sit AFTER the token: the supervisor's call site passes four positional arguments whose fourth is CancellationToken.None, "
+            + "so an int inserted before the token silently rebinds it and does not compile. The rule's own exemption for trailing optional parameters does not "
+            + "apply here only because effectiveModel is optional too, which makes the token not the last REQUIRED parameter.")]
     public async Task ApplyAsync(Guid conversationId,
         int budgetTokens,
         string? effectiveModel = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int keepVerbatimExchanges = SessionKeepVerbatim)
     {
         if (budgetTokens <= 0)
         {
@@ -94,7 +114,7 @@ internal sealed class WorkSessionStepContextBound(
         // The FOLD runs on the node's default chat model, not on the one the step itself uses — true for a session's
         // caller pin exactly as it already is for a bound agent's own. Summarizing is not the session's work, and
         // routing it to a pinned model would make a fold contend for that model's load slot mid-session.
-        var result = await _compaction.CompactAsync(conversationId, requestedModel: null, SessionKeepVerbatim, cancellationToken).ConfigureAwait(false);
+        var result = await _compaction.CompactAsync(conversationId, requestedModel: null, keepVerbatimExchanges, cancellationToken).ConfigureAwait(false);
         _logger.LogInformation(
             "Work session conversation {ConversationId} projected ~{Projected} replayed token(s) against a step budget of {Budget} (effective {EffectiveBudget} after this model's observed correction); forced compaction reported {Outcome} after folding {Folded} message(s).",
             conversationId,
@@ -108,7 +128,7 @@ internal sealed class WorkSessionStepContextBound(
     /// <summary>
     ///     Estimates the tokens the next step's request will carry for HISTORY: the synopsis plus every completed,
     ///     content-bearing message the synopsis does not already cover. Mirrors
-    ///     <c>NodeChatStreamService.BuildConversationContext</c> — same selected-path collapse, same anchor space, same
+    ///     <c>ConversationContextBuilder.Build</c> — same selected-path collapse, same anchor space, same
     ///     completed/non-empty filter — and measures with the same <see cref="ITokenEstimator" /> the context budgeters
     ///     use, under the same per-model calibration, so this projection and their verdicts are in one arithmetic. The
     ///     state block for the coming step is deliberately NOT counted: it is bounded by construction and is what the

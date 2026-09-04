@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
@@ -55,12 +56,22 @@ public static class NodeChatMessageStatusValues
     };
 }
 
+/// <summary>
+///     <paramref name="Kind" /> is the <c>conversations.kind</c> discriminator (<see cref="NodeConversationKind" />);
+///     it defaults to <c>chat</c>, so every ordinary caller keeps its behaviour. <paramref name="ConversationId" />
+///     lets a caller create the conversation at an id it minted earlier — the integration accept path commits its
+///     durable rows first and creates the owned conversation afterwards, at the id the session row already carries.
+///     Passing <c>null</c> keeps the mint-your-own behaviour. The column is the primary key, so a colliding id is a
+///     <c>SqliteException</c> and a caller bug, exactly as it would be on the mint path.
+/// </summary>
 public sealed record NodeChatCreateConversationRequest(
     string? Title,
     string? UserId,
     long CreatedAtUtc,
     string Origin = NodeChatOriginValues.Local,
-    Guid? AgentDefinitionId = null);
+    Guid? AgentDefinitionId = null,
+    string Kind = NodeConversationKind.Chat,
+    Guid? ConversationId = null);
 
 public sealed record NodeChatEnsureConversationRequest(
     Guid ConversationId,

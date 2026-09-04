@@ -91,6 +91,10 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
             case LocalModelProxyApiKey proxyApiKey:
                 proxyApiKey.KeyHash = NodePayloadProtector.Decrypt(proxyApiKey.KeyHash, context.NodeEncryptionKey.Span, Guid.Empty, proxyApiKey.Id, "local_model_proxy_api_key_hash");
                 break;
+            case IntegrationApiKey integrationApiKey:
+                integrationApiKey.KeyHash =
+                    NodePayloadProtector.Decrypt(integrationApiKey.KeyHash, context.NodeEncryptionKey.Span, Guid.Empty, integrationApiKey.Id, "integration_api_key_hash");
+                break;
             case ScheduledJobDefinition jobDefinition:
                 jobDefinition.ParameterJson = DecryptIfPresent(jobDefinition.ParameterJson, context.NodeEncryptionKey.Span, Guid.Empty, jobDefinition.Id, "parameter_json");
                 break;
@@ -447,6 +451,13 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
             case DevWorkflowRunEvent workflowEvent:
                 workflowEvent.DetailJson =
                     DecryptIfPresent(workflowEvent.DetailJson, context.NodeEncryptionKey.Span, workflowEvent.RunId, workflowEvent.Id, "dev_workflow_run_event_detail_json");
+                break;
+            case IntegrationExecutionEvent executionEvent:
+                executionEvent.DetailJson = DecryptIfPresent(executionEvent.DetailJson,
+                    context.NodeEncryptionKey.Span,
+                    executionEvent.ExecutionId,
+                    executionEvent.Id,
+                    "integration_execution_event_detail_json");
                 break;
         }
 

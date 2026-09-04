@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.Integrations.Tools;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
@@ -50,6 +51,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly AllowedToolDto _spawnOfferDto;
     private readonly AllowedToolDto _computeOfferDto;
+    private readonly AllowedToolDto _emitOutputOfferDto;
 
     // The four work-session state tools, held out of the whole offer for the same reason spawn_subagent is: they are
     // profile-opt-in only. They are also inert outside a session — each handler resolves its session from the ambient
@@ -97,8 +99,10 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         //   * RequiresApproval is STRUCTURAL, not a risk judgement: it is what routes the call through the runner's
         //     out-of-stream approval round-trip, where the human wait happens outside the stream-idle watchdog. A tool
         //     handler cannot simply block for a human — it would trip StreamIdleTimeout. It also means the three
-        //     unattended paths (sub-agent, scheduler, and delegate-scope inbound MCP), which strip every
-        //     approval-required tool, strip this one for free — correct, since none of them has a person to answer.
+        //     unattended paths (sub-agent, scheduler, delegate-scope inbound MCP), which strip every approval-required
+        //     tool, strip this one for free — correct, since none of them has a person to answer. The integration
+        //     coordinator is NOT one of them: it does not strip, it composes an explicit offer that this builtin
+        //     catalog never joins, so ask_user cannot reach an integration run in the first place.
         //     Agentic-scope inbound MCP is the deliberate exception: it may invoke approval-required tools through the
         //     strict audited auto-approval boundary. If ask_user is selected there, its handler's no-answer fail-safe
         //     returns immediately rather than creating a human wait that an unattended caller cannot satisfy.
@@ -149,6 +153,19 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // approval round-trip key off; the unattended paths (sub-agent, scheduler, delegate-scope inbound MCP) strip
         // every approval-required tool, so they strip this one for free.
         _computeOfferDto = ToOfferDto(ComputeToolDefinition.ToolName, ComputeToolDefinition.ParameterSchema, requiresApproval: true, ToolCategory.WriteExecute);
+
+        // emit_output is held out of EVERY projection — the whole offer, the profile pool, and both known-tool catalogs
+        // — so it never reaches chat, the scheduler, a benchmark, MCP, a sub-agent, or the agent-editor tool picker. An
+        // integration execution is the only context in which delivering a payload to an external caller means anything,
+        // and the integration coordinator is the only caller that may union it in, through the accessor below. That is
+        // the same seam ask_user uses, for the same reason: it is a property of the RUN, not a per-agent permission.
+        //
+        // The approval flag here is the raw declared one; ToOfferDto consults no policy. The coordinator recomposes it
+        // through IToolApprovalPolicy at union time, which is the only place it can be composed for this tool.
+        _emitOutputOfferDto = ToOfferDto(EmitOutputToolDefinition.ToolName,
+            EmitOutputToolDefinition.ParameterSchema,
+            requiresApproval: false,
+            ToolCategory.ReadLocal);
 
         // WriteExecute is the honest category: every one of these writes durable session rows, and it is the only write
         // category the enum has. Labelling them ReadLocal to keep them out of a category-based operator policy would
@@ -359,6 +376,9 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             .. customDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))
         ];
     }
+
+    /// <inheritdoc />
+    public IReadOnlyList<AllowedToolDto> GetIntegrationOutputOffer() => [_emitOutputOfferDto];
 
     public IReadOnlyList<AllowedToolDto> GetOfferedToolsForProfile(string? activeModelId, bool isCloudModel = false)
     {
