@@ -2710,6 +2710,7 @@ export const zXeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse = z.ob
 	category: z.string(),
 	effectiveRequiresApproval: z.boolean(),
 	sessionScopeEligible: z.boolean(),
+	unattendedBehaviour: z.string(),
 });
 
 export const zXeLocalAiEngineClientEndpointsMcpV1ToolCatalogResponse = z.object({
@@ -3561,12 +3562,20 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationApiKeys
 
 export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecutionsResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionSummaryDto),
+	totalCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
 export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecutionsRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationSessionsResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionResponse),
+	totalCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
 export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationSessionsRequest = z.record(z.string(), z.never());
@@ -8984,7 +8993,7 @@ export const zGetIntegrationExecutionEventsResponse =
 export const zListIntegrationExecutionsQuery = z.object({
 	triggerId: z.guid().nullish(),
 	sessionId: z.guid().nullish(),
-	status: zXeLocalAiEngineClientPersistenceEntitiesIntegrationExecutionStatus.nullish(),
+	status: z.array(zXeLocalAiEngineClientPersistenceEntitiesIntegrationExecutionStatus).nullish(),
 	limit: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })

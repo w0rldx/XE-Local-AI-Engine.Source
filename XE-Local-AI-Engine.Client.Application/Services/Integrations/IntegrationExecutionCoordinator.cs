@@ -42,8 +42,12 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 /// </summary>
 internal sealed class IntegrationExecutionCoordinator : BackgroundService
 {
-    /// <summary>How many rows the startup sweep pulls per page. Bounded so a large backlog does not load in one list.</summary>
-    private const int RecoveryPageSize = 200;
+    /// <summary>
+    ///     How many EVENTS <see cref="HighestPersistedSequenceAsync" /> pulls per page. Events are unbounded — one
+    ///     execution can write as many as it likes — so that read genuinely has to page. The row sweep does not: see
+    ///     <see cref="ReconcileInterruptedAsync" />.
+    /// </summary>
+    private const int RecoveryEventPageSize = 200;
 
     /// <summary>
     ///     How many times a dispatch fault, or the whole startup sweep, is retried before it is given up on. Small on
@@ -359,23 +363,21 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>();
 
-        var interrupted = new List<IntegrationExecutionSnapshot>();
-        foreach (var status in NonTerminalStatuses)
-        {
-            var offset = 0;
-            while (true)
-            {
-                var page = await store.ListAsync(new IntegrationExecutionFilter(TriggerId: null, SessionId: null, status, RecoveryPageSize, offset), cancellationToken)
-                                      .ConfigureAwait(false);
-                interrupted.AddRange(page);
-                if (page.Count < RecoveryPageSize)
-                {
-                    break;
-                }
-
-                offset += page.Count;
-            }
-        }
+        // ONE read of the whole non-terminal set, unpaged, and ONE pass over that snapshot. One read rather than one
+        // per status because the filter takes a status set; unpaged because an offset over THIS set cannot be made
+        // safe. It shrinks (every row this sweep closes leaves the filter, as does one the already-listening external
+        // cancel path closes mid-sweep) and it grows (that same listener can admit while the sweep runs), so an
+        // advancing offset steps past an unseen row that shifted down behind the cursor, and an offset that restarts
+        // at the top on every change never terminates under sustained admission churn.
+        //
+        // Loading it all is affordable by construction: IntegrationExecutionStore.AcceptAsync counts the node-wide
+        // non-terminal rows inside its admission transaction and refuses past IntegrationOptions.MaxQueuedExecutions
+        // (default 8, hard ceiling 1024), so the large backlog the old page size guarded against cannot exist.
+        //
+        // A stale snapshot is harmless: TerminalizeAsync is a status/version CAS over NonTerminalStatuses, so a row
+        // that went terminal between the read and its turn loses the CAS and this sweep writes nothing for it.
+        var interrupted = await store.ListAsync(new IntegrationExecutionFilter(TriggerId: null, SessionId: null, NonTerminalStatuses, int.MaxValue, Offset: 0), cancellationToken)
+                                     .ConfigureAwait(false);
 
         var recovered = 0;
         foreach (var row in interrupted)
@@ -434,14 +436,14 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         var highest = row.LastSequence;
         while (true)
         {
-            var page = await store.ListEventsAsync(row.Id, highest, RecoveryPageSize, cancellationToken).ConfigureAwait(false);
+            var page = await store.ListEventsAsync(row.Id, highest, RecoveryEventPageSize, cancellationToken).ConfigureAwait(false);
             if (page.Count == 0)
             {
                 return highest;
             }
 
             highest = page[^1].Sequence;
-            if (page.Count < RecoveryPageSize)
+            if (page.Count < RecoveryEventPageSize)
             {
                 return highest;
             }

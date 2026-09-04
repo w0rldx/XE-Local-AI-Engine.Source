@@ -170,6 +170,14 @@ public sealed class IntegrationSessionService
         return [.. sessions.Select(session => ToDto(session, names.GetValueOrDefault(session.TriggerId, string.Empty)))];
     }
 
+    /// <summary>The total the operator's pager labels a page with: the same filter, without its window.</summary>
+    public Task<int> CountAsync(IntegrationSessionFilter filter, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        return _sessions.CountAsync(filter.TriggerId, filter.Status, cancellationToken);
+    }
+
     /// <summary>
     ///     The integrator's own read, and its ENTIRE authorisation decision is the shared helper: principal ownership
     ///     AND the current key's trigger allowlist. Returns <see langword="null" /> for every masked case — unknown,

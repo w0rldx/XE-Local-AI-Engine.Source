@@ -4,6 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Integrations.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Integrations.V1.Validators;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
@@ -30,17 +31,21 @@ public sealed class ListIntegrationExecutionsEndpoint(IntegrationExecutionQueryS
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var rows = await _executions.ListAsync(new IntegrationExecutionFilter(req.TriggerId,
-                                           req.SessionId,
-                                           req.Status,
-                                           Math.Clamp(req.Limit ?? DefaultLimit, min: 1, ListIntegrationExecutionsRequestValidator.MaxLimit),
-                                           Math.Max(req.Offset ?? 0, val2: 0)),
-                                       ct)
-                                   .ConfigureAwait(false);
+        var filter = new IntegrationExecutionFilter(req.TriggerId,
+            req.SessionId,
+            req.Status is { Count: > 0 } statuses ? new HashSet<IntegrationExecutionStatus>(statuses) : null,
+            Math.Clamp(req.Limit ?? DefaultLimit, min: 1, ListIntegrationExecutionsRequestValidator.MaxLimit),
+            Math.Max(req.Offset ?? 0, val2: 0));
+
+        var rows = await _executions.ListAsync(filter, ct).ConfigureAwait(false);
+
+        // The SAME filter instance for both reads, so the total can only ever describe the page beside it.
+        var totalCount = await _executions.CountAsync(filter, ct).ConfigureAwait(false);
 
         await Send.OkAsync(new ListIntegrationExecutionsResponse
             {
-                Items = rows.Select(IntegrationMapper.ToSummary).ToArray()
+                Items = rows.Select(IntegrationMapper.ToSummary).ToArray(),
+                TotalCount = totalCount
             },
             ct).ConfigureAwait(false);
     }

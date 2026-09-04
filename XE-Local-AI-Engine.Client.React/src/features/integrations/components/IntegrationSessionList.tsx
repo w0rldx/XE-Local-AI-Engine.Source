@@ -3,7 +3,8 @@ import { IconEye, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
-import { formatIntegrationTimestamp, shortPrincipalId } from "@/features/integrations/components/IntegrationFormatters";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { shortPrincipalId } from "@/features/integrations/components/IntegrationFormatters";
 import { IntegrationSessionStatusBadge } from "@/features/integrations/components/IntegrationStatusBadge";
 import type { IntegrationSession } from "@/features/integrations/models/IntegrationModels";
 
@@ -80,10 +81,10 @@ export function IntegrationSessionList({ sessions, isMutating, onView, onDelete 
 								/>
 							</Table.Td>
 							<Table.Td>
-								<Text size="sm">{formatIntegrationTimestamp(session.createdAtUtc)}</Text>
+								<Text size="sm">{formatTimestamp(session.createdAtUtc)}</Text>
 							</Table.Td>
 							<Table.Td>
-								<Text size="sm">{formatIntegrationTimestamp(session.lastActivityUtc)}</Text>
+								<Text size="sm">{formatTimestamp(session.lastActivityUtc)}</Text>
 							</Table.Td>
 							<Table.Td>
 								<Text size="sm">{session.executionCount}</Text>

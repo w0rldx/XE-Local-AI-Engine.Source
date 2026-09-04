@@ -11417,13 +11417,14 @@
           {
             "name": "status",
             "in": "query",
+            "style": "form",
+            "explode": true,
             "schema": {
+              "type": "array",
               "nullable": true,
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesIntegrationExecutionStatus"
-                }
-              ]
+              "items": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesIntegrationExecutionStatus"
+              }
             }
           },
           {
@@ -29134,7 +29135,8 @@
           "source",
           "category",
           "effectiveRequiresApproval",
-          "sessionScopeEligible"
+          "sessionScopeEligible",
+          "unattendedBehaviour"
         ],
         "properties": {
           "name": {
@@ -29157,6 +29159,9 @@
           },
           "sessionScopeEligible": {
             "type": "boolean"
+          },
+          "unattendedBehaviour": {
+            "type": "string"
           }
         }
       },
@@ -31755,7 +31760,8 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "items"
+          "items",
+          "totalCount"
         ],
         "properties": {
           "items": {
@@ -31763,6 +31769,10 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationExecutionSummaryDto"
             }
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -31774,7 +31784,8 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "items"
+          "items",
+          "totalCount"
         ],
         "properties": {
           "items": {
@@ -31782,6 +31793,10 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsIntegrationsV1IntegrationSessionResponse"
             }
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

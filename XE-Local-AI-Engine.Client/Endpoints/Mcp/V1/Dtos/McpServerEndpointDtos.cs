@@ -213,4 +213,40 @@ public sealed class ToolCatalogEntryResponse
     ///     not carry, a resource-read that names no resource) which only ever remove eligibility.
     /// </summary>
     public required bool SessionScopeEligible { get; init; }
+
+    /// <summary>
+    ///     What reaching this tool does to a run that has NO operator behind it — a scheduled run, an integration
+    ///     trigger run, any invocation whose package is unattended. One of the
+    ///     <see cref="ToolUnattendedBehaviourValues" />, and NOT derivable from
+    ///     <see cref="EffectiveRequiresApproval" />: <c>ask_user</c> is approval-gated too (that is how the call is
+    ///     routed to the human round-trip) but an unattended run continues past it, so a warning driven off the
+    ///     approval flag alone names a tool that would not actually fail the run.
+    /// </summary>
+    public required string UnattendedBehaviour { get; init; }
+}
+
+/// <summary>
+///     The closed value set of <see cref="ToolCatalogEntryResponse.UnattendedBehaviour" />, each read straight off
+///     <c>ToolApprovalCoordinator</c>'s two unattended branches. Strings rather than an enum, matching the
+///     <see cref="ToolCatalogEntryResponse.Source" /> and <see cref="ToolCatalogEntryResponse.Category" /> idiom on the
+///     same record; an unrecognized value must degrade fail-closed on the client.
+/// </summary>
+public static class ToolUnattendedBehaviourValues
+{
+    /// <summary>
+    ///     The run ENDS. <c>ToolApprovalCoordinator.RequestToolApprovalAsync</c> throws
+    ///     <c>ApprovalUnavailableException</c> before anything is broadcast, because executing a tool nobody sanctioned
+    ///     is not a safe default.
+    /// </summary>
+    public const string Fails = "fails";
+
+    /// <summary>
+    ///     The run CONTINUES without an answer. <c>ToolApprovalCoordinator.RequestUserAnswerAsync</c> skips the park for
+    ///     an unattended package and stashes the same "not answered" result the wait would have reached, so the model
+    ///     gets a branchable result instead of a dead turn. Only <c>ask_user</c> behaves this way.
+    /// </summary>
+    public const string ContinuesUnanswered = "continuesUnanswered";
+
+    /// <summary>The tool needs no human at all, so an unattended run executes it exactly as an interactive one does.</summary>
+    public const string Runs = "runs";
 }

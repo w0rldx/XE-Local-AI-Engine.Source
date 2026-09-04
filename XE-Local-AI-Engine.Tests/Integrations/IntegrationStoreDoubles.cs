@@ -565,6 +565,17 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
     /// <summary>Makes every paged list throw, which is how a WHOLE startup sweep fails.</summary>
     public bool ThrowOnEveryList { get; set; }
 
+    /// <summary>
+    ///     Runs AFTER each read is taken, with the 1-based read number, so a suite can change the filtered set between
+    ///     the read and the caller's pass over it.
+    /// </summary>
+    public Action<int>? AfterList { get; set; }
+
+    /// <summary>How many reads have been served. The startup sweep's whole shape is "exactly one".</summary>
+    public int ListCalls => Volatile.Read(ref _listCalls);
+
+    private int _listCalls;
+
     public Task<IReadOnlyList<IntegrationExecutionSnapshot>> ListAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default)
     {
         if (ThrowOnEveryList)
@@ -574,19 +585,40 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
 
         ArgumentNullException.ThrowIfNull(filter);
 
+        IReadOnlyList<IntegrationExecutionSnapshot> taken;
         lock (_gate)
         {
-            var matches = _rows.Where(row => (filter.TriggerId is null || row.TriggerId == filter.TriggerId)
-                                             && (filter.SessionId is null || row.SessionId == filter.SessionId)
-                                             && (filter.Status is null || row.Status == filter.Status))
-                               .OrderByDescending(static row => row.ReceivedAtUtc)
-                               .ThenByDescending(static row => row.Id)
-                               .Skip(filter.Offset)
-                               .Take(filter.Limit)
-                               .ToArray();
-            return Task.FromResult<IReadOnlyList<IntegrationExecutionSnapshot>>(matches);
+            taken = Matching(filter).OrderByDescending(static row => row.ReceivedAtUtc)
+                                    .ThenByDescending(static row => row.Id)
+                                    .Skip(filter.Offset)
+                                    .Take(filter.Limit)
+                                    .ToArray();
+        }
+
+        // Counted unconditionally: `hook?.Invoke(Increment())` skips the increment when no hook is set, and ListCalls
+        // must be true for every suite, not only the ones that install one.
+        var call = Interlocked.Increment(ref _listCalls);
+
+        // Outside the lock: the hook mutates rows through the double's own public helpers, which take it themselves.
+        AfterList?.Invoke(call);
+        return Task.FromResult(taken);
+    }
+
+    public Task<int> CountAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        lock (_gate)
+        {
+            return Task.FromResult(Matching(filter).Count());
         }
     }
+
+    /// <summary>The real store's shared filter, mirrored so the double's count and page agree the same way.</summary>
+    private IEnumerable<IntegrationExecutionSnapshot> Matching(IntegrationExecutionFilter filter) =>
+        _rows.Where(row => (filter.TriggerId is null || row.TriggerId == filter.TriggerId)
+                           && (filter.SessionId is null || row.SessionId == filter.SessionId)
+                           && (filter.Status is not { Count: > 0 } statuses || statuses.Contains(row.Status)));
 
     /// <summary>Makes the next non-terminal CAS lose, as it does when a concurrent cancel CASed the same version first.</summary>
     public bool FailNextStatusCas { get; set; }
@@ -808,6 +840,10 @@ internal sealed class FakeIntegrationSessionStore : IIntegrationSessionStore
         ];
         return Task.FromResult(page);
     }
+
+    public Task<int> CountAsync(Guid? triggerId, IntegrationSessionStatus? status, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_rows.Count(row => (triggerId is not { } trigger || row.TriggerId == trigger)
+                                           && (status is not { } sessionStatus || row.Status == sessionStatus)));
 
     public Task<bool> DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
         Task.FromResult(_rows.RemoveAll(row => row.Id == sessionId) > 0);

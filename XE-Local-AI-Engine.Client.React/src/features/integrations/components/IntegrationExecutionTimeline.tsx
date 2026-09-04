@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
-import { formatIntegrationTimestamp } from "@/features/integrations/components/IntegrationFormatters";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import type { IntegrationExecutionEvent } from "@/features/integrations/models/IntegrationModels";
 
 interface IntegrationExecutionTimelineProps {
@@ -210,7 +210,7 @@ export function IntegrationExecutionTimeline({ events, isLoading }: IntegrationE
 								{event.eventType}
 							</Badge>
 							<Text size="xs" c="dimmed">
-								{formatIntegrationTimestamp(event.occurredAtUtc)}
+								{formatTimestamp(event.occurredAtUtc)}
 							</Text>
 							{line === null ? null : <Text size="sm">{line}</Text>}
 						</Group>
