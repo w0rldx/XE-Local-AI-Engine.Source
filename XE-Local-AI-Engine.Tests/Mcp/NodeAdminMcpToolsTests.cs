@@ -957,6 +957,18 @@ public sealed class NodeAdminMcpToolsTests
             1,
             null);
 
+    // The switch throws on an unmapped member, and a validation error is the only thing that reaches it — so a new
+    // whitelisted setting whose arm was forgotten turns an operator's rejection into a 500 on the one path that was
+    // supposed to explain what they got wrong. Asked over the enum, so the next member cannot regress it either.
+    [Test]
+    public void SettingsField_NamesEveryNodeSettingsField()
+    {
+        foreach (var field in Enum.GetValues<NodeSettingsField>())
+        {
+            AssertEx.NotEmpty(McpAdminWireNames.SettingsField(field), $"{field} has no snake_case name on the MCP surface.");
+        }
+    }
+
     private static DevWorkflowNodeRunSnapshot NodeRun(string nodeKey, DevWorkflowNodeRunStatus status) =>
         new(Guid.NewGuid(),
             Guid.NewGuid(),

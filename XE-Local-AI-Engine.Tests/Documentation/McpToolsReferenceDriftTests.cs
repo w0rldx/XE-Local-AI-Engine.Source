@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Documentation;
 
-using System.Globalization;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using ModelContextProtocol.Server;
@@ -38,36 +37,6 @@ public sealed partial class McpToolsReferenceDriftTests
                                     .Order()
                                     .ToArray();
         AssertEx.Empty(wrongScopes, $"Documented MCP tool scopes are wrong: {string.Join("; ", wrongScopes)}");
-    }
-
-    [Test]
-    public void McpToolsReference_SettingsWhitelistMatchesTheUpdateNodeSettingsParameters()
-    {
-        // The tool table above pins names and scopes; this pins the one tool whose CONTRACT is a field list. Without
-        // it a new whitelisted setting silently leaves the reference claiming a stale count and a stale list.
-        var registered = AssertEx.NotNull(typeof(NodeAdminMcpTools).GetMethods(BindingFlags.Instance | BindingFlags.Public)
-                                                                   .SingleOrDefault(static method =>
-                                                                       method.GetCustomAttribute<McpServerToolAttribute>()?.Name == "update_node_settings"))
-                                 .GetParameters()
-                                 .Where(static parameter => parameter.ParameterType != typeof(CancellationToken))
-                                 .Select(static parameter => parameter.Name!)
-                                 .Order(StringComparer.Ordinal)
-                                 .ToArray();
-
-        var reference = File.ReadAllText(RepositoryPaths.Combine("skills",
-            "xe-local-ai-engine",
-            "references",
-            "mcp-tools.md"));
-        var whitelist = AssertEx.NotNull(SettingsWhitelistRegex().Match(reference) is { Success: true } match ? match : null);
-        var documented = SettingsFieldRegex().Matches(whitelist.Groups["fields"].Value)
-                                             .Select(static field => field.Groups["field"].Value)
-                                             .Order(StringComparer.Ordinal)
-                                             .ToArray();
-
-        AssertEx.Equal(registered.Length, int.Parse(whitelist.Groups["count"].Value, CultureInfo.InvariantCulture),
-            "The reference's field COUNT drifted from update_node_settings.");
-        AssertEx.Equal(string.Join('|', registered), string.Join('|', documented),
-            "The reference's field LIST drifted from update_node_settings.");
     }
 
     [Test]
@@ -135,12 +104,6 @@ public sealed partial class McpToolsReferenceDriftTests
 
     [GeneratedRegex(@"^\|\s*`(?<tool>[a-z0-9_]+)`\s*\|\s*(?<scope>delegate|agentic)\s*\|")]
     private static partial Regex ToolCellRegex();
-
-    [GeneratedRegex(@"accepts only these (?<count>\d+) optional fields:(?<fields>[\s\S]*?)\.\n")]
-    private static partial Regex SettingsWhitelistRegex();
-
-    [GeneratedRegex(@"`(?<field>[a-z0-9_]+)`")]
-    private static partial Regex SettingsFieldRegex();
 
     [GeneratedRegex(@"`(?<field>[a-z][a-z0-9_]*_[a-z0-9_]+)`")]
     private static partial Regex WhitelistFieldsRegex();

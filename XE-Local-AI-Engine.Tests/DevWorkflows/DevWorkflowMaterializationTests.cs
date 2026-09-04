@@ -398,6 +398,30 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>
+    ///     The same zero-task answer over a template subtree with NO validation node: nothing to stand for, so the
+    ///     marker is the bare commit event, and its detail says the graph did not move.
+    ///     <para>
+    ///         <c>revisionBumped</c> is the field a consumer refetches on. Without this the flag has no test at all —
+    ///         its only other caller writes rows instead, under a marker the STORE details, which carries no such
+    ///         field.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ADecompositionThatFoundNoWorkAndHasNoCheckSaysTheRevisionDidNotMove()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await DecomposeAsync(harness, "[]", DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var events = await harness.ReadEventsAsync(runId).ConfigureAwait(false);
+        var marker = events.Last(static entry => entry.EventType == "graph.changed");
+        AssertEx.Contains(AssertEx.NotNull(marker.DetailJson),
+            "\"revisionBumped\":false",
+            message: "the one graph.changed that changes no graph says so, or a consumer refetches and gets the same revision back.");
+    }
+
+    /// <summary>
     ///     A materializing producer's route is recorded against the graph its expansion WROTE, not the one it settled on.
     ///     <para>
     ///         The route is computed when a node settles, and a decomposition settles a whole tick before the clone-root
