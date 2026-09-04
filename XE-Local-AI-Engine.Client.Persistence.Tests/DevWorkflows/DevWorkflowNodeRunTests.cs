@@ -126,6 +126,44 @@ public sealed class DevWorkflowNodeRunTests
         AssertEx.Equal(int.MaxValue,
             (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).Single(row => row.Id == saturated).MaxAttempts,
             "a cap already at int.MaxValue saturates rather than wrapping negative.");
+
+        // A row persisted BEFORE widening shipped: an old operator Retry spent an attempt without moving the cap, so
+        // it already sits past it. Raising the cap by one from ITSELF would carry that row's 4-of-3 to 5-of-4 and
+        // leave it one over for ever; the widening catches the cap up to the attempt first, then grants the new one.
+        var legacy = Guid.NewGuid();
+        _ = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, legacy, "legacy", DevWorkflowVersions.Any, maxAttempts: 3).ConfigureAwait(false);
+        var stale = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                    legacy,
+                                    DevWorkflowVersions.Any,
+                                    DevWorkflowNodeRunStatus.Pending,
+                                    IncrementAttempt: true))
+                                .ConfigureAwait(false);
+        var overCap = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                      legacy,
+                                      stale.Version,
+                                      DevWorkflowNodeRunStatus.Pending,
+                                      IncrementAttempt: true))
+                                  .ConfigureAwait(false);
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                            legacy,
+                            overCap.Version,
+                            DevWorkflowNodeRunStatus.Pending,
+                            IncrementAttempt: true))
+                        .ConfigureAwait(false);
+        var beforeRetry = (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).Single(row => row.Id == legacy);
+        AssertEx.Equal(expected: 4, beforeRetry.Attempt);
+        AssertEx.Equal(expected: 3, beforeRetry.MaxAttempts, "the legacy shape this case exists for: already one past its cap.");
+
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                            legacy,
+                            DevWorkflowVersions.Any,
+                            DevWorkflowNodeRunStatus.Pending,
+                            IncrementAttempt: true,
+                            WidenMaxAttempts: true))
+                        .ConfigureAwait(false);
+        var caughtUp = (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).Single(row => row.Id == legacy);
+        AssertEx.Equal(expected: 5, caughtUp.Attempt);
+        AssertEx.Equal(expected: 5, caughtUp.MaxAttempts, "the retry the operator paid for is admitted rather than left one over the cap for ever.");
     }
 
     /// <summary>
