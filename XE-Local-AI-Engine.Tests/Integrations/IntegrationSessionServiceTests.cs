@@ -128,6 +128,53 @@ public sealed class IntegrationSessionServiceTests
     }
 
     [Test]
+    public async Task InvokesNamingSessionsThatDoNotExist_LeaveNoGateEntriesBehind()
+    {
+        // The gate is entered for ANY non-null session id, before anything has decided the session exists. Without the
+        // forget an authenticated integrator looping invoke with random GUIDs adds one SemaphoreSlim per call,
+        // permanently: the per-principal limiter bounds the rate, not the total.
+        var harness = new IntegrationInvokeHarness();
+        var callerManaged = harness.SeedTrigger("caller-managed", sessionPolicy: IntegrationSessionPolicy.CallerManaged);
+        var perInvocation = harness.SeedTrigger("per-invocation");
+
+        for (var i = 0; i < 8; i++)
+        {
+            var result = await harness.AcceptAsync(callerManaged.Name, sessionId: Guid.NewGuid()).ConfigureAwait(false);
+            AssertEx.Equal(IntegrationAcceptOutcome.SessionNotFound, result.Outcome);
+        }
+
+        // The policy branch answers before the ownership read and mints an entry of its own.
+        var named = await harness.AcceptAsync(perInvocation.Name, sessionId: Guid.NewGuid()).ConfigureAwait(false);
+        AssertEx.Equal(IntegrationAcceptOutcome.SessionNotFound, named.Outcome);
+
+        AssertEx.Equal(expected: 0, harness.SessionGate.TrackedCount, "An id with no row behind it must leave no gate entry.");
+    }
+
+    [Test]
+    public async Task AnInvokeNamingAnotherPrincipalsSession_KeepsThatSessionsGateEntry()
+    {
+        // The other half of the rule: the answer is the same masked 404, but the row EXISTS, and dropping its entry
+        // would let its owner's next accept mint a second semaphore and enter while a first accept is still inside.
+        var harness = new IntegrationInvokeHarness();
+        var trigger = harness.SeedTrigger("caller-managed", sessionPolicy: IntegrationSessionPolicy.CallerManaged);
+        var foreign = harness.SeedSession(trigger.Id, principalId: Guid.NewGuid());
+
+        var result = await harness.AcceptAsync(trigger.Name, sessionId: foreign.Id).ConfigureAwait(false);
+
+        AssertEx.Equal(IntegrationAcceptOutcome.SessionNotFound, result.Outcome);
+        AssertEx.Equal(expected: 1, harness.SessionGate.TrackedCount, "A session that exists keeps the mutual exclusion its owner depends on.");
+    }
+
+    [Test]
+    public async Task DeletingASessionThatDoesNotExist_LeavesNoGateEntryBehind()
+    {
+        var harness = new IntegrationInvokeHarness();
+
+        AssertEx.Equal(IntegrationSessionDeleteOutcome.NotFound, await harness.SessionService.DeleteAsync(Guid.NewGuid()).ConfigureAwait(false));
+        AssertEx.Equal(expected: 0, harness.SessionGate.TrackedCount, "The delete path mints an entry the same way the invoke path does.");
+    }
+
+    [Test]
     public async Task Close_IsIdempotentAndForgetsTheGateEntry()
     {
         // Its callers close a session whose executions are already terminal — the coordinator after a PerInvocation

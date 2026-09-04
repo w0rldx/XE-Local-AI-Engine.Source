@@ -34,6 +34,19 @@ internal sealed class IntegrationApiHandler
     /// <summary>The session family's single masked answer. Unknown, foreign and allowlist-excluded are all this one.</summary>
     private const string MaskedSessionMessage = "No such session.";
 
+    /// <summary>
+    ///     The machine-readable half of the two session refusals a caller can actually act on: retry after the running
+    ///     execution ends, or start a new session. Prose alone made an integrator match on the sentence.
+    ///     <para>
+    ///         NOT members of <c>IntegrationFailureCategories</c>: nothing here failed a RUN, and that vocabulary is
+    ///         asserted closed. The masked 404 and the 401 stay code-free — a discriminator there is the leak the whole
+    ///         family is shaped to avoid.
+    ///     </para>
+    /// </summary>
+    private const string SessionBusyCode = "session-busy";
+
+    private const string SessionClosedCode = "session-closed";
+
     private static readonly JsonSerializerOptions RequestSerializerOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IntegrationExternalAccess _access;
@@ -443,13 +456,23 @@ internal sealed class IntegrationApiHandler
                 await WriteMessageAsync(context, StatusCodes.Status404NotFound, result.Message).ConfigureAwait(false);
                 return;
             case IntegrationAcceptOutcome.RequestConflict:
-            case IntegrationAcceptOutcome.SessionClosed:
-            case IntegrationAcceptOutcome.SessionBusy:
                 await WriteMessageAsync(context, StatusCodes.Status409Conflict, result.Message).ConfigureAwait(false);
                 return;
+            case IntegrationAcceptOutcome.SessionClosed:
+                await WriteMessageAsync(context, StatusCodes.Status409Conflict, result.Message, SessionClosedCode).ConfigureAwait(false);
+                return;
+            case IntegrationAcceptOutcome.SessionBusy:
+                await WriteMessageAsync(context, StatusCodes.Status409Conflict, result.Message, SessionBusyCode).ConfigureAwait(false);
+                return;
             case IntegrationAcceptOutcome.InputsRejected:
-            case IntegrationAcceptOutcome.SessionPolicyRejected:
                 await WriteMessageAsync(context, StatusCodes.Status422UnprocessableEntity, result.Message).ConfigureAwait(false);
+                return;
+            case IntegrationAcceptOutcome.SessionPolicyRejected:
+                await WriteMessageAsync(context,
+                        StatusCodes.Status422UnprocessableEntity,
+                        result.Message,
+                        IntegrationFailureCategories.SessionPolicy)
+                    .ConfigureAwait(false);
                 return;
             case IntegrationAcceptOutcome.QueueFull:
                 context.Response.Headers.RetryAfter = "5";
@@ -583,14 +606,23 @@ internal sealed class IntegrationApiHandler
         return Task.CompletedTask;
     }
 
-    private static Task WriteMessageAsync(HttpContext context, int statusCode, string message)
+    /// <summary>
+    ///     Content-free by construction: never an echo of the caller's inputs. <paramref name="code" /> is the optional
+    ///     machine-readable discriminator, present only on the refusals a caller can branch on — never on a masked 404.
+    /// </summary>
+    private static Task WriteMessageAsync(HttpContext context, int statusCode, string message, string? code = null)
     {
         context.Response.StatusCode = statusCode;
-        // Content-free by construction: never an echo of the caller's inputs.
-        return context.Response.WriteAsJsonAsync(new
-        {
-            message
-        }, context.RequestAborted);
+        return code is null
+            ? context.Response.WriteAsJsonAsync(new
+            {
+                message
+            }, context.RequestAborted)
+            : context.Response.WriteAsJsonAsync(new
+            {
+                message,
+                code
+            }, context.RequestAborted);
     }
 }
 

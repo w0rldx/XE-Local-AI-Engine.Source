@@ -102,8 +102,11 @@ public sealed class IntegrationExternalAccess
     {
         ArgumentNullException.ThrowIfNull(caller);
 
-        var session = await _sessions.GetByIdAsync(sessionId, cancellationToken).ConfigureAwait(false);
-        if (session is null || session.PrincipalId != caller.PrincipalId)
+        // The store's two-column predicate IS the ownership limb — a missing row and a foreign one come back as the
+        // same non-result, so there is no loaded row here for a later edit to start reading. The allowlist is the
+        // second limb and stays here, because it is an authorisation rule rather than a persistence one.
+        var session = await _sessions.GetForPrincipalAsync(sessionId, caller.PrincipalId, cancellationToken).ConfigureAwait(false);
+        if (session is null)
         {
             return Masked;
         }

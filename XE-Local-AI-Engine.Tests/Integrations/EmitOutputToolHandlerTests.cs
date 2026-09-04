@@ -319,6 +319,23 @@ public sealed class EmitOutputToolHandlerTests
         AssertEx.False(answer.Contains("launch-code-alpha-zero", StringComparison.Ordinal), "The acknowledgement must never echo the payload back into the transcript.");
     }
 
+    [Test]
+    public async Task WhenTheBufferEntryIsGone_ReturnsASentenceRatherThanThrowingOntoTheRunnerThread()
+    {
+        // The post-terminal removal race: the row still read Running a moment ago, and Reserve now finds no entry. Every
+        // other refusal on this path is a sentence, and a throw here would end the turn instead.
+        using var fixture = new Fixture();
+        using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
+        _ = fixture.Buffer.Untracked.Add(fixture.ExecutionId);
+
+        var answer = await fixture.Handler.ExecuteAsync(Arguments()).ConfigureAwait(false);
+
+        AssertEx.Contains(answer, "No integration execution is currently running");
+        AssertEx.Empty(fixture.Executions.Events);
+        AssertEx.Empty(fixture.Buffer.Published);
+        AssertEx.Empty(fixture.Buffer.Abandoned, "Reserve returned no sequence, so there is nothing to abandon.");
+    }
+
     private static string Arguments(string payload = """{"ok":true}""", string? contentType = null) =>
         contentType is null
             ? $$"""{"payload":{{payload}}}"""

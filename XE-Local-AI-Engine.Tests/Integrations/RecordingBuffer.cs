@@ -26,6 +26,13 @@ internal sealed class RecordingBuffer(long initialSequence = 0) : IIntegrationEx
 
     public List<long> Abandoned { get; } = [];
 
+    /// <summary>
+    ///     Ids this double answers as UNTRACKED, which is what a post-terminal <c>Remove</c> leaves behind. The real
+    ///     buffer throws on <c>Reserve</c> for one; nothing else about this double changes, so a suite that does not opt
+    ///     in sees the old behaviour.
+    /// </summary>
+    public HashSet<Guid> Untracked { get; } = [];
+
     /// <summary>Completes once a reservation has been taken, so a blocking-commit test never sleeps on a guess.</summary>
     public Task WaitForReserveAsync() => _reserved.Task;
 
@@ -33,6 +40,11 @@ internal sealed class RecordingBuffer(long initialSequence = 0) : IIntegrationEx
     {
         lock (_gate)
         {
+            if (Untracked.Contains(executionId))
+            {
+                throw new InvalidOperationException($"Integration execution {executionId} has no event buffer entry. Call TryCreate before minting a sequence.");
+            }
+
             _sequence++;
             Reserved.Add(_sequence);
             _ = _reserved.TrySetResult();
@@ -76,7 +88,7 @@ internal sealed class RecordingBuffer(long initialSequence = 0) : IIntegrationEx
 
     public long LowestPendingReservation(Guid executionId) => long.MaxValue;
 
-    public bool IsTracked(Guid executionId) => true;
+    public bool IsTracked(Guid executionId) => !Untracked.Contains(executionId);
 
     public long LastSequence(Guid executionId) => _sequence;
 

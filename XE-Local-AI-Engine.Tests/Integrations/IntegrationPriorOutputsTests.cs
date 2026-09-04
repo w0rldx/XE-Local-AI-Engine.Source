@@ -205,6 +205,39 @@ public sealed class IntegrationPriorOutputsTests
         AssertEx.False(leading.Contains("theirs", StringComparison.Ordinal), "The list read is scoped to this session.");
     }
 
+    [Test]
+    public async Task EightPriorExecutionsWithOneOutputEach_ReplayAllEight()
+    {
+        // R4-9(b) promises the last 8. The CURRENT execution occupies one row of the page, so a page of exactly
+        // MaxPayloads returns seven prior ones and the eighth is lost.
+        using var harness = new Harness();
+        harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
+
+        var oldest = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - 600_000;
+        for (var index = 0; index < IntegrationPriorOutputsComposer.MaxPayloads; index++)
+        {
+            var earlier = harness.SeedAccepted(IntegrationExecutionStatus.Completed, oldest + index);
+            AssertEx.True(await harness.Executions.AppendOutputEventAsync(new IntegrationEventAppend(Guid.NewGuid(),
+                            earlier,
+                            Sequence: 2,
+                            IntegrationStreamEventTypes.ExternalOutput,
+                            Envelope(index),
+                            OccurredAtUtc: oldest + index),
+                        maxOutputBytesPerExecution: 1_048_576)
+                    .ConfigureAwait(false),
+                "Seeding a committed output must succeed.");
+        }
+
+        await harness.Coordinator.ProcessOneAsync(harness.SeedAccepted(), CancellationToken.None);
+
+        var leading = LeadingContext(harness);
+        AssertEx.Equal(IntegrationPriorOutputsComposer.MaxPayloads, Entries(leading).Count, "A session with eight prior outputs replays eight.");
+        for (var index = 0; index < IntegrationPriorOutputsComposer.MaxPayloads; index++)
+        {
+            AssertEx.Contains(leading, $"\"n\":{index}");
+        }
+    }
+
     /// <summary>Commits one output on an earlier, already-completed execution of the harness's session.</summary>
     private static async Task<Guid> SeedCommittedOutputsAsync(Harness harness, params string[] envelopes)
     {

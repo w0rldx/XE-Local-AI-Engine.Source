@@ -181,7 +181,22 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
     {
         // Reserve mints a sequence and publishes NOTHING. A throw here took no reservation, so there is nothing to
         // abandon — calling Abandon with a sequence Reserve never returned would be a defect, not defensive coding.
-        var sequence = _buffer.Reserve(execution.Id);
+        //
+        // It throws for an UNTRACKED id, which a post-terminal removal race can produce between the Running read above
+        // and this line. The run is ending either way, so it answers with the same sentence every other refusal on
+        // this path uses rather than escaping onto the runner thread. The persistence failure below still throws on
+        // purpose — that is what makes an unbacked frame unrepeatable — and this case wrote nothing to be unbacked.
+        long sequence;
+        try
+        {
+            sequence = _buffer.Reserve(execution.Id);
+        }
+        catch (InvalidOperationException exception)
+        {
+            _logger.LogDebug(exception, "{ToolName} found no event buffer entry for execution {ExecutionId}.", ToolName, execution.Id);
+            return NoRunningExecution;
+        }
+
         var occurredAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var emitted = new IntegrationStreamEvent(IntegrationStreamEventTypes.ExternalOutput,
             sequence,

@@ -970,7 +970,9 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         var executions = await store.ListAsync(new IntegrationExecutionFilter(TriggerId: null,
                     session.Id,
                     Status: null,
-                    IntegrationPriorOutputsComposer.MaxPayloads,
+                    // One MORE than the cap: the current execution occupies a row here and is skipped below, so asking
+                    // for exactly MaxPayloads would replay seven prior outputs where R4-9(b) promises eight.
+                    IntegrationPriorOutputsComposer.MaxPayloads + 1,
                     Offset: 0),
                 cancellationToken)
             .ConfigureAwait(false);

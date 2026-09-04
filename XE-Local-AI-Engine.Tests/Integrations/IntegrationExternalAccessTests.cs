@@ -90,10 +90,14 @@ public sealed class IntegrationExternalAccessTests
         var broad = await fixture.Access.ResolveSessionAsync(sessionId, new IntegrationCallerIdentity(fixture.PrincipalId, BroadPrefix));
         var narrow = await fixture.Access.ResolveSessionAsync(sessionId, new IntegrationCallerIdentity(fixture.PrincipalId, NarrowPrefix));
         var foreign = await fixture.Access.ResolveSessionAsync(sessionId, new IntegrationCallerIdentity(Guid.NewGuid(), BroadPrefix));
+        var unknown = await fixture.Access.ResolveSessionAsync(Guid.NewGuid(), new IntegrationCallerIdentity(fixture.PrincipalId, BroadPrefix));
 
         AssertEx.Equal(IntegrationAccessOutcome.Allowed, broad.Outcome);
         AssertEx.Equal(IntegrationAccessOutcome.Masked, narrow.Outcome, "The session rule is the execution rule, against session.TriggerId.");
         AssertEx.Equal(IntegrationAccessOutcome.Masked, foreign.Outcome);
+        AssertEx.Equal(IntegrationAccessOutcome.Masked, unknown.Outcome,
+            "The store's two-column read answers a missing row and a foreign one with the same non-result.");
+        AssertEx.Null(foreign.Session, "A masked result never carries the row.");
     }
 
     [Test]

@@ -99,7 +99,7 @@ public sealed class IntegrationSessionService
             // never a distinct code that would confirm the policy of a trigger the caller cannot otherwise inspect.
             return sessionId is null
                 ? Accepted(existing: null)
-                : Masked;
+                : await MaskAsync(sessionId.Value, cancellationToken).ConfigureAwait(false);
         }
 
         // R4-9(a), re-checked HERE and not only at trigger save: an agent definition's tools can change afterwards, and
@@ -123,7 +123,7 @@ public sealed class IntegrationSessionService
         var access = await _access.ResolveSessionAsync(id, caller, cancellationToken).ConfigureAwait(false);
         if (access.Outcome != IntegrationAccessOutcome.Allowed || access.Session is not { } session)
         {
-            return Masked;
+            return await MaskAsync(id, cancellationToken).ConfigureAwait(false);
         }
 
         // Another trigger's session is masked too: confirming it exists would let a caller enumerate sessions across
@@ -221,6 +221,9 @@ public sealed class IntegrationSessionService
         var session = await _sessions.GetByIdAsync(sessionId, cancellationToken).ConfigureAwait(false);
         if (session is null)
         {
+            // Same reason as the invoke path: this call minted the entry, no row justifies keeping it, and the read
+            // that proved absence is the one inside this section.
+            _gate.Forget(sessionId);
             return IntegrationSessionDeleteOutcome.NotFound;
         }
 
@@ -248,6 +251,27 @@ public sealed class IntegrationSessionService
     /// <summary>Unknown, foreign-principal, allowlist-excluded and another trigger's session are ONE answer.</summary>
     private static IntegrationSessionGateResult Masked =>
         new(IntegrationAcceptOutcome.SessionNotFound, Existing: null, SessionNotFoundMessage);
+
+    /// <summary>
+    ///     The masked answer, and the gate entry the accept path minted for an id with NO row behind it. Without this an
+    ///     authenticated integrator looping invoke with random GUIDs adds one <c>SemaphoreSlim</c> per call, permanently
+    ///     — the per-principal limiter bounds the rate, not the total.
+    ///     <para>
+    ///         ONLY when the row is absent, and the read that proves it runs inside the caller's own critical section.
+    ///         Dropping the entry of a session that merely belongs to someone ELSE would let its owner's next accept
+    ///         mint a second semaphore and enter while a first accept is still inside — which is the cross-request
+    ///         contamination the gate exists to prevent.
+    ///     </para>
+    /// </summary>
+    private async Task<IntegrationSessionGateResult> MaskAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        if (await _sessions.GetByIdAsync(sessionId, cancellationToken).ConfigureAwait(false) is null)
+        {
+            _gate.Forget(sessionId);
+        }
+
+        return Masked;
+    }
 
     private async Task<IntegrationSessionDto> ToDtoAsync(IntegrationSessionSnapshot session, CancellationToken cancellationToken)
     {

@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Integrations;
+using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 using XE_Local_AI_Engine.Client.Services.Integrations.Tools;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -303,12 +304,81 @@ public sealed class IntegrationSessionEndToEndTests
                                   .ListEventsAsync(accepted.ExecutionId, sinceSequence: 0, limit: 500));
     }
 
+    [Test]
+    public async Task ContinuingAClosedSession_Returns409WithTheSessionClosedCode()
+    {
+        Host.Reset();
+        using var client = Factory.CreateClient();
+        var seeded = await SeedAsync(client, "e2e-closed");
+
+        var first = await InvokeAsync(client, seeded, "Do the thing.", sessionId: null);
+        await WaitUntilTerminalAsync(client, seeded.Key, first.ExecutionId);
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            AssertEx.True(await scope.ServiceProvider.GetRequiredService<IntegrationSessionService>().CloseAsync(first.SessionId));
+        }
+
+        var (status, body) = await RefusedAsync(client, seeded, first.SessionId);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, status);
+        AssertEx.Equal("session-closed", body.Code, "A caller retries a busy session and starts a new one for a closed one; prose alone made it match on the sentence.");
+    }
+
+    [Test]
+    public async Task ContinuingASessionThatIsBusy_Returns409WithTheSessionBusyCode()
+    {
+        Host.Reset();
+        using var client = Factory.CreateClient();
+        var seeded = await SeedAsync(client, "e2e-busy");
+
+        var first = await InvokeAsync(client, seeded, "Do the thing.", sessionId: null);
+        await WaitUntilTerminalAsync(client, seeded.Key, first.ExecutionId);
+
+        // A SECOND row on the same session, admitted through the store and left Accepted. Racing a live turn instead
+        // would make the assertion depend on how fast the substituted runner returns.
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var executionId = Guid.NewGuid();
+            AssertEx.True(await scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>()
+                                     .AcceptAsync(new IntegrationAcceptCommand(NewSession: null,
+                                             executionId,
+                                             seeded.TriggerId,
+                                             first.SessionId,
+                                             seeded.PrincipalId,
+                                             Guid.NewGuid(),
+                                             new byte[] { 9, 9, 9 },
+                                             seeded.KeyPrefix,
+                                             DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                                             new IntegrationEventAppend(Guid.NewGuid(),
+                                                 executionId,
+                                                 Sequence: 1,
+                                                 IntegrationStreamEventTypes.ExecutionAccepted,
+                                                 DetailJson: null,
+                                                 DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())),
+                                         maxActive: 4096,
+                                         maxActivePerPrincipal: 4096));
+        }
+
+        var (status, body) = await RefusedAsync(client, seeded, first.SessionId);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, status);
+        AssertEx.Equal("session-busy", body.Code);
+    }
+
+    private static async Task<(HttpStatusCode Status, ErrorBody Body)> RefusedAsync(HttpClient client, Seeded seeded, Guid sessionId)
+    {
+        using var request = BuildInvoke(seeded, "And again.", sessionId);
+        using var response = await client.SendAsync(request);
+        return (response.StatusCode, AssertEx.NotNull(await response.Content.ReadFromJsonAsync<ErrorBody>(IntegrationEndpointPayloads.Json)));
+    }
+
     private async Task<Seeded> SeedAsync(HttpClient client, string prefix)
     {
         var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, $"{prefix}-agent");
         var trigger = await IntegrationEndpointPayloads.CreateTriggerAsync(Factory, client, prefix, agentId, sessionPolicy: "CallerManaged");
         var key = await IntegrationEndpointPayloads.GenerateKeyAsync(Factory, client, $"{prefix}-key");
-        return new Seeded(trigger.Name, key.Key);
+        return new Seeded(trigger.Name, key.Key, trigger.Id, key.View.PrincipalId, key.View.KeyPrefix);
     }
 
     private static async Task<Accepted> InvokeAsync(HttpClient client, Seeded seeded, string text, Guid? sessionId)
@@ -418,7 +488,10 @@ public sealed class IntegrationSessionEndToEndTests
         return AssertEx.NotNull(await response.Content.ReadFromJsonAsync<StatusBody>(IntegrationEndpointPayloads.Json));
     }
 
-    private sealed record Seeded(string TriggerName, string Key);
+    private sealed record Seeded(string TriggerName, string Key, Guid TriggerId, Guid PrincipalId, string KeyPrefix);
+
+    /// <summary>The external family's error envelope: prose always, and a machine-readable code on the refusals only.</summary>
+    private sealed record ErrorBody(string Message, string? Code);
 
     private sealed record Accepted(Guid ExecutionId, Guid SessionId);
 
