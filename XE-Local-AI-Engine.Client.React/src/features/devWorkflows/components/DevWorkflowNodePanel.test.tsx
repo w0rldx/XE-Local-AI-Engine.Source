@@ -684,7 +684,7 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.getByTestId("dev-workflow-node-cost-steps").textContent).toBe("3");
 		expect(screen.getByTestId("dev-workflow-node-cost-served-model").textContent).toBe("qwen3-27b-instruct-q4");
 
-		// The four durations: queued, total, inside provider turns, and what is left over for tools and the loop.
+		// The four durations: queued, total, inside agent turns, and what is left over outside those turns.
 		expect(screen.getByTestId("dev-workflow-node-cost-queued").textContent).toBe("2s");
 		expect(screen.getByTestId("dev-workflow-node-cost-ran").textContent).toBe("1m 00s");
 		expect(screen.getByTestId("dev-workflow-node-cost-turn-time").textContent).toBe("40s");

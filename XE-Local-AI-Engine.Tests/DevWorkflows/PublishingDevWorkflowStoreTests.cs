@@ -152,36 +152,118 @@ public sealed class PublishingDevWorkflowStoreTests
     ///     a lost concurrency race would double it again.
     ///     <para>
     ///         Proved on the tokens rather than on the clock: two <c>CancellationToken</c>s are equal when they came from
-    ///         the same source, so ten resets seeing ONE distinct deadline is the claim itself. The elapsed bound is the
-    ///         same claim in wall-clock terms, with a margin wide enough not to flake.
+    ///         the same source, so ten resets seeing ONE distinct deadline is the claim itself.
+    ///     </para>
+    ///     <para>
+    ///         Both halves of what "one budget" means are asserted here, and the second half is a REVERSAL of the
+    ///         earlier reading that every reset is offered no matter what. Every reset is offered <b>while the budget
+    ///         lasts</b>; once it is spent, nothing further is even scheduled — an answer that arrives after the route
+    ///         has committed cannot be used, so starting it would only pile work up behind a boundary nobody is
+    ///         watching.
     ///     </para>
     /// </summary>
     [Test]
     public async Task ARetryRoute_BoundsEveryResetWithOneDeadline()
     {
         const int resets = 10;
-        var budget = TimeSpan.FromMilliseconds(300);
-        var telemetry = new StubDevWorkflowNodeTelemetrySource { Delay = TimeSpan.FromMinutes(1), ExpectedEntries = resets };
-        var (store, publisher) = Create(telemetry, budget);
         var route = new RouteDevWorkflowRetryCommand(
             new AppendDevWorkflowEventCommand(RunId, DevWorkflowVersions.Any, DevWorkflowEventTypes.NodeRetryRouted, NodeRunId),
             [.. Enumerable.Range(0, resets).Select(static _ => ReAttempt())]);
 
-        var elapsed = Stopwatch.StartNew();
+        // While the budget lasts. A budget nothing can exhaust, because this arm is about the token's identity rather
+        // than the clock — a wall-clock budget here would only make the assertion flake on a loaded box.
+        var offered = new StubDevWorkflowNodeTelemetrySource { ExpectedEntries = resets };
+        var (store, publisher) = Create(offered, Hang, collectionSlots: resets);
+
         _ = await store.RouteRetryAsync(route).ConfigureAwait(false);
+
+        // Offering is EVENTUAL: the decorator hands each collection to the thread pool so a collector that blocks
+        // before its first await cannot hold the route, which means the tenth reset may not have reached the collector
+        // yet at the instant the route commits.
+        await offered.AllEntered.WaitAsync(Hang).ConfigureAwait(false);
+        AssertEx.Equal(resets, offered.Calls, "Every reset is offered while the budget lasts; only the budget is shared.");
+        AssertEx.Equal(expected: 1,
+            offered.Deadlines.Distinct().Count(),
+            "All ten collections must run under ONE deadline, or the route costs the graph's width times the budget.");
+        await publisher.Received(1).PublishAsync(RunId, Sequence, DevWorkflowChangeKind.Node, Arg.Any<CancellationToken>());
+
+        // And once it is spent, nothing more is scheduled. The first reset's collector stalls for the whole 300 ms, so
+        // the shared deadline is gone by the time the second is reached and the nine behind it start no collection at
+        // all — which is also why the route still returns inside its budget.
+        var stalled = new StubDevWorkflowNodeTelemetrySource { Delay = TimeSpan.FromMinutes(1), ExpectedEntries = 1 };
+        var budget = TimeSpan.FromMilliseconds(300);
+        var (spent, _) = Create(stalled, budget, collectionSlots: resets);
+
+        var elapsed = Stopwatch.StartNew();
+        _ = await spent.RouteRetryAsync(route).ConfigureAwait(false);
         elapsed.Stop();
 
-        // The elapsed bound is on the ROUTE's return, above. Offering is EVENTUAL: the decorator hands each collection
-        // to the thread pool so a collector that blocks before its first await cannot hold the route, which means the
-        // tenth reset may not have reached the collector yet at the instant the route commits.
+        await stalled.AllEntered.WaitAsync(Hang).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, stalled.Calls, "A reset reached after the shared budget expired must not schedule a collection at all.");
+
+        // A generous bound, for the same reason the gated tests below use one: the collector stalls for a MINUTE, so
+        // any bounded return is the claim, and a multiple of the 300 ms budget only measures how loaded the box is.
+        AssertEx.True(elapsed.Elapsed < Hang,
+            $"A route of {resets} resets behind a stalled collector took {elapsed.ElapsedMilliseconds} ms against a {budget.TotalMilliseconds} ms budget.");
+    }
+
+    /// <summary>
+    ///     The ceiling BEHIND the deadline. The deadline abandons the caller's wait, not the collection, so without a
+    ///     bound on the collections themselves a collector that never terminates costs a thread-pool worker and a
+    ///     service scope per settle, for the life of the process — and a wide retry route multiplies that by the graph's
+    ///     width. One slot here, so one stuck collector is the whole pool.
+    ///     <para>
+    ///         The release is the other half: a slot comes back when the COLLECTOR terminates, not when the settle
+    ///         stopped waiting for it. Releasing it on the abandoned wait would let the next settle start work beside
+    ///         the stuck one, which is the accumulation the pool exists to stop.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ASettle_ThatFindsTheCollectionPoolFull_GoesAheadWithoutOne()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var budget = TimeSpan.FromMilliseconds(300);
+        var telemetry = new StubDevWorkflowNodeTelemetrySource
+        {
+            IgnoresCancellationUntil = gate,
+            Answer = new DevWorkflowNodeTelemetry(InputTokens: 5),
+            ExpectedEntries = 1
+        };
+        var harness = CreateHarness(telemetry, budget, collectionSlots: 1);
+
+        // The first settle takes the only slot, is abandoned at the deadline, and is still holding it.
+        _ = await harness.Store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked)).ConfigureAwait(false);
         await telemetry.AllEntered.WaitAsync(Hang).ConfigureAwait(false);
-        AssertEx.Equal(resets, telemetry.Calls, "Every reset is still offered to the collector; only the budget is shared.");
-        AssertEx.Equal(expected: 1,
-            telemetry.Deadlines.Distinct().Count(),
-            "All ten collections must run under ONE deadline, or the route costs the graph's width times the budget.");
+
+        var elapsed = Stopwatch.StartNew();
+        _ = await harness.Store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked)).ConfigureAwait(false);
+        elapsed.Stop();
+
+        AssertEx.Equal(expected: 1, telemetry.Calls, "A settle that finds every slot in use must not start a second collection.");
+        AssertEx.Equal(expected: 1, harness.Scopes.Created, "And it opens no scope: admission is checked before the work is scheduled.");
+        // A tight bound is safe HERE, unlike the route test above: a refused settle starts no collection, arms no timer
+        // and awaits nothing, so it cannot be slowed by a loaded thread pool the way a 300 ms deadline can.
         AssertEx.True(elapsed.Elapsed < budget * 3,
-            $"A route of {resets} stalled collections took {elapsed.ElapsedMilliseconds} ms against a {budget.TotalMilliseconds} ms budget.");
-        await publisher.Received(1).PublishAsync(RunId, Sequence, DevWorkflowChangeKind.Node, Arg.Any<CancellationToken>());
+            $"The refused settle waited {elapsed.ElapsedMilliseconds} ms against a {budget.TotalMilliseconds} ms budget; it should not wait at all.");
+        _ = await harness.Inner.Received(2)
+                        .TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static forwarded => forwarded.Telemetry == null),
+                            Arg.Any<CancellationToken>());
+
+        // Re-offered in a loop rather than asserted once: the release runs in the abandoned task's own finally, just
+        // after the scope it disposes, so the slot comes back a moment after the gate opens rather than with it.
+        gate.SetResult();
+        telemetry.IgnoresCancellationUntil = null;
+        var giveUpAt = DateTimeOffset.UtcNow + Hang;
+        while (telemetry.Calls < 2 && DateTimeOffset.UtcNow < giveUpAt)
+        {
+            _ = await harness.Store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked)).ConfigureAwait(false);
+            if (telemetry.Calls < 2)
+            {
+                await Task.Delay(25).ConfigureAwait(false);
+            }
+        }
+
+        AssertEx.Equal(expected: 2, telemetry.Calls, "The stuck collector's slot comes back when it finally returns, and the next settle is measured again.");
     }
 
     /// <summary>The other half of the same claim: a single settle owns its own budget and shares nothing with the next one.</summary>
@@ -293,13 +375,21 @@ public sealed class PublishingDevWorkflowStoreTests
             IncrementAttempt: true);
 
     private static (IDevWorkflowStore Store, IDevWorkflowEventPublisher Publisher) Create(StubDevWorkflowNodeTelemetrySource? source = null,
-        TimeSpan? collectionTimeout = null)
+        TimeSpan? collectionTimeout = null,
+        int collectionSlots = 4)
     {
-        var harness = CreateHarness(source, collectionTimeout);
+        var harness = CreateHarness(source, collectionTimeout, collectionSlots);
         return (harness.Store, harness.Publisher);
     }
 
-    private static Harness CreateHarness(StubDevWorkflowNodeTelemetrySource? source = null, TimeSpan? collectionTimeout = null)
+    /// <summary>
+    ///     Every store here gets its OWN admission pool. The production one is static and process-wide — it has to be,
+    ///     since the decorator is registered scoped — so a suite sharing it would let one test's stuck collector starve
+    ///     another's, in whichever order the runner happened to pick.
+    /// </summary>
+    private static Harness CreateHarness(StubDevWorkflowNodeTelemetrySource? source = null,
+        TimeSpan? collectionTimeout = null,
+        int collectionSlots = 4)
     {
         var inner = Substitute.For<IDevWorkflowStore>();
         var result = new DevWorkflowMutationResult(RunId, Sequence, Version: 2, DevWorkflowRunStatus.Running, GraphRevision: 0);
@@ -325,6 +415,7 @@ public sealed class PublishingDevWorkflowStoreTests
                 publisher,
                 scopes,
                 new DevWorkflowGraphCache(),
+                new DevWorkflowNodeTelemetryCollectionPool(collectionSlots),
                 NullLogger<PublishingDevWorkflowStore>.Instance,
                 collectionTimeout),
             publisher,

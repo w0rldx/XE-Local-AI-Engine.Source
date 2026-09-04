@@ -123,11 +123,14 @@ WHERE n.run_id IN (:runIds) AND n.failure_class IS NOT NULL GROUP BY failure_gro
    mid-step counts only the steps that had ended**, because the consumption row is written inside `SettleStepAsync`
    and an in-flight step has none yet — which is exactly the `Blocked` and `Cancelled` case, the one where the
    biggest numbers are; **the envelope read stops after 20 pages of 200**, so a conversation past 4,000
-   envelopes under-counts rather than holding a dispatcher tick open; and **one retry route shares ONE collection
+   envelopes under-counts rather than holding a dispatcher tick open; **one retry route shares ONE collection
    budget** (`PublishingDevWorkflowStore.RouteRetryAsync` opens a single 5 s deadline before the loop over
-   `command.Resets`), so a route wide enough or slow enough to exhaust it forwards its later resets unenriched —
-   those attempts get no `node.retry.scheduled` cost vector at all, and the retry-arm total below under-counts by
-   exactly them.
+   `command.Resets`), so every reset is offered a collection *while that budget lasts* and, once it is spent, the
+   remaining resets are forwarded unenriched with no collection started at all — those attempts get no
+   `node.retry.scheduled` cost vector, and the retry-arm total below under-counts by exactly them; and **at most four
+   cost collections run at once per application** (`DevWorkflowNodeTelemetryCollectionPool`, a container singleton), so a
+   settle arriving while four stuck collectors hold the pool is forwarded unmeasured the same way. Both losses are
+   silent in the data and loud in the log — grep for `cost-collection slots are in use` and `outlived its`.
 4. `estimated_input_tokens` is a character-profile estimate (`WorkSessionModels.cs:129`); quote it only where
    `input_tokens` is null.
 5. `provider_calls` is a ratio against its cap only while one budget was attached (`WorkSessionModels.cs:115-118`).

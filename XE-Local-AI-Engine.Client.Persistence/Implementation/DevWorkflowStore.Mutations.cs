@@ -83,6 +83,16 @@ internal sealed partial class DevWorkflowStore
                     run.GraphRevision++;
                 }
 
+                // The producer's route, re-recorded against the graph this expansion just wrote. It belongs in THIS
+                // transaction: the route and the edges it describes are one fact, and a separate write afterwards
+                // could leave a run whose expansion committed and whose route still denies it.
+                if (command.RouteJson is { } producerRoute && command.RouteNodeRunId is { } producerNodeRunId)
+                {
+                    EnsureNotBlank(producerRoute, nameof(command.RouteJson));
+                    var producer = await LoadNodeRunAsync(run.Id, producerNodeRunId, cancellationToken).ConfigureAwait(false);
+                    producer.RouteJson = producerRoute;
+                }
+
                 var detail = Utf8(JsonSerializer.Serialize(new MaterializationDetail(command.NodeRuns.Count, run.GraphRevision), JsonOptions));
                 var eventType = command.GraphJson is null ? DevWorkflowEventTypes.NodeMaterialized : DevWorkflowEventTypes.GraphChanged;
                 return new MutationOutcome(eventType, $"{command.NodeRuns.Count} node run(s)", detail);

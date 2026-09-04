@@ -44,7 +44,12 @@ internal static class AddNodeDevWorkflowsExtensions
             services.GetRequiredService<IDevWorkflowEventPublisher>(),
             services.GetRequiredService<IServiceScopeFactory>(),
             services.GetRequiredService<DevWorkflowGraphCache>(),
+            services.GetRequiredService<DevWorkflowNodeTelemetryCollectionPool>(),
             services.GetRequiredService<ILogger<PublishingDevWorkflowStore>>()));
+
+        // The admission ceiling for those collections. A SINGLETON, because the store above is scoped: a per-scope
+        // ceiling would bound nothing, since a stuck collector would simply cost another slot on the next tick.
+        builder.Services.AddSingleton<DevWorkflowNodeTelemetryCollectionPool>();
         builder.Services.TryAddSingleton<IDevWorkflowEventPublisher, NoOpDevWorkflowEventPublisher>();
         builder.Services.AddSingleton<IDevWorkflowArtifactBlobStore, ManagedDevWorkflowArtifactBlobStore>();
 

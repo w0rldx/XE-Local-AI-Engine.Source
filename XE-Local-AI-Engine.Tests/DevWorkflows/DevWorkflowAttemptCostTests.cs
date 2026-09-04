@@ -113,6 +113,10 @@ public sealed class DevWorkflowAttemptCostTests
             Substitute.For<IDevWorkflowEventPublisher>(),
             new RecordingTelemetryScopeFactory(inner, new StubDevWorkflowNodeTelemetrySource { Answer = new DevWorkflowNodeTelemetry(InputTokens: 5) }),
             new DevWorkflowGraphCache(),
+
+            // Its own admission pool. The real one is a container singleton, and this assertion is about what the
+            // collector answers — not about which other suite happened to be holding a slot at the time.
+            new DevWorkflowNodeTelemetryCollectionPool(slots: 1),
             NullLogger<PublishingDevWorkflowStore>.Instance);
 
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(runId,

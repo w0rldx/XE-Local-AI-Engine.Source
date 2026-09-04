@@ -30,6 +30,7 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
     IDevWorkflowEventPublisher publisher,
     IServiceScopeFactory scopes,
     DevWorkflowGraphCache graphs,
+    DevWorkflowNodeTelemetryCollectionPool collections,
     ILogger<PublishingDevWorkflowStore> logger,
     TimeSpan? collectionTimeout = null) : IDevWorkflowStore
 {
@@ -47,6 +48,11 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
     ///         deadline, because the graph's width is what decides how many resets there are and a per-command budget
     ///         would multiply by it. The parameter exists so a test can prove that without waiting five real seconds;
     ///         production takes the default.
+    ///     </para>
+    ///     <para>
+    ///         A SPENT deadline schedules nothing. Once the shared budget has expired, a route's remaining resets are
+    ///         forwarded unenriched without a collection being started at all: the answer would already be too late to
+    ///         use, so starting it would only pile up work behind a boundary the caller has stopped watching.
     ///     </para>
     /// </summary>
     private static readonly TimeSpan DefaultCollectionTimeout = TimeSpan.FromSeconds(5);
@@ -72,6 +78,7 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
     private readonly DevWorkflowGraphCache _graphs = graphs ?? throw new ArgumentNullException(nameof(graphs));
     private readonly ILogger<PublishingDevWorkflowStore> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly TimeSpan _collectionTimeout = collectionTimeout ?? DefaultCollectionTimeout;
+    private readonly DevWorkflowNodeTelemetryCollectionPool _collections = collections ?? throw new ArgumentNullException(nameof(collections));
 
     public Task<DevWorkflowWorkItemSnapshot> CreateWorkItemAsync(CreateDevWorkflowWorkItemCommand command, CancellationToken cancellationToken = default) =>
         _inner.CreateWorkItemAsync(command, cancellationToken);
@@ -312,11 +319,48 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
             return command;
         }
 
+        // A cancelled CALLER is still a cancelled caller, and is told so rather than quietly settling unenriched.
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // A SPENT budget schedules nothing. The deadline is shared across a retry route, so once it has expired every
+        // remaining reset would start a collection whose answer is already too late to be used.
+        if (deadline.IsCancellationRequested)
+        {
+            _logger.LogDebug("The cost-collection budget was spent before node run {NodeRunId} was reached; it is forwarded without a measurement.",
+                command.NodeRunId);
+            return command;
+        }
+
+        // Admission BEFORE scheduling, because the deadline bounds the wait and not the work behind it: a collector
+        // that never terminates would otherwise keep its worker and its scope for the life of the process, one per
+        // settle. No slot free means no collection at all — the same trade an expired deadline makes.
+        if (!_collections.TryEnter())
+        {
+            _logger.LogWarning("All {CollectionSlots} cost-collection slots are in use; node run {NodeRunId} is forwarded without a measurement.",
+                _collections.Slots,
+                command.NodeRunId);
+            return command;
+        }
+
         // Task.Run, so the boundary holds even against a collector that blocks BEFORE its first await — a call on
         // this stack would never reach the WaitAsync below. The consequence is that a reset is offered to the
         // collector EVENTUALLY rather than synchronously, which is what the route test waits for.
         var startedAt = Stopwatch.GetTimestamp();
-        var collection = Task.Run(() => CollectAsync(command, deadline, cancellationToken), CancellationToken.None);
+        var collection = Task.Run(async () =>
+            {
+                try
+                {
+                    return await CollectAsync(command, deadline, cancellationToken).ConfigureAwait(false);
+                }
+                finally
+                {
+                    // The slot comes back when the COLLECTOR terminates, not when the caller stops waiting for it —
+                    // releasing it on the abandoned wait would let the next settle start work beside the stuck one,
+                    // which is the accumulation the pool exists to stop.
+                    _collections.Release();
+                }
+            },
+            CancellationToken.None);
 
         try
         {

@@ -420,13 +420,21 @@ public sealed record DevWorkflowNodeRunSeed(
 ///     Creates node-runs on a run. A non-null <see cref="GraphJson" /> also rewrites the run's pinned graph and bumps
 ///     its revision in the same transaction — the dynamic-expansion path, recorded as <c>graph.changed</c>. A null one
 ///     is the initial materialization at run start, where the graph is already pinned and unchanged.
+///     <para>
+///         <see cref="RouteJson" /> re-records the route of the node run that PRODUCED this expansion, against the
+///         rewritten graph and inside the same transaction. Its route was computed when it settled, which was before
+///         the clone-root edges existed — so left alone it would list the authored join edge and omit every root the
+///         next tick actually admits. Both members are set together or not at all; a route needs a row to land on.
+///     </para>
 /// </summary>
 public sealed record MaterializeDevWorkflowNodesCommand(
     Guid RunId,
     long ExpectedVersion,
     Guid OperationId,
     IReadOnlyList<DevWorkflowNodeRunSeed> NodeRuns,
-    string? GraphJson = null);
+    string? GraphJson = null,
+    Guid? RouteNodeRunId = null,
+    string? RouteJson = null);
 
 /// <summary>
 ///     A node-run status move. <see cref="IncrementAttempt" /> is the retry-in-place path; the row is never duplicated.
