@@ -198,6 +198,13 @@ WHERE n.run_id IN (UPPER(:runIds)) AND n.failure_class IS NOT NULL GROUP BY fail
     is what a cold arm and a warm arm compare on. It is NULL, never zero, when no turn warmed a local runtime (a
     remote provider, Ollama, an already-resident model) and on every row written before the column existed — so
     treat a null as unmeasured rather than as a proven warm start, and still record the runtime state (rule 9).
+12. **An admitted FAST-model swap's `noticeDetail` names the grading reason, never a refusal.** The `auto`-effort
+    dispatcher's `EffortDispatched` notice carries `noticeDetail: short-turn` (or another grading code) when a
+    turn actually swapped onto the configured fast model. The `fast-model-*` codes (`fast-model-unset`,
+    `fast-model-is-active-model`, `fast-model-not-local`, `fast-model-no-capacity`, `fast-model-unavailable`) are
+    refusal codes only — they explain why a graded-Fast turn did **not** swap, and never co-occur with a served
+    swap. Do not read a `fast-model-*` code as the reason a swap fired.
+    (`IReasoningEffortDispatcher.cs`; live-validated `Plans/ai-trends-2026-09-02/progress/c2-report.md` §4.)
 
 **Defaults by question.** *Did model routing change what it cost?* — tokens and `run_ms` grouped by
 `served_model_name`. *Did tool-schema filtering pay for itself?* — `tool_schema_tokens` per node run, with
