@@ -10,8 +10,10 @@ public sealed class NodeLoginLockoutIntegrationTests
     private const string Password = "Str0ng!Password123";
     private const string WrongPassword = "wrong-password";
 
-    // Identity lockout policy configured in ConfigureServices: MaxFailedAccessAttempts = 5.
+    // Identity lockout policy configured in ConfigureServices: MaxFailedAccessAttempts = 5, DefaultLockoutTimeSpan = 5 min.
     private const int LockoutThreshold = 5;
+
+    private const int LockoutSeconds = 300;
 
     [Test]
     public async Task Login_WhenPasswordIsWrong_ReturnsUnauthorized()
@@ -24,6 +26,26 @@ public sealed class NodeLoginLockoutIntegrationTests
         using var response = await LoginAsync(client, WrongPassword).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    // The enumeration boundary: before the threshold a failure must stay indistinguishable from "no such account", so
+    // the body carries no `code` and no Retry-After tells a caller anything about this account.
+    [Test]
+    public async Task Login_WhenPasswordIsWrongBeforeThreshold_ReturnsUnauthorizedWithoutACode()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+
+        await SetupAsync(client).ConfigureAwait(false);
+
+        using var response = await LoginAsync(client, WrongPassword).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        AssertEx.False(response.Headers.Contains("Retry-After"), "A pre-threshold failure must not carry Retry-After.");
+
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        AssertEx.False(body.Contains("locked-out", StringComparison.Ordinal),
+            $"A pre-threshold failure must not name a lockout. Body: '{body}'.");
     }
 
     [Test]
@@ -43,6 +65,17 @@ public sealed class NodeLoginLockoutIntegrationTests
         using var lockedOutResponse = await LoginAsync(client, Password).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, lockedOutResponse.StatusCode);
+
+        // The whole point of the coded body: the correct password is being refused, and only `code` explains why.
+        var payload = AssertEx.NotNull(await lockedOutResponse.Content.ReadFromJsonAsync<LockedOutBody>().ConfigureAwait(false));
+        AssertEx.Equal("locked-out", payload.Code);
+        AssertEx.NotEmpty(payload.Message);
+        AssertEx.True(payload.RetryAfterSeconds is > 0 and <= LockoutSeconds,
+            $"retryAfterSeconds must fall inside the 5-minute lockout window but was {payload.RetryAfterSeconds}.");
+
+        // The header repeats the body's number so a non-browser caller does not have to parse the body to back off.
+        var retryAfter = AssertEx.NotNull(lockedOutResponse.Headers.RetryAfter, "The locked-out 401 must carry a Retry-After header.");
+        AssertEx.Equal(TimeSpan.FromSeconds(payload.RetryAfterSeconds), retryAfter.Delta ?? TimeSpan.Zero);
     }
 
     [Test]
@@ -84,4 +117,6 @@ public sealed class NodeLoginLockoutIntegrationTests
                 password
             });
     }
+
+    private sealed record LockedOutBody(string Message, string Code, int RetryAfterSeconds);
 }

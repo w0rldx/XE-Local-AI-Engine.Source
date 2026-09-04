@@ -6074,6 +6074,7 @@
 			"passwordLabel": "Password",
 			"signInButton": "Sign in",
 			"errorIncorrectPassword": "Incorrect password. Please try again.",
+			"errorLockedOut": "Too many failed sign-in attempts. This account is locked. Try again in {{minutes}} min.",
 			"errorNodeUnreachable": "Can't reach the node. Check that it's running and try again.",
 			"errorGeneric": "Sign in failed. Please try again."
 		},

@@ -11,11 +11,24 @@ import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { getSafeRedirectPath } from "@/core/auth/utils/RedirectPath";
 import { LanguageMenu } from "@/core/locales/components/LanguageMenu/LanguageMenu";
 
+// The node answers a locked account with a 401 carrying this body; a wrong password answers a body-less 401.
+interface LoginLockedOutBody {
+	code?: string;
+	retryAfterSeconds?: number;
+}
+
 // Translate the raw failure into an operator-facing message instead of surfacing axios' "Request failed with
-// status code 401". 401 = wrong password; a missing response = the node is unreachable; anything else is generic.
-function getErrorMessage(error: unknown, t: (key: string) => string): string {
+// status code 401". 401 = wrong password, unless the body says the account is locked out; a missing response = the
+// node is unreachable; anything else is generic.
+function getErrorMessage(error: unknown, t: (key: string, options?: Record<string, unknown>) => string): string {
 	if (isAxiosError(error)) {
 		if (error.response?.status === 401) {
+			const body = error.response.data as LoginLockedOutBody | undefined;
+			if (body?.code === "locked-out") {
+				// Round up so "0 min" is never shown; the node already floors the value at one second.
+				return t("auth.login.errorLockedOut", { minutes: Math.max(1, Math.ceil((body.retryAfterSeconds ?? 0) / 60)) });
+			}
+
 			return t("auth.login.errorIncorrectPassword");
 		}
 

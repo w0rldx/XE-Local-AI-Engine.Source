@@ -205,7 +205,7 @@ For an automated spike compile, read the existing `DefineConstants`, append `P0_
 ### The full Tests module balloons to ~3.5 GB — it is a framework leak, not a fixture bug
 
 - Use `TestServerWebAppFactory`, not `WebApplicationFactory<Program>`; entry-point resolution roots host graphs for process lifetime.
-- `AddRateLimiter` creates an undisposed replenishment timer per host. Test composition uses `NoOpRateLimiterOptionsProvider`; real rate-limit tests opt into one shared host.
+- `AddRateLimiter` creates an undisposed replenishment timer per host. `ConfigureServices` computes every permit limit *outside* the `AddRateLimiter` lambda so its closure captures ints rather than `builder`, and raises them under `builder.Environment.IsEnvironment("Testing")` (auth 10 → 10,000/min) so a test host neither roots the disposed host graph nor throttles the single loopback partition every integration test shares.
 - Avoid per-test providers that create long-lived MCP SDK registries/clients. Use the keyed/shared fixture pattern.
 - `scripts/run-tests-memory-safe.sh` is the whole-module runner. A low `DOTNET_GCHeapHardLimit` is not a valid leak verdict; size-cap tests allocate large payloads.
 
