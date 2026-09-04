@@ -128,9 +128,19 @@ public sealed class ListIntegrationExecutionsRequestValidator : Validator<ListIn
     public ListIntegrationExecutionsRequestValidator()
     {
         When(static request => request.Status is not null,
-            () => RuleFor(static request => request.Status)
-                  .IsInEnum()
-                  .WithMessage("Filter on a known execution status."));
+            () =>
+            {
+                RuleForEach(static request => request.Status)
+                    .IsInEnum()
+                    .WithMessage("Filter on a known execution status.");
+
+                // A set can hold each status at most once, so a repeat is a malformed query rather than a wider
+                // filter, and saying so beats silently deduplicating it. Distinctness also bounds the length: a
+                // duplicate-free list of enum members can never be longer than the enum.
+                RuleFor(static request => request.Status)
+                    .Must(static statuses => statuses!.Distinct().Count() == statuses!.Count)
+                    .WithMessage("Name each execution status at most once.");
+            });
 
         When(static request => request.Limit is not null,
             () => RuleFor(static request => request.Limit)

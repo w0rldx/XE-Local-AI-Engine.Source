@@ -576,17 +576,30 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
 
         lock (_gate)
         {
-            var matches = _rows.Where(row => (filter.TriggerId is null || row.TriggerId == filter.TriggerId)
-                                             && (filter.SessionId is null || row.SessionId == filter.SessionId)
-                                             && (filter.Status is null || row.Status == filter.Status))
-                               .OrderByDescending(static row => row.ReceivedAtUtc)
-                               .ThenByDescending(static row => row.Id)
-                               .Skip(filter.Offset)
-                               .Take(filter.Limit)
-                               .ToArray();
+            var matches = Matching(filter).OrderByDescending(static row => row.ReceivedAtUtc)
+                                          .ThenByDescending(static row => row.Id)
+                                          .Skip(filter.Offset)
+                                          .Take(filter.Limit)
+                                          .ToArray();
             return Task.FromResult<IReadOnlyList<IntegrationExecutionSnapshot>>(matches);
         }
     }
+
+    public Task<int> CountAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        lock (_gate)
+        {
+            return Task.FromResult(Matching(filter).Count());
+        }
+    }
+
+    /// <summary>The real store's shared filter, mirrored so the double's count and page agree the same way.</summary>
+    private IEnumerable<IntegrationExecutionSnapshot> Matching(IntegrationExecutionFilter filter) =>
+        _rows.Where(row => (filter.TriggerId is null || row.TriggerId == filter.TriggerId)
+                           && (filter.SessionId is null || row.SessionId == filter.SessionId)
+                           && (filter.Status is not { Count: > 0 } statuses || statuses.Contains(row.Status)));
 
     /// <summary>Makes the next non-terminal CAS lose, as it does when a concurrent cancel CASed the same version first.</summary>
     public bool FailNextStatusCas { get; set; }
@@ -808,6 +821,10 @@ internal sealed class FakeIntegrationSessionStore : IIntegrationSessionStore
         ];
         return Task.FromResult(page);
     }
+
+    public Task<int> CountAsync(Guid? triggerId, IntegrationSessionStatus? status, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_rows.Count(row => (triggerId is not { } trigger || row.TriggerId == trigger)
+                                           && (status is not { } sessionStatus || row.Status == sessionStatus)));
 
     public Task<bool> DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
         Task.FromResult(_rows.RemoveAll(row => row.Id == sessionId) > 0);

@@ -135,11 +135,16 @@ public sealed record IntegrationTerminalizeCommand(
 /// <summary>
 ///     Paged filter for the admin executions list. The paging fields are <see cref="Limit" /> and <see cref="Offset" />
 ///     and no other names; a null filter field means "do not constrain on it".
+///     <para>
+///         <see cref="Status" /> is a SET rather than one value, so the operator's Active/History chips are one
+///         server-side query instead of one query per status. An empty set is treated exactly like a null one — "do not
+///         constrain" — because an empty set can only ever match nothing, which no caller means by it.
+///     </para>
 /// </summary>
 public sealed record IntegrationExecutionFilter(
     Guid? TriggerId,
     Guid? SessionId,
-    IntegrationExecutionStatus? Status,
+    IReadOnlySet<IntegrationExecutionStatus>? Status,
     int Limit,
     int Offset);
 
@@ -215,6 +220,14 @@ public interface IIntegrationExecutionStore
     ///     non-deterministically, dropping or duplicating a row across pages.
     /// </summary>
     Task<IReadOnlyList<IntegrationExecutionSnapshot>> ListAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     How many rows <paramref name="filter" /> matches, IGNORING its <c>Limit</c> and <c>Offset</c> — the total a
+    ///     pager needs to know how far the history reaches. It shares the filter-application code with
+    ///     <see cref="ListAsync" /> rather than repeating the predicates, so the count and the page it labels cannot
+    ///     disagree about which rows are in scope.
+    /// </summary>
+    Task<int> CountAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     How many of ONE session's executions are <c>Accepted</c>, <c>Queued</c> or <c>Running</c>. Deliberately not

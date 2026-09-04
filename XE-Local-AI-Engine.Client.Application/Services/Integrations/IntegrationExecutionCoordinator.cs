@@ -359,22 +359,21 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>();
 
+        // ONE paged loop over the whole non-terminal set rather than one loop per status: the filter takes a status
+        // set, so three passes over the same index bought nothing.
         var interrupted = new List<IntegrationExecutionSnapshot>();
-        foreach (var status in NonTerminalStatuses)
+        var offset = 0;
+        while (true)
         {
-            var offset = 0;
-            while (true)
+            var page = await store.ListAsync(new IntegrationExecutionFilter(TriggerId: null, SessionId: null, NonTerminalStatuses, RecoveryPageSize, offset), cancellationToken)
+                                  .ConfigureAwait(false);
+            interrupted.AddRange(page);
+            if (page.Count < RecoveryPageSize)
             {
-                var page = await store.ListAsync(new IntegrationExecutionFilter(TriggerId: null, SessionId: null, status, RecoveryPageSize, offset), cancellationToken)
-                                      .ConfigureAwait(false);
-                interrupted.AddRange(page);
-                if (page.Count < RecoveryPageSize)
-                {
-                    break;
-                }
-
-                offset += page.Count;
+                break;
             }
+
+            offset += page.Count;
         }
 
         var recovered = 0;
