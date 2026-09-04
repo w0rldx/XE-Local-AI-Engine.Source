@@ -11,8 +11,8 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 /// </summary>
 public sealed class AddGraphWorkflowsMigrationTests
 {
-    private const string PreviousMigrationId = "20260903104044_AddIntegrationFoundation";
-    private const string ThisMigrationId = "20260904084628_AddGraphWorkflows";
+    private const string PreviousMigrationId = "20260904121650_AddAiTrendsWave";
+    private const string ThisMigrationId = "20260904145855_AddGraphWorkflows";
 
     private static readonly string[] Tables =
     [

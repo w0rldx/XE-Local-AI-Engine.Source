@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 {
     [DbContext(typeof(NodeChatDbContext))]
-    [Migration("20260904084628_AddGraphWorkflows")]
+    [Migration("20260904145855_AddGraphWorkflows")]
     partial class AddGraphWorkflows
     {
         /// <inheritdoc />
@@ -58,6 +58,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(false)
                         .HasColumnName("disable_base_scaffold");
+
+                    b.Property<bool>("DisableToolRelevanceFilter")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("disable_tool_relevance_filter");
 
                     b.Property<byte[]>("GenerationMetadataJson")
                         .HasColumnType("BLOB")
@@ -148,6 +154,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("agent_definition_id");
 
+                    b.Property<string>("AuthoredEffort")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("authored_effort");
+
                     b.Property<int?>("CompletionTokens")
                         .HasColumnType("INTEGER")
                         .HasColumnName("completion_tokens");
@@ -169,6 +179,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("created_at_utc");
 
+                    b.Property<string>("DispatchedTier")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("dispatched_tier");
+
                     b.Property<string>("ErrorClass")
                         .HasColumnType("TEXT")
                         .HasColumnName("error_class");
@@ -180,6 +194,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<long>("LatencyMs")
                         .HasColumnType("INTEGER")
                         .HasColumnName("latency_ms");
+
+                    b.Property<int?>("MaxToolSchemaTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("max_tool_schema_tokens");
 
                     b.Property<Guid?>("MessageId")
                         .HasColumnType("TEXT")
@@ -236,6 +254,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<string>("TerminalStatus")
                         .HasColumnType("TEXT")
                         .HasColumnName("terminal_status");
+
+                    b.Property<long?>("ToolSchemaTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("tool_schema_tokens");
 
                     b.Property<int?>("TotalTokens")
                         .HasColumnType("INTEGER")
@@ -953,6 +975,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("launch_has_aux_assets");
 
+                    b.Property<int?>("LaunchIdentityScheme")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("launch_identity_scheme");
+
                     b.Property<string>("LaunchKvCacheTypeSource")
                         .HasMaxLength(16)
                         .HasColumnType("TEXT")
@@ -1147,6 +1173,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<bool?>("LaunchHasAuxAssets")
                         .HasColumnType("INTEGER")
                         .HasColumnName("launch_has_aux_assets");
+
+                    b.Property<int?>("LaunchIdentityScheme")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("launch_identity_scheme");
 
                     b.Property<string>("LaunchKvCacheTypeSource")
                         .HasMaxLength(16)
@@ -1705,6 +1735,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<bool?>("PrimaryLaunchHasAuxAssets")
                         .HasColumnType("INTEGER")
                         .HasColumnName("primary_launch_has_aux_assets");
+
+                    b.Property<int?>("PrimaryLaunchIdentityScheme")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("primary_launch_identity_scheme");
 
                     b.Property<string>("PrimaryLaunchKvCacheTypeSource")
                         .HasMaxLength(16)
@@ -2604,6 +2638,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("agent_definition_id");
 
+                    b.Property<long?>("AgentTurnMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("agent_turn_ms");
+
                     b.Property<int>("Attempt")
                         .HasColumnType("INTEGER")
                         .HasColumnName("attempt");
@@ -2624,6 +2662,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("ended_at_utc");
 
+                    b.Property<long?>("EstimatedInputTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("estimated_input_tokens");
+
                     b.Property<string>("FailureClass")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT")
@@ -2632,6 +2674,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<byte[]>("InputJson")
                         .HasColumnType("BLOB")
                         .HasColumnName("input_json");
+
+                    b.Property<long?>("InputTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("input_tokens");
 
                     b.Property<int?>("MaterializationIndex")
                         .HasColumnType("INTEGER")
@@ -2661,6 +2707,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("BLOB")
                         .HasColumnName("output_json");
 
+                    b.Property<long?>("OutputTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("output_tokens");
+
                     b.Property<string>("PendingDecisionKind")
                         .HasMaxLength(32)
                         .HasColumnType("TEXT")
@@ -2669,6 +2719,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<byte[]>("PolicyResolutionJson")
                         .HasColumnType("BLOB")
                         .HasColumnName("policy_resolution_json");
+
+                    b.Property<int?>("ProviderCalls")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("provider_calls");
 
                     b.Property<string>("QueueReason")
                         .HasMaxLength(64)
@@ -2679,6 +2733,15 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("queued_at_utc");
 
+                    b.Property<long?>("ReasoningTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("reasoning_tokens");
+
+                    b.Property<string>("RouteJson")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("route_json");
+
                     b.Property<Guid>("RunId")
                         .HasColumnType("TEXT")
                         .HasColumnName("run_id");
@@ -2686,6 +2749,11 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<long>("Sequence")
                         .HasColumnType("INTEGER")
                         .HasColumnName("sequence");
+
+                    b.Property<string>("ServedModelName")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("served_model_name");
 
                     b.Property<int>("SessionResumes")
                         .HasColumnType("INTEGER")
@@ -2706,9 +2774,26 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("terminal_reason");
 
+                    b.Property<int?>("ToolCalls")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("tool_calls");
+
+                    b.Property<string>("ToolNamesJson")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("tool_names_json");
+
+                    b.Property<long?>("ToolSchemaTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("tool_schema_tokens");
+
                     b.Property<Guid?>("WorkSessionId")
                         .HasColumnType("TEXT")
                         .HasColumnName("work_session_id");
+
+                    b.Property<int?>("WorkSessionSteps")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("work_session_steps");
 
                     b.HasKey("Id");
 
