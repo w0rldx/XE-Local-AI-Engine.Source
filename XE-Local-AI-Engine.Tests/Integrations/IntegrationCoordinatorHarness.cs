@@ -87,7 +87,15 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
                   .Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false));
         Resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                .Returns(_ => new ResolvedAgentRuntime("SCAFFOLD+PERSONA", OfferedTools, ModelProfile: null, "medium", AgentDefinitionVersion: 7, _agentDefinitionId, "Sensor agent", []));
+                .Returns(_ => new ResolvedAgentRuntime("SCAFFOLD+PERSONA",
+                    OfferedTools,
+                    ModelProfile: null,
+                    "medium",
+                    AgentDefinitionVersion: 7,
+                    _agentDefinitionId,
+                    "Sensor agent",
+                    [],
+                    Kind: ResolvedKind));
         Capacity.DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
                 .Returns(_ =>
                 {
@@ -300,6 +308,13 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     ///     saved.
     /// </summary>
     public AgentDefinitionKind DefinitionKind { get; set; } = AgentDefinitionKind.Single;
+
+    /// <summary>
+    ///     The kind the RESOLVER reports, which is a second read of the same definition and can therefore disagree
+    ///     with <see cref="DefinitionKind" />: that disagreement is the time-of-check/time-of-use window an operator
+    ///     opens by switching the definition to an orchestrator between the two reads.
+    /// </summary>
+    public AgentDefinitionKind ResolvedKind { get; set; } = AgentDefinitionKind.Single;
 
     public bool HideConversation { get; set; }
 

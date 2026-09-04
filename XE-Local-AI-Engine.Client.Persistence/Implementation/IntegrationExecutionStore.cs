@@ -209,22 +209,23 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         try
         {
             _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await MoveWatermarksAsync(command.ExecutionId, entity.SessionId, command.Sequence, command.EndedAtUtc, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (DbUpdateConcurrencyException)
         {
             _dbContext.ChangeTracker.Clear();
             return false;
         }
-        catch (DbUpdateException)
+        catch (Exception)
         {
-            // Not a lost CAS but a failed save — a constraint the terminal event violated, say. The tracker still holds
-            // the mutated entities, so a scoped context reused for the next call would replay them on its next save.
+            // EVERYTHING inside the transaction, not just the save: a watermark update or the commit that throws rolls
+            // the database back while EF still holds the saved terminal entity as committed, and the next call on this
+            // scoped context — the fault handler's own terminalization — then compare-and-swaps against that stale
+            // identity-map version and loses forever, stranding the row non-terminal with its admission slot held.
             _dbContext.ChangeTracker.Clear();
             throw;
         }
-
-        await MoveWatermarksAsync(command.ExecutionId, entity.SessionId, command.Sequence, command.EndedAtUtc, cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
         return true;
     }
@@ -262,17 +263,17 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         try
         {
             _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await MoveWatermarksAsync(command.ExecutionId, entity.SessionId, command.Sequence, command.OccurredAtUtc, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (DbUpdateException)
+        catch (Exception)
         {
             // A duplicate execution-and-sequence pair is a caller bug and rethrows, but the failed event stays
-            // tracked; without this clear, the next append on the same scoped context replays it.
+            // tracked; without this clear, the next append on the same scoped context replays it. The boundary covers
+            // the watermarks and the commit too, for the same reason it does in TryTerminalizeAsync.
             _dbContext.ChangeTracker.Clear();
             throw;
         }
-
-        await MoveWatermarksAsync(command.ExecutionId, entity.SessionId, command.Sequence, command.OccurredAtUtc, cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IntegrationExecutionSnapshot?> FindActiveBySessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
@@ -328,17 +329,17 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         try
         {
             _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await MoveWatermarksAsync(append.ExecutionId, entity.SessionId, append.Sequence, append.OccurredAtUtc, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (DbUpdateException)
+        catch (Exception)
         {
             // The mutated entity and the pending event stay tracked otherwise, and the next call on this scoped context
-            // would replay them on its own save.
+            // would replay them on its own save. Widened past the save for the same reason as the terminal path: a
+            // rolled-back watermark update must not leave this row's counters tracked as committed.
             _dbContext.ChangeTracker.Clear();
             throw;
         }
-
-        await MoveWatermarksAsync(append.ExecutionId, entity.SessionId, append.Sequence, append.OccurredAtUtc, cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
         return true;
     }
@@ -440,7 +441,11 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
             entity.LastSequence,
             entity.Version);
 
+    /// <summary>
+    ///     The SAME two names <c>IntegrationTerminalPayload.Failure</c> writes, so no writer — fallback or not — can put
+    ///     a second failed-terminal shape in front of a reader.
+    /// </summary>
     private sealed record IntegrationTerminalDetail(
-        [property: JsonPropertyName("failureCategory")] string? FailureCategory,
-        [property: JsonPropertyName("failureSummary")] string? FailureSummary);
+        [property: JsonPropertyName("category")] string? Category,
+        [property: JsonPropertyName("summary")] string? Summary);
 }

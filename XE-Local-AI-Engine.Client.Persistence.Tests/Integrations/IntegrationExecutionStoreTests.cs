@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Integrations;
 
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -485,7 +486,8 @@ public sealed class IntegrationExecutionStoreTests
         var terminal = (await readStore.ListEventsAsync(accept.ExecutionId, sinceSequence: 7, limit: 10).ConfigureAwait(false)).Single();
         AssertEx.Equal(expected: 8L, terminal.Sequence);
         // Reading the detail back as text is what catches an implementation that wrote it raw and stored plaintext.
-        AssertEx.Equal("""{"failureCategory":"restart","failureSummary":"interrupted by a host restart"}""", terminal.DetailJson);
+        AssertEx.Equal("""{"category":"restart","summary":"interrupted by a host restart"}""", terminal.DetailJson,
+            "The store's fallback writes the SAME {category, summary} shape IntegrationTerminalPayload does, so a reader sees one failed-terminal envelope.");
 
         var session = AssertEx.NotNull(await new IntegrationSessionStore(readContext).GetByIdAsync(accept.SessionId).ConfigureAwait(false));
         AssertEx.Equal(expected: 8L, session.LastSequence,
@@ -796,6 +798,38 @@ public sealed class IntegrationExecutionStoreTests
         var row = AssertEx.NotNull(await new IntegrationExecutionStore(reader).GetByIdAsync(accept.ExecutionId).ConfigureAwait(false));
         AssertEx.Equal(IntegrationExecutionStatus.Accepted, row.Status, "Nothing about the failed terminal may survive it.");
         AssertEx.Equal(expected: 1L, row.LastSequence);
+    }
+
+    [Test]
+    public async Task TryTerminalizeAsync_WhenTheWatermarkUpdateFailsAfterTheSave_RollsBackAndLeavesNoStaleTrackedTerminal()
+    {
+        // The regression the round-1 transaction introduced: SaveChanges succeeds and EF marks the terminal entity as
+        // committed, then a statement LATER in the same transaction throws and the database rolls back. With the
+        // tracker-clear scoped to the save alone, the identity map kept the terminal entity at its bumped version, so
+        // the fault handler's retry on the same scoped store compare-and-swapped against a version the database never
+        // had, lost every time, and left the row Running with its admission slot held until a restart.
+        using var fixture = new IntegrationTestFixture();
+        var seed = await SeedAsync(fixture).ConfigureAwait(false);
+        var accept = await AcceptOneAsync(fixture, seed).ConfigureAwait(false);
+
+        await using var context = fixture.CreateContext();
+        var store = new IntegrationExecutionStore(context);
+
+        // The session watermark moves AFTER the save and inside the same transaction, so renaming the column it writes
+        // fails exactly that statement and nothing before it.
+        await fixture.RawExecuteAsync("ALTER TABLE integration_sessions RENAME COLUMN last_sequence TO last_sequence_moved;").ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<SqliteException>(() => store.TryTerminalizeAsync(Terminal(accept.ExecutionId, expectedVersion: 0, Accepted, sequence: 8)))
+                          .ConfigureAwait(false);
+        await fixture.RawExecuteAsync("ALTER TABLE integration_sessions RENAME COLUMN last_sequence_moved TO last_sequence;").ConfigureAwait(false);
+
+        await using var reader = fixture.CreateContext();
+        var row = AssertEx.NotNull(await new IntegrationExecutionStore(reader).GetByIdAsync(accept.ExecutionId).ConfigureAwait(false));
+        AssertEx.Equal(IntegrationExecutionStatus.Accepted, row.Status, "The transaction rolled back, so nothing about the failed terminal may survive it.");
+        AssertEx.Equal(expected: 0L, row.Version);
+
+        // The SAME store instance the fault handler would reuse from its scope.
+        AssertEx.True(await store.TryTerminalizeAsync(Terminal(accept.ExecutionId, expectedVersion: 0, Accepted, sequence: 8)).ConfigureAwait(false),
+            "A rolled-back terminal must leave no tracked entity behind, or the row can never be closed again.");
     }
 
     private static IntegrationInvocationAuditInput Audit(SeedState seed) =>

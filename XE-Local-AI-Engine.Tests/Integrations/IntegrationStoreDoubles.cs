@@ -463,6 +463,20 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
         }
     }
 
+    /// <summary>Closes a row as Failed without touching its version, the way a racing writer's terminal transaction does.</summary>
+    public void Fail(Guid executionId, string failureCategory)
+    {
+        lock (_gate)
+        {
+            var index = _rows.FindIndex(row => row.Id == executionId);
+            _rows[index] = _rows[index] with
+            {
+                Status = IntegrationExecutionStatus.Failed,
+                FailureCategory = failureCategory
+            };
+        }
+    }
+
     public Task<int> CountActiveBySessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
         lock (_gate)
@@ -638,11 +652,14 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
     /// <summary>Makes the next terminal transaction throw, which must publish nothing and leave the row non-terminal.</summary>
     public bool ThrowOnNextTerminalize { get; set; }
 
-    /// <summary>Makes the next terminal CAS lose, as it does when another path terminalized the row first.</summary>
-    public bool FailNextTerminalizeCas { get; set; }
+    /// <summary>
+    ///     Runs on the writer's thread before each terminal CAS, carrying that CAS's 1-based ordinal, so a suite can
+    ///     drift the row's version INSIDE the window a bounded retry has to survive — which is exactly what a caller
+    ///     hammering cancel does to a coordinator that is finishing.
+    /// </summary>
+    public Action<int>? BeforeTerminalizeCas { get; set; }
 
-    /// <summary>Makes the bounded retry lose as well, so a caller cannot recover by re-reading the row's version.</summary>
-    public bool FailSecondTerminalizeCas { get; set; }
+    private int _terminalizeCalls;
 
     /// <summary>Moves a row's receive stamp, so a queue-age deadline can be driven without waiting real minutes.</summary>
     public void Backdate(Guid executionId, long receivedAtUtc)
@@ -664,17 +681,12 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
 
         lock (_gate)
         {
+            BeforeTerminalizeCas?.Invoke(++_terminalizeCalls);
+
             if (ThrowOnNextTerminalize)
             {
                 ThrowOnNextTerminalize = false;
                 throw new DbUpdateException("The terminal transaction failed.");
-            }
-
-            if (FailNextTerminalizeCas)
-            {
-                FailNextTerminalizeCas = FailSecondTerminalizeCas;
-                FailSecondTerminalizeCas = false;
-                return Task.FromResult(false);
             }
 
             var index = _rows.FindIndex(row => row.Id == command.ExecutionId);

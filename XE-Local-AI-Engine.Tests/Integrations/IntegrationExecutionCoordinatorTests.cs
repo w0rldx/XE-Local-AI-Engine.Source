@@ -478,15 +478,14 @@ public sealed class IntegrationExecutionCoordinatorTests
     }
 
     [Test]
-    public async Task Run_WhenTheRetriedTerminalCasAlsoLoses_AbandonsTheReservationAndWritesNoAuditRow()
+    public async Task Run_WhenEveryTerminalAttemptLosesToAFreshVersion_AbandonsTheReservationAndWritesNoAuditRow()
     {
-        // The retry is bounded at one. A second loss means another path owns the terminal artefacts, so this one
-        // publishes nothing and audits nothing.
+        // The retries are bounded, and a writer that drifts the row's version on EVERY single attempt exhausts them.
+        // Whatever else that costs, this path must publish nothing and audit nothing: an unresolved reservation parks
+        // every reader on the execution, and a second audit row would claim an outcome that was never committed.
         using var harness = new Harness();
         var executionId = harness.SeedAccepted();
-        harness.StampStopMarkerFor = executionId;
-        harness.Executions.FailNextTerminalizeCas = true;
-        harness.Executions.FailSecondTerminalizeCas = true;
+        harness.Executions.BeforeTerminalizeCas = _ => harness.Executions.StampStopMarker(executionId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
 
         await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
 
@@ -532,11 +531,14 @@ public sealed class IntegrationExecutionCoordinatorTests
     }
 
     [Test]
-    public async Task Run_WhenTheTerminalCasIsLost_AbandonsTheReservationAndWritesNoAuditRow()
+    public async Task Run_WhenTheTerminalCasIsLostToAnAlreadyTerminalRow_AbandonsTheReservationAndWritesNoAuditRow()
     {
         using var harness = new Harness();
         var executionId = harness.SeedAccepted();
-        harness.Executions.FailNextTerminalizeCas = true;
+
+        // Another path closed the row inside the window the CAS loses to, so it owns the terminal event and the one
+        // audit row. A forced loss alone would leave the row LIVE, which this coordinator is now obliged to close.
+        harness.Executions.BeforeTerminalizeCas = _ => harness.Executions.Complete(executionId);
 
         await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
 
@@ -852,6 +854,83 @@ public sealed class IntegrationExecutionCoordinatorTests
         AssertEx.True(harness.Executions.Events.Any(candidate => candidate.ExecutionId == executionId
                                                                  && string.Equals(candidate.EventType, IntegrationStreamEventTypes.ExecutionCancelled, StringComparison.Ordinal)),
             "A cancelled run publishes execution.cancelled, never execution.failed.");
+    }
+
+    [Test]
+    public async Task Run_WhenTheDefinitionTurnsIntoAnOrchestratorBetweenTheTwoReads_RefusesItBeforeTheRunner()
+    {
+        // The resolver re-reads the definition through its own fresh query, so the Kind the package is BUILT from is
+        // not the Kind the step-1 guard judged. An operator switching the definition mid-flight used to slip through
+        // that window and get a Completed result from an orchestrator that ran no participant at all.
+        using var harness = new Harness
+        {
+            ResolvedKind = AgentDefinitionKind.Orchestrator
+        };
+        var executionId = harness.SeedAccepted();
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        var row = harness.Row(executionId);
+        AssertEx.Equal(IntegrationExecutionStatus.Failed, row.Status);
+        AssertEx.Equal(IntegrationFailureCategories.TriggerUnavailable, row.FailureCategory);
+        AssertEx.Contains(row.FailureSummary ?? string.Empty, "orchestrator");
+        AssertEx.Equal(expected: 0, harness.RunCount, "The resolved kind is the one the package carries, so a late switch must never reach the runner.");
+    }
+
+    [Test]
+    public async Task Finish_WhenRepeatedCancelsDriftTheVersionAcrossTheRetries_StillLandsExactlyOneCancelledTerminal()
+    {
+        // Every cancel used to re-stamp the durable marker under a fresh version. Two of them landing between the
+        // coordinator's lost CAS and its ONE retry exhausted the budget, the false was dropped, and the row stayed
+        // Running forever with its admission slot held.
+        using var harness = new Harness
+        {
+            TerminalStatus = InvocationStatus.Failed,
+            TerminalFailureCategory = FailureCategory.Unexpected
+        };
+        var executionId = harness.SeedAccepted();
+        harness.Executions.BeforeTerminalizeCas = attempt =>
+        {
+            if (attempt <= 2)
+            {
+                harness.Executions.StampStopMarker(executionId, 4_242 + attempt);
+            }
+        };
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        var row = harness.Row(executionId);
+        AssertEx.Equal(IntegrationExecutionStatus.Cancelled, row.Status, "A live row must never end processing non-terminal.");
+        AssertEx.Null(row.FailureCategory, "A cancel is an outcome, not a failure.");
+        AssertEx.Equal(expected: 1,
+            harness.Executions.Events.Count(candidate => candidate.ExecutionId == executionId && IsTerminalEvent(candidate.EventType)),
+            "Whoever wins the terminal CAS owns the ONE terminal event, however many attempts it took.");
+    }
+
+    [Test]
+    public async Task Run_WhenAStopMarkerLandsWhileAPreRunRejectionTerminalizes_WritesCancelledRatherThanTheRejection()
+    {
+        // The generic retry reloaded the row for its version and ignored the marker on it, so a pre-run rejection
+        // could beat an accepted cancel to the row: the caller got its 202 and then saw Failed / trigger-unavailable.
+        using var harness = new Harness();
+        harness.DisableTrigger();
+        var executionId = harness.SeedAccepted();
+        harness.Executions.BeforeTerminalizeCas = attempt =>
+        {
+            if (attempt == 1)
+            {
+                harness.Executions.StampStopMarker(executionId, stopRequestedAtUtc: 4_242);
+            }
+        };
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        var row = harness.Row(executionId);
+        AssertEx.Equal(IntegrationExecutionStatus.Cancelled, row.Status);
+        AssertEx.Null(row.FailureCategory, "The durable marker outranks the outcome the rejection came with.");
+        AssertEx.True(harness.Executions.Events.Any(candidate => candidate.ExecutionId == executionId
+                                                                 && string.Equals(candidate.EventType, IntegrationStreamEventTypes.ExecutionCancelled, StringComparison.Ordinal)),
+            "The published frame has to agree with the row a poll returns.");
     }
 
     private static bool IsTerminalEvent(string eventType) =>

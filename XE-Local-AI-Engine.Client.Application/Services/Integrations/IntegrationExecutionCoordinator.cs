@@ -55,6 +55,13 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
     /// <summary>The pause between those attempts. Short, because an admitted execution's caller is waiting on it.</summary>
     private static readonly TimeSpan RecoveryRetryDelay = TimeSpan.FromMilliseconds(250);
 
+    /// <summary>
+    ///     How many times a terminal transition may reload the row and try again. Bounded rather than open-ended: each
+    ///     loss costs a reserved sequence, and a writer that drifts the version three times running is a caller
+    ///     hammering cancel, not a race that one more read would settle.
+    /// </summary>
+    private const int MaxTerminalAttempts = 4;
+
     /// <summary>The statuses a terminal transition may leave. Nothing else is a legal source for one.</summary>
     private static readonly IReadOnlySet<IntegrationExecutionStatus> NonTerminalStatuses = new HashSet<IntegrationExecutionStatus>
     {
@@ -574,6 +581,19 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         if (resolved is null)
         {
             await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.TriggerUnavailable, "The trigger's target agent no longer exists.").ConfigureAwait(false);
+            return;
+        }
+
+        // The SECOND read of the definition's Kind, and the one this package is actually built from: the resolver
+        // re-reads the definition through its own fresh query, so an operator who switched it to an orchestrator
+        // between the step-1 guard above and this resolve would otherwise get a Completed result from a run that
+        // executed no participant, no routing and no handoff. Judged here rather than trusted from the earlier read.
+        if (resolved.Kind != AgentDefinitionKind.Single)
+        {
+            await TerminalizeBeforeRunAsync(context,
+                    IntegrationFailureCategories.TriggerUnavailable,
+                    "The trigger's target agent is an orchestrator, which external integrations do not run.")
+                .ConfigureAwait(false);
             return;
         }
 
@@ -1098,7 +1118,13 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         //     Append for a terminal event (that publishes before the row exists), and never a status CAS followed by a
         //     separate event insert (a crash between them leaves a terminal row whose terminal event never arrives, and
         //     startup recovery scans only NON-terminal rows, so the inconsistency would be permanent).
-        _ = await TerminalizeAsync(context, RunningOnly, status, failureCategory, failureSummary).ConfigureAwait(false);
+        if (!await TerminalizeAsync(context, RunningOnly, status, failureCategory, failureSummary).ConfigureAwait(false))
+        {
+            // A Running row that lost every bounded attempt is stranded: nothing else will pick it up, and its
+            // admission slot is held until the process restarts. The fault path re-reads over EVERY non-terminal
+            // status, honours the marker it finds and returns at once if some other writer closed the row first.
+            await TerminalizeFromFaultAsync(context, status, failureCategory, failureSummary).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -1242,7 +1268,11 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
             }
 
             context.Version = row.Version;
-            _ = await TerminalizeAsync(context, NonTerminalStatuses, status, failureCategory, failureSummary).ConfigureAwait(false);
+
+            // The re-read is this path's own first look at the row, so it honours a marker the caller's outcome
+            // predates before it ever attempts a CAS.
+            var (marked, markedCategory, markedSummary) = HonourStopMarker(row, status, failureCategory, failureSummary);
+            _ = await TerminalizeAsync(context, NonTerminalStatuses, marked, markedCategory, markedSummary).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -1260,9 +1290,15 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
     ///         so a queued cancel cannot produce two cancelled events and two audit rows.
     ///     </para>
     ///     <para>
-    ///         The single retry exists because the cancel path stamps its durable stop marker through a NON-terminal
-    ///         status update, which bumps the row's version without terminalizing it. Without the retry a coordinator
-    ///         holding the pre-marker version would lose its CAS and leave the row stuck.
+    ///         The retries exist because the cancel path stamps its durable stop marker through a NON-terminal status
+    ///         update, which bumps the row's version without terminalizing it. Without them a coordinator holding the
+    ///         pre-marker version would lose its CAS and leave the row stuck — and ONE retry is not enough, because a
+    ///         second cancel landing inside the window bumps the version again and exhausts it.
+    ///     </para>
+    ///     <para>
+    ///         Every reload also honours the marker it finds: a stop marker stamped after this outcome was chosen
+    ///         outranks it, so a pre-run rejection racing an accepted cancel writes <c>Cancelled</c> rather than the
+    ///         failure the caller never asked for.
     ///     </para>
     /// </summary>
     private async Task<bool> TerminalizeAsync(ExecutionRunContext context,
@@ -1271,20 +1307,49 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         string? failureCategory,
         string? failureSummary)
     {
-        if (await TryTerminalizeOnceAsync(context, expectedStatuses, status, failureCategory, failureSummary).ConfigureAwait(false))
+        var outcome = (Status: status, FailureCategory: failureCategory, FailureSummary: failureSummary);
+
+        for (var attempt = 1; attempt <= MaxTerminalAttempts; attempt++)
         {
-            return true;
+            if (await TryTerminalizeOnceAsync(context, expectedStatuses, outcome.Status, outcome.FailureCategory, outcome.FailureSummary).ConfigureAwait(false))
+            {
+                return true;
+            }
+
+            var fresh = await context.Store.GetByIdAsync(context.ExecutionId, CancellationToken.None).ConfigureAwait(false);
+            if (fresh is null || !expectedStatuses.Contains(fresh.Status) || fresh.Version == context.Version)
+            {
+                // Gone, already terminal, or a loss no reload explains: retrying the same version would only lose the
+                // same way.
+                return false;
+            }
+
+            context.Version = fresh.Version;
+            outcome = HonourStopMarker(fresh, outcome.Status, outcome.FailureCategory, outcome.FailureSummary);
         }
 
-        var fresh = await context.Store.GetByIdAsync(context.ExecutionId, CancellationToken.None).ConfigureAwait(false);
-        if (fresh is null || !expectedStatuses.Contains(fresh.Status) || fresh.Version == context.Version)
-        {
-            return false;
-        }
-
-        context.Version = fresh.Version;
-        return await TryTerminalizeOnceAsync(context, expectedStatuses, status, failureCategory, failureSummary).ConfigureAwait(false);
+        return false;
     }
+
+    /// <summary>
+    ///     A durable stop marker outranks the FAILURE a terminal path came with. The cancel primitive stamps it before
+    ///     it does anything else, so a row carrying one has an accepted 202 behind it: closing it as a failure shows
+    ///     the caller a fault it did not cause and never asked about.
+    ///     <para>
+    ///         A <c>Completed</c> outcome is the one exception, and is left alone. The generation had already produced
+    ///         its answer: its assistant turn is persisted, its <c>external.output</c> payloads are committed, and a
+    ///         row reading <c>Cancelled</c> over them would contradict every artefact the caller can read. The 202 the
+    ///         cancel endpoint returns says the stop was REQUESTED, never that it arrived in time.
+    ///     </para>
+    /// </summary>
+    private static (IntegrationExecutionStatus Status, string? FailureCategory, string? FailureSummary) HonourStopMarker(
+        IntegrationExecutionSnapshot row,
+        IntegrationExecutionStatus status,
+        string? failureCategory,
+        string? failureSummary) =>
+        row.StopRequestedAtUtc is not null && status is not (IntegrationExecutionStatus.Cancelled or IntegrationExecutionStatus.Completed)
+            ? (IntegrationExecutionStatus.Cancelled, null, null)
+            : (status, failureCategory, failureSummary);
 
     private async Task<bool> TryTerminalizeOnceAsync(ExecutionRunContext context,
         IReadOnlySet<IntegrationExecutionStatus> expectedStatuses,

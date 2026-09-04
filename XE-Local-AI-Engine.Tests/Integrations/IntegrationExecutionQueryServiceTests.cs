@@ -71,6 +71,42 @@ public sealed class IntegrationExecutionQueryServiceTests
         AssertEx.True(harness.CancelTokenFired);
     }
 
+    [Test]
+    public async Task RequestCancel_OnARowWhoseMarkerIsAlreadyStamped_WritesNothingASecondTime()
+    {
+        // Every cancel used to re-stamp the marker under a fresh version. A caller hammering the endpoint drifted the
+        // row's version out from under the coordinator's bounded terminal retries and stranded it Running.
+        using var harness = new Harness();
+        var executionId = harness.Seed(IntegrationExecutionStatus.Running);
+
+        AssertEx.Equal(IntegrationCancelOutcome.Requested, await harness.Service.RequestCancelAsync(executionId));
+        var afterFirst = harness.Row(executionId);
+        AssertEx.True(afterFirst.StopRequestedAtUtc is not null);
+        AssertEx.Equal(expected: 1L, afterFirst.Version);
+
+        AssertEx.Equal(IntegrationCancelOutcome.Requested, await harness.Service.RequestCancelAsync(executionId),
+            "The marker is already durable and the signal still fires, so the answer is unchanged.");
+        var afterSecond = harness.Row(executionId);
+        AssertEx.Equal(expected: 1L, afterSecond.Version, "A second cancel must cost the row no version at all.");
+        AssertEx.Equal(afterFirst.StopRequestedAtUtc, afterSecond.StopRequestedAtUtc);
+    }
+
+    [Test]
+    public async Task RequestCancel_WhenItsOwnTerminalCasLosesToATerminalRow_Answers409NotAccepted()
+    {
+        using var harness = new Harness();
+        var executionId = harness.Seed(IntegrationExecutionStatus.Accepted);
+
+        // A pre-run rejection reached the row between this cancel's marker write and its own terminal CAS.
+        harness.Executions.BeforeTerminalizeCas = _ => harness.Executions.Fail(executionId, IntegrationFailureCategories.TriggerUnavailable);
+
+        var outcome = await harness.Service.RequestCancelAsync(executionId);
+
+        AssertEx.Equal(IntegrationCancelOutcome.AlreadyTerminal, outcome,
+            "The run is over: a 202 would have the caller poll for a cancellation that will never arrive.");
+        AssertEx.True(harness.CancelTokenFired);
+    }
+
     private sealed class Harness : IDisposable
     {
         private readonly IntegrationExecutionEventBuffer _buffer;

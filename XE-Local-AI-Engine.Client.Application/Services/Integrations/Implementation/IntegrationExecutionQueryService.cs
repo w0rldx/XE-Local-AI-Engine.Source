@@ -62,7 +62,11 @@ public sealed class IntegrationExecutionQueryService
     /// <summary>
     ///     Requests cancellation, in the fixed order the transition table needs.
     ///     <list type="number">
-    ///         <item>Stamp the durable stop marker, so a restart cannot resurrect the run.</item>
+    ///         <item>
+    ///             Stamp the durable stop marker, so a restart cannot resurrect the run. Written ONCE: a row that
+    ///             already carries one is answered without a second write, because every marker write bumps the
+    ///             version and a repeated cancel would drift it out from under the coordinator's terminal retries.
+    ///         </item>
     ///         <item>
     ///             Terminalize a row that has not started, in ONE transaction. Whoever's CAS wins owns the terminal
     ///             event and the one audit row; a loser appends nothing, because the coordinator won the
@@ -94,6 +98,15 @@ public sealed class IntegrationExecutionQueryService
 
         try
         {
+            // Idempotent: a row whose marker is already durable needs no second write. Re-stamping it bumps the
+            // version for nothing, and a caller hammering cancel would drift the version out from under the
+            // coordinator's bounded terminal retries until they were exhausted and the row stranded non-terminal.
+            // The signal in the finally below still fires, which is what actually stops a run in flight.
+            if (execution.StopRequestedAtUtc is not null)
+            {
+                return IntegrationCancelOutcome.Requested;
+            }
+
             // CancellationToken.None from here down, for the same reason the coordinator uses it: a cancel that has
             // decided to stop a run must finish stamping and closing it even if the client that asked walks away.
             //
@@ -128,9 +141,18 @@ public sealed class IntegrationExecutionQueryService
                     return IntegrationCancelOutcome.AlreadyTerminal;
                 }
             }
-            else if (execution.Status is IntegrationExecutionStatus.Accepted or IntegrationExecutionStatus.Queued)
+            else if (execution.Status is IntegrationExecutionStatus.Accepted or IntegrationExecutionStatus.Queued
+                     && !await TryTerminalizeCancelledAsync(execution, execution.Version + 1, nowUnixMs, CancellationToken.None).ConfigureAwait(false))
             {
-                await TryTerminalizeCancelledAsync(execution, execution.Version + 1, nowUnixMs, CancellationToken.None).ConfigureAwait(false);
+                // The terminal CAS lost. If it lost to a TERMINAL row — a pre-run rejection that beat this cancel to
+                // it — the run is over and the honest answer is a 409, not a 202 the caller will poll for a cancel
+                // that will never arrive. A still-live row is the ordinary case and stays a 202.
+                var fresh = await _executions.GetByIdAsync(executionId, CancellationToken.None).ConfigureAwait(false);
+                if (fresh is not null
+                    && fresh.Status is not (IntegrationExecutionStatus.Accepted or IntegrationExecutionStatus.Queued or IntegrationExecutionStatus.Running))
+                {
+                    return IntegrationCancelOutcome.AlreadyTerminal;
+                }
             }
 
             return IntegrationCancelOutcome.Requested;
@@ -143,7 +165,12 @@ public sealed class IntegrationExecutionQueryService
         }
     }
 
-    private async Task TryTerminalizeCancelledAsync(IntegrationExecutionSnapshot execution,
+    /// <summary>
+    ///     <see langword="true" /> when this cancel won the terminal compare-and-swap and owns the artefacts, and
+    ///     <see langword="false" /> when it did not — which the caller resolves against the row itself, because a loss
+    ///     to a terminal row and a loss to a live one are different answers.
+    /// </summary>
+    private async Task<bool> TryTerminalizeCancelledAsync(IntegrationExecutionSnapshot execution,
         long expectedVersion,
         long nowUnixMs,
         CancellationToken cancellationToken)
@@ -154,7 +181,7 @@ public sealed class IntegrationExecutionQueryService
         if (!_buffer.TryCreate(execution.Id, execution.LastSequence))
         {
             _logger.LogWarning("The event buffer refused an entry for integration execution {ExecutionId}; the cancel marker stands and the coordinator will terminalize it.", execution.Id);
-            return;
+            return false;
         }
 
         // The audit row is built BEFORE the terminal command and carried inside it, so the store inserts it in the
@@ -192,7 +219,7 @@ public sealed class IntegrationExecutionQueryService
                                        .ConfigureAwait(false);
             if (!won)
             {
-                return;
+                return false;
             }
 
             _buffer.Publish(new IntegrationStreamEvent(IntegrationStreamEventTypes.ExecutionCancelled,
@@ -203,6 +230,7 @@ public sealed class IntegrationExecutionQueryService
                 ContentType: null,
                 Payload: null));
             published = true;
+            return true;
         }
         finally
         {

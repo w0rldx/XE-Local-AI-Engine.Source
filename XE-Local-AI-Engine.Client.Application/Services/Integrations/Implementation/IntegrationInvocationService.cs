@@ -104,7 +104,8 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             // 3. Dedup, scoped to (principal, request id) — the pair the unique index covers. A FOREIGN request id is
             //    simply not found, so one integrator can never preclaim another's and force it a permanent 409.
             //
-            //    It runs BEFORE the session gate and before the input checks, and that order is the whole point of
+            //    It runs BEFORE session RESOLUTION and before the input checks — inside the per-session gate, which is
+            //    still entered first and held through admission — and that order is the whole point of
             //    `requestId`: a retry happens exactly when the original 202 was lost, which is exactly when the
             //    original execution is still running on the session it named. Resolving the session first answered
             //    such a retry with SessionBusy 409, and a session closed since answered SessionClosed — in both cases
