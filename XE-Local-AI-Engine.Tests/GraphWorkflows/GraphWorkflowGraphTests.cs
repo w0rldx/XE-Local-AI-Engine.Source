@@ -12,6 +12,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class GraphWorkflowGraphTests
 {
+    /// <summary>The charset refusal in full, so a row that fails some OTHER way cannot pass by containing "key".</summary>
+    private const string Charset = "is not a legal key. Keys are 1 to 64 characters of letters, digits, '_' and '-'.";
+
     private const string StartToEnd = """
                                       { "schemaVersion": 1,
                                         "nodes": [{ "key": "start", "kind": "Start" },
@@ -225,13 +228,18 @@ public sealed class GraphWorkflowGraphTests
     ///     A key reaches a plaintext database column, a canvas element id, a URL search param and a terminal-reason
     ///     sentence. One charset is what keeps all four honest at once.
     /// </summary>
+    /// <remarks>
+    ///     Each row names the sentence it expects. The empty key never reaches the charset check at all — it is refused
+    ///     one step earlier, as a missing required string — and asserting the same words for both would hide the day a
+    ///     charset failure started reading like an absence.
+    /// </remarks>
     [Test]
-    [Arguments("a b")]
-    [Arguments("a.b")]
-    [Arguments("a/b")]
-    [Arguments("aaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffggggg")]
-    [Arguments("")]
-    public void Parse_RejectsAKeyOutsideTheCharset(string key)
+    [Arguments("a b", Charset)]
+    [Arguments("a.b", Charset)]
+    [Arguments("a/b", Charset)]
+    [Arguments("aaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffggggg", Charset)]
+    [Arguments("", "needs a non-empty 'key'")]
+    public void Parse_RejectsAKeyOutsideTheCharset(string key, string expected)
     {
         var quoted = JsonSerializer.Serialize(key);
         var json = $$"""
@@ -240,7 +248,7 @@ public sealed class GraphWorkflowGraphTests
                        "edges": [{ "key": "e1", "from": {{quoted}}, "to": "done" }] }
                      """;
 
-        AssertEx.Contains(AssertEx.Throws<GraphWorkflowValidationException>(() => GraphWorkflowGraph.Parse(json)).Message, "key");
+        AssertEx.Contains(AssertEx.Throws<GraphWorkflowValidationException>(() => GraphWorkflowGraph.Parse(json)).Message, expected);
     }
 
     [Test]

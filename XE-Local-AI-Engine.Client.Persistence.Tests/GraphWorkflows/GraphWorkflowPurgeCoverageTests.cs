@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.GraphWorkflows;
 
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -82,7 +83,14 @@ public sealed class GraphWorkflowPurgeCoverageTests
             + $"{string.Join(", ", covered.Except(discovered, StringComparer.Ordinal))}.");
     }
 
-    /// <summary>Deleting one run takes its subtree and leaves the definition — the other half of the same ordered delete.</summary>
+    /// <summary>
+    ///     Deleting one run takes its subtree and leaves the definition — the other half of the same ordered delete.
+    ///     <para>
+    ///         A SECOND run of the same definition, with a subtree of its own, is what makes the counts an assertion
+    ///         about scoping rather than about emptiness: every table below would read zero just as happily if the
+    ///         delete were unscoped and took the lot.
+    ///     </para>
+    /// </summary>
     [Test]
     public async Task DeleteRun_TakesItsSubtreeAndLeavesTheDefinitionStanding()
     {
@@ -94,6 +102,13 @@ public sealed class GraphWorkflowPurgeCoverageTests
         _ = await GraphWorkflowTestFixture.SeedNodeRunAsync(context, runId, "analyze", GraphWorkflowNodeKind.Agent, inputJson: """{"run":{"input":1}}""")
                                           .ConfigureAwait(false);
         _ = await GraphWorkflowTestFixture.SeedRunEventAsync(context, runId, seq: 1, "run.started", """{"note":"seeded"}""").ConfigureAwait(false);
+
+        var survivorRunId = await GraphWorkflowTestFixture.SeedRunAsync(context, definition.Id).ConfigureAwait(false);
+        var survivorNodeRunId = await GraphWorkflowTestFixture
+                                      .SeedNodeRunAsync(context, survivorRunId, "review", GraphWorkflowNodeKind.Agent, inputJson: """{"run":{"input":2}}""")
+                                      .ConfigureAwait(false);
+        var survivorEventId = await GraphWorkflowTestFixture.SeedRunEventAsync(context, survivorRunId, seq: 1, "run.started", """{"note":"survivor"}""")
+                                                            .ConfigureAwait(false);
 
         await using (var transaction = await context.Database.BeginTransactionAsync().ConfigureAwait(false))
         {
@@ -110,10 +125,32 @@ public sealed class GraphWorkflowPurgeCoverageTests
                      "graph_workflow_run_events"
                  })
         {
-            AssertEx.Equal(expected: 0L, await fixture.RawTableCountAsync(table).ConfigureAwait(false), $"{table} must be empty after the run is deleted.");
+            AssertEx.Equal(expected: 1L,
+                await fixture.RawTableCountAsync(table).ConfigureAwait(false),
+                $"{table} must hold exactly the other run's row after the first run is deleted.");
         }
+
+        // By id rather than by count: one row of the right shape in the wrong run would satisfy the counts above.
+        AssertEx.Equal(survivorRunId, await ScalarGuidAsync(fixture, "SELECT id FROM graph_workflow_runs;").ConfigureAwait(false), "The other run must be the survivor.");
+        AssertEx.Equal(survivorNodeRunId,
+            await ScalarGuidAsync(fixture, "SELECT id FROM graph_workflow_node_runs;").ConfigureAwait(false),
+            "and its node run must be untouched.");
+        AssertEx.Equal(survivorEventId, await ScalarGuidAsync(fixture, "SELECT id FROM graph_workflow_run_events;").ConfigureAwait(false), "and so must its event.");
 
         AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("graph_workflow_definitions").ConfigureAwait(false),
             "A definition is not run-scoped and survives by design; only deleting the definition takes it.");
+    }
+
+    /// <summary>The one id a single-row query returns, read straight from the file rather than through the model.</summary>
+    private static async Task<Guid> ScalarGuidAsync(GraphWorkflowTestFixture fixture, string sql)
+    {
+        var value = await fixture.RawScalarAsync(sql).ConfigureAwait(false);
+        return value switch
+        {
+            Guid guid => guid,
+            string text => Guid.Parse(text, CultureInfo.InvariantCulture),
+            byte[] bytes => new Guid(bytes),
+            _ => throw new InvalidOperationException($"'{sql}' returned no id this test can read.")
+        };
     }
 }

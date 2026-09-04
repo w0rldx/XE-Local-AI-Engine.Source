@@ -15,22 +15,40 @@ public sealed class GraphWorkflowOptionsTests
     private const string ProbeRoute = "/api/local/v1/graph-workflows/definitions";
 
     /// <summary>
-    ///     The four refusals the section owns: a budget under its floor (three of the nine, one of them the dispatch
-    ///     interval), a run that could not instantiate the definition it started from, and a replay window above its
-    ///     ceiling. The accepted rows are the defaults and the extremes that are legal.
+    ///     Every refusal the section owns, one row per rule: each of the NINE floors at floor minus one, the two
+    ///     relations (a run that could not instantiate the definition it started from, and a replay window above its
+    ///     ceiling), and the accepted rows that pin the other side — the documented defaults, every floor exactly at
+    ///     its floor, and the replay window exactly at its ceiling.
+    ///     <para>
+    ///         Each refusing row is the defaults with ONE member moved, so what it pins is that member's own floor and
+    ///         not some combination. The two exceptions are the rows for the relations, which are about two members by
+    ///         definition, and the <c>MaxNodeRunsPerRun</c> floor, which has to lower <c>MaxNodesPerDefinition</c> with
+    ///         it or the relation would refuse the row before its floor got the chance.
+    ///     </para>
     /// </summary>
     [Test]
-    [Arguments(200, 200, 500, 200, true, "the documented defaults")]
-    [Arguments(2, 2, 100, 1, true, "the budgets under test exactly at their floors")]
-    [Arguments(200, 200, 500, 1000, true, "the replay window exactly at its ceiling")]
-    [Arguments(1, 200, 500, 200, false, "a definition cap that admits no graph at all")]
-    [Arguments(2, 1, 100, 200, false, "a run cap under its own floor")]
-    [Arguments(200, 200, 99, 200, false, "a dispatch interval under 100 ms")]
-    [Arguments(200, 100, 500, 200, false, "fewer node runs per run than nodes per definition")]
-    [Arguments(200, 200, 500, 1001, false, "a replay window above 1000")]
+    [Arguments(200, 200, 50, 600, 262_144, 500, 4, 65_536, 200, true, "the documented defaults")]
+    [Arguments(2, 2, 1, 1, 1024, 100, 1, 1024, 1, true, "every budget exactly at its floor")]
+    [Arguments(200, 200, 50, 600, 262_144, 500, 4, 65_536, 1000, true, "the replay window exactly at its ceiling")]
+    [Arguments(1, 200, 50, 600, 262_144, 500, 4, 65_536, 200, false, "a definition cap that admits no graph at all")]
+    [Arguments(2, 1, 50, 600, 262_144, 500, 4, 65_536, 200, false, "a run cap under its own floor")]
+    [Arguments(200, 200, 0, 600, 262_144, 500, 4, 65_536, 200, false, "an attempt budget that permits no attempt")]
+    [Arguments(200, 200, 50, 0, 262_144, 500, 4, 65_536, 200, false, "a default node timeout of no time at all")]
+    [Arguments(200, 200, 50, 600, 1023, 500, 4, 65_536, 200, false, "an output cap under a kilobyte")]
+    [Arguments(200, 200, 50, 600, 262_144, 99, 4, 65_536, 200, false, "a dispatch interval under 100 ms")]
+    [Arguments(200, 200, 50, 600, 262_144, 500, 0, 65_536, 200, false, "a concurrency cap that would run nothing")]
+    [Arguments(200, 200, 50, 600, 262_144, 500, 4, 1023, 200, false, "a run-input cap under a kilobyte")]
+    [Arguments(200, 200, 50, 600, 262_144, 500, 4, 65_536, 0, false, "a replay window that would return nothing")]
+    [Arguments(200, 100, 50, 600, 262_144, 500, 4, 65_536, 200, false, "fewer node runs per run than nodes per definition")]
+    [Arguments(200, 200, 50, 600, 262_144, 500, 4, 65_536, 1001, false, "a replay window above 1000")]
     public void Validator_RefusesTheCombinationsThatCannotWork(int maxNodesPerDefinition,
         int maxNodeRunsPerRun,
+        int maxTotalAttempts,
+        int defaultNodeTimeoutSeconds,
+        int maxOutputJsonBytes,
         int dispatchIntervalMilliseconds,
+        int maxConcurrentRuns,
+        int maxRunInputBytes,
         int eventReplayLimit,
         bool expected,
         string because)
@@ -42,7 +60,12 @@ public sealed class GraphWorkflowOptionsTests
             {
                 MaxNodesPerDefinition = maxNodesPerDefinition,
                 MaxNodeRunsPerRun = maxNodeRunsPerRun,
+                MaxTotalAttempts = maxTotalAttempts,
+                DefaultNodeTimeoutSeconds = defaultNodeTimeoutSeconds,
+                MaxOutputJsonBytes = maxOutputJsonBytes,
                 DispatchIntervalMilliseconds = dispatchIntervalMilliseconds,
+                MaxConcurrentRuns = maxConcurrentRuns,
+                MaxRunInputBytes = maxRunInputBytes,
                 EventReplayLimit = eventReplayLimit
             });
 

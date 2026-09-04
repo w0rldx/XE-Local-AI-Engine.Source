@@ -18,9 +18,13 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 /// </remarks>
 internal sealed class GraphWorkflowTestFixture : IDisposable
 {
-    /// <summary>Opaque to this assembly: the parser and its rules live in the Application layer.</summary>
+    /// <summary>
+    ///     Opaque to this assembly: the parser and its rules live in the Application layer. Kept a graph that layer
+    ///     would actually ACCEPT anyway — an End node needs its <c>outcome</c>, and a fixture whose sample document
+    ///     the real parser refuses is one every later slice would have to work around.
+    /// </summary>
     public const string SampleGraph =
-        """{"schemaVersion":1,"nodes":[{"key":"start","kind":"Start"},{"key":"done","kind":"End"}],"edges":[{"key":"e1","from":"start","to":"done"}]}""";
+        """{"schemaVersion":1,"nodes":[{"key":"start","kind":"Start"},{"key":"done","kind":"End","config":{"outcome":"completed"}}],"edges":[{"key":"e1","from":"start","to":"done"}]}""";
 
     private readonly NullNodeSqliteKeyHolder _keyHolder = new();
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-graph-workflows-" + Guid.NewGuid().ToString("N"));

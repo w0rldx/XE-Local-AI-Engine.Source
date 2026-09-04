@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 
+using System.Globalization;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
@@ -11,6 +12,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class GraphWorkflowStateMachineTests
 {
+    /// <summary>The parser's node- and edge-key ceiling, restated: it is private to <c>GraphWorkflowGraph</c>.</summary>
+    private const int MaxKeyLength = 64;
+
     /// <summary>The output document of a Condition node whose answer routes down the false branch.</summary>
     private const string NotOk = """{"output":{"json":{"ok":false}}}""";
 
@@ -231,7 +235,9 @@ public sealed class GraphWorkflowStateMachineTests
                 condition,
                 ByKey(NodeRun("check", GraphWorkflowNodeRunStatus.Succeeded, NotOk),
                     NodeRun("yes", GraphWorkflowNodeRunStatus.Skipped),
-                    NodeRun("fallback", GraphWorkflowNodeRunStatus.Succeeded))));
+                    NodeRun("fallback", GraphWorkflowNodeRunStatus.Succeeded))),
+            "two dead edges and only one is news: the Condition's own dead edge into the join is listed FIRST and is "
+            + "still not the cause, because a branch not taken is the graph working.");
 
         var parallel = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.ParallelJoinAll);
 
@@ -239,24 +245,6 @@ public sealed class GraphWorkflowStateMachineTests
             GraphWorkflowStateMachine.SkipReason(parallel.Nodes["merge"],
                 parallel,
                 ByKey(NodeRun("left", GraphWorkflowNodeRunStatus.Failed), NodeRun("right", GraphWorkflowNodeRunStatus.Succeeded))));
-    }
-
-    /// <summary>
-    ///     Two dead edges, and only one of them is news: a Condition taking its other branch is the graph working, so
-    ///     the branch that was actually refused is named even when the routed-past one is listed first.
-    /// </summary>
-    [Test]
-    public void SkipReason_PrefersARefusedBranchOverOneAGateMerelyRoutedPast()
-    {
-        var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.ConditionWithDefault);
-
-        AssertEx.Equal("Skipped: upstream 'yes' was skipped.",
-            GraphWorkflowStateMachine.SkipReason(graph.Nodes["merge"],
-                graph,
-                ByKey(NodeRun("check", GraphWorkflowNodeRunStatus.Succeeded, NotOk),
-                    NodeRun("yes", GraphWorkflowNodeRunStatus.Skipped),
-                    NodeRun("fallback", GraphWorkflowNodeRunStatus.Succeeded))),
-            "the Condition's own dead edge into the join is listed first and is still not the cause.");
     }
 
     /// <summary>
@@ -612,6 +600,102 @@ public sealed class GraphWorkflowStateMachineTests
     [Test]
     public void EdgeState_HasNoWaivedMember() =>
         AssertEx.Equal("Pending, Satisfied, Dead", string.Join(", ", Enum.GetNames<GraphWorkflowEdgeState>()));
+
+    /// <summary>
+    ///     The terminal reason's bound, asked of the LONGEST sentence the rules can actually produce: every named node
+    ///     key at the parser's 64-character ceiling, the longest terminal status name on each of them, the "and N more"
+    ///     tail, and a refused pause naming a 64-character key of its own.
+    ///     <para>
+    ///         The sentence cannot exceed the bound and that is the finding, not a gap: every word of it is fixed
+    ///         text, a node key or an enum name, so its worst case is arithmetic rather than input. The second half
+    ///         computes that worst case from the template and the ceilings and pins it under the bound, so a reason
+    ///         that later names something unbounded reds here instead of being silently truncated at a run — and
+    ///         <see cref="Bounded_NeverEndsOnTheHighHalfOfASurrogatePair" /> pins the cut that would then do the
+    ///         truncating.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public void Recompute_WithTheLongestReasonTheGraphRulesAllow_StaysWithinTheColumnsBound()
+    {
+        // Restated rather than referenced: all three are private to the code under test, which is the point of pinning
+        // them from outside. MaxNodesPerGraph is GraphWorkflowOptions.MaxNodesPerDefinition's [Range] ceiling — the
+        // most End nodes any accepted definition could hold.
+        const int MaxTerminalReason = 512;
+        const int MaxNamedNodes = 3;
+        const int MaxNodesPerGraph = 10_000;
+
+        var pauseKey = LongKey('p');
+        var ends = Enumerable.Range(0, count: 6).Select(index => LongKey('e', index)).ToList();
+        var graph = GraphWorkflowGraph.Parse(RejectionIntoManyEnds(pauseKey, ends));
+
+        // Cancelled, not Skipped: both are terminal and neither reaches an end, and it is the longer word of the two.
+        var outcome = GraphWorkflowStateMachine.Recompute(GraphWorkflowRunStatus.WaitingForApproval,
+            graph,
+            [
+                .. ends.Select(static key => NodeRun(key, GraphWorkflowNodeRunStatus.Cancelled)),
+                NodeRun(LongKey('s'), GraphWorkflowNodeRunStatus.Succeeded),
+                NodeRun(pauseKey,
+                    GraphWorkflowNodeRunStatus.Succeeded,
+                    GraphWorkflowStateMachine.PauseOutputJson(GraphWorkflowDecisionKind.Reject),
+                    GraphWorkflowNodeKind.Pause),
+                NodeRun(LongKey('f'), GraphWorkflowNodeRunStatus.Succeeded)
+            ]);
+
+        var reason = AssertEx.NotNull(outcome.TerminalReason);
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, outcome.Status);
+        AssertEx.True(reason.Contains($"'{ends[0]}' was Cancelled", StringComparison.Ordinal), "The longest reason still names its ends: " + reason);
+        AssertEx.True(reason.Contains($", and {ends.Count - MaxNamedNodes} more", StringComparison.Ordinal), "and still counts the ones it did not name: " + reason);
+        AssertEx.True(reason.Contains($"the pause '{pauseKey}' answered Reject", StringComparison.Ordinal), "and still names the answer: " + reason);
+        AssertEx.True(reason.Length <= MaxTerminalReason, $"The reason is {reason.Length} characters, past the {MaxTerminalReason} the column keeps.");
+
+        // The template's own worst case, over the ceilings the parser and the options enforce. Derived from the enums
+        // rather than written out, so a longer status or decision name is caught here rather than by a truncation.
+        var longestStatus = Enum.GetValues<GraphWorkflowNodeRunStatus>()
+                                .Where(static status => GraphWorkflowStateMachine.IsTerminal(status))
+                                .Max(static status => status.ToString().Length);
+        var longestDecision = Enum.GetValues<GraphWorkflowDecisionKind>().Max(static decision => decision.ToString().Length);
+        var worstCase = "No terminal node succeeded: ".Length
+                        + (MaxNamedNodes * ("'".Length + MaxKeyLength + "' was ".Length + longestStatus))
+                        + ((MaxNamedNodes - 1) * ", ".Length)
+                        + $", and {MaxNodesPerGraph} more".Length
+                        + ", after the pause '".Length + MaxKeyLength + "' answered ".Length + longestDecision
+                        + ".".Length;
+
+        AssertEx.True(worstCase <= MaxTerminalReason,
+            $"The longest reason the template can build is {worstCase} characters against a bound of {MaxTerminalReason}, so it would be truncated.");
+    }
+
+    /// <summary>
+    ///     A pause whose rejection fans out into <paramref name="ends" /> minus one End nodes, with the remaining one on
+    ///     its approval branch. Every key is at the parser's 64-character ceiling, which is what makes the reason this
+    ///     produces the longest one a legal graph can produce.
+    /// </summary>
+    private static string RejectionIntoManyEnds(string pauseKey, IReadOnlyList<string> ends)
+    {
+        var start = LongKey('s');
+        var fanout = LongKey('f');
+        var nodes = new List<string>
+        {
+            $$"""{ "key": "{{start}}", "kind": "Start" }""",
+            $$"""{ "key": "{{pauseKey}}", "kind": "Pause", "config": { "prompt": "Well?", "allowedDecisions": ["Approve", "Reject"] } }""",
+            $$"""{ "key": "{{fanout}}", "kind": "Parallel" }"""
+        };
+        nodes.AddRange(ends.Select(static key => $$"""{ "key": "{{key}}", "kind": "End", "config": { "outcome": "done" } }"""));
+
+        var edges = new List<string>
+        {
+            $$"""{ "key": "edge-start", "from": "{{start}}", "to": "{{pauseKey}}" }""",
+            $$"""{ "key": "edge-approve", "from": "{{pauseKey}}", "to": "{{ends[0]}}", "condition": { "path": "output.decision", "op": "eq", "value": "Approve" } }""",
+            $$"""{ "key": "edge-reject", "from": "{{pauseKey}}", "to": "{{fanout}}", "condition": { "path": "output.decision", "op": "eq", "value": "Reject" } }"""
+        };
+        edges.AddRange(ends.Skip(1).Select((key, index) => $$"""{ "key": "edge-{{index}}", "from": "{{fanout}}", "to": "{{key}}" }"""));
+
+        return $$"""{ "schemaVersion": 1, "nodes": [{{string.Join(", ", nodes)}}], "edges": [{{string.Join(", ", edges)}}] }""";
+    }
+
+    /// <summary>A key exactly at the parser's ceiling, distinct per <paramref name="index" />.</summary>
+    private static string LongKey(char fill, int index = 0) =>
+        new string(fill, MaxKeyLength - 4) + index.ToString("D4", CultureInfo.InvariantCulture);
 
     /// <summary>
     ///     One recomputation over a chain <c>node-0 → node-1 → …</c> as long as the statuses named, so the LAST of them

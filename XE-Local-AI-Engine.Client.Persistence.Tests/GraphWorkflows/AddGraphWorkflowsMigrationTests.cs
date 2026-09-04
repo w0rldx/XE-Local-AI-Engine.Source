@@ -149,10 +149,28 @@ public sealed class AddGraphWorkflowsMigrationTests
             "The caller-minted request id is what makes a retried start idempotent, so it is a database constraint.");
     }
 
-    /// <summary>The migrated schema and the one EnsureCreated builds must agree, or a fresh box and an upgraded one diverge.</summary>
+    /// <summary>
+    ///     The migrated schema and the one EnsureCreated builds must agree, or a fresh box and an upgraded one diverge.
+    ///     <para>
+    ///         Compared by column SIGNATURE — name, declared type and nullability — and by index name set, not by
+    ///         column name alone. A column the migration declares TEXT and the model declares BLOB carries the same
+    ///         name on both boxes and stores a different thing on each, and an index present on one of them is a query
+    ///         plan that only holds on that box. Deeper than the Dev Workflow suite's equivalent, which compares names
+    ///         only; that suite is not this slice's to change.
+    ///     </para>
+    /// </summary>
     [Test]
     public async Task MigratedSchema_MatchesWhatEnsureCreatedBuilds()
     {
+        // pragma_table_info and pragma_index_list are table-valued, so the table name binds rather than concatenates.
+        // Both are ordered by name and folded into one string, which is what turns a mismatch into a readable diff.
+        const string ColumnSignatures = """
+                                        SELECT group_concat(signature, ', ')
+                                        FROM (SELECT name || ' ' || type || (CASE "notnull" WHEN 1 THEN ' NOT NULL' ELSE '' END) AS signature
+                                              FROM pragma_table_info($table) ORDER BY name);
+                                        """;
+        const string IndexNames = "SELECT group_concat(name, ', ') FROM (SELECT name FROM pragma_index_list($table) ORDER BY name);";
+
         await using var probe = await MigrationSchemaProbe.MigrateChatAsync("graph-workflows-schema-parity.sqlite").ConfigureAwait(false);
 
         using var fixture = new GraphWorkflowTestFixture();
@@ -164,6 +182,14 @@ public sealed class AddGraphWorkflowsMigrationTests
             var ensured = await EnsureCreatedColumnsAsync(fixture, table).ConfigureAwait(false);
             AssertEx.Empty(migrated.Except(ensured, StringComparer.Ordinal), $"{table}: the migration created column(s) EnsureCreated does not.");
             AssertEx.Empty(ensured.Except(migrated, StringComparer.Ordinal), $"{table}: EnsureCreated created column(s) the migration does not.");
+
+            AssertEx.Equal(await ProbeTextAsync(probe, ColumnSignatures, table).ConfigureAwait(false),
+                await EnsuredTextAsync(fixture, ColumnSignatures, table).ConfigureAwait(false),
+                $"{table}: the migrated columns and the ones EnsureCreated builds differ in declared type or nullability.");
+
+            AssertEx.Equal(await ProbeTextAsync(probe, IndexNames, table).ConfigureAwait(false),
+                await EnsuredTextAsync(fixture, IndexNames, table).ConfigureAwait(false),
+                $"{table}: the migration and EnsureCreated do not create the same indexes.");
         }
     }
 
@@ -204,6 +230,20 @@ public sealed class AddGraphWorkflowsMigrationTests
         var sql = value is null ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
         var whereIndex = sql?.IndexOf(" WHERE ", StringComparison.Ordinal) ?? -1;
         return whereIndex < 0 ? null : sql![(whereIndex + " WHERE ".Length)..].Trim();
+    }
+
+    /// <summary>One <c>group_concat</c> row from the MIGRATED database, as text.</summary>
+    private static async Task<string> ProbeTextAsync(MigrationSchemaProbe probe, string sql, string table)
+    {
+        var value = await probe.ScalarAsync(sql, command => command.Parameters.AddWithValue("$table", table)).ConfigureAwait(false);
+        return value is null ? string.Empty : Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+    }
+
+    /// <summary>The same row from the database <c>EnsureCreated</c> built.</summary>
+    private static async Task<string> EnsuredTextAsync(GraphWorkflowTestFixture fixture, string sql, string table)
+    {
+        var value = await fixture.RawScalarAsync(sql, command => command.Parameters.AddWithValue("$table", table)).ConfigureAwait(false);
+        return value is null ? string.Empty : Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
     }
 
     private static async Task<IReadOnlySet<string>> EnsureCreatedColumnsAsync(GraphWorkflowTestFixture fixture, string table)

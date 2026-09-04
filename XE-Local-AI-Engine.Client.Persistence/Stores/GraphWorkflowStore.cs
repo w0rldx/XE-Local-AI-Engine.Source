@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
@@ -53,11 +54,19 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
         {
             _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (DbUpdateException exception)
+        catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
         {
             // Cleared, or the definition stays tracked as Added and every later write in this scope trips over it.
             _dbContext.ChangeTracker.Clear();
             throw new GraphWorkflowDefinitionConflictException($"A graph workflow definition already exists for id '{command.DefinitionId}'.", exception);
+        }
+        catch (DbUpdateException)
+        {
+            // Anything else — a missing table, a read-only file, a full disk — is not "it already exists", and saying
+            // so would answer 409 to a broken node and hide the real fault. Cleared for the same reason as above, then
+            // left to travel with its own stack.
+            _dbContext.ChangeTracker.Clear();
+            throw;
         }
 
         return Snapshot(definition);
@@ -71,9 +80,24 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
             EnsureNotBlank(command.Name, nameof(command.Name));
         }
 
+        byte[]? graph = null;
+        var graphNodeCount = 0;
         if (command.GraphJson is not null)
         {
             EnsureNotBlank(command.GraphJson, nameof(command.GraphJson));
+
+            // The node count is denormalized so the list never decrypts a blob. A new graph without one would leave
+            // the PREVIOUS graph's count beside it, and the list would then report a number for a document that no
+            // longer has it — the one lie this column exists to make impossible.
+            graphNodeCount = command.NodeCount
+                             ?? throw new ArgumentException("A graph workflow definition edit that carries a graph must carry its node count with it.",
+                                 nameof(command));
+            graph = Utf8(command.GraphJson);
+        }
+
+        if (command.NodeCount is < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(command), "A definition node count cannot be negative.");
         }
 
         var definition = await LoadAsync(command.DefinitionId, cancellationToken).ConfigureAwait(false);
@@ -92,14 +116,18 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
             definition.Description = command.Description;
         }
 
-        if (command.GraphJson is not null)
+        if (graph is not null)
         {
             // Hash, node count and schema version are written together with the graph, every time: that is what lets
             // the list promise never to decrypt a blob and still tell the truth about it.
-            var graph = Utf8(command.GraphJson);
             definition.GraphJson = graph;
             definition.GraphHash = HashPayload(graph);
-            definition.NodeCount = command.NodeCount ?? definition.NodeCount;
+            definition.NodeCount = graphNodeCount;
+
+            // The schema version, unlike the node count, may be left to the stored one: this node understands exactly
+            // one version and the parser refuses every other, so a graph that reached here IS that version and the
+            // stored value already says so. The day a second version ships, this line becomes a lie and the command
+            // has to carry it — which is why it is spelled out rather than defaulted quietly.
             definition.SchemaVersion = command.SchemaVersion ?? definition.SchemaVersion;
         }
         else if (command.NodeCount is { } nodeCount)
@@ -204,6 +232,13 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
     /// </summary>
     private static string HashPayload(byte[] payload) =>
         Convert.ToHexStringLower(SHA256.HashData(payload));
+
+    /// <summary>
+    ///     Whether a failed write was the unique index refusing a duplicate. SQLite reports both PRIMARY KEY (1555) and
+    ///     UNIQUE (2067) as extended codes of the generic constraint error, and only those two mean "already exists".
+    /// </summary>
+    private static bool IsUniqueConstraintViolation(DbUpdateException exception) =>
+        exception.InnerException is SqliteException { SqliteExtendedErrorCode: 1555 or 2067 };
 
     private static void EnsureNotBlank(string? value, string parameterName)
     {

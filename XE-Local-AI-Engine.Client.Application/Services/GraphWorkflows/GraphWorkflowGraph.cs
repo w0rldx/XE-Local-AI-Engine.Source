@@ -114,7 +114,7 @@ internal sealed class GraphWorkflowGraph
     };
 
     /// <summary>Detached from its document by <c>Clone</c>, so a node that declares no config reads as an empty one.</summary>
-    private static readonly JsonElement EmptyConfig = JsonDocument.Parse("{}").RootElement.Clone();
+    private static readonly JsonElement EmptyConfig = CloneEmptyObject();
 
     private static readonly Dictionary<string, string> NoArgumentBindings = new(StringComparer.Ordinal);
 
@@ -258,6 +258,16 @@ internal sealed class GraphWorkflowGraph
         }
 
         return graph;
+    }
+
+    /// <summary>
+    ///     An empty JSON object, detached from the document that produced it — which is then disposed. A clone owns its
+    ///     own bytes, so the document has no reader left to keep alive.
+    /// </summary>
+    private static JsonElement CloneEmptyObject()
+    {
+        using var document = JsonDocument.Parse("{}");
+        return document.RootElement.Clone();
     }
 
     private static JsonDocument ParseDocument(string graphJson)

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.GraphWorkflows;
 
 using System.Security.Cryptography;
+using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
@@ -106,6 +107,102 @@ public sealed class GraphWorkflowStoreTests
         AssertEx.Equal(created.GraphJson, renamed.GraphJson, "A rename must not rewrite the graph.");
         AssertEx.Equal(created.GraphHash, renamed.GraphHash, "and it must not rewrite the hash that names the graph.");
         AssertEx.Equal(created.NodeCount, renamed.NodeCount, "or the node count the list reports for it.");
+    }
+
+    /// <summary>
+    ///     A graph and its node count travel together or not at all. Accepting the graph alone would rewrite the blob
+    ///     and its hash while leaving the PREVIOUS graph's count beside them, and the definition list — which reports
+    ///     that column precisely so it never has to decrypt a blob — would then report a number for a document that no
+    ///     longer has it.
+    /// </summary>
+    [Test]
+    public async Task UpdateDefinition_WithAGraphButNoNodeCount_IsRefused()
+    {
+        const string ReplacementGraph =
+            """{"schemaVersion":1,"nodes":[{"key":"start","kind":"Start"},{"key":"work","kind":"Agent"},{"key":"done","kind":"End"}],"edges":[]}""";
+
+        using var fixture = new GraphWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = GraphWorkflowTestFixture.StoreFor(context);
+        var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store).ConfigureAwait(false);
+
+        var refusal = await AssertEx.ThrowsAsync<ArgumentException>(
+                                        () => store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id,
+                                            created.Version,
+                                            GraphJson: ReplacementGraph)),
+                                        "A graph without its node count must be refused rather than written.")
+                                    .ConfigureAwait(false);
+
+        AssertEx.Equal(nameof(ArgumentException), refusal.GetType().Name, "and refused as an argument fault, not as a conflict or a not-found.");
+
+        var unchanged = await store.GetDefinitionAsync(created.Id).ConfigureAwait(false);
+        AssertEx.Equal(created.GraphJson, unchanged.GraphJson, "The refused edit must not have rewritten the graph.");
+        AssertEx.Equal(created.GraphHash, unchanged.GraphHash, "nor the hash that names it.");
+        AssertEx.Equal(created.Version, unchanged.Version, "nor bumped the version.");
+
+        // The same graph WITH its count is accepted, so the refusal above is about the missing count and not about the
+        // graph being rejected for some other reason.
+        var replaced = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id,
+                                      created.Version,
+                                      GraphJson: ReplacementGraph,
+                                      NodeCount: 3))
+                                  .ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 3, replaced.NodeCount);
+        AssertEx.Equal(ReplacementGraph, replaced.GraphJson);
+        AssertEx.Equal(expected: 1, replaced.SchemaVersion, "An unsent schema version keeps the stored one: this node has exactly one.");
+    }
+
+    /// <summary>
+    ///     The conflict the create path owns, and its negative control. Both halves matter: the unique index refusing a
+    ///     duplicate id IS "already exists", and a write that failed for any other reason is NOT — answering 409 to a
+    ///     node whose table is gone would hide the real fault behind a retryable-looking one.
+    ///     <para>
+    ///         The duplicate goes through a SECOND context on purpose. Re-adding the id to the context that already
+    ///         tracks it never reaches SQLite at all: EF's identity map refuses it first, which proves nothing about
+    ///         what the store does with a constraint violation.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task CreateDefinition_MapsOnlyTheDuplicateIdToAConflict()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var definitionId = Guid.NewGuid();
+
+        _ = await GraphWorkflowTestFixture.StoreFor(context)
+                                          .CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(definitionId,
+                                              "Triage",
+                                              GraphWorkflowTestFixture.SampleGraph,
+                                              NodeCount: 2))
+                                          .ConfigureAwait(false);
+
+        await using var second = fixture.CreateContext();
+        var store = GraphWorkflowTestFixture.StoreFor(second);
+
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowDefinitionConflictException>(
+                              () => store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(definitionId,
+                                  "Triage again",
+                                  GraphWorkflowTestFixture.SampleGraph,
+                                  NodeCount: 2)),
+                              "A second definition under one id is the unique index refusing it, which is a conflict.")
+                          .ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("graph_workflow_definitions").ConfigureAwait(false), "and the refused row must not have landed.");
+
+        // The negative control: with the table gone the write fails for a reason that is not a duplicate, and the
+        // caller has to hear that rather than "it already exists".
+        await fixture.RawExecuteAsync("DROP TABLE graph_workflow_definitions;").ConfigureAwait(false);
+
+        var broken = await AssertEx.ThrowsAsync<DbUpdateException>(
+                                       () => store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(Guid.NewGuid(),
+                                           "Nowhere to go",
+                                           GraphWorkflowTestFixture.SampleGraph,
+                                           NodeCount: 2)),
+                                       "A write that failed for anything but a unique violation must travel as itself.")
+                                   .ConfigureAwait(false);
+
+        _ = AssertEx.NotNull(broken.InnerException, "and it must still carry the SQLite fault that explains it.");
     }
 
     [Test]
