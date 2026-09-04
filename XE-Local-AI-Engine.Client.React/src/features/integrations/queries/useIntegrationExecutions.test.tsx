@@ -10,6 +10,7 @@ import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
+import { integrationEventLimit } from "@/features/integrations/models/IntegrationModels";
 import {
 	useCancelIntegrationExecution,
 	useIntegrationExecutionEvents,
@@ -119,25 +120,38 @@ function eventsRoute(): URLSearchParams[] {
 
 /**
  * The feed served BY WATERMARK, the way the endpoint documents it: `sinceSeq` is EXCLUSIVE, rows ascend, and a page
- * shorter than the limit means "caught up". 600 events therefore need two requests, and the terminal event is in the
- * second one — the row a single 500-row read used to drop.
+ * shorter than the limit means "caught up". The caller decides which sequences each cursor answers with, so a test
+ * can serve holes, an exact page boundary, or a server that stops making progress.
  */
-function pagedEventsRoute(total: number): URLSearchParams[] {
+function eventsPagesRoute(pageFor: (sinceSeq: number) => readonly number[], terminalSequence = -1): URLSearchParams[] {
 	const requests: URLSearchParams[] = [];
 	server.use(
 		http.get(localApiPath(`integrations/executions/${executionId}/events`), ({ request }) => {
 			const params = new URL(request.url).searchParams;
 			requests.push(params);
-			const sinceSeq = Number(params.get("sinceSeq") ?? "0");
-			const limit = Number(params.get("limit") ?? "500");
-			const items = Array.from({ length: total }, (_unused, index) => index + 1)
-				.filter((sequence) => sequence > sinceSeq)
-				.slice(0, limit)
-				.map((sequence) => eventRow(sequence, sequence === total ? "execution.completed" : "execution.accepted"));
+			const items = pageFor(Number(params.get("sinceSeq") ?? "0")).map((sequence) =>
+				eventRow(sequence, sequence === terminalSequence ? "execution.completed" : "execution.accepted"),
+			);
 			return HttpResponse.json({ items });
 		}),
 	);
 	return requests;
+}
+
+/** A contiguous log of `total` events, served in pages of the limit the client asked for. */
+function pagedEventsRoute(total: number): URLSearchParams[] {
+	return eventsPagesRoute(
+		(sinceSeq) =>
+			Array.from({ length: total }, (_unused, index) => index + 1)
+				.filter((sequence) => sequence > sinceSeq)
+				.slice(0, integrationEventLimit),
+		total,
+	);
+}
+
+/** `count` sequences ending at `lastSequence`, so a full page can carry holes rather than 1..N. */
+function sequencesEndingAt(lastSequence: number, count: number): number[] {
+	return Array.from({ length: count }, (_unused, index) => lastSequence - count + 1 + index);
 }
 
 /** The query string of the first recorded request, as a total value so the assertions need no non-null dance. */
@@ -307,6 +321,48 @@ describe("useIntegrationExecutions", () => {
 
 		expect(requests.map((request) => request.get("sinceSeq"))).toEqual(["0", "500", "0", "500"]);
 		expect(result.current.data).toHaveLength(600);
+	});
+
+	// The exact boundary: a page that is FULL says nothing about whether more exist, so the client must ask again and
+	// only the empty answer ends the read.
+	it("asks once more when the log ends exactly on a page boundary", async () => {
+		const requests = eventsPagesRoute((sinceSeq) => (sinceSeq === 0 ? sequencesEndingAt(500, 500) : []));
+		const { wrapper } = harness();
+
+		const { result } = renderHook(() => useIntegrationExecutionEvents(executionId), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.data).toHaveLength(500);
+		});
+		expect(requests.map((request) => request.get("sinceSeq"))).toEqual(["0", "500"]);
+	});
+
+	// Sequences are strictly increasing but NOT contiguous — the counter is shared — so the next cursor is the last
+	// sequence the page carried, never the row count.
+	it("takes the next cursor from the page's highest sequence, not from how many rows it held", async () => {
+		const requests = eventsPagesRoute((sinceSeq) => (sinceSeq === 0 ? sequencesEndingAt(750, 500) : []));
+		const { wrapper } = harness();
+
+		const { result } = renderHook(() => useIntegrationExecutionEvents(executionId), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.data).toHaveLength(500);
+		});
+		expect(requests.map((request) => request.get("sinceSeq"))).toEqual(["0", "750"]);
+	});
+
+	// The guard against a server that answers a full page without advancing: the loop must end rather than ask
+	// forever. Without it this route would never stop.
+	it("stops when a full page reports no higher sequence than the cursor it was given", async () => {
+		const requests = eventsPagesRoute((sinceSeq) => (sinceSeq === 0 ? sequencesEndingAt(500, 500) : sequencesEndingAt(500, 500)));
+		const { wrapper } = harness();
+
+		const { result } = renderHook(() => useIntegrationExecutionEvents(executionId), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.data).toHaveLength(1000);
+		});
+		expect(requests.map((request) => request.get("sinceSeq"))).toEqual(["0", "500"]);
 	});
 
 	it("does not read events until an execution is selected", async () => {

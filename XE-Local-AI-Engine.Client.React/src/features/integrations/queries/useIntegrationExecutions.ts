@@ -1,16 +1,14 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import {
-	getIntegrationExecutionEvents,
-	type XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionEventDto,
-} from "@/core/api/generated";
+import type { XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionEventDto } from "@/core/api/generated";
 import {
 	cancelIntegrationExecutionMutation,
+	getIntegrationExecutionEventsOptions,
 	getIntegrationExecutionEventsQueryKey,
 	getIntegrationExecutionOptions,
 	listIntegrationExecutionsOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { callWithResponseValidation, withResponseValidation } from "@/core/api/ResponseValidation";
+import { withResponseValidation } from "@/core/api/ResponseValidation";
 import {
 	toIntegrationExecution,
 	toIntegrationExecutionDetail,
@@ -98,19 +96,22 @@ export function useIntegrationExecutionEvents(executionId: string | null, option
 			path: { executionId: executionId ?? "" },
 			query: { sinceSeq: 0, limit: integrationEventLimit },
 		}),
-		queryFn: async ({ signal }) => {
+		queryFn: async (context) => {
 			const items: XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionEventDto[] = [];
 			let sinceSeq = 0;
 			for (;;) {
-				// biome-ignore lint/performance/noAwaitInLoops: watermark paging is sequential by definition — the next `sinceSeq` is read off the page before it, so there is nothing to run in parallel.
-				const { data } = await callWithResponseValidation(
-					getIntegrationExecutionEvents({
+				// Each page is a full generated adapter — shared axios instance, response validation and the outer
+				// query's AbortSignal, threaded by the runtime rather than by hand. The adapter's own `queryFn` reads
+				// its request off `queryKey[0]`, so the page's key travels with it; the outer context supplies the
+				// signal. `page.queryFn` is a function here because `queryOptions()` always emits one.
+				const page = withResponseValidation(
+					getIntegrationExecutionEventsOptions({
 						path: { executionId: executionId ?? "" },
 						query: { sinceSeq, limit: integrationEventLimit },
-						signal,
-						throwOnError: true,
 					}),
 				);
+				// biome-ignore lint/performance/noAwaitInLoops: watermark paging is sequential by definition — the next `sinceSeq` is read off the page before it, so there is nothing to run in parallel.
+				const data = await page.queryFn!({ ...context, queryKey: page.queryKey });
 				items.push(...data.items);
 				// The next watermark is the highest sequence this page carried. Requiring it to ADVANCE is what stops a
 				// full page that reports no higher sequence from looping forever.
