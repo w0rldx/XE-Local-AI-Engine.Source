@@ -3940,7 +3940,7 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph =
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
+		.nullish(),
 	nodes: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphNode).optional(),
 	edges: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphEdge).optional(),
 });

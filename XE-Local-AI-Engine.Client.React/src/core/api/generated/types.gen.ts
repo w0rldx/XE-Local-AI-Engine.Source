@@ -3291,7 +3291,7 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitio
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph = {
-	schemaVersion?: number;
+	schemaVersion?: number | null;
 	nodes?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphNode>;
 	edges?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphEdge>;
 };
