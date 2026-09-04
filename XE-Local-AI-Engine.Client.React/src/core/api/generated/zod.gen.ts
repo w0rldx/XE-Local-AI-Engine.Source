@@ -3531,6 +3531,22 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecuti
 
 export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecutionEventsRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionStatus = z.enum(["Active", "Closed"]);
+
+export const zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionResponse = z.object({
+	id: z.guid(),
+	triggerId: z.guid(),
+	triggerName: z.string(),
+	agentDefinitionId: z.guid(),
+	status: zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionStatus,
+	createdAtUtc: z.int(),
+	lastActivityUtc: z.int(),
+	executionCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
 export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationApiKeysResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationApiKeyView),
 });
@@ -3540,6 +3556,12 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecuti
 });
 
 export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecutionsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationSessionsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationSessionsRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationTriggersResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationTriggerView),
@@ -8646,6 +8668,24 @@ export const zCreateIntegrationTriggerBody = zXeLocalAiEngineClientEndpointsInte
  */
 export const zCreateIntegrationTriggerResponse = zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationTriggerView;
 
+export const zDeleteIntegrationSessionPath = z.object({
+	sessionId: z.string(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteIntegrationSessionResponse = z.void();
+
+export const zGetIntegrationSessionPath = z.object({
+	sessionId: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetIntegrationSessionResponse = zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionResponse;
+
 export const zDeleteIntegrationTriggerPath = z.object({
 	triggerId: z.string(),
 });
@@ -8735,6 +8775,26 @@ export const zListIntegrationExecutionsQuery = z.object({
  * Success
  */
 export const zListIntegrationExecutionsResponse = zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecutionsResponse;
+
+export const zListIntegrationSessionsQuery = z.object({
+	triggerId: z.guid().nullish(),
+	status: zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionStatus.nullish(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	offset: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+/**
+ * Success
+ */
+export const zListIntegrationSessionsResponse = zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationSessionsResponse;
 
 export const zRevokeIntegrationApiKeyPath = z.object({
 	keyId: z.string(),

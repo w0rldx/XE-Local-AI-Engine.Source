@@ -100,6 +100,7 @@ import {
 	deleteExternalProviderConnection,
 	deleteGoldenConversation,
 	deleteImageModel,
+	deleteIntegrationSession,
 	deleteIntegrationTrigger,
 	deleteKnowledgeDocument,
 	deleteLocalModel,
@@ -190,6 +191,7 @@ import {
 	getImageRuntimeStatus,
 	getIntegrationExecution,
 	getIntegrationExecutionEvents,
+	getIntegrationSession,
 	getIntegrationTrigger,
 	getInvocationMonitor,
 	getKnowledgeDocument,
@@ -273,6 +275,7 @@ import {
 	listInferenceProfiles,
 	listIntegrationApiKeys,
 	listIntegrationExecutions,
+	listIntegrationSessions,
 	listIntegrationTriggers,
 	listKnowledgeDocuments,
 	listLocalModels,
@@ -636,6 +639,8 @@ import type {
 	DeleteImageModelData,
 	DeleteImageModelError,
 	DeleteImageModelResponse,
+	DeleteIntegrationSessionData,
+	DeleteIntegrationSessionResponse,
 	DeleteIntegrationTriggerData,
 	DeleteIntegrationTriggerResponse,
 	DeleteKnowledgeDocumentData,
@@ -842,6 +847,8 @@ import type {
 	GetIntegrationExecutionEventsError,
 	GetIntegrationExecutionEventsResponse,
 	GetIntegrationExecutionResponse,
+	GetIntegrationSessionData,
+	GetIntegrationSessionResponse,
 	GetIntegrationTriggerData,
 	GetIntegrationTriggerResponse,
 	GetInvocationMonitorData,
@@ -1027,6 +1034,9 @@ import type {
 	ListIntegrationExecutionsData,
 	ListIntegrationExecutionsError,
 	ListIntegrationExecutionsResponse,
+	ListIntegrationSessionsData,
+	ListIntegrationSessionsError,
+	ListIntegrationSessionsResponse,
 	ListIntegrationTriggersData,
 	ListIntegrationTriggersResponse,
 	ListKnowledgeDocumentsData,
@@ -5982,6 +5992,48 @@ export const createIntegrationTriggerMutation = (
 	return mutationOptions;
 };
 
+export const deleteIntegrationSessionMutation = (
+	options?: Partial<Options<DeleteIntegrationSessionData>>,
+): UseMutationOptions<DeleteIntegrationSessionResponse, AxiosError<DefaultError>, Options<DeleteIntegrationSessionData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteIntegrationSessionResponse,
+		AxiosError<DefaultError>,
+		Options<DeleteIntegrationSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteIntegrationSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getIntegrationSessionQueryKey = (options: Options<GetIntegrationSessionData>) =>
+	createQueryKey("getIntegrationSession", options);
+
+export const getIntegrationSessionOptions = (options: Options<GetIntegrationSessionData>) =>
+	queryOptions<
+		GetIntegrationSessionResponse,
+		AxiosError<DefaultError>,
+		GetIntegrationSessionResponse,
+		ReturnType<typeof getIntegrationSessionQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getIntegrationSession({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getIntegrationSessionQueryKey(options),
+	});
+
 export const deleteIntegrationTriggerMutation = (
 	options?: Partial<Options<DeleteIntegrationTriggerData>>,
 ): UseMutationOptions<DeleteIntegrationTriggerResponse, AxiosError<DefaultError>, Options<DeleteIntegrationTriggerData>> => {
@@ -6194,6 +6246,67 @@ export const listIntegrationExecutionsInfiniteOptions = (options?: Options<ListI
 				return data;
 			},
 			queryKey: listIntegrationExecutionsInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
+
+export const listIntegrationSessionsQueryKey = (options?: Options<ListIntegrationSessionsData>) =>
+	createQueryKey("listIntegrationSessions", options);
+
+export const listIntegrationSessionsOptions = (options?: Options<ListIntegrationSessionsData>) =>
+	queryOptions<
+		ListIntegrationSessionsResponse,
+		AxiosError<ListIntegrationSessionsError>,
+		ListIntegrationSessionsResponse,
+		ReturnType<typeof listIntegrationSessionsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listIntegrationSessions({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listIntegrationSessionsQueryKey(options),
+	});
+
+export const listIntegrationSessionsInfiniteQueryKey = (
+	options?: Options<ListIntegrationSessionsData>,
+): QueryKey<Options<ListIntegrationSessionsData>> => createQueryKey("listIntegrationSessions", options, true);
+
+export const listIntegrationSessionsInfiniteOptions = (options?: Options<ListIntegrationSessionsData>) => {
+	const opts = infiniteQueryOptions<
+		ListIntegrationSessionsResponse,
+		AxiosError<ListIntegrationSessionsError>,
+		InfiniteData<ListIntegrationSessionsResponse>,
+		QueryKey<Options<ListIntegrationSessionsData>>,
+		number | null | Pick<QueryKey<Options<ListIntegrationSessionsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListIntegrationSessionsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									offset: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listIntegrationSessions({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listIntegrationSessionsInfiniteQueryKey(options),
 		},
 	);
 	return opts as Omit<typeof opts, "initialData">;

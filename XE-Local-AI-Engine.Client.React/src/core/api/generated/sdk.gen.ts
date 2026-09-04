@@ -279,6 +279,9 @@ import type {
 	DeleteImageModelData,
 	DeleteImageModelErrors,
 	DeleteImageModelResponses,
+	DeleteIntegrationSessionData,
+	DeleteIntegrationSessionErrors,
+	DeleteIntegrationSessionResponses,
 	DeleteIntegrationTriggerData,
 	DeleteIntegrationTriggerErrors,
 	DeleteIntegrationTriggerResponses,
@@ -549,6 +552,9 @@ import type {
 	GetIntegrationExecutionEventsErrors,
 	GetIntegrationExecutionEventsResponses,
 	GetIntegrationExecutionResponses,
+	GetIntegrationSessionData,
+	GetIntegrationSessionErrors,
+	GetIntegrationSessionResponses,
 	GetIntegrationTriggerData,
 	GetIntegrationTriggerErrors,
 	GetIntegrationTriggerResponses,
@@ -798,6 +804,9 @@ import type {
 	ListIntegrationExecutionsData,
 	ListIntegrationExecutionsErrors,
 	ListIntegrationExecutionsResponses,
+	ListIntegrationSessionsData,
+	ListIntegrationSessionsErrors,
+	ListIntegrationSessionsResponses,
 	ListIntegrationTriggersData,
 	ListIntegrationTriggersErrors,
 	ListIntegrationTriggersResponses,
@@ -1395,6 +1404,8 @@ import {
 	zDeleteGoldenConversationResponse,
 	zDeleteImageModelPath,
 	zDeleteImageModelResponse,
+	zDeleteIntegrationSessionPath,
+	zDeleteIntegrationSessionResponse,
 	zDeleteIntegrationTriggerPath,
 	zDeleteIntegrationTriggerResponse,
 	zDeleteKnowledgeDocumentPath,
@@ -1563,6 +1574,8 @@ import {
 	zGetIntegrationExecutionEventsResponse,
 	zGetIntegrationExecutionPath,
 	zGetIntegrationExecutionResponse,
+	zGetIntegrationSessionPath,
+	zGetIntegrationSessionResponse,
 	zGetIntegrationTriggerPath,
 	zGetIntegrationTriggerResponse,
 	zGetInvocationMonitorResponse,
@@ -1704,6 +1717,8 @@ import {
 	zListIntegrationApiKeysResponse,
 	zListIntegrationExecutionsQuery,
 	zListIntegrationExecutionsResponse,
+	zListIntegrationSessionsQuery,
+	zListIntegrationSessionsResponse,
 	zListIntegrationTriggersResponse,
 	zListKnowledgeDocumentsQuery,
 	zListKnowledgeDocumentsResponse,
@@ -8810,6 +8825,65 @@ export const createIntegrationTrigger = <ThrowOnError extends boolean = false>(
 		},
 	});
 
+export const deleteIntegrationSession = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteIntegrationSessionData, ThrowOnError>,
+): RequestResult<DeleteIntegrationSessionResponses, DeleteIntegrationSessionErrors, ThrowOnError> =>
+	(options.client ?? client).delete<DeleteIntegrationSessionResponses, DeleteIntegrationSessionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteIntegrationSessionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteIntegrationSessionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/sessions/{sessionId}",
+		...options,
+	});
+
+export const getIntegrationSession = <ThrowOnError extends boolean = false>(
+	options: Options<GetIntegrationSessionData, ThrowOnError>,
+): RequestResult<GetIntegrationSessionResponses, GetIntegrationSessionErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetIntegrationSessionResponses, GetIntegrationSessionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetIntegrationSessionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetIntegrationSessionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/sessions/{sessionId}",
+		...options,
+	});
+
 export const deleteIntegrationTrigger = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteIntegrationTriggerData, ThrowOnError>,
 ): RequestResult<DeleteIntegrationTriggerResponses, DeleteIntegrationTriggerErrors, ThrowOnError> =>
@@ -9054,6 +9128,36 @@ export const listIntegrationExecutions = <ThrowOnError extends boolean = false>(
 			},
 		],
 		url: "/api/local/v1/integrations/executions",
+		...options,
+	});
+
+export const listIntegrationSessions = <ThrowOnError extends boolean = false>(
+	options?: Options<ListIntegrationSessionsData, ThrowOnError>,
+): RequestResult<ListIntegrationSessionsResponses, ListIntegrationSessionsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListIntegrationSessionsResponses, ListIntegrationSessionsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zListIntegrationSessionsQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListIntegrationSessionsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/integrations/sessions",
 		...options,
 	});
 

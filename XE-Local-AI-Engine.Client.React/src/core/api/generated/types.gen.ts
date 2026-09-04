@@ -2947,6 +2947,19 @@ export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecution
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionResponse = {
+	id: string;
+	triggerId: string;
+	triggerName: string;
+	agentDefinitionId: string;
+	status: XeLocalAiEngineClientPersistenceEntitiesIntegrationSessionStatus;
+	createdAtUtc: number;
+	lastActivityUtc: number;
+	executionCount: number;
+};
+
+export type XeLocalAiEngineClientPersistenceEntitiesIntegrationSessionStatus = "Active" | "Closed";
+
 export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationApiKeysResponse = {
 	items: Array<XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationApiKeyView>;
 };
@@ -2956,6 +2969,14 @@ export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecution
 };
 
 export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecutionsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationSessionsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationSessionsRequest = {
 	[key: string]: never;
 };
 
@@ -12131,6 +12152,64 @@ export type CreateIntegrationTriggerResponses = {
 
 export type CreateIntegrationTriggerResponse = CreateIntegrationTriggerResponses[keyof CreateIntegrationTriggerResponses];
 
+export type DeleteIntegrationSessionData = {
+	body?: never;
+	path: {
+		sessionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/integrations/sessions/{sessionId}";
+};
+
+export type DeleteIntegrationSessionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteIntegrationSessionResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteIntegrationSessionResponse = DeleteIntegrationSessionResponses[keyof DeleteIntegrationSessionResponses];
+
+export type GetIntegrationSessionData = {
+	body?: never;
+	path: {
+		sessionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/integrations/sessions/{sessionId}";
+};
+
+export type GetIntegrationSessionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetIntegrationSessionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionResponse;
+};
+
+export type GetIntegrationSessionResponse = GetIntegrationSessionResponses[keyof GetIntegrationSessionResponses];
+
 export type DeleteIntegrationTriggerData = {
 	body?: never;
 	path: {
@@ -12391,6 +12470,44 @@ export type ListIntegrationExecutionsResponses = {
 };
 
 export type ListIntegrationExecutionsResponse = ListIntegrationExecutionsResponses[keyof ListIntegrationExecutionsResponses];
+
+export type ListIntegrationSessionsData = {
+	body?: never;
+	path?: never;
+	query?: {
+		triggerId?: string | null;
+		status?: XeLocalAiEngineClientPersistenceEntitiesIntegrationSessionStatus | null;
+		limit?: number | null;
+		offset?: number | null;
+	};
+	url: "/api/local/v1/integrations/sessions";
+};
+
+export type ListIntegrationSessionsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListIntegrationSessionsError = ListIntegrationSessionsErrors[keyof ListIntegrationSessionsErrors];
+
+export type ListIntegrationSessionsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationSessionsResponse;
+};
+
+export type ListIntegrationSessionsResponse = ListIntegrationSessionsResponses[keyof ListIntegrationSessionsResponses];
 
 export type RevokeIntegrationApiKeyData = {
 	body?: never;
