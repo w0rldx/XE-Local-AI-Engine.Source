@@ -5450,6 +5450,113 @@
 					"missing": "This trigger no longer exists. Close the editor and reload the list."
 				}
 			},
+			"sessions": {
+				"title": "Integration sessions",
+				"subtitle": "Conversations a caller-managed trigger keeps across invocations. Deleting one removes its conversation and every execution that ran on it.",
+				"list": {
+					"loading": "Loading sessions…",
+					"empty": "No sessions match these filters yet.",
+					"deletedTrigger": "Deleted trigger",
+					"viewAria": "View session details",
+					"deleteAria": "Delete session",
+					"windowNote": "Showing up to {{limit}} most recently active sessions. Narrow by trigger or status to reach older records.",
+					"columns": {
+						"id": "Session",
+						"trigger": "Trigger",
+						"status": "Status",
+						"created": "Created",
+						"lastActivity": "Last activity",
+						"executions": "Executions",
+						"actions": "Actions"
+					}
+				},
+				"filters": {
+					"trigger": "Trigger",
+					"status": "Status",
+					"allTriggers": "All triggers",
+					"allStatuses": "All statuses"
+				},
+				"status": {
+					"Active": "Active",
+					"Closed": "Closed"
+				},
+				"detail": {
+					"title": "Session detail",
+					"agent": "Agent",
+					"executionsTitle": "Executions on this session",
+					"noExecutions": "No executions have run on this session."
+				},
+				"delete": {
+					"title": "Delete session",
+					"description": "Delete this session? Its conversation, its executions and their recorded events are removed. This cannot be undone.",
+					"action": "Delete"
+				},
+				"errors": {
+					"load": "Could not load integration sessions.",
+					"delete": "Could not delete the session. Cancel its active executions first.",
+					"executions": "Could not load this session's executions."
+				}
+			},
+			"executions": {
+				"title": "Integration executions",
+				"subtitle": "Unattended runs an integrator started through a trigger. Cancel an active run, or open one to read its recorded timeline.",
+				"filters": {
+					"allStatuses": "All",
+					"trigger": "Trigger",
+					"session": "Session",
+					"allTriggers": "All triggers",
+					"allSessions": "All sessions"
+				},
+				"list": {
+					"loading": "Loading executions…",
+					"empty": "No executions match these filters yet.",
+					"viewAria": "View execution details",
+					"cancelAria": "Cancel execution",
+					"windowNote": "Showing up to {{limit}} most recently received executions. Narrow by trigger, session or status to reach older records.",
+					"columns": {
+						"trigger": "Trigger",
+						"session": "Session",
+						"execution": "Execution",
+						"status": "Status",
+						"received": "Received",
+						"started": "Started",
+						"ended": "Ended",
+						"duration": "Duration",
+						"outputs": "Outputs",
+						"actions": "Actions"
+					}
+				},
+				"status": {
+					"Accepted": "Accepted",
+					"Queued": "Queued",
+					"Running": "Running",
+					"Completed": "Completed",
+					"Failed": "Failed",
+					"Cancelled": "Cancelled"
+				},
+				"detail": {
+					"title": "Execution detail",
+					"timelineTitle": "Timeline",
+					"outputTitle": "Output payload",
+					"failureTitle": "Failure",
+					"failureCategory": "Failure category",
+					"principal": "Principal",
+					"requestId": "Request id",
+					"keyPrefix": "Key",
+					"outputBytes": "Output bytes",
+					"noEvents": "No events recorded for this execution."
+				},
+				"cancel": {
+					"title": "Cancel execution",
+					"description": "Request cancellation of this execution? A running turn stops once it observes the request, so the row may stay active for a moment.",
+					"action": "Cancel execution"
+				},
+				"errors": {
+					"load": "Could not load integration executions.",
+					"events": "Could not load the execution timeline.",
+					"cancel": "Could not cancel the execution."
+				}
+			},
 			"keys": {
 				"title": "Integration API keys",
 				"subtitle": "Credentials an integrator presents to the loopback integration API. Only a one-way hash is stored, so a key is shown once when you generate it.",

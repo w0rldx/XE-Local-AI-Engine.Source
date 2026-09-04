@@ -18,6 +18,8 @@ import { toIntegrationTrigger } from "@/features/integrations/models/Integration
 export const integrationQueryIds = {
 	listTriggers: "listIntegrationTriggers",
 	listKeys: "listIntegrationApiKeys",
+	listExecutions: "listIntegrationExecutions",
+	listSessions: "listIntegrationSessions",
 } as const;
 
 /** Builds the partial generated-query-key filter that matches every cached variant of one integrations endpoint. */

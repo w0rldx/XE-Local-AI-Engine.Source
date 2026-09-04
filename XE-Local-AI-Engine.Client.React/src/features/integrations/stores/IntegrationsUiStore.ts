@@ -10,23 +10,33 @@ interface IntegrationsUiStore {
 	editorTarget: IntegrationEditorTarget;
 	/** True while the generate-key dialog is open. */
 	keyDialogOpen: boolean;
+	/** The execution whose detail dialog is open, or null. */
+	selectedExecutionId: string | null;
+	/** The session whose detail dialog is open, or null. */
+	selectedSessionId: string | null;
 	actions: {
 		openCreate: () => void;
 		openEdit: (id: string) => void;
 		closeEditor: () => void;
 		openKeyDialog: () => void;
 		closeKeyDialog: () => void;
+		selectExecution: (id: string | null) => void;
+		selectSession: (id: string | null) => void;
 	};
 }
 
 export const useIntegrationsUiStore = create<IntegrationsUiStore>()((set) => ({
 	editorTarget: null,
 	keyDialogOpen: false,
+	selectedExecutionId: null,
+	selectedSessionId: null,
 	actions: {
 		openCreate: () => set({ editorTarget: { mode: "create" } }),
 		openEdit: (id) => set({ editorTarget: { mode: "edit", id } }),
 		closeEditor: () => set({ editorTarget: null }),
 		openKeyDialog: () => set({ keyDialogOpen: true }),
 		closeKeyDialog: () => set({ keyDialogOpen: false }),
+		selectExecution: (id) => set({ selectedExecutionId: id }),
+		selectSession: (id) => set({ selectedSessionId: id }),
 	},
 }));

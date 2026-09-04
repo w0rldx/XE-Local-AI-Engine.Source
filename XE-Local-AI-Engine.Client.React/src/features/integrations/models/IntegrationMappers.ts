@@ -2,13 +2,21 @@ import type {
 	XeLocalAiEngineClientEndpointsIntegrationsV1CreateIntegrationTriggerRequest,
 	XeLocalAiEngineClientEndpointsIntegrationsV1GenerateIntegrationApiKeyRequest,
 	XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationApiKeyView,
+	XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionDetailDto,
+	XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionEventDto,
+	XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionSummaryDto,
+	XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionResponse,
 	XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationTriggerView,
 	XeLocalAiEngineClientEndpointsIntegrationsV1UpdateIntegrationTriggerRequest,
 } from "@/core/api/generated";
 import type {
 	IntegrationApiKey,
+	IntegrationExecution,
+	IntegrationExecutionDetail,
+	IntegrationExecutionEvent,
 	IntegrationInputKind,
 	IntegrationKeyFormValues,
+	IntegrationSession,
 	IntegrationSessionPolicy,
 	IntegrationTrigger,
 	IntegrationTriggerFormValues,
@@ -133,5 +141,64 @@ export function toGenerateIntegrationApiKeyRequest(
 		label: values.label.trim(),
 		allowedTriggerIds: values.allowAllTriggers ? null : [...values.allowedTriggerIds],
 		...(values.principalId === "" ? {} : { principalId: values.principalId }),
+	};
+}
+
+export function toIntegrationExecution(
+	dto: XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionSummaryDto,
+): IntegrationExecution {
+	return {
+		id: dto.id,
+		triggerId: dto.triggerId,
+		sessionId: dto.sessionId,
+		status: dto.status,
+		receivedAtUtc: dto.receivedAtUtc,
+		// A run cancelled or failed before it took the lease never started, so both of these are legitimately absent
+		// and render as a dash rather than as an error.
+		startedAtUtc: dto.startedAtUtc ?? null,
+		endedAtUtc: dto.endedAtUtc ?? null,
+		failureCategory: dto.failureCategory ?? null,
+		failureSummary: dto.failureSummary ?? null,
+		outputCount: dto.outputCount,
+	};
+}
+
+export function toIntegrationExecutionDetail(
+	dto: XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionDetailDto,
+): IntegrationExecutionDetail {
+	return {
+		execution: toIntegrationExecution(dto.execution),
+		principalId: dto.principalId,
+		keyPrefix: dto.keyPrefix,
+		requestId: dto.requestId,
+		invocationId: dto.invocationId,
+		outputBytes: dto.outputBytes,
+		stopRequestedAtUtc: dto.stopRequestedAtUtc ?? null,
+	};
+}
+
+export function toIntegrationExecutionEvent(
+	dto: XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionEventDto,
+): IntegrationExecutionEvent {
+	return {
+		sequence: dto.sequence,
+		eventType: dto.eventType,
+		detailJson: dto.detailJson ?? null,
+		occurredAtUtc: dto.occurredAtUtc,
+	};
+}
+
+export function toIntegrationSession(
+	dto: XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionResponse,
+): IntegrationSession {
+	return {
+		id: dto.id,
+		triggerId: dto.triggerId,
+		triggerName: dto.triggerName,
+		agentDefinitionId: dto.agentDefinitionId,
+		status: dto.status,
+		createdAtUtc: dto.createdAtUtc,
+		lastActivityUtc: dto.lastActivityUtc,
+		executionCount: dto.executionCount,
 	};
 }

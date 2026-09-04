@@ -15,3 +15,22 @@ export function formatIntegrationTimestamp(value: number): string {
 	const date = new Date(value);
 	return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
 }
+
+/**
+ * Formats an optional epoch-millis timestamp. `null` is a legitimate value on an execution row — a run cancelled or
+ * failed before it took the node's lease never started and never ended — so it reads as a dash, not as an error.
+ */
+export function formatIntegrationOptionalTimestamp(value: number | null): string {
+	return value === null ? "—" : formatIntegrationTimestamp(value);
+}
+
+/**
+ * Wall-clock duration of a run, in compact seconds. Both endpoints are required: a run that never started has no
+ * duration to state, and inventing one from `receivedAtUtc` would report queue time as execution time.
+ */
+export function formatIntegrationDuration(startedAtUtc: number | null, endedAtUtc: number | null): string {
+	if (startedAtUtc === null || endedAtUtc === null) {
+		return "—";
+	}
+	return `${((endedAtUtc - startedAtUtc) / 1000).toFixed(1)}s`;
+}
