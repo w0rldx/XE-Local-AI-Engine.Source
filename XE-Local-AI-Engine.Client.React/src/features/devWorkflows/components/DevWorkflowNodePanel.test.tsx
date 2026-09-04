@@ -269,6 +269,29 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.queryByTestId("dev-workflow-node-attempts-total")).toBeNull();
 	});
 
+	it("calls the total partial when an earlier attempt was billed for rounds the provider never reported usage for", () => {
+		// A context-window overflow ends the attempt after N provider calls and reports no usage for any of them, so the
+		// payload carries calls and tools with null tokens. Adding only attempt 2 would print the last attempt's tokens
+		// as if they were the whole bill.
+		const nodeRunId = devWorkflowNodeRunDetail().id;
+		renderPanel(devWorkflowNodeRunDetail({ attempt: 2, maxAttempts: 3, inputTokens: 900, outputTokens: 120, providerCalls: 3 }), {
+			events: [
+				devWorkflowRunEvent({
+					id: "retry-overflow",
+					sequence: 2,
+					eventType: "node.retry.scheduled",
+					nodeRunId,
+					outcome: "context-overflow",
+					detailJson: JSON.stringify({ attempt: 1, providerCalls: 10, toolCalls: 4, inputTokens: null, outputTokens: null }),
+				}),
+			],
+		});
+
+		const total = screen.getByTestId("dev-workflow-node-attempts-total").textContent ?? "";
+		expect(total).toContain("Provider calls 13");
+		expect(total).toContain("the real total is higher");
+	});
+
 	it("says the total is a floor when an earlier attempt's event never loaded, rather than printing a wrong number", () => {
 		// A tail-anchored page set reaches attempt 2's retry but not attempt 1's, so attempt 1 recorded nothing. Adding
 		// the two it CAN see and calling that the total would understate what the run paid, silently.

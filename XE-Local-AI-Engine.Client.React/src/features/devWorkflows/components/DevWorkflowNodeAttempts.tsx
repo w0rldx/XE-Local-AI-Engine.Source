@@ -24,8 +24,15 @@ export interface DevWorkflowNodeAttemptsProps {
 	readonly nodeRun?: DevWorkflowNodeRunDetailResponse;
 }
 
-function hasAttemptCost(cost: DevWorkflowAttemptCost): boolean {
-	return devWorkflowAttemptCostFields.some((name) => cost[name] != null);
+/**
+ * An attempt whose numbers cannot be added up. Two shapes qualify: one that recorded nothing at all, which is an
+ * attempt the loaded event pages never reached, and one billed for provider calls whose usage was never reported —
+ * a context-window overflow ends the attempt after N rounds and the provider returns no token counts for any of them.
+ * Provider calls of 0 or none with null tokens is NOT that: nothing was spent, so nothing is missing.
+ */
+function isUnrecorded(cost: DevWorkflowAttemptCost): boolean {
+	const recordedNothing = !devWorkflowAttemptCostFields.some((name) => cost[name] != null);
+	return recordedNothing || ((cost.providerCalls ?? 0) > 0 && cost.inputTokens == null);
 }
 
 /** One attempt's additive numbers on a single line. An absent member is left out; a wall of dashes is not information. */
@@ -86,10 +93,10 @@ export function DevWorkflowNodeAttempts({ attempts, nodeRun }: DevWorkflowNodeAt
 		toolCalls: sum("toolCalls"),
 		agentTurnMs: sum("agentTurnMs"),
 	});
-	// An EARLIER attempt that recorded nothing is an attempt the loaded event pages never reached, which makes the sum
-	// a floor rather than the total. The last row is not that: it is the attempt still running, which has simply not
-	// spent anything yet, and calling that partial would put the caveat on every node currently working.
-	const partial = rows.slice(0, -1).some((row) => !hasAttemptCost(row.cost));
+	// An EARLIER attempt the log cannot account for makes the sum a floor rather than the total. The last row is never
+	// that: it is the attempt still running, which has simply not spent anything yet, and calling that partial would
+	// put the caveat on every node currently working.
+	const partial = rows.slice(0, -1).some((row) => isUnrecorded(row.cost));
 
 	return (
 		<SectionCard title={t("pages.devWorkflows.attempts.title", "Attempts")} gap={4} data-testid="dev-workflow-node-attempts">
