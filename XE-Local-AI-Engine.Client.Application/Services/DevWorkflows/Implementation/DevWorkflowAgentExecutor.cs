@@ -531,6 +531,18 @@ internal sealed class DevWorkflowAgentExecutor
         var objective = new StringBuilder();
         _ = objective.AppendLine(node.Instructions is { Length: > 0 } instructions ? instructions : $"Carry out the '{node.Label}' step of this development workflow.");
 
+        // A node whose template subtree carries a DevTask is writing work for the implementation lane, so it is told
+        // what that lane can and cannot do — in code, because it is the lane's contract rather than one template's
+        // strategy. Gated on the SAME predicate the materializer refuses a task package by: a template of Agent and
+        // Tool nodes produces no coder attempt, and telling its decomposition that every task must export a patch and
+        // add a new test file would bind it to rules nothing there enforces.
+        // Uncapped like the instructions and counted the same way: it lands before the policy phase reads
+        // objective.Length, so policy gets the room this leaves rather than overrunning the limit behind it.
+        if (node.Materialization is { } materialization && graph.TemplateSubtreeHasDevTask(materialization))
+        {
+            _ = objective.AppendLine().AppendLine(DevWorkflowDecompositionContract.Text);
+        }
+
         // The scoped rule sets, between the node's own instructions and what was asked, per §5.6.1a. Their text counts
         // against the same budget everything else does: policy that pushed the objective over the limit would crowd out
         // the request it is supposed to govern.
@@ -564,39 +576,79 @@ internal sealed class DevWorkflowAgentExecutor
         _ = objective.Append(inputSection);
 
         var upstream = await DevWorkflowUpstreamArtifacts.RecordAsync(store, graph, run, nodeRun, cancellationToken).ConfigureAwait(false);
+
+        // What did NOT arrive belongs in the same section as what did. An All join now carries on past a leaf a person
+        // skipped, so this node can be handed four implementations where the fan-out was five wide — and with nothing
+        // saying so it would judge the four as if they were the whole job. Named here rather than left to the absence.
+        var skipped = await DevWorkflowUpstreamArtifacts.SkippedAsync(store, graph, run.Id, nodeRun.NodeKey, cancellationToken).ConfigureAwait(false);
         var section = $"{Environment.NewLine}## What the steps before you produced{Environment.NewLine}";
-        if (upstream.Count > 0 && objective.Length + section.Length <= MaxObjectiveCharacters)
+        if ((upstream.Count > 0 || skipped.Count > 0) && objective.Length + section.Length <= MaxObjectiveCharacters)
         {
             _ = objective.Append(section);
+
+            // Composed FIRST though they are appended last. One line per skipped step, carrying the reason the row
+            // kept — which for an operator's decision is the operator's own words — with the heading folded into the
+            // first line, so a budget that runs out leaves no heading promising steps it could not name.
+            var lines = skipped.Select(static skip => string.Create(CultureInfo.InvariantCulture,
+                                    $"- '{skip.NodeKey}' was skipped{(skip.TerminalReason is { Length: > 0 } reason ? $": {reason}" : ".")}{Environment.NewLine}"))
+                               .ToList();
+            if (lines.Count > 0)
+            {
+                lines[0] = $"{Environment.NewLine}### Skipped steps{Environment.NewLine}{lines[0]}";
+            }
+
+            // Their room is then held BACK from what the artifacts apportion. The share below hands the bodies every
+            // remaining character, so one long document would truncate to the ceiling itself and leave the lines
+            // nothing to fit into — the node would again be told nothing about the work that did not happen, and an
+            // absence cannot be read. Reserving is cheap: a line is a node key and a reason bounded at a kilobyte.
+            // Capped at half the room so the reserve cannot invert the problem, a wide fan-out of skipped branches
+            // crowding out the branches that DID produce.
+            var reserve = Math.Min(lines.Sum(static line => line.Length), (MaxObjectiveCharacters - objective.Length) / 2);
+            var artifactCeiling = MaxObjectiveCharacters - reserve;
             for (var index = 0; index < upstream.Count; index++)
             {
                 var artifact = upstream[index];
                 var header = string.Create(CultureInfo.InvariantCulture,
                     $"{Environment.NewLine}### {artifact.Kind} '{artifact.Name}' (version {artifact.Version}, id {artifact.Id}){Environment.NewLine}");
 
-                // Everything still to be written shares the room left equally, so a long first document cannot crowd
-                // out the ones after it and a short one hands its slack on. The share has to cover this artifact's own
-                // header and marker as well as its body, which is why both come off it before the body is asked for.
-                var share = (MaxObjectiveCharacters - objective.Length) / (upstream.Count - index);
+                // Everything still to be written shares the room left equally — the room left BELOW the reserve, not
+                // below the limit — so a long first document cannot crowd out the ones after it and a short one hands
+                // its slack on. The share has to cover this artifact's own header and marker as well as its body,
+                // which is why both come off it before the body is asked for.
+                var share = (artifactCeiling - objective.Length) / (upstream.Count - index);
                 var body = await RenderArtifactAsync(run.Id, artifact, share - header.Length - DevWorkflowPolicyText.TruncationMarkerReserve, cancellationToken).ConfigureAwait(false);
 
                 // The bound is enforced HERE, on the FINISHED block, with the header, the body, whichever marker was
                 // rendered and the newlines all counted. Nothing reaches the objective except through this check, so
-                // no reference-only line, marker or rounding can push it past the limit. A block that will not fit
-                // falls back to its header alone — the agent still learns the artifact exists, which is the half that
-                // matters most — and an artifact with no room even for that is dropped rather than allowed to overrun.
+                // no reference-only line, marker or rounding can push it past the reserved ceiling. A block that will
+                // not fit falls back to its header alone — the agent still learns the artifact exists, which is the
+                // half that matters most — and one with no room even for that is dropped rather than allowed to
+                // overrun.
                 foreach (var candidate in new[]
                          {
                              header + body + Environment.NewLine,
                              header
                          })
                 {
-                    if (objective.Length + candidate.Length <= MaxObjectiveCharacters)
+                    if (objective.Length + candidate.Length <= artifactCeiling)
                     {
                         _ = objective.Append(candidate);
                         break;
                     }
                 }
+            }
+
+            // Last, and under the SAME overall bound as everything else rather than under the reserve: whatever the
+            // artifacts left unspent is the list's to use, and a line about work that did not happen still must not
+            // push the objective past the limit.
+            foreach (var line in lines)
+            {
+                if (objective.Length + line.Length > MaxObjectiveCharacters)
+                {
+                    break;
+                }
+
+                _ = objective.Append(line);
             }
         }
 

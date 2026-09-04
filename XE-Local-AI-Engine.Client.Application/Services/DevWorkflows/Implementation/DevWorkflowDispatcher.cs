@@ -49,6 +49,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     /// </summary>
     private const int SweepPageSize = 500;
 
+    /// <summary>
+    ///     How much of an operator's decision comment reaches the node run's <c>terminal_reason</c>. The column holds
+    ///     1024 and the comment is free text a person typed, so it is cut here rather than at the store's rejection —
+    ///     a decision that could not be applied because someone was verbose is the wrong way for a run to stop.
+    /// </summary>
+    private const int MaxDecisionComment = 500;
+
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -584,7 +591,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                                    target,
                                    OutputJson: outputJson,
                                    FailureClass: target == DevWorkflowNodeRunStatus.Failed ? DevWorkflowFailureClasses.GateRejected : null,
-                                   TerminalReason: target == DevWorkflowNodeRunStatus.Failed ? "A human abandoned this node run." : null,
+                                   TerminalReason: DecidedReason(target, settled.Comment),
                                    IncrementAttempt: incrementAttempt,
 
                                    // A retry gets a NEW session: resuming the one that just failed resumes the context
@@ -645,6 +652,21 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         // anywhere" by evaluating these same edges against this same document before the operator clicks.
         static string Output(DevWorkflowDecisionKind decision) =>
             DevWorkflowStateMachine.GateOutputJson(decision);
+
+        // What a person's decision leaves on the row. A Skip used to leave nothing, and it is the one terminal that
+        // most needs a reason: an All join now carries on past a skipped leaf, so the node downstream is handed the
+        // skip as evidence and has only this string to say WHY the work it was expecting is not there. The operator's
+        // own words are the whole of that why, so they travel — bounded, because the column is 1024 and a comment is
+        // free text an operator typed.
+        static string? DecidedReason(DevWorkflowNodeRunStatus target, string? comment) =>
+            target switch
+            {
+                DevWorkflowNodeRunStatus.Failed => "A human abandoned this node run.",
+                DevWorkflowNodeRunStatus.Skipped when comment?.Trim() is { Length: > 0 } said =>
+                    $"Skipped by an operator: {DevWorkflowStateMachine.Bounded(said, MaxDecisionComment)}",
+                DevWorkflowNodeRunStatus.Skipped => "Skipped by an operator.",
+                _ => null
+            };
     }
 
     /// <summary>
@@ -838,10 +860,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
             if (admission == DevWorkflowNodeAdmission.Skip)
             {
+                // Named, not bare. A cascade writes as many Skipped rows as it reaches, and without the cause on each
+                // one an operator reading the tail cannot tell which row was the decision and which followed it.
                 _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
                                        nodeRun.Id,
                                        DevWorkflowVersions.Any,
-                                       DevWorkflowNodeRunStatus.Skipped),
+                                       DevWorkflowNodeRunStatus.Skipped,
+                                       TerminalReason: DevWorkflowStateMachine.SkipReason(node, graph, byKey)),
                                    cancellationToken)
                                .ConfigureAwait(false);
                 written++;
@@ -1041,11 +1066,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
     /// <summary>
     ///     The edge states <see cref="AValidationSucceededOnThePathTaken" /> walks THROUGH: the ones in which the run
-    ///     really came this way. One name today, and it is a set rather than an equality test because the set is what
-    ///     the rule is about.
+    ///     really came this way. A set rather than an equality test because the set is what the rule is about.
     ///     <para>
     ///         <c>Dead</c> and <c>Pending</c> are the two that must never be in it — a branch that did not run, or has
-    ///         not run yet, carries no provenance. Every other state the machine has today belongs here.
+    ///         not run yet, carries no provenance. Every other state the machine has today belongs here, <c>Waived</c>
+    ///         included: an operator's skip is waived precisely when everything behind it was satisfied or waived in
+    ///         turn, so the rows further back DID run and the walk has to be able to reach them. Leaving it out is what
+    ///         would block <c>integrate</c> on the shipped template the moment someone skips <c>verify</c>.
     ///         <c>DevWorkflowMaterializationTests.TheProvenanceWalkCrossesEveryEdgeStateThatIsNotDeadOrPending</c>
     ///         ENFORCES that rather than proving it: it demands an entry for every state outside those two, so a new
     ///         one cannot be added to <see cref="DevWorkflowEdgeState" /> without this walk being told about it. A
@@ -1053,7 +1080,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     ///         entry here — the assertion asks whoever hits it which of the two it is.
     ///     </para>
     /// </summary>
-    private static readonly DevWorkflowEdgeState[] ProvenanceEdgeStates = [DevWorkflowEdgeState.Satisfied];
+    private static readonly DevWorkflowEdgeState[] ProvenanceEdgeStates = [DevWorkflowEdgeState.Satisfied, DevWorkflowEdgeState.Waived];
 
     /// <summary>
     ///     <c>GRAPH-C4-3</c>, asked of the rows a run actually landed rather than of every structural ancestor: does the
@@ -1061,16 +1088,16 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     ///     <para>
     ///         One backward walk over the inbound edges whose state is in <see cref="ProvenanceEdgeStates" />, which is
     ///         what makes the rule the smaller one. A branch that did not run drops out with no special case — a
-    ///         <c>Skipped</c>, <c>Failed</c> or <c>Cancelled</c> source kills every out-edge — so an <c>Any</c>
-    ///         convergence whose other branch carried its own validation does not block the apply on work that was
-    ///         correctly not done.
+    ///         <c>Failed</c> or <c>Cancelled</c> source, and a <c>Skipped</c> one with anything dead behind it, kills
+    ///         every out-edge — so an <c>Any</c> convergence whose other branch carried its own validation does not
+    ///         block the apply on work that was correctly not done.
     ///     </para>
     ///     <para>
     ///         The candidate row is tested for <c>Succeeded</c> separately, and that test is NOT redundant with the edge
-    ///         state even though it looks it today: a <c>Satisfied</c> edge does imply a succeeded source, but a state
-    ///         that means "this branch was waived and the run carried on past it" does not — the rows BEHIND such an
-    ///         edge succeeded while the waived node itself did not. Crossing the edge and still refusing to count a
-    ///         non-succeeded validation is the pair that stays correct either way.
+    ///         state: a <c>Satisfied</c> edge does imply a succeeded source, but a <c>Waived</c> one does not — the rows
+    ///         BEHIND a waived edge succeeded while the waived node itself was skipped. Crossing the edge and still
+    ///         refusing to count a non-succeeded validation is the pair that stays correct either way, and it is what
+    ///         makes an operator's skip of the validation node itself still block the apply.
     ///     </para>
     ///     <para>
     ///         An unmaterialized template key reads <c>Pending</c> and falls out exactly as admission's own template
@@ -1093,7 +1120,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             foreach (var edge in graph.InboundEdges(pending.Pop()))
             {
                 var source = byKey.GetValueOrDefault(edge.From);
-                if (!ProvenanceEdgeStates.Contains(DevWorkflowStateMachine.EdgeState(edge, source)) || !seen.Add(edge.From))
+                if (!ProvenanceEdgeStates.Contains(DevWorkflowStateMachine.EdgeState(edge, graph, byKey)) || !seen.Add(edge.From))
                 {
                     continue;
                 }

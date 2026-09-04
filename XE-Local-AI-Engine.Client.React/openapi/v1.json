@@ -32492,6 +32492,10 @@
           "sequence": {
             "type": "integer"
           },
+          "skipWaived": {
+            "type": "boolean",
+            "nullable": true
+          },
           "validationNotApplicable": {
             "type": "boolean"
           }

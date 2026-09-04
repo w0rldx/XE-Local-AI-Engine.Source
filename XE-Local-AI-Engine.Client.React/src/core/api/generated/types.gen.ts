@@ -3540,6 +3540,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 	startedAtUtc?: number | null;
 	completedAtUtc?: number | null;
 	sequence?: number;
+	skipWaived?: boolean | null;
 	validationNotApplicable?: boolean;
 };
 

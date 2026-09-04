@@ -83,6 +83,33 @@ public sealed class DevWorkflowAgentExecutorTests
     /// <summary>The agent every graph here binds, so a test is about the lane rather than about routing.</summary>
     private const string SeededAgentId = "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b";
 
+    /// <summary>
+    ///     A branch that produces beside one that cannot run at all, both handed to the same <c>All</c> join and one
+    ///     agent behind it. The C1 shape reduced to the lane: what reaches the node after the join when a person
+    ///     excused one of the branches feeding it.
+    /// </summary>
+    private const string TwoBranchesIntoAVerification = $$"""
+                                                          {
+                                                            "schemaVersion": 1,
+                                                            "nodes": [
+                                                              { "nodeKey": "split", "nodeType": "Parallel", "label": "Split" },
+                                                              { "nodeKey": "research", "nodeType": "Agent", "label": "Research",
+                                                                "agentDefinitionId": "{{SeededAgentId}}" },
+                                                              { "nodeKey": "doomed", "nodeType": "Agent", "label": "Doomed" },
+                                                              { "nodeKey": "join", "nodeType": "Join", "label": "Join" },
+                                                              { "nodeKey": "verify", "nodeType": "Agent", "label": "Verify",
+                                                                "agentDefinitionId": "{{SeededAgentId}}" }
+                                                            ],
+                                                            "edges": [
+                                                              { "from": "split", "to": "research" },
+                                                              { "from": "split", "to": "doomed" },
+                                                              { "from": "research", "to": "join" },
+                                                              { "from": "doomed", "to": "join" },
+                                                              { "from": "join", "to": "verify" }
+                                                            ]
+                                                          }
+                                                          """;
+
     [ClassDataSource<DevWorkflowHostFixture>(Shared = SharedType.PerClass)]
     public required DevWorkflowHostFixture Host { get; init; }
 
@@ -600,6 +627,88 @@ public sealed class DevWorkflowAgentExecutorTests
     }
 
     /// <summary>
+    ///     A node whose template expands into the implementation lane is told what the coder its tasks become can and
+    ///     cannot do, and a node that does not decompose is not. The gating is the half worth pinning: the paragraph is
+    ///     about the implementation lane, so appending it to every agent objective would spend the budget of nodes that
+    ///     never write a task on rules they cannot break — and the reason it exists at all is that four live runs died
+    ///     on slices with nothing to change.
+    /// </summary>
+    [Test]
+    public async Task TheObjective_ForANodeThatDecomposesIntoDevTasks_CarriesWhatEachTaskBecomes()
+    {
+        // Two private hosts: each asserts on Objectives.Single(), which is a claim about every objective its fake was
+        // handed, and the shared host would let one graph's node answer the other's assertion.
+        await using var decomposing = new DevWorkflowHarness();
+        var decomposingRun = await decomposing.StartRunAsync(DevWorkflowGraphs.DecompositionIntoDevTasks, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
+        _ = await decomposing.AdvanceUntilQuiescentAsync(decomposingRun).ConfigureAwait(false);
+
+        await using var plain = new DevWorkflowHarness();
+        var plainRun = await plain.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await plain.AdvanceUntilQuiescentAsync(plainRun).ConfigureAwait(false);
+
+        AssertEx.Contains(decomposing.Agent.Objectives.Single(),
+            "must finish by submitting a NON-EMPTY code change",
+            message: "the decomposing node is told the one rule every slice it writes has to satisfy.");
+        AssertEx.Contains(decomposing.Agent.Objectives.Single(),
+            "may never modify, delete or rename a test file that already exists",
+            message: "and the one an existing-test slice is refused by.");
+        AssertEx.False(plain.Agent.Objectives.Single().Contains("What each task becomes", StringComparison.Ordinal),
+            $"a node with no materialization writes no tasks and is told nothing about them: {plain.Agent.Objectives.Single()}");
+    }
+
+    /// <summary>
+    ///     A decomposition whose template subtree carries no <c>DevTask</c> is NOT handed the coder's contract. Its
+    ///     clones are ordinary sessions with no patch to export, and the materializer deliberately keeps them that way
+    ///     — it refuses a package for naming no changed files only when a DevTask is in the subtree — so telling that
+    ///     node every task must produce a code patch and a new test file binds it to rules nothing downstream applies.
+    /// </summary>
+    [Test]
+    public async Task TheObjective_ForADecompositionWithNoDevTaskInItsTemplate_OmitsWhatEachTaskBecomes()
+    {
+        // A private host for the same reason the pair above uses two: Objectives.Single() is a claim about every
+        // objective the fake was handed.
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionSubtree, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.False(harness.Agent.Objectives.Single().Contains("What each task becomes", StringComparison.Ordinal),
+            $"an Agent-and-Tool template produces no coder attempt, so its decomposition is told nothing about one: {harness.Agent.Objectives.Single()}");
+    }
+
+    /// <summary>
+    ///     And a template rooted in an Agent with a <c>DevTask</c> BELOW it is handed the contract all the same: the
+    ///     coder that cannot finish on an empty patch is one node further down, where reading only the template root
+    ///     would miss it. The same whole-subtree read the materializer refuses a package by.
+    /// </summary>
+    [Test]
+    public async Task TheObjective_ForADecompositionWithADevTaskBelowItsTemplateRoot_CarriesWhatEachTaskBecomes()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Contains(harness.Agent.Objectives.Single(),
+            "must finish by submitting a NON-EMPTY code change",
+            message: "the DevTask under the template root is a coder attempt, so its decomposition is bound by the coder's contract.");
+    }
+
+    /// <summary>
+    ///     The seeded <c>feature-development-v1</c> decomposition keeps the contract under the new gate: its template
+    ///     root <c>implement</c> is the DevTask, so the predicate the executor and the materializer share answers yes.
+    ///     Asserted on the predicate rather than on a run, because the seeded graph needs a project, six agents and a
+    ///     gate answered to reach its decompose node, and none of that is what this is about.
+    /// </summary>
+    [Test]
+    public void TheSeededFeatureDevelopmentDecomposition_StillMeetsTheContractGate()
+    {
+        var graph = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph);
+        var materialization = AssertEx.NotNull(graph.Nodes["decompose"].Materialization, "the seeded decompose node declares a materialization.");
+
+        AssertEx.True(graph.TemplateSubtreeHasDevTask(materialization),
+            "the seeded template expands into a DevTask, so its decomposition is still told what each task becomes.");
+    }
+
+    /// <summary>
     ///     The operator's request has to reach the agent, and so do the artifacts before it. Asserted on the objective
     ///     the lane actually handed over, because a node whose objective is the template's generic text is a node that
     ///     does not know what was asked.
@@ -614,6 +723,146 @@ public sealed class DevWorkflowAgentExecutorTests
 
         AssertEx.Contains(harness.Agent.Objectives.Single(), "Explain how the inference path works.");
         AssertEx.Contains(harness.Agent.Objectives.Single(), "Research", message: "the node's own label says which step this is.");
+    }
+
+    /// <summary>
+    ///     The seeded template AS MATERIALIZED: two slices, each an implementation with its own validation behind it,
+    ///     both handed to the join beside the decomposition's own edge, and a verification node after it. The clone
+    ///     keys are written out rather than produced, because what is under test is what the verification node is
+    ///     TOLD, not how the clones came to exist.
+    /// </summary>
+    private const string MaterializedSlicesIntoAVerification = $$"""
+                                                                 {
+                                                                   "schemaVersion": 1,
+                                                                   "nodes": [
+                                                                     { "nodeKey": "decompose", "nodeType": "Agent", "label": "Decompose",
+                                                                       "agentDefinitionId": "{{SeededAgentId}}" },
+                                                                     { "nodeKey": "implement#a", "nodeType": "Agent", "label": "Implement a" },
+                                                                     { "nodeKey": "implement#b", "nodeType": "Agent", "label": "Implement b",
+                                                                       "agentDefinitionId": "{{SeededAgentId}}" },
+                                                                     { "nodeKey": "validate#a", "nodeType": "Tool", "label": "Validate a" },
+                                                                     { "nodeKey": "validate#b", "nodeType": "Tool", "label": "Validate b" },
+                                                                     { "nodeKey": "join", "nodeType": "Join", "label": "Join" },
+                                                                     { "nodeKey": "verify", "nodeType": "Agent", "label": "Verify",
+                                                                       "agentDefinitionId": "{{SeededAgentId}}" }
+                                                                   ],
+                                                                   "edges": [
+                                                                     { "from": "decompose", "to": "implement#a" },
+                                                                     { "from": "decompose", "to": "implement#b" },
+                                                                     { "from": "decompose", "to": "join" },
+                                                                     { "from": "implement#a", "to": "validate#a" },
+                                                                     { "from": "implement#b", "to": "validate#b" },
+                                                                     { "from": "validate#a", "to": "join" },
+                                                                     { "from": "validate#b", "to": "join" },
+                                                                     { "from": "join", "to": "verify" }
+                                                                   ]
+                                                                 }
+                                                                 """;
+
+    /// <summary>
+    ///     The operator's sentence has to survive the clone between them. A person skips the IMPLEMENTATION, its
+    ///     validation is skipped behind it, and the validation is what the verification node's producing-ancestor walk
+    ///     stops at — so without the reason being propagated the agent asked to judge the run is told only that
+    ///     something before it was skipped, and never why.
+    /// </summary>
+    [Test]
+    public async Task TheObjective_CarriesTheOperatorsReasonThroughTheCloneThatWasSkippedBehindIt()
+    {
+        // A private host: Objectives is the shared fake's whole history, and this asserts on the LAST one.
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(MaterializedSlicesIntoAVerification).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        _ = await harness.SaveAgentArtifactAsync(runId, "decompose", "tasks.json", """{"tasks":[]}""").ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked,
+            (await harness.ReadNodeRunAsync(runId, "implement#a").ConfigureAwait(false)).Status,
+            "the slice bound to no agent stands down for a human, which is what an operator then skips.");
+
+        await harness.SettleAgentAsync(runId, "implement#b").ConfigureAwait(false);
+        await harness.DecideAsync(runId, "implement#a", DevWorkflowDecisionKind.Skip, comment: "This slice names a file the repository does not have.")
+                     .ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal("Skipped: upstream 'implement#a' was skipped by an operator: This slice names a file the repository does not have.",
+            AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "validate#a").ConfigureAwait(false)).TerminalReason),
+            "the clone skipped behind the decision quotes it rather than restating it generically.");
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "verify").ConfigureAwait(false)).Status);
+        AssertEx.Contains(harness.Agent.Objectives[^1],
+            "- 'validate#a' was skipped: Skipped: upstream 'implement#a' was skipped by an operator: "
+            + "This slice names a file the repository does not have.",
+            message: "and the verification node is handed the operator's own sentence, two nodes from where it was written.");
+    }
+
+    /// <summary>
+    ///     A step a person excused reaches the node after the join BY NAME, with the operator's own reason. Now that an
+    ///     <c>All</c> join carries on past a skipped branch (C1), the verification node can be handed four slices where
+    ///     the fan-out was five wide — and with nothing saying so it would judge the four as if they were the whole job.
+    ///     An absence cannot be read; a line can.
+    /// </summary>
+    [Test]
+    public async Task TheObjective_NamesTheStepsAPersonSkipped()
+    {
+        // A private host: Objectives is the shared fake's whole history, and this asserts on the LAST one.
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(TwoBranchesIntoAVerification).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", ResearchMarkdown).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
+        await harness.DecideAsync(runId, "doomed", DevWorkflowDecisionKind.Skip, comment: "No repository binding exists for this branch.")
+                     .ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
+            (await harness.ReadNodeRunAsync(runId, "verify").ConfigureAwait(false)).Status,
+            "the join carried the branch that produced, so the verification node ran.");
+
+        var objective = harness.Agent.Objectives[^1];
+        AssertEx.Contains(objective, "### Skipped steps");
+        AssertEx.Contains(objective,
+            "- 'doomed' was skipped: Skipped by an operator: No repository binding exists for this branch.",
+            message: "named, with the operator's reason, so the node judges what was produced against what was not.");
+        AssertEx.Contains(objective, ResearchMarkdown, message: "and the branch that DID produce is still handed over whole.");
+    }
+
+    /// <summary>
+    ///     The skipped steps survive a branch that produced more than the objective can hold. The artifact bodies share
+    ///     whatever room is left, so before their share was cut by the list's own length a single long document would
+    ///     truncate to the ceiling and the lines under it — appended last — would silently not fit. The node would once
+    ///     again judge four slices as if they were five, and nothing in the objective would say otherwise.
+    /// </summary>
+    [Test]
+    public async Task TheObjective_WhenAnUpstreamArtifactWouldFillIt_StillNamesTheStepsAPersonSkipped()
+    {
+        // A private host: Objectives is the shared fake's whole history, and this asserts on the LAST one.
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(TwoBranchesIntoAVerification).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", new string('a', 20_000)).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
+        await harness.DecideAsync(runId, "doomed", DevWorkflowDecisionKind.Skip, comment: "No repository binding exists for this branch.")
+                     .ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
+            (await harness.ReadNodeRunAsync(runId, "verify").ConfigureAwait(false)).Status,
+            "the node ran: an over-long objective is refused, and the refusal blocks it for a human.");
+
+        var objective = harness.Agent.Objectives[^1];
+        AssertEx.Contains(objective, " characters.)", message: "the document that DID arrive is truncated, which is what leaves the list nothing to fit in.");
+        AssertEx.Contains(objective, "### Skipped steps");
+        AssertEx.Contains(objective,
+            "- 'doomed' was skipped: Skipped by an operator: No repository binding exists for this branch.",
+            message: "and the skipped branch is still named, because its room was set aside before the bodies apportioned the rest.");
+        AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
+            $"the objective was {objective.Length} characters, past the ceiling.");
+        AssertEx.True(objective.Length > DevWorkflowAgentExecutor.MaxObjectiveCharacters - 500,
+            $"the objective came to only {objective.Length} characters, so the artifact never crowded the budget and this test proves nothing.");
     }
 
     /// <summary>

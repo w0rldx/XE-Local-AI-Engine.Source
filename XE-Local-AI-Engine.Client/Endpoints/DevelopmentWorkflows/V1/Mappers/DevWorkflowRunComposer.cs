@@ -50,6 +50,11 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
                                           .GroupBy(static nodeRun => nodeRun.MaterializedFromNodeRunId!.Value)
                                           .ToDictionary(static group => group.Key,
                                               static group => group.Select(static nodeRun => nodeRun.MaterializationIndex).Distinct().Count());
+        // The state machine's own verdict on every skipped row, resolved ONCE for the run: a skip a person chose is
+        // waived and a join carries on past it, one that cascaded off something dead is not. A client cannot tell them
+        // apart — the ancestor that decides it need not be among the join's own dependencies — so the answer ships on
+        // the row rather than being re-derived in the browser.
+        var waivedSkips = DevWorkflowGraphContract.WaivedSkipNodeKeys(run.GraphJson, byKey);
         var nodes = detail.NodeRuns
                           .Select(nodeRun => ToSummary(nodeRun,
                               nodesByKey.GetValueOrDefault(nodeRun.NodeKey),
@@ -59,7 +64,8 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
                               keysByNodeRunId,
                               materializationCounts,
                               agentsById,
-                              staleInputs.Contains(nodeRun.Id)))
+                              staleInputs.Contains(nodeRun.Id),
+                              SkipWaived(nodeRun, waivedSkips)))
                           .ToList();
 
         return new DevWorkflowRunResponse(run.Id,
@@ -166,7 +172,8 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         IReadOnlyDictionary<Guid, string> keysByNodeRunId,
         IReadOnlyDictionary<Guid, int> materializationCounts,
         IReadOnlyDictionary<Guid, AgentDefinitionRecord> agentsById,
-        bool hasStaleInputs) =>
+        bool hasStaleInputs,
+        bool? skipWaived) =>
         new(nodeRun.Id,
             nodeRun.NodeKey,
             nodeRun.NodeType.ToString(),
@@ -195,10 +202,19 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             StartedAtUtc: nodeRun.StartedAtUtc,
             CompletedAtUtc: nodeRun.EndedAtUtc,
             Sequence: nodeRun.Sequence,
+            SkipWaived: skipWaived,
 
             // Asked of the contract, not of a spelling of the token repeated here: the same verdict decides the
             // drill-down's note, this row's badge and whether the run header counts the row as work.
             ValidationNotApplicable: DevWorkflowGraphContract.ValidationWasNotApplicable(nodeRun.OutputJson));
+
+    /// <summary>
+    ///     The waived verdict as the wire carries it: only a <c>Skipped</c> row has one, and a run whose pinned graph
+    ///     could not be parsed has none at all — both read as <c>null</c>, which the client renders as a skip it makes
+    ///     no claim about rather than as a dead one.
+    /// </summary>
+    private static bool? SkipWaived(DevWorkflowNodeRunSnapshot nodeRun, IReadOnlySet<string>? waivedSkips) =>
+        waivedSkips is null || nodeRun.Status != DevWorkflowNodeRunStatus.Skipped ? null : waivedSkips.Contains(nodeRun.NodeKey);
 
     /// <summary>
     ///     Which upstream nodes a <c>Pending</c> node run is still waiting on, computed here rather than left to the

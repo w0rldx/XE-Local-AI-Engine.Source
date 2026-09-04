@@ -1,116 +1,136 @@
 # AGENTS.md
 
-## Approval Gates
+XE Local AI Engine: a single ASP.NET Core node process (`XE-Local-AI-Engine.Client`) that serves a React SPA,
+loopback-only `/api/local/v1` endpoints and SignalR hubs, persists to SQLite with per-column encryption, and
+supervises `llama-server` / `sd-server` child processes for local inference. .NET 10 + Aspire, React 19 +
+Vite + pnpm, Python (uv) for training tooling.
 
-Do not edit files, run mutating commands, perform infrastructure changes, or clean up files before an approved plan.
+This file is instructions, not documentation. Read `docs/agent-knowledge.md` before your first non-trivial
+change: it records the invariants and traps that the code does not tell you, and lists beliefs that are now
+false. `docs/wiki/` is the code-grounded architecture reference; start at `docs/wiki/Home.md`.
 
-For failures, stop and report the failing command/output before attempting fixes.
+## Working rules
 
-## Hard-won knowledge
+- Do not edit files, run mutating commands, or clean up before a plan is approved.
+- On a failure, stop and report the failing command and its output before attempting a fix.
+- Parallel work goes in git worktrees under `.tmp/worktrees/`; never let two tasks claim the same file.
+- Branch from and target `develop`. Commit messages follow Conventional Commits (`fix(scope): …`).
+- Never commit secrets or runtime state: `node.key`, `*.sqlite`, `.env`, `dp-keys/`, `*.enc`.
+- Never hand-edit generated output: the hey-api client under `src/core/api/generated/`, `routeTree.gen.ts`,
+  EF migration designer files. Regenerate and commit the result.
+- Cite `file` + symbol, never `file:line`, for code that is being edited (lines drift, symbols survive).
+- Agents may propose updates to durable standards or project intelligence; promotion needs human approval.
+- `docs/agent-knowledge.md` entries are written as rule → failure prevented → authority. Add one when you
+  pay for a new trap; never quote a count or timing from a doc as current, the script's own output wins.
 
-Read `docs/agent-knowledge.md` before your first non-trivial change. It records the rules, invariants, and traps that are not derivable from the code — each one encodes a bug that was already paid for once (build-breaking `TODO` comments, the OpenAPI regen that silently drops endpoints, why `dev-stop.sh` is the sanctioned stop path, sandbox symlink guards, MAF constructor pitfalls). It also lists beliefs that are now false, so a half-remembered old rule can be corrected.
+## Repository map
 
-`docs/wiki/` is the code-grounded architecture reference.
+Solution: `XE-Local-AI-Engine.slnx`. Full layout and dependency rules: `docs/wiki/02-project-layout.md`.
+
+- `XE-Local-AI-Engine.Client` — host: FastEndpoints, SignalR hubs, composition root, serves the SPA.
+- `XE-Local-AI-Engine.Client.Application` — services (chat, agents, scheduler, model-fit, dev mode, training, benchmarks).
+- `XE-Local-AI-Engine.Client.Persistence` — EF Core + SQLite, encrypted columns; references only `Providers.Abstractions`.
+- `XE-Local-AI-Engine.AI.Agent` / `AI.Contracts` — Microsoft Agent Framework wiring / shared DTOs.
+- `XE-Local-AI-Engine.Providers.*` — runtimes and model sources; each depends only on `Providers.Abstractions`
+  (reviewed exception: `LlamaServer` and `OpenAICompat` also use the leaf `Providers.OpenAICompatible.Core`).
+- `XE-Local-AI-Engine.AppHost` / `ServiceDefaults` — dev-only Aspire orchestration and telemetry defaults.
+- `XE-Local-AI-Engine.WindowsLauncher` — Velopack entry point; starts the published host as a child process, no project refs.
+- `XE-Local-AI-Engine.Client.React` — the SPA. Has its own `AGENTS.md` for frontend-only rules.
+- `XE-Local-AI-Engine.Tests`, `AI.Agent.Tests`, `Client.Persistence.Tests` — TUnit; `Tests.E2ETests` — Playwright, opt-in.
+- `Client.Testing` — shared host fixtures; `Testing.FakeOllama` — in-memory fake model server used by tests.
+- `scripts/` — dev lifecycle, validation gates, smoke runners. `publish/` — packaging. `tools/training/` — the
+  shipped Python training runtime (own `pyproject.toml`; never `uv sync` inside it).
+
+## Local runtime
+
+```bash
+scripts/dev-start.sh     # isolated Aspire AppHost for THIS checkout; seeds XE-Local-AI-Engine.AppHost/.data/node.key
+scripts/dev-status.sh    # resource states + endpoint URLs (--json); the port changes on every restart
+scripts/dev-stop.sh      # the only sanctioned stop path
+```
+
+Never run `aspire stop --all` or `pkill -f <substring>`: both cross worktree boundaries and kill other
+checkouts' instances. Kill by PID. Run one instance per data directory. Details: `scripts/README-dev-stop.md`,
+`docs/agent-knowledge.md` §2.
 
 ## Validation
 
-### What CI runs on a PR to `develop`
+A change is done when these pass. **`--configuration Release` is load-bearing**: Debug skips the analyzers
+(Meziantou, BannedApiAnalyzers, `IDExxxx`, the no-bare-`TODO` rule). Iterate in Debug, finish in Release;
+`XE_FULL_ANALYSIS=1` forces the analyzers in Debug. A ~1 s incremental build that compiled nothing proves
+nothing; use `--no-incremental` when the evidence matters.
 
-`.github/workflows/build-and-test.yml`, four parallel jobs (the tag-triggered `release.yml` re-runs
-this whole file as its `validate` job before packaging):
+Backend (repo root):
 
-- **python-quality** — `scripts/python-validation.sh --scope full --serial`: ruff (format + lint),
-  pyrefly, pytest (+coverage) and bandit over `tools/training` and `scripts/**`, from the root
-  `pyproject.toml` + `uv.lock` (dev tooling only). Runs the `tools/training/test_*.py` self-checks
-  and the `scripts/**` unittest suites under pytest. Not the training runtime: `tools/training/
-  pyproject.toml` + `uv.lock` are the shipped runtime manifest (ADR 0005) and stay untouched.
-  - `python3 scripts/docs-inventory-check.py` runs in the same job: it fails when a SignalR hub, a
-    `LocalApiRoutes` route family, a React `features/` directory, a numbered wiki page or a solution
-    project is missing from the `docs/wiki/` page that enumerates it. Run it after adding any of those.
-- **release-contracts** — `scripts/run-release-contract-tests.sh` (auto-enrolled `scripts/tests`,
-  `scripts/compliance/tests`, `scripts/performance/tests`), then `scripts/lint-release-scripts.sh
-  --no-behavior --bootstrap` (shellcheck, PSScriptAnalyzer, Pester, the `P0_SPIKE` compile gate).
-  shellcheck is installed pinned (`v0.11.0`, sha256-verified) because `ubuntu-latest` ships 0.9.0,
-  whose SC2317/SC2015 false positives fail the `--severity=style` pass; the script refuses < 0.10.0.
-- **build-and-test** — Release build, `scripts/openapi-live-check.sh`, then the solution's test
-  projects run concurrently with Cobertura coverage: `XE-Local-AI-Engine.Tests` through
-  `scripts/run-tests-memory-safe.sh` (`TEST_GROUPS=$(nproc)` processes, each covering a packed set of
-  namespaces), the rest as a plain `dotnet test --maximum-parallel-tests 2`. `scripts/merge-cobertura.py` merges every report and enforces
-  `scripts/backend-coverage-baseline.txt`. TRX and coverage XML are uploaded as `backend-test-results`.
-  `--report-trx` copies each coverage report as a TRX attachment under
-  `…/_<machine>_<timestamp>/In/<machine>/`, so the report globs stay depth-bounded.
-- **client-react** — `openapi:check`, `licenses:check`, `validate` (= `lint` + `knip` +
-  `signalr:check` + `depcruise`), `test:coverage:check`, `test:tooling`, `build`, `pnpm audit`.
+```bash
+dotnet tool restore --tool-manifest dotnet-tools.json
+scripts/with-build-lock.sh -- dotnet restore XE-Local-AI-Engine.slnx
+scripts/with-build-lock.sh -- dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
+scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- \
+  dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1
+```
 
-Not gates: `e2e.yml` (manual dispatch, or a PR labelled `run-e2e`) and `pnpm run spellCheck`
-(~1.7k unknown words on the current tree — a dictionary task, not a gate).
+- Never overlap a build with a `--no-build` test run. The lock serializes cooperating shells (exit **69** = lock
+  not acquired, nothing ran); the guard detects an uncooperative build (exit **75** = CONTAMINATED, result void,
+  re-run; it is not a red).
+- Scope with `--treenode-filter '/*/*/(ClassA|ClassB)/*'`, never `--filter`. `--list-tests` is authoritative.
+  A no-match filter exits 8. Zero tests is never a pass.
+- Verify the whole changed test project before hand-off, not only the class you touched.
+- `scripts/run-tests-memory-safe.sh` is the lower-memory full run of `XE-Local-AI-Engine.Tests` only; it locks
+  and guards itself. Do not wrap it in the guard; if you must, pass `NO_BUILD=1` or every run reports exit 75.
+  Run the other test projects separately.
 
-Backend:
+Frontend (`XE-Local-AI-Engine.Client.React/`):
 
-- `dotnet restore XE-Local-AI-Engine.slnx`
-- `dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore`
-- `dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1`
+```bash
+pnpm install --frozen-lockfile
+pnpm run validate            # lint (tsc + biome + stylelint + guards) + knip + signalr:check + depcruise
+pnpm run test:coverage:check # full vitest run with thresholds (pnpm test = same suite, no coverage, inner loop)
+pnpm run test:tooling
+pnpm run build
+```
 
-**The `--configuration Release` in those commands is load-bearing — always finish with it.** Local Debug builds skip analyzer execution (`Directory.Build.targets`; 84s → 10s on the Tests module), Meziantou, BannedApiAnalyzers and the `IDExxxx` code-style rules — including the "no bare `TODO`" rule — only fire in Release. Iterate in Debug, but a change is not verified until a Release build passes, or the packaging script will reject what compiled fine for you. `XE_FULL_ANALYSIS=1` forces the full pass in Debug.
+`pnpm run lint` is the typecheck; the E2E fixture's `build:e2e` is a bare `vite build`, so a green E2E run does
+not prove types. After any backend contract change run `pnpm run openapi:check` (regenerates the hey-api client,
+fails on drift) and commit the output. `pnpm run licenses:check` after a dependency change.
 
-This solution-wide command is the canonical local backend gate; `README.md`, `CONTRIBUTING.md`, `XE-Local-AI-Engine.Client/README.md` and `XE-Local-AI-Engine.Client.React/AGENTS.md` all restate it and defer here. **CI runs something different on purpose:** `build-and-test` auto-enrols the test projects from `XE-Local-AI-Engine.slnx` (E2E excluded) and runs them **concurrently**, each with its **own** `--results-directory` — required, because MTP resolves `--coverage-output` relative to it and modules sharing one directory would overwrite each other's Cobertura report. `XE-Local-AI-Engine.Tests` is the exception: CI runs it through `scripts/run-tests-memory-safe.sh` with `TEST_GROUPS=$(nproc)`, i.e. one process per packed *group* of namespaces. One process barely uses the cores (host builds serialize behind the static `HostStartupLock`), while one process per namespace pays code-coverage static instrumentation ~98 times — measured in CPU-seconds: 1991 per-namespace, 684 for `TEST_GROUPS=4`, 677 for a single process. The other projects run as a plain `dotnet test --maximum-parallel-tests 2`. All the per-batch and per-project Cobertura reports are merged by `scripts/merge-cobertura.py` against `scripts/backend-coverage-baseline.txt`.
+Python (`tools/training`, `scripts/**`): `scripts/python-validation.sh --scope changed` (or `full`). Needs `uv`.
 
-`scripts/run-tests-memory-safe.sh` is also the local full-run tool for the `XE-Local-AI-Engine.Tests` module — it does not cover the other test projects, so run them too. It defaults to `JOBS=10` batch processes (measured 2026-08-22 on a 16-core box: one process 8-wide 11:00 / 10.0 GB, `JOBS=4` 6:02, `JOBS=10` 2:18 at ~670 MB per batch). Setting `COVERAGE_DIR=<dir>` adds a per-unit Cobertura + TRX report (pair it with `TEST_GROUPS=N`, as CI does — the knob is not called `GROUPS`, bash owns that name); that mode clones the ~240 MB test output tree once per job, because coverage instrumentation rewrites assemblies **in place** and concurrent batches cannot share one tree.
+Docs inventory: after adding a SignalR hub, `LocalApiRoutes` family, React `features/` dir, wiki page or
+project, run `python3 scripts/docs-inventory-check.py` and name it in the wiki page that enumerates it.
 
-Backend tests are TUnit on Microsoft.Testing.Platform — the pinned version is in `Directory.Packages.props`. To scope a run, use `--treenode-filter` (not `--filter`). Alternation works: `/*/*/(QuantLadderTests|DesktopPortStoreTests)/*` discovers exactly the union of the two classes' tests. `--list-tests` honors the filter and is authoritative for the current count; don't trust a count written down here.
+Release scripts (`publish/**`, `scripts/release/**`): `scripts/lint-release-scripts.sh` (shellcheck ≥ 0.10,
+PSScriptAnalyzer, Pester; a missing tool fails, never skips).
 
-Never run a build and a test run concurrently — `dotnet test --no-build` reads `bin/`, and a build in another process rewrites those assemblies mid-run and produces phantom failures (or a phantom green). Two guards exist, and both are already wired into `scripts/run-tests-memory-safe.sh` and `scripts/run-e2e-local.sh`:
+CI runs `.github/workflows/build-and-test.yml` on PRs and pushes to `develop` (four jobs: `python-quality`,
+`release-contracts`, `build-and-test`, `client-react`); `release.yml` re-runs it before packaging. CI deliberately
+runs backend test projects concurrently, each with its own `--results-directory` (MTP resolves `--coverage-output`
+relative to it, so shared directories overwrite each other's Cobertura report); the commands above are the local
+gate. Shape and rationale: `docs/wiki/13-testing-and-validation.md`, `docs/agent-knowledge.md` §1.
 
-- `scripts/with-build-lock.sh -- <command>` — cross-process `flock` so cooperating shells serialize. Bounded wait; exit 69 names the holder.
-- `scripts/assembly-guard.sh guard --test-bins -- <test command>` — snapshots the test assemblies around the run and reports **exit 75, CONTAMINATED, re-run required** if they changed, instead of reporting test failures. Wrap any new test runner in it — but not one that already self-guards: wrapping `scripts/run-tests-memory-safe.sh` trips exit 75 every time, because the build it performs falls inside the outer window. Pass `NO_BUILD=1` if you must wrap it.
+Opt-in live runners (nothing invokes them; ask before running, run before a tester RC):
 
-**Exit 75 from any test script means the result is void, not red.** Re-run it. See `docs/agent-knowledge.md` §1 for the evidence and the file-descriptor trap that makes the naive `flock <file> <command>` form leak the lock to MSBuild's daemons.
+- `scripts/run-e2e-local.sh` — Playwright; sets the mandatory `-p:RunE2ETests=true` and refuses a zero-test pass.
+- `scripts/run-gpu-smoke-local.sh` — the only gate proving the GPU did the work; exit 5 = infra abort, 1 = product failed.
+- `scripts/run-tool-grammar-smoke-local.sh` — after changing any tool schema or the llama.cpp pin; its failing
+  negative control is the evidence, a run without it proved nothing.
 
-Frontend (from `XE-Local-AI-Engine.Client.React/`):
+## Conventions that bite
 
-- `pnpm install`
-- `pnpm run lint`
-- `pnpm test`
-- `pnpm run build`
+- Backend tests are TUnit on Microsoft.Testing.Platform, not xUnit. Style: `docs/wiki/17-writing-tests.md`.
+- FastEndpoints, one endpoint per file, calling `Client.Application` services directly; no MediatR/CQRS.
+  DTOs, mappers and validators fold into `V1/{Dtos,Mappers,Validators}/`; `Dtos/` keeps a flat namespace.
+- `using` directives go inside the file-scoped namespace; subfolder namespaces must nest (IDE0130 is an error).
+- A bare `TODO`/`FIXME`/`HACK` in a C# comment fails the Release build.
+- Frontend: feature folders under `src/features/`, TanStack Query for server state, Zustand only for UI state,
+  manual Mantine forms (no form library), user-facing strings through react-i18next.
+- Full list: `docs/wiki/16-code-conventions.md`.
 
-After any backend contract change, run `pnpm openapi:check` — it regenerates the hey-api client and fails on drift. Commit regenerated output with the change; never hand-edit generated files.
+## Where to look
 
-E2E is ask-gated unless the task specifically targets E2E behavior; it runs in its own lane and is excluded from solution-wide `dotnet test`.
-
-- `scripts/run-e2e-local.sh` — opt-in local runner for the Playwright suite. Nothing invokes it automatically; run it by hand before cutting a tester RC. It sets the mandatory `-p:RunE2ETests=true` (without it the E2E csproj demotes itself to a library and the run passes vacuously with zero tests), installs Playwright browsers, and refuses to report a zero-test run as a pass. `--filter '/*/*/HostBootSmokeE2ETests/*'` scopes it; `--list` is authoritative for the current test count. Note the fixture runs `pnpm run build:e2e` (a bare `vite build`) — it deliberately does **not** typecheck or lint, because `pnpm run lint` already does and paying for it twice cost 20-45s per run. The consequence: a frontend type error no longer surfaces at fixture init, so run `pnpm run lint` yourself before trusting a green E2E pass.
-
-- `scripts/run-gpu-smoke-local.sh` — opt-in **live GPU smoke** against a real, locally started node. Nothing invokes it automatically; run it by hand before cutting a tester RC or after touching the inference/runtime path. It owns the AppHost lifecycle (`dev-start.sh` → `aspire wait app` → `dev-stop.sh`), discovers the port from `dev-status.sh --json` (it changes on every restart), and asserts, in order: the installed llama.cpp identity, the `IRuntimeDeviceAudit` verdict, a real streamed chat turn, **that the GPU actually did the work** (nvidia-smi utilisation during generation + a VRAM rise over a baseline sampled before the host starts), a real tool call, optionally image generation (`--images`), and that eject returns VRAM to baseline. Every step must record a verdict — a step that is skipped or produces no result fails the run, so "nothing ran" can never read as green. Exit 1 always comes with a `=== Summary ===` naming each step's verdict; **exit 5 is an infrastructure abort** (AppHost failed to start or never became healthy, base URL undiscoverable, auth failed) where nothing was judged and no summary is printed — so a pre-RC wrapper can treat 1 as "product says no" and 5 as "fix the machine and re-run". Exit 3 means an instance is already running, 4 that it could not tell, 2 a missing prerequisite (including "a host with no NVIDIA GPU"), 75 contamination, 130 interrupted.
-  - **Why the GPU assertion is the load-bearing one:** a correct reply proves nothing — CPU fallback answers correctly, just slowly. Measured in one local run, same model and script: GPU peak 72% / +1199 MiB VRAM versus CPU-fallback 11% / +0 MiB, with an identical, correct answer both times.
-  - **Configuration is not outcome.** The *installed* runtime record and the *effective* backend disagree in both directions: a `vulkan` install with no Vulkan ICD runs entirely on the CPU, and an `XE_LLAMACPP_SERVER_PATH` override runs on CUDA while the record still says `vulkan`. The device audit, not the variant field, is the authority.
-  - Logic is tested without a GPU by `scripts/tests/gpu-smoke.test.sh` (96 checks), which drives every refuse-to-pass path directly. The script prints its own `N checks passed` line — trust that over any number quoted here, and note it treats a zero-check run as a failure rather than a pass.
-
-- `scripts/run-tool-grammar-smoke-local.sh` — opt-in **live tool-schema grammar smoke** against a real `llama-server`. Nothing invokes it automatically; run it after changing any tool's `ParameterSchema`, after adding a tool, or when bumping the llama.cpp pin. It exists because llama-server compiles the whole `tools` array into one GBNF grammar before sampling and rejects over-large repetition bounds with HTTP 400 `Failed to initialize samplers: failed to parse grammar` — a P1 that shipped once, and that **no other suite can catch**: `ChatLocalToolsE2ETests` runs against FakeOllama (no chat template, no grammar), and the `LlamaGrammarToolSchemaCompatibilityTests` unit tests measure against a hand-measured constant rather than the real converter.
-  - **The negative control is the load-bearing assertion.** The script POSTs the real production offer twice: sanitised (must be 200) and unsanitised (must still be the grammar 400). A 200 on the unsanitised body means the run proved nothing — either the model is a *reasoning* model, whose template never enters the constrained branch, or llama.cpp raised its limits and `LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound` must be re-measured. A "pass" without that failing control is not evidence.
-  - It therefore needs a **non-reasoning, tool-capable** GGUF; a reasoning model makes the smoke inert rather than red, which is exactly why the control is checked explicitly.
-
-Python (`tools/training`, `scripts/**`):
-
-- `scripts/python-validation.sh --scope <deps|style|types|tests|security|changed|full>` — the same
-  gate CI runs, from the root `pyproject.toml` (ruff `E,F,I,B,UP,SIM,N,S` @120 cols, pyrefly,
-  pytest with `filterwarnings=error`, bandit). Needs `uv` on PATH; `--scope deps` (or `full`) syncs
-  the dev venv into `./.venv`. `--scope changed` diffs against `develop` and runs only what the
-  changed files need. `uv run ruff format .` fixes formatting; `uv run ruff check --fix .` the
-  autofixable rules. Do NOT run `uv sync` inside `tools/training/` — that resolves the multi-GB
-  training runtime, not the tooling. The heavy runtime imports (`torch`, `unsloth`, ...) are typed
-  as `Any` in pyrefly (`replace-imports-with-any`) because they only exist in the provisioned venv.
-
-Release-critical scripts:
-
-- `scripts/lint-release-scripts.sh` — shellcheck + PSScriptAnalyzer over `publish/package-tester-win.ps1`, `publish/package-rc.sh`, and the other packaging scripts. The release path is the tag-triggered `.github/workflows/release.yml` (publishes to this repo's GitHub Releases; GitHub Actions must be enabled on the repository for it to run). `package-tester-win.ps1` and `package-rc.sh` are deprecated/reference-only manual packagers, but this script still gives them static analysis of their own. A missing linter exits 2 rather than passing silently. It also build-only compile-checks the `#if P0_SPIKE` code in `XE-Local-AI-Engine.AI.Agent.Tests` (never runs it) and restores an ungated build afterwards — see `docs/agent-knowledge.md` for the gate rationale and the `DefineConstants` replacement trap.
-- `publish/tests/package-tester-win.Tests.ps1` — Pester coverage (49 tests) for the packaging script's pure logic: the NuGet vulnerability-JSON parsing, `Get-ProjectVersion`, the SemVer gate, the GitHub-App client-ID predicate, and `Find-GitHubRelease`'s both-tag-form resolution. **It runs by default** — `scripts/lint-release-scripts.sh` includes it, and `--pester` merely requests it explicitly (`--pester-only` scopes to it). A missing Pester module is a **hard failure**, not a silent skip, because a skipped suite must never read as a pass. The tests extract their subjects from the real `.ps1` via the PowerShell AST rather than copying its logic, so a rename or restructure fails them loudly instead of leaving them grading a stale copy.
-
-## Parallel Work
-
-For parallel implementation tasks, prefer git worktrees under `.tmp/worktrees/` and avoid multiple tasks claiming the same file unless explicitly approved.
-
-## Durable Memory
-
-Agents may propose updates to project intelligence or standards, but durable context promotion requires human architect approval.
+- `docs/agent-knowledge.md` — hard-won rules by area (§1 build/test, §2 runtime, §3 models, §4 agents, §5 frontend).
+- `docs/wiki/` — architecture; `docs/adr/` — decisions; `docs/roadmaps/` — status records.
+- `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md` — what a PR must state.
 
 <!-- CODEGRAPH_START -->
 ## CodeGraph

@@ -605,20 +605,30 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
-    ///     The byte-identical pin. All THREE seeder graph constants, because a run pinned on the prior revision is
-    ///     re-parsed by the graph cache long after the seeder has upgraded the definition row — so the revision the
-    ///     product no longer ships must satisfy every invariant here as well.
+    ///     The byte-identical pin. Both graphs the product ships AND every prior revision it still keeps, because a run
+    ///     pinned on one of those is re-parsed by the graph cache long after the seeder has upgraded the definition row
+    ///     — so a revision the product no longer ships must satisfy every invariant here as well.
+    ///     <para>
+    ///         The revisions are read off <c>FeatureDevelopmentPriorRevisions</c> rather than listed one at a time, so
+    ///         the next one kept cannot quietly fall out of this pin the way the second one did.
+    ///     </para>
     /// </summary>
     [Test]
-    [Arguments(nameof(DevWorkflowDefinitionSeeder.ResearchPlanApprovalGraph))]
-    [Arguments(nameof(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph))]
-    [Arguments(nameof(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraphRevision1))]
-    public void SeededTemplatesStillValidate(string constantName)
+    public void SeededTemplatesStillValidate()
     {
-        var json = (string)typeof(DevWorkflowDefinitionSeeder).GetField(constantName, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static)!
-                                                              .GetRawConstantValue()!;
+        var graphs = new List<(string Name, string Json)>
+        {
+            (nameof(DevWorkflowDefinitionSeeder.ResearchPlanApprovalGraph), DevWorkflowDefinitionSeeder.ResearchPlanApprovalGraph),
+            (nameof(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph), DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph)
+        };
+        graphs.AddRange(DevWorkflowDefinitionSeeder.FeatureDevelopmentPriorRevisions
+                                                   .Select(static (json, index) => ($"FeatureDevelopmentPriorRevisions[{index}]", json)));
 
-        AssertEx.NotEmpty(DevWorkflowGraph.Parse(json).Nodes, $"the seeded graph '{constantName}' must satisfy every invariant this validator holds.");
+        AssertEx.True(graphs.Count >= 4, $"every kept revision has to reach this pin; it found {graphs.Count} graphs.");
+        foreach (var (name, json) in graphs)
+        {
+            AssertEx.NotEmpty(DevWorkflowGraph.Parse(json).Nodes, $"the seeded graph '{name}' must satisfy every invariant this validator holds.");
+        }
     }
 
     /// <summary>

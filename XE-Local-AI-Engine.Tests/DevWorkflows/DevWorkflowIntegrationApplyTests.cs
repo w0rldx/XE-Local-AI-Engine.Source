@@ -28,11 +28,15 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class DevWorkflowIntegrationApplyTests
 {
-    /// <summary>Two slices that do not depend on each other, so both are implemented and both have a patch to apply.</summary>
+    /// <summary>
+    ///     Two slices that do not depend on each other, so both are implemented and both have a patch to apply. Each
+    ///     names the file it changes because this template's implementation node is a <c>DevTask</c>, and a package for
+    ///     one of those is refused when a task names none — a coder there has to export a patch to finish.
+    /// </summary>
     private const string TwoIndependentTasks = """
                                                [
-                                                 { "id": "alpha", "title": "Add the parser", "goal": "Parse the manifest." },
-                                                 { "id": "beta", "title": "Add the writer", "goal": "Write the manifest." }
+                                                 { "id": "alpha", "title": "Add the parser", "goal": "Parse the manifest.", "changes": ["src/Manifest/Parser.cs"] },
+                                                 { "id": "beta", "title": "Add the writer", "goal": "Write the manifest.", "changes": ["src/Manifest/Writer.cs"] }
                                                ]
                                                """;
 
@@ -365,7 +369,7 @@ public sealed class DevWorkflowIntegrationApplyTests
     {
         const string Slices = """
                               [
-                                { "id": "alpha", "title": "Fix /home/operator/secrets/repo/parser.cs", "goal": "Parse the manifest." }
+                                { "id": "alpha", "title": "Fix /home/operator/secrets/repo/parser.cs", "goal": "Parse the manifest.", "changes": ["src/Manifest/Parser.cs"] }
                               ]
                               """;
 

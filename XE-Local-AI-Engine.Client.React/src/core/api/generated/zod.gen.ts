@@ -4245,6 +4245,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNod
 	startedAtUtc: z.int().nullish(),
 	completedAtUtc: z.int().nullish(),
 	sequence: z.int().optional(),
+	skipWaived: z.boolean().nullish(),
 	validationNotApplicable: z.boolean().optional(),
 });
 
