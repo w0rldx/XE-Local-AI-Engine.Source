@@ -7,6 +7,8 @@
 //   `as*`  — an unknown value has no honest substitute (a decision kind, an artifact kind), so it reads as
 //            `undefined` and the caller displays the raw token instead of mislabelling it.
 
+import type { TFunction } from "i18next";
+
 import type {
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse as DevWorkflowArtifactResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse as DevWorkflowDecisionResponse,
@@ -18,6 +20,7 @@ import type {
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse as DevWorkflowNodeRunSummaryResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetResponse as DevWorkflowRuleSetResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetSummaryResponse as DevWorkflowRuleSetSummaryResponse,
+	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse as DevWorkflowRunCostResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventResponse as DevWorkflowRunEventResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse as DevWorkflowRunResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse as DevWorkflowRunSummaryResponse,
@@ -36,6 +39,7 @@ export type {
 	DevWorkflowNodeRunSummaryResponse,
 	DevWorkflowRuleSetResponse,
 	DevWorkflowRuleSetSummaryResponse,
+	DevWorkflowRunCostResponse,
 	DevWorkflowRunEventResponse,
 	DevWorkflowRunResponse,
 	DevWorkflowRunSummaryResponse,
@@ -272,18 +276,71 @@ export function devWorkflowArtifactLineages(
 }
 
 /**
- * The "attempt N of M" numbers, for the three surfaces that render that sentence.
+ * The attempt numbers, for the three surfaces that render that sentence.
  *
- * The displayed maximum is clamped UP to the attempt. An operator's Retry on an exhausted node runs an attempt past
- * the node's `maxAttempts` — X3 grants the intervention its own go — and the raw fields then read "attempt 4 of 3",
- * a sentence that says the runtime broke its own budget rather than that a human granted one more attempt.
+ * Two maxima, because after FU2-3 there are two: an operator's Retry on an exhausted node widens the node run's
+ * `maxAttempts` by one per Retry, so `maxAttempts` is the budget the runtime is now working to and `cap` the one the
+ * definition declared. They differ exactly when `operatorRetries` is non-zero, which is when the copy has to say a
+ * human granted the extra attempt rather than let the badge imply the runtime overran its own budget.
+ *
+ * The clamp up to the attempt is now only a compatibility guard: a server from before the widening still sends
+ * `attempt` past `maxAttempts` on an operator retry, and "attempt 4 of 3" is a sentence about a broken runtime.
  */
 export function devWorkflowAttemptCounts(
 	attempt: number | undefined | null,
 	maxAttempts: number | undefined | null,
-): { readonly attempt: number; readonly maxAttempts: number } {
+	operatorRetries?: number | undefined | null,
+): DevWorkflowAttemptCounts {
 	const current = attempt ?? 1;
-	return { attempt: current, maxAttempts: Math.max(current, maxAttempts ?? 1) };
+	const effective = Math.max(current, maxAttempts ?? 1);
+	const retries = Math.max(0, operatorRetries ?? 0);
+	return { attempt: current, maxAttempts: effective, cap: Math.max(1, effective - retries), operatorRetries: retries };
+}
+
+export interface DevWorkflowAttemptCounts {
+	readonly attempt: number;
+	/** The budget in force, operator retries included. */
+	readonly maxAttempts: number;
+	/** The budget the definition declared, never below 1. */
+	readonly cap: number;
+	readonly operatorRetries: number;
+}
+
+/**
+ * The rendered attempt sentence. One helper rather than the same branch at each of the three surfaces.
+ *
+ * The retry wording describes GRANTED CAPACITY, never who started the attempt on screen. `operatorRetries` is a
+ * cumulative delta on the row, so a Retry taken before the cap was reached widens the budget for every later attempt
+ * — including the ordinary automatic ones. "attempt 3 (operator retry)" would then credit a human with an attempt the
+ * runtime started by itself. So both halves stay visible: the ordinary "N of M", plus what the definition declared
+ * and how much an operator added to it.
+ */
+export function devWorkflowAttemptLabel(t: TFunction, counts: DevWorkflowAttemptCounts): string {
+	return counts.operatorRetries > 0
+		? t(
+				"pages.devWorkflows.nodes.attemptOperatorRetry",
+				"attempt {{attempt}} of {{maxAttempts}} (cap {{cap}}, +1 from an operator retry)",
+				{ ...counts, count: counts.operatorRetries },
+			)
+		: t("pages.devWorkflows.nodes.attempt", "attempt {{attempt}} of {{maxAttempts}}", { ...counts });
+}
+
+/**
+ * "12s" / "4m 12s" / "1h 04m". The unit letters are the same abbreviations the benchmark tables already print.
+ *
+ * Shared by the node-run table's status line and the node panel's cost section, so a node's "took 4m 12s" and the
+ * panel's "ran for" can never disagree about the same two timestamps.
+ */
+export function formatDevWorkflowDuration(milliseconds: number): string {
+	const totalSeconds = Math.max(0, Math.round(milliseconds / 1000));
+	if (totalSeconds < 60) {
+		return `${totalSeconds}s`;
+	}
+	const minutes = Math.floor(totalSeconds / 60);
+	if (minutes < 60) {
+		return `${minutes}m ${String(totalSeconds % 60).padStart(2, "0")}s`;
+	}
+	return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
 }
 
 /** The shared decoder (P4 §2.10), kept under the feature's own name so no call site or test had to move. */

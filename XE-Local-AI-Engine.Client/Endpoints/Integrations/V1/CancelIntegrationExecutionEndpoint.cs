@@ -22,6 +22,16 @@ public sealed class CancelIntegrationExecutionEndpoint(IntegrationExecutionQuery
     {
         Post(LocalApiRoutes.Integrations.ExecutionCancel);
         Policies(NodeAuthorizationPolicies.Operator);
+        // The three codes HandleAsync actually answers. Without this the generated client declares the framework's
+        // default 204 alone — a contract lie that hides the 409 a caller has to branch on and promises a code this
+        // endpoint never sends. The 409 is declared as FastEndpoints' OWN problem shape because that is what
+        // AddError + Send.ErrorsAsync writes (see ProblemDetailsProducesExtensions); the 202 and 404 carry no body.
+        // ClearDefaultProduces takes the ONE code to drop: the bare overload clears everything, which silently takes
+        // the 401 and 403 the auth policy contributes with it.
+        Description(builder => builder.ClearDefaultProduces(StatusCodes.Status204NoContent)
+                                      .Produces(StatusCodes.Status202Accepted)
+                                      .Produces(StatusCodes.Status404NotFound)
+                                      .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CancellationToken ct)

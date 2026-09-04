@@ -212,6 +212,13 @@ public sealed class RateLimitPolicyTests
             AssertEx.Equal("60",
                 throttled.Headers.TryGetValues("Retry-After", out var retryAfter) ? string.Join(",", retryAfter) : null,
                 "A 429 must carry the Retry-After hint OnRejected sets.");
+
+            // OnRejected is shared by every policy, so its body has to name the one that rejected. An integrator told
+            // it made "too many auth attempts" is sent to rotate a credential that was never the problem.
+            var body = await throttled.Content.ReadAsStringAsync().ConfigureAwait(false);
+            AssertEx.False(body.Contains("auth", StringComparison.OrdinalIgnoreCase),
+                $"The integration family's 429 must not be worded as an auth throttle, and reads: {body}");
+            AssertEx.Contains(body, "Too many requests", StringComparison.Ordinal);
         }
         finally
         {

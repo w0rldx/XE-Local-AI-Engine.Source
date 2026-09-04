@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using NSubstitute;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -37,7 +39,7 @@ public sealed class SupervisorLaunchFallbackTests
         AssertEx.False(safe.Arguments.Contains("-fa"), "the safe retry drops the forced flash attention.");
 
         // The fallback was persisted for this backend so future spawns skip the known-bad optimized config.
-        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, CancellationToken.None),
+        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None),
             "a successful safe retry must record the optimized-config fallback for the backend.");
 
         var observations = telemetry.Observations.ToArray();
@@ -86,7 +88,7 @@ public sealed class SupervisorLaunchFallbackTests
         AssertEx.NotNull(endpoint);
         AssertEx.Equal(expected: 2, launcher.LaunchCount);
         AssertEx.Equal(expected: 1, supervisor.CountRunningProcesses());
-        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, CancellationToken.None));
+        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None));
     }
 
     [Test]
@@ -142,7 +144,7 @@ public sealed class SupervisorLaunchFallbackTests
         AssertEx.Contains(optimized!.Arguments, "-ctk");
         AssertEx.True(launcher.Launches.TryDequeue(out var safe));
         AssertEx.False(safe!.Arguments.Contains("-ctk"));
-        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, CancellationToken.None));
+        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None));
     }
 
     [Test]
@@ -193,7 +195,93 @@ public sealed class SupervisorLaunchFallbackTests
         AssertEx.True(launcher.Launches.TryDequeue(out var safe));
         AssertEx.False(safe!.Arguments.Contains("-ctk"));
         AssertEx.False(safe.Arguments.Contains("--flash-attn"));
-        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, CancellationToken.None));
+        AssertEx.True(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None));
+    }
+
+    [Test]
+    public async Task CpuMoeSafeRetry_KeepsTheFlagAndDisablesOnlyKvQuant()
+    {
+        // The safe candidate may drop KV-cache quantization and NOTHING else: dropping --cpu-moe would launch the
+        // over-subscription the capability gate refuses outright.
+        var launcher = new FakeProcessLauncher();
+        var fallbackStore = new FakeLaunchFallbackStore();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            healthProbe: new FirstReadinessFailsHealthProbe(),
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            launchFallbackStore: fallbackStore,
+            allocationResolver: ExpertOffloadAllocationResolver());
+
+        await supervisor.EnsureRunningAsync("moe-model", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+        AssertEx.True(launcher.Launches.TryDequeue(out var optimized));
+        AssertEx.Contains(optimized!.Arguments, "--cpu-moe", "the primary of an expert-offload placement carries the flag.");
+        AssertEx.Contains(optimized.Arguments, "-ctk");
+        AssertEx.True(launcher.Launches.TryDequeue(out var safe));
+        AssertEx.Contains(safe!.Arguments, "--cpu-moe", "the safe retry must carry --cpu-moe through untouched.");
+        AssertEx.False(safe.Arguments.Contains("-ctk"), "the safe retry drops the KV-cache quant, and only that.");
+    }
+
+    [Test]
+    public async Task ExpertOffloadSafeRetry_RecordsNothing()
+    {
+        // R1: an expert-offload spawn is the most VRAM-marginal launch on the box, so a one-shot success without KV
+        // quantization proves nothing about KV. Recording it would disable the optimized config for EVERY model on
+        // this backend from one model's placement or transient failure.
+        var fallbackStore = new FakeLaunchFallbackStore();
+        await using var supervisor = SupervisorFactory.Create(new FakeProcessLauncher(),
+            healthProbe: new FirstReadinessFailsHealthProbe(),
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            launchFallbackStore: fallbackStore,
+            allocationResolver: ExpertOffloadAllocationResolver());
+
+        await supervisor.EnsureRunningAsync("moe-model", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Empty(fallbackStore.Disabled,
+            "an expert-offload safe retry is inconclusive about KV and must record nothing for the backend.");
+        AssertEx.False(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None));
+    }
+
+    [Test]
+    public async Task CpuMoeOnlyPlan_GetsNoSafeRetry()
+    {
+        // With KV quantization already recorded as unsupported, the plan carries --cpu-moe alone — and there is
+        // nothing safe left to drop, so the builder produces ONE candidate. That is what keeps every safe retry a KV
+        // retry, which is what makes the supervisor's attribution sound in the first place.
+        var launcher = new FakeProcessLauncher();
+        var fallbackStore = new FakeLaunchFallbackStore();
+        fallbackStore.Disable(GpuVariant.Cuda);
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            launchFallbackStore: fallbackStore,
+            allocationResolver: ExpertOffloadAllocationResolver());
+
+        await supervisor.EnsureRunningAsync("moe-model", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, launcher.LaunchCount);
+        AssertEx.True(launcher.Launches.TryDequeue(out var only));
+        AssertEx.Contains(only!.Arguments, "--cpu-moe");
+        AssertEx.False(only.Arguments.Contains("-ctk"));
+    }
+
+    /// <summary>An allocation resolver that always places the experts in system RAM.</summary>
+    private static IProcessContextAllocationResolver ExpertOffloadAllocationResolver()
+    {
+        var allocation = new ProcessContextAllocation(ProcessContextTokens: 8192,
+            ModelTrainContextTokens: null,
+            ProcessContextAllocationSource.HardwareTier,
+            ProcessPlacementMode.ExpertOffload,
+            ResourceFootprint.Zero,
+            ContentIdentity: "moe-model:0",
+            CacheKey: "moe-cache");
+        var resolver = Substitute.For<IProcessContextAllocationResolver>();
+        resolver.ResolveAsync(Arg.Any<string>(),
+                    Arg.Any<ModelRole>(),
+                    Arg.Any<GpuVariant>(),
+                    Arg.Any<ResolvedLaunchArguments>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(_ => Task.FromResult<ProcessContextAllocation?>(allocation));
+        return resolver;
     }
 
     /// <summary>Health probe whose readiness wait fails once (the optimized spawn) then succeeds (the safe retry).</summary>

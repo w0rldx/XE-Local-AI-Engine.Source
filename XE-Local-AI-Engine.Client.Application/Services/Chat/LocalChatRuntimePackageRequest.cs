@@ -23,4 +23,6 @@ public sealed record LocalChatRuntimePackageRequest(
     bool IsUnattended = false,
     IReadOnlyList<ResolvedCustomTool>? CustomTools = null,
     JsonElement? ResponseJsonSchema = null,
-    bool ReasoningBudgetEnforceable = true);
+    bool ReasoningBudgetEnforceable = true,
+    bool DisableToolRelevanceFilter = false,
+    bool AllowAutoModelSwap = false);

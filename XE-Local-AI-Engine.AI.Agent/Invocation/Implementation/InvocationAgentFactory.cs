@@ -4,8 +4,10 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 internal sealed class InvocationAgentFactory : IInvocationAgentFactory
@@ -34,6 +36,14 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     /// <summary>Forwards to <see cref="ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey" />; kept alongside the disable-thinking marker so both llama.cpp markers read the same here.</summary>
     internal const string LlamaReasoningBudgetMarkerKey = ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey;
 
+    // The MAF skill-discovery tools an agent WITH skills also carries. They reach the model through AIContextProviders
+    // rather than the resolver, so the factory has to count them by hand to measure the same array the send-time hop
+    // will. Counted off ToolRelevanceChatClient's own list rather than a second constant here, so the count and the
+    // core-name list cannot drift apart. It fails SAFE either way: an undercount skips the append, the hop then
+    // refuses to filter for lack of list_tools, and the cost is a missed optimisation on one agent shape, never a
+    // hidden tool the model cannot recover. Never relax the hop's gate.
+    private static readonly int MafSkillToolCount = ToolRelevanceChatClient.SkillToolNames.Length;
+
     private readonly IChatClient _chatClient;
     private readonly IClientLocalToolRegistry _clientLocalToolRegistry;
     private readonly ICustomToolCatalog _customToolCatalog;
@@ -43,6 +53,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     private readonly InvocationAgentOptions _options;
     private readonly IServiceProvider _serviceProvider;
     private readonly IAgentToolRegistry _toolRegistry;
+    private readonly ToolRelevanceOptions _toolRelevanceOptions;
 
     public InvocationAgentFactory(IChatClient chatClient,
         IOptions<InvocationAgentOptions> options,
@@ -52,7 +63,8 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         IAgentToolRegistry toolRegistry,
         IClientLocalToolRegistry clientLocalToolRegistry,
         IMcpToolRegistry mcpToolRegistry,
-        ICustomToolCatalog customToolCatalog)
+        ICustomToolCatalog customToolCatalog,
+        IOptions<ToolRelevanceOptions>? toolRelevanceOptions = null)
     {
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         ArgumentNullException.ThrowIfNull(options);
@@ -64,6 +76,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         _clientLocalToolRegistry = clientLocalToolRegistry ?? throw new ArgumentNullException(nameof(clientLocalToolRegistry));
         _mcpToolRegistry = mcpToolRegistry ?? throw new ArgumentNullException(nameof(mcpToolRegistry));
         _customToolCatalog = customToolCatalog ?? throw new ArgumentNullException(nameof(customToolCatalog));
+        _toolRelevanceOptions = toolRelevanceOptions?.Value ?? new ToolRelevanceOptions();
     }
 
     public async Task<InvocationAgentContext> CreateAsync(InvocationAgentDefinition definition, CancellationToken cancellationToken = default)
@@ -430,15 +443,33 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     ///     <see cref="InvocationToolResolver" /> so the single-agent and orchestration factories resolve tools
     ///     identically.
     /// </summary>
-    private Task<IList<AITool>> ResolveExecutableToolsAsync(InvocationAgentDefinition definition, CancellationToken cancellationToken)
+    private async Task<IList<AITool>> ResolveExecutableToolsAsync(InvocationAgentDefinition definition, CancellationToken cancellationToken)
     {
-        return InvocationToolResolver.ResolveAsync(definition.Tools,
-            _toolRegistry,
-            _clientLocalToolRegistry,
-            _mcpToolRegistry,
-            _customToolCatalog,
-            _logger,
-            cancellationToken);
+        var tools = await InvocationToolResolver.ResolveAsync(definition.Tools,
+                                                    _toolRegistry,
+                                                    _clientLocalToolRegistry,
+                                                    _mcpToolRegistry,
+                                                    _customToolCatalog,
+                                                    _logger,
+                                                    cancellationToken)
+                                                .ConfigureAwait(false);
+
+        // The escape hatch for the tool-relevance offer, appended ABOVE the pipeline so it is executable, and NOT part
+        // of the offer so no runtime config hash moves. This is the only site in the product that appends it, which is
+        // what makes the hop inert by construction for orchestration participants and spawned sub-agents.
+        //
+        // The skill-tool term closes a two-count mismatch: the array the hop measures carries the MAF skill tools, the
+        // array resolved here does not.
+        var skillToolCount = definition.Skills is { Count: > 0 } ? MafSkillToolCount : 0;
+        if (ToolRelevanceScope.Current is { Active: true } && tools.Count + skillToolCount > _toolRelevanceOptions.Threshold)
+        {
+            // The resolver hands back a fixed-size empty array for an empty offer, so materialize before appending.
+            var executable = tools as List<AITool> ?? [.. tools];
+            executable.Add(new ListToolsFunction(executable));
+            return executable;
+        }
+
+        return tools;
     }
 
     private static IReadOnlyList<ChatMessage> BuildSeedMessages(InvocationAgentDefinition definition)

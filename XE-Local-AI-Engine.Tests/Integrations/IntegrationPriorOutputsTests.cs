@@ -87,7 +87,11 @@ public sealed class IntegrationPriorOutputsTests
     {
         var newestFirst = Enumerable.Range(start: 1, count: 8).Reverse().Select(index => Envelope(index, padding: 200)).ToArray();
 
-        var composed = AssertEx.NotNull(IntegrationPriorOutputsComposer.Compose(newestFirst, byteBudget: 700, Seed));
+        // The budget bounds the WHOLE message, so the room the entries used to get is now named as such: this test is
+        // about which envelopes survive a tight budget, not about the wrapper's cost.
+        var composed = AssertEx.NotNull(IntegrationPriorOutputsComposer.Compose(newestFirst,
+            IntegrationPriorOutputsComposer.FixedOverheadBytes + 700,
+            Seed));
 
         AssertEx.Contains(composed, IntegrationPriorOutputsComposer.TruncationNotice);
         AssertEx.False(composed.Contains("\"n\":1,", StringComparison.Ordinal), "Older envelopes are dropped once the budget is spent.");
@@ -107,7 +111,9 @@ public sealed class IntegrationPriorOutputsTests
         // needs to cover.
         var oversized = Envelope(index: 1, padding: 4_000);
 
-        var composed = AssertEx.NotNull(IntegrationPriorOutputsComposer.Compose([oversized], byteBudget: 500, Seed));
+        var composed = AssertEx.NotNull(IntegrationPriorOutputsComposer.Compose([oversized],
+            IntegrationPriorOutputsComposer.FixedOverheadBytes + 500,
+            Seed));
 
         AssertEx.Contains(composed, IntegrationPriorOutputsComposer.TruncationNotice);
         AssertEx.Contains(composed, "\"n\":1");
@@ -119,11 +125,39 @@ public sealed class IntegrationPriorOutputsTests
     {
         var emoji = $$"""{"contentType":"text/plain","payload":"{{new string('é', count: 400)}}"}""";
 
-        var composed = AssertEx.NotNull(IntegrationPriorOutputsComposer.Compose([emoji], byteBudget: 200, Seed));
+        var composed = AssertEx.NotNull(IntegrationPriorOutputsComposer.Compose([emoji],
+            IntegrationPriorOutputsComposer.FixedOverheadBytes + 200,
+            Seed));
 
         AssertEx.Contains(composed, IntegrationPriorOutputsComposer.TruncationNotice);
         AssertEx.True(Encoding.UTF8.GetByteCount(Entries(composed).Single()) <= 200,
             "A two-byte rune must be measured as two bytes, or the block overshoots its budget by up to one byte per character.");
+    }
+
+    [Test]
+    public void TheWholeComposedMessage_FitsTheBudget_NotJustItsEntries()
+    {
+        // The exact shape that used to overflow: eight padded envelopes against a 700-byte budget. Before the fix the
+        // budget bounded the rendered entries alone, so the preamble, the fence's markers and metadata, and the
+        // truncation notice — around 500 bytes of wrapper — were spent on top of it and the composed message came back
+        // at roughly 1,200 bytes for a 700-byte option.
+        var newestFirst = Enumerable.Range(start: 1, count: 8).Reverse().Select(index => Envelope(index, padding: 200)).ToArray();
+        const int Budget = 700;
+
+        var composed = AssertEx.NotNull(IntegrationPriorOutputsComposer.Compose(newestFirst, Budget, Seed));
+
+        AssertEx.True(Encoding.UTF8.GetByteCount(composed) <= Budget,
+            $"The composed block is {Encoding.UTF8.GetByteCount(composed)} bytes against a {Budget}-byte budget: PriorOutputsContextBytes bounds the WHOLE message the turn carries, not the payloads inside its fence.");
+    }
+
+    [Test]
+    public void ABudgetSmallerThanTheWrapper_ReplaysNothingRatherThanOverflowing()
+    {
+        // A budget the fence alone cannot fit has no room for any entry, and emitting the wrapper anyway would put a
+        // block on the wire that is larger than the option asked for.
+        AssertEx.Null(IntegrationPriorOutputsComposer.Compose([Envelope(index: 1)],
+            IntegrationPriorOutputsComposer.FixedOverheadBytes,
+            Seed));
     }
 
     [Test]

@@ -58,6 +58,11 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .When(static request => !string.IsNullOrWhiteSpace(request.SpeculativeMode))
             .WithMessage("Unknown speculative decoding mode.");
 
+        RuleFor(static request => request.KvCacheType)
+            .Must(StoredNodeSettings.IsValidKvCacheType)
+            .When(static request => !string.IsNullOrWhiteSpace(request.KvCacheType))
+            .WithMessage("Unknown KV cache type.");
+
         RuleFor(static request => request.SpeculativeDraftMaxTokens!.Value)
             .InclusiveBetween(StoredNodeSettings.MinSpeculativeDraftMaxTokens, StoredNodeSettings.MaxSpeculativeDraftMaxTokens)
             .When(static request => request.SpeculativeDraftMaxTokens is not null);

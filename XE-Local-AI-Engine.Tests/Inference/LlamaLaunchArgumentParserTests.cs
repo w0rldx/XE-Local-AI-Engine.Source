@@ -49,6 +49,13 @@ public sealed class LlamaLaunchArgumentParserTests
     [Arguments("--parallel 4", "--parallel")]
     [Arguments("-ctk q8_0", "-ctk")]
     [Arguments("--top-k 40 -ub 2048", "-ub")]
+    // Expert placement — --cpu-moe/--n-cpu-moe write the SAME tensor-override list -ot does (llama.cpp
+    // common/arg.cpp), so an override could re-place every expert after the placement verdict was admitted.
+    [Arguments("--cpu-moe", "--cpu-moe")]
+    [Arguments("-cmoe", "-cmoe")]
+    [Arguments("--top-k 40 --cpu-moe", "--cpu-moe")]
+    [Arguments("--n-cpu-moe 12", "--n-cpu-moe")]
+    [Arguments("-ncmoe 12", "-ncmoe")]
     // Adapter family — newly reserved. The registry decides which adapter (if any) a model launches with, and the
     // launch-policy fingerprint commits to that choice, so an operator override here is now rejected.
     [Arguments("--lora /tmp/tuned.gguf", "--lora")]
@@ -57,6 +64,21 @@ public sealed class LlamaLaunchArgumentParserTests
     public void FindReservedFlag_DetectsManagedFlags(string raw, string expected)
     {
         AssertEx.Equal(expected, LlamaLaunchArgumentParser.FindReservedFlag(raw));
+    }
+
+    [Test]
+    public void ParseSanitized_StripsExpertPlacementFlags()
+    {
+        var valueless = LlamaLaunchArgumentParser.ParseSanitized("--temp 0.7 --cpu-moe --top-k 40");
+
+        AssertEx.Equal(expected: 4, valueless.Count);
+        AssertEx.False(valueless.Contains("--cpu-moe"), "The expert-placement flag must be stripped on the read path.");
+
+        var counted = LlamaLaunchArgumentParser.ParseSanitized("--temp 0.7 -ncmoe 12 --top-k 40");
+
+        AssertEx.Equal(expected: 4, counted.Count);
+        AssertEx.False(counted.Contains("-ncmoe"), "The counted form must be stripped too.");
+        AssertEx.False(counted.Contains("12"), "Its value must be stripped with it.");
     }
 
     [Test]

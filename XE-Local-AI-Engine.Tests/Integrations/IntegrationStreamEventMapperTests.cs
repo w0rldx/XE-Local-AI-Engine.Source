@@ -51,6 +51,70 @@ public sealed class IntegrationStreamEventMapperTests
         AssertEx.Equal(expectedOk, completed.Payload!.Value.GetProperty("ok").GetBoolean());
     }
 
+    /// <summary>
+    ///     F-05 — <c>emit_output</c> refuses by RETURNING a sentence, never by throwing, so the pipeline's
+    ///     exception-only <c>IsError</c> reports every refusal as a successful call. Before this, an external caller
+    ///     could tell a refused emit from a delivered one only by the ABSENCE of an <c>external.output</c> frame; the
+    ///     acknowledgement's opening words are what makes the outcome machine-readable on <c>tool.completed</c>.
+    ///     <para>
+    ///         The delivered case states the handler's sentence VERBATIM rather than composing it from the constant:
+    ///         that is the contract an integrator's client reads, so a reworded acknowledgement has to fail here.
+    ///     </para>
+    /// </summary>
+    [Test]
+    [Arguments("Output delivered to the caller (24 bytes, application/json). Do not repeat it in your reply.", true)]
+    [Arguments("This tool only works inside an integration execution.", false)]
+    [Arguments("No integration execution is currently running for this session.", false)]
+    [Arguments("emit_output needs a payload.", false)]
+    [Arguments("This execution has already delivered 900 of its 1000 output bytes; nothing further was delivered.", false)]
+    [Arguments(null, false)]
+    public void ToolLifecycle_EmitOutput_ReportsOkOnlyForADeliveredPayload(string? result, bool expectedOk)
+    {
+        var completed = AssertEx.NotNull(IntegrationStreamEventMapper.ToolLifecycle(
+            Payload(ToolCallLifecyclePhase.Completed, isError: false, "emit_output", result)));
+
+        AssertEx.Equal(IntegrationStreamEventTypes.ToolCompleted, completed.Type);
+        AssertEx.Equal("emit_output", Field(completed, "name"));
+        AssertEx.Equal(expectedOk, completed.Payload!.Value.GetProperty("ok").GetBoolean());
+        AssertEx.False(completed.Payload.Value.TryGetProperty("result", out _),
+            "the tool result text never crosses to an external caller; only the graded outcome does.");
+    }
+
+    /// <summary>
+    ///     F-05 — the result grading is scoped to <c>emit_output</c> BY NAME. Every other tool keeps the
+    ///     exception-only meaning of <c>ok</c>, so a tool that legitimately answers with refusal-shaped prose is still
+    ///     a successful call.
+    /// </summary>
+    [Test]
+    [Arguments("read_file", "No such file.")]
+    [Arguments("run_python", "This tool only works inside an integration execution.")]
+    public void ToolLifecycle_ForAnyOtherTool_KeepsTheExceptionOnlyOutcome(string toolName, string result)
+    {
+        var completed = AssertEx.NotNull(IntegrationStreamEventMapper.ToolLifecycle(
+            Payload(ToolCallLifecyclePhase.Completed, isError: false, toolName, result)));
+
+        AssertEx.True(completed.Payload!.Value.GetProperty("ok").GetBoolean(),
+            "a non-emit tool's outcome is the pipeline's exception flag and nothing else.");
+
+        var failed = AssertEx.NotNull(IntegrationStreamEventMapper.ToolLifecycle(
+            Payload(ToolCallLifecyclePhase.Completed, isError: true, toolName, result)));
+
+        AssertEx.False(failed.Payload!.Value.GetProperty("ok").GetBoolean());
+    }
+
+    /// <summary>
+    ///     F-05 — a throw on the handler's one deliberate throwing path (a persistence failure) still reports
+    ///     <c>ok:false</c>, so the exception signal is not lost by the result grading sitting beside it.
+    /// </summary>
+    [Test]
+    public void ToolLifecycle_EmitOutput_WhenThePipelineCaughtAnException_ReportsNotOk()
+    {
+        var completed = AssertEx.NotNull(IntegrationStreamEventMapper.ToolLifecycle(
+            Payload(ToolCallLifecyclePhase.Completed, isError: true, "emit_output", "Error: Function failed.")));
+
+        AssertEx.False(completed.Payload!.Value.GetProperty("ok").GetBoolean());
+    }
+
     /// <summary>Test 11 — a failed or cancelled run yields no terminal draft at all.</summary>
     [Test]
     [Arguments(InvocationStatus.Failed)]
@@ -300,13 +364,17 @@ public sealed class IntegrationStreamEventMapperTests
             "An event the mapper cannot record costs a frame, and it has to say so; silence would hide a wiring bug.");
     }
 
-    private static ToolCallLifecyclePayload Payload(ToolCallLifecyclePhase phase, bool isError) =>
+    private static ToolCallLifecyclePayload Payload(ToolCallLifecyclePhase phase,
+        bool isError,
+        string toolName = "read_file",
+        string? result = null) =>
         new()
         {
             InvocationId = Guid.NewGuid(),
             ToolCallId = "call-1",
-            ToolName = "read_file",
+            ToolName = toolName,
             Phase = phase,
+            Result = result,
             IsError = isError
         };
 

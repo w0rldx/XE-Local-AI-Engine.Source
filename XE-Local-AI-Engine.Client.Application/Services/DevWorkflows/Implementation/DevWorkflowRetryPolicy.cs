@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
 using System.Collections.Concurrent;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -304,6 +303,33 @@ internal sealed class DevWorkflowRetryPolicy
                     failure.OutputJson,
                     cancellationToken)
                 .ConfigureAwait(false);
+        }
+
+        // GRAPH-C4-4: this node's own fix loop, bounded by what the definition said. Absent means no cap (ruling D9) —
+        // a parse-time default would tighten routing on every already-stored definition at run start, silently.
+        //
+        // Attempt is the right base and needs no column of its own: a node with a retryTarget never takes the
+        // same-node path, and each route re-attempts the whole descendant set including this node. An operator Retry
+        // raises the same counter and is bounded only by the run-wide budget, so it is subtracted. The count still
+        // over-attributes when two nodes route to one target and the reset bumps both rows — which errs toward
+        // blocking, the direction every budget here errs, and is why the message does not claim this node looped N
+        // times.
+        if (node.MaxLoopIterations is { } maxLoopIterations)
+        {
+            var decisions = await store.ListDecisionsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+            var loops = nodeRun.Attempt - 1 - decisions.Count(decision => decision.NodeRunId == nodeRun.Id && decision.Decision == DevWorkflowDecisionKind.Retry);
+            if (loops >= maxLoopIterations)
+            {
+                return await BlockAsync(store,
+                        run,
+                        nodeRun,
+                        DevWorkflowFailureClasses.BudgetExhausted,
+                        $"{failure.SanitizedReason} This node's fix loop has been re-run {loops} {(loops == 1 ? "time" : "times")}, which is as many as it allows "
+                        + "(invariant GRAPH-C4-4).",
+                        failure.OutputJson,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
         }
 
         // The WHOLE cascade has to fit, not just the target's own attempt. Admitting a fan-out one attempt at a time is
@@ -657,86 +683,35 @@ internal sealed class DevWorkflowRetryPolicy
         {
             // A transient retry landing in the MIDDLE of a genuine fix loop. Overwriting priorFailure here would leave
             // the routed node's name with this node's own count-less output under it, so the rework request that
-            // follows quotes a verdict it can no longer evidence. Both members stay as the route wrote them.
-            return inputJson!;
+            // follows quotes a verdict it can no longer evidence. Both members stay as the route wrote them — and the
+            // merge still runs, because an operator's retry reason belongs to the attempt they retried and nothing
+            // else, this one included.
+            return DevWorkflowNodeInputs.Merge(inputJson, write: null);
         }
 
-        using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer))
-        {
-            writer.WriteStartObject();
-            using (var existing = Parse(inputJson))
+        return DevWorkflowNodeInputs.Merge(inputJson,
+            writer =>
             {
-                if (existing is not null)
+                if (fromNodeKey is not null)
                 {
-                    foreach (var property in existing.RootElement.EnumerateObject()
-                                                     .Where(property => property.Name != "priorFailure"
-                                                                        && (fromNodeKey is null
-                                                                            || property.Name is not ("priorFailureNode" or "priorFailureAttempt"))))
+                    writer.WriteString("priorFailureNode", fromNodeKey);
+                    if (fromAttempt is { } attempt)
                     {
-                        property.WriteTo(writer);
+                        writer.WriteNumber("priorFailureAttempt", attempt);
                     }
                 }
-            }
 
-            if (fromNodeKey is not null)
-            {
-                writer.WriteString("priorFailureNode", fromNodeKey);
-                if (fromAttempt is { } attempt)
-                {
-                    writer.WriteNumber("priorFailureAttempt", attempt);
-                }
-            }
-
-            writer.WritePropertyName("priorFailure");
-            using (var output = Parse(outputJson))
-            {
-                if (output is null)
-                {
-                    writer.WriteStringValue(outputJson);
-                }
-                else
-                {
-                    output.RootElement.WriteTo(writer);
-                }
-            }
-
-            writer.WriteEndObject();
-        }
-
-        return Encoding.UTF8.GetString(buffer.ToArray());
+                writer.WritePropertyName("priorFailure");
+                DevWorkflowNodeInputs.WriteJsonOrString(writer, outputJson);
+            },
+            fromNodeKey is null ? ["priorFailure"] : ["priorFailure", "priorFailureNode", "priorFailureAttempt"]);
     }
 
     /// <summary>Whether these inputs already name the node whose verdict routed the run back to them.</summary>
     private static bool CarriesRoutedFailure(string? inputJson)
     {
-        using var existing = Parse(inputJson);
+        using var existing = DevWorkflowNodeInputs.Parse(inputJson);
         return existing is not null && existing.RootElement.TryGetProperty("priorFailureNode", out _);
-    }
-
-    /// <summary>A JSON object, or null when there is none or the text is not one this can carry through.</summary>
-    private static JsonDocument? Parse(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return null;
-        }
-
-        try
-        {
-            var document = JsonDocument.Parse(json);
-            if (document.RootElement.ValueKind == JsonValueKind.Object)
-            {
-                return document;
-            }
-
-            document.Dispose();
-            return null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
     }
 
     private static RetryDetail DetailFor(DevWorkflowNodeRunSnapshot nodeRun, DevWorkflowFailure failure) =>

@@ -15,4 +15,14 @@ public interface IInferenceInvalidationEvaluator
     ///     below the frozen baseline. Degrades safely (skips a check rather than reporting stale) when an input is unknown.
     /// </summary>
     Task<bool> IsStaleAsync(InferenceProfileRecord profile, CancellationToken ct);
+
+    /// <summary>
+    ///     Returns <see langword="true" /> when replaying <paramref name="profile" /> would CONTRADICT today's placement
+    ///     verdict: the current memory-fit estimate puts the model's expert weights in system RAM, but the row carries no
+    ///     tensor override, so its replay would launch a Mixture-of-Experts model fully resident and oversubscribe the
+    ///     device. <c>-ot</c> IS the frozen expert placement, so a row that has one cannot hide the decision, and a
+    ///     resident/dense verdict never trips this axis. Degrades safely (reports no contradiction) when the verdict is
+    ///     unavailable, leaving the caller exactly where it stood before this check existed.
+    /// </summary>
+    Task<bool> ContradictsCurrentPlacementAsync(InferenceProfileRecord profile, CancellationToken ct);
 }

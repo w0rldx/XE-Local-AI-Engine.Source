@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ApiError } from "@/core/api/errors/ApiError";
+import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import type {
 	IntegrationExecution,
@@ -29,7 +31,7 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
-const { executionHooksMock, sessionHooksMock, triggerHooksMock, confirmMock } = vi.hoisted(() => ({
+const { executionHooksMock, sessionHooksMock, triggerHooksMock, confirmMock, toastMock } = vi.hoisted(() => ({
 	executionHooksMock: {
 		useIntegrationExecutions: vi.fn(),
 		useIntegrationExecution: vi.fn(),
@@ -39,12 +41,14 @@ const { executionHooksMock, sessionHooksMock, triggerHooksMock, confirmMock } = 
 	sessionHooksMock: { useIntegrationSessions: vi.fn(), useDeleteIntegrationSession: vi.fn() },
 	triggerHooksMock: { useIntegrationTriggers: vi.fn() },
 	confirmMock: vi.fn(),
+	toastMock: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn(), warning: vi.fn(), progress: vi.fn() },
 }));
 
 vi.mock("@/features/integrations/queries/useIntegrationExecutions", () => executionHooksMock);
 vi.mock("@/features/integrations/queries/useIntegrationSessions", () => sessionHooksMock);
 vi.mock("@/features/integrations/queries/useIntegrationTriggers", () => triggerHooksMock);
 vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: confirmMock }) }));
+vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
 import { IntegrationExecutionsPage } from "@/features/integrations/pages/IntegrationExecutionsPage";
 
@@ -222,6 +226,40 @@ describe("IntegrationExecutionsPage", () => {
 		expect(cancel.mutate.mock.calls.at(0)?.[0]).toEqual({ path: { executionId: "exec-running" } });
 	});
 
+	// The 409 body is a FastEndpoints validation problem whose only readable field is a generic English title, so the
+	// page must not echo it: this race gets its own localized sentence.
+	it("says the run already finished when cancellation is refused with 409", async () => {
+		const cancel = makeMutation();
+		cancel.mutate.mockImplementation((_variables: unknown, handlers: { onError?: (error: unknown) => void }) => {
+			handlers.onError?.(new ApiError(409, { title: "One or more errors occurred!" } as ProblemDetails));
+		});
+		executionHooksMock.useCancelIntegrationExecution.mockReturnValue(cancel);
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("integration-execution-cancel-exec-running"));
+
+		await waitFor(() => {
+			expect(toastMock.error).toHaveBeenCalled();
+		});
+		expect(toastMock.error).toHaveBeenCalledWith(expect.stringContaining("already finished"));
+	});
+
+	it("falls back to the generic cancel failure on any other status", async () => {
+		const cancel = makeMutation();
+		cancel.mutate.mockImplementation((_variables: unknown, handlers: { onError?: (error: unknown) => void }) => {
+			handlers.onError?.(new ApiError(500, {} as ProblemDetails));
+		});
+		executionHooksMock.useCancelIntegrationExecution.mockReturnValue(cancel);
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("integration-execution-cancel-exec-running"));
+
+		await waitFor(() => {
+			expect(toastMock.error).toHaveBeenCalled();
+		});
+		expect(toastMock.error).toHaveBeenCalledWith("Could not cancel the execution.");
+	});
+
 	it("does not cancel when the confirmation is declined", async () => {
 		const cancel = makeMutation();
 		executionHooksMock.useCancelIntegrationExecution.mockReturnValue(cancel);
@@ -370,6 +408,7 @@ describe("IntegrationExecutionsPage", () => {
 					id: "session-1",
 					triggerId: "trigger-1",
 					triggerName: "Sensor hub",
+					principalId: "77777777-7777-4777-8777-777777777777",
 					agentDefinitionId: "agent-1",
 					status: "Active",
 					createdAtUtc: 1000,

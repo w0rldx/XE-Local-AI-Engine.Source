@@ -65,6 +65,108 @@ public sealed class DevWorkflowNodeRunTests
     }
 
     /// <summary>
+    ///     FU2-3: an operator's Retry is allowed AT the cap and buys ONE more attempt, so it raises the row's own cap
+    ///     alongside the attempt it spends. Without it the row reads "attempt 4 of 3" — the runtime claiming it broke
+    ///     its own budget where a person granted one more try — and the retry policy's cap check refuses the very
+    ///     attempt that was just bought.
+    /// </summary>
+    [Test]
+    public async Task WideningTheCap_RaisesItByOnePerRetryAndOnlyWhenAsked()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var nodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "implement", seed.RunVersion).ConfigureAwait(false);
+
+        var automatic = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                        nodeRunId,
+                                        version,
+                                        DevWorkflowNodeRunStatus.Pending,
+                                        IncrementAttempt: true))
+                                    .ConfigureAwait(false);
+        AssertEx.Equal(expected: 3, (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).Single().MaxAttempts, "an automatic re-attempt buys nothing.");
+
+        var bought = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                     nodeRunId,
+                                     automatic.Version,
+                                     DevWorkflowNodeRunStatus.Pending,
+                                     IncrementAttempt: true,
+                                     WidenMaxAttempts: true))
+                                 .ConfigureAwait(false);
+        var widened = (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).Single();
+        AssertEx.Equal(expected: 3, widened.Attempt);
+        AssertEx.Equal(expected: 4, widened.MaxAttempts);
+
+        var third = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                    nodeRunId,
+                                    bought.Version,
+                                    DevWorkflowNodeRunStatus.Pending,
+                                    IncrementAttempt: true,
+                                    WidenMaxAttempts: true))
+                                .ConfigureAwait(false);
+        var again = (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).Single();
+        AssertEx.Equal(expected: 4, again.Attempt);
+        AssertEx.Equal(expected: 5, again.MaxAttempts, "each retry buys exactly one, so the cap tracks the decisions rather than being switched off by the first.");
+
+        // Graph validation accepts int.MaxValue for maxAttempts, and a cap that wraps to negative would refuse every
+        // attempt the node has left — the opposite of what the retry bought.
+        var saturated = Guid.NewGuid();
+        var seeded = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, saturated, "unbounded", third.Version, maxAttempts: int.MaxValue)
+                                                 .ConfigureAwait(false);
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                            saturated,
+                            seeded,
+                            DevWorkflowNodeRunStatus.Pending,
+                            IncrementAttempt: true,
+                            WidenMaxAttempts: true))
+                        .ConfigureAwait(false);
+        AssertEx.Equal(int.MaxValue,
+            (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).Single(row => row.Id == saturated).MaxAttempts,
+            "a cap already at int.MaxValue saturates rather than wrapping negative.");
+
+        // A row persisted BEFORE widening shipped: an old operator Retry spent an attempt without moving the cap, so
+        // it already sits past it. Raising the cap by one from ITSELF would carry that row's 4-of-3 to 5-of-4 and
+        // leave it one over for ever; the widening catches the cap up to the attempt first, then grants the new one.
+        var legacy = Guid.NewGuid();
+        _ = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, legacy, "legacy", DevWorkflowVersions.Any, maxAttempts: 3).ConfigureAwait(false);
+        var stale = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                    legacy,
+                                    DevWorkflowVersions.Any,
+                                    DevWorkflowNodeRunStatus.Pending,
+                                    IncrementAttempt: true))
+                                .ConfigureAwait(false);
+        var overCap = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                      legacy,
+                                      stale.Version,
+                                      DevWorkflowNodeRunStatus.Pending,
+                                      IncrementAttempt: true))
+                                  .ConfigureAwait(false);
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                            legacy,
+                            overCap.Version,
+                            DevWorkflowNodeRunStatus.Pending,
+                            IncrementAttempt: true))
+                        .ConfigureAwait(false);
+        var beforeRetry = (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).Single(row => row.Id == legacy);
+        AssertEx.Equal(expected: 4, beforeRetry.Attempt);
+        AssertEx.Equal(expected: 3, beforeRetry.MaxAttempts, "the legacy shape this case exists for: already one past its cap.");
+
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                            legacy,
+                            DevWorkflowVersions.Any,
+                            DevWorkflowNodeRunStatus.Pending,
+                            IncrementAttempt: true,
+                            WidenMaxAttempts: true))
+                        .ConfigureAwait(false);
+        var caughtUp = (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).Single(row => row.Id == legacy);
+        AssertEx.Equal(expected: 5, caughtUp.Attempt);
+        AssertEx.Equal(expected: 5, caughtUp.MaxAttempts, "the retry the operator paid for is admitted rather than left one over the cap for ever.");
+    }
+
+    /// <summary>
     ///     The detail this store writes is READ BY NAME, so its casing is a contract and not a formatting choice.
     ///     <para>
     ///         Serialized with the framework default it came out <c>{"WorkSessionId":…,"Attempt":1}</c> while every
@@ -196,6 +298,59 @@ public sealed class DevWorkflowNodeRunTests
     }
 
     /// <summary>
+    ///     A decision is answered about an ATTEMPT, and <c>ExpectedVersion</c> is <c>Any</c> — so the attempt the
+    ///     caller validated against travels on the command and is re-checked here. Without it a routed reset that
+    ///     commits between the caller's read and this write leaves the answer stamped with whatever attempt the reset
+    ///     produced: orphaned on a fresh try nobody was asked about, or counted later as a widening that never
+    ///     happened.
+    /// </summary>
+    [Test]
+    public async Task RecordDecision_RefusesAnAnswerTakenOnAnAttemptTheRowHasLeft()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var nodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "implement", seed.RunVersion).ConfigureAwait(false);
+
+        // The reset: the row is now attempt 2 and Pending, which is where the operator's read of attempt 1 goes stale.
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                            nodeRunId,
+                            version,
+                            DevWorkflowNodeRunStatus.Pending,
+                            IncrementAttempt: true))
+                        .ConfigureAwait(false);
+
+        var refusal = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(seed.RunId,
+                                            Guid.NewGuid(),
+                                            nodeRunId,
+                                            DevWorkflowVersions.Any,
+                                            Guid.NewGuid(),
+                                            DevWorkflowDecisionKind.Retry,
+                                            ExpectedAttempt: 1,
+                                            ExpectedStatus: DevWorkflowNodeRunStatus.Blocked)),
+                                        "An answer about attempt 1 must not be written onto attempt 2.")
+                                    .ConfigureAwait(false);
+        AssertEx.True(refusal.Message.Contains("attempt 2", StringComparison.Ordinal), "the refusal says where the row actually stands.");
+        AssertEx.Empty(await store.ListDecisionsAsync(seed.RunId).ConfigureAwait(false), "and nothing is written, so the transaction rolled back whole.");
+
+        // The same command against the row as it now stands is admitted, so the guard refuses a MOVED row rather than
+        // every Retry that names an expectation.
+        _ = await store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(seed.RunId,
+                            Guid.NewGuid(),
+                            nodeRunId,
+                            DevWorkflowVersions.Any,
+                            Guid.NewGuid(),
+                            DevWorkflowDecisionKind.Retry,
+                            ExpectedAttempt: 2,
+                            ExpectedStatus: DevWorkflowNodeRunStatus.Pending))
+                        .ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, (await store.ListDecisionsAsync(seed.RunId).ConfigureAwait(false)).Count);
+    }
+
+    /// <summary>
     ///     The run-wide re-attempt budget is admitted where the decision is written, so a Retry that is recorded but not
     ///     yet settled still counts. Two blocked node runs answered in the same tick window — before the dispatcher has
     ///     turned either answer into an attempt — is exactly the case a check taken before recording lets through: both
@@ -300,6 +455,85 @@ public sealed class DevWorkflowNodeRunTests
                               () => store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand(seed.RunId, secondNodeRunId, attached.Version, sessionId)),
                               "One session, one owner.")
                           .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     A seed may land ALREADY TERMINAL, which the zero-task decomposition's no-op verdict row needs: the row
+    ///     stands for a check that did not have to run, and it is never transitioned, so the store stamps what a
+    ///     transition would have — the status, the output document and both timestamps — at the create.
+    ///     <para>
+    ///         Seeding it <c>Pending</c> and transitioning it afterwards would leave a window in which a crash left an
+    ///         admissible row at a template key, and the tool lane would really run that template's commands.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task Materialize_SeedsATerminalRowWithWhatItProduced()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        const string Output = """{"status":"succeeded","attempt":1,"verdict":"validation-not-applicable"}""";
+        var nodeRunId = Guid.NewGuid();
+        _ = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(seed.RunId,
+                           seed.RunVersion,
+                           Guid.NewGuid(),
+                           [
+                               new DevWorkflowNodeRunSeed(nodeRunId,
+                                   "validate",
+                                   DevWorkflowNodeType.Tool,
+                                   Status: DevWorkflowNodeRunStatus.Succeeded,
+                                   OutputJson: Output)
+                           ]))
+                       .ConfigureAwait(false);
+
+        var nodeRun = await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, nodeRun.Status);
+        AssertEx.Equal(Output, nodeRun.OutputJson, "the row says what it produced, which is the whole evidence that it did not have to run.");
+        AssertEx.True(nodeRun.StartedAtUtc is not null && nodeRun.EndedAtUtc is not null,
+            "a row nothing will transition still needs the two timestamps a reader reads a duration off.");
+    }
+
+    /// <summary>
+    ///     And the other half of the same rule: an output document describes what a node run PRODUCED, so a seed that
+    ///     has not ended cannot carry one. Refused outside the transaction, as a caller mistake rather than a lost race.
+    /// </summary>
+    [Test]
+    public async Task Materialize_RefusesAnOutputDocumentOnASeedThatHasNotEnded()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        _ = await AssertEx.ThrowsAsync<ArgumentException>(() => store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(seed.RunId,
+                              seed.RunVersion,
+                              Guid.NewGuid(),
+                              [new DevWorkflowNodeRunSeed(Guid.NewGuid(), "validate", DevWorkflowNodeType.Tool, OutputJson: "{}")])),
+                          "A pending row that already says what it produced is a caller saying two things at once.")
+                      .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     And the same rule from the other side: a seed may land waiting or finished, never live. A <c>Running</c> seed
+    ///     with no output document slips past the rule above and writes a row with no start time and no lane behind it,
+    ///     which nothing would ever come back to transition.
+    /// </summary>
+    [Test]
+    public async Task Materialize_RefusesASeedInALiveStatus()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        _ = await AssertEx.ThrowsAsync<ArgumentException>(() => store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(seed.RunId,
+                              seed.RunVersion,
+                              Guid.NewGuid(),
+                              [new DevWorkflowNodeRunSeed(Guid.NewGuid(), "validate", DevWorkflowNodeType.Tool, Status: DevWorkflowNodeRunStatus.Running)])),
+                          "A row created Running is a row no lane ever took.")
+                      .ConfigureAwait(false);
     }
 
     /// <summary>Materializing the same node key twice is a transition error, not a raw constraint violation.</summary>

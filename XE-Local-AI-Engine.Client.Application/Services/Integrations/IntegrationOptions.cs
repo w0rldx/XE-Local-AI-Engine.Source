@@ -131,6 +131,11 @@ public sealed class IntegrationOptions : IValidatableObject
     ///     The byte budget for the framed "prior outputs" document a caller-managed continuation carries, so the model
     ///     can see what it already emitted. A byte budget rather than a token budget, which is why it does not fold into
     ///     <see cref="ContextBudgetTokens" />. Consumed by the session context builder.
+    ///     <para>
+    ///         It bounds the WHOLE composed message, not the replayed payloads alone: the preamble, the untrusted-content
+    ///         fence and the truncation notice are spent out of it first, and what is left is what the entries may fill.
+    ///         Values near the 1 KiB floor therefore replay nothing, because the wrapper alone is worth ~500 bytes.
+    ///     </para>
     /// </summary>
     [Range(1024, 1024 * 1024)]
     public int PriorOutputsContextBytes { get; init; } = 32_768;

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -55,6 +56,10 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         // apart — the ancestor that decides it need not be among the join's own dependencies — so the answer ships on
         // the row rather than being re-derived in the browser.
         var waivedSkips = DevWorkflowGraphContract.WaivedSkipNodeKeys(run.GraphJson, byKey);
+
+        // The cap each node's DEFINITION declared, resolved once for the run off the same pinned graph everything else
+        // here reads.
+        var declaredCaps = DevWorkflowGraphContract.DeclaredMaxAttempts(run.GraphJson);
         var nodes = detail.NodeRuns
                           .Select(nodeRun => ToSummary(nodeRun,
                               nodesByKey.GetValueOrDefault(nodeRun.NodeKey),
@@ -65,7 +70,8 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
                               materializationCounts,
                               agentsById,
                               staleInputs.Contains(nodeRun.Id),
-                              SkipWaived(nodeRun, waivedSkips)))
+                              SkipWaived(nodeRun, waivedSkips),
+                              OperatorRetries(nodeRun, declaredCaps)))
                           .ToList();
 
         return new DevWorkflowRunResponse(run.Id,
@@ -86,7 +92,11 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             run.StartedAtUtc,
             run.EndedAtUtc,
             run.Version,
-            run.LastSequence);
+            run.LastSequence,
+
+            // Summed over the node runs already loaded above: the rollup costs no extra query, and a run's own row
+            // carries no cost of its own to disagree with.
+            Cost: RunCost(detail.NodeRuns));
     }
 
     public async Task<DevWorkflowNodeRunDetailResponse> ComposeNodeAsync(Guid runId, Guid nodeRunId, CancellationToken cancellationToken)
@@ -159,9 +169,26 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             nodeRun.FailureClass,
             nodeRun.TerminalReason,
             [.. decisions.Where(decision => decision.NodeRunId == nodeRunId).OrderBy(static decision => decision.Sequence).Select(DevWorkflowContractMapper.ToResponse)],
+            OperatorRetries(nodeRun, DevWorkflowGraphContract.DeclaredMaxAttempts(run.GraphJson)),
             nodeRun.StartedAtUtc,
             nodeRun.EndedAtUtc,
-            nodeRun.Sequence);
+            nodeRun.Sequence,
+
+            // Named from here on: the tail is a run of same-typed optional slots, so a positional call would compile
+            // silently misaligned if a field is spliced in ahead of them.
+            InputTokens: nodeRun.InputTokens,
+            OutputTokens: nodeRun.OutputTokens,
+            ReasoningTokens: nodeRun.ReasoningTokens,
+            EstimatedInputTokens: nodeRun.EstimatedInputTokens,
+            ProviderCalls: nodeRun.ProviderCalls,
+            ToolCalls: nodeRun.ToolCalls,
+            ToolSchemaTokens: nodeRun.ToolSchemaTokens,
+            ToolNames: DevWorkflowNodeRunDocuments.ToolNames(nodeRun.ToolNamesJson),
+            AgentTurnMs: nodeRun.AgentTurnMs,
+            ServedModelName: nodeRun.ServedModelName,
+            Route: Route(nodeRun.RouteJson),
+            WorkSessionSteps: nodeRun.WorkSessionSteps,
+            FailureClassGroup: AgentUnitFailureClass.FromDevWorkflowFailureClass(nodeRun.FailureClass));
     }
 
     private static DevWorkflowNodeRunSummaryResponse ToSummary(DevWorkflowNodeRunSnapshot nodeRun,
@@ -173,7 +200,8 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         IReadOnlyDictionary<Guid, int> materializationCounts,
         IReadOnlyDictionary<Guid, AgentDefinitionRecord> agentsById,
         bool hasStaleInputs,
-        bool? skipWaived) =>
+        bool? skipWaived,
+        int operatorRetries) =>
         new(nodeRun.Id,
             nodeRun.NodeKey,
             nodeRun.NodeType.ToString(),
@@ -202,7 +230,42 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             StartedAtUtc: nodeRun.StartedAtUtc,
             CompletedAtUtc: nodeRun.EndedAtUtc,
             Sequence: nodeRun.Sequence,
-            SkipWaived: skipWaived);
+            OperatorRetries: operatorRetries,
+            SkipWaived: skipWaived,
+            InputTokens: nodeRun.InputTokens,
+            OutputTokens: nodeRun.OutputTokens,
+            ToolCalls: nodeRun.ToolCalls,
+
+            // Asked of the contract, not of a spelling of the token repeated here: the same verdict decides the
+            // drill-down's note, this row's badge and whether the run header counts the row as work.
+            ValidationNotApplicable: DevWorkflowGraphContract.ValidationWasNotApplicable(nodeRun.OutputJson));
+
+    /// <summary>
+    ///     How many attempts an operator has bought this node run: the distance the row's own <c>MaxAttempts</c> has
+    ///     travelled from the cap its definition declared, which each Retry raises by one IN PLACE. The widening is
+    ///     therefore its own record, and the client subtracts this to recover the declared cap.
+    ///     <para>
+    ///         Read off the row rather than counted from <c>Retry</c> decision rows, because a decision row exists
+    ///         whether or not it was ever applied and whether or not widening existed when it was written. Counting
+    ///         them reported a widening in two cases that never had one: the settle window between recording a Retry
+    ///         and the dispatcher spending it, which a PAUSED run holds open indefinitely; and every node run
+    ///         persisted BEFORE this shipped, whose Retry rows moved no cap at all — both rendered a cap one below
+    ///         the definition's.
+    ///     </para>
+    ///     <para>
+    ///         A MATERIALIZED clone is looked up by its own key and needs no template hop: the materializer DEEP-CLONES
+    ///         the template node into the graph's node array, rewriting only <c>nodeKey</c> and <c>retryTarget</c>, and
+    ///         the expansion is written back to <c>run.GraphJson</c> under a bumped revision. So the pinned graph a run
+    ///         detail reads declares every clone key, carrying the template's own <c>maxAttempts</c>.
+    ///     </para>
+    ///     <para>
+    ///         Floored at zero, and zero for a node key the pinned graph does not declare — an unroutable graph, which
+    ///         <see cref="DevWorkflowGraphContract.DeclaredMaxAttempts" /> answers empty for. Nothing to compare
+    ///         against is not evidence of a widening.
+    ///     </para>
+    /// </summary>
+    private static int OperatorRetries(DevWorkflowNodeRunSnapshot nodeRun, IReadOnlyDictionary<string, int> declaredCaps) =>
+        declaredCaps.TryGetValue(nodeRun.NodeKey, out var declared) ? Math.Max(0, nodeRun.MaxAttempts - declared) : 0;
 
     /// <summary>
     ///     The waived verdict as the wire carries it: only a <c>Skipped</c> row has one, and a run whose pinned graph
@@ -211,6 +274,43 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
     /// </summary>
     private static bool? SkipWaived(DevWorkflowNodeRunSnapshot nodeRun, IReadOnlySet<string>? waivedSkips) =>
         waivedSkips is null || nodeRun.Status != DevWorkflowNodeRunStatus.Skipped ? null : waivedSkips.Contains(nodeRun.NodeKey);
+
+    /// <summary>
+    ///     The run's spend, added member by member over its node runs. A member stays null until some row reports it,
+    ///     so a run whose nodes never measured anything says "nobody measured" rather than "zero".
+    /// </summary>
+    private static DevWorkflowRunCostResponse RunCost(IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns)
+    {
+        long? inputTokens = null;
+        long? outputTokens = null;
+        int? toolCalls = null;
+        int? providerCalls = null;
+        long? agentTurnMs = null;
+        foreach (var nodeRun in nodeRuns)
+        {
+            inputTokens = Add(inputTokens, nodeRun.InputTokens);
+            outputTokens = Add(outputTokens, nodeRun.OutputTokens);
+            toolCalls = Add(toolCalls, nodeRun.ToolCalls);
+            providerCalls = Add(providerCalls, nodeRun.ProviderCalls);
+            agentTurnMs = Add(agentTurnMs, nodeRun.AgentTurnMs);
+        }
+
+        return new DevWorkflowRunCostResponse(inputTokens, outputTokens, toolCalls, providerCalls, agentTurnMs);
+    }
+
+    private static long? Add(long? total, long? term) => term is { } value ? (total ?? 0) + value : total;
+
+    private static int? Add(int? total, int? term) => term is { } value ? (total ?? 0) + value : total;
+
+    /// <summary>
+    ///     The stored route on the wire, parsed by the runtime's own reader — the one that owns the document — and only
+    ///     re-shaped here. An unreadable column costs this node its route rather than costing the drill-down a 500,
+    ///     exactly as an unreadable policy resolution does.
+    /// </summary>
+    private static DevWorkflowNodeRouteResponse? Route(string? routeJson) =>
+        DevWorkflowNodeRunDocuments.TryParseRoute(routeJson) is { } route
+            ? new DevWorkflowNodeRouteResponse(route.Satisfied, route.Dead, route.Waived, route.GateAnswer, route.Truncated)
+            : null;
 
     /// <summary>
     ///     Which upstream nodes a <c>Pending</c> node run is still waiting on, computed here rather than left to the

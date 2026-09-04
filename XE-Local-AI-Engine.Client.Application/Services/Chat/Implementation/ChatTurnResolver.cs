@@ -155,8 +155,16 @@ public sealed class ChatTurnResolver(
         // truly has no model to run: neither the local GGUF default NOR the agent's pin produced one. An Ollama-only
         // node with a pinning agent (every server-initiated work-session step) resolves an effective model here and must
         // not be failed as "no chat model installed".
+        // The one place the model-selection PROVENANCE exists: `effectiveModel` above keeps only the answer, not how it
+        // was reached. Read exactly as that line reads — no explicit user pick AND no honored pin means the turn ran on
+        // the node's default model and nobody asked for a specific one, which is the only shape the runner's
+        // reasoning-effort dispatcher may swap. Both other shapes (an explicit pick, an honored agent pin) are a
+        // request for THAT model, so they clear the permission.
+        var allowAutoModelSwap = !userPickedConcreteModel && resolved?.ModelProfile is null;
+
         return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, supportsVision,
-            requiresInstalledChatModel && effectiveModel is null, activeModelIsCloud, effectiveModelIsCloud, reasoningBudgetEnforceable);
+            requiresInstalledChatModel && effectiveModel is null, activeModelIsCloud, effectiveModelIsCloud, reasoningBudgetEnforceable,
+            allowAutoModelSwap);
     }
 
     /// <summary>

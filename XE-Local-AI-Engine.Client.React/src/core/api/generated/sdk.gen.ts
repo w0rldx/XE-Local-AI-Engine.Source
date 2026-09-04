@@ -1281,7 +1281,6 @@ import {
 	zCancelImageModelDownloadBody,
 	zCancelImageModelDownloadResponse,
 	zCancelIntegrationExecutionPath,
-	zCancelIntegrationExecutionResponse,
 	zCancelLlamaCppSourceBuildResponse,
 	zCancelNodeBindingResponse,
 	zCancelNodeChatMessageBody,
@@ -8774,7 +8773,6 @@ export const cancelIntegrationExecution = <ThrowOnError extends boolean = false>
 					query: z.never().optional(),
 				})
 				.parseAsync(data),
-		responseValidator: async (data) => await zCancelIntegrationExecutionResponse.parseAsync(data),
 		security: [
 			{
 				key: "JWTBearerAuth",

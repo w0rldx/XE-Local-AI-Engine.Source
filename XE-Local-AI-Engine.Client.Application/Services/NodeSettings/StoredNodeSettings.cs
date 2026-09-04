@@ -117,6 +117,13 @@ public sealed partial record StoredNodeSettings
     /// <summary>Default <c>--spec-type</c> — speculative decoding off (operator opt-in). Mirrors <c>SpeculativeDecodingSettings.DisabledMode</c>.</summary>
     public const string DefaultSpeculativeMode = SpeculativeDecodingSettings.DisabledMode;
 
+    /// <summary>
+    ///     Default KV-cache type for GPU chat spawns. Mirrors <c>LlamaServerLaunchPolicyOptions.KvCacheType</c>'s own
+    ///     default, so an unset setting seeds an options object equal to the provider default and the launch argv,
+    ///     launch identity and inference-profile fingerprint are all byte-identical to a node that never had this knob.
+    /// </summary>
+    public const string DefaultKvCacheType = LlamaServerKvCacheTypes.Q8_0;
+
     /// <summary>Default draft tokens per step (<c>--spec-draft-n-max</c>); mirrors <c>LlamaServerSupervisorOptions.SpeculativeDraftMaxTokens</c>.</summary>
     public const int DefaultSpeculativeDraftMaxTokens = 3;
 
@@ -177,6 +184,16 @@ public sealed partial record StoredNodeSettings
     public static bool SpeculativeModeRequiresDraftModel(string? mode)
     {
         return SpeculativeDecodingSettings.ModeRequiresDraftModel(mode);
+    }
+
+    /// <summary>
+    ///     Returns <see langword="true" /> when <paramref name="type" /> is a recognized KV-cache type (or empty, i.e.
+    ///     "use the node default"). Delegates to <see cref="LlamaServerKvCacheTypes.IsAllowed" /> so the allow-list has
+    ///     one authority shared with the benchmark KV picker.
+    /// </summary>
+    public static bool IsValidKvCacheType(string? type)
+    {
+        return LlamaServerKvCacheTypes.IsAllowed(type);
     }
 
     public int MaxMessageRequestTimeoutSeconds { get; init; } = DefaultMaxMessageRequestTimeoutSeconds;
@@ -268,6 +285,15 @@ public sealed partial record StoredNodeSettings
     public string? SpeculativeMode { get; init; }
 
     /// <summary>
+    ///     KV-cache element type for GPU chat spawns (<c>-ctk</c>/<c>-ctv</c>): <c>f16</c> | <c>q8_0</c> | <c>q4_0</c>.
+    ///     Seed: <c>q8_0</c>. <c>f16</c> emits no KV or flash-attention flags at all. Unknown falls back to
+    ///     <see langword="null" /> (re-seeded to the default). Applies on the next node restart, and CHANGING IT
+    ///     invalidates every frozen inference profile on this node — the selected type is part of the launch-policy
+    ///     fingerprint, so each model re-explores under the new type before it can replay again.
+    /// </summary>
+    public string? KvCacheType { get; init; }
+
+    /// <summary>
     ///     Installed draft-model NAME for <c>draft-*</c> speculative modes, resolved server-side to its GGUF path on the
     ///     spawn path (like the target model). Ignored by <c>ngram-*</c> modes. Applies on the next node restart.
     /// </summary>
@@ -286,6 +312,15 @@ public sealed partial record StoredNodeSettings
     ///     node restart (seeded into the knowledge-base options at host build).
     /// </summary>
     public string? RerankerModelName { get; init; }
+
+    /// <summary>
+    ///     Installed node-local chat model the reasoning-effort dispatcher moves a FAST <c>auto</c> turn onto.
+    ///     <see langword="null" />/blank (default) leaves the swap OFF — an <c>auto</c> turn then keeps its model and
+    ///     only lowers the effort. It is validated at save to be an installed llama.cpp model (never a cloud id, an
+    ///     external id, or an Ollama name) and to leave a second loaded-process slot, and re-validated per turn.
+    ///     NOT restart-gated: it is read per send, so a save applies to the next turn.
+    /// </summary>
+    public string? AutoEffortFastModelName { get; init; }
 
     /// <summary>
     ///     Node-level master flag for the client voice (TTS) feature. <see langword="null" /> (absent) reads as

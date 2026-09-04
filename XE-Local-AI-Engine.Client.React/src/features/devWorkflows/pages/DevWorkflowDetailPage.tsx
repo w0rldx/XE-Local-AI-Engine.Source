@@ -187,6 +187,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 			selectedRunId={runId}
 			nodes={nodes}
 			pendingDecisionCount={pendingDecisionCount}
+			cost={run?.cost}
 			startableDefinitions={canStartRun ? (definitionsQuery.data?.items ?? []) : []}
 			selectedDefinitionId={definitionId}
 			onSelectDefinition={setDefinitionId}

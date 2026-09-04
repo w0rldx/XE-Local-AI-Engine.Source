@@ -1,4 +1,4 @@
-import { Alert, Code, Divider, Group, Stack, Table, Text } from "@mantine/core";
+import { Alert, Code, Divider, Group, Stack, Table, Text, Tooltip } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
@@ -66,6 +66,18 @@ export function IntegrationSessionDetailDialog({ session, onClose }: Integration
 							? t("pages.integrations.sessions.list.deletedTrigger", "Deleted trigger")
 							: session.triggerName}
 					</Text>
+				</Group>
+				<Group gap="sm">
+					<Text size="sm" c="dimmed" w={160}>
+						{t("pages.integrations.sessions.list.columns.principal", "Principal")}
+					</Text>
+					{/* Same shortened-with-tooltip form the executions detail uses, so one integrator reads the same on
+					    both surfaces. The keys page is where this identity maps back to a credential. */}
+					<Tooltip label={session.principalId}>
+						<Code title={session.principalId} data-testid="integration-session-principal">
+							{shortPrincipalId(session.principalId)}
+						</Code>
+					</Tooltip>
 				</Group>
 				<Group gap="sm">
 					<Text size="sm" c="dimmed" w={160}>

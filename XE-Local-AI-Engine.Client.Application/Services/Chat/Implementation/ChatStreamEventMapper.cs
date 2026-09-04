@@ -249,12 +249,13 @@ internal static class ChatStreamEventMapper
             sequence,
             timestampMs,
             NoticeKind: payload.Kind.ToString(),
-            NoticeMessage: payload.Message);
+            NoticeMessage: payload.Message,
+            NoticeDetail: payload.Detail);
     }
 
     public static void AccumulateNotice(NodeChatPartAccumulator parts, TurnNoticePayload payload, long sequence)
     {
-        parts.AppendNotice(payload.Kind.ToString(), payload.Message, sequence);
+        parts.AppendNotice(payload.Kind.ToString(), payload.Message, sequence, payload.Detail);
     }
 
     /// <summary>

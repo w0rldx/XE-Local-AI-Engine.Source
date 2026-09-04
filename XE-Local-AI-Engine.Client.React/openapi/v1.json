@@ -10820,14 +10820,27 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "No Content"
+          "202": {
+            "description": "Accepted"
           },
           "401": {
             "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -26543,6 +26556,10 @@
             "type": "string",
             "nullable": true
           },
+          "kvCacheType": {
+            "type": "string",
+            "nullable": true
+          },
           "speculativeDraftModelName": {
             "type": "string",
             "nullable": true
@@ -26574,6 +26591,10 @@
             "format": "int32"
           },
           "rerankerModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "autoEffortFastModelName": {
             "type": "string",
             "nullable": true
           },
@@ -26754,6 +26775,10 @@
             "type": "string",
             "nullable": true
           },
+          "kvCacheType": {
+            "type": "string",
+            "nullable": true
+          },
           "speculativeDraftModelName": {
             "type": "string",
             "nullable": true
@@ -26769,6 +26794,10 @@
             "nullable": true
           },
           "rerankerModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "autoEffortFastModelName": {
             "type": "string",
             "nullable": true
           },
@@ -28055,6 +28084,18 @@
           },
           "kvQuantRequiresFlashAttention": {
             "type": "boolean",
+            "nullable": true
+          },
+          "kvBytesPerToken": {
+            "type": "integer",
+            "nullable": true
+          },
+          "kvBytesPerTokenQuant": {
+            "type": "string",
+            "nullable": true
+          },
+          "attentionArch": {
+            "type": "string",
             "nullable": true
           }
         }
@@ -31641,6 +31682,7 @@
           "id",
           "triggerId",
           "triggerName",
+          "principalId",
           "agentDefinitionId",
           "status",
           "createdAtUtc",
@@ -31658,6 +31700,10 @@
           },
           "triggerName": {
             "type": "string"
+          },
+          "principalId": {
+            "type": "string",
+            "format": "guid"
           },
           "agentDefinitionId": {
             "type": "string",
@@ -33564,6 +33610,10 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphEdge"
             }
+          },
+          "allowUngatedWrites": {
+            "type": "boolean",
+            "nullable": true
           }
         }
       },
@@ -33648,6 +33698,11 @@
           },
           "toolMode": {
             "type": "string",
+            "nullable": true
+          },
+          "maxLoopIterations": {
+            "type": "integer",
+            "format": "int32",
             "nullable": true
           },
           "isTemplate": {
@@ -33907,6 +33962,10 @@
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse"
             }
           },
+          "operatorRetries": {
+            "type": "integer",
+            "format": "int32"
+          },
           "startedAtUtc": {
             "type": "integer",
             "nullable": true
@@ -33917,6 +33976,68 @@
           },
           "sequence": {
             "type": "integer"
+          },
+          "inputTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "outputTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "reasoningTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "estimatedInputTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "providerCalls": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "toolCalls": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "toolSchemaTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "toolNames": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "agentTurnMs": {
+            "type": "integer",
+            "nullable": true
+          },
+          "servedModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "route": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse"
+              }
+            ]
+          },
+          "workSessionSteps": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "failureClassGroup": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -33937,6 +34058,37 @@
           "currentContentSha256": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "satisfied": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dead": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "waived": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "gateAnswer": {
+            "type": "string",
+            "nullable": true
+          },
+          "truncated": {
+            "type": "boolean"
           }
         }
       },
@@ -34391,6 +34543,9 @@
           },
           "lastSequence": {
             "type": "integer"
+          },
+          "cost": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse"
           }
         }
       },
@@ -34500,8 +34655,56 @@
           "sequence": {
             "type": "integer"
           },
+          "operatorRetries": {
+            "type": "integer",
+            "format": "int32"
+          },
           "skipWaived": {
             "type": "boolean",
+            "nullable": true
+          },
+          "inputTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "outputTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "toolCalls": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "validationNotApplicable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "inputTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "outputTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "toolCalls": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "providerCalls": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "agentTurnMs": {
+            "type": "integer",
             "nullable": true
           }
         }
@@ -37098,6 +37301,10 @@
             "type": "string",
             "nullable": true
           },
+          "primaryLaunchIdentitySchemeOutdated": {
+            "type": "boolean",
+            "nullable": true
+          },
           "primaryEffectiveLaunchIdentity": {
             "type": "string",
             "nullable": true
@@ -39471,6 +39678,7 @@
           "defaultTemporaryChat",
           "memoryExtractionEnabled",
           "disableBaseScaffold",
+          "disableToolRelevanceFilter",
           "allowedSkillIds",
           "version",
           "createdAtUtc",
@@ -39528,6 +39736,9 @@
             "type": "boolean"
           },
           "disableBaseScaffold": {
+            "type": "boolean"
+          },
+          "disableToolRelevanceFilter": {
             "type": "boolean"
           },
           "allowedSkillIds": {
@@ -39624,6 +39835,9 @@
             "type": "boolean"
           },
           "disableBaseScaffold": {
+            "type": "boolean"
+          },
+          "disableToolRelevanceFilter": {
             "type": "boolean"
           },
           "allowedSkillIds": {
@@ -40529,6 +40743,23 @@
             "format": "int32",
             "nullable": true
           },
+          "toolSchemaTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "maxToolSchemaTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "dispatchedTier": {
+            "type": "string",
+            "nullable": true
+          },
+          "authoredEffort": {
+            "type": "string",
+            "nullable": true
+          },
           "contentChunkCount": {
             "type": "integer",
             "format": "int32",
@@ -40615,6 +40846,9 @@
             "type": "boolean"
           },
           "disableBaseScaffold": {
+            "type": "boolean"
+          },
+          "disableToolRelevanceFilter": {
             "type": "boolean"
           },
           "allowedSkillIds": {

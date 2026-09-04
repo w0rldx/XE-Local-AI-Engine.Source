@@ -63,6 +63,63 @@ internal sealed class DevWorkflowNodeRun
     public int? MaterializationIndex { get; set; }
     public string? FailureClass { get; set; }
     public string? TerminalReason { get; set; }
+
+    // Cost telemetry: twelve nullable, plaintext, metadata-only columns saying what this node run SPENT and where it
+    // routed — counts, a served model name, structural node keys and tool NAMES, never a prompt, an argument, a result
+    // or a transcript. Written once, at the terminal-or-blocked transition, through the one store decorator every call
+    // site crosses; nothing reads them to decide anything. Attempt increments in place, so they describe the LAST
+    // attempt only — the earlier attempts ride on their own node.retry.scheduled events, which is exactly why the
+    // Pending reset below clears every one of them.
+
+    /// <summary>Provider-reported prompt tokens, summed over the attempt's chat-run envelopes; over its attempts on a DevTask node.</summary>
+    public long? InputTokens { get; set; }
+
+    /// <summary>Provider-reported completion tokens, summed the same way.</summary>
+    public long? OutputTokens { get; set; }
+
+    /// <summary>Provider-reported reasoning tokens, summed the same way.</summary>
+    public long? ReasoningTokens { get; set; }
+
+    /// <summary>The character-profile estimate summed over the work session's steps — the lower bound that exists when no envelope does.</summary>
+    public long? EstimatedInputTokens { get; set; }
+
+    /// <summary>Raw provider rounds the attempt admitted, summed over the work session's steps.</summary>
+    public int? ProviderCalls { get; set; }
+
+    /// <summary>Tool invocations that returned, successfully or not, summed over the work session's steps.</summary>
+    public int? ToolCalls { get; set; }
+
+    /// <summary>Tool-schema tokens SHIPPED ACROSS ROUNDS, not schema size — the largest single round is a different number.</summary>
+    public long? ToolSchemaTokens { get; set; }
+
+    /// <summary>
+    ///     Up to sixteen distinct tool NAMES this attempt called, as an ordinal-sorted JSON string array. Names only —
+    ///     never arguments, never results. Agent path only: null on a DevTask node run and on every structural row,
+    ///     where it means "there were no step rows to read", never "this node called no tools".
+    /// </summary>
+    public string? ToolNamesJson { get; set; }
+
+    /// <summary>
+    ///     WHOLE agent turns, summed: every chat-run envelope's own duration, which spans the provider rounds AND the
+    ///     tool loop between them. It is deliberately not called provider time — nothing this attempt persists
+    ///     separates the two, so subtracting this from the node's runtime leaves what happened OUTSIDE the turns
+    ///     (queueing before the session started, the node's own settle work), not the tool loop.
+    /// </summary>
+    public long? AgentTurnMs { get; set; }
+
+    /// <summary>What the provider actually SERVED, off the envelope. Beside the authored pin, never instead of it: a pin is a request, not a receipt.</summary>
+    public string? ServedModelName { get; set; }
+
+    /// <summary>
+    ///     Which of this node's out-edges its settle satisfied and which it killed, as the state machine itself judged
+    ///     them — <c>{"satisfied":[…],"dead":[…],"gateAnswer":…,"truncated":…}</c> over plaintext structural node keys.
+    ///     Null on a row that is not terminal: a node that has not finished has routed nowhere yet.
+    /// </summary>
+    public string? RouteJson { get; set; }
+
+    /// <summary>How many steps the owned work session had taken when this node run settled.</summary>
+    public int? WorkSessionSteps { get; set; }
+
     public long? QueuedAtUtc { get; set; }
     public long? StartedAtUtc { get; set; }
     public long? EndedAtUtc { get; set; }

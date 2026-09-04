@@ -148,7 +148,28 @@ public sealed class SupervisorCrashAndSurfaceTests
 
         AssertEx.Equal(expected: 2, healths.Count);
         AssertEx.True(healths.All(h => h.IsResponsive));
+        AssertEx.False(healths.Any(h => h.HasExited));
         AssertEx.Contains(healths, h => h.Role == ModelRole.Chat);
         AssertEx.Contains(healths, h => h.Role == ModelRole.Embedding);
+    }
+
+    [Test]
+    public async Task CheckHealth_MarksACrashedProcessAsExited()
+    {
+        // A crashed handle lingers in the process table until the idle reaper collects it. `IsResponsive: false` alone
+        // cannot tell that apart from a live process that is loading or wedged, and the two are opposite answers for a
+        // caller deciding capacity: a corpse holds no VRAM and no slot, a wedged process holds both. `HasExited` is
+        // the difference, and the capacity snapshot filters on it.
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            new FakeHealthProbe(responsive: true));
+
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        launcher.Handles.Single().SimulateExit();
+
+        var health = (await supervisor.CheckHealthAsync(CancellationToken.None)).Single();
+
+        AssertEx.True(health.HasExited);
+        AssertEx.False(health.IsResponsive);
     }
 }

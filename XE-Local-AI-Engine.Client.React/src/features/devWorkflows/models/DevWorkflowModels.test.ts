@@ -3,6 +3,7 @@
 // after narrowing — so a member added on the server and not here renders the FALLBACK, silently. The literal lists
 // are asserted rather than inferred for exactly that reason.
 
+import type { TFunction } from "i18next";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -13,6 +14,7 @@ import {
 	devWorkflowArtifactLanguage,
 	devWorkflowArtifactLineages,
 	devWorkflowAttemptCounts,
+	devWorkflowAttemptLabel,
 	devWorkflowDecisionKinds,
 	devWorkflowNodeAwaitsHuman,
 	devWorkflowNodeStatuses,
@@ -240,13 +242,51 @@ describe("devWorkflowArtifactLineages", () => {
 });
 
 describe("devWorkflowAttemptCounts", () => {
-	it("clamps the maximum up to the attempt — an operator-granted retry is not the runtime overrunning its budget", () => {
-		expect(devWorkflowAttemptCounts(4, 3)).toEqual({ attempt: 4, maxAttempts: 4 });
+	it("reads back the declared cap under an operator retry, which widened the budget the runtime works to", () => {
+		expect(devWorkflowAttemptCounts(4, 4, 1)).toEqual({ attempt: 4, maxAttempts: 4, cap: 3, operatorRetries: 1 });
+		expect(devWorkflowAttemptCounts(5, 5, 2)).toEqual({ attempt: 5, maxAttempts: 5, cap: 3, operatorRetries: 2 });
 	});
 
-	it("leaves an ordinary attempt alone and defaults both halves to 1", () => {
-		expect(devWorkflowAttemptCounts(2, 3)).toEqual({ attempt: 2, maxAttempts: 3 });
-		expect(devWorkflowAttemptCounts(undefined, undefined)).toEqual({ attempt: 1, maxAttempts: 1 });
-		expect(devWorkflowAttemptCounts(null, null)).toEqual({ attempt: 1, maxAttempts: 1 });
+	it("leaves an ordinary attempt alone and defaults every half to 1", () => {
+		expect(devWorkflowAttemptCounts(2, 3, 0)).toEqual({ attempt: 2, maxAttempts: 3, cap: 3, operatorRetries: 0 });
+		expect(devWorkflowAttemptCounts(undefined, undefined, undefined)).toEqual({
+			attempt: 1,
+			maxAttempts: 1,
+			cap: 1,
+			operatorRetries: 0,
+		});
+		expect(devWorkflowAttemptCounts(null, null, null)).toEqual({ attempt: 1, maxAttempts: 1, cap: 1, operatorRetries: 0 });
+	});
+
+	it("treats a server that has no operatorRetries field as having granted none", () => {
+		expect(devWorkflowAttemptCounts(2, 3)).toEqual({ attempt: 2, maxAttempts: 3, cap: 3, operatorRetries: 0 });
+	});
+
+	it("still clamps the maximum up to the attempt, the compatibility guard for a server from before the widening", () => {
+		expect(devWorkflowAttemptCounts(4, 3)).toEqual({ attempt: 4, maxAttempts: 4, cap: 4, operatorRetries: 0 });
+	});
+
+	it("never reports a declared cap below 1, however many retries the row claims", () => {
+		expect(devWorkflowAttemptCounts(2, 2, 9)).toEqual({ attempt: 2, maxAttempts: 2, cap: 1, operatorRetries: 9 });
+	});
+});
+
+describe("devWorkflowAttemptLabel", () => {
+	// The real bundle answers this in the component tests; here the interpolation is what is under test, so a stub `t`
+	// that echoes its key and values proves which key was picked and what was handed to it.
+	const t = ((key: string, _fallback: string, values: Record<string, unknown>) =>
+		`${key} ${JSON.stringify(values)}`) as unknown as TFunction;
+
+	it("says 'of M' when no human granted the attempt", () => {
+		expect(devWorkflowAttemptLabel(t, devWorkflowAttemptCounts(2, 3, 0))).toContain("pages.devWorkflows.nodes.attempt ");
+	});
+
+	it("hands the retry key both maxima and the retry count, so the copy can say what capacity was added", () => {
+		const label = devWorkflowAttemptLabel(t, devWorkflowAttemptCounts(5, 5, 2));
+
+		expect(label).toContain("pages.devWorkflows.nodes.attemptOperatorRetry");
+		expect(label).toContain('"maxAttempts":5');
+		expect(label).toContain('"cap":3');
+		expect(label).toContain('"count":2');
 	});
 });

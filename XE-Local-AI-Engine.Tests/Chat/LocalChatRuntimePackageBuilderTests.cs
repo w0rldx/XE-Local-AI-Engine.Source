@@ -245,6 +245,67 @@ public sealed class LocalChatRuntimePackageBuilderTests
         AssertEx.True(unattended.IsUnattended);
     }
 
+    // The §5 byte-identity guard for the tool-relevance opt-out (same posture as IsUnattended above): the filter narrows
+    // only the array handed to the provider, never the offer, the resolved prompt or the approval wrap, so an agent that
+    // opts out must hash byte-identically to the same agent that does not — and toggling it can never invalidate a resume.
+    [Test]
+    public void Build_WithToolRelevanceOptOut_ProducesTheSameConfigHash()
+    {
+        var builder = new LocalChatRuntimePackageBuilder();
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        var filtered = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
+            conversationId,
+            "You are helpful.",
+            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            "qwen3.5:0.8b",
+            AgentDefinitionVersion: 1));
+
+        var optedOut = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
+            conversationId,
+            "You are helpful.",
+            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            "qwen3.5:0.8b",
+            AgentDefinitionVersion: 1,
+            DisableToolRelevanceFilter: true));
+
+        AssertEx.Equal(filtered.ConfigHash, optedOut.ConfigHash);
+        AssertEx.False(filtered.DisableToolRelevanceFilter);
+        AssertEx.True(optedOut.DisableToolRelevanceFilter);
+    }
+
+    // Fail-closed by construction: every construction site that does NOT pass the model-selection provenance — the
+    // scheduler, the three benchmark executors, the encrypted/server envelope assembler — gets "the model is pinned,
+    // never swap it" with no edit. And, like IsUnattended, it describes HOW the model was chosen rather than the
+    // agent's configuration, so it must leave the config hash byte-identical in either state.
+    [Test]
+    public void Build_WhenAllowAutoModelSwapIsUnset_IsFalseAndConfigHashIsUnchanged()
+    {
+        var builder = new LocalChatRuntimePackageBuilder();
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        var omitted = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
+            conversationId,
+            "You are helpful.",
+            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            "qwen3.5:0.8b",
+            AgentDefinitionVersion: 1));
+
+        var swappable = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
+            conversationId,
+            "You are helpful.",
+            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            "qwen3.5:0.8b",
+            AgentDefinitionVersion: 1,
+            AllowAutoModelSwap: true));
+
+        AssertEx.False(omitted.AllowAutoModelSwap, "an omitted provenance must fail closed to pinned");
+        AssertEx.True(swappable.AllowAutoModelSwap);
+        AssertEx.Equal(omitted.ConfigHash, swappable.ConfigHash);
+    }
+
     private static ConversationMessageDto CreateMessage(MessageRole role, string content, int sortOrder)
     {
         return new ConversationMessageDto

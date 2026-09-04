@@ -42,6 +42,22 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
+    public async Task Normalize_WhenAutoEffortFastModelIsBlank_IsNull()
+    {
+        // Blank is the "Off" signal the select sends, and null is what the dispatcher reads as "this node names no
+        // fast model". Whitespace must not survive as a model name nothing can resolve.
+        await WriteSettingsJsonAsync("{ \"autoEffortFastModelName\": \"   \" }");
+        var blank = await LoadAsync();
+
+        AssertEx.Null(blank.AutoEffortFastModelName);
+
+        await WriteSettingsJsonAsync("{ \"autoEffortFastModelName\": \"  qwen3-1.7b  \" }");
+        var trimmed = await LoadAsync();
+
+        AssertEx.Equal("qwen3-1.7b", trimmed.AutoEffortFastModelName);
+    }
+
+    [Test]
     public async Task OldFileWithRemovedKeys_LoadsWithoutThrowing_AndKeepsTheSurvivingFields()
     {
         // samplingDefaults (never read at runtime) and allowedVoiceModels (a neural-voice leftover the Web Speech-only
@@ -243,6 +259,35 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
             SpeculativeMode = mode
         });
         AssertEx.Equal(mode, loaded.SpeculativeMode);
+    }
+
+    [Test]
+    [Arguments("q5_1")]
+    [Arguments("int8")]
+    [Arguments("f32")]
+    public async Task KvCacheType_Unknown_FallsBackToNull(string type)
+    {
+        // The normalizer is the layer that must never let a bad value through: LlamaServerLaunchPolicyOptions.Validate()
+        // runs in the launch policy's constructor, so a persisted junk value would fail host build rather than degrade.
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            KvCacheType = type
+        });
+        AssertEx.Null(loaded.KvCacheType);
+    }
+
+    [Test]
+    [Arguments("f16", "f16")]
+    [Arguments("q8_0", "q8_0")]
+    [Arguments("Q4_0", "q4_0")]
+    [Arguments("  q8_0  ", "q8_0")]
+    public async Task KvCacheType_Known_IsKeptCanonical(string type, string expected)
+    {
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            KvCacheType = type
+        });
+        AssertEx.Equal(expected, loaded.KvCacheType);
     }
 
     [Test]

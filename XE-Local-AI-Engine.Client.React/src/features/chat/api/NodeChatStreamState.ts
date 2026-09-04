@@ -163,7 +163,7 @@ function decomposeParts(parts: readonly ChatMessagePart[] | undefined): {
 		} else if (part.kind === "text") {
 			textSegments.push({ id: part.id, sequence: part.sequence, text: part.text });
 		} else if (part.kind === "notice") {
-			noticeEntries.push({ id: part.id, sequence: part.sequence, noticeKind: part.noticeKind, text: part.text });
+			noticeEntries.push({ id: part.id, sequence: part.sequence, noticeKind: part.noticeKind, text: part.text, detail: part.detail });
 		}
 	}
 
@@ -647,6 +647,7 @@ export function applyNodeChatStreamEvent(
 				sequence: event.sequence,
 				noticeKind: event.noticeKind ?? "",
 				text: event.noticeMessage ?? "",
+				detail: event.noticeDetail ?? undefined,
 			},
 		];
 		const nextParts = buildMessageParts(reasoningSegments, toolEntries, textSegments, nextNoticeEntries);

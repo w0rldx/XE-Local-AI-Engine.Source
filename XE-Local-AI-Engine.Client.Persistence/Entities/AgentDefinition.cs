@@ -72,6 +72,15 @@ internal sealed record class AgentDefinition
     public bool DisableBaseScaffold { get; set; }
 
     /// <summary>
+    ///     Per-agent opt-out from the send-time tool-relevance filter: with this set, every offered tool is put in front
+    ///     of the model on every round even when the node has the filter enabled and the agent carries more tools than
+    ///     the threshold. Plaintext (structural). Default <c>false</c> (follow the node setting). Non-config-affecting:
+    ///     the filter narrows only the array handed to the provider, never the offer, the resolved prompt or the runtime
+    ///     package's config hash, so toggling it can never invalidate a resume.
+    /// </summary>
+    public bool DisableToolRelevanceFilter { get; set; }
+
+    /// <summary>
     ///     Per-agent default for the temporary-chat (memory write-only-suppression) flag a new conversation inherits.
     ///     Plaintext (structural). Non-config-affecting (exactly like <see cref="PlaybookEnabled" />): it gates post-run
     ///     memory extraction only and must NOT enter the runtime package config hash or bump the agent's own version.

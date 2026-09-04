@@ -2,10 +2,16 @@ namespace XE_Local_AI_Engine.Tests.WorkSessions;
 
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
@@ -404,6 +410,199 @@ public sealed class WorkSessionStepLoopTests
     ///     What an operator does in Node Settings: the stored allow-list replaces the seeded one outright, so the
     ///     session's model is either on it or it is not.
     /// </summary>
+
+    /// <summary>
+    ///     <c>GRAPH-C4-2</c>'s runtime half, at the seam that makes it a rule rather than a snapshot. The development
+    ///     workflow checks a node's effective tool projection before it creates the session — but every step re-resolves
+    ///     the agent definition by id, and that definition is mutable. Edit it between two steps to add a write/execute
+    ///     tool and the next turn would carry it, unchecked, on a node that declared nothing.
+    ///     <para>
+    ///         Refused BEFORE the send, and settled Failed rather than Paused: a paused workflow session is resumed by
+    ///         its owning run, so a pause would loop until the resume budget ran out and blame a budget nothing spent.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task Loop_WhenTheAgentDefinitionGainsAWriteToolBetweenSteps_RefusesTheNextTurnInsteadOfSendingIt()
+    {
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(),
+            ConfigureAdditionalTestServices = WithOfferedWriteTool(WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher))
+        };
+
+        var agentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "tool-capable-model").ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId, agentDefinitionId: agentId).ConfigureAwait(false);
+        await SetAllowListAsync(factory.Services, "tool-capable-model").ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+
+        // Step one is sent because the definition allows nothing that writes; the edit lands while it is in flight.
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], (services, _) => AllowAsync(services, agentId, WriteToolName)));
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>()
+                             .TryStart(sessionId, new WorkSessionRuntimeOverride(ModelProfile: null, ReasoningEffort: null, RefuseUndeclaredWrites: true)));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, fake.Requests.Count, "Only the turn taken before the edit is sent; the widened one never leaves.");
+
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
+        AssertEx.Contains(events,
+            entry => entry.EventType == WorkSessionEventTypes.StepEnded && entry.Outcome == "WriteGate",
+            "The row names the guard that stopped the step, on its own phase so a retried step's real row is not swallowed.");
+        AssertEx.Contains(events,
+            entry => entry.EventType == "SessionStatusChanged"
+                     && entry.Outcome == nameof(AgentWorkSessionStatus.Failed)
+                     && entry.DetailJson?.Contains("GRAPH-C4-2", StringComparison.Ordinal) == true
+                     && entry.DetailJson.Contains(WriteToolName, StringComparison.Ordinal),
+            "The reason names the tool and the invariant, which is what the owning run then blocks its node run with.");
+    }
+
+    /// <summary>
+    ///     The other half of the same bypass: DELETE the definition and the turn resolver keeps the default persona —
+    ///     the embedded prompt and the FULL capability-gated offer — so a node that declared nothing would be handed
+    ///     more than any binding could have given it. Refused, not defaulted.
+    /// </summary>
+    [Test]
+    public async Task Loop_WhenTheAgentDefinitionIsDeletedBetweenSteps_RefusesTheNextTurnRatherThanFallingBackToTheDefaultPersona()
+    {
+        var sessionId = Guid.NewGuid();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(),
+            ConfigureAdditionalTestServices = WithOfferedWriteTool(WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                new RecordingWorkSessionEventPublisher()))
+        };
+
+        var agentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "tool-capable-model").ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId, agentDefinitionId: agentId).ConfigureAwait(false);
+        await SetAllowListAsync(factory.Services, "tool-capable-model").ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], (services, _) => DeleteAgentAsync(services, agentId)));
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>()
+                             .TryStart(sessionId, new WorkSessionRuntimeOverride(ModelProfile: null, ReasoningEffort: null, RefuseUndeclaredWrites: true)));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, fake.Requests.Count);
+        AssertEx.Contains(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false),
+            entry => entry.EventType == "SessionStatusChanged"
+                     && entry.Outcome == nameof(AgentWorkSessionStatus.Failed)
+                     && entry.DetailJson?.Contains("no longer exists", StringComparison.Ordinal) == true
+                     && entry.DetailJson.Contains("GRAPH-C4-2", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///     And with the definition left alone, an armed session's turns are the turns it takes today — same count, same
+    ///     request, same landing. The guard refuses a projection that WIDENED; it does not narrow one that did not.
+    /// </summary>
+    [Test]
+    public async Task Loop_WhenTheAgentDefinitionIsUnchanged_SendsTheArmedSessionsTurnsExactlyAsItDoesToday()
+    {
+        var sessionId = Guid.NewGuid();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(),
+            ConfigureAdditionalTestServices = WithOfferedWriteTool(WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                new RecordingWorkSessionEventPublisher()))
+        };
+
+        var agentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "tool-capable-model").ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId, agentDefinitionId: agentId).ConfigureAwait(false);
+        await SetAllowListAsync(factory.Services, "tool-capable-model").ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted]));
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>()
+                             .TryStart(sessionId, new WorkSessionRuntimeOverride(ModelProfile: null, ReasoningEffort: null, RefuseUndeclaredWrites: true)));
+        var completed = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Completed).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 2, completed.StepCount, "Both scripted turns are sent; the guard costs the session nothing.");
+        AssertEx.Equal(expected: 2, fake.Requests.Count);
+        AssertEx.Empty((await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false))
+                       .Where(static entry => entry.Outcome == "WriteGate")
+                       .ToList());
+    }
+
+    /// <summary>The tool the stubbed offer carries, which the agent's allowed set decides whether to project.</summary>
+    private const string WriteToolName = "write_the_repository";
+
+    /// <summary>
+    ///     A host whose offer really carries a write/execute tool beside the ordinary ones. Stubbed rather than driven
+    ///     off installed models: the offer is capability-gated on the effective model and a test host has none, so the
+    ///     real provider answers with nothing and the guard would be asserted against an empty set.
+    /// </summary>
+    private static Action<IServiceCollection> WithOfferedWriteTool(Action<IServiceCollection> inner) =>
+        services =>
+        {
+            inner(services);
+            AllowedToolDto[] offer =
+            [
+                new()
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "ask_user",
+                    Location = ToolLocation.ClientLocal,
+                    Category = ToolCategory.Orchestration
+                },
+                new()
+                {
+                    Id = Guid.NewGuid(),
+                    Name = WriteToolName,
+                    Location = ToolLocation.ClientLocal,
+                    Category = ToolCategory.WriteExecute
+                }
+            ];
+            var provider = Substitute.For<ILocalToolOfferProvider>();
+            _ = provider.IsToolCapable(Arg.Any<string?>()).Returns(true);
+            _ = provider.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>()).Returns(offer);
+            _ = provider.GetOfferedToolsForProfile(Arg.Any<string?>(), Arg.Any<bool>()).Returns(offer);
+            _ = provider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(offer);
+            _ = provider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(offer);
+            _ = provider.GetKnownToolNames().Returns([.. offer.Select(static tool => tool.Name)]);
+            _ = provider.GetKnownToolNamesAsync(Arg.Any<CancellationToken>()).Returns([.. offer.Select(static tool => tool.Name)]);
+            services.RemoveAll<ILocalToolOfferProvider>();
+            services.AddSingleton(provider);
+        };
+
+    /// <summary>The operator edit the guard exists for: the bound definition gains a tool that writes.</summary>
+    private static async Task AllowAsync(IServiceProvider services, Guid agentDefinitionId, params string[] toolNames)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
+        var definition = AssertEx.NotNull(await store.GetByIdAsync(agentDefinitionId).ConfigureAwait(false));
+        _ = await store.UpdateAsync(agentDefinitionId,
+                           new AgentDefinitionInput(definition.Name,
+                               definition.Description,
+                               definition.Instructions,
+                               definition.ModelProfile,
+                               definition.ReasoningEffort,
+                               definition.Kind,
+                               toolNames,
+                               new Dictionary<string, bool>(StringComparer.Ordinal),
+                               definition.OrchestrationTopologyJson))
+                       .ConfigureAwait(false);
+    }
+
+    /// <summary>The other edit: the binding is deleted, and the turn resolver keeps the default persona.</summary>
+    private static async Task DeleteAgentAsync(IServiceProvider services, Guid agentDefinitionId)
+    {
+        await using var scope = services.CreateAsyncScope();
+        _ = await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>().DeleteAsync(agentDefinitionId).ConfigureAwait(false);
+    }
+
     private static async Task SetAllowListAsync(IServiceProvider services, params string[] models)
     {
         await using var scope = services.CreateAsyncScope();
@@ -592,6 +791,7 @@ public sealed class WorkSessionStepLoopTests
             AssertEx.Equal("qwen3-30b", request.Model);
             AssertEx.Equal("high", request.ReasoningEffort);
             AssertEx.True(request.ReasoningEffortOverridesAgentPin, "the caller's effort is a pin, so it must beat the bound agent's own.");
+            AssertEx.True(request.IsWorkSessionTurn, "every supervised step is a work-session turn, pinned or not.");
         }
     }
 
@@ -618,6 +818,41 @@ public sealed class WorkSessionStepLoopTests
         AssertEx.Null(fake.Requests[0].Model, "an unpinned session resolves its model the way every other send does.");
         AssertEx.Null(fake.Requests[0].ReasoningEffort);
         AssertEx.False(fake.Requests[0].ReasoningEffortOverridesAgentPin);
+        AssertEx.True(fake.Requests[0].IsWorkSessionTurn,
+            "an unpinned session is still a supervised step, so the adaptive-effort swap must stay refused on it.");
+        AssertEx.False(fake.Requests[0].SuppressAskUser,
+            "An operator-driven session keeps ask_user: there is someone attached to the embedded chat to answer it.");
+    }
+
+    [Test]
+    public async Task Loop_WhenTheSessionIsWorkflowOwned_SendsEveryStepWithAskUserSuppressed()
+    {
+        // A workflow node has no operator attached and its embedded chat is read-only, so an ask_user question could
+        // only ever go unanswered — burning the node-wide pending-tool-call age or, sooner, the park guard that pauses
+        // the whole run. The send therefore has to withdraw the tool, and the kind is the only signal that says so.
+        var sessionId = Guid.NewGuid();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                new RecordingWorkSessionEventPublisher())
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId, AgentWorkSessionKind.Workflow).ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantDelta, ChatStreamEventTypes.AssistantCompleted]));
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], DeclareCompleteAsync));
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Completed).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 2, fake.Requests.Count);
+        foreach (var request in fake.Requests)
+        {
+            AssertEx.True(request.SuppressAskUser, "Every step of a workflow-owned session is sent without ask_user, not just the first.");
+        }
     }
 
     private static FakeNodeChatStreamService ResolveStream(TestServerWebAppFactory factory, ref FakeNodeChatStreamService? stream)

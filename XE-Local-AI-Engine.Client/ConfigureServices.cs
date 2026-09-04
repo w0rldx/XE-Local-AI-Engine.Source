@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -533,9 +534,17 @@ public static class ConfigureServices
                 context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
                 context.HttpContext.Response.ContentType = "application/json";
                 context.HttpContext.Response.Headers["Retry-After"] = "60";
+
+                // OnRejected is SHARED by every policy above, so the body has to name the policy that actually
+                // rejected. Only AuthPolicy throttles sign-in attempts; telling an integrator whose invoke hit the
+                // coarse per-IP ceiling that it made "too many auth attempts" sends it to rotate a credential that was
+                // never the problem. The neutral sentence is the one the SPA already renders for a 429.
+                var policyName = context.HttpContext.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName;
                 await context.HttpContext.Response.WriteAsJsonAsync(new
                 {
-                    message = "Too many auth attempts. Please try again later."
+                    message = string.Equals(policyName, NodeAuthRateLimits.AuthPolicy, StringComparison.Ordinal)
+                        ? "Too many auth attempts. Please try again later."
+                        : "Too many requests. Please try again later."
                 }, cancellationToken).ConfigureAwait(false);
             };
         });

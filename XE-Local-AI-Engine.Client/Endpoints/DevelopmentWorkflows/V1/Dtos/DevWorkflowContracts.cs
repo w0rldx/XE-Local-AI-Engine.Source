@@ -208,7 +208,15 @@ public sealed class DevWorkflowArtifactRequest
 // with. There is no edge table anywhere: this shape is composed from the encrypted graph blob on the definition row or
 // the run row, which is the single source of routing truth.
 
-public sealed record DevWorkflowGraph(int SchemaVersion, IReadOnlyList<DevWorkflowGraphNode> Nodes, IReadOnlyList<DevWorkflowGraphEdge> Edges)
+public sealed record DevWorkflowGraph(int SchemaVersion,
+    IReadOnlyList<DevWorkflowGraphNode> Nodes,
+    IReadOnlyList<DevWorkflowGraphEdge> Edges,
+    /// <summary>
+    ///     The template's own waiver of the rule that a node writing outside its sandbox is reached through a human
+    ///     gate. Absent means <c>false</c>: the rule is new, so nothing already stored can be relying on the waiver, and
+    ///     a definition written before this field keeps every byte it had.
+    /// </summary>
+    bool? AllowUngatedWrites = null)
 {
     public static DevWorkflowGraph Empty { get; } = new(1, [], []);
 }
@@ -238,6 +246,12 @@ public sealed record DevWorkflowGraphNode(
     DevWorkflowMaterialization? Materialization,
     IReadOnlyDictionary<string, string>? RequiredCapabilities,
     string? ToolMode,
+    /// <summary>
+    ///     How many times this node's fix loop may re-run before the run stops and asks a human. Only meaningful beside
+    ///     a <c>RetryTarget</c>, and refused without one. Absent means no per-loop cap at all — the run-wide attempt
+    ///     budget is what bounds it then, exactly as it does today.
+    /// </summary>
+    int? MaxLoopIterations,
     /// <summary>
     ///     Whether this node belongs to a materialization template subtree — a clone-in-waiting the run gives no node
     ///     run to. DERIVED on the way out from the runtime's own parser, never authored and never stored: the save path
@@ -338,7 +352,50 @@ public sealed record DevWorkflowRunResponse(
     long? StartedAtUtc,
     long? CompletedAtUtc,
     long Version,
-    long LastSequence);
+    long LastSequence,
+
+    /// <summary>
+    ///     The run's cost, summed over the node runs already on this response. A LOWER bound by construction: it is the
+    ///     final attempt of each node, so a run that retried spent more. The runbook's total is this plus the run's
+    ///     <c>node.retry.scheduled</c> details.
+    /// </summary>
+    DevWorkflowRunCostResponse Cost);
+
+/// <summary>
+///     Where one terminal node run routed, parsed off the node run's own <c>route_json</c>.
+/// </summary>
+/// <param name="Satisfied">
+///     The out-edges whose condition fired. This means "the edge was satisfied", NEVER "the successor ran": admission
+///     is a question about a target's INBOUND edges, so an <c>All</c> join can still skip on a dead sibling edge and an
+///     <c>Any</c> join can admit on one. For a human gate, the node's own output document is authoritative.
+/// </param>
+/// <param name="Dead">The out-edges whose condition did not fire.</param>
+/// <param name="Waived">
+///     The out-edges of a node run whose SKIP the state machine waived — an operator's own skip rather than one that
+///     cascaded off something dead. Its own bucket because neither of the others is true of it: a waived edge does not
+///     admit an <c>Any</c> successor the way a satisfied one does, and it does not kill an <c>All</c> one the way a
+///     dead one does. Empty on a row written before this bucket existed, which is also what it means.
+/// </param>
+/// <param name="GateAnswer">The decision a human gate settled on; null on every other node type.</param>
+/// <param name="Truncated">
+///     Whether keys were dropped to keep the stored document inside its column bound. A truncated route must be shown
+///     as truncated, or a short list reads as the whole one.
+/// </param>
+public sealed record DevWorkflowNodeRouteResponse(IReadOnlyList<string> Satisfied,
+    IReadOnlyList<string> Dead,
+    IReadOnlyList<string> Waived,
+    string? GateAnswer,
+    bool Truncated);
+
+/// <summary>
+///     A run's headline spend, summed over its node runs' final attempts. Every member is null until some node run
+///     reports one, because "nobody measured" and "zero" are different answers.
+/// </summary>
+public sealed record DevWorkflowRunCostResponse(long? InputTokens,
+    long? OutputTokens,
+    int? ToolCalls,
+    int? ProviderCalls,
+    long? AgentTurnMs);
 
 public sealed record DevWorkflowRunSummaryResponse(
     Guid Id,
@@ -395,6 +452,16 @@ public sealed record DevWorkflowNodeRunSummaryResponse(
     long? CompletedAtUtc,
     long Sequence,
     /// <summary>
+    ///     How many attempts an operator has bought this node run. A human retry is allowed AT the cap and raises
+    ///     <see cref="MaxAttempts" /> by one in place, so the cap the DEFINITION declared is
+    ///     <c>maxAttempts - operatorRetries</c>, and a client that shows the raw pair says "attempt 4 of 4" for a node
+    ///     whose definition allows three. Measured server-side as the distance <c>maxAttempts</c> has travelled from
+    ///     the cap the run's pinned graph declares — the widening is its own record — so a Retry that was recorded but
+    ///     never spent, and one from before widening existed, both count nothing. Zero when the pinned graph cannot be
+    ///     parsed.
+    /// </summary>
+    int OperatorRetries,
+    /// <summary>
     ///     For a <c>Skipped</c> row only: whether the state machine WAIVES this skip, so a downstream <c>All</c> join
     ///     carries on past it as long as a sibling arrived. <c>false</c> means the skip is dead and the join will skip
     ///     with it; <c>null</c> means the question does not apply — any other status — or that the pinned graph could
@@ -408,7 +475,23 @@ public sealed record DevWorkflowNodeRunSummaryResponse(
     ///         stops the two from drifting.
     ///     </para>
     /// </summary>
-    bool? SkipWaived);
+    bool? SkipWaived,
+    /// <summary>
+    ///     What the node run's LAST attempt cost, three headline numbers of the twelve the drill-down carries. Null on
+    ///     a row with nothing to report — a structural node, a row written before this was collected, or a collection
+    ///     that could not run — which is not the same as zero. Earlier attempts live on the run's
+    ///     <c>node.retry.scheduled</c> events, never here.
+    /// </summary>
+    long? InputTokens,
+    long? OutputTokens,
+    int? ToolCalls,
+    /// <summary>
+    ///     The row is a <c>Succeeded</c> check that had nothing to check — the verdict a zero-task decomposition seeds
+    ///     onto its template's validations (D12). Carried on the SUMMARY rather than left to the drill-down because the
+    ///     run header counts these rows and the node table renders them: without it a run that decomposed into no work
+    ///     reports its template check as completed work, which is the one thing that row does not stand for.
+    /// </summary>
+    bool ValidationNotApplicable);
 
 /// <summary>
 ///     The drill-down. <see cref="WorkSessionId" /> is the whole of the agent view: it links out to the EXISTING
@@ -447,9 +530,71 @@ public sealed record DevWorkflowNodeRunDetailResponse(
     string? FailureClass,
     string? TerminalReason,
     IReadOnlyList<DevWorkflowDecisionResponse> Decisions,
+    /// <summary>
+    ///     How many attempts an operator has bought this node run. A human retry is allowed AT the cap and raises
+    ///     <see cref="MaxAttempts" /> by one in place, so the cap the DEFINITION declared is
+    ///     <c>maxAttempts - operatorRetries</c>, and a client that shows the raw pair says "attempt 4 of 4" for a node
+    ///     whose definition allows three. Measured server-side as the distance <c>maxAttempts</c> has travelled from
+    ///     the cap the run's pinned graph declares — the widening is its own record — so a Retry that was recorded but
+    ///     never spent, and one from before widening existed, both count nothing. Zero when the pinned graph cannot be
+    ///     parsed.
+    /// </summary>
+    int OperatorRetries,
     long? StartedAtUtc,
     long? CompletedAtUtc,
-    long Sequence);
+    long Sequence,
+
+    /// <summary>
+    ///     What this node run's LAST attempt spent on the provider. Null means nobody reported it, never zero: the
+    ///     columns are cleared by the <c>Pending</c> reset a re-attempt writes, so earlier attempts are on the run's
+    ///     <c>node.retry.scheduled</c> events and a total is <c>this + those</c>.
+    /// </summary>
+    long? InputTokens,
+    long? OutputTokens,
+    long? ReasoningTokens,
+
+    /// <summary>A character-profile estimate the agent loop made. Quote it only where <see cref="InputTokens" /> is null.</summary>
+    long? EstimatedInputTokens,
+    int? ProviderCalls,
+    int? ToolCalls,
+
+    /// <summary>Schema tokens SHIPPED across rounds, which is a cost, not the size of the schema.</summary>
+    long? ToolSchemaTokens,
+
+    /// <summary>
+    ///     The distinct tools this node run's session called, names only and capped. A last element of <c>"…"</c> is a
+    ///     truncation marker rather than a tool. Null means there were no work-session step rows to read — a DevTask,
+    ///     Tool, Gate, Parallel or Join row — and never "this node called no tools", which is what
+    ///     <see cref="ToolCalls" /> answers.
+    /// </summary>
+    IReadOnlyList<string>? ToolNames,
+
+    /// <summary>
+    ///     Wall-clock time inside the agent's chat turns, tool loop included — the envelope measures a whole run, and
+    ///     no provider-round-only duration is persisted anywhere this collector can read. So the node's runtime minus
+    ///     this is time spent OUTSIDE the turns, which is not the same thing as tool time and must never be labelled
+    ///     as it.
+    /// </summary>
+    long? AgentTurnMs,
+
+    /// <summary>
+    ///     The model that actually served the last turn — the receipt, as opposed to <see cref="ModelLabel" />, which
+    ///     is what the node or its agent ASKED for. Both are present because they can differ.
+    /// </summary>
+    string? ServedModelName,
+
+    /// <summary>Where a terminal node run routed. Null while it has not finished, because it has routed nowhere yet.</summary>
+    DevWorkflowNodeRouteResponse? Route,
+
+    /// <summary>How many steps the node run's work session took. Zero is a measurement; null is an absence.</summary>
+    int? WorkSessionSteps,
+
+    /// <summary>
+    ///     <see cref="FailureClass" /> projected onto the ONE cross-unit vocabulary
+    ///     (<c>AgentUnitFailureClass</c>), so a workflow node run, a chat run envelope and a Development attempt can be
+    ///     grouped together in a report. Null exactly when the row records no failure. Nothing routes on it.
+    /// </summary>
+    string? FailureClassGroup);
 
 /// <summary>
 ///     Which rule text actually applied, by content hash. Names the document without copying its body, so the audit

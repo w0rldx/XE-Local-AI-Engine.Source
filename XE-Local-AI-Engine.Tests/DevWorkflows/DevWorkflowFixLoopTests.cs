@@ -285,4 +285,94 @@ public sealed class DevWorkflowFixLoopTests
         AssertEx.Empty((await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Where(static entry => entry.EventType == "node.retry.routed"));
         AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked, (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status);
     }
+
+    /// <summary>
+    ///     <c>GRAPH-C4-4</c>: a fix loop the definition bounded stops when its own cap is spent, not when the run-wide
+    ///     budget runs out. The first failure routes; the second is refused, and the target is left where it was.
+    /// </summary>
+    [Test]
+    public async Task AFixLoopBoundedByItsDefinitionBlocksWhenTheCapIsSpent()
+    {
+        await using var harness = new DevWorkflowHarness();
+        harness.Tools.Answer("lint", FakeDevWorkflowToolCommands.Passing(), FakeDevWorkflowToolCommands.Passing());
+        harness.Tools.Answer("test", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Failing());
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FanOutFixLoopBounded, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Attempt, "the first failure routes: one re-run is what the cap allows.");
+
+        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var failing = await harness.ReadNodeRunAsync(runId, "test").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, failing.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, failing.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(failing.TerminalReason), "fix loop has been re-run 1 time, which is as many as it allows");
+        AssertEx.Equal(expected: 2,
+            (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Attempt,
+            "and the target is left exactly where the one allowed re-run left it, with attempts of its own to spare.");
+    }
+
+    /// <summary>
+    ///     An operator's <c>Retry</c> raises the same attempt counter the cap is derived from, and it is bounded by the
+    ///     run-wide budget rather than by this. So it is subtracted: a person's decision must not spend a loop the
+    ///     definition gave the machine.
+    /// </summary>
+    [Test]
+    public async Task AnOperatorRetryDoesNotCountTowardTheFixLoopCap()
+    {
+        await using var harness = new DevWorkflowHarness();
+        harness.Tools.Answer("lint", FakeDevWorkflowToolCommands.Passing(), FakeDevWorkflowToolCommands.Passing(), FakeDevWorkflowToolCommands.Passing());
+        harness.Tools.Answer("test",
+            FakeDevWorkflowToolCommands.Failing(),
+            FakeDevWorkflowToolCommands.Failing(),
+            FakeDevWorkflowToolCommands.Failing());
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FanOutFixLoopBounded, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        await harness.DecideAsync(runId, "test", DevWorkflowDecisionKind.Retry).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var failing = await harness.ReadNodeRunAsync(runId, "test").ConfigureAwait(false);
+        AssertEx.Equal(expected: 3, failing.Attempt, "the person's retry really did spend an attempt on the row.");
+        AssertEx.Contains(AssertEx.NotNull(failing.TerminalReason),
+            "fix loop has been re-run 1 time",
+            message: "and the count is still ONE: the loop ran once, and the operator's attempt is not one of its iterations.");
+    }
+
+    /// <summary>
+    ///     The byte-identical default: a definition naming no cap keeps today's accounting, where only the target's own
+    ///     attempts and the run-wide budget bound the loop (ruling D9).
+    /// </summary>
+    [Test]
+    public async Task AFixLoopWithNoCapKeepsTodaysAccounting()
+    {
+        await using var harness = new DevWorkflowHarness();
+        harness.Tools.Answer("lint", FakeDevWorkflowToolCommands.Passing(), FakeDevWorkflowToolCommands.Passing());
+        harness.Tools.Answer("test", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Failing());
+        var runId = await harness.StartRunAsync(Uncapped(), developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 3,
+            (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Attempt,
+            "the second failure routes as well, exactly as it did before this rule existed.");
+        AssertEx.Equal(expected: 2,
+            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "node.retry.routed"));
+    }
+
+    /// <summary>The same graph with its per-loop cap taken off, so the two accountings are compared on one shape.</summary>
+    private static string Uncapped() =>
+        DevWorkflowGraphs.FanOutFixLoopBounded.Replace(", \"maxLoopIterations\": 1", string.Empty, StringComparison.Ordinal);
 }

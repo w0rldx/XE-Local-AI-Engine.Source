@@ -40,7 +40,8 @@ public sealed record BenchmarkComparisonRecord(
     long EnqueuedAtUtc,
     long? StartedAtUtc,
     long? CompletedAtUtc,
-    long Version);
+    long Version,
+    BenchmarkRunLaunchIntent? LaunchIntent = null);
 
 /// <summary>The whole pairwise picture of one project at one consistent moment.</summary>
 /// <param name="PolicyRevisionId">Null when judging is off — there is no cohort to pair inside.</param>

@@ -58,6 +58,7 @@ const emptyFormValues: AgentDefinitionFormValues = {
 	// Extraction defaults ON (matches the backend default) so opting into memory learns from runs unless turned off.
 	memoryExtractionEnabled: true,
 	disableBaseScaffold: false,
+	disableToolRelevanceFilter: false,
 	generationMetadata: null,
 };
 
@@ -78,6 +79,7 @@ function toFormValues(definition: AgentDefinition): AgentDefinitionFormValues {
 		defaultTemporaryChat: definition.defaultTemporaryChat,
 		memoryExtractionEnabled: definition.memoryExtractionEnabled,
 		disableBaseScaffold: definition.disableBaseScaffold,
+		disableToolRelevanceFilter: definition.disableToolRelevanceFilter,
 		// An edit starts with no applied draft; a null block preserves whatever provenance the row already carries.
 		generationMetadata: null,
 	};

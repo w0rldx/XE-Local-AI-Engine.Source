@@ -83,4 +83,38 @@ public sealed class DevWorkflowGraphContractTests
 
         AssertEx.Contains(refusal.Message, "'nodeType'");
     }
+
+    /// <summary>
+    ///     The editor's badge row, answered by the parser. The invariants refuse a save on these effects, so an editor
+    ///     computing its own set would show badges that disagree with the 400 the operator gets — which is the drift
+    ///     this class exists to prevent.
+    /// </summary>
+    [Test]
+    public void EffectsOf_AnswersWhatEachNodeCanChange()
+    {
+        const string Declared = """
+                                {"schemaVersion":1,"allowUngatedWrites":true,
+                                 "nodes":[{"nodeKey":"research","nodeType":"Agent"},
+                                          {"nodeKey":"release","nodeType":"Agent","requiredCapabilities":{"WriteExecute":"runs the release script"}},
+                                          {"nodeKey":"check","nodeType":"Tool","validationCommandIds":["git_status"]},
+                                          {"nodeKey":"approval","nodeType":"HumanGate"}],
+                                 "edges":[{"from":"research","to":"release"},{"from":"release","to":"check"},{"from":"check","to":"approval"}]}
+                                """;
+
+        var effects = DevWorkflowGraphContract.EffectsOf(Declared);
+
+        AssertEx.Empty(effects["research"], "an agent that declares nothing carries nothing.");
+        AssertEx.Equal("WriteExecute", string.Join(", ", effects["release"]));
+        AssertEx.Equal("ReadLocal", string.Join(", ", effects["check"]));
+        AssertEx.Empty(effects["approval"], "a gate routes; it does not act.");
+    }
+
+    /// <summary>
+    ///     Empty for a graph nothing could route, exactly as <see cref="DevWorkflowGraphContract.TemplateNodeKeys" />
+    ///     is and for the same reason: this is a read path, and the run whose pinned graph is unroutable is the one an
+    ///     operator most needs to be able to open.
+    /// </summary>
+    [Test]
+    public void EffectsOf_AnswersEmptyForAGraphNothingCouldRoute() =>
+        AssertEx.Empty(DevWorkflowGraphContract.EffectsOf("""{"schemaVersion":1,"nodes":[{"nodeKey":"a","nodeType":"Nonsense"}],"edges":[]}"""));
 }

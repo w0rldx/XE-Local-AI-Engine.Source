@@ -162,6 +162,28 @@ describe("DevWorkflowGraphView", () => {
 		expect(screen.getByTestId("dev-workflow-graph-node-attempt-node-research").textContent).toBe("attempt 3 of 3");
 	});
 
+	it("carries the operator-retry count onto the card, so the canvas names the declared cap too", () => {
+		renderWithProviders(
+			<DevWorkflowGraphView
+				run={chainRun([
+					devWorkflowNodeRunSummary({
+						id: "node-research",
+						nodeKey: "research",
+						status: "Blocked",
+						attempt: 4,
+						maxAttempts: 4,
+						operatorRetries: 1,
+					}),
+				])}
+				onSelect={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByTestId("dev-workflow-graph-node-attempt-node-research").textContent).toBe(
+			"attempt 4 of 4 (cap 3, +1 from an operator retry)",
+		);
+	});
+
 	it("says which part of a decomposition a generated card is, and stays quiet about a group of one", () => {
 		renderWithProviders(
 			<DevWorkflowGraphView

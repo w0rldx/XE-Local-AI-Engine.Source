@@ -7,11 +7,18 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     One session as both surfaces render it: the operator's admin list and detail, and the integrator's own
 ///     principal-scoped status read. <see cref="TriggerName" /> rides along because it is the name the integrator
 ///     addresses — an id would make the external body unusable without a second lookup the caller cannot make.
+///     <para>
+///         <see cref="PrincipalId" /> is the OWNING INTEGRATOR, and it is projected onto the operator surface only.
+///         The external status route renders its own <c>IntegrationSessionStatusResponse</c> and deliberately does not
+///         carry it: a caller already knows which principal it authenticated as, and the masking rules on that route
+///         answer every foreign session identically.
+///     </para>
 /// </summary>
 public sealed record IntegrationSessionDto(
     Guid Id,
     Guid TriggerId,
     string TriggerName,
+    Guid PrincipalId,
     Guid AgentDefinitionId,
     IntegrationSessionStatus Status,
     long CreatedAtUtc,

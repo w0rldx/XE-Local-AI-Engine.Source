@@ -5,19 +5,20 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Deterministic i18n: t returns the supplied default string (or a {{var}}-interpolated defaultValue from the options
-// object form) so labels and the hidden-count note are readable in assertions.
+// Deterministic i18n: t returns the supplied default string with its {{var}} placeholders filled from whichever
+// argument carries them — t(key, defaultValue, params), t(key, { defaultValue, ...params }) or t(key, defaultValue).
+// Interpolating all three forms is what lets an assertion read the value a cell actually shows rather than a template.
+interface TranslationOptions {
+	defaultValue?: string;
+	[param: string]: unknown;
+}
+
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
-		t: (key: string, fallbackOrOptions?: string | { defaultValue?: string; [param: string]: unknown }) => {
-			if (typeof fallbackOrOptions === "string") {
-				return fallbackOrOptions;
-			}
-			if (fallbackOrOptions && typeof fallbackOrOptions === "object") {
-				const template = fallbackOrOptions.defaultValue ?? key;
-				return template.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(fallbackOrOptions[name] ?? ""));
-			}
-			return key;
+		t: (key: string, fallbackOrOptions?: string | TranslationOptions, maybeOptions?: TranslationOptions) => {
+			const template = typeof fallbackOrOptions === "string" ? fallbackOrOptions : (fallbackOrOptions?.defaultValue ?? key);
+			const params = typeof fallbackOrOptions === "string" ? maybeOptions : fallbackOrOptions;
+			return template.replace(/\{\{(\w+)\}\}/g, (match, name: string) => (params && name in params ? String(params[name]) : match));
 		},
 	}),
 }));
@@ -55,6 +56,9 @@ function makeRecommendation(overrides: Partial<ModelFitRecommendation>): ModelFi
 		kvQuantHeadroomGb: null,
 		kvQuantFits: null,
 		kvQuantRequiresFlashAttention: null,
+		kvBytesPerToken: null,
+		kvBytesPerTokenQuant: null,
+		attentionArch: null,
 		...overrides,
 	};
 }
@@ -347,6 +351,44 @@ describe("RecommendationTable", () => {
 		renderTable(<RecommendationTable recommendations={[noAdvisory]} />);
 
 		expect(screen.queryByTestId("model-fit-kv-quant-hint-1")).toBeNull();
+	});
+
+	it("shows the KV-per-token line with the attention tag when both the figure and its quant are present", () => {
+		const withPerToken = makeRecommendation({
+			rank: 1,
+			kvBytesPerToken: 640,
+			kvBytesPerTokenQuant: "Q8_0",
+			attentionArch: "mla",
+		});
+
+		renderTable(<RecommendationTable recommendations={[withPerToken]} />);
+
+		// 640 B/token is 0.6 KB: the line reports KB, and the quant it was computed with, lower-cased.
+		expect(screen.getByTestId("model-fit-kv-per-token-1").textContent).toBe("MLA \u00b7 0.6 KB/token (q8_0 KV)");
+	});
+
+	it("renders the KV-per-token line without an arch tag when the row carries no attention tag", () => {
+		const noArch = makeRecommendation({ rank: 1, kvBytesPerToken: 640, kvBytesPerTokenQuant: "Q8_0", attentionArch: null });
+
+		renderTable(<RecommendationTable recommendations={[noArch]} />);
+
+		// No tag means no separator either: the line starts at the figure rather than with a dangling middle dot.
+		expect(screen.getByTestId("model-fit-kv-per-token-1").textContent).toBe("0.6 KB/token (q8_0 KV)");
+	});
+
+	it("withholds the KV-per-token line when the figure has no quant label", () => {
+		// Half a fact is worse than none: an unlabelled KV byte count is ambiguous by a factor of two.
+		const unlabelled = makeRecommendation({ rank: 1, kvBytesPerToken: 640, kvBytesPerTokenQuant: null });
+
+		renderTable(<RecommendationTable recommendations={[unlabelled]} />);
+
+		expect(screen.queryByTestId("model-fit-kv-per-token-1")).toBeNull();
+	});
+
+	it("renders no KV-per-token line for a row that predates the field", () => {
+		renderTable(<RecommendationTable recommendations={[makeRecommendation({ rank: 1 })]} />);
+
+		expect(screen.queryByTestId("model-fit-kv-per-token-1")).toBeNull();
 	});
 
 	it("renders an explore-section row (all new fields null/false) without crashing", () => {

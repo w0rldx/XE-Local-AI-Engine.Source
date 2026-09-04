@@ -473,7 +473,7 @@ import type {
 	CancelImageModelDownloadData,
 	CancelImageModelDownloadResponse,
 	CancelIntegrationExecutionData,
-	CancelIntegrationExecutionResponse,
+	CancelIntegrationExecutionError,
 	CancelLlamaCppSourceBuildData,
 	CancelLlamaCppSourceBuildResponse,
 	CancelNodeBindingData,
@@ -5950,10 +5950,10 @@ export const getInvocationMonitorOptions = (options?: Options<GetInvocationMonit
 
 export const cancelIntegrationExecutionMutation = (
 	options?: Partial<Options<CancelIntegrationExecutionData>>,
-): UseMutationOptions<CancelIntegrationExecutionResponse, AxiosError<DefaultError>, Options<CancelIntegrationExecutionData>> => {
+): UseMutationOptions<unknown, AxiosError<CancelIntegrationExecutionError>, Options<CancelIntegrationExecutionData>> => {
 	const mutationOptions: UseMutationOptions<
-		CancelIntegrationExecutionResponse,
-		AxiosError<DefaultError>,
+		unknown,
+		AxiosError<CancelIntegrationExecutionError>,
 		Options<CancelIntegrationExecutionData>
 	> = {
 		mutationFn: async (fnOptions) => {

@@ -82,9 +82,13 @@ export interface NodeChatStreamEventDto {
 	isError?: boolean | null;
 	// Notice fields: present on the `assistant-notice` event only. `noticeKind` is one of "ModelSubstituted" |
 	// "ToolDisabled" | "HistoryTruncated" | "AttachmentsWithheld"; unknown kinds render via the generic fallback.
-	// `noticeMessage` is the sanitized, user-facing sentence to display verbatim.
+	// `noticeMessage` is the sanitized, user-facing sentence to display verbatim. `noticeDetail` is the notice's
+	// optional structured detail beside that prose — a stable machine code or short identifier naming WHY it fired
+	// (the kebab-case dispatch reason for "EffortDispatched", the effective model for the withheld kinds). Rendered
+	// as-is, never translated, and absent on notices that carry none.
 	noticeKind?: string | null;
 	noticeMessage?: string | null;
+	noticeDetail?: string | null;
 	// Runtime phase: present on the `assistant-phase` event only. One of "preparing_runtime" |
 	// "loading_model" | "generating" — emitted before the first token while a local model cold-loads, so the UI can
 	// show a distinct "Loading model…" indicator instead of the generic typing dots. Absent for cloud/Ollama turns.

@@ -210,6 +210,35 @@ public sealed class BenchmarkJudgeExecutorTests
     }
 
     [Test]
+    public async Task Execute_ForAnAttemptFrozenUnderAnOlderIdentityScheme_FailsWithTheSupersededReason()
+    {
+        // D14: the attempt froze its intended identity at enqueue and would write its effective identity now, so a
+        // scheme change between the two leaves hashes that cannot be compared. Fail before anything launches.
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed, launchIdentityScheme: null);
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        string? failureMessage = null;
+        store.MarkJudgeFailedAsync(run.Id, 2, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Failed, call.ArgAt<string>(2)),
+                 Version = 5
+             });
+        var runner = Substitute.For<IInvocationRunner>();
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow),
+            Substitute.For<IWorkerEventDispatcher>(), runner);
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run, AttemptId), CancellationToken.None);
+
+        AssertEx.Contains(AssertEx.NotNull(failureMessage), BenchmarkLaunchIdentityScheme.SupersededReason);
+        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
+    }
+
+    [Test]
     public async Task Execute_WhenCapacityRejects_FailsOnlyJudgeWithoutDispatcherOrGeneration()
     {
         var installed = Installed();
@@ -796,13 +825,16 @@ public sealed class BenchmarkJudgeExecutorTests
         InstalledModelSnapshot installed,
         string? kvCacheType = null,
         int? promptVersion = null,
-        BenchmarkJudgeRubricV1? rubric = null)
+        BenchmarkJudgeRubricV1? rubric = null,
+        int? launchIdentityScheme = LlamaServerLaunchProjection.IdentitySchemeVersion)
     {
-        store.GetJudgeAttemptAsync(AttemptId, Arg.Any<CancellationToken>()).Returns(Attempt(installed, kvCacheType));
+        store.GetJudgeAttemptAsync(AttemptId, Arg.Any<CancellationToken>()).Returns(Attempt(installed, kvCacheType, launchIdentityScheme));
         store.GetJudgePolicyRevisionAsync(RevisionId, Arg.Any<CancellationToken>()).Returns(Revision(promptVersion, rubric));
     }
 
-    private static BenchmarkJudgeAttemptRecord Attempt(InstalledModelSnapshot installed, string? kvCacheType = null) =>
+    private static BenchmarkJudgeAttemptRecord Attempt(InstalledModelSnapshot installed,
+        string? kvCacheType = null,
+        int? launchIdentityScheme = LlamaServerLaunchProjection.IdentitySchemeVersion) =>
         new(AttemptId,
             Guid.NewGuid(),
             1,
@@ -823,7 +855,7 @@ public sealed class BenchmarkJudgeExecutorTests
             null,
             1,
             new BenchmarkRunLaunchIntent("cpu", BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, "cpu-variant",
-                LlamaServerLaunchProjection.FlashAttentionAuto, "intended", null));
+                LlamaServerLaunchProjection.FlashAttentionAuto, "intended", null, launchIdentityScheme));
 
     private static BenchmarkJudgePolicyRevisionRecord Revision(int? promptVersion = null, BenchmarkJudgeRubricV1? rubric = null) =>
         new(RevisionId, Guid.NewGuid(), 1, BenchmarkJudgeSerialization.SerializePolicy(Policy(promptVersion, rubric)), PolicyHash, null, 1, 1);

@@ -354,6 +354,72 @@ public sealed class DevWorkflowStoreTests
         AssertEx.Equal("Original request", updated.Request, "A PATCH that named only the title may not rewrite the request.");
     }
 
+    /// <summary>
+    ///     T5: a re-attempt empties every cost column, exactly as it empties the timestamps and the failure fields. The
+    ///     columns describe one attempt, so carrying them forward would make the next attempt report the previous one's
+    ///     spend — the earlier attempt's numbers live on its <c>node.retry.scheduled</c> event instead.
+    /// </summary>
+    [Test]
+    public async Task Reattempt_ClearsTelemetry()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var nodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "research", seed.RunVersion).ConfigureAwait(false);
+
+        var failed = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                    nodeRunId,
+                                    version,
+                                    DevWorkflowNodeRunStatus.Failed,
+                                    FailureClass: "ProviderError",
+                                    TerminalReason: "The provider refused the round.",
+                                    Telemetry: new DevWorkflowNodeTelemetry(InputTokens: 1_200,
+                                        OutputTokens: 340,
+                                        ReasoningTokens: 90,
+                                        EstimatedInputTokens: 1_500,
+                                        ProviderCalls: 4,
+                                        ToolCalls: 3,
+                                        ToolSchemaTokens: 800,
+                                        ToolNamesJson: """["read_document","search_web"]""",
+                                        AgentTurnMs: 9_100,
+                                        ServedModelName: "qwen3-27b",
+                                        RouteJson: """{"satisfied":[],"dead":["review"],"gateAnswer":null,"truncated":false}""",
+                                        WorkSessionSteps: 6)))
+                                .ConfigureAwait(false);
+
+        var settled = await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1_200L, settled.InputTokens, "A terminal transition carrying telemetry writes it.");
+        AssertEx.Equal("qwen3-27b", settled.ServedModelName, "The served model is what the provider answered with, written beside the counts.");
+
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                              nodeRunId,
+                              failed.Version,
+                              DevWorkflowNodeRunStatus.Pending,
+                              DetailJson: """{"attempt":1,"failureClass":"ProviderError"}""",
+                              IncrementAttempt: true,
+                              ClearWorkSession: true))
+                          .ConfigureAwait(false);
+
+        var reset = await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false);
+        const string Because = "A re-attempt starts from a clean slate, and the cost columns are part of it.";
+        AssertEx.Equal(expected: 2, reset.Attempt, "The re-attempt is the same row with a higher attempt number.");
+        AssertEx.Null(reset.InputTokens, Because);
+        AssertEx.Null(reset.OutputTokens, Because);
+        AssertEx.Null(reset.ReasoningTokens, Because);
+        AssertEx.Null(reset.EstimatedInputTokens, Because);
+        AssertEx.Null(reset.ProviderCalls, Because);
+        AssertEx.Null(reset.ToolCalls, Because);
+        AssertEx.Null(reset.ToolSchemaTokens, Because);
+        AssertEx.Null(reset.ToolNamesJson, Because);
+        AssertEx.Null(reset.AgentTurnMs, Because);
+        AssertEx.Null(reset.ServedModelName, Because);
+        AssertEx.Null(reset.RouteJson, Because);
+        AssertEx.Null(reset.WorkSessionSteps, Because);
+    }
+
     /// <summary>Performs one competing write, on its own connection, inside the first save it intercepts.</summary>
     private sealed class CompetingWriteInterceptor(Func<Task> write) : SaveChangesInterceptor
     {

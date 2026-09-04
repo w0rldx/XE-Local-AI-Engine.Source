@@ -101,6 +101,7 @@ const sampleDefinition: AgentDefinition = {
 	defaultTemporaryChat: false,
 	memoryExtractionEnabled: true,
 	disableBaseScaffold: false,
+	disableToolRelevanceFilter: false,
 	version: 1,
 	createdAtUtc: 1000,
 	updatedAtUtc: 2000,

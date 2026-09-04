@@ -46,6 +46,8 @@ export interface DevWorkflowCanvasNodeData extends Record<string, unknown> {
 	readonly startedAtUtc?: number;
 	readonly attempt: number;
 	readonly maxAttempts: number;
+	/** How many of `maxAttempts` an operator's Retry granted (FU2-3). Absent on a definition render. */
+	readonly operatorRetries?: number;
 	readonly agentDisplayName?: string;
 	readonly modelLabel?: string;
 	/**
@@ -151,6 +153,7 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 			startedAtUtc: optional(node.startedAtUtc),
 			attempt: node.attempt ?? 1,
 			maxAttempts: node.maxAttempts ?? 1,
+			operatorRetries: optional(node.operatorRetries),
 			agentDisplayName: optional(node.agentDisplayName),
 			modelLabel: optional(node.modelLabel),
 			isApplyTool: applyToolKeys.has(node.nodeKey ?? ""),

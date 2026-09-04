@@ -5,7 +5,7 @@
 // offers a reload instead of a save that would discard someone else's work, and a graph the server would refuse never
 // leaves the browser.
 
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -21,31 +21,56 @@ import { setupMswServer } from "@/test/UseMswServer";
 const definitionId = devWorkflowTestIds.definition;
 
 /**
- * research → plan, joined by a materialization whose template is `implement`. `plan` carries the three fields the form
- * must round-trip untouched; `toolMode` sits on a Tool node because that is the only node type the server allows it on.
- * The shape validates clean, which is what lets every save assertion below actually reach the wire.
+ * `feature-development-v1`'s tail, small enough to assert on: one Agent that decomposes into a `implement → validate`
+ * template subtree handed back at `join`, then a human gate and the apply behind it.
+ *
+ * Every field the form round-trips untouched is on a node the form shows no control for — `modelProfile` and
+ * `reasoningEffort` on the Tool node, `toolMode` on the apply, `materialization` on the decomposition — and the ONE
+ * Agent node is index 0, so the per-node model and effort pickers exist exactly once.
+ *
+ * The shape validates clean against the SERVER, which is what lets every save assertion below actually reach the wire:
+ * the declared capability is `Network` (no gate required), the apply is reached from a human gate carrying only the
+ * approval and from a Tool node in Validate mode, and the materialization joins DOWNSTREAM of the node that produces
+ * it. A fixture the server would refuse would pass here — the API is mocked — and be found only in production.
  */
 const graph: DevWorkflowGraph = {
 	schemaVersion: 1,
 	nodes: [
-		{ nodeKey: "research", nodeType: "Agent", label: "Research" },
 		{
-			nodeKey: "plan",
-			nodeType: "Tool",
-			label: "Plan",
-			toolMode: "Apply",
-			requiredCapabilities: { gpu: "true" },
-			modelProfile: "qwen3-30b",
-			reasoningEffort: "high",
-			materialization: { templateNodeKey: "implement", artifactKind: "TaskPackage", joinNodeKey: "plan", maxChildren: 5 },
+			nodeKey: "decompose",
+			nodeType: "Agent",
+			label: "Decompose",
+			requiredCapabilities: { Network: "reads the package feed while splitting the plan" },
+			materialization: { templateNodeKey: "implement", artifactKind: "TaskPackage", joinNodeKey: "join", maxChildren: 5 },
 		},
 		{ nodeKey: "implement", nodeType: "DevTask", label: "Implement", isTemplate: true },
+		{
+			nodeKey: "validate",
+			nodeType: "Tool",
+			label: "Validate",
+			isTemplate: true,
+			retryTarget: "implement",
+			maxLoopIterations: 2,
+			modelProfile: "qwen3-30b",
+			reasoningEffort: "high",
+		},
+		{ nodeKey: "join", nodeType: "Join", label: "Every slice implemented" },
+		{ nodeKey: "approval", nodeType: "HumanGate", label: "Approve integration" },
+		{ nodeKey: "integrate", nodeType: "Tool", toolMode: "Apply", label: "Apply the approved patches" },
 	],
 	edges: [
-		{ from: "research", to: "plan" },
-		{ from: "implement", to: "plan" },
+		{ from: "decompose", to: "join" },
+		{ from: "implement", to: "validate" },
+		{ from: "validate", to: "join" },
+		{ from: "join", to: "approval" },
+		{ from: "approval", to: "integrate", condition: { path: "decision", op: "eq", value: "Approve" } },
 	],
 };
+
+/** The fixture with one edge condition replaced, so a condition test edits a row without stranding the graph. */
+function withCondition(condition: { path: string; op: string; value: unknown }): DevWorkflowGraph {
+	return { ...graph, edges: graph.edges?.map((edge, index) => (index === 0 ? { ...edge, condition } : edge)) };
+}
 
 function definitionRoute(overrides: { version?: number; graph?: DevWorkflowGraph } = {}) {
 	return jsonRoute("get", `development-workflows/definitions/${definitionId}`, {
@@ -96,6 +121,20 @@ function renderPanel() {
 	);
 }
 
+/**
+ * Opens one edge row's operator picker and answers ITS dropdown. Every row keeps its option list mounted, so a bare
+ * text query matches five identical lists; the open combobox names its own listbox through `aria-controls`.
+ */
+function openOperator(index: number): ReturnType<typeof within> {
+	const input = screen.getByTestId(`dev-workflow-definition-edge-op-${index}`);
+	fireEvent.click(input);
+	const listbox = document.getElementById(input.getAttribute("aria-controls") ?? "");
+	if (!listbox) {
+		throw new Error(`The operator picker on edge ${index} named no open listbox.`);
+	}
+	return within(listbox);
+}
+
 setupMswServer();
 
 /** Loads a definition carrying one conditional edge, types `text` into the value cell, saves, and returns the body. */
@@ -106,7 +145,7 @@ async function editConditionValue(
 	let sent: { graph?: DevWorkflowGraph } | undefined;
 	server.use(
 		...optionRoutes(),
-		definitionRoute({ graph: { ...graph, edges: [{ from: "research", to: "plan", condition }] } }),
+		definitionRoute({ graph: withCondition(condition) }),
 		http.put(localApiPath(`development-workflows/definitions/${definitionId}`), async ({ request }) => {
 			sent = (await request.json()) as typeof sent;
 			return HttpResponse.json({ id: definitionId, version: 4 });
@@ -160,28 +199,31 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 		);
 		renderPanel();
 
-		fireEvent.change(await screen.findByTestId("dev-workflow-definition-node-label-0"), { target: { value: "Investigate" } });
+		fireEvent.change(await screen.findByTestId("dev-workflow-definition-node-label-0"), { target: { value: "Split the plan" } });
 		fireEvent.click(screen.getByTestId("dev-workflow-definition-save"));
 
 		await waitFor(() => expect(sent).toBeDefined());
 		expect(sent?.version).toBe(3);
-		expect(sent?.graph?.nodes?.[0]?.label).toBe("Investigate");
+		expect(sent?.graph?.nodes?.[0]?.label).toBe("Split the plan");
 		// Everything the form does not author must come back exactly as it arrived — the Tool node's model and effort
 		// included, which this form shows no control for precisely because that lane dispatches on neither.
-		expect(sent?.graph?.nodes?.[1]?.toolMode).toBe("Apply");
-		expect(sent?.graph?.nodes?.[1]?.requiredCapabilities).toEqual({ gpu: "true" });
-		expect(sent?.graph?.nodes?.[1]?.materialization?.maxChildren).toBe(5);
-		expect(sent?.graph?.nodes?.[1]?.modelProfile).toBe("qwen3-30b");
-		expect(sent?.graph?.nodes?.[1]?.reasoningEffort).toBe("high");
+		expect(sent?.graph?.nodes?.[5]?.toolMode).toBe("Apply");
+		expect(sent?.graph?.nodes?.[0]?.requiredCapabilities).toEqual({ Network: "reads the package feed while splitting the plan" });
+		expect(sent?.graph?.nodes?.[0]?.materialization?.maxChildren).toBe(5);
+		expect(sent?.graph?.nodes?.[2]?.modelProfile).toBe("qwen3-30b");
+		expect(sent?.graph?.nodes?.[2]?.reasoningEffort).toBe("high");
+		expect(sent?.graph?.nodes?.[2]?.maxLoopIterations).toBe(2);
+		// And an untouched template keeps its waiver ABSENT — an explicit `null` would be a document saying something
+		// it never said, and `?? null` would have passed on one.
+		expect("allowUngatedWrites" in (sent?.graph ?? {})).toBe(false);
 	});
 
 	it("shows the fields it will not edit as read-only badges, so nothing looks lost", async () => {
 		server.use(...optionRoutes(), definitionRoute());
 		renderPanel();
 
-		const badges = await screen.findByTestId("dev-workflow-definition-node-readonly-1");
-		expect(badges.textContent).toContain("Apply");
-		expect(badges.textContent).toContain("implement");
+		expect((await screen.findByTestId("dev-workflow-definition-node-readonly-5")).textContent).toContain("Apply");
+		expect(screen.getByTestId("dev-workflow-definition-node-readonly-0").textContent).toContain("implement");
 	});
 
 	it("offers only this node's CHAT models as a per-node model, because a non-chat one is a run that fails at dispatch", async () => {
@@ -193,7 +235,7 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 	});
 
 	it("offers the model and effort pins on an Agent node only, because no other lane dispatches on them", async () => {
-		// Node 0 is the Agent; node 1 is a Tool and node 2 a DevTask, which run commands and Dev Mode's own coder.
+		// Node 0 is the only Agent; node 1 is a DevTask and node 2 a Tool, which run Dev Mode's own coder and commands.
 		server.use(...optionRoutes(), definitionRoute());
 		renderPanel();
 
@@ -228,6 +270,28 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 		expect(sent?.graph?.nodes?.[0]?.reasoningEffort).toBe("medium");
 	});
 
+	it("offers auto in the per-node reasoning effort menu and sends it as written", async () => {
+		// The node is agent-bound, so its turn always carries a pinned model: authoring `auto` buys the effort ladder
+		// and never a model swap. All the form has to do is stop hiding the token.
+		let sent: { graph?: DevWorkflowGraph } | undefined;
+		server.use(
+			...optionRoutes(),
+			definitionRoute(),
+			http.put(localApiPath(`development-workflows/definitions/${definitionId}`), async ({ request }) => {
+				sent = (await request.json()) as typeof sent;
+				return HttpResponse.json({ id: definitionId, name: "Research → Plan → Approval", version: 4 });
+			}),
+		);
+		renderPanel();
+
+		fireEvent.click(await screen.findByTestId("dev-workflow-definition-node-effort-0"));
+		fireEvent.click(screen.getByText("auto"));
+		fireEvent.click(screen.getByTestId("dev-workflow-definition-save"));
+
+		await waitFor(() => expect(sent).toBeDefined());
+		expect(sent?.graph?.nodes?.[0]?.reasoningEffort).toBe("auto");
+	});
+
 	it("refuses to save a graph the server would reject, naming the node instead of waiting for a 400", async () => {
 		let putCalls = 0;
 		server.use(
@@ -241,7 +305,7 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 		renderPanel();
 
 		// Two nodes sharing a key: the server refuses it, and so does the form — before the request.
-		fireEvent.change(await screen.findByTestId("dev-workflow-definition-node-key-1"), { target: { value: "research" } });
+		fireEvent.change(await screen.findByTestId("dev-workflow-definition-node-key-1"), { target: { value: "decompose" } });
 
 		expect(screen.getByTestId("dev-workflow-definition-issue-duplicateNodeKey")).toBeDefined();
 		expect(screen.getByTestId("dev-workflow-definition-save")).toHaveProperty("disabled", true);
@@ -296,26 +360,26 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 		renderPanel();
 
 		const first = await screen.findByTestId("dev-workflow-definition-node-key-0");
-		expect((first as HTMLInputElement).value).toBe("research");
+		expect((first as HTMLInputElement).value).toBe("decompose");
 
 		fireEvent.click(screen.getByTestId("dev-workflow-definition-node-down-0"));
-		expect((screen.getByTestId("dev-workflow-definition-node-key-0") as HTMLInputElement).value).toBe("plan");
+		expect((screen.getByTestId("dev-workflow-definition-node-key-0") as HTMLInputElement).value).toBe("implement");
 
 		fireEvent.click(screen.getByTestId("dev-workflow-definition-add-node"));
-		expect(screen.getByTestId("dev-workflow-definition-node-3")).toBeDefined();
+		expect(screen.getByTestId("dev-workflow-definition-node-6")).toBeDefined();
 
-		fireEvent.click(screen.getByTestId("dev-workflow-definition-node-remove-3"));
-		expect(screen.queryByTestId("dev-workflow-definition-node-3")).toBeNull();
+		fireEvent.click(screen.getByTestId("dev-workflow-definition-node-remove-6"));
+		expect(screen.queryByTestId("dev-workflow-definition-node-6")).toBeNull();
 	});
 
 	it("gives every icon control an accessible name", async () => {
 		server.use(...optionRoutes(), definitionRoute());
 		renderPanel();
 
-		expect((await screen.findAllByLabelText("Move node up")).length).toBe(3);
+		expect((await screen.findAllByLabelText("Move node up")).length).toBe(6);
 		expect(screen.getAllByLabelText("Move node down").length).toBeGreaterThan(0);
-		expect(screen.getAllByLabelText("Remove node").length).toBe(3);
-		expect(screen.getAllByLabelText("Remove edge").length).toBe(2);
+		expect(screen.getAllByLabelText("Remove node").length).toBe(6);
+		expect(screen.getAllByLabelText("Remove edge").length).toBe(5);
 	});
 
 	it("keeps a boolean and a number scalar through the value cell, because the server compares by JSON kind", async () => {
@@ -336,7 +400,7 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 		let sent: { graph?: DevWorkflowGraph } | undefined;
 		server.use(
 			...optionRoutes(),
-			definitionRoute({ graph: { ...graph, edges: [{ from: "research", to: "plan", condition: { path: "$.ok", op: "eq", value: true } }] } }),
+			definitionRoute({ graph: withCondition({ path: "$.ok", op: "eq", value: true }) }),
 			http.put(localApiPath(`development-workflows/definitions/${definitionId}`), async ({ request }) => {
 				sent = (await request.json()) as typeof sent;
 				return HttpResponse.json({ id: definitionId, version: 4 });
@@ -344,8 +408,8 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 		);
 		renderPanel();
 
-		fireEvent.click(await screen.findByTestId("dev-workflow-definition-edge-op-0"));
-		fireEvent.click(await screen.findByText("ne"));
+		await screen.findByTestId("dev-workflow-definition-edge-0");
+		fireEvent.click(openOperator(0).getByText("ne"));
 		fireEvent.click(screen.getByTestId("dev-workflow-definition-save"));
 
 		await waitFor(() => expect(sent).toBeDefined());
@@ -354,13 +418,14 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 	});
 
 	it("offers the operator as the server's closed set rather than free text", async () => {
-		server.use(...optionRoutes(), definitionRoute({ graph: { ...graph, edges: [{ from: "research", to: "plan" }] } }));
+		server.use(...optionRoutes(), definitionRoute());
 		renderPanel();
 
-		fireEvent.click(await screen.findByTestId("dev-workflow-definition-edge-op-0"));
+		await screen.findByTestId("dev-workflow-definition-edge-0");
+		const options = openOperator(0);
 
 		for (const operator of ["eq", "ne", "gt", "gte", "lt", "lte", "exists", "notExists"]) {
-			expect(screen.getByText(operator)).toBeDefined();
+			expect(options.getByText(operator)).toBeDefined();
 		}
 	});
 
@@ -368,12 +433,7 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 		let sent: { graph?: DevWorkflowGraph } | undefined;
 		server.use(
 			...optionRoutes(),
-			definitionRoute({
-				graph: {
-					...graph,
-					edges: [{ from: "research", to: "plan", condition: { path: "$.decision", op: "eq", value: "Approve" } }],
-				},
-			}),
+			definitionRoute({ graph: withCondition({ path: "$.decision", op: "eq", value: "Approve" }) }),
 			http.put(localApiPath(`development-workflows/definitions/${definitionId}`), async ({ request }) => {
 				sent = (await request.json()) as typeof sent;
 				return HttpResponse.json({ id: definitionId, version: 4 });
@@ -389,6 +449,108 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 
 		await waitFor(() => expect(sent).toBeDefined());
 		expect(sent?.graph?.edges?.[0]?.condition ?? null).toBeNull();
+	});
+
+	it("declares a capability with the reason its author wrote, and shows what each node can change", async () => {
+		let sent: { graph?: DevWorkflowGraph } | undefined;
+		server.use(
+			...optionRoutes(),
+			definitionRoute(),
+			http.put(localApiPath(`development-workflows/definitions/${definitionId}`), async ({ request }) => {
+				sent = (await request.json()) as typeof sent;
+				return HttpResponse.json({ id: definitionId, version: 4 });
+			}),
+		);
+		renderPanel();
+
+		// The effect badges are DERIVED the way the invariants derive them: the apply node writes, the validation reads
+		// and reaches the network (it names no command, so it inherits the project profile's set).
+		expect((await screen.findByTestId("dev-workflow-definition-node-effects-5")).textContent).toContain(
+			"writes the repository or runs commands",
+		);
+		expect(screen.getByTestId("dev-workflow-definition-node-effects-2").textContent).toContain("reads the repository");
+
+		fireEvent.click(screen.getByTestId("dev-workflow-definition-node-capabilities-0"));
+		fireEvent.click(await screen.findByText("Orchestration"));
+		fireEvent.change(screen.getByTestId("dev-workflow-definition-node-capability-reason-1-0"), {
+			target: { value: "hands slices to the coder agents" },
+		});
+		fireEvent.click(screen.getByTestId("dev-workflow-definition-save"));
+
+		await waitFor(() => expect(sent).toBeDefined());
+		expect(sent?.graph?.nodes?.[0]?.requiredCapabilities).toEqual({
+			Network: "reads the package feed while splitting the plan",
+			Orchestration: "hands slices to the coder agents",
+		});
+	});
+
+	it("refuses a declared write nothing gates, and takes the template's waiver as the answer", async () => {
+		let sent: { graph?: DevWorkflowGraph } | undefined;
+		server.use(
+			...optionRoutes(),
+			definitionRoute(),
+			http.put(localApiPath(`development-workflows/definitions/${definitionId}`), async ({ request }) => {
+				sent = (await request.json()) as typeof sent;
+				return HttpResponse.json({ id: definitionId, version: 4 });
+			}),
+		);
+		renderPanel();
+
+		// `decompose` is the entry node, so nothing gates it: declaring a write there is GRAPH-C4-2, before the request.
+		fireEvent.click(await screen.findByTestId("dev-workflow-definition-node-capabilities-0"));
+		fireEvent.click(await screen.findByText("WriteExecute"));
+
+		const issue = screen.getByTestId("dev-workflow-definition-issue-ungatedWrite");
+		expect(issue.textContent).toContain("decompose");
+		expect(screen.getByTestId("dev-workflow-definition-save")).toHaveProperty("disabled", true);
+
+		fireEvent.click(screen.getByTestId("dev-workflow-definition-allow-ungated-writes"));
+		expect(screen.queryByTestId("dev-workflow-definition-issue-ungatedWrite")).toBeNull();
+
+		fireEvent.change(screen.getByTestId("dev-workflow-definition-node-capability-reason-1-0"), {
+			target: { value: "runs the release script" },
+		});
+		fireEvent.click(screen.getByTestId("dev-workflow-definition-save"));
+
+		await waitFor(() => expect(sent).toBeDefined());
+		expect(sent?.graph?.allowUngatedWrites).toBe(true);
+	});
+
+	it("offers the fix-loop cap only where there is a loop to bound, and clears it with the target", async () => {
+		let sent: { graph?: DevWorkflowGraph } | undefined;
+		server.use(
+			...optionRoutes(),
+			definitionRoute(),
+			http.put(localApiPath(`development-workflows/definitions/${definitionId}`), async ({ request }) => {
+				sent = (await request.json()) as typeof sent;
+				return HttpResponse.json({ id: definitionId, version: 4 });
+			}),
+		);
+		renderPanel();
+
+		// Node 2 routes back to `implement`; node 0 routes nowhere, and the server refuses a cap on a node that does.
+		expect(await screen.findByTestId("dev-workflow-definition-node-max-loops-2")).toBeDefined();
+		expect(screen.queryByTestId("dev-workflow-definition-node-max-loops-0")).toBeNull();
+
+		fireEvent.change(screen.getByTestId("dev-workflow-definition-node-max-loops-2"), { target: { value: "3" } });
+		fireEvent.click(screen.getByTestId("dev-workflow-definition-save"));
+
+		await waitFor(() => expect(sent).toBeDefined());
+		expect(sent?.graph?.nodes?.[2]?.maxLoopIterations).toBe(3);
+
+		// Clearing the target takes the cap with it. This is the branch that keeps the server from 400ing over a field
+		// the form has just hidden, and without this half a refactor that dropped `maxLoopIterations: null` stays green.
+		const retryTarget = screen.getByTestId("dev-workflow-definition-node-retry-target-2");
+		const clear = retryTarget.parentElement?.querySelector("button");
+		expect(clear).toBeDefined();
+		fireEvent.click(clear as HTMLButtonElement);
+
+		expect(screen.queryByTestId("dev-workflow-definition-node-max-loops-2")).toBeNull();
+		fireEvent.click(screen.getByTestId("dev-workflow-definition-save"));
+
+		// The second PUT is the one with no target; waiting on that is what tells it apart from the first.
+		await waitFor(() => expect(sent?.graph?.nodes?.[2]?.retryTarget ?? null).toBeNull());
+		expect(sent?.graph?.nodes?.[2]?.maxLoopIterations ?? null).toBeNull();
 	});
 
 	it("archives behind a confirmation rather than deleting the template outright", async () => {

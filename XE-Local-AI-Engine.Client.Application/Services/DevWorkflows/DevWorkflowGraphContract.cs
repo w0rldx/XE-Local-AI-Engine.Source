@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
@@ -81,6 +82,61 @@ public static class DevWorkflowGraphContract
     }
 
     /// <summary>
+    ///     What each node of a stored graph can change, as effect names — the editor's badge row.
+    ///     <para>
+    ///         Asked of the parser rather than re-derived from the wire document, for the reason this class exists: the
+    ///         invariants refuse a save on these effects, so an editor computing its own set would show badges that
+    ///         disagree with the 400 the operator gets. The author's REASON is not here — it stays on the wire node's
+    ///         own <c>requiredCapabilities</c>, which is the field it was written into.
+    ///     </para>
+    ///     <para>
+    ///         Answers EMPTY for a graph that cannot be parsed, exactly as <see cref="TemplateNodeKeys" /> does and for
+    ///         the same reason: this is a read path, and a run whose pinned graph is unroutable is the one an operator
+    ///         most needs to be able to open.
+    ///     </para>
+    /// </summary>
+    public static IReadOnlyDictionary<string, IReadOnlyList<string>> EffectsOf(string graphJson)
+    {
+        try
+        {
+            return DevWorkflowGraph.Parse(graphJson)
+                                   .Nodes
+                                   .ToDictionary(static node => node.Key,
+                                       static IReadOnlyList<string> (node) =>
+                                           [.. DevWorkflowGraph.Effects(node.Value).Select(static effect => effect.ToString()).Order(StringComparer.Ordinal)],
+                                       StringComparer.Ordinal);
+        }
+        catch (DevWorkflowValidationException)
+        {
+            return new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        }
+    }
+
+    /// <summary>
+    ///     The attempt cap each node's DEFINITION declares, keyed by node key, with the parser's own per-node-type
+    ///     default applied — so this and <c>DevWorkflowGraph</c> cannot disagree about a node that omits
+    ///     <c>maxAttempts</c>. It is the number a node run's <c>MaxAttempts</c> started at, before any operator Retry
+    ///     widened it in place, which makes the difference between the two the record of the widening itself.
+    ///     <para>
+    ///         Answers EMPTY for a graph that cannot be parsed, for the reason <see cref="TemplateNodeKeys" /> does:
+    ///         this is a read path and an unroutable run is the one an operator most needs to open. A key that is
+    ///         missing means the reader has nothing to compare against, not that the cap is zero.
+    ///     </para>
+    /// </summary>
+    public static IReadOnlyDictionary<string, int> DeclaredMaxAttempts(string graphJson)
+    {
+        try
+        {
+            return DevWorkflowGraph.Parse(graphJson)
+                                   .Nodes.ToDictionary(static entry => entry.Key, static entry => entry.Value.MaxAttempts, StringComparer.Ordinal);
+        }
+        catch (DevWorkflowValidationException)
+        {
+            return new Dictionary<string, int>(StringComparer.Ordinal);
+        }
+    }
+
+    /// <summary>
     ///     Which of a run's skipped node runs the state machine WAIVES, so the API can send the verdict instead of the
     ///     browser guessing it: a skip an operator chose is excused and a downstream <c>All</c> join carries on past it,
     ///     while a skip that cascaded off a Failed ancestor or a branch nothing routed down is dead and the join will
@@ -121,5 +177,36 @@ public static class DevWorkflowGraphContract
 
         var graph = DevWorkflowGraph.Parse(graphJson);
         return graph.OutboundEdges(nodeKey).Any(static edge => DevWorkflowStateMachine.GateEdgeFires(edge, DevWorkflowDecisionKind.Reject));
+    }
+
+    /// <summary>
+    ///     Whether a node run's output document says it validated nothing because there was nothing to validate — the
+    ///     verdict the zero-task decomposition seeds onto its template's checks (ruling D12).
+    ///     <para>
+    ///         Asked here so the API and the runtime read ONE spelling of the token. The row is a real
+    ///         <c>Succeeded</c> row and has to be, or the join behind it would never let the apply through — but it
+    ///         stands for work that did not happen, so every count and every badge that says "done" has to be able to
+    ///         tell the two apart. An unreadable document is simply not this verdict.
+    ///     </para>
+    /// </summary>
+    public static bool ValidationWasNotApplicable(string? outputJson)
+    {
+        if (string.IsNullOrWhiteSpace(outputJson))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(outputJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.TryGetProperty("verdict", out var verdict)
+                   && verdict.ValueKind == JsonValueKind.String
+                   && string.Equals(verdict.GetString(), DevWorkflowNodeOutputVerdicts.ValidationNotApplicable, StringComparison.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 }

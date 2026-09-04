@@ -1,8 +1,11 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
+using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
@@ -52,6 +55,17 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
                 sp.GetRequiredService<IModelTrustResolver>(),
                 knowledgeOptions.AllowCloudModelAccess);
         });
+        // The always-on tool names a relevance filter may never hide: the work-session state tools plus every
+        // approval-bearing built-in from the catalog above. Composed here because both inputs are node-side; the agent
+        // assembly only ever consumes the resulting name set.
+        builder.Services.AddSingleton<IToolRelevanceCoreSet, ToolRelevanceCoreSet>();
+        // The node's relevance selector. The agent assembly registers the model-free lexical one with TryAdd; node-side
+        // this REPLACES it with the embedding-backed selector, which resolves the concrete lexical one for its own
+        // degrade path and only reaches a model when EmbeddingModelName is configured. Replace rather than a second
+        // AddSingleton so the winner does not depend on module order. AI.Agent-only tests keep the lexical
+        // registration. Both singletons: the vector cache is a long-lived RAM-only store.
+        builder.Services.AddSingleton<LexicalToolRelevanceSelector>();
+        builder.Services.Replace(ServiceDescriptor.Singleton<IToolRelevanceSelector, EmbeddingToolRelevanceSelector>());
         // MCP tool extensibility. The connection manager owns the MCP client lifecycle and republishes the dynamic
         // tool snapshot into the registry consumed by offered-tool resolution. The startup connector triggers an
         // initial refresh off the hot path; the manager stays singleton because it owns long-lived connections.
