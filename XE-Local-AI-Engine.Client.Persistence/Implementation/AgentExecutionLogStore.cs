@@ -295,6 +295,10 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
             entity.ReasoningChunkCount,
             entity.TraceId,
             entity.StartedAtUtc,
-            entity.CreatedAtUtc);
+            entity.CreatedAtUtc,
+            entity.ToolSchemaTokens,
+            entity.MaxToolSchemaTokens,
+            entity.DispatchedTier,
+            entity.AuthoredEffort);
     }
 }

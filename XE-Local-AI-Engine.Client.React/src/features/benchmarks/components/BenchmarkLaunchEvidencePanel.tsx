@@ -1,4 +1,4 @@
-import { Accordion, Alert, Stack } from "@mantine/core";
+import { Accordion, Alert, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -23,11 +23,18 @@ interface IntendedEffectiveAlertProps {
 // row with a missing end is not a difference.
 function IntendedEffectiveAlert({ launch, message, testId }: IntendedEffectiveAlertProps) {
 	const { t } = useTranslation();
+	// A row frozen under a superseded launch-identity scheme carries two identities that were never meant to be
+	// compared, so the identity row is never a difference and the alert says so in one line instead of raising a drift
+	// warning about a launch that in fact matched. The flag is common, not exotic: the server computes it as "stored
+	// scheme, NULL read as 1, != the current version", which is true of every run frozen before the cutover. Only the
+	// identity is scheme-bound — the executable digest is compared either way, because a digest is a digest under any
+	// scheme.
+	const schemeOutdated = launch.launchIdentitySchemeOutdated === true;
 	const rows: BenchmarkEvidenceDiffRow[] = [
 		{
 			key: "launch.launchIdentity",
 			values: [launch.intendedLaunchIdentity, launch.effectiveLaunchIdentity],
-			differs: launch.intendedLaunchIdentity !== launch.effectiveLaunchIdentity,
+			differs: !schemeOutdated && launch.intendedLaunchIdentity !== launch.effectiveLaunchIdentity,
 		},
 		{
 			key: "launch.executableSha256",
@@ -42,6 +49,14 @@ function IntendedEffectiveAlert({ launch, message, testId }: IntendedEffectiveAl
 		<Alert color="yellow" icon={<IconAlertTriangle size={16} />} data-testid={testId}>
 			<Stack gap="xs">
 				{message}
+				{schemeOutdated ? (
+					<Text size="sm" c="dimmed" data-testid={`${testId}-scheme-outdated`}>
+						{t(
+							"pages.benchmarks.launch.identitySchemeOutdated",
+							"Frozen under an earlier launch-identity scheme, so the two identities are not comparable.",
+						)}
+					</Text>
+				) : null}
 				<BenchmarkEvidenceDiffTable
 					rows={rows}
 					labels={[t("pages.benchmarks.launch.intended", "Intended"), t("pages.benchmarks.launch.effective", "Effective")]}

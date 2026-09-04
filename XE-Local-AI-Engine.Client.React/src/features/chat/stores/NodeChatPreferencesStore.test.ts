@@ -253,7 +253,7 @@ describe("NodeChatPreferencesStore", () => {
 });
 
 describe("clampReasoningEffort", () => {
-	// reasoningEfforts = ["none", "low", "medium", "high"] (graded Ollama set).
+	// reasoningEfforts = ["none", "low", "medium", "high", "auto"] (graded Ollama set).
 	// binaryReasoningEfforts = ["on", "none"].
 
 	it("returns the current effort unchanged when it is already in the available set", () => {
@@ -272,6 +272,12 @@ describe("clampReasoningEffort", () => {
 
 	it("preserves 'none' when switching onto a graded set (reasoning stays off)", () => {
 		expect(clampReasoningEffort("none", reasoningEfforts)).toBe("none");
+	});
+
+	// A binary model has no graded ladder for the node to dispatch into, so a stale stored "auto" reaching one must
+	// degrade to the model's natural reasoning rather than collapsing to the list's first entry by rank accident.
+	it("maps a stale 'auto' onto a binary set's 'on'", () => {
+		expect(clampReasoningEffort("auto", binaryReasoningEfforts)).toBe("on");
 	});
 
 	it("maps any reasoning-ON graded level onto a binary set's 'on'", () => {

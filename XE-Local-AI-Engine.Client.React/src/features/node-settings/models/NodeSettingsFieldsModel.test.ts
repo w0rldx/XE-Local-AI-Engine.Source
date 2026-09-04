@@ -5,7 +5,9 @@ import {
 	buildNodeSettingsRequest,
 	newUsageRateRow,
 	nodeSettingsFieldDefaults,
+	kvCacheTypeSelectValues,
 	restartGatedNodeSettingsFields,
+	speculativeModeSelectValues,
 	toNodeSettingsFieldBounds,
 	toNodeSettingsFieldsForm,
 	touchesRestartGatedField,
@@ -353,6 +355,27 @@ describe("buildNodeSettingsRequest", () => {
 		expect(body.chatCacheReuse).toBe(0);
 	});
 
+	it("sends a changed KV cache type and rejects an unknown one", () => {
+		const changed = buildNodeSettingsRequest({ ...baseline, kvCacheType: "q4_0" }, baseline, bounds, false);
+		expect(changed.errors).toEqual({});
+		expect(changed.body.kvCacheType).toBe("q4_0");
+
+		// Unset means "leave it alone": an unchanged field is never sent, so the seeded options stay the provider default.
+		const unchanged = buildNodeSettingsRequest({ ...baseline }, baseline, bounds, false);
+		expect(unchanged.body.kvCacheType).toBeUndefined();
+
+		const bogus = buildNodeSettingsRequest({ ...baseline, kvCacheType: "q5_1" }, baseline, bounds, false);
+		expect(bogus.errors["kvCacheType"]).toBe("type");
+		expect(bogus.body.kvCacheType).toBeUndefined();
+	});
+
+	it("marks the KV cache type as restart-gated", () => {
+		// The seeded LlamaServerLaunchPolicyOptions is built once at host build, so a save needs a node restart.
+		expect(restartGatedNodeSettingsFields.has("kvCacheType")).toBe(true);
+		expect(kvCacheTypeSelectValues).toEqual(["f16", "q8_0", "q4_0"]);
+		expect(nodeSettingsFieldDefaults.kvCacheType).toBe("q8_0");
+	});
+
 	it("rejects an unknown speculative mode", () => {
 		const form = { ...baseline, speculativeMode: "totally-bogus" };
 		const { errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
@@ -366,6 +389,21 @@ describe("buildNodeSettingsRequest", () => {
 		// The mode itself is still valid, so no mode error — only the missing draft model blocks the save.
 		expect(errors["speculativeMode"]).toBeUndefined();
 		expect(body.speculativeDraftModelName).toBeUndefined();
+	});
+
+	it.each(["draft-dflash", "draft-dspark"])("offers %s as an external-draft mode that needs a draft model", (mode) => {
+		const withoutDraft = { ...baseline, speculativeMode: mode, speculativeDraftModelName: "" };
+		const missing = buildNodeSettingsRequest(withoutDraft, baseline, bounds, false);
+		// The mode itself is accepted; only the missing second GGUF blocks the save.
+		expect(missing.errors["speculativeMode"]).toBeUndefined();
+		expect(missing.errors["speculativeDraftModelName"]).toBe("required");
+
+		const withDraft = { ...baseline, speculativeMode: mode, speculativeDraftModelName: "my-draft", speculativeDraftMaxTokens: 15 };
+		const saved = buildNodeSettingsRequest(withDraft, baseline, bounds, false);
+		expect(saved.errors).toEqual({});
+		expect(saved.body.speculativeMode).toBe(mode);
+		expect(saved.body.speculativeDraftMaxTokens).toBe(15);
+		expect(speculativeModeSelectValues).toContain(mode);
 	});
 
 	it("does NOT require a draft model for draft-mtp, whose drafter lives in the main model", () => {
@@ -415,6 +453,24 @@ describe("buildNodeSettingsRequest", () => {
 		const { body, errors } = buildNodeSettingsRequest(off, withModel, bounds, false);
 		expect(errors).toEqual({});
 		expect(body.rerankerModelName).toBe("");
+	});
+
+	it("sends a changed fast model for automatic reasoning effort, and an empty string for Off", () => {
+		const form = { ...baseline, autoEffortFastModelName: "  qwen3-1.7b  " };
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+		expect(errors).toEqual({});
+		expect(body.autoEffortFastModelName).toBe("qwen3-1.7b");
+
+		const withModel = { ...baseline, autoEffortFastModelName: "qwen3-1.7b" };
+		const off = { ...withModel, autoEffortFastModelName: "" };
+		expect(buildNodeSettingsRequest(off, withModel, bounds, false).body.autoEffortFastModelName).toBe("");
+	});
+
+	it("does not restart-gate the fast model for automatic reasoning effort", () => {
+		// The dispatcher reads it per send, so a save applies to the very next turn — telling the operator to restart
+		// would be wrong, and would train them to ignore the hint on the fields that do need one.
+		expect(restartGatedNodeSettingsFields.has("autoEffortFastModelName")).toBe(false);
+		expect(restartGatedNodeSettingsFields.has("rerankerModelName")).toBe(true);
 	});
 
 	it("sends the usage-rate map when a rate row is added (no developer gate)", () => {

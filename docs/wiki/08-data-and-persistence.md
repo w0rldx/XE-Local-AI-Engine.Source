@@ -248,6 +248,16 @@ Tests use `NullNodeSqliteKeyHolder` (a fixed zero key) plus a non-encrypting mig
 - **Cloud creds & operator secrets are not in this DB.** Don't add a "credentials" table — credentials live in DataProtection files and the WorkerHub layer; see [Security & Privacy](12-security-and-privacy.md).
 - **Go through stores.** Don't expose `DbSet`s or return entities across the transport boundary; map to records/DTOs in the store layer.
 
+## Node-run cost telemetry: twelve plaintext columns, and why they are not encrypted
+
+`dev_workflow_node_runs` carries twelve nullable columns recording what one node-run **attempt** cost: `input_tokens`, `output_tokens`, `reasoning_tokens`, `estimated_input_tokens`, `provider_calls`, `tool_calls`, `tool_schema_tokens`, `tool_names_json`, `agent_turn_ms`, `served_model_name`, `route_json` and `work_session_steps` (migration `AddAiTrendsWave`). They are written at ONE place — the publishing store decorator, on a terminal, `Blocked` or `WaitingForApproval` transition — so a call site added later is covered without anyone remembering to. A collection that throws or overruns its deadline leaves nulls and the transition proceeds unchanged.
+
+They are deliberately **outside** the encryption interceptor's tracked set, and that is a policy statement rather than an oversight: the interceptor only accepts `byte[]` properties, so a non-`byte[]` column is structurally unreachable by it, and `DevWorkflowEncryptionTests` asserts the three text columns reach the database file as plaintext. What they hold is metadata only — counts, durations, structural node keys, a served model name, and outbound tool NAMES bounded at sixteen per attempt and 128 characters each, recorded only when the name matched a tool the request offered. No prompt, no tool argument, no tool result and no transcript may ever be added here; see [the trajectory data policy](../security/agent-trajectory-data-policy.md).
+
+`agent_turn_ms` is whole-turn time — each envelope's duration spans the provider rounds and the tool loop between them — so `run_ms - agent_turn_ms` is time outside the turns, never tool time.
+
+Two reading traps a query must respect. The columns hold the **last attempt only** — a `Pending` re-attempt clears them, and the failing attempt's nine additive numbers are merged into that reset's `node.retry.scheduled` event detail instead — so a node's true total is `row + retry snapshots`. And a null is "nobody reported it", never zero: a structural node, a row from before the migration, and a collection that could not run all read the same way. The [cost telemetry runbook](../runbooks/agent-unit-cost-telemetry-runbook.md) carries the full recipe, including the reasons every number is a lower bound.
+
 ## Related pages
 
 - [Architecture Overview](01-architecture-overview.md)

@@ -72,6 +72,9 @@ public sealed record NodeSettingsResponse
 
     public string? SpeculativeMode { get; init; }
 
+    /// <summary>KV-cache element type for GPU chat spawns: <c>f16</c> | <c>q8_0</c> | <c>q4_0</c>. Null means the node default.</summary>
+    public string? KvCacheType { get; init; }
+
     public string? SpeculativeDraftModelName { get; init; }
 
     public int? SpeculativeDraftMaxTokens { get; init; }
@@ -91,6 +94,8 @@ public sealed record NodeSettingsResponse
     ///     <see langword="null" />/blank leaves reranking OFF.
     /// </summary>
     public string? RerankerModelName { get; init; }
+
+    public string? AutoEffortFastModelName { get; init; }
 
     public long? HuggingFaceDiskMarginBytes { get; init; }
 
@@ -185,6 +190,12 @@ public sealed record SaveNodeSettingsRequest
 
     public string? SpeculativeMode { get; init; }
 
+    /// <summary>
+    ///     KV-cache element type for GPU chat spawns: <c>f16</c> | <c>q8_0</c> | <c>q4_0</c>. Changing it invalidates
+    ///     every frozen inference profile on this node.
+    /// </summary>
+    public string? KvCacheType { get; init; }
+
     public string? SpeculativeDraftModelName { get; init; }
 
     public int? SpeculativeDraftMaxTokens { get; init; }
@@ -193,6 +204,8 @@ public sealed record SaveNodeSettingsRequest
 
     /// <summary>Installed cross-encoder reranker model name for knowledge-base search rerank. Empty/blank disables reranking.</summary>
     public string? RerankerModelName { get; init; }
+
+    public string? AutoEffortFastModelName { get; init; }
 
     public long? HuggingFaceDiskMarginBytes { get; init; }
 

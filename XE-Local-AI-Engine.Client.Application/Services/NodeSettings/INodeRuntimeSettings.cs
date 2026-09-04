@@ -80,6 +80,9 @@ public interface INodeRuntimeSettings
     /// <summary>The chat-role speculative-decoding <c>--spec-type</c> (stored &gt; seed <c>none</c>).</summary>
     Task<string> GetSpeculativeModeAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>The GPU chat-spawn KV-cache type <c>-ctk</c>/<c>-ctv</c> (stored &gt; seed <c>q8_0</c>).</summary>
+    Task<string> GetKvCacheTypeAsync(CancellationToken cancellationToken = default);
+
     /// <summary>The installed draft-model name for <c>draft-*</c> modes, or <see langword="null" /> when unset.</summary>
     Task<string?> GetSpeculativeDraftModelNameAsync(CancellationToken cancellationToken = default);
 
@@ -91,6 +94,13 @@ public interface INodeRuntimeSettings
 
     /// <summary>The knowledge-base reranker model name (stored &gt; off), or <see langword="null" /> when reranking is disabled.</summary>
     Task<string?> GetRerankerModelNameAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The node-local chat model a FAST <c>auto</c> turn may be moved onto (stored &gt; off), or
+    ///     <see langword="null" /> when this node names none. Read per send rather than at host build, so a save
+    ///     applies to the next turn without a restart.
+    /// </summary>
+    Task<string?> GetAutoEffortFastModelNameAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Whether the user-defined custom tools feature is enabled at the node level (stored &gt; off). Default is
@@ -148,6 +158,9 @@ public interface INodeRuntimeSettings
 
     /// <inheritdoc cref="GetSpeculativeModeAsync" />
     string GetSpeculativeMode();
+
+    /// <inheritdoc cref="GetKvCacheTypeAsync" />
+    string GetKvCacheType();
 
     /// <inheritdoc cref="GetSpeculativeDraftModelNameAsync" />
     string? GetSpeculativeDraftModelName();

@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using System.Reflection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -25,6 +27,17 @@ public sealed class DevWorkflowMaterializationTests
                                       { "id": "beta", "title": "Add the writer", "goal": "Write the manifest.", "dependsOn": ["alpha"] }
                                     ]
                                     """;
+
+    /// <summary>
+    ///     The same package for a template that roots in a <c>DevTask</c>: there a slice becomes a coder attempt, so it
+    ///     has to name the files it changes or the materializer hands the whole package back before cloning anything.
+    /// </summary>
+    private const string TwoDevTasks = """
+                                       [
+                                         { "id": "alpha", "title": "Add the parser", "goal": "Parse the manifest.", "changes": ["src/Manifest/Parser.cs"], "acceptanceCriteria": ["the manifest parses"] },
+                                         { "id": "beta", "title": "Add the writer", "goal": "Write the manifest.", "changes": ["src/Manifest/Writer.cs"], "dependsOn": ["alpha"] }
+                                       ]
+                                       """;
 
     /// <summary>Two slices neither of which waits for the other — the shape a fan-out actually has.</summary>
     private const string TwoIndependentTasks = """
@@ -324,6 +337,35 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>
+    ///     Every capability invariant holds on the graph AS MATERIALIZED, not only on the definition. The rewrite is
+    ///     re-parsed by the graph cache on the tick after expansion, so a rule that held at save and broke after the
+    ///     clones were wired would fail a run mid-flight rather than an author at their keyboard.
+    ///     <para>
+    ///         The proof the rewrite preserves them is the virtual edge: what the invariants read from a materializing
+    ///         node to its template root before expansion is the definition-time image of the real edge the
+    ///         materializer wires afterwards, so the fixpoint gives the same answer on both graphs.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task MaterializedGraphStillValidates()
+    {
+        await using var harness = new DevWorkflowHarness();
+        // TwoDevTasks rather than TwoTasks: this template roots in a DevTask, and a package whose tasks name no
+        // 'changes' is refused there before anything is cloned — which would leave this asserting the definition.
+        var runId = await DecomposeAsync(harness, TwoDevTasks, DevWorkflowGraphs.DecompositionIntoDevTasksAndIntegration).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+
+        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, run.GraphRevision, "the graph really was rewritten, or this asserts the definition again.");
+
+        var materialized = DevWorkflowGraph.Parse(run.GraphJson);
+
+        AssertEx.Contains(materialized.Nodes.Keys, key => key.Contains('#', StringComparison.Ordinal), "the clones are in the graph being judged.");
+        AssertEx.NotEmpty(materialized.Nodes.Values.Where(static node => node.ToolMode == DevWorkflowToolMode.Apply),
+            "and so is the apply node whose validation ancestry GRAPH-C4-3 asks about.");
+    }
+
+    /// <summary>
     ///     "There is no follow-up work" is a legitimate answer, not malformed output (review F4). The join keeps the edge
     ///     it already had, fires on the decomposition itself, and the run completes — where the alternative reading
     ///     leaves it Pending for ever.
@@ -337,12 +379,196 @@ public sealed class DevWorkflowMaterializationTests
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
         AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
-        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).Count, "no children, and no rows invented for a template nothing cloned.");
+        AssertEx.Equal(expected: 3,
+            (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).Count,
+            "no children, and one row — and only one — standing for the validation that did not apply.");
         AssertEx.Equal(expected: 0, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).GraphRevision, "there was no rewrite to make: the graph already said this.");
-        var marker = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Single(static entry => entry.EventType == "graph.changed");
+        var events = await harness.ReadEventsAsync(runId).ConfigureAwait(false);
+        AssertEx.Empty(events.Where(static entry => entry.EventType == "graph.changed"), "no graph changed, so nothing says one did.");
+        var marker = events.Last(static entry => entry.EventType == "node.materialized");
+        AssertEx.Contains(AssertEx.NotNull(marker.DetailJson),
+            "\"graphRevision\":0",
+            message: "the commit marker says no graph moved, or a consumer refetches and gets the same revision back.");
+
+        // Nothing rewrote the graph, so nothing re-records the route either: it keeps the shape it settled with.
+        var route = AssertEx.NotNull(DevWorkflowNodeRunDocuments.TryParseRoute((await harness.ReadNodeRunAsync(runId, "decompose").ConfigureAwait(false)).RouteJson));
+        AssertEx.Equal("join", string.Join(", ", route.Satisfied), "the authored edge is the whole route, because it is still the whole graph.");
+        AssertEx.Empty(route.Dead);
+        AssertEx.Empty(route.Waived);
+    }
+
+    /// <summary>
+    ///     The same zero-task answer over a template subtree with NO validation node: nothing to stand for, so the
+    ///     marker is the bare commit event, and its detail says the graph did not move.
+    ///     <para>
+    ///         <c>revisionBumped</c> is the field a consumer refetches on. Without this the flag has no test at all —
+    ///         its only other caller writes rows instead, under a marker the STORE details, which carries no such
+    ///         field.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ADecompositionThatFoundNoWorkAndHasNoCheckSaysTheRevisionDidNotMove()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await DecomposeAsync(harness, "[]", DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var events = await harness.ReadEventsAsync(runId).ConfigureAwait(false);
+        var marker = events.Last(static entry => entry.EventType == "graph.changed");
         AssertEx.Contains(AssertEx.NotNull(marker.DetailJson),
             "\"revisionBumped\":false",
             message: "the one graph.changed that changes no graph says so, or a consumer refetches and gets the same revision back.");
+    }
+
+    /// <summary>
+    ///     A materializing producer's route is recorded against the graph its expansion WROTE, not the one it settled on.
+    ///     <para>
+    ///         The route is computed when a node settles, and a decomposition settles a whole tick before the clone-root
+    ///         edges exist. Left at that, the persisted document names the authored join edge and omits every root the
+    ///         next tick actually admits — a recorded route disagreeing with the routing that happened, which is the one
+    ///         thing §4.2 says it may never do. So the producer's route is re-taken inside the materialization
+    ///         transaction, against the rewritten graph.
+    ///     </para>
+    ///     <para>
+    ///         Two INDEPENDENT tasks, because a <c>dependsOn</c> chain hangs only the first root off the decomposition
+    ///         and a one-root assertion would be satisfied by the pre-expansion graph as well.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ADecompositionsRouteNamesTheCloneRootsItsExpansionAdmitted()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await DecomposeAsync(harness, TwoIndependentTasks).ConfigureAwait(false);
+
+        // One tick settles the decomposition AND expands it, which is why the stale document was never observable
+        // between the two — and why nothing caught it. The assertion is on what the tick leaves behind.
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+
+        var route = AssertEx.NotNull(DevWorkflowNodeRunDocuments.TryParseRoute((await harness.ReadNodeRunAsync(runId, "decompose").ConfigureAwait(false)).RouteJson));
+        AssertEx.Equal("implement#alpha, implement#beta, join",
+            string.Join(", ", route.Satisfied.OrderBy(static key => key, StringComparer.Ordinal)),
+            "both clone roots the expansion wired to the decomposition, and the authored join edge it kept — which is what EdgeState "
+            + "answers for each of them once the rewritten graph is the run's.");
+        AssertEx.Empty(route.Dead);
+        AssertEx.Empty(route.Waived);
+        AssertEx.False(route.Truncated);
+    }
+
+    /// <summary>
+    ///     Ruling D12: the zero-task path writes one already-succeeded row per validation node in the template, rather
+    ///     than exempting the apply downstream from having to find one.
+    ///     <para>
+    ///         Without the row an apply node's runtime pre-check asks about a template key that has no row at all,
+    ///         reads it as "nothing validated this", and blocks a run that did exactly what it was asked. The row is
+    ///         seeded terminal rather than seeded and then transitioned: a <c>Pending</c> row at a template key is
+    ///         admissible — its only inbound edge is dropped as template-sourced — so the tool lane would really run
+    ///         the template's validation commands, and a crash between the two writes would do that.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ADecompositionThatFoundNoWorkWritesOneNotApplicableValidateRow()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await DecomposeAsync(harness, "[]").ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var validate = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, validate.Status, "the row stands for a check that did not need to run, so it is not pending work.");
+        AssertEx.Contains(AssertEx.NotNull(validate.OutputJson),
+            "\"verdict\":\"validation-not-applicable\"",
+            message: "and it says WHY it succeeded, or a reader takes it for a check that passed.");
+        AssertEx.Contains(validate.OutputJson!,
+            "\"status\":\"succeeded\"",
+            message: "the routing vocabulary's own value, so a conditional out-edge on this node fires as a real pass would.");
+        AssertEx.Null(validate.MaterializationIndex, "it stands for ZERO clones, which is a different fact from being clone n.");
+    }
+
+    /// <summary>
+    ///     And the reason the row exists: the apply behind the join is reached UNBLOCKED. The apply's runtime check asks
+    ///     whether a validation succeeded on the path this run took, and "there was nothing to decompose" has to answer
+    ///     that as a pass rather than as an absence.
+    /// </summary>
+    [Test]
+    public async Task AZeroTaskDecompositionReachesItsApplyUnblocked()
+    {
+        await using var harness = DevWorkflowHarness.WithAScriptedChain();
+        var runId = await IntegrationRunWithNoWorkAsync(harness).ConfigureAwait(false);
+
+        await harness.DecideAsync(runId, "integrationapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var integrate = await harness.ReadNodeRunAsync(runId, "integrate").ConfigureAwait(false);
+        AssertEx.NotEqual(DevWorkflowNodeRunStatus.Pending, integrate.Status, "the apply was dispatched at all, or this asserts nothing about the pre-check.");
+        AssertEx.False((integrate.TerminalReason ?? string.Empty).Contains("GRAPH-C4-3", StringComparison.Ordinal),
+            $"the apply must not be blocked for want of a validation that was written for it: {integrate.FailureClass} — {integrate.TerminalReason}");
+    }
+
+    /// <summary>
+    ///     The counter-proof, and the rule the pre-check exists for: when the validation the apply's proof rested on is
+    ///     no longer a success, the apply is blocked for a human rather than applying patches nothing has judged.
+    ///     <para>
+    ///         The row is moved directly, which is what the harness's own escape hatch is for: at this baseline every
+    ///         reachable path to an apply keeps its validation succeeded, and the shape this models is the one the
+    ///         follow-up round introduces — an operator's skip that an <c>All</c> join now carries on past.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AnApplyWhoseValidationNoLongerSucceededIsBlockedWithPolicy()
+    {
+        await using var harness = DevWorkflowHarness.WithAScriptedChain();
+        var runId = await IntegrationRunWithNoWorkAsync(harness).ConfigureAwait(false);
+
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Failed).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "integrationapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var integrate = await harness.ReadNodeRunAsync(runId, "integrate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, integrate.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.Policy,
+            integrate.FailureClass,
+            "a policy refusal needs a person; calling it a configuration fault sends them to fix a definition that is fine.");
+        AssertEx.Contains(AssertEx.NotNull(integrate.TerminalReason), "GRAPH-C4-3", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     The pre-check's walk crosses an edge in every state EXCEPT <c>Dead</c> and <c>Pending</c> — the two that mean
+    ///     the run did not come this way, or has not yet.
+    ///     <para>
+    ///         Asserted over the enum rather than over today's one-name list, because the failure this guards against
+    ///         cannot be written as a run yet: a branch in flight adds a state for an operator's skip whose own
+    ///         dependencies all succeeded, and the rows BEHIND such an edge are <c>Succeeded</c>. A walk that refused to
+    ///         cross it would block an apply whose validation really did pass. This test goes red the moment that state
+    ///         exists and the walk has not been told about it, which is the one line the merge has to add.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public void TheProvenanceWalkCrossesEveryEdgeStateThatIsNotDeadOrPending()
+    {
+        var field = AssertEx.NotNull(typeof(DevWorkflowDispatcher).GetField("ProvenanceEdgeStates", BindingFlags.NonPublic | BindingFlags.Static),
+            "the walk's edge-state set is gone or renamed.");
+        var crossed = (DevWorkflowEdgeState[])AssertEx.NotNull(field.GetValue(null));
+        var expected = Enum.GetValues<DevWorkflowEdgeState>()
+                           .Where(static state => state is not (DevWorkflowEdgeState.Dead or DevWorkflowEdgeState.Pending))
+                           .Order()
+                           .ToArray();
+
+        AssertEx.True(expected.SequenceEqual(crossed.Order()),
+            $"a state that says the run took this edge has to be walked through, and Dead and Pending never may be. "
+            + $"Expected [{string.Join(", ", expected)}], walked [{string.Join(", ", crossed)}].");
+    }
+
+    /// <summary>The shipped integration shape, decomposed into no work at all and standing at its integration gate.</summary>
+    private static async Task<Guid> IntegrationRunWithNoWorkAsync(DevWorkflowHarness harness)
+    {
+        var (projectId, _) = await harness.SeedDevelopmentProjectAsync().ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionIntoDevTasksAndIntegration, "Add the feature.", projectId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "decompose", "tasks.json", "[]").ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        return runId;
     }
 
     /// <summary>

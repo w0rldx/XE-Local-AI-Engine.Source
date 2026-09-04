@@ -16,7 +16,7 @@ public sealed class ProviderCallBudgetEfficiencyTests
         budget.RegisterProviderRound(estimatedInputTokens: 80, toolSchemaTokens: 10);
         budget.RecordProviderRoundElapsed(TimeSpan.FromMilliseconds(12.5));
         budget.RecordProviderRoundElapsed(TimeSpan.FromMilliseconds(7.5));
-        budget.RecordToolCallRequested();
+        budget.RecordToolCallRequested("read_document");
         budget.RecordToolCallCompleted(TimeSpan.FromMilliseconds(4.25), resultBytes: 256, failed: true);
         budget.RecordProviderRetry();
         budget.RecordToolArgumentRepair();

@@ -331,6 +331,64 @@ public sealed class RuntimePackageConfigHashTests
         AssertEx.NotEqual(noneDigest, onDigest);
     }
 
+    // `auto` is a CONFIGURATION value, so switching the picker to it must move the digest — a resume of a turn
+    // authored `high` must not silently replay as an auto-dispatched one. It must also be distinguishable from
+    // "unspecified" (null), which is what an unrecognized value used to collapse to.
+    [Test]
+    public void Compute_WhenReasoningEffortIsAuto_DiffersFromEveryGradedLevelAndFromNull()
+    {
+        var autoDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
+            "prompt",
+            [],
+            modelProfile: null,
+            new TimeoutSettings(),
+            "auto");
+
+        var nullDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
+            "prompt",
+            [],
+            modelProfile: null,
+            new TimeoutSettings());
+
+        AssertEx.NotEqual(nullDigest, autoDigest);
+
+        foreach (var graded in new[] { "none", "on", "minimal", "low", "medium", "high", "xhigh" })
+        {
+            var gradedDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
+                "prompt",
+                [],
+                modelProfile: null,
+                new TimeoutSettings(),
+                graded);
+
+            AssertEx.NotEqual(gradedDigest, autoDigest);
+        }
+    }
+
+    // The canonical JSON must carry the literal "auto", not null: the digest has to say "the operator authored auto"
+    // rather than "the operator authored nothing", which is what an unrecognized value normalizes to.
+    [Test]
+    [Arguments("auto")]
+    [Arguments("AUTO")]
+    [Arguments("  Auto ")]
+    public void SerializeCanonicalJson_WhenEffortIsAuto_NormalizesToAuto(string authored)
+    {
+        var canonicalJson = RuntimePackageConfigHash.SerializeCanonicalJson(agentDefinitionVersion: 7,
+            "prompt",
+            [],
+            modelProfile: null,
+            new TimeoutSettings
+            {
+                InvocationTimeoutSeconds = 300,
+                ToolCallTimeoutSeconds = 60,
+                StreamIdleTimeoutSeconds = 30
+            },
+            authored);
+
+        AssertEx.Equal("{\"agentDefinitionVersion\":7,\"resolvedSystemPrompt\":\"prompt\",\"allowedTools\":[],\"modelProfile\":null,\"reasoningEffort\":\"auto\",\"timeouts\":{\"invocationTimeoutSeconds\":300,\"toolCallTimeoutSeconds\":60,\"streamIdleTimeoutSeconds\":30}}",
+            canonicalJson);
+    }
+
     // Stability guard: the binary-"on" feature must NOT shift the hash of any capable-model effort. The canonical
     // JSON for low/medium/high/none must remain byte-identical to the pre-fix serialization (only the previously
     // failing binary-on turn changes). Pinned as literals so any drift in named-effort normalization fails loudly.

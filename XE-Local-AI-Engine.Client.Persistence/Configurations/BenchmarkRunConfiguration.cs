@@ -98,6 +98,7 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.PrimaryKvAutoReason).HasColumnName("primary_kv_auto_reason").HasMaxLength(64);
         builder.Property(entity => entity.PrimaryFlashAttentionMode).HasColumnName("primary_flash_attention_mode").HasMaxLength(16);
         builder.Property(entity => entity.PrimaryIntendedLaunchIdentity).HasColumnName("primary_intended_launch_identity").HasMaxLength(64);
+        builder.Property(entity => entity.PrimaryLaunchIdentityScheme).HasColumnName("primary_launch_identity_scheme");
         builder.Property(entity => entity.PrimaryIntendedExecutableSha256).HasColumnName("primary_intended_executable_sha256").HasMaxLength(64);
         builder.Property(entity => entity.PrimaryLaunchReceiptJson).HasColumnName("primary_launch_receipt_json");
         builder.Property(entity => entity.PrimaryEnvironmentFactsJson).HasColumnName("primary_environment_facts_json");

@@ -15,6 +15,12 @@ internal sealed record LlamaServerCapabilityDecision(
 /// </summary>
 internal static class LlamaServerCapabilityGate
 {
+    /// <summary>
+    ///     The stable token an expert-offload refusal carries, so support and tests can match the cause rather than the
+    ///     message. Never localized.
+    /// </summary>
+    internal const string ExpertOffloadRequiresCpuMoe = "expert-offload-requires-cpu-moe";
+
     private static readonly IReadOnlyDictionary<string, int> OptionalOptions = new Dictionary<string, int>(StringComparer.Ordinal)
     {
         ["--cache-reuse"] = 1,
@@ -52,6 +58,18 @@ internal static class LlamaServerCapabilityGate
             return Incompatible(spec,
                 "The selected llama.cpp runtime does not support the profile's KV-cache and Flash Attention options. Recalibrate this profile for the selected runtime.",
                 canTrySafeFallback: true);
+        }
+
+        // --cpu-moe is deliberately NOT in OptionalOptions. The flag is the placement: ProcessContextAllocationResolver
+        // reserved (GpuBytes, max(CpuBytes, fileSize)) on the premise that the whole expert share sits in system RAM,
+        // so a runtime that cannot take the flag cannot honour that admission. Refuse rather than degrade — and never
+        // with canTrySafeFallback, which would drop the flag and launch the very over-subscription this prevents.
+        if (arguments.Contains("--cpu-moe") && !SupportsLaunchOption(manifest, "--cpu-moe"))
+        {
+            return Incompatible(spec,
+                "The selected llama.cpp runtime does not support '--cpu-moe', which this model needs to keep its experts "
+                + "in system RAM. Install a runtime that supports it, or use a model that fits in VRAM. "
+                + "(" + ExpertOffloadRequiresCpuMoe + ")");
         }
 
         if (!SupportsKvAndFlashValues(arguments, manifest))

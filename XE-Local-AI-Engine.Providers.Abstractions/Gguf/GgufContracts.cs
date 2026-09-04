@@ -223,6 +223,17 @@ public sealed record GgufRepoSummary(
 ///     Global-attention layer stride (every Nth layer is full attention; Gemma3=6, Gemma2=2), resolved from the header or
 ///     a per-architecture default; <see langword="null" /> when unknown (the estimator then keeps every layer full-attention).
 /// </param>
+/// <param name="AttentionKeyLengthMla">
+///     Multi-head Latent Attention latent key dimension (GGUF <c>{arch}.attention.key_length_mla</c>). Together with
+///     <paramref name="AttentionValueLengthMla" /> this is llama.cpp's <c>is_mla()</c> test: when both are present and
+///     positive the KV cache is one latent K tensor per layer and NO V tensor. <see langword="null" /> for every
+///     non-MLA model. Detection is by these keys, never by architecture name.
+/// </param>
+/// <param name="AttentionValueLengthMla">
+///     MLA latent value dimension (GGUF <c>{arch}.attention.value_length_mla</c>); present only alongside
+///     <paramref name="AttentionKeyLengthMla" />. Under MLA no V cache is allocated, so this participates in detection
+///     rather than in the byte formula.
+/// </param>
 public sealed record GgufRepoFile(
     string FileName,
     string Quant,
@@ -242,7 +253,9 @@ public sealed record GgufRepoFile(
     long? AttentionKeyLength = null,
     long? AttentionValueLength = null,
     long? SlidingWindow = null,
-    long? SlidingWindowPattern = null);
+    long? SlidingWindowPattern = null,
+    long? AttentionKeyLengthMla = null,
+    long? AttentionValueLengthMla = null);
 
 /// <summary>One repo's inspected detail: gating, license, and its usable <c>.gguf</c> files.</summary>
 public sealed record GgufRepoDetail(
@@ -275,4 +288,6 @@ public sealed record GgufModelFootprintFacts(
     string? ContentIdentity = null,
     string? Architecture = null,
     long? ExpertCount = null,
-    long? ExpertUsedCount = null);
+    long? ExpertUsedCount = null,
+    long? AttentionKeyLengthMla = null,
+    long? AttentionValueLengthMla = null);

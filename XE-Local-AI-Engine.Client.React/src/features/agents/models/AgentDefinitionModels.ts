@@ -16,7 +16,7 @@ export type AgentDefinitionKind = "Single" | "Orchestrator";
 export const agentDefinitionKinds: readonly AgentDefinitionKind[] = ["Single", "Orchestrator"];
 
 // Reasoning effort reuses the chat surface's union so the agent form and the composer stay in lockstep.
-export const agentReasoningEfforts: readonly ReasoningEffort[] = ["none", "low", "medium", "high"];
+export const agentReasoningEfforts: readonly ReasoningEffort[] = ["none", "low", "medium", "high", "auto"];
 
 // Domain view-model for an agent definition. Tool config is exposed as typed structures (the wire DTO keeps
 // allowedToolNames as a list and toolApprovals as a map); timestamps are epoch milliseconds (long on the wire).
@@ -49,6 +49,10 @@ export interface AgentDefinition {
 	// When true this agent opts OUT of the layered base instruction scaffold the runtime normally prepends — only the
 	// instructions written above are sent, unmodified. Defaults to false (scaffold applied).
 	readonly disableBaseScaffold: boolean;
+	// When true this agent opts OUT of the node's send-time tool-relevance filter, so every tool it is allowed to use is
+	// put in front of the model on every round. Defaults to false (follow the node setting). Never an authorisation
+	// change: a filtered-out tool is one the model was not shown, not one it may not call.
+	readonly disableToolRelevanceFilter: boolean;
 	readonly version: number;
 	readonly createdAtUtc: number;
 	readonly updatedAtUtc: number;
@@ -79,6 +83,8 @@ export interface AgentDefinitionFormValues {
 	memoryExtractionEnabled: boolean;
 	// Opts this agent out of the layered base instruction scaffold normally prepended at resolve time.
 	disableBaseScaffold: boolean;
+	// Opts this agent out of the node's send-time tool-relevance filter, so every allowed tool is offered every round.
+	disableToolRelevanceFilter: boolean;
 	// Opaque provenance from an applied AI draft, echoed back verbatim on save. Unlike a skill there is no posture to
 	// demote — an agent definition carries no Imported/Enabled fence — so this is the only thing a draft leaves
 	// behind. `null` (an ordinary edit) tells the server to preserve whatever provenance the row already has.
@@ -108,6 +114,7 @@ export const agentDefinitionFormSchema = z
 		defaultTemporaryChat: z.boolean(),
 		memoryExtractionEnabled: z.boolean(),
 		disableBaseScaffold: z.boolean(),
+		disableToolRelevanceFilter: z.boolean(),
 		// Deliberately unvalidated: the provenance block is opaque client-side and must survive submit byte-for-byte,
 		// so a z.object() (which strips unknown keys) would drop any field the server adds later.
 		generationMetadata: z.custom<GenerationMetadata>().nullable(),

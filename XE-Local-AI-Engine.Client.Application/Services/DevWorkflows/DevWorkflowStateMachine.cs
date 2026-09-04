@@ -45,6 +45,29 @@ internal enum DevWorkflowNodeAdmission
 internal readonly record struct DevWorkflowRunOutcome(DevWorkflowRunStatus Status, string? FailureClass = null, string? TerminalReason = null);
 
 /// <summary>
+///     Where one SETTLED node run's out-edges went, as the state machine itself judged them — the record behind the
+///     node run's <c>route_json</c> column.
+///     <para>
+///         <see cref="Satisfied" /> means "this node's out-edge condition was satisfied". It does <b>not</b> mean the
+///         successor ran: admission is a question about a TARGET's inbound edges, so a successor with an <c>All</c>
+///         join can still be skipped by a dead sibling edge, and one with an <c>Any</c> join can become eligible on a
+///         sibling's edge without this one firing.
+///     </para>
+///     <para>
+///         There is no <c>Pending</c> bucket, and that is a proven impossibility rather than an omission:
+///         <see cref="DevWorkflowStateMachine.RouteTaken" /> refuses a source that is not terminal, which is the only
+///         state in which <see cref="DevWorkflowStateMachine.EdgeState" /> answers <c>Pending</c>.
+///     </para>
+/// </summary>
+/// <param name="GateAnswer">The decision token a human gate settled on; null on every other node type.</param>
+/// <param name="Truncated">Whether keys were dropped to keep the serialized document inside the column's bound.</param>
+public sealed record DevWorkflowRoute(IReadOnlyList<string> Satisfied,
+    IReadOnlyList<string> Dead,
+    IReadOnlyList<string> Waived,
+    string? GateAnswer,
+    bool Truncated);
+
+/// <summary>
 ///     The run and node-run state machines, as pure functions over persisted rows and the parsed graph.
 ///     <para>
 ///         The store deliberately does not judge transitions — it provides the rejection channel and enforces only what
@@ -70,6 +93,12 @@ internal static class DevWorkflowStateMachine
 
     /// <summary>How many terminal nodes a reason names one by one before it starts counting them instead.</summary>
     private const int MaxNamedNodes = 3;
+
+    /// <summary>How many successor keys each bucket of a route names. A fan-out wider than this is a shape, not a list.</summary>
+    private const int MaxRoutedKeys = 8;
+
+    /// <summary>The schema's own bound on the node run's <c>route_json</c> (<c>DevWorkflowNodeRunConfiguration</c>).</summary>
+    private const int MaxRouteJson = 1024;
 
     /// <summary>The two answers a human gate refuses with, by the output document each one stores. Nothing varies.</summary>
     private static readonly Dictionary<string, DevWorkflowDecisionKind> GateRefusals = new(StringComparer.Ordinal)
@@ -219,6 +248,134 @@ internal static class DevWorkflowStateMachine
         return source.Status == DevWorkflowNodeRunStatus.Skipped && IsWaived(edge.From, graph, nodeRunsByKey, waived, resolving)
             ? DevWorkflowEdgeState.Waived
             : DevWorkflowEdgeState.Dead;
+    }
+
+    /// <summary>
+    ///     Where a settled node run's own out-edges went, judged edge by edge by <see cref="EdgeState" /> itself rather
+    ///     than by a second copy of the rule — so the recorded route and the routing that actually happened cannot
+    ///     answer differently.
+    ///     <para>
+    ///         Two rules it inherits by delegating. A source that settled anything other than <c>Succeeded</c> kills
+    ///         every out-edge without its conditions being consulted, so a failed, cancelled or skipped node run
+    ///         records an empty <c>satisfied</c> list — which is the truth: it routed nowhere. And an edge leaving a
+    ///         materialization TEMPLATE is dropped, matching <see cref="Admission" />: the template is the one node
+    ///         deliberately never instantiated, and its edges are the authored shape the clones' own edges stand in for.
+    ///     </para>
+    ///     <para>
+    ///         <c>Waived</c> gets a bucket of its OWN rather than being folded into either half, because no fold is
+    ///         true under both join policies: a waived edge does not admit an <c>Any</c> successor, which is what
+    ///         <c>satisfied</c> would claim, and it does not kill an <c>All</c> one, which is what <c>dead</c> would
+    ///         claim. The three buckets are the three states <see cref="EdgeState" /> can answer for a terminal
+    ///         source, one for one, which is the only shape that keeps the record and the routing from answering
+    ///         differently.
+    ///     </para>
+    ///     <para>
+    ///         Whether a skip was WAIVED is not readable off the source row — it is a walk back over the graph — so
+    ///         the run's other rows come in as <paramref name="nodeRunsByKey" />. <paramref name="source" /> is laid
+    ///         over that dictionary at its own key, because the caller projects the command's target status and output
+    ///         onto it before asking and the stored row is still the previous attempt's.
+    ///     </para>
+    ///     <para>
+    ///         A non-terminal source is REFUSED rather than recorded, because <see cref="EdgeState" /> answers
+    ///         <c>Pending</c> for one and <see cref="DevWorkflowRoute" /> has no bucket for that. The caller computes a
+    ///         route only for a terminal settle; <c>Blocked</c> and <c>WaitingForApproval</c> get no route at all,
+    ///         which is honest — the node has not finished, so it has routed nowhere yet.
+    ///     </para>
+    /// </summary>
+    /// <param name="decision">The gate's answer, for a <c>HumanGate</c> source. Recorded as the route's gate answer; the edge verdicts come from the output document either way, which is what keeps it agreeing with <see cref="GateEdgeFires" />.</param>
+    internal static DevWorkflowRoute RouteTaken(DevWorkflowGraph graph,
+        DevWorkflowNodeRunSnapshot source,
+        IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> nodeRunsByKey,
+        DevWorkflowDecisionKind? decision)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(nodeRunsByKey);
+        if (!IsTerminal(source.Status))
+        {
+            throw new ArgumentException($"A route may only be taken from a terminal node run; '{source.NodeKey}' is {source.Status}.", nameof(source));
+        }
+
+        var rows = new Dictionary<string, DevWorkflowNodeRunSnapshot>(nodeRunsByKey, StringComparer.Ordinal)
+        {
+            [source.NodeKey] = source
+        };
+
+        var satisfied = new List<string>();
+        var dead = new List<string>();
+        var waived = new List<string>();
+        var edges = graph.TemplateKeys.Contains(source.NodeKey) ? [] : graph.OutboundEdges(source.NodeKey);
+        foreach (var edge in edges)
+        {
+            switch (EdgeState(edge, graph, rows))
+            {
+                case DevWorkflowEdgeState.Satisfied:
+                    satisfied.Add(edge.To);
+                    break;
+                case DevWorkflowEdgeState.Waived:
+                    waived.Add(edge.To);
+                    break;
+
+                // Dead, and only Dead: Pending needs a source that is null or non-terminal, and both are refused above.
+                default:
+                    dead.Add(edge.To);
+                    break;
+            }
+        }
+
+        var truncated = satisfied.Count > MaxRoutedKeys || dead.Count > MaxRoutedKeys || waived.Count > MaxRoutedKeys;
+        return new DevWorkflowRoute([.. satisfied.Take(MaxRoutedKeys)],
+            [.. dead.Take(MaxRoutedKeys)],
+            [.. waived.Take(MaxRoutedKeys)],
+            decision?.ToString(),
+            truncated);
+    }
+
+    /// <summary>
+    ///     A route as the <c>route_json</c> column stores it, dropping keys until the document fits the column's bound
+    ///     rather than clipping it mid-string — a truncated document that no longer parses would take the whole recipe
+    ///     down with it. Anything dropped raises <see cref="DevWorkflowRoute.Truncated" />, so a short list is never
+    ///     read as a complete one.
+    /// </summary>
+    internal static string RouteJson(DevWorkflowRoute route)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+
+        var satisfied = route.Satisfied.ToList();
+        var dead = route.Dead.ToList();
+        var waived = route.Waived.ToList();
+        var truncated = route.Truncated;
+        while (true)
+        {
+            var json = JsonSerializer.Serialize(new DevWorkflowRoute(satisfied, dead, waived, route.GateAnswer, truncated), JsonOptions);
+            if (json.Length <= MaxRouteJson || (satisfied.Count == 0 && dead.Count == 0 && waived.Count == 0))
+            {
+                return json;
+            }
+
+            // Drop from the longest list, so a route with one satisfied edge and nine dead ones keeps the edge that says
+            // where the run went rather than losing it to the ones that say where it did not.
+            var longest = new[] { satisfied, dead, waived }.MaxBy(static list => list.Count)!;
+            longest.RemoveAt(longest.Count - 1);
+            truncated = true;
+        }
+    }
+
+    /// <summary>
+    ///     The answer a human gate settled on, read back off the output document <see cref="GateOutputJson" /> wrote —
+    ///     the same pairing, so the writer and this reader cannot drift. Null for any other document, including a
+    ///     structural node's.
+    /// </summary>
+    internal static DevWorkflowDecisionKind? GateDecisionFrom(string? outputJson)
+    {
+        if (ParseOutput(outputJson) is not { ValueKind: JsonValueKind.Object } output
+            || !output.TryGetProperty("decision", out var decision)
+            || decision.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        return Enum.TryParse<DevWorkflowDecisionKind>(decision.GetString(), out var parsed) ? parsed : null;
     }
 
     /// <summary>

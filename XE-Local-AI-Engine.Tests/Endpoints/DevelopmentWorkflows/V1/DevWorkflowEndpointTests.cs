@@ -388,6 +388,10 @@ public sealed class DevWorkflowEndpointTests
     ///     validation node where the integration step had been. Both directions are asserted on one round trip: what
     ///     the store was handed, and what the caller reads back. Sent in lower case on purpose: the stored value is
     ///     canonical whatever an author writes, so nothing reading the blob later has to parse case-insensitively.
+    ///     <para>
+    ///         The <c>validate</c> node is not decoration: <c>GRAPH-C4-3</c> refuses an apply a run can reach without a
+    ///         validation, and the seeded template this graph models has always had one between the work and the gate.
+    ///     </para>
     /// </summary>
     [Test]
     public async Task Definition_KeepsAnApplyNodesToolModeThroughTheRoundTrip()
@@ -395,9 +399,11 @@ public sealed class DevWorkflowEndpointTests
         const string ApplyGraph = """
                                   {"schemaVersion":1,
                                    "nodes":[{"nodeKey":"implement","nodeType":"DevTask","nodeTimeoutSeconds":900},
+                                            {"nodeKey":"validate","nodeType":"Tool"},
                                             {"nodeKey":"approval","nodeType":"HumanGate"},
                                             {"nodeKey":"integrate","nodeType":"Tool","toolMode":"apply","label":"Apply the approved patches"}],
-                                   "edges":[{"from":"implement","to":"approval"},
+                                   "edges":[{"from":"implement","to":"validate"},
+                                            {"from":"validate","to":"approval"},
                                             {"from":"approval","to":"integrate","condition":{"path":"decision","op":"eq","value":"Approve"}}]}
                                   """;
         var store = Store();
@@ -421,13 +427,62 @@ public sealed class DevWorkflowEndpointTests
             "the stored graph is what a run pins, so the apply node survives into it — in the parser's own spelling, whatever casing was sent.");
         using var document = JsonDocument.Parse(body);
         var nodes = document.RootElement.GetProperty("graph").GetProperty("nodes");
-        AssertEx.Equal("Apply", nodes[2].GetProperty("toolMode").GetString());
+        AssertEx.Equal("Apply", nodes[3].GetProperty("toolMode").GetString());
         AssertEx.Equal(JsonValueKind.Null,
             nodes[1].GetProperty("toolMode").ValueKind,
             "a node that declares none reads back as null — absent is Validate, exactly as the runtime's parser reads it.");
         using var storedDocument = JsonDocument.Parse(stored!);
         AssertEx.False(storedDocument.RootElement.GetProperty("nodes")[1].TryGetProperty("toolMode", out _),
             "and nothing is written into the stored graph for it, so a definition authored before this field keeps its bytes.");
+    }
+
+    /// <summary>
+    ///     The capability fields cross the wire in BOTH directions, or they are not authorable at all: the mapper
+    ///     serializes the wire DTO, so a graph field absent from it is DROPPED on any save round-trip — which is how
+    ///     <c>toolMode</c> was lost once already. All three are asserted on one trip: the node's declared effects and
+    ///     its loop cap, and the graph-level waiver, in what the store was handed and in what the caller reads back.
+    /// </summary>
+    [Test]
+    public async Task Definition_KeepsTheCapabilityFieldsThroughTheRoundTrip()
+    {
+        const string CapabilityGraph = """
+                                       {"schemaVersion":1,"allowUngatedWrites":true,
+                                        "nodes":[{"nodeKey":"implement","nodeType":"Agent",
+                                                  "requiredCapabilities":{"WriteExecute":"runs the release script"}},
+                                                 {"nodeKey":"check","nodeType":"Tool","retryTarget":"implement","maxLoopIterations":2}],
+                                        "edges":[{"from":"implement","to":"check"}]}
+                                       """;
+        var store = Store();
+        string? stored = null;
+        store.CreateDefinitionAsync(Arg.Any<CreateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call =>
+             {
+                 stored = call.Arg<CreateDevWorkflowDefinitionCommand>().GraphJson;
+                 return DefinitionSnapshot(stored);
+             });
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(CapabilityGraph)).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
+        AssertEx.NotNull(stored);
+        using var storedDocument = JsonDocument.Parse(stored!);
+        AssertEx.True(storedDocument.RootElement.GetProperty("allowUngatedWrites").GetBoolean(), "the waiver is what a run pins, so it has to survive into the blob.");
+        var storedNodes = storedDocument.RootElement.GetProperty("nodes");
+        AssertEx.Equal("runs the release script",
+            storedNodes[0].GetProperty("requiredCapabilities").GetProperty("WriteExecute").GetString(),
+            "the author's reason rides the blob untouched — nothing in the runtime reads it, and the editor renders it.");
+        AssertEx.Equal(expected: 2, storedNodes[1].GetProperty("maxLoopIterations").GetInt32());
+        AssertEx.False(storedNodes[0].TryGetProperty("maxLoopIterations", out _),
+            "and a node that names no cap writes none, so a definition authored before this field keeps its bytes.");
+
+        using var document = JsonDocument.Parse(body);
+        var graph = document.RootElement.GetProperty("graph");
+        AssertEx.True(graph.GetProperty("allowUngatedWrites").GetBoolean());
+        var nodes = graph.GetProperty("nodes");
+        AssertEx.Equal("runs the release script", nodes[0].GetProperty("requiredCapabilities").GetProperty("WriteExecute").GetString());
+        AssertEx.Equal(expected: 2, nodes[1].GetProperty("maxLoopIterations").GetInt32());
     }
 
     /// <summary>

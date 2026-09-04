@@ -13,6 +13,7 @@ using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -41,6 +42,7 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Interaction;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
@@ -50,7 +52,9 @@ using XE_Local_AI_Engine.Client.Services.Validation.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
+using XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -3019,6 +3023,28 @@ public sealed class InvocationRunnerTests
         return resolver;
     }
 
+    /// <summary>
+    ///     A llama.cpp resolver whose launched per-slot window DIFFERS per model, so a turn that runs two models can
+    ///     assert each send was sized against the window of the model that actually served it.
+    /// </summary>
+    private static ILocalModelProviderResolver CreatePerModelLlamaCppResolver(IReadOnlyDictionary<string, int> windowsByModel)
+    {
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ProviderName.Returns(LlamaServerProviderConstants.ProviderName);
+        provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(callInfo => Task.FromResult(windowsByModel.TryGetValue(callInfo.Arg<string>(), out var window)
+                    ? new LocalModelRuntimeInfo(window)
+                    : null));
+
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(LlamaServerProviderConstants.ProviderName));
+        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(provider));
+
+        return resolver;
+    }
+
     [Test]
     public async Task RunAsync_WhenModelRoutesToCloud_DoesNotWarmALocalProvider()
     {
@@ -3072,6 +3098,404 @@ public sealed class InvocationRunnerTests
             && payload.Message.Contains("qwen3.5:0.8b", StringComparison.Ordinal)));
     }
 
+    // ---- reasoning effort `auto` -------------------------------------------------------------------------------
+
+    /// <summary>
+    ///     THE byte-identical-default proof. The dispatcher is registered through a factory that THROWS, so a turn
+    ///     whose effort is anything but <c>auto</c> proves it was never RESOLVED — not merely never invoked — because
+    ///     the runner opens no scope on that path at all. Registered scoped, exactly as the composition root does.
+    /// </summary>
+    [Test]
+    [Arguments(null)]
+    [Arguments("")]
+    [Arguments("none")]
+    [Arguments("on")]
+    [Arguments("minimal")]
+    [Arguments("low")]
+    [Arguments("medium")]
+    [Arguments("high")]
+    [Arguments("xhigh")]
+    public async Task Dispatch_WhenEffortIsNotAuto_DispatcherIsNeverResolvedOrInvoked(string? reasoningEffort)
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        InvocationAgentDefinition? built = null;
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
+            eventDispatcher: dispatcher,
+            reasoningEffortDispatcherFactory: static _ => throw new InvalidOperationException("The dispatcher must never be resolved on a non-auto turn."));
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort(reasoningEffort).Build();
+
+        await RunAsync(runner, package);
+
+        // No throw means no resolve. The definition must also be exactly what it was before this feature existed:
+        // the authored effort, the resolved model, and untouched sampling.
+        var definitionBuilt = AssertEx.NotNull(built);
+        AssertEx.True(string.Equals(reasoningEffort, definitionBuilt.ReasoningEffort, StringComparison.Ordinal),
+            "the authored effort must reach the definition untouched");
+        AssertEx.Equal("qwen3.5:0.8b", definitionBuilt.ModelId);
+        AssertEx.Null(definitionBuilt.Sampling?.MaxOutputTokens);
+        await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.EffortDispatched));
+    }
+
+    /// <summary>
+    ///     The other half of the proof: the same throwing factory IS reached on an <c>auto</c> turn, so the test above
+    ///     cannot pass by simply never wiring the dispatcher at all.
+    /// </summary>
+    [Test]
+    public async Task Dispatch_WhenEffortIsAuto_ResolvesTheDispatcherFromTheTurnScope()
+    {
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender,
+            agentUpdates: CreateUpdates("ok"),
+            reasoningEffortDispatcherFactory: static _ => throw new InvalidOperationException("resolved-on-auto"));
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").Build();
+
+        // The resolution failure surfaces as the turn's failure, which is what proves the resolve happened.
+        await RunAsync(runner, package);
+
+        AssertEx.True(sender.SentEncryptedFailures.Count > 0, "an auto turn must reach the dispatcher registration");
+    }
+
+    [Test]
+    public async Task Dispatch_WhenTierIsNormalAndNoSwap_EmitsNoNotice()
+    {
+        // The common case. A notice on every ordinary turn would be noise, so NORMAL with the model unchanged is
+        // silent — the effort still changes, it is just not worth interrupting the reader for.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        InvocationAgentDefinition? built = null;
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Normal, "qwen3.5:0.8b", "medium", ReasoningDispatchReasons.Balanced));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
+            eventDispatcher: dispatcher,
+            reasoningEffortDispatcherFactory: _ => stub);
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").Build();
+
+        await RunAsync(runner, package);
+
+        AssertEx.Equal(expected: 1, stub.Invocations);
+        AssertEx.Equal("medium", AssertEx.NotNull(built).ReasoningEffort, "the dispatched effort replaces `auto` before the definition is built");
+        await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.EffortDispatched));
+    }
+
+    [Test]
+    public async Task Dispatch_WhenModelSwapped_EmitsEffortDispatchedNotice()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        InvocationAgentDefinition? built = null;
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
+            eventDispatcher: dispatcher,
+            reasoningEffortDispatcherFactory: _ => stub);
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build();
+
+        await RunAsync(runner, package);
+
+        var definitionBuilt = AssertEx.NotNull(built);
+        AssertEx.Equal("qwen3-1.7b", definitionBuilt.ModelId, "the turn runs on the model the dispatcher chose");
+        AssertEx.Equal("low", definitionBuilt.ReasoningEffort);
+        AssertEx.Null(definitionBuilt.Sampling?.MaxOutputTokens, "no tier caps the send's output");
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.InvocationId == package.InvocationId
+            && payload.Kind == TurnNoticeKind.EffortDispatched
+            && payload.Detail == ReasoningDispatchReasons.ShortTurn
+            && payload.Message.Contains("qwen3-1.7b", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task Dispatch_WhenModelSwapped_RecordsTheServedModelOnTheInvocationState()
+    {
+        // The invocation state is seeded with the model the PACKAGE named, and BOTH the persisted message row and the
+        // run envelope's provider attribution are read from it. A swapped turn that leaves it alone is recorded, and
+        // measured, against a model that never saw the turn — the fast model's tokens and latency land on the big
+        // model's row.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender, agentUpdates: CreateUpdates("ok"), eventDispatcher: dispatcher, reasoningEffortDispatcherFactory: _ => stub);
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportServedModelAsync(package.InvocationId, "qwen3-1.7b");
+    }
+
+    [Test]
+    [Arguments("auto")]
+    [Arguments("medium")]
+    public async Task Dispatch_WhenTheModelIsNotSwapped_NeverRecordsAServedModel(string reasoningEffort)
+    {
+        // Both silent shapes: an `auto` turn the dispatcher chose not to swap, and an ordinary turn that never reaches
+        // the dispatcher at all. The seeded model is already correct on each, and a redundant report would rewrite the
+        // state on every turn for nothing.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3.5:0.8b", "low", ReasoningDispatchReasons.FastModelUnset));
+        var runner = CreateRunner(sender, agentUpdates: CreateUpdates("ok"), eventDispatcher: dispatcher, reasoningEffortDispatcherFactory: _ => stub);
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort(reasoningEffort).Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.DidNotReceive().ReportServedModelAsync(Arg.Any<Guid>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public async Task Dispatch_WhenTheFallbackRerunsOnTheOriginalModel_NeverRecordsTheFastModelAsServed()
+    {
+        // The other half of the rule: the fast model did not serve this turn, the original one did, and the seeded
+        // state already names it. Reporting the fast model here would put a model that produced nothing on the row.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var observed = new List<InvocationAgentDefinition>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
+            eventDispatcher: dispatcher,
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
+
+        AssertEx.Equal(expected: 2, observed.Count, "the re-run must have happened, or this proves nothing");
+        await dispatcher.DidNotReceive().ReportServedModelAsync(Arg.Any<Guid>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public async Task Dispatch_WhenSwappedSendFailsAfterFirstToken_StillEmitsExactlyOneEffortDispatchedNotice()
+    {
+        // A swapped turn withholds its notice until the send resolves, precisely so a fallback cannot leave the reader
+        // with two contradictory rows. When the send streams and THEN fails there is no fallback to announce — and the
+        // turn used to end with no effort notice at all, which is the one outcome the ruling forbids. The notice names
+        // the model that actually served; the failure itself is reported as on any other turn.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var observed = new List<InvocationAgentDefinition>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed, emitATokenBeforeFailing: true),
+            eventDispatcher: dispatcher,
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
+
+        AssertEx.Equal(expected: 1, observed.Count, "a turn that has already streamed must not be re-run");
+        AssertEx.True(sender.SentEncryptedFailures.Count > 0, "the turn still fails");
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.EffortDispatched
+            && payload.Detail == ReasoningDispatchReasons.ShortTurn
+            && payload.Message.Contains("qwen3-1.7b", StringComparison.Ordinal)));
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.EffortDispatched));
+    }
+
+    [Test]
+    public async Task Dispatch_WhenSwapAdmitted_DisposesTheReservationBeforeTheScope()
+    {
+        // Declaration order is load-bearing: `using` disposes in REVERSE order, so the scope is declared first and
+        // released LAST — after the ledger reservation produced by the CapacityService that lives inside it. Reversing
+        // the two would tear down the scoped services while a live reservation still referred to them.
+        var sender = new MockHubMessageSender();
+        using var reservation = new SpyReservation();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn, reservation: reservation));
+        var runner = CreateRunner(sender, agentUpdates: CreateUpdates("ok"), reasoningEffortDispatcherFactory: _ => stub);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
+
+        AssertEx.True(reservation.DisposedAtTicks.HasValue, "the ledger reservation must be released");
+        AssertEx.True(stub.DisposedAtTicks.HasValue, "the per-turn scope must be torn down");
+        AssertEx.True(reservation.DisposedAtTicks!.Value <= stub.DisposedAtTicks!.Value,
+            "the ledger reservation must be released before the scope that produced it");
+    }
+
+    [Test]
+    public async Task Dispatch_WhenSwappedSendFailsBeforeFirstToken_RetriesOnOriginalModelAtLowAndEmitsFastModelUnavailable()
+    {
+        // The fast model went away between the capacity probe and the send. Nothing reached the client, so the turn
+        // re-runs once on the model it was authorised for — and COMPLETES. A failed turn here would break the
+        // dispatcher's "never fails a turn" contract.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var observed = new List<InvocationAgentDefinition>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
+            eventDispatcher: dispatcher,
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub);
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build();
+
+        await RunAsync(runner, package);
+
+        AssertEx.Equal(expected: 2, observed.Count, "exactly one re-run");
+        AssertEx.Equal("qwen3-1.7b", observed[0].ModelId);
+        AssertEx.Equal("qwen3.5:0.8b", observed[1].ModelId, "the re-run uses the model the turn was authorised for");
+        AssertEx.Equal("low", observed[1].ReasoningEffort, "the re-run keeps the tier the dispatcher chose and gives up only the model");
+        AssertEx.Empty(sender.SentEncryptedFailures);
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.EffortDispatched && payload.Detail == ReasoningDispatchReasons.FastModelUnavailable));
+        // ONE notice for the turn. A swapped turn stays silent until the send has resolved precisely so a fallback
+        // does not leave the reader with two contradictory "reasoning effort resolved" rows for one answer.
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.EffortDispatched));
+    }
+
+    [Test]
+    public async Task Dispatch_WhenSwappedSendFailsAfterFirstToken_DoesNotRetry()
+    {
+        // Once a token has reached the client there is nothing to re-run into: the turn fails exactly as any other
+        // mid-stream failure does.
+        var sender = new MockHubMessageSender();
+        var observed = new List<InvocationAgentDefinition>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed, emitATokenBeforeFailing: true),
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
+
+        AssertEx.Equal(expected: 1, observed.Count, "a turn that has already streamed must not be re-run");
+        AssertEx.True(sender.SentEncryptedFailures.Count > 0);
+    }
+
+    [Test]
+    public async Task Dispatch_WhenFallbackRerunsOnOriginalModel_HoldsNoFastReservation()
+    {
+        // The fast reservation books the small model's bytes and one of the loaded-process slots. Carrying it into the
+        // re-run double-books the ledger against a model that is no longer being loaded, and can starve the original
+        // model's own spawn on a node at the process cap — the exact failure the re-run exists to avoid.
+        var sender = new MockHubMessageSender();
+        using var reservation = new SpyReservation();
+        var observed = new List<InvocationAgentDefinition>();
+        long? secondRunStartedAt = null;
+        var factory = CreateModelRoutedFactory("qwen3-1.7b", observed);
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn, reservation: reservation));
+        var spyFactory = Substitute.For<IInvocationAgentFactory>();
+        spyFactory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+                  .Returns(callInfo =>
+                  {
+                      if (observed.Count == 1)
+                      {
+                          secondRunStartedAt ??= Stopwatch.GetTimestamp();
+                      }
+
+                      return factory.CreateAsync(callInfo.Arg<InvocationAgentDefinition>(), callInfo.Arg<CancellationToken>());
+                  });
+
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: spyFactory,
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
+
+        AssertEx.True(reservation.DisposedAtTicks.HasValue, "the fast reservation must be released");
+        AssertEx.True(secondRunStartedAt.HasValue, "the re-run must have started");
+        AssertEx.True(reservation.DisposedAtTicks!.Value <= secondRunStartedAt!.Value, "the fast reservation must be released BEFORE the re-run begins");
+        // Dispose is idempotent at its source, so the `using` at turn end running a second time must not throw.
+        AssertEx.Equal(expected: 2, reservation.DisposeCount, "released in the catch, then again by the turn-end using");
+    }
+
+    [Test]
+    public async Task Dispatch_WhenTheExternalOriginalBindingChangesBeforeTheFallback_RefusesTheFallbackSend()
+    {
+        // The turn is authorised for a declared-LOCAL external model and swaps to a node-local fast model. The fast
+        // send fails before any output, and while it fails the operator flips that connection to Cloud. The fallback
+        // re-runs the ORIGINAL model inside the pin scope opened before the swap — so unless that scope also carries
+        // the ORIGINAL model's pin, the fallback falls through to the transport's weaker unpinned rule and honours a
+        // Local->Cloud escalation the pin exists to refuse.
+        var sender = new MockHubMessageSender();
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        var observed = new List<InvocationAgentDefinition>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateExternalFallbackFactory("qwen3-1.7b",
+                registry,
+                recorder,
+                observed,
+                onFastModelSend: () => registry.Replace(ExternalProviderTestData.Connection(locality: ExternalProviderLocality.Cloud),
+                    ExternalProviderTestData.Model())),
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub,
+            externalProviderRegistry: registry);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithModel(ExternalProviderTestData.ModelId).WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
+
+        AssertEx.Equal(expected: 2, observed.Count, "the fallback must have been attempted");
+        AssertEx.Empty(recorder.Requests, "the prompt must never reach the changed endpoint");
+        AssertEx.True(sender.SentEncryptedFailures.Count > 0, "a refused fallback fails the turn rather than sending");
+    }
+
+    [Test]
+    public async Task Dispatch_WhenTheExternalOriginalBindingIsUnchanged_TheFallbackStillSends()
+    {
+        // The other half of the pin: an untouched binding must not be turned into a refusal by pinning the original
+        // model as well. The fallback sends, on the endpoint the turn was authorised for, and the turn completes.
+        var sender = new MockHubMessageSender();
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        var observed = new List<InvocationAgentDefinition>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateExternalFallbackFactory("qwen3-1.7b", registry, recorder, observed),
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub,
+            externalProviderRegistry: registry);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithModel(ExternalProviderTestData.ModelId).WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
+
+        AssertEx.Equal(expected: 1, recorder.Requests.Count, "the fallback must reach the pinned endpoint");
+        AssertEx.Equal("http://127.0.0.1:18099/v1/chat/completions", recorder.LastRequest.Uri?.AbsoluteUri);
+        AssertEx.Empty(sender.SentEncryptedFailures);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheTurnNeverSwapsModels_ResolvesExactlyOnePin()
+    {
+        // Byte-identical guard for the pin set. Resolving BOTH the dispatched and the original model must not widen
+        // the ambient set on any turn that did not swap: a non-`auto` turn and an `auto` turn that stayed on its own
+        // model both name the same id twice, and the resolver de-duplicates.
+        var nonAutoPins = await RunNoSwapTurnAndCapturePinsAsync("medium");
+        var autoPins = await RunNoSwapTurnAndCapturePinsAsync("auto");
+
+        foreach (var pins in new[] { nonAutoPins, autoPins })
+        {
+            AssertEx.Equal(expected: 1, pins.Count, "a turn that never swapped must pin exactly the model it runs");
+            AssertEx.Equal(ExternalProviderTestData.ModelId, pins[0].ModelId);
+        }
+    }
+
+    /// <summary>
+    ///     One completed turn on an external model that never swaps, returning the pins in force at its send. The
+    ///     `auto` case dispatches to the SAME model, so it is dispatched but not swapped.
+    /// </summary>
+    private static async Task<IReadOnlyList<ExternalProviderBindingPin>> RunNoSwapTurnAndCapturePinsAsync(string effort)
+    {
+        var sender = new MockHubMessageSender();
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        var pinsAtSend = new List<IReadOnlyList<ExternalProviderBindingPin>>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Normal,
+            ExternalProviderTestData.ModelId,
+            "medium",
+            ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateExternalFallbackFactory("qwen3-1.7b", registry, recorder, [], pinsAtSend: pinsAtSend),
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub,
+            externalProviderRegistry: registry);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithModel(ExternalProviderTestData.ModelId).WithReasoningEffort(effort).Build());
+
+        AssertEx.Empty(sender.SentEncryptedFailures);
+        AssertEx.Equal(expected: 1, pinsAtSend.Count, "the turn must have sent exactly once");
+        return pinsAtSend[0];
+    }
+
     [Test]
     public async Task RunAsync_WhenAToolReturnsTheDisabledMarker_SurfacesAToolDisabledNoticeOncePerTool()
     {
@@ -3087,6 +3511,190 @@ public sealed class InvocationRunnerTests
             && payload.Kind == TurnNoticeKind.ToolDisabled
             && payload.Detail == "test-tool"
             && payload.Message.Contains("test-tool", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheRelevanceHopHeldToolsBack_EmitsOneToolsFilteredNoticeAfterTheFirstAssistantText()
+    {
+        // The drain the hop cannot do itself: it leaves the pair on the ambient scope several awaited frames below the
+        // runner, and the runner turns it into the one counts-only sentence at the end of the FIRST segment — after
+        // the assistant text, exactly as HistoryTruncated does.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var chunksSentWhenTheNoticeFired = -1;
+        dispatcher.When(static call => call.ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.ToolsFiltered)))
+                  .Do(_ => chunksSentWhenTheNoticeFired = sender.SentEncryptedChunks.Count(static chunk => chunk.Kind == EncryptedChunkEnvelopeV1.ContentKind));
+        var runner = CreateRunner(sender,
+            eventDispatcher: dispatcher,
+            agentUpdates: ToolsFilteredUpdates(hidden: 5, total: 12, "Hello"),
+            toolRelevanceOptions: new ToolRelevanceOptions
+            {
+                Enabled = true
+            });
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        // The sentence is asserted verbatim: the ChatNoticeRow test renders whatever the server sends, so this is the
+        // only place the wording is pinned.
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.InvocationId == package.InvocationId
+            && payload.Kind == TurnNoticeKind.ToolsFiltered
+            && payload.Message == "5 of 12 tools were held back from this turn to save context; the assistant can list and use them by calling list_tools."));
+        AssertEx.True(chunksSentWhenTheNoticeFired >= 1, "The notice must follow the first assistant text, never precede it.");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenNoToolWasHeldBack_EmitsNoToolsFilteredNotice()
+    {
+        // Both silent shapes: the shipped default (the filter never engages) and an ACTIVE filter whose decision hid
+        // nothing — "0 of N tools were held back" is a sentence no user should ever see.
+        var shippedDefaultDispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await RunAsync(CreateRunner(new MockHubMessageSender(), eventDispatcher: shippedDefaultDispatcher, agentUpdates: CreateUpdates("Hello")),
+            RuntimePackageBuilder.Valid().Build());
+
+        var nothingHiddenDispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await RunAsync(CreateRunner(new MockHubMessageSender(),
+                eventDispatcher: nothingHiddenDispatcher,
+                agentUpdates: ToolsFilteredUpdates(hidden: 0, total: 12, "Hello"),
+                toolRelevanceOptions: new ToolRelevanceOptions
+                {
+                    Enabled = true
+                }),
+            RuntimePackageBuilder.Valid().Build());
+
+        foreach (var dispatcher in new[] { shippedDefaultDispatcher, nothingHiddenDispatcher })
+        {
+            await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.ToolsFiltered));
+        }
+    }
+
+    [Test]
+    public async Task RunAsync_WhenASecondSegmentFiltersAgain_KeepsTheNoticeToTheFirstSegmentsCounts()
+    {
+        // The drain is inside `if (isFirstSegment …)`, so an approval resume that rebinds the tool array and computes a
+        // second decision must NOT post a second "tools were held back" line under output the user has already read.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1
+                ? ToolsFilteredApprovalRequestUpdates(hidden: 5, total: 12)
+                : ToolsFilteredUpdates(hidden: 3, total: 9, "done");
+        });
+        var runner = CreateRunner(sender,
+            factory,
+            eventDispatcher: dispatcher,
+            toolRelevanceOptions: new ToolRelevanceOptions
+            {
+                Enabled = true
+            });
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("run_in_agent_home").Build();
+
+        var runTask = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        await runTask;
+
+        AssertEx.Equal(expected: 2, segment, "The resume segment must actually run, or this proves nothing.");
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.ToolsFiltered
+            && payload.Message.StartsWith("5 of 12 tools", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task RunAsync_OnACompletedTurn_ReportsTheBudgetsToolSchemaTokenEstimateBeforeTheTerminalReport()
+    {
+        // The columns are populated on the SHIPPED default (tool relevance off): the budget counts the schema either
+        // way, and that is what makes the before/after measurable at all. Cumulative across rounds, maximum per round.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var order = new List<string>();
+        dispatcher.When(static call => call.ReportToolSchemaTokensAsync(Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<int?>())).Do(_ => order.Add("estimate"));
+        dispatcher.When(static call => call.ReportInvocationCompletedAsync(Arg.Any<Guid>(),
+                            Arg.Any<int?>(),
+                            Arg.Any<int?>(),
+                            Arg.Any<int?>(),
+                            Arg.Any<int?>(),
+                            Arg.Any<long?>(),
+                            Arg.Any<string?>(),
+                            Arg.Any<InvocationThroughput?>()))
+                  .Do(_ => order.Add("completed"));
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: ToolSchemaBudgetedUpdates(640, 300));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportToolSchemaTokensAsync(package.InvocationId, 940L, 640);
+        AssertEx.True(order.SequenceEqual(["estimate", "completed"], StringComparer.Ordinal),
+            "The estimate must reach the invocation state BEFORE the terminal report, or the envelope row is written without it.");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheTurnIsCancelled_StillReportsTheToolSchemaTokenEstimate()
+    {
+        // The easiest path to lose, and the most interesting one to keep: a turn that was stopped is exactly where an
+        // operator asks what the tool schema was costing.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var order = new List<string>();
+        dispatcher.When(static call => call.ReportToolSchemaTokensAsync(Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<int?>())).Do(_ => order.Add("estimate"));
+        dispatcher.When(static call => call.ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>())).Do(_ => order.Add("terminal"));
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = CreateRunner(sender, CreateFactory(cancellationToken => ToolSchemaBudgetedThenParkedUpdates(640, started, cancellationToken)), eventDispatcher: dispatcher);
+        var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
+
+        var runTask = RunAsync(runner, package);
+        await started.Task;
+        runner.Cancel(package.InvocationId);
+        await runTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        await dispatcher.Received(1).ReportToolSchemaTokensAsync(package.InvocationId, 640L, 640);
+        AssertEx.True(order.SequenceEqual(["estimate", "terminal"], StringComparer.Ordinal));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheTurnFails_StillReportsTheToolSchemaTokenEstimate()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var order = new List<string>();
+        dispatcher.When(static call => call.ReportToolSchemaTokensAsync(Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<int?>())).Do(_ => order.Add("estimate"));
+        dispatcher.When(static call => call.ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>())).Do(_ => order.Add("terminal"));
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: ToolSchemaBudgetedThenThrowingUpdates(640));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportToolSchemaTokensAsync(package.InvocationId, 640L, 640);
+        AssertEx.True(order.SequenceEqual(["estimate", "terminal"], StringComparer.Ordinal));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheEstimateReportThrows_StillCompletesTheTurn()
+    {
+        // Telemetry never decides an outcome. The report runs immediately before the terminal report, so an unguarded
+        // throw on the completed path would fall into the catch below it and turn a finished turn into a failed one.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.ReportToolSchemaTokensAsync(Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<int?>())
+                  .Returns<Task>(static _ => throw new InvalidOperationException("the estimate seam broke"));
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: CreateUpdates("Hello"));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId,
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<long?>(),
+            Arg.Any<string?>(),
+            Arg.Any<InvocationThroughput?>());
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), Arg.Any<FailureCategory>());
     }
 
     [Test]
@@ -3478,7 +4086,10 @@ public sealed class InvocationRunnerTests
         UserQuestionAnswerStash? userQuestionAnswerStash = null,
         IToolApprovalAuditRecorder? approvalAuditRecorder = null,
         IToolApprovalPolicy? approvalPolicy = null,
-        IInvocationAttachmentTracker? attachmentTracker = null)
+        IInvocationAttachmentTracker? attachmentTracker = null,
+        ToolRelevanceOptions? toolRelevanceOptions = null,
+        Func<IServiceProvider, IReasoningEffortDispatcher>? reasoningEffortDispatcherFactory = null,
+        IExternalProviderRegistry? externalProviderRegistry = null)
     {
         var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
@@ -3557,6 +4168,10 @@ public sealed class InvocationRunnerTests
             Options.Create(new ProviderResilienceOptions()),
             Options.Create(new AgentToolPipelineOptions()),
             Options.Create(new ProviderCallBudgetOptions()),
+            // Tool relevance stays OFF by default here: every existing assertion in this file is a byte-identical-offer
+            // assertion. The notice-drain tests pass their own enabled options.
+            Options.Create(toolRelevanceOptions ?? new ToolRelevanceOptions()),
+            new FakeToolRelevanceCoreSet(),
             configuration,
             runtimeSettings,
             Options.Create(new SpawnOptions()),
@@ -3574,8 +4189,26 @@ public sealed class InvocationRunnerTests
                 pendingToolCallRegistry,
                 runtimeSettings),
             new InvocationLifecycleTracker(attachmentTracker ?? CreateAttachmentTracker(), pendingToolCallRegistry, runtimeSettings),
-            new FakeExternalProviderRegistry(),
+            externalProviderRegistry ?? new FakeExternalProviderRegistry(),
+            // The runner opens ONE scope per `auto` turn and resolves the dispatcher from it. The default provider
+            // registers nothing, so a test that never sends `auto` proves — by not throwing — that no scope is used.
+            CreateScopeFactory(reasoningEffortDispatcherFactory),
             NullLogger<InvocationRunner>.Instance);
+    }
+
+    /// <summary>
+    ///     A real container holding only the reasoning-effort dispatcher, registered SCOPED exactly as the composition
+    ///     root registers it — so a test drives the same resolve-from-a-scope path the product does.
+    /// </summary>
+    private static IServiceScopeFactory CreateScopeFactory(Func<IServiceProvider, IReasoningEffortDispatcher>? dispatcherFactory)
+    {
+        var services = new ServiceCollection();
+        if (dispatcherFactory is not null)
+        {
+            services.AddScoped(dispatcherFactory);
+        }
+
+        return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
     }
 
     private static async Task RunAsync(InvocationRunner runner,
@@ -3656,6 +4289,231 @@ public sealed class InvocationRunnerTests
             var createdAtField = AssertEx.NotNull(pendingToolCall.GetType().GetField("<CreatedAt>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic));
             createdAtField.SetValue(pendingToolCall, DateTimeOffset.UtcNow - age);
         }
+    }
+
+    [Test]
+    [Arguments(32768)]
+    [Arguments(4096)]
+    public async Task Dispatch_WhenTierIsFast_LeavesTheSendsSamplingUntouched(int effectiveContextTokens)
+    {
+        // No tier caps the output. A FAST turn differs from a non-`auto` turn only in its effort, on a wide window as
+        // much as on a narrow one — which is what keeps both context budgeters' output RESERVATION where it was and
+        // keeps a small window from being starved by a reservation a non-`auto` turn would never have made.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        InvocationAgentDefinition? built = null;
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3.5:0.8b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateFactory(CreateUpdates("ok"), onCreate: definition => built = definition),
+            eventDispatcher: dispatcher,
+            providerResolver: CreateLlamaCppResolver(effectiveContextTokens),
+            reasoningEffortDispatcherFactory: _ => stub);
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").Build();
+
+        await RunAsync(runner, package);
+
+        AssertEx.Null(AssertEx.NotNull(built).Sampling?.MaxOutputTokens);
+        AssertEx.Empty(sender.SentEncryptedFailures);
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.ContextWindowExceeded);
+    }
+
+    [Test]
+    public async Task Dispatch_WhenTheFallbackRerunsOnTheOriginalModel_UsesTheOriginalModelsWindow()
+    {
+        // The swapped model was warmed at 4096 and the turn policy was sized against THAT window. Re-running the
+        // original model on it would measure a long conversation against the fast model's window and drop history the
+        // authorised model would have kept — and would thread 4096 as the num_ctx of a process launched at 32768.
+        var sender = new MockHubMessageSender();
+        var observed = new List<InvocationAgentDefinition>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
+            providerResolver: CreatePerModelLlamaCppResolver(new Dictionary<string, int>(StringComparer.Ordinal)
+            {
+                ["qwen3-1.7b"] = 4096,
+                ["qwen3.5:0.8b"] = 32768
+            }),
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build());
+
+        AssertEx.Equal(expected: 2, observed.Count, "exactly one re-run");
+        AssertEx.Equal(expected: 4096, observed[0].EffectiveContextTokens, "the swapped send is sized against the fast model's window");
+        AssertEx.Equal(expected: 32768, observed[1].EffectiveContextTokens, "the re-run is sized against the window of the model it actually runs on");
+        AssertEx.Empty(sender.SentEncryptedFailures);
+    }
+
+    [Test]
+    public async Task Dispatch_WhenASwappedTurnWouldOfferTools_DoesNotRetry()
+    {
+        // The re-run re-enters RunSingleAgentAsync, which owns the tool-relevance drain and its ToolsFiltered notice.
+        // The dispatcher's own gate refuses a swap on any tool-bearing turn, so this shape is unreachable through the
+        // real dispatcher; the guard makes that dependency explicit rather than load-bearing by coincidence.
+        var sender = new MockHubMessageSender();
+        var observed = new List<InvocationAgentDefinition>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().WithAllowedTool("test-tool").Build());
+
+        AssertEx.Equal(expected: 1, observed.Count, "a tool-bearing turn must not be re-run");
+        AssertEx.True(sender.SentEncryptedFailures.Count > 0);
+    }
+
+    // ---- reasoning-effort dispatch helpers -----------------------------------------------------------------------
+
+    /// <summary>
+    ///     A dispatcher that answers with one fixed decision. Records how many times it was invoked so a test can
+    ///     assert both "never" and "exactly once".
+    /// </summary>
+    private sealed class StubReasoningEffortDispatcher(ReasoningDispatchDecision decision) : IReasoningEffortDispatcher, IDisposable
+    {
+        public int Invocations { get; private set; }
+
+        /// <summary>Set when the SCOPE that produced this instance is torn down — this is a scoped registration.</summary>
+        public long? DisposedAtTicks { get; private set; }
+
+        public Task<ReasoningDispatchDecision> DispatchAsync(ReasoningDispatchRequest request, CancellationToken cancellationToken)
+        {
+            Invocations++;
+            return Task.FromResult(decision);
+        }
+
+        public void Dispose()
+        {
+            DisposedAtTicks ??= Stopwatch.GetTimestamp();
+        }
+    }
+
+    /// <summary>A stand-in for the capacity ledger reservation, recording WHEN it was released.</summary>
+    private sealed class SpyReservation : IDisposable
+    {
+        public int DisposeCount { get; private set; }
+
+        public long? DisposedAtTicks { get; private set; }
+
+        public void Dispose()
+        {
+            DisposeCount++;
+            DisposedAtTicks ??= Stopwatch.GetTimestamp();
+        }
+    }
+
+    private static ReasoningDispatchDecision Decision(ReasoningTier tier,
+        string model,
+        string effort,
+        string reasonCode,
+        IDisposable? reservation = null)
+    {
+        return new ReasoningDispatchDecision(tier, model, effort, MaxOutputTokens: null, SupportsThinking: true, ReasoningBudgetEnforceable: true, reasonCode, reservation);
+    }
+
+    /// <summary>
+    ///     A factory whose stream fails for ONE model and succeeds for every other, recording each definition it was
+    ///     asked to build. That is how a swapped send is made to fail while the original model's re-run completes.
+    /// </summary>
+    private static IInvocationAgentFactory CreateModelRoutedFactory(string failingModel, List<InvocationAgentDefinition> observed, bool emitATokenBeforeFailing = false)
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(callInfo =>
+               {
+                   var definition = callInfo.Arg<InvocationAgentDefinition>();
+                   observed.Add(definition);
+                   var fails = string.Equals(definition.ModelId, failingModel, StringComparison.Ordinal);
+                   Func<CancellationToken, IAsyncEnumerable<AgentResponseUpdate>> updates = fails
+                       ? _ => emitATokenBeforeFailing ? TokenThenThrowingUpdates() : ThrowingUpdates()
+                       : _ => CreateUpdates("ok");
+
+                   return Task.FromResult(new InvocationAgentContext
+                   {
+                       Agent = new FakeAIAgent(updates, onSessionObserved: null),
+                       Session = null,
+                       SeedMessages = definition.ConversationContext
+                                                .Prepend(new ChatMessage(ChatRole.System, definition.Instructions))
+                                                .ToList()
+                   });
+               });
+
+        return factory;
+    }
+
+    /// <summary>
+    ///     Like <see cref="CreateModelRoutedFactory" />, except every non-failing model sends through the REAL
+    ///     <see cref="ExternalOpenAiChatClient" /> over a recording transport — so the pin check that refuses a changed
+    ///     binding is the production one, running inside the runner's own ambient pin scope, rather than a copy of its
+    ///     rule restated in the test.
+    /// </summary>
+    private static IInvocationAgentFactory CreateExternalFallbackFactory(string failingModel,
+        IExternalProviderRegistry registry,
+        OpenAiWireRecorder recorder,
+        List<InvocationAgentDefinition> observed,
+        Action? onFastModelSend = null,
+        List<IReadOnlyList<ExternalProviderBindingPin>>? pinsAtSend = null)
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(callInfo =>
+               {
+                   var definition = callInfo.Arg<InvocationAgentDefinition>();
+                   observed.Add(definition);
+                   var fails = string.Equals(definition.ModelId, failingModel, StringComparison.Ordinal);
+                   Func<CancellationToken, IAsyncEnumerable<AgentResponseUpdate>> updates = fails
+                       ? _ => FailingFastModelUpdates(onFastModelSend)
+                       : token => ExternalSendUpdates(registry, definition.ModelId, recorder, pinsAtSend, token);
+
+                   return Task.FromResult(new InvocationAgentContext
+                   {
+                       Agent = new FakeAIAgent(updates, onSessionObserved: null),
+                       Session = null,
+                       SeedMessages = definition.ConversationContext
+                                                .Prepend(new ChatMessage(ChatRole.System, definition.Instructions))
+                                                .ToList()
+                   });
+               });
+
+        return factory;
+    }
+
+    /// <summary>The fast model going away at the send boundary, with the operator's edit landing as it does.</summary>
+    private static async IAsyncEnumerable<AgentResponseUpdate> FailingFastModelUpdates(Action? onSend)
+    {
+        onSend?.Invoke();
+        await Task.Yield();
+        yield return await Task.FromException<AgentResponseUpdate>(new InvalidOperationException("the fast model is gone"));
+    }
+
+    /// <summary>One real external send, made from inside the turn's ambient pin scope.</summary>
+    private static async IAsyncEnumerable<AgentResponseUpdate> ExternalSendUpdates(IExternalProviderRegistry registry,
+        string modelId,
+        OpenAiWireRecorder recorder,
+        List<IReadOnlyList<ExternalProviderBindingPin>>? pinsAtSend,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        pinsAtSend?.Add(ExternalProviderBindingPinScope.Current);
+        using var client = new ExternalOpenAiChatClient(registry, modelId, recorder.CreateHandler);
+        var response = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, cancellationToken).ConfigureAwait(false);
+        yield return new AgentResponseUpdate(ChatRole.Assistant, response.Text);
+    }
+
+    /// <summary>Streams one chunk and then fails, so the turn has recorded first output before the failure.</summary>
+    private static async IAsyncEnumerable<AgentResponseUpdate> TokenThenThrowingUpdates()
+    {
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "partial");
+        await Task.Yield();
+        yield return await Task.FromException<AgentResponseUpdate>(new InvalidOperationException("stream failed"));
+    }
+
+    /// <summary>Retry OFF, so a failing stream surfaces once and the test observes exactly the runner's own behaviour.</summary>
+    private static IProviderStreamResilience NoRetryResilience()
+    {
+        return new ProviderStreamResilience(Options.Create(new ProviderResilienceOptions { RetryEnabled = false }),
+            TimeProvider.System,
+            NullLogger<ProviderStreamResilience>.Instance);
     }
 
     private static IInvocationAgentFactory CreateFactory(IAsyncEnumerable<AgentResponseUpdate> updates, Action<InvocationAgentDefinition>? onCreate = null, Action<bool>? onSessionObserved = null)
@@ -4002,6 +4860,76 @@ public sealed class InvocationRunnerTests
     {
         await Task.Yield();
         yield return await Task.FromException<AgentResponseUpdate>(new InvalidOperationException("stream failed"));
+    }
+
+    // The four helpers below stand in for the two seams that write during a turn but sit several awaited frames BELOW
+    // the runner: the provider-call budget middleware, which registers each round's tool-schema token estimate, and the
+    // send-time relevance hop, which leaves the notice counts on the ambient scope. Both are AsyncLocal, so a fake
+    // agent stream — enumerated inside the runner's own scopes — reaches exactly the instances the turn under test
+    // seeded, which is the whole point: neither seam can be injected from out here.
+    private static async IAsyncEnumerable<AgentResponseUpdate> ToolsFilteredUpdates(int hidden, int total, string text)
+    {
+        RecordRelevanceDecision(hidden, total);
+        yield return new AgentResponseUpdate(ChatRole.Assistant, text);
+        await Task.Yield();
+    }
+
+    // A first segment that both filters and requests an approval, so the resume segment's own decision can be shown not
+    // to re-drain.
+    private static async IAsyncEnumerable<AgentResponseUpdate> ToolsFilteredApprovalRequestUpdates(int hidden, int total)
+    {
+        RecordRelevanceDecision(hidden, total);
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "working on it");
+        await Task.Yield();
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new ToolApprovalRequestContent("approval-run-in-agent-home", new ToolCallContent("call-run-in-agent-home"))
+        });
+        await Task.Yield();
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> ToolSchemaBudgetedUpdates(params int[] toolSchemaTokensPerRound)
+    {
+        RegisterProviderRounds(toolSchemaTokensPerRound);
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "Hello");
+        await Task.Yield();
+    }
+
+    // Rounds are registered BEFORE the park, so the estimate the cancelled path reports is a real one rather than zero.
+    private static async IAsyncEnumerable<AgentResponseUpdate> ToolSchemaBudgetedThenParkedUpdates(int toolSchemaTokens,
+        TaskCompletionSource started,
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken = default)
+    {
+        RegisterProviderRounds([toolSchemaTokens]);
+        started.TrySetResult();
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        yield break;
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> ToolSchemaBudgetedThenThrowingUpdates(int toolSchemaTokens)
+    {
+        RegisterProviderRounds([toolSchemaTokens]);
+        await Task.Yield();
+        yield return await Task.FromException<AgentResponseUpdate>(new InvalidOperationException("stream failed"));
+    }
+
+    private static void RegisterProviderRounds(IReadOnlyList<int> toolSchemaTokensPerRound)
+    {
+        var budget = AssertEx.NotNull(ProviderCallBudget.Current, "The runner seeds the provider-call budget before the agent runs.");
+        foreach (var toolSchemaTokens in toolSchemaTokensPerRound)
+        {
+            budget.RegisterProviderRound(estimatedInputTokens: 10, toolSchemaTokens);
+        }
+    }
+
+    // What the hop's single-flight factory does once one array's decision is computed: Interlocked.Exchange, so the
+    // pair the runner drains always describes ONE array rather than a sum across two.
+    private static void RecordRelevanceDecision(int hidden, int total)
+    {
+        var state = AssertEx.NotNull(ToolRelevanceScope.Current, "The runner seeds the relevance scope before the agent runs.");
+        Interlocked.Exchange(ref state.PendingNoticeHiddenCount, hidden);
+        Interlocked.Exchange(ref state.PendingNoticeTotalCount, total);
     }
 
     // The shape an HTTP client timeout takes: a TaskCanceledException on a token this node does not own, raised while

@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -135,6 +136,106 @@ public sealed class InferenceInvalidationEvaluatorTests
         AssertEx.True(stale);
     }
 
+    [Test]
+    public async Task KvCacheTypeChangedSinceFreeze_IsStale()
+    {
+        // D13, end to end through the REAL fingerprint provider: the node's selected KV-cache type is part of a frozen
+        // profile's identity, so changing it drifts axis (b) and the profile must be reported stale even though the
+        // build, the hardware and the free VRAM all still match. The same wiring at the unchanged type must NOT be
+        // stale — otherwise this test would pass on any drift at all.
+        var modelPath = Path.GetTempFileName();
+        var binaryDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(binaryDirectory);
+        var binaryPath = Path.Combine(binaryDirectory, OperatingSystem.IsWindows() ? "llama-server.exe" : "llama-server");
+        using var fileHashCache = new LaunchPolicyFileHashCache();
+        try
+        {
+            await File.WriteAllTextAsync(modelPath, "revision-1");
+            File.SetLastWriteTimeUtc(modelPath, DateTime.UnixEpoch);
+            await File.WriteAllTextAsync(binaryPath, "binary-revision-1");
+
+            var frozenAtQ8 = FingerprintProvider(binaryPath, fileHashCache, LlamaServerKvCacheTypes.Q8_0);
+            var record = FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb);
+            var captured = await frozenAtQ8.CaptureAsync(record, modelPath, CancellationToken.None);
+            var frozen = record with
+            {
+                LaunchPolicyFingerprintVersion = captured.Version,
+                LaunchPolicyFingerprint = captured.Value
+            };
+
+            var unchanged = BuildEvaluator(FrozenBuild,
+                NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb),
+                modelPath,
+                frozenAtQ8);
+            AssertEx.False(await unchanged.IsStaleAsync(frozen, CancellationToken.None),
+                "Nothing changed, so the profile must still be valid.");
+
+            var afterKvChange = BuildEvaluator(FrozenBuild,
+                NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb),
+                modelPath,
+                FingerprintProvider(binaryPath, fileHashCache, LlamaServerKvCacheTypes.Q4_0));
+            AssertEx.True(await afterKvChange.IsStaleAsync(frozen, CancellationToken.None),
+                "Selecting a different KV-cache type must stale a frozen profile through the launch-policy axis.");
+        }
+        finally
+        {
+            File.Delete(modelPath);
+            Directory.Delete(binaryDirectory, recursive: true);
+        }
+    }
+
+    private static LaunchPolicyFingerprintProvider FingerprintProvider(string binaryPath,
+        LaunchPolicyFileHashCache fileHashCache,
+        string kvCacheType)
+    {
+        var runtime = new InstalledRuntimeState(FrozenBuild, "llama.zip", "deadbeef", GpuVariant.Cuda, DateTimeOffset.UnixEpoch);
+        var installedStore = Substitute.For<IInstalledRuntimeStore>();
+        installedStore.ReadAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<InstalledRuntimeState?>(runtime));
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        binaryManager.EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult(new LlamaBinary(binaryPath, runtime.Tag, runtime.Variant, IsPinnedFallback: false)));
+        var modelStore = Substitute.For<IGgufModelStore>();
+        modelStore.ResolveModelFilePathAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult<string?>(null));
+
+        return new LaunchPolicyFingerprintProvider(installedStore,
+            binaryManager,
+            modelStore,
+            Substitute.For<IGgufModelRegistry>(),
+            new LlamaServerSupervisorOptions(),
+            new LlamaServerLaunchPolicyOptions
+            {
+                KvCacheType = kvCacheType,
+                EnableGpuKvCacheQuantization = !string.Equals(kvCacheType, LlamaServerKvCacheTypes.F16, StringComparison.Ordinal)
+            },
+            fileHashCache);
+    }
+
+    private static InferenceInvalidationEvaluator BuildEvaluator(string installedTag,
+        HardwareProfile hardware,
+        string modelFilePath,
+        ILaunchPolicyFingerprintProvider fingerprintProvider,
+        IProcessContextAllocationResolver? allocationResolver = null)
+    {
+        var hardwareProfiler = Substitute.For<IHardwareProfiler>();
+        hardwareProfiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(hardware));
+
+        var installedStore = Substitute.For<IInstalledRuntimeStore>();
+        installedStore.ReadAsync(Arg.Any<CancellationToken>())
+                      .Returns(Task.FromResult<InstalledRuntimeState?>(new InstalledRuntimeState(installedTag, "llama.zip", "deadbeef", GpuVariant.Cuda, DateTimeOffset.UnixEpoch)));
+
+        var modelStore = Substitute.For<IGgufModelStore>();
+        modelStore.ResolveModelFilePathAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult<string?>(modelFilePath));
+
+        return new InferenceInvalidationEvaluator(installedStore,
+            modelStore,
+            fingerprintProvider,
+            hardwareProfiler,
+            allocationResolver ?? Substitute.For<IProcessContextAllocationResolver>(),
+            NullLogger<InferenceInvalidationEvaluator>.Instance);
+    }
+
     private static InferenceInvalidationEvaluator BuildEvaluator(string installedTag,
         HardwareProfile hardware)
     {
@@ -166,6 +267,7 @@ public sealed class InferenceInvalidationEvaluatorTests
             modelStore,
             fingerprintProvider,
             hardwareProfiler,
+            Substitute.For<IProcessContextAllocationResolver>(),
             NullLogger<InferenceInvalidationEvaluator>.Instance);
     }
 
@@ -183,6 +285,107 @@ public sealed class InferenceInvalidationEvaluatorTests
             CpuCores = 16,
             FreeDiskBytes = 500 * Gb
         };
+    }
+
+    [Test]
+    public async Task Placement_LegacyExpertOffloadRowWithNoOverrideTensor_ContradictsCurrentVerdict()
+    {
+        // The row an intermediate build could freeze: the explore decided expert offload but recorded no -ot, so its
+        // replay would launch the model fully resident under a verdict that says the experts belong in system RAM.
+        var evaluator = BuildEvaluatorWithPlacement(ProcessPlacementMode.ExpertOffload, out _);
+
+        var contradicts =
+            await evaluator.ContradictsCurrentPlacementAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb) with { IsMoe = true, ExpertCount = 128 },
+                CancellationToken.None);
+
+        AssertEx.True(contradicts);
+    }
+
+    [Test]
+    public async Task Placement_ExpertOffloadRowThatCarriesItsOverrideTensor_IsNotContradicted()
+    {
+        // -ot IS the frozen expert placement, so a row that has one agrees with the verdict by construction — and the
+        // verdict is never even priced.
+        var evaluator = BuildEvaluatorWithPlacement(ProcessPlacementMode.ExpertOffload, out var allocationResolver);
+
+        var contradicts = await evaluator.ContradictsCurrentPlacementAsync(
+            FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb) with
+            {
+                IsMoe = true,
+                ExpertCount = 128,
+                OverrideTensor = @"\.ffn_(up|down|gate|gate_up)_(ch|)exps=CPU"
+            },
+            CancellationToken.None);
+
+        AssertEx.False(contradicts);
+        await allocationResolver.DidNotReceiveWithAnyArgs()
+                                .ResolveAsync(default!, default, default, default!, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Placement_ResidentVerdictLeavesADenseRowUntouched()
+    {
+        // The byte-identical pin: a dense model that fits resident keeps replaying with no tensor override.
+        var evaluator = BuildEvaluatorWithPlacement(ProcessPlacementMode.GpuResident, out _);
+
+        var contradicts = await evaluator.ContradictsCurrentPlacementAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb),
+            CancellationToken.None);
+
+        AssertEx.False(contradicts);
+    }
+
+    [Test]
+    public async Task Placement_WhenTheVerdictCannotBeDerived_TheAxisIsSkippedRatherThanReportingStale()
+    {
+        var allocationResolver = Substitute.For<IProcessContextAllocationResolver>();
+        allocationResolver.ResolveAsync(Arg.Any<string>(),
+                              Arg.Any<ModelRole>(),
+                              Arg.Any<GpuVariant>(),
+                              Arg.Any<ResolvedLaunchArguments>(),
+                              Arg.Any<CancellationToken>())
+                          .Returns<Task<ProcessContextAllocation?>>(_ => throw new InvalidOperationException("no facts"));
+
+        var evaluator = BuildEvaluator(FrozenBuild,
+            NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb),
+            "/models/model.gguf",
+            MatchingFingerprintProvider(),
+            allocationResolver);
+
+        AssertEx.False(await evaluator.ContradictsCurrentPlacementAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb),
+            CancellationToken.None));
+    }
+
+    private static InferenceInvalidationEvaluator BuildEvaluatorWithPlacement(ProcessPlacementMode placement,
+        out IProcessContextAllocationResolver allocationResolver)
+    {
+        var resolver = Substitute.For<IProcessContextAllocationResolver>();
+        resolver.ResolveAsync(Arg.Any<string>(),
+                    Arg.Any<ModelRole>(),
+                    Arg.Any<GpuVariant>(),
+                    Arg.Any<ResolvedLaunchArguments>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult<ProcessContextAllocation?>(new ProcessContextAllocation(ProcessContextTokens: 4096,
+                    ModelTrainContextTokens: null,
+                    ProcessContextAllocationSource.FrozenProfile,
+                    placement,
+                    new ResourceFootprint(8 * Gb, 8 * Gb),
+                    ContentIdentity: "content",
+                    CacheKey: "key")));
+        allocationResolver = resolver;
+
+        return BuildEvaluator(FrozenBuild,
+            NvidiaProfile(24 * Gb, availableVramBytes: 8 * Gb),
+            "/models/model.gguf",
+            MatchingFingerprintProvider(),
+            resolver);
+    }
+
+    private static ILaunchPolicyFingerprintProvider MatchingFingerprintProvider()
+    {
+        var fingerprintProvider = Substitute.For<ILaunchPolicyFingerprintProvider>();
+        fingerprintProvider.MatchesAsync(Arg.Any<InferenceProfileRecord>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+                           .Returns(Task.FromResult(true));
+        return fingerprintProvider;
     }
 
     private static InferenceProfileRecord FrozenRecord(string build, long? freeVramAtFreeze)

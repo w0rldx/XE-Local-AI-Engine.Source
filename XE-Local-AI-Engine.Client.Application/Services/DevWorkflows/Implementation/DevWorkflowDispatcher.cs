@@ -940,6 +940,21 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
         if (node.NodeType == DevWorkflowNodeType.Tool)
         {
+            if (node.ToolMode == DevWorkflowToolMode.Apply && !AValidationSucceededOnThePathTaken(graph, node, byKey))
+            {
+                // GRAPH-C4-3's runtime half, and it goes BEFORE the consumption record below: a blocked apply must not
+                // first record that it consumed inputs it never read. Policy rather than a failure — nothing broke,
+                // and the answer is a person's.
+                return await BlockAsync(store,
+                        run,
+                        nodeRun,
+                        $"Node '{node.NodeKey}' applies approved patches, and no validation node succeeded on the path this run took. "
+                        + "Nothing has judged what is about to be applied (invariant GRAPH-C4-3).",
+                        DevWorkflowFailureClasses.Policy,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
             if (nodeRun.Status == DevWorkflowNodeRunStatus.Pending)
             {
                 // These commands judge what the steps before them produced, so a later version of any of it makes this
@@ -1078,6 +1093,80 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         {
             return null;
         }
+    }
+
+    /// <summary>
+    ///     The edge states <see cref="AValidationSucceededOnThePathTaken" /> walks THROUGH: the ones in which the run
+    ///     really came this way. A set rather than an equality test because the set is what the rule is about.
+    ///     <para>
+    ///         <c>Dead</c> and <c>Pending</c> are the two that must never be in it — a branch that did not run, or has
+    ///         not run yet, carries no provenance. Every other state the machine has today belongs here, <c>Waived</c>
+    ///         included: an operator's skip is waived precisely when everything behind it was satisfied or waived in
+    ///         turn, so the rows further back DID run and the walk has to be able to reach them. Leaving it out is what
+    ///         would block <c>integrate</c> on the shipped template the moment someone skips <c>verify</c>.
+    ///         <c>DevWorkflowMaterializationTests.TheProvenanceWalkCrossesEveryEdgeStateThatIsNotDeadOrPending</c>
+    ///         ENFORCES that rather than proving it: it demands an entry for every state outside those two, so a new
+    ///         one cannot be added to <see cref="DevWorkflowEdgeState" /> without this walk being told about it. A
+    ///         future state that means "undecided in some new way" is a third exclusion for that test to name, not an
+    ///         entry here — the assertion asks whoever hits it which of the two it is.
+    ///     </para>
+    /// </summary>
+    private static readonly DevWorkflowEdgeState[] ProvenanceEdgeStates = [DevWorkflowEdgeState.Satisfied, DevWorkflowEdgeState.Waived];
+
+    /// <summary>
+    ///     <c>GRAPH-C4-3</c>, asked of the rows a run actually landed rather than of every structural ancestor: does the
+    ///     apply node's provenance contain a <c>Tool</c>/<c>Validate</c> node whose row succeeded?
+    ///     <para>
+    ///         One backward walk over the inbound edges whose state is in <see cref="ProvenanceEdgeStates" />, which is
+    ///         what makes the rule the smaller one. A branch that did not run drops out with no special case — a
+    ///         <c>Failed</c> or <c>Cancelled</c> source, and a <c>Skipped</c> one with anything dead behind it, kills
+    ///         every out-edge — so an <c>Any</c> convergence whose other branch carried its own validation does not
+    ///         block the apply on work that was correctly not done.
+    ///     </para>
+    ///     <para>
+    ///         The candidate row is tested for <c>Succeeded</c> separately, and that test is NOT redundant with the edge
+    ///         state: a <c>Satisfied</c> edge does imply a succeeded source, but a <c>Waived</c> one does not — the rows
+    ///         BEHIND a waived edge succeeded while the waived node itself was skipped. Crossing the edge and still
+    ///         refusing to count a non-succeeded validation is the pair that stays correct either way, and it is what
+    ///         makes an operator's skip of the validation node itself still block the apply.
+    ///     </para>
+    ///     <para>
+    ///         An unmaterialized template key reads <c>Pending</c> and falls out exactly as admission's own template
+    ///         filter drops it — and the zero-task decomposition's no-op verdict row puts it back in, which is what
+    ///         makes that path pass this check without an exemption of its own.
+    ///     </para>
+    /// </summary>
+    private static bool AValidationSucceededOnThePathTaken(DevWorkflowGraph graph,
+        DevWorkflowGraphNode apply,
+        IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> byKey)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal)
+        {
+            apply.NodeKey
+        };
+        var pending = new Stack<string>();
+        pending.Push(apply.NodeKey);
+        while (pending.Count > 0)
+        {
+            foreach (var edge in graph.InboundEdges(pending.Pop()))
+            {
+                var source = byKey.GetValueOrDefault(edge.From);
+                if (!ProvenanceEdgeStates.Contains(DevWorkflowStateMachine.EdgeState(edge, graph, byKey)) || !seen.Add(edge.From))
+                {
+                    continue;
+                }
+
+                if (graph.Nodes.GetValueOrDefault(edge.From) is { NodeType: DevWorkflowNodeType.Tool, ToolMode: DevWorkflowToolMode.Validate }
+                    && source?.Status == DevWorkflowNodeRunStatus.Succeeded)
+                {
+                    return true;
+                }
+
+                pending.Push(edge.From);
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

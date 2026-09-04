@@ -95,6 +95,36 @@ public sealed class ModelFitMapperKvQuantTests
     }
 
     [Test]
+    public void ToResponse_WhenDiagnosticsCarryKvPerTokenFields_ExtractsThemWithTheirQuantAndArch()
+    {
+        const string diagnostics = """
+                                   {"section":"recommended","kv_bytes_per_token":640,"kv_bytes_per_token_quant":"Q8_0",
+                                    "attention_arch":"mla"}
+                                   """;
+        var view = CreateView(CreateRecord(diagnostics));
+
+        var response = view.ToResponse();
+
+        var row = response.Recommendations[0];
+        AssertEx.Equal(expected: 640L, row.KvBytesPerToken!.Value);
+        AssertEx.Equal("Q8_0", row.KvBytesPerTokenQuant);
+        AssertEx.Equal("mla", row.AttentionArch);
+    }
+
+    [Test]
+    public void ToResponse_WhenDiagnosticsLackKvPerTokenKeys_YieldsNullPerTokenFields()
+    {
+        var view = CreateView(CreateRecord("""{"section":"explore","release_date":"2025-03-12"}"""));
+
+        var response = view.ToResponse();
+
+        var row = response.Recommendations[0];
+        AssertEx.True(row.KvBytesPerToken is null, "a pre-existing snapshot row must read the KV-per-token figure as null.");
+        AssertEx.True(row.KvBytesPerTokenQuant is null, "a pre-existing snapshot row must read the KV-per-token quant as null.");
+        AssertEx.True(row.AttentionArch is null, "a pre-existing snapshot row must read the attention tag as null.");
+    }
+
+    [Test]
     public void ToResponse_WhenDiagnosticsMalformed_YieldsNullAdvisoryFields()
     {
         var view = CreateView(CreateRecord("{not json"));

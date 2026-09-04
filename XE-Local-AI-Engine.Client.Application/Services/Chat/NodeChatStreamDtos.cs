@@ -110,6 +110,21 @@ public sealed record NodeChatStreamRequest(
     // ordinary send keeps the precedence it has today. Trailing optional so the SignalR hub forwards the record
     // unchanged.
     bool ReasoningEffortOverridesAgentPin = false,
+    // Whether this turn is a step of a supervised work session rather than a send someone typed. Set UNCONDITIONALLY by
+    // WorkSessionExecutionSupervisor, so it is true on every step of every session — including every development-
+    // workflow node step, whatever that node authored — and false on every ordinary chat send. The runtime package
+    // refuses the adaptive-effort model swap on it: a session step is autonomous, and a step served by a model neither
+    // the graph's author nor the operator chose is not their decision. Trailing optional so the SignalR hub forwards the
+    // record unchanged.
+    bool IsWorkSessionTurn = false,
+    // GRAPH-C4-2's runtime half, carried on the turn it judges. Set by a work session a development-workflow Agent node
+    // drives when that node declares no WriteExecute capability and its template waives nothing: the send resolves the
+    // agent definition ONCE and refuses before it sends if that resolution's own tool offer carries a tool which writes
+    // files or runs commands. It rides the request rather than being asked ahead of the send because the definition is
+    // mutable — a check that resolves it separately is answering about a projection the turn may no longer use. False
+    // everywhere else, so every ordinary send is unchanged. Trailing optional so the SignalR hub forwards the record
+    // unchanged.
+    bool RefuseUndeclaredWrites = false,
     // Whether this turn must be sent WITHOUT the ask_user tool, overriding the "every tool-enabled turn can always ask
     // its operator a question" invariant AskUserToolOffer otherwise holds. True only for a work session owned by a
     // development-workflow node, because there is no operator attached to one: its embedded chat is read-only (the
@@ -197,4 +212,11 @@ public sealed record ChatStreamEvent(
     // events only; null everywhere else, and null on a reconnect replay that cannot resolve it). The browser prefers
     // this per-request answer over the tool catalog's tool-identity flag when deciding whether to offer the session
     // button. Trailing optional so every existing event type's wire shape is unchanged.
-    bool? SessionScopeEligible = null);
+    bool? SessionScopeEligible = null,
+    // The notice's optional structured detail (AssistantNotice events only), carried verbatim from
+    // TurnNoticePayload.Detail: a stable machine code or short identifier that names WHY the notice fired, next to
+    // NoticeMessage's prose. EffortDispatched carries the kebab-case dispatch reason code, ModelSubstituted /
+    // AttachmentsWithheld / KnowledgeWithheld the effective model, OrchestrationDegraded the degradation reason.
+    // Sanitized at the source like every other notice field. Trailing optional so every existing event type's wire
+    // shape is unchanged.
+    string? NoticeDetail = null);

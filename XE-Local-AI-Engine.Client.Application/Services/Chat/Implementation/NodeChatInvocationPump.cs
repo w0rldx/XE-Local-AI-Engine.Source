@@ -99,7 +99,11 @@ public sealed class NodeChatInvocationPump(
             state.StreamedThinkingChunkCount,
             CurrentTraceId(),
             state.StartedAt == default ? null : state.StartedAt.ToUnixTimeMilliseconds(),
-            provider);
+            provider,
+            state.ToolSchemaTokens,
+            state.MaxToolSchemaTokens,
+            state.DispatchedTier,
+            state.AuthoredEffort);
 
         // A cancelled turn persists NO error text — a user cancel (or an operator eject,
         // also Cancelled-category) is an outcome, not a failure, so it must not leave a red error banner on the row.

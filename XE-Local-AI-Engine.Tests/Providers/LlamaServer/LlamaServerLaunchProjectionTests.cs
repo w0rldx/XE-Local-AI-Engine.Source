@@ -51,6 +51,67 @@ public sealed class LlamaServerLaunchProjectionTests
     }
 
     [Test]
+    public void ArgumentVector_KvTypeF16_EmitsNoKvOrFlashArgs()
+    {
+        // Selecting f16 collapses to EnableGpuKvCacheQuantization = false in the DI seed, so the plan carries
+        // UseKvCacheQuantization: false and the vector loses -fa/-ctk/-ctv entirely — the same KV segment (none) a CPU
+        // spawn emits today.
+        var plan = new LlamaServerLaunchPlan(RequestedContextTokens: 16384,
+            UseKvCacheQuantization: false,
+            LlamaServerKvCacheTypes.F16,
+            CpuThreads: null,
+            CpuThreadsBatch: null);
+
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(ChatKey,
+            ExecutablePath,
+            ModelFilePath,
+            Port,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            chatCacheReuse: 256,
+            plan: plan,
+            chatCacheRamMiB: 512);
+
+        AssertVector(spec,
+        [
+            "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "1", "--no-warmup",
+            "--metrics", "--fit", "on", "-c", "16384",
+            "--jinja", "--cache-reuse", "256", "--cache-ram", "512"
+        ]);
+        AssertEx.False(spec.Arguments.Contains("-ctk"), "f16 must emit no -ctk.");
+        AssertEx.False(spec.Arguments.Contains("-ctv"), "f16 must emit no -ctv.");
+        AssertEx.False(spec.Arguments.Contains("-fa"), "f16 must leave flash attention at the runtime default.");
+    }
+
+    [Test]
+    public void ArgumentVector_KvTypeQ4_EmitsCtkCtvQ4()
+    {
+        // What the explore spawn following a q4_0-induced stale mark actually launches with.
+        var plan = new LlamaServerLaunchPlan(RequestedContextTokens: 16384,
+            UseKvCacheQuantization: true,
+            LlamaServerKvCacheTypes.Q4_0,
+            CpuThreads: null,
+            CpuThreadsBatch: null);
+
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(ChatKey,
+            ExecutablePath,
+            ModelFilePath,
+            Port,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            chatCacheReuse: 256,
+            plan: plan,
+            chatCacheRamMiB: 512);
+
+        AssertVector(spec,
+        [
+            "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "1", "--no-warmup",
+            "--metrics", "--fit", "on", "-c", "16384", "-fa", "on", "-ctk", "q4_0", "-ctv", "q4_0",
+            "--jinja", "--cache-reuse", "256", "--cache-ram", "512"
+        ]);
+    }
+
+    [Test]
     public void ArgumentVector_GpuReplayWithNoPlan_IsUnchanged()
     {
         // The benchmark/replay-profiling shape: policy bypassed entirely, frozen args emitted verbatim. This is the
@@ -246,6 +307,10 @@ public sealed class LlamaServerLaunchProjectionTests
             },
             baseline with
             {
+                CpuMoe = false
+            },
+            baseline with
+            {
                 OverrideTensor = "exps=GPU"
             },
             baseline with
@@ -434,6 +499,42 @@ public sealed class LlamaServerLaunchProjectionTests
     }
 
     [Test]
+    public void CpuMoe_RoundTripsThroughTheArgumentVector()
+    {
+        // --cpu-moe is a valueless flag like --jinja/--metrics, so the effective reading must recover it and its
+        // absence must read as absent rather than as the intent that rendered it.
+        var withFlag = AssertEx.NotNull(LlamaServerLaunchProjection.TryFromArguments([
+            "-m", ModelFilePath, "--parallel", "1", "--fit", "on", "--cpu-moe", "-c", "8192"
+        ]));
+        var withoutFlag = AssertEx.NotNull(LlamaServerLaunchProjection.TryFromArguments([
+            "-m", ModelFilePath, "--parallel", "1", "--fit", "on", "-c", "8192"
+        ]));
+
+        AssertEx.True(withFlag.CpuMoe);
+        AssertEx.False(withoutFlag.CpuMoe);
+        AssertEx.NotEqual(withFlag.ComputeIdentity(), withoutFlag.ComputeIdentity());
+    }
+
+    [Test]
+    public void From_GpuExploreWithAnExpertOffloadPlan_ProjectsCpuMoe_AndAReplayNeverDoes()
+    {
+        var offloadPlan = new LlamaServerLaunchPlan(RequestedContextTokens: 8192,
+            UseKvCacheQuantization: true,
+            LlamaServerKvCacheTypes.Q8_0,
+            CpuThreads: null,
+            CpuThreadsBatch: null,
+            CpuMoe: true);
+
+        var explore = LlamaServerLaunchProjection.From(GpuVariant.Cuda, ResolvedLaunchArguments.Explore(), offloadPlan);
+        var replay = LlamaServerLaunchProjection.From(GpuVariant.Cuda,
+            ResolvedLaunchArguments.Replay(ctxSize: 8192, overrideTensor: "exps=CPU"),
+            offloadPlan);
+
+        AssertEx.True(explore.CpuMoe);
+        AssertEx.False(replay.CpuMoe, "a frozen replay owns its own placement; --cpu-moe must never join its -ot.");
+    }
+
+    [Test]
     public void TryFromArguments_IsTolerantOfUnknownArgumentsAndLastWinsForARepeatedFlag()
     {
         // Operator extra arguments are appended after everything else and llama.cpp is last-wins for a scalar flag, so
@@ -497,8 +598,13 @@ public sealed class LlamaServerLaunchProjectionTests
     {
         // Identities are persisted alongside benchmark runs, so reordering, renaming or adding a projected member would
         // silently invalidate every stored one while every other test here still passed. This literal is the tripwire.
-        AssertEx.Equal("f642c972396108f8129c6a01812775f43f15047eca05248886986f6c52b737b4",
+        // RE-BASELINED when CpuMoe joined the record (identity scheme 1 -> 2). The scheme-1 literal was
+        // f642c972396108f8129c6a01812775f43f15047eca05248886986f6c52b737b4; work frozen under it is failed at cutover
+        // rather than compared, and LlamaServerLaunchReceipt.CurrentVersion moved 1 -> 2 in the same change so a
+        // pre-slice and a post-slice identity are DISTINGUISHABLE rather than merely unequal.
+        AssertEx.Equal("3d17edf6e09739e9ad0a56b5b238e604ec11f49954ca9bcfd4cccf535081ef4f",
             FullyPopulatedProjection().ComputeIdentity());
+        AssertEx.Equal(expected: 2, LlamaServerLaunchProjection.IdentitySchemeVersion);
     }
 
     private static LlamaServerLaunchProjection FullyPopulatedProjection()
@@ -509,6 +615,7 @@ public sealed class LlamaServerLaunchProjectionTests
             GpuLayers: 24,
             TensorSplit: "0.6,0.4",
             OverrideTensor: "exps=CPU",
+            CpuMoe: true,
             KvCacheTypeK: "q8_0",
             KvCacheTypeV: "q8_0",
             LlamaServerLaunchProjection.FlashAttentionOn,

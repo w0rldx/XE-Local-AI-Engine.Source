@@ -34,7 +34,9 @@ public sealed record NodeSettingsAgenticPatch
     public string? SpeculativeDraftModelName { get; init; }
     public int? SpeculativeDraftMaxTokens { get; init; }
     public int? SpeculativeDraftGpuLayers { get; init; }
+    public string? KvCacheType { get; init; }
     public string? RerankerModelName { get; init; }
+    public string? AutoEffortFastModelName { get; init; }
 }
 
 public sealed record NodeSettingsAgenticView(
@@ -53,7 +55,9 @@ public sealed record NodeSettingsAgenticView(
     string? SpeculativeDraftModelName,
     int? SpeculativeDraftMaxTokens,
     int? SpeculativeDraftGpuLayers,
-    string? RerankerModelName);
+    string? KvCacheType,
+    string? RerankerModelName,
+    string? AutoEffortFastModelName);
 
 public sealed record NodeSettingsAdministrationResult(
     bool Updated,
@@ -122,6 +126,12 @@ public static class NodeSettingsAgenticPatchValidation
             && !IsBetween(draftTokens, StoredNodeSettings.MinSpeculativeDraftMaxTokens, StoredNodeSettings.MaxSpeculativeDraftMaxTokens))
         {
             return Reject(NodeSettingsField.SpeculativeDraftMaxTokens, "Speculative draft tokens is outside the supported range.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(patch.KvCacheType)
+            && !StoredNodeSettings.IsValidKvCacheType(patch.KvCacheType))
+        {
+            return Reject(NodeSettingsField.KvCacheType, "Unknown KV cache type.");
         }
 
         if (patch.SpeculativeDraftGpuLayers is { } draftLayers

@@ -178,7 +178,9 @@
 			"modelSubstituted": "Modell ersetzt",
 			"toolDisabled": "Tool deaktiviert",
 			"historyTruncated": "Verlauf gekürzt",
-			"orchestrationDegraded": "Orchestrierung nicht verwendet"
+			"orchestrationDegraded": "Orchestrierung nicht verwendet",
+			"toolsFiltered": "Tools gefiltert",
+			"effortDispatched": "Reasoning-Aufwand aufgelöst"
 		},
 		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus."
 	},
@@ -651,7 +653,8 @@
 				"low": "Niedrig",
 				"medium": "Mittel",
 				"high": "Hoch",
-				"xhigh": "Höchste"
+				"xhigh": "Höchste",
+				"auto": "Auto"
 			},
 			"newConversation": "Neuer normaler Chat",
 			"newEncryptedConversation": "Neuer verschlüsselter Chat",
@@ -1769,6 +1772,7 @@
 					"invalid": "Eine oder mehrere Eingaben sind ungültig.",
 					"positive": "Bitte eine positive ganze Zahl eingeben.",
 					"mode": "Unbekannter Modus für spekulatives Decoding.",
+					"type": "Unbekannter KV-Cache-Typ.",
 					"required": "Wähle für diesen Modus ein Entwurfsmodell.",
 					"requiredKeepWarmModel": "Wähle ein Modell aus, das warmgehalten werden soll.",
 					"keepWarmCapacity": "Zum Warmhalten eines Modells sind mindestens zwei geladene Prozessplätze erforderlich.",
@@ -1858,15 +1862,26 @@
 				"maxPendingToolCallAgeMinutes": {
 					"label": "Max. ausstehende Tool-Aufruf-Dauer"
 				},
+				"kvCacheType": {
+					"label": "KV-Cache-Typ",
+					"description": "Eine Änderung setzt alle eingefrorenen Inferenzprofile dieses Knotens außer Kraft. Jedes Modell wird beim nächsten Laden mit dem neuen KV-Cache-Typ neu vermessen und muss erneut gebenchmarkt und eingefroren werden. q4_0 tauscht Antwortqualität gegen VRAM ein.",
+					"options": {
+						"f16": "f16 (unquantisiert)",
+						"q8_0": "q8_0 (Standard, halber KV-VRAM)",
+						"q4_0": "q4_0 (ein Viertel des KV-VRAM)"
+					}
+				},
 				"speculativeMode": {
 					"label": "Spekulatives Decoding",
-					"description": "Draft-and-Verify-Decoding erhöht den Durchsatz für einzelne Nutzer. n-Gramm-Modi brauchen kein zusätzliches Modell; Entwurfsmodelle belegen zusätzlichen VRAM, der von den Kapazitätsprüfungen noch nicht berücksichtigt wird.",
+					"description": "Draft-and-Verify-Decoding erhöht den Durchsatz für einzelne Nutzer. n-Gramm-Modi brauchen kein zusätzliches Modell; Entwurfsmodelle belegen zusätzlichen VRAM, der von den Kapazitätsprüfungen noch nicht berücksichtigt wird. DFlash und DSpark benötigen ein eigenes Entwurfsmodell und sind auf größere Entwurfsblöcke ausgelegt als die voreingestellten 3 Entwurfstoken pro Schritt (upstream verwendet 15 bzw. 7); der Server begrenzt diesen Wert nur nach unten, er muss also manuell erhöht werden.",
 					"options": {
 						"off": "Aus",
 						"ngram-mod": "n-Gramm (kein Entwurfsmodell)",
 						"ngram-cache": "n-Gramm-Cache (kein Entwurfsmodell)",
 						"draft-simple": "Entwurfsmodell (einfach)",
 						"draft-eagle3": "Entwurfsmodell (EAGLE-3)",
+						"draft-dflash": "Entwurfsmodell (DFlash)",
+						"draft-dspark": "Entwurfsmodell (DSpark)",
 						"draft-mtp": "Entwurfsmodell (MTP)"
 					}
 				},
@@ -1894,6 +1909,12 @@
 					"downloadStarted": "Der empfohlene Reranker ({{model}}) wird heruntergeladen.",
 					"downloadInFlight": "Der empfohlene Reranker ({{model}}) wird bereits heruntergeladen.",
 					"downloadError": "Der Download des empfohlenen Rerankers konnte nicht gestartet werden."
+				},
+				"autoEffortFastModel": {
+					"label": "Schnelles Modell für automatische Denkintensität",
+					"description": "Wenn eine Chat-Runde die automatische Denkintensität verwendet und die Runde einfach wirkt, wird sie stattdessen auf diesem kleinen llama.cpp-Modell ausgeführt. Aus lassen, um das Modell der Unterhaltung zu behalten und nur die Denkintensität zu senken. Benötigt einen zweiten Prozess-Slot; Änderungen gelten ab der nächsten Nachricht.",
+					"off": "Aus",
+					"empty": "Keine installierten llama.cpp-Chatmodelle"
 				},
 				"embeddingModel": {
 					"downloadRecommended": "Empfohlenes Embedding-Modell herunterladen",
@@ -2510,7 +2531,8 @@
 						"none": "Keiner",
 						"low": "Niedrig",
 						"medium": "Mittel",
-						"high": "Hoch"
+						"high": "Hoch",
+						"auto": "Auto"
 					}
 				},
 				"tools": {
@@ -2578,6 +2600,10 @@
 				"disableBaseScaffold": {
 					"label": "Basis-Anweisungsgerüst deaktivieren",
 					"description": "Überspringt die vom Knoten normalerweise vorangestellten Basis-Anweisungen für jeden Agenten – es werden nur die oben geschriebenen Anweisungen unverändert verwendet."
+				},
+				"disableToolRelevanceFilter": {
+					"label": "Immer alle Tools anbieten",
+					"description": "Überspringt den Tool-Relevanzfilter dieses Knotens für diesen Agenten, sodass dem Modell in jeder Runde alle nutzbaren Tools gezeigt werden. Aktivieren, wenn dem Agenten Tools fehlen; bei Agenten mit vielen Tools kostet es Kontext."
 				}
 			},
 			"playbook": {
@@ -3172,6 +3198,16 @@
 					"hint": "≈ {{gb}} GB mit {{quant}} KV-Cache",
 					"tooltip": "Nur eine Schätzung – die angezeigte Passung nutzt den Standard-fp16-KV-Cache. Ein quantisierter KV-Cache erfordert Flash Attention und passende Startparameter; die Ersparnis ist eine Schätzung, keine garantierte Kompatibilität."
 				},
+				"kvPerToken": {
+					"hint": "{{kb}} KB/Token ({{quant}} KV)",
+					"tooltip": "KV-Cache-Kosten eines Tokens bei {{context}} Kontext, berechnet mit einem {{quant}}-KV-Cache (Standard beim Chat-Start) statt mit dem fp16-Cache, den die Speicherangaben oben verwenden."
+				},
+				"attentionArch": {
+					"mla": "MLA",
+					"swa": "SWA",
+					"gqa": "GQA",
+					"mha": "MHA"
+				},
 				"catalog": {
 					"version": "Katalog v{{version}}",
 					"source": {
@@ -3263,7 +3299,8 @@
 				"status": {
 					"explored": "Erkundet",
 					"frozen": "Eingefroren",
-					"stale": "Veraltet"
+					"stale": "Veraltet",
+					"staleTooltip": "Neuvermessung erforderlich. Ein Profil wird ungültig, wenn sich seit dem Einfrieren der llama.cpp-Build, die GPU, der freie VRAM beim Einfrieren oder der KV-Cache-Typ dieses Knotens geändert hat."
 				},
 				"actions": {
 					"benchmark": "Benchmark",
@@ -4344,6 +4381,7 @@
 				"intended": "Beabsichtigt",
 				"effective": "Tatsächlich",
 				"intendedDiffers": "Der beabsichtigte und der tatsächliche Start unterscheiden sich.",
+				"identitySchemeOutdated": "Unter einem früheren Launch-Identitätsschema eingefroren; die beiden Identitäten sind nicht vergleichbar.",
 				"primaryDiffers": "Start unterscheidet sich: {{fields}}",
 				"copy": "Kopieren",
 				"copied": "Kopiert",
@@ -5024,7 +5062,8 @@
 				"startFailed": "Der Lauf konnte nicht gestartet werden.",
 				"startRun": "Lauf starten",
 				"waitingOnYou_one": "{{count}} wartet auf Sie",
-				"waitingOnYou_other": "{{count}} warten auf Sie"
+				"waitingOnYou_other": "{{count}} warten auf Sie",
+				"cost": "{{input}} / {{output}} Tok. · {{tools}} Tool-Aufrufe, nur letzte Versuche"
 			},
 			"delete": {
 				"open": "Löschen",
@@ -5062,7 +5101,12 @@
 				"appliesPatches": "wendet Patches an",
 				"materializedOf": "erzeugt · {{index}} von {{count}}",
 				"staleInputs": "Veraltete Eingaben",
-				"agentWithModel": "{{agent}} · {{model}}"
+				"agentWithModel": "{{agent}} · {{model}}",
+				"columnCost": "Kosten",
+				"costTokens": "{{input}} / {{output}} Tok.",
+				"costToolCalls_one": "{{count}} Tool-Aufruf",
+				"costToolCalls_other": "{{count}} Tool-Aufrufe",
+				"notApplicable": "nichts zu validieren"
 			},
 			"events": {
 				"title": "Ereignisse",
@@ -5213,12 +5257,53 @@
 				"devTaskNoStage": "Diese Aufgabe hat noch keinen Stand gemeldet.",
 				"devTaskEvidence": "Development Mode zeigt Versuche, Patch und Prüfnachweise dieser Aufgabe. Die Freigabe, mit der ein Patch übernommen wird, ist ein Gate-Knoten in diesem Workflow.",
 				"objective": "Zielvorgabe",
-				"cascadeRerun": "Dieser Knoten läuft erneut, weil „{{node}}“ fehlgeschlagen ist und der Lauf die davon abhängige Arbeit wiederholt."
+				"cascadeRerun": "Dieser Knoten läuft erneut, weil „{{node}}“ fehlgeschlagen ist und der Lauf die davon abhängige Arbeit wiederholt.",
+				"cost": {
+					"title": "Kosten",
+					"none": "Für diesen Versuch wurde nichts erfasst.",
+					"tokensIn": "Eingabe-Tokens",
+					"tokensOut": "Ausgabe-Tokens",
+					"reasoning": "Reasoning-Tokens",
+					"estimated": "Geschätzte Eingabe-Tokens",
+					"providerCalls": "Provider-Aufrufe",
+					"toolCalls": "Tool-Aufrufe",
+					"schemaTokens": "Tool-Schema-Tokens",
+					"steps": "Arbeitssitzungs-Schritte",
+					"servedModel": "Bedient von",
+					"queuedFor": "In der Warteschlange",
+					"ranFor": "Laufzeit",
+					"turnTime": "Agent-Turns",
+					"outsideTurnTime": "Außerhalb der Turns",
+					"toolNames": "Aufgerufene Tools",
+					"toolNamesTruncated": "…und weitere",
+					"route": "Genommener Weg",
+					"routeTruncated": "gekürzt",
+					"routeSatisfied": "erfüllt → {{nodes}}",
+					"routeDead": "nicht genommen → {{nodes}}",
+					"routeWaived": "entschuldigt → {{nodes}}",
+					"gateAnswer": "beantwortet mit {{answer}}",
+					"routeGateNote": "Eine erfüllte Kante bedeutet, dass ihre Bedingung zutraf, nicht dass der Nachfolger lief — ein Join kann trotzdem über eine tote Geschwisterkante übersprungen werden. Eine entschuldigte Kante lässt das übersprungene Node stehen, ohne einen All-Join zu töten, admittiert aber für sich allein niemanden."
+				},
+				"failureGroup": {
+					"Cancelled": "Abgebrochen",
+					"Timeout": "Zeitüberschreitung",
+					"Interrupted": "Unterbrochen",
+					"Provider": "Provider",
+					"ModelCapability": "Modellfähigkeit",
+					"ContextExceeded": "Kontext überschritten",
+					"Configuration": "Konfiguration",
+					"Policy": "Richtlinie",
+					"BudgetExhausted": "Budget erschöpft",
+					"ToolOrCommand": "Tool oder Befehl",
+					"Rejected": "Abgelehnt",
+					"Internal": "Intern"
+				}
 			},
 			"validation": {
 				"loadFailed": "Der Bericht dieses Knotens konnte nicht geladen werden.",
 				"unreadable": "Der Bericht dieses Knotens konnte nicht gelesen werden, sein Ergebnis ist deshalb nicht belastbar. Öffnen Sie ihn im Reiter „Artefakte“, um den gespeicherten Inhalt zu sehen.",
 				"refused": "Es wurde kein Bericht geschrieben, hier steht daher nichts, was belegt, was dieser Knoten getan hat.",
+				"notApplicable": "Für diesen Lauf wurde nichts zerlegt, daher hatte diese Prüfung nichts zu validieren.",
 				"priorAttempt": "Der gespeicherte Bericht stammt aus Versuch {{reportAttempt}}, dieser Knoten ist bei Versuch {{attempt}}. Er ist nicht das aktuelle Ergebnis — öffnen Sie ihn im Reiter „Artefakte“, wenn Sie den früheren Nachweis brauchen.",
 				"passed": "Prüfung bestanden",
 				"failed": "Prüfung fehlgeschlagen",
@@ -5283,7 +5368,22 @@
 				"retryTargetPlaceholder": "Diesen Knoten selbst wiederholen",
 				"toolMode": "Werkzeugmodus: {{mode}}",
 				"materialization": "erzeugt {{template}} (max. {{max}})",
-				"requiredCapabilities": "benötigt {{count}} Fähigkeit(en)",
+				"requiredCapabilities": "Deklarierte Fähigkeiten",
+				"allowUngatedWrites": "Schreibzugriff ohne Freigabe erlauben",
+				"allowUngatedWritesHelp": "Erlaubt einem Knoten dieser Vorlage, in das Repository zu schreiben, ohne dass auf jedem Weg dorthin eine menschliche Freigabe liegt.",
+				"maxLoopIterations": "Grenze der Korrekturschleife",
+				"maxLoopIterationsPlaceholder": "Keine Grenze",
+				"maxLoopIterationsHelp": "Wie oft dieser Knoten zurückspringen darf, bevor der Lauf anhält und Sie fragt. Eine Wiederholung durch Sie zählt nicht mit.",
+				"requiredCapabilitiesHint": "Was der Agent dieses Knotens über das Lesen hinaus tun darf. Ein deklarierter Schreibzugriff braucht auf jedem Weg dorthin eine menschliche Freigabe.",
+				"capabilityReason": "Wofür {{effect}}?",
+				"capabilityReasonRequired": "Eine deklarierte Fähigkeit braucht eine Begründung.",
+				"effectDerived": "Ergibt sich daraus, was dieser Knoten ausführt.",
+				"effects": {
+					"ReadLocal": "liest das Repository",
+					"WriteExecute": "schreibt in das Repository oder führt Befehle aus",
+					"Orchestration": "orchestriert andere Agenten",
+					"Network": "greift auf das Netzwerk zu"
+				},
 				"edges": "Kanten",
 				"addEdge": "Kante hinzufügen",
 				"noEdges": "Diese Vorlage hat noch keine Kanten.",
@@ -5304,7 +5404,13 @@
 					"orphan": "Nichts erreicht „{{subject}}“, der Knoten würde also nie laufen.",
 					"unknownRetryTarget": "„{{subject}}“ wiederholt zu einem Knoten, den diese Vorlage nicht deklariert.",
 					"retryTargetNotAncestor": "„{{subject}}“ wiederholt zu einem Knoten, der ihn nicht erreichen kann. Ein Wiederholungsziel muss stromaufwärts liegen.",
-					"joinAnyNeedsTwoInbound": "„{{subject}}“ verwendet Any, hat aber weniger als zwei eingehende Kanten."
+					"joinAnyNeedsTwoInbound": "„{{subject}}“ verwendet Any, hat aber weniger als zwei eingehende Kanten.",
+					"deadGateEdge": "„{{subject}}“ ist eine menschliche Freigabe mit einer ausgehenden Kante, die keine Antwort je nimmt — dahinter würde nichts laufen.",
+					"orphanedGateEdge": "Die Kante {{subject}} verlässt eine menschliche Freigabe, und keine Antwort würde sie je nehmen. Knüpfen Sie sie an eine Antwort, die die Freigabe geben kann.",
+					"strandedBranch": "„{{subject}}“ erreicht kein Ende des Laufs: Jeder Weg von dort führt über eine Kante einer Freigabe, die nie zutreffen kann.",
+					"ungatedWrite": "„{{subject}}“ kann in das Repository schreiben und ein Lauf erreicht den Knoten, ohne dass jemand gefragt wird. Legen Sie auf jeden Weg dorthin eine menschliche Freigabe, oder erlauben Sie Schreibzugriff ohne Freigabe für diese Vorlage und begründen Sie es.",
+					"applyWithoutValidation": "„{{subject}}“ wendet freigegebene Patches an und ein Lauf erreicht den Knoten, ohne dass eine Validierung gelaufen ist. Legen Sie auf jeden Weg dorthin einen Werkzeugknoten im Modus „Validate“.",
+					"templateValidationLeaf": "„{{subject}}“ validiert innerhalb einer Materialisierungsvorlage, und keine Kante verlässt den Knoten — er würde als Ende des Laufs zählen. Geben Sie ihm eine Kante zum Join-Knoten der Vorlage."
 				}
 			},
 			"devTaskStatus": {

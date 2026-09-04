@@ -72,6 +72,26 @@ public sealed class LlamaFitParamsProcessRunnerTests
         AssertEx.Contains(spec.Arguments, "--pooling");
     }
 
+    [Test]
+    public void BuildArguments_CarriesExpertPlacementToTheHelper()
+    {
+        // Without these the helper fits under a placement the server is NOT running (experts on the GPU), and its
+        // stdout carries no -ot, so the frozen replay would silently drop the flag that made the placement true.
+        var valueless = LlamaFitParamsProcessRunner.BuildArguments([
+            "-m", "/models/moe.gguf", "--fit", "on", "--cpu-moe", "--metrics"
+        ]);
+
+        AssertEx.True(valueless.SequenceEqual(["-m", "/models/moe.gguf", "--fit", "on", "--cpu-moe"]));
+
+        var shortForm = LlamaFitParamsProcessRunner.BuildArguments(["-m", "/models/moe.gguf", "-cmoe"]);
+
+        AssertEx.True(shortForm.SequenceEqual(["-m", "/models/moe.gguf", "-cmoe"]));
+
+        var counted = LlamaFitParamsProcessRunner.BuildArguments(["-m", "/models/moe.gguf", "--n-cpu-moe", "12"]);
+
+        AssertEx.True(counted.SequenceEqual(["-m", "/models/moe.gguf", "--n-cpu-moe", "12"]));
+    }
+
     private static LlamaServerLaunchSpec CreateSpec(string workingDirectory) =>
         new("model",
             ModelRole.Reranker,

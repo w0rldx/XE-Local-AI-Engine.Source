@@ -721,6 +721,36 @@ public sealed class BenchmarkStoreTests : IDisposable
     }
 
     [Test]
+    public async Task StartRun_PersistsTheLaunchIdentitySchemeAndALegacyNullRoundTrips()
+    {
+        // A row frozen under a scheme records it; a row frozen before the column existed round-trips as NULL rather
+        // than failing to load, and the cutover guard is what reads that NULL as scheme 1.
+        var databasePath = GetDatabasePath("launch-identity-scheme.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+
+        var stamped = await store.StartRunAsync(CreateRun(project) with
+        {
+            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent("cuda", "q8_0", "explicit", null, "on", "intended-stamped", "manifest-sha", 2)
+        });
+        project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        var legacy = await store.StartRunAsync(CreateRun(project) with
+        {
+            PrimaryLaunchIntent = new BenchmarkRunLaunchIntent("cuda", "q8_0", "explicit", null, "on", "intended-legacy", "manifest-sha")
+        });
+
+        var reloadedStamped = AssertEx.NotNull(await store.GetRunAsync(stamped.Id));
+        var reloadedLegacy = AssertEx.NotNull(await store.GetRunAsync(legacy.Id));
+
+        AssertEx.Equal<int?>(expected: 2, AssertEx.NotNull(reloadedStamped.PrimaryLaunchIntent).LaunchIdentityScheme);
+        AssertEx.Null(AssertEx.NotNull(reloadedLegacy.PrimaryLaunchIntent).LaunchIdentityScheme,
+            "a row frozen before the scheme column existed must load with a NULL scheme, not fail.");
+    }
+
+    [Test]
     public async Task StartRun_WithoutAFreezeIntent_LeavesTheLegacyColumnsNull()
     {
         var databasePath = GetDatabasePath("launch-intent-legacy.sqlite");

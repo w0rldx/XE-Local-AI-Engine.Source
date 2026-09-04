@@ -30,6 +30,20 @@ public sealed class LocalChatHub(
     {
         ArgumentNullException.ThrowIfNull(request);
         EnsureMessageWithinSizeCap(request.Content);
+
+        // RefuseUndeclaredWrites is a SERVER-set field: the development-workflow runtime puts it on the requests it
+        // builds itself, and nothing arriving on this wire is entitled to arm a rule about a node it is not running.
+        // Cleared rather than rejected, because a browser gains nothing by setting it — the most it could do is make
+        // its own turn refuse — and a rejection would be a new failure mode on a field no client is meant to know
+        // about. The copy is taken only when the field arrives set, so an ordinary send allocates nothing extra.
+        if (request.RefuseUndeclaredWrites)
+        {
+            request = request with
+            {
+                RefuseUndeclaredWrites = false
+            };
+        }
+
         return TrackAttachment(streamService.SendMessageAsync(request, cancellationToken), cancellationToken);
     }
 

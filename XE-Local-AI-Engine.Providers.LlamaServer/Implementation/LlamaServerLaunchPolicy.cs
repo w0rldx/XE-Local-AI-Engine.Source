@@ -64,13 +64,17 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
         // GPU explore: the shared allocation's context plus the KV-cache quantization + flash attention optimization,
         // unless this backend already had the optimized config recorded as unable to reach readiness.
         var useKvQuant = _options.EnableGpuKvCacheQuantization
-                         && !await _fallbackStore.IsOptimizedConfigDisabledAsync(variant, ct).ConfigureAwait(false);
+                         && !await _fallbackStore.IsOptimizedConfigDisabledAsync(variant, _options.KvCacheType, ct).ConfigureAwait(false);
 
+        // --cpu-moe is emitted from the ADMITTED placement, never from an architecture name: only
+        // MoeFitVerdict.FitsWithExpertOffload produces ExpertOffload, and that needs a positive expert_count in the
+        // GGUF header. The flag makes the placement the ledger already booked true — see LlamaServerLaunchPlan.CpuMoe.
         return new LlamaServerLaunchPlan(allocation.ProcessContextTokens,
             useKvQuant,
             _options.KvCacheType,
             CpuThreads: null,
-            CpuThreadsBatch: null);
+            CpuThreadsBatch: null,
+            allocation.Placement == ProcessPlacementMode.ExpertOffload);
     }
 
     /// <inheritdoc />
@@ -94,10 +98,10 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
     }
 
     /// <inheritdoc />
-    public Task RecordOptimizedConfigFailedAsync(GpuVariant variant, CancellationToken ct)
+    public Task RecordOptimizedConfigFailedAsync(GpuVariant variant, string kvCacheType, CancellationToken ct)
     {
-        _logger.LogWarning("Recording optimized llama-server launch config (KV-cache quant + flash attention) as unsupported for backend {Variant}; future spawns will use the safe config.", variant);
-        return _fallbackStore.DisableOptimizedConfigAsync(variant, ct);
+        _logger.LogWarning("Recording optimized llama-server launch config (KV-cache quant + flash attention) as unsupported for backend {Variant} at KV-cache type {KvCacheType}; future spawns of that pair will use the safe config.", variant, kvCacheType);
+        return _fallbackStore.DisableOptimizedConfigAsync(variant, kvCacheType, ct);
     }
 
     /// <summary>Derives (<c>-t</c>, <c>-tb</c>) for a CPU build; a GPU build gets both null — no thread flags.</summary>

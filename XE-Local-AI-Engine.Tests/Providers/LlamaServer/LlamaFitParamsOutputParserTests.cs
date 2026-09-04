@@ -31,6 +31,51 @@ public sealed class LlamaFitParamsOutputParserTests
     }
 
     [Test]
+    public void TryParseFittedArgs_ExpertOffloadSpawn_FreezesTheEquivalentOverrideTensor()
+    {
+        // The helper is handed --cpu-moe, fits against it, and echoes the override back verbatim (upstream
+        // tools/fit-params/fit-params.cpp prints every tensor_buft_override as -ot). That -ot IS the frozen expert
+        // placement, so the replay reproduces what the admission ledger booked without ever emitting --cpu-moe.
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(
+            [@"-c 8192 -ngl 48 -ot ""\.ffn_(up|down|gate|gate_up)_(ch|)exps=CPU"""],
+            startupOutput: [],
+            successfulLaunchArguments: ["-m", "/models/moe.gguf", "--fit", "on", "--cpu-moe"]);
+
+        var draft = AssertEx.NotNull(resolved);
+        AssertEx.Equal(@"\.ffn_(up|down|gate|gate_up)_(ch|)exps=CPU", draft.OverrideTensor);
+        AssertEx.Equal(expected: 48, draft.NGpuLayers!.Value);
+    }
+
+    [Test]
+    [Arguments("--cpu-moe")]
+    [Arguments("-cmoe")]
+    public void TryParseFittedArgs_ExpertOffloadSpawnWithoutAnOverride_ProvesNoReplay(string flag)
+    {
+        // A fit line with no -ot cannot express the placement the spawn ran under. Drafting it would freeze a replay
+        // that launches the experts back onto the GPU, outside the footprint admission reserved, so no draft is made.
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl 48"],
+            startupOutput: [],
+            successfulLaunchArguments: ["-m", "/models/moe.gguf", "--fit", "on", flag]);
+
+        AssertEx.Null(resolved);
+    }
+
+    [Test]
+    public void TryParseFittedArgs_ResidentSpawn_IsUnchangedByTheExpertOffloadRule()
+    {
+        // The byte-identical pin: a dense/fully-resident explore names no expert flag, so the draft is what it always
+        // was -- an absent -ot stays absent and still yields a complete replay.
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl 48"],
+            startupOutput: [],
+            successfulLaunchArguments: ["-m", "/models/dense.gguf", "--fit", "on"]);
+
+        var draft = AssertEx.NotNull(resolved);
+        AssertEx.Equal(expected: 8192, draft.CtxSize);
+        AssertEx.Equal(expected: 48, draft.NGpuLayers!.Value);
+        AssertEx.Null(draft.OverrideTensor);
+    }
+
+    [Test]
     public void TryParseFittedArgs_MultiDeviceGrammar_PreservesTensorSplit()
     {
         var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl 32 -ts 7,3"]);

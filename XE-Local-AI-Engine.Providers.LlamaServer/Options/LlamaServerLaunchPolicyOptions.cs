@@ -135,7 +135,7 @@ public sealed class LlamaServerLaunchPolicyOptions
     private const int DefaultRerankerContextTokens = 2048;
     private const int DefaultContextSafetyMarginTokens = 256;
     private const int DefaultCpuThreadReserve = 1;
-    private const string DefaultKvCacheType = "q8_0";
+    private const string DefaultKvCacheType = LlamaServerKvCacheTypes.Q8_0;
 
     /// <summary>The role's requested context window in tokens (before capping to the model's train context).</summary>
     public int ContextTokensForRole(ModelRole role)
@@ -183,6 +183,15 @@ public sealed class LlamaServerLaunchPolicyOptions
         if (string.IsNullOrWhiteSpace(KvCacheType))
         {
             throw new InvalidOperationException($"{nameof(KvCacheType)} must be non-empty.");
+        }
+
+        // Fail-fast on a misconfiguration rather than emitting a -ctk value llama-server will reject. This runs in the
+        // launch policy's constructor, i.e. at host build, so a bad value takes the node down instead of degrading. It
+        // is unreachable from the UI (the node-settings normalizer maps an unknown value to null, which re-seeds to the
+        // default); a hand-edited node-settings.json or a future non-UI seed is what this catches.
+        if (!LlamaServerKvCacheTypes.IsAllowed(KvCacheType))
+        {
+            throw new InvalidOperationException($"{nameof(KvCacheType)} '{KvCacheType}' is not a supported KV-cache type.");
         }
 
         if (CpuThreadReserve < 0)

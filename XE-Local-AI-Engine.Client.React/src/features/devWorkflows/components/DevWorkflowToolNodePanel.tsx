@@ -77,6 +77,11 @@ export function DevWorkflowToolNodePanel({ nodeRun, onShowArtifacts }: DevWorkfl
 	// puts Succeeded rows back to Pending) leaves attempt N's report standing until attempt N+1's commands land. Both
 	// documents carry the attempt they were written for, so an older one is never painted as the current result — a
 	// stale "Validation passed" over a node that is re-validating is the one lie this panel must not tell.
+	// A decomposition that found no work writes one already-succeeded row per validation node in its template, so an
+	// apply downstream can read a validation that really did run for this run. That row wrote no report because it ran
+	// nothing, and "no report was written, so there is nothing here that evidences what this node did" would be an
+	// alarm about a row behaving exactly as designed.
+	const notApplicable = useMemo(() => validationNotApplicable(nodeRun.outputJson), [nodeRun.outputJson]);
 	const reportAttempt = applyReport?.attempt ?? report?.attempt;
 	const priorAttempt =
 		typeof reportAttempt === "number" && reportAttempt < (nodeRun.attempt ?? 1) ? reportAttempt : undefined;
@@ -93,7 +98,16 @@ export function DevWorkflowToolNodePanel({ nodeRun, onShowArtifacts }: DevWorkfl
 			gap="xs"
 			data-testid="dev-workflow-node-tool"
 		>
-			{artifactId ? null : <RefusedWithoutReport nodeRun={nodeRun} />}
+			{artifactId ? null : notApplicable ? (
+				<Text size="sm" c="dimmed" data-testid="dev-workflow-validation-not-applicable">
+					{t(
+						"pages.devWorkflows.validation.notApplicable",
+						"Nothing was decomposed for this run, so this check had nothing to validate.",
+					)}
+				</Text>
+			) : (
+				<RefusedWithoutReport nodeRun={nodeRun} />
+			)}
 
 			{artifactId && contentQuery.isPending ? <Loader size="sm" data-testid="dev-workflow-validation-loading" /> : null}
 
@@ -140,6 +154,33 @@ export function DevWorkflowToolNodePanel({ nodeRun, onShowArtifacts }: DevWorkfl
 			) : null}
 		</SectionCard>
 	);
+}
+
+/**
+ * Whether the row says it validated nothing because there was nothing to validate — the verdict a zero-task
+ * decomposition writes onto its template's validation nodes. Read off the row's own output document, which is the only
+ * place that fact lives on the DETAIL response; an unreadable body is simply not that verdict.
+ *
+ * The token is `DevWorkflowNodeOutputVerdicts.ValidationNotApplicable`, and the server answers the same question with
+ * `DevWorkflowGraphContract.ValidationWasNotApplicable` — which is what the node-run SUMMARY carries as
+ * `validationNotApplicable`, for the run table and the progress counts. Spelled out here because there is no generated
+ * enum for a verdict inside an output document.
+ */
+function validationNotApplicable(outputJson: string | null | undefined): boolean {
+	if (!outputJson) {
+		return false;
+	}
+
+	try {
+		const parsed: unknown = JSON.parse(outputJson);
+		return (
+			typeof parsed === "object" &&
+			parsed !== null &&
+			(parsed as { readonly verdict?: unknown }).verdict === "validation-not-applicable"
+		);
+	} catch {
+		return false;
+	}
 }
 
 /**

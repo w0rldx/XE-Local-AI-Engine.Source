@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
 ///     Shared fakes for the <see cref="LlamaServerProcessSupervisor" /> tests: a process launcher that records the
@@ -400,30 +401,31 @@ internal sealed class RecordingInferenceLease : ILlamaServerInferenceLease
 }
 
 /// <summary>
-///     In-memory <see cref="ILlamaServerLaunchFallbackStore" /> for tests: records disabled optimized backends without
-///     touching disk. Exposes the recorded set so a test can assert the one-shot KV-quant fallback was persisted.
+///     In-memory <see cref="ILlamaServerLaunchFallbackStore" /> for tests: records disabled optimized (backend, KV type)
+///     pairs without touching disk. Exposes the recorded set so a test can assert the one-shot KV-quant fallback was
+///     persisted, and against which KV type.
 /// </summary>
 internal sealed class FakeLaunchFallbackStore : ILlamaServerLaunchFallbackStore
 {
-    private readonly HashSet<GpuVariant> _disabled = [];
+    private readonly HashSet<(GpuVariant Variant, string KvCacheType)> _disabled = [];
 
-    public IReadOnlyCollection<GpuVariant> Disabled => _disabled;
+    public IReadOnlyCollection<(GpuVariant Variant, string KvCacheType)> Disabled => _disabled;
 
-    public Task<bool> IsOptimizedConfigDisabledAsync(GpuVariant variant, CancellationToken ct)
+    public Task<bool> IsOptimizedConfigDisabledAsync(GpuVariant variant, string kvCacheType, CancellationToken ct)
     {
-        return Task.FromResult(_disabled.Contains(variant));
+        return Task.FromResult(_disabled.Contains((variant, kvCacheType)));
     }
 
-    public Task DisableOptimizedConfigAsync(GpuVariant variant, CancellationToken ct)
+    public Task DisableOptimizedConfigAsync(GpuVariant variant, string kvCacheType, CancellationToken ct)
     {
-        _disabled.Add(variant);
+        _disabled.Add((variant, kvCacheType));
         return Task.CompletedTask;
     }
 
-    /// <summary>Seeds a backend as already-disabled so a spawn skips the optimized config from the start.</summary>
-    public void Disable(GpuVariant variant)
+    /// <summary>Seeds a (backend, KV type) pair as already-disabled so a spawn skips the optimized config from the start.</summary>
+    public void Disable(GpuVariant variant, string kvCacheType = LlamaServerKvCacheTypes.Q8_0)
     {
-        _disabled.Add(variant);
+        _disabled.Add((variant, kvCacheType));
     }
 }
 

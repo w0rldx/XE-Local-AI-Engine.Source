@@ -83,6 +83,16 @@ internal sealed partial class DevWorkflowStore
                     run.GraphRevision++;
                 }
 
+                // The producer's route, re-recorded against the graph this expansion just wrote. It belongs in THIS
+                // transaction: the route and the edges it describes are one fact, and a separate write afterwards
+                // could leave a run whose expansion committed and whose route still denies it.
+                if (command.RouteJson is { } producerRoute && command.RouteNodeRunId is { } producerNodeRunId)
+                {
+                    EnsureNotBlank(producerRoute, nameof(command.RouteJson));
+                    var producer = await LoadNodeRunAsync(run.Id, producerNodeRunId, cancellationToken).ConfigureAwait(false);
+                    producer.RouteJson = producerRoute;
+                }
+
                 var detail = Utf8(JsonSerializer.Serialize(new MaterializationDetail(command.NodeRuns.Count, run.GraphRevision), JsonOptions));
                 var eventType = command.GraphJson is null ? DevWorkflowEventTypes.NodeMaterialized : DevWorkflowEventTypes.GraphChanged;
                 return new MutationOutcome(eventType, $"{command.NodeRuns.Count} node run(s)", detail);
@@ -166,6 +176,11 @@ internal sealed partial class DevWorkflowStore
             nodeRun.EndedAtUtc = null;
             nodeRun.FailureClass = null;
             nodeRun.TerminalReason = null;
+
+            // The cost columns go with them, and for the same reason: they describe the attempt that just failed, and
+            // leaving them would make the next attempt report the previous one's spend. What that attempt cost is
+            // captured onto its node.retry.scheduled event before this reset runs.
+            ClearTelemetry(nodeRun);
         }
 
         if (IsTerminal(command.TargetStatus))
@@ -200,6 +215,8 @@ internal sealed partial class DevWorkflowStore
             nodeRun.DevelopmentTaskId = developmentTaskId;
         }
 
+        ApplyTelemetry(nodeRun, command.Telemetry);
+
         await ApplyWorkItemStatusAsync(run.WorkItemId, command.WorkItemStatus, cancellationToken).ConfigureAwait(false);
         return new MutationOutcome(EventTypeFor(command.TargetStatus),
             command.Outcome ?? OutcomeFor(command.TargetStatus),
@@ -208,6 +225,49 @@ internal sealed partial class DevWorkflowStore
             // the reason alone would leave its event saying nothing about what it is re-attempting.
             command.DetailJson is not null ? Utf8(command.DetailJson) : ReasonDetail(command.TerminalReason),
             nodeRun.Id);
+    }
+
+    /// <summary>
+    ///     Writes the cost columns a settle collected. Member-wise and null-skipping, so a collector that could answer
+    ///     only half the question — an agent node whose envelopes are gone, a structural node that has a route and
+    ///     nothing else — leaves the rest of the row alone instead of blanking it.
+    /// </summary>
+    private static void ApplyTelemetry(DevWorkflowNodeRun nodeRun, DevWorkflowNodeTelemetry? telemetry)
+    {
+        if (telemetry is null)
+        {
+            return;
+        }
+
+        nodeRun.InputTokens = telemetry.InputTokens ?? nodeRun.InputTokens;
+        nodeRun.OutputTokens = telemetry.OutputTokens ?? nodeRun.OutputTokens;
+        nodeRun.ReasoningTokens = telemetry.ReasoningTokens ?? nodeRun.ReasoningTokens;
+        nodeRun.EstimatedInputTokens = telemetry.EstimatedInputTokens ?? nodeRun.EstimatedInputTokens;
+        nodeRun.ProviderCalls = telemetry.ProviderCalls ?? nodeRun.ProviderCalls;
+        nodeRun.ToolCalls = telemetry.ToolCalls ?? nodeRun.ToolCalls;
+        nodeRun.ToolSchemaTokens = telemetry.ToolSchemaTokens ?? nodeRun.ToolSchemaTokens;
+        nodeRun.ToolNamesJson = telemetry.ToolNamesJson ?? nodeRun.ToolNamesJson;
+        nodeRun.AgentTurnMs = telemetry.AgentTurnMs ?? nodeRun.AgentTurnMs;
+        nodeRun.ServedModelName = telemetry.ServedModelName ?? nodeRun.ServedModelName;
+        nodeRun.RouteJson = telemetry.RouteJson ?? nodeRun.RouteJson;
+        nodeRun.WorkSessionSteps = telemetry.WorkSessionSteps ?? nodeRun.WorkSessionSteps;
+    }
+
+    /// <summary>Empties all twelve cost columns, which is what a re-attempt's clean slate means for them.</summary>
+    private static void ClearTelemetry(DevWorkflowNodeRun nodeRun)
+    {
+        nodeRun.InputTokens = null;
+        nodeRun.OutputTokens = null;
+        nodeRun.ReasoningTokens = null;
+        nodeRun.EstimatedInputTokens = null;
+        nodeRun.ProviderCalls = null;
+        nodeRun.ToolCalls = null;
+        nodeRun.ToolSchemaTokens = null;
+        nodeRun.ToolNamesJson = null;
+        nodeRun.AgentTurnMs = null;
+        nodeRun.ServedModelName = null;
+        nodeRun.RouteJson = null;
+        nodeRun.WorkSessionSteps = null;
     }
 
     public Task<DevWorkflowMutationResult> RouteRetryAsync(RouteDevWorkflowRetryCommand command, CancellationToken cancellationToken = default)

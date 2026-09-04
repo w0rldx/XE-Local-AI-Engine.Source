@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 internal static class BenchmarkEndpointMapper
 {
@@ -327,6 +328,11 @@ internal static class BenchmarkEndpointMapper
         response.PrimaryFlashAttentionMode = primaryIntent?.FlashAttentionMode;
         response.PrimaryIntendedLaunchIdentity = primaryIntent?.IntendedLaunchIdentity;
         response.PrimaryIntendedExecutableSha256 = primaryIntent?.IntendedExecutableSha256;
+        // Server-computed so the scheme number never reaches the client. A NULL stored scheme is a pre-scheme freeze,
+        // i.e. scheme 1, and the guard treats it the same way.
+        response.PrimaryLaunchIdentitySchemeOutdated = primaryIntent is null
+            ? null
+            : (primaryIntent.LaunchIdentityScheme ?? 1) != LlamaServerLaunchProjection.IdentitySchemeVersion;
         response.PrimaryEffectiveLaunchIdentity = primary?.EffectiveLaunchIdentity;
         response.PrimaryEffectiveBackend = primary?.EffectiveBackend;
         response.PrimaryPlacementOffloaded = primary?.PlacementOffloaded;

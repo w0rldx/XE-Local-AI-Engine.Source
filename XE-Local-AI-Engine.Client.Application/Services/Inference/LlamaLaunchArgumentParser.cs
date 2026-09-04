@@ -16,7 +16,8 @@ using System.Text;
 ///         <item>
 ///             <b>Memory-fit placement</b> — the context size, GPU-layer/tensor placement, KV-cache type,
 ///             flash-attention, parallel slots, and batch sizes (<c>-c</c>, <c>-ngl</c>, <c>-ts</c>, <c>-ot</c>,
-///             <c>-ctk</c>/<c>-ctv</c>, <c>-fa</c>, <c>--parallel</c>, <c>-b</c>/<c>-ub</c> and their long aliases). The
+///             <c>--cpu-moe</c>/<c>--n-cpu-moe</c>, <c>-ctk</c>/<c>-ctv</c>, <c>-fa</c>, <c>--parallel</c>,
+///             <c>-b</c>/<c>-ub</c> and their long aliases). The
 ///             capacity/allocation resolver and the launch policy decide these BEFORE admission and record the resulting
 ///             footprint in the memory ledger. The override is appended to the spec AFTER that decision, so letting it
 ///             change a placement flag would silently invalidate the ledger, defeat the safe-config retry, and
@@ -46,6 +47,11 @@ public static class LlamaLaunchArgumentParser
         "-ngl", "--gpu-layers", "--n-gpu-layers",
         "-ts", "--tensor-split",
         "-ot", "--override-tensor",
+        // --cpu-moe/-cmoe and --n-cpu-moe/-ncmoe are -ot by another name: upstream pushes them into the SAME
+        // tensor_buft_overrides list the -ot flag writes (llama.cpp common/arg.cpp), so an override could re-place
+        // every expert tensor after the placement verdict admission already booked a footprint for.
+        "-cmoe", "--cpu-moe",
+        "-ncmoe", "--n-cpu-moe",
         "-ctk", "--cache-type-k",
         "-ctv", "--cache-type-v",
         "-fa", "--flash-attn",

@@ -38,6 +38,7 @@ internal static class NodeSettingsEndpointDtoMapper
             MinChatCacheReuse = StoredNodeSettings.MinChatCacheReuse,
             MaxAllowedChatCacheReuse = StoredNodeSettings.MaxChatCacheReuse,
             SpeculativeMode = settings.SpeculativeMode,
+            KvCacheType = settings.KvCacheType,
             SpeculativeDraftModelName = settings.SpeculativeDraftModelName,
             SpeculativeDraftMaxTokens = settings.SpeculativeDraftMaxTokens,
             MinSpeculativeDraftMaxTokens = StoredNodeSettings.MinSpeculativeDraftMaxTokens,
@@ -46,6 +47,7 @@ internal static class NodeSettingsEndpointDtoMapper
             MinSpeculativeDraftGpuLayers = StoredNodeSettings.MinSpeculativeDraftGpuLayers,
             MaxAllowedSpeculativeDraftGpuLayers = StoredNodeSettings.MaxSpeculativeDraftGpuLayers,
             RerankerModelName = settings.RerankerModelName,
+            AutoEffortFastModelName = settings.AutoEffortFastModelName,
             HuggingFaceDiskMarginBytes = settings.HuggingFaceDiskMarginBytes,
             OrchestrationIdleTimeoutSeconds = settings.OrchestrationIdleTimeoutSeconds,
             MinOrchestrationIdleTimeoutSeconds = StoredNodeSettings.MinOrchestrationIdleTimeoutSeconds,
@@ -111,6 +113,9 @@ internal static class NodeSettingsEndpointDtoMapper
             SpeculativeMode = request.SpeculativeMode is null
                 ? currentSettings.SpeculativeMode
                 : request.SpeculativeMode.Trim(),
+            KvCacheType = request.KvCacheType is null
+                ? currentSettings.KvCacheType
+                : request.KvCacheType.Trim(),
             SpeculativeDraftModelName = request.SpeculativeDraftModelName is null
                 ? currentSettings.SpeculativeDraftModelName
                 : request.SpeculativeDraftModelName.Trim(),
@@ -122,6 +127,9 @@ internal static class NodeSettingsEndpointDtoMapper
             RerankerModelName = request.RerankerModelName is null
                 ? currentSettings.RerankerModelName
                 : request.RerankerModelName.Trim(),
+            AutoEffortFastModelName = request.AutoEffortFastModelName is null
+                ? currentSettings.AutoEffortFastModelName
+                : request.AutoEffortFastModelName.Trim(),
             OrchestrationIdleTimeoutSeconds = request.OrchestrationIdleTimeoutSeconds ?? currentSettings.OrchestrationIdleTimeoutSeconds,
             AgentHomePrepareTimeoutSeconds = request.AgentHomePrepareTimeoutSeconds ?? currentSettings.AgentHomePrepareTimeoutSeconds,
             AgentHomeCommandTimeoutSeconds = request.AgentHomeCommandTimeoutSeconds ?? currentSettings.AgentHomeCommandTimeoutSeconds,

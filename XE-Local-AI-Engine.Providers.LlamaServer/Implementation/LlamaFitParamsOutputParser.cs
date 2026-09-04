@@ -16,6 +16,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     parser tolerates it on any pin): <c>-c 0</c> means the
 ///     model-trained context and <c>-ngl -1</c> means automatic placement. Context zero is never concrete. Automatic
 ///     placement is normalized to explicit all-layers (<c>-2</c>) only when verbose startup output proves full offload.
+///     Expert placement is preserved the same way KV/flash-attention policy is — from the successful argv: a spawn that
+///     carried <c>--cpu-moe</c> must yield an <c>-ot</c>, because the helper turns that flag into the equivalent tensor
+///     override and echoes it. A fit line without one is not a replayable placement and fails the parse.
 /// </remarks>
 internal static partial class LlamaFitParamsOutputParser
 {
@@ -29,7 +32,11 @@ internal static partial class LlamaFitParamsOutputParser
     {
         ArgumentNullException.ThrowIfNull(fitParamsOutput);
 
-        if (!TryParseSuccessfulLaunchPolicy(successfulLaunchArguments, out var kvTypeK, out var kvTypeV, out var flashAttn))
+        if (!TryParseSuccessfulLaunchPolicy(successfulLaunchArguments,
+                out var kvTypeK,
+                out var kvTypeV,
+                out var flashAttn,
+                out var expertOffload))
         {
             return null;
         }
@@ -68,6 +75,15 @@ internal static partial class LlamaFitParamsOutputParser
 
             var tensorSplit = OptionalValue(match, "ts");
             var overrideTensor = OptionalValue(match, "ot");
+
+            // The spawn kept the experts in system RAM, so the replay MUST carry that placement or it would launch
+            // outside the footprint admission booked for it. The helper echoes --cpu-moe back as -ot, so a missing
+            // -ot here means the helper never saw the flag (or dropped it): no concrete replay can be proven.
+            if (expertOffload && overrideTensor is null)
+            {
+                continue;
+            }
+
             return ResolvedLaunchArguments.Replay(ctxSize,
                 gpuLayers,
                 tensorSplit,
@@ -111,11 +127,13 @@ internal static partial class LlamaFitParamsOutputParser
     private static bool TryParseSuccessfulLaunchPolicy(IReadOnlyList<string>? arguments,
         out string? kvTypeK,
         out string? kvTypeV,
-        out bool flashAttn)
+        out bool flashAttn,
+        out bool expertOffload)
     {
         kvTypeK = null;
         kvTypeV = null;
         flashAttn = false;
+        expertOffload = false;
         string? flashAttnValue = null;
 
         if (arguments is null)
@@ -139,6 +157,10 @@ internal static partial class LlamaFitParamsOutputParser
                 {
                     return false;
                 }
+            }
+            else if (argument is "-cmoe" or "--cpu-moe" or "-ncmoe" or "--n-cpu-moe")
+            {
+                expertOffload = true;
             }
             else if ((argument is "-fa" or "--flash-attn")
                      && !TryReadSingleValue(arguments, ref index, ref flashAttnValue))

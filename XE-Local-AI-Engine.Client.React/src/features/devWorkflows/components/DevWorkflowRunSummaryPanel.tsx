@@ -7,6 +7,7 @@ import { DevWorkflowRunStatusBadge } from "@/features/devWorkflows/components/De
 import {
 	type DevWorkflowDefinitionSummaryResponse,
 	type DevWorkflowNodeRunSummaryResponse,
+	type DevWorkflowRunCostResponse,
 	type DevWorkflowRunSummaryResponse,
 	toDevWorkflowNodeStatus,
 	toDevWorkflowRunStatus,
@@ -18,6 +19,8 @@ export interface DevWorkflowRunSummaryPanelProps {
 	readonly selectedRunId?: string;
 	readonly nodes: readonly DevWorkflowNodeRunSummaryResponse[];
 	readonly pendingDecisionCount: number;
+	/** The run's spend, summed server-side over its node runs' final attempts. Absent until a run is selected. */
+	readonly cost?: DevWorkflowRunCostResponse;
 	/** Empty while a run is live: X14 allows one live run per work item and the start is refused with a 409 anyway. */
 	readonly startableDefinitions: readonly DevWorkflowDefinitionSummaryResponse[];
 	/** Lifted, because the centre pane previews the picked template while the work item has nothing to show yet. */
@@ -35,6 +38,7 @@ export function DevWorkflowRunSummaryPanel({
 	selectedRunId,
 	nodes,
 	pendingDecisionCount,
+	cost,
 	startableDefinitions,
 	selectedDefinitionId,
 	onSelectDefinition,
@@ -46,7 +50,11 @@ export function DevWorkflowRunSummaryPanel({
 	const { t } = useTranslation();
 	const definitionId = selectedDefinitionId;
 
-	const statuses = nodes.map((node) => toDevWorkflowNodeStatus(node.status));
+	// D12's no-op rows are in neither figure: a check that had nothing to check is a succeeded row standing for work
+	// that did not happen, and counting it as done reports a run that decomposed into nothing as having completed a
+	// validation. Left out of the total as well, so the fraction stays "of the work there was".
+	const counted = nodes.filter((node) => !node.validationNotApplicable);
+	const statuses = counted.map((node) => toDevWorkflowNodeStatus(node.status));
 	const running = statuses.filter((status) => status === "Running").length;
 	const queued = statuses.filter((status) => status === "Queued").length;
 	const done = statuses.filter((status) => status === "Succeeded" || status === "Skipped").length;
@@ -141,12 +149,23 @@ export function DevWorkflowRunSummaryPanel({
 								running,
 								queued,
 								done,
-								total: nodes.length,
+								total: counted.length,
 							})}
 						</Text>
 						{pendingDecisionCount > 0 ? (
 							<Text size="sm" c="orange" fw={500} data-testid="dev-workflow-progress-decisions">
 								{t("pages.devWorkflows.detail.waitingOnYou", "{{count}} waiting on you", { count: pendingDecisionCount })}
+							</Text>
+						) : null}
+						{/* The run's spend so far. A LOWER bound: it sums each node's LAST attempt, so a run that retried spent
+						    more than this line says — the retry events carry the rest. */}
+						{cost && (cost.inputTokens != null || cost.outputTokens != null || cost.toolCalls != null) ? (
+							<Text size="xs" c="dimmed" data-testid="dev-workflow-progress-cost">
+								{t("pages.devWorkflows.detail.cost", "{{input}} / {{output}} tok · {{tools}} tool calls, final attempts only", {
+									input: cost.inputTokens?.toLocaleString() ?? "–",
+									output: cost.outputTokens?.toLocaleString() ?? "–",
+									tools: cost.toolCalls?.toLocaleString() ?? "–",
+								})}
 							</Text>
 						) : null}
 					</SectionCard>

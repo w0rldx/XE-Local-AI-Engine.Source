@@ -36,6 +36,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             OrchestrationTopologyJson = input.OrchestrationTopologyJson,
             PlaybookEnabled = input.PlaybookEnabled,
             DisableBaseScaffold = input.DisableBaseScaffold,
+            DisableToolRelevanceFilter = input.DisableToolRelevanceFilter,
             DefaultTemporaryChat = input.DefaultTemporaryChat,
             MemoryExtractionEnabled = input.MemoryExtractionEnabled,
             GenerationMetadataJson = EncodeOptional(input.GenerationMetadataJson),
@@ -71,6 +72,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             OrchestrationTopologyJson = input.OrchestrationTopologyJson,
             PlaybookEnabled = input.PlaybookEnabled,
             DisableBaseScaffold = input.DisableBaseScaffold,
+            DisableToolRelevanceFilter = input.DisableToolRelevanceFilter,
             DefaultTemporaryChat = input.DefaultTemporaryChat,
             MemoryExtractionEnabled = input.MemoryExtractionEnabled,
             // The only place a seeded provenance is stamped — the manual AddAsync leaves Source at the entity default
@@ -141,6 +143,9 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
         // DisableBaseScaffold toggles whether the scaffold is folded into the resolved prompt; like PlaybookEnabled the
         // prompt change drives the config hash directly, so it is excluded from configChanged and never bumps Version.
         entity.DisableBaseScaffold = input.DisableBaseScaffold;
+        // DisableToolRelevanceFilter narrows only the provider-bound tools array — never the offer, the prompt or the
+        // config hash — so like the two above it is excluded from configChanged and never bumps Version.
+        entity.DisableToolRelevanceFilter = input.DisableToolRelevanceFilter;
         // DefaultTemporaryChat gates post-run memory extraction only (not the prompt), so like PlaybookEnabled it is
         // excluded from configChanged and never bumps Version.
         entity.DefaultTemporaryChat = input.DefaultTemporaryChat;
@@ -249,7 +254,8 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             entity.DefaultTemporaryChat,
             entity.MemoryExtractionEnabled,
             entity.DisableBaseScaffold,
-            entity.GenerationMetadataJson is null ? null : Decode(entity.GenerationMetadataJson));
+            entity.GenerationMetadataJson is null ? null : Decode(entity.GenerationMetadataJson),
+            entity.DisableToolRelevanceFilter);
     }
 
     private static byte[]? EncodeOptional(string? value)

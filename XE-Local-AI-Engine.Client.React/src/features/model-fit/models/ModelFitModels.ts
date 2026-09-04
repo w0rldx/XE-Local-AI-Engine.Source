@@ -86,6 +86,15 @@ export interface ModelFitRecommendation {
 	readonly kvQuantFits: boolean | null;
 	// Always true when an advisory is present — a quantized KV cache requires flash attention; null when kvQuant is null.
 	readonly kvQuantRequiresFlashAttention: boolean | null;
+	// KV-cache bytes for ONE token of context at the snapshot's context target, computed at kvBytesPerTokenQuant (the
+	// chat launch's element size, not the fp16 estimate the required-memory columns use). Null when the GGUF header
+	// cannot size the KV term or the row predates this field. Never render it without the quant label.
+	readonly kvBytesPerToken: number | null;
+	// The KV element size kvBytesPerToken was computed at (currently "Q8_0"); null when kvBytesPerToken is null.
+	readonly kvBytesPerTokenQuant: string | null;
+	// The model's attention shape as a stable lowercase token ("mla" | "swa" | "gqa" | "mha"), derived from GGUF
+	// numbers rather than the architecture string. Null on a row that predates this field.
+	readonly attentionArch: string | null;
 }
 
 // Domain view-model for the latest cached recommendation snapshot. hasCache:false is the explicit empty /

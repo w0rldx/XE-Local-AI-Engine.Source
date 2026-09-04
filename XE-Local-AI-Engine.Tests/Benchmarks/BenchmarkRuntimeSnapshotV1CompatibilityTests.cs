@@ -82,6 +82,51 @@ public sealed class BenchmarkRuntimeSnapshotV1CompatibilityTests
         AssertEx.Equal(LiteralV1Snapshot, withoutBudget, "the v1 wire shape is frozen — no schema v2");
     }
 
+    [Test]
+    public void Serialize_WithTheRelevanceFilterOptOut_LeavesTheWireShapeAndHashUnmoved()
+    {
+        // The opt-out is an execution-context bit, not frozen configuration: it is [JsonIgnore]d off this record, so an
+        // agent that disabled the tool-relevance filter freezes the same bytes and the same configurationHash as one
+        // that did not. Without that, every run frozen before the flag existed would fail hash validation on upgrade.
+        var factory = new BenchmarkRuntimeSnapshotFactory(new BenchmarkEligibilityPolicy());
+        var input = Input();
+        var optedOut = input with
+        {
+            ResolvedRuntime = input.ResolvedRuntime with
+            {
+                DisableToolRelevanceFilter = true
+            }
+        };
+
+        var serialized = Encoding.UTF8.GetString(factory.Serialize(factory.Create(optedOut)));
+
+        AssertEx.False(serialized.Contains("disableToolRelevanceFilter", StringComparison.OrdinalIgnoreCase),
+            "the opt-out must leave no trace on the frozen wire shape");
+        AssertEx.Equal(LiteralV1Snapshot, serialized, "the v1 wire shape and its configuration hash are frozen — the opt-out cannot move either");
+    }
+
+    [Test]
+    public void BuildPrimaryPackage_ForAnOptedOutAgent_StillRunsUnderTheRelevanceFilter()
+    {
+        // The companion to the test above: because the flag never reaches the frozen payload, a benchmark generation
+        // never honours it. Pinned so the omission stays deliberate rather than becoming a silent divergence between a
+        // freshly frozen run and the same run replayed from storage.
+        var factory = new BenchmarkRuntimeSnapshotFactory(new BenchmarkEligibilityPolicy());
+        var input = Input();
+        var optedOut = input with
+        {
+            ResolvedRuntime = input.ResolvedRuntime with
+            {
+                DisableToolRelevanceFilter = true
+            }
+        };
+
+        var replayed = factory.Deserialize(factory.Serialize(factory.Create(optedOut)));
+
+        AssertEx.False(replayed.ResolvedRuntime.DisableToolRelevanceFilter,
+            "a replayed benchmark run generates under the node-level relevance-filter setting, never the agent's opt-out");
+    }
+
     private static BenchmarkRuntimeSnapshotInput Input() =>
         new(Guid.Parse("11111111-1111-1111-1111-111111111111"),
             Guid.Parse("22222222-2222-2222-2222-222222222222"),

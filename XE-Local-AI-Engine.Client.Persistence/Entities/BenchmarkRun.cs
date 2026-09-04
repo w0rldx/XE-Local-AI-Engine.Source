@@ -189,6 +189,12 @@ internal sealed record class BenchmarkRun
     public string? PrimaryIntendedExecutableSha256 { get; set; }
 
     /// <summary>
+    ///     The launch-identity SCHEME <see cref="PrimaryIntendedLaunchIdentity" /> was computed under. NULL on a row
+    ///     frozen before the scheme was recorded, which reads as scheme 1.
+    /// </summary>
+    public int? PrimaryLaunchIdentityScheme { get; set; }
+
+    /// <summary>
     ///     Plaintext UTF-8 JSON while tracked; encrypted at rest with node-scoped AAD column
     ///     <c>benchmark_primary_launch_receipt_json</c>. Written once, before inference, and never overwritten.
     /// </summary>

@@ -155,6 +155,7 @@ internal static class AddNodeModelRuntimeExtensions
         builder.Services.AddHuggingFaceGgufStore(configuration);
 
         builder.Services.AddSingleton(sp => BuildSeededLlamaServerSupervisorOptions(sp));
+        builder.Services.AddSingleton(sp => BuildSeededLlamaServerLaunchPolicyOptions(sp));
         builder.Services.AddLlamaServerLocalModelProvider();
         builder.Services.AddSingleton<ILlamaCppRuntimeAdministrationService, LlamaCppRuntimeAdministrationService>();
 
@@ -458,6 +459,26 @@ internal static class AddNodeModelRuntimeExtensions
             SpeculativeDraftModelName = runtimeSettings.GetSpeculativeDraftModelName(),
             SpeculativeDraftMaxTokens = runtimeSettings.GetSpeculativeDraftMaxTokens(),
             SpeculativeDraftGpuLayers = runtimeSettings.GetSpeculativeDraftGpuLayers()
+        };
+    }
+
+    /// <summary>
+    ///     Seeds <see cref="LlamaServerLaunchPolicyOptions" /> from the node's KV-cache-type setting, registered before
+    ///     <c>AddLlamaServerLocalModelProvider()</c> so the provider's own <c>TryAddSingleton</c> default becomes a
+    ///     no-op. Every other member keeps its initializer default, so with the setting unset this object is equal to
+    ///     <c>new LlamaServerLaunchPolicyOptions()</c> on every field its consumers read — the argv, the launch identity
+    ///     and the inference-profile fingerprint are then byte-identical to a node that never had this knob.
+    ///     <c>f16</c> collapses to <c>EnableGpuKvCacheQuantization = false</c>, which is exactly the
+    ///     no-<c>-ctk</c>/<c>-ctv</c>/<c>-fa</c> vector a CPU spawn already emits.
+    /// </summary>
+    internal static LlamaServerLaunchPolicyOptions BuildSeededLlamaServerLaunchPolicyOptions(IServiceProvider serviceProvider)
+    {
+        var runtimeSettings = serviceProvider.GetRequiredService<INodeRuntimeSettings>();
+        var kvCacheType = runtimeSettings.GetKvCacheType();
+        return new LlamaServerLaunchPolicyOptions
+        {
+            KvCacheType = kvCacheType,
+            EnableGpuKvCacheQuantization = !string.Equals(kvCacheType, LlamaServerKvCacheTypes.F16, StringComparison.Ordinal)
         };
     }
 

@@ -211,6 +211,46 @@ public sealed class NodeRuntimeSettingsTests
     }
 
     [Test]
+    public async Task KvCacheType_StoredValuePresent_OverridesTheDefault()
+    {
+        var sut = CreateSut(new StoredNodeSettings
+            {
+                KvCacheType = "q4_0"
+            },
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+
+        AssertEx.Equal("q4_0", await sut.GetKvCacheTypeAsync());
+    }
+
+    [Test]
+    public void KvCacheType_SyncTwin_MirrorsTheAsyncAccessor()
+    {
+        // The DI seed reads the SYNCHRONOUS getter at host build, so it must resolve the same value.
+        var sut = CreateSut(new StoredNodeSettings
+            {
+                KvCacheType = "q4_0"
+            },
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+
+        AssertEx.Equal("q4_0", sut.GetKvCacheType());
+    }
+
+    [Test]
+    public async Task KvCacheType_StoredAbsentOrUnknown_UsesTheDefault()
+    {
+        // Unset is the byte-identical-default path: the DI seed then builds options equal to the provider's own.
+        var unset = CreateSut(new StoredNodeSettings(), seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+        AssertEx.Equal(StoredNodeSettings.DefaultKvCacheType, await unset.GetKvCacheTypeAsync());
+
+        var unknown = CreateSut(new StoredNodeSettings
+            {
+                KvCacheType = "not-a-real-type"
+            },
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+        AssertEx.Equal(StoredNodeSettings.DefaultKvCacheType, await unknown.GetKvCacheTypeAsync());
+    }
+
+    [Test]
     public async Task RecommendedTag_FallsBackToPin_WhenStoredMalformed()
     {
         // A malformed stored tag (Normalize would null it, but guard the accessor independently as well).

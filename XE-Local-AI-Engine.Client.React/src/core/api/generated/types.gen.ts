@@ -1506,6 +1506,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	minChatCacheReuse?: number;
 	maxAllowedChatCacheReuse?: number;
 	speculativeMode?: string | null;
+	kvCacheType?: string | null;
 	speculativeDraftModelName?: string | null;
 	speculativeDraftMaxTokens?: number | null;
 	minSpeculativeDraftMaxTokens?: number;
@@ -1514,6 +1515,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	minSpeculativeDraftGpuLayers?: number;
 	maxAllowedSpeculativeDraftGpuLayers?: number;
 	rerankerModelName?: string | null;
+	autoEffortFastModelName?: string | null;
 	huggingFaceDiskMarginBytes?: number | null;
 	orchestrationIdleTimeoutSeconds?: number | null;
 	minOrchestrationIdleTimeoutSeconds?: number;
@@ -1559,10 +1561,12 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	recommendedLlamaCppTag?: string | null;
 	chatCacheReuse?: number | null;
 	speculativeMode?: string | null;
+	kvCacheType?: string | null;
 	speculativeDraftModelName?: string | null;
 	speculativeDraftMaxTokens?: number | null;
 	speculativeDraftGpuLayers?: number | null;
 	rerankerModelName?: string | null;
+	autoEffortFastModelName?: string | null;
 	huggingFaceDiskMarginBytes?: number | null;
 	orchestrationIdleTimeoutSeconds?: number | null;
 	agentHomePrepareTimeoutSeconds?: number | null;
@@ -1917,6 +1921,9 @@ export type XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationRespon
 	kvQuantHeadroomGb?: number | null;
 	kvQuantFits?: boolean | null;
 	kvQuantRequiresFlashAttention?: boolean | null;
+	kvBytesPerToken?: number | null;
+	kvBytesPerTokenQuant?: string | null;
+	attentionArch?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRequest = {
@@ -3416,6 +3423,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph
 	schemaVersion?: number;
 	nodes?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphNode>;
 	edges?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphEdge>;
+	allowUngatedWrites?: boolean | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphNode = {
@@ -3438,6 +3446,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph
 		[key: string]: string;
 	} | null;
 	toolMode?: string | null;
+	maxLoopIterations?: number | null;
 	isTemplate?: boolean | null;
 };
 
@@ -3512,6 +3521,19 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 	startedAtUtc?: number | null;
 	completedAtUtc?: number | null;
 	sequence?: number;
+	inputTokens?: number | null;
+	outputTokens?: number | null;
+	reasoningTokens?: number | null;
+	estimatedInputTokens?: number | null;
+	providerCalls?: number | null;
+	toolCalls?: number | null;
+	toolSchemaTokens?: number | null;
+	toolNames?: Array<string> | null;
+	agentTurnMs?: number | null;
+	servedModelName?: string | null;
+	route?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse | null;
+	workSessionSteps?: number | null;
+	failureClassGroup?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppliedRuleSetResponse = {
@@ -3519,6 +3541,14 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppli
 	name?: string;
 	contentSha256?: string;
 	currentContentSha256?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse = {
+	satisfied?: Array<string>;
+	dead?: Array<string>;
+	waived?: Array<string>;
+	gateAnswer?: string | null;
+	truncated?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunRequest = {
@@ -3663,6 +3693,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunRe
 	completedAtUtc?: number | null;
 	version?: number;
 	lastSequence?: number;
+	cost?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse = {
@@ -3693,6 +3724,18 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 	sequence?: number;
 	operatorRetries?: number;
 	skipWaived?: boolean | null;
+	inputTokens?: number | null;
+	outputTokens?: number | null;
+	toolCalls?: number | null;
+	validationNotApplicable?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse = {
+	inputTokens?: number | null;
+	outputTokens?: number | null;
+	toolCalls?: number | null;
+	providerCalls?: number | null;
+	agentTurnMs?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1StartDevWorkflowRunRequest = {
@@ -4473,6 +4516,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespons
 	primaryFlashAttentionMode?: string | null;
 	primaryIntendedLaunchIdentity?: string | null;
 	primaryIntendedExecutableSha256?: string | null;
+	primaryLaunchIdentitySchemeOutdated?: boolean | null;
 	primaryEffectiveLaunchIdentity?: string | null;
 	primaryEffectiveBackend?: string | null;
 	primaryPlacementOffloaded?: number | null;
@@ -5169,6 +5213,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = {
 	defaultTemporaryChat: boolean;
 	memoryExtractionEnabled: boolean;
 	disableBaseScaffold: boolean;
+	disableToolRelevanceFilter: boolean;
 	allowedSkillIds: Array<string>;
 	version: number;
 	createdAtUtc: number;
@@ -5194,6 +5239,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest =
 	defaultTemporaryChat?: boolean;
 	memoryExtractionEnabled?: boolean;
 	disableBaseScaffold?: boolean;
+	disableToolRelevanceFilter?: boolean;
 	allowedSkillIds?: Array<string> | null;
 	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadata | null;
 };
@@ -5459,6 +5505,10 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse = {
 	completionTokens?: number | null;
 	reasoningTokens?: number | null;
 	totalTokens?: number | null;
+	toolSchemaTokens?: number | null;
+	maxToolSchemaTokens?: number | null;
+	dispatchedTier?: string | null;
+	authoredEffort?: string | null;
 	contentChunkCount?: number | null;
 	reasoningChunkCount?: number | null;
 	traceId?: string | null;
@@ -5490,6 +5540,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest =
 	defaultTemporaryChat?: boolean;
 	memoryExtractionEnabled?: boolean;
 	disableBaseScaffold?: boolean;
+	disableToolRelevanceFilter?: boolean;
 	allowedSkillIds?: Array<string> | null;
 	generationMetadata?: XeLocalAiEngineClientEndpointsCommonGenerationMetadata | null;
 };

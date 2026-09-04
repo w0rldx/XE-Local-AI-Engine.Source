@@ -376,6 +376,16 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
                 throw new ExternalProviderValidationException($"'{model.DefaultReasoningEffort}' is not a recognized reasoning effort.");
             }
 
+            // Refused even though the vocabulary accepts it: `auto` is resolved PER TURN by this node's dispatcher into
+            // a concrete tier, and the dispatcher's FAST tier is a node-local model swap this node cannot perform for a
+            // remote endpoint. A registered model's DEFAULT effort is a wire value, so `auto` would either leak to the
+            // endpoint or be silently dropped — neither is a defensible reading of the operator's input.
+            if (string.Equals(ReasoningEffortNormalizer.Normalize(model.DefaultReasoningEffort), "auto", StringComparison.Ordinal))
+            {
+                throw new ExternalProviderValidationException(
+                    "A registered model's default reasoning effort cannot be 'auto'; auto is resolved per turn by this node.");
+            }
+
             // Refused, not silently canonicalized. Every capability here is an operator ASSERTION about a remote server
             // no probe can interrogate, and "it does not reason, but here is its default reasoning effort" is not a
             // claim with a defensible reading — accepting it would put reasoning_effort on the wire for a model the

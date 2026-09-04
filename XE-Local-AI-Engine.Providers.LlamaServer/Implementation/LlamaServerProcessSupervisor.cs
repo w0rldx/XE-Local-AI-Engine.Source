@@ -872,7 +872,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         {
             if (running.Handle.HasExited)
             {
-                healths.Add(new LlamaServerProcessHealth(key.ModelName, key.Role, IsResponsive: false, "Process has exited."));
+                healths.Add(new LlamaServerProcessHealth(key.ModelName, key.Role, IsResponsive: false, "Process has exited.", HasExited: true));
                 continue;
             }
 
@@ -1408,7 +1408,33 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     // The safe config reached readiness where the optimized (KV-quant + flash-attention) config could
                     // not — so the optimized config is the culprit for THIS backend (not a broken model, which would
                     // fail the safe config too). Record it so subsequent spawns skip the known-bad optimized config.
-                    await _launchPolicy.RecordOptimizedConfigFailedAsync(variant, ct).ConfigureAwait(false);
+                    // WithoutKvCacheQuantization() leaves the plan's KvCacheType intact, so the verdict is keyed on
+                    // the node's CURRENT selection. On the replay branch that is not read off the frozen profile: it
+                    // coincides with the profile's frozen type only because D13 stales a profile whose frozen type
+                    // differs from the selection, so a mismatching pair cannot replay in the first place.
+                    if (candidate.Plan is { CpuMoe: true })
+                    {
+                        // An expert-offload spawn is the most VRAM-marginal launch on the box, so a one-shot success
+                        // without KV quantization proves nothing about KV: the primary may have failed on placement or
+                        // transient pressure. Recording it would disable the optimized config for EVERY model on this
+                        // backend from one model's failure, so it is logged as inconclusive instead.
+                        _logger.LogInformation("Safe-retry readiness for expert-offload model {ModelName} role {Role} is inconclusive about the optimized KV config; nothing recorded for backend {Variant}.",
+                            key.ModelName,
+                            key.Role,
+                            variant);
+                    }
+                    else if (candidate.Plan is { } safeRetryPlan)
+                    {
+                        await _launchPolicy.RecordOptimizedConfigFailedAsync(variant, safeRetryPlan.KvCacheType, ct).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        // Unreachable today: every SafeRetry candidate is built from a plan. An empty key would be
+                        // unmatchable by every read, silently discarding the verdict, so say so instead.
+                        _logger.LogWarning("Safe-retry readiness for model {ModelName} role {Role} carried no launch plan; the optimized-config failure was not recorded.",
+                            key.ModelName,
+                            key.Role);
+                    }
                 }
 
                 return running;

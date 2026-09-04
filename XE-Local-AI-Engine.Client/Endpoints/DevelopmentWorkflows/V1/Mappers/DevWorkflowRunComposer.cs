@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -91,7 +92,11 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             run.StartedAtUtc,
             run.EndedAtUtc,
             run.Version,
-            run.LastSequence);
+            run.LastSequence,
+
+            // Summed over the node runs already loaded above: the rollup costs no extra query, and a run's own row
+            // carries no cost of its own to disagree with.
+            Cost: RunCost(detail.NodeRuns));
     }
 
     public async Task<DevWorkflowNodeRunDetailResponse> ComposeNodeAsync(Guid runId, Guid nodeRunId, CancellationToken cancellationToken)
@@ -167,7 +172,23 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             OperatorRetries(nodeRun, DevWorkflowGraphContract.DeclaredMaxAttempts(run.GraphJson)),
             nodeRun.StartedAtUtc,
             nodeRun.EndedAtUtc,
-            nodeRun.Sequence);
+            nodeRun.Sequence,
+
+            // Named from here on: the tail is a run of same-typed optional slots, so a positional call would compile
+            // silently misaligned if a field is spliced in ahead of them.
+            InputTokens: nodeRun.InputTokens,
+            OutputTokens: nodeRun.OutputTokens,
+            ReasoningTokens: nodeRun.ReasoningTokens,
+            EstimatedInputTokens: nodeRun.EstimatedInputTokens,
+            ProviderCalls: nodeRun.ProviderCalls,
+            ToolCalls: nodeRun.ToolCalls,
+            ToolSchemaTokens: nodeRun.ToolSchemaTokens,
+            ToolNames: DevWorkflowNodeRunDocuments.ToolNames(nodeRun.ToolNamesJson),
+            AgentTurnMs: nodeRun.AgentTurnMs,
+            ServedModelName: nodeRun.ServedModelName,
+            Route: Route(nodeRun.RouteJson),
+            WorkSessionSteps: nodeRun.WorkSessionSteps,
+            FailureClassGroup: AgentUnitFailureClass.FromDevWorkflowFailureClass(nodeRun.FailureClass));
     }
 
     private static DevWorkflowNodeRunSummaryResponse ToSummary(DevWorkflowNodeRunSnapshot nodeRun,
@@ -210,7 +231,14 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             CompletedAtUtc: nodeRun.EndedAtUtc,
             Sequence: nodeRun.Sequence,
             OperatorRetries: operatorRetries,
-            SkipWaived: skipWaived);
+            SkipWaived: skipWaived,
+            InputTokens: nodeRun.InputTokens,
+            OutputTokens: nodeRun.OutputTokens,
+            ToolCalls: nodeRun.ToolCalls,
+
+            // Asked of the contract, not of a spelling of the token repeated here: the same verdict decides the
+            // drill-down's note, this row's badge and whether the run header counts the row as work.
+            ValidationNotApplicable: DevWorkflowGraphContract.ValidationWasNotApplicable(nodeRun.OutputJson));
 
     /// <summary>
     ///     How many attempts an operator has bought this node run: the distance the row's own <c>MaxAttempts</c> has
@@ -246,6 +274,43 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
     /// </summary>
     private static bool? SkipWaived(DevWorkflowNodeRunSnapshot nodeRun, IReadOnlySet<string>? waivedSkips) =>
         waivedSkips is null || nodeRun.Status != DevWorkflowNodeRunStatus.Skipped ? null : waivedSkips.Contains(nodeRun.NodeKey);
+
+    /// <summary>
+    ///     The run's spend, added member by member over its node runs. A member stays null until some row reports it,
+    ///     so a run whose nodes never measured anything says "nobody measured" rather than "zero".
+    /// </summary>
+    private static DevWorkflowRunCostResponse RunCost(IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns)
+    {
+        long? inputTokens = null;
+        long? outputTokens = null;
+        int? toolCalls = null;
+        int? providerCalls = null;
+        long? agentTurnMs = null;
+        foreach (var nodeRun in nodeRuns)
+        {
+            inputTokens = Add(inputTokens, nodeRun.InputTokens);
+            outputTokens = Add(outputTokens, nodeRun.OutputTokens);
+            toolCalls = Add(toolCalls, nodeRun.ToolCalls);
+            providerCalls = Add(providerCalls, nodeRun.ProviderCalls);
+            agentTurnMs = Add(agentTurnMs, nodeRun.AgentTurnMs);
+        }
+
+        return new DevWorkflowRunCostResponse(inputTokens, outputTokens, toolCalls, providerCalls, agentTurnMs);
+    }
+
+    private static long? Add(long? total, long? term) => term is { } value ? (total ?? 0) + value : total;
+
+    private static int? Add(int? total, int? term) => term is { } value ? (total ?? 0) + value : total;
+
+    /// <summary>
+    ///     The stored route on the wire, parsed by the runtime's own reader — the one that owns the document — and only
+    ///     re-shaped here. An unreadable column costs this node its route rather than costing the drill-down a 500,
+    ///     exactly as an unreadable policy resolution does.
+    /// </summary>
+    private static DevWorkflowNodeRouteResponse? Route(string? routeJson) =>
+        DevWorkflowNodeRunDocuments.TryParseRoute(routeJson) is { } route
+            ? new DevWorkflowNodeRouteResponse(route.Satisfied, route.Dead, route.Waived, route.GateAnswer, route.Truncated)
+            : null;
 
     /// <summary>
     ///     Which upstream nodes a <c>Pending</c> node run is still waiting on, computed here rather than left to the

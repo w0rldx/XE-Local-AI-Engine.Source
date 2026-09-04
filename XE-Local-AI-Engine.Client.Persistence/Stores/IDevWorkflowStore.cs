@@ -158,7 +158,48 @@ public sealed record DevWorkflowNodeRunSnapshot(
     long? QueuedAtUtc,
     long? StartedAtUtc,
     long? EndedAtUtc,
-    long CreatedAtUtc);
+    long CreatedAtUtc,
+
+    // The twelve cost-telemetry columns, trailing and optional so a caller composing a node run by hand — a test, a
+    // fake store — keeps compiling and reads back exactly what a row written before this slice reads back: nulls.
+    long? InputTokens = null,
+    long? OutputTokens = null,
+    long? ReasoningTokens = null,
+    long? EstimatedInputTokens = null,
+    int? ProviderCalls = null,
+    int? ToolCalls = null,
+    long? ToolSchemaTokens = null,
+    string? ToolNamesJson = null,
+    long? AgentTurnMs = null,
+    string? ServedModelName = null,
+    string? RouteJson = null,
+    int? WorkSessionSteps = null);
+
+/// <summary>
+///     What one node-run attempt spent and where it routed, collected at the terminal-or-blocked transition and applied
+///     to the row by <see cref="IDevWorkflowStore.TransitionNodeRunAsync" />. Every member is optional: a member left
+///     null leaves its column untouched, which is how a node run with no work session and no development task still
+///     records a route beside twelve nulls.
+///     <para>
+///         Metadata only — counts, a served model name, structural node keys and tool NAMES. No prompt, no tool
+///         argument, no tool result and no transcript may ever be added here.
+///         <see cref="RouteJson" /> and <see cref="ToolNamesJson" /> arrive already serialized because this record
+///         crosses into persistence, where neither the graph projection nor the collector's name set is visible.
+///     </para>
+/// </summary>
+public sealed record DevWorkflowNodeTelemetry(
+    long? InputTokens = null,
+    long? OutputTokens = null,
+    long? ReasoningTokens = null,
+    long? EstimatedInputTokens = null,
+    int? ProviderCalls = null,
+    int? ToolCalls = null,
+    long? ToolSchemaTokens = null,
+    string? ToolNamesJson = null,
+    long? AgentTurnMs = null,
+    string? ServedModelName = null,
+    string? RouteJson = null,
+    int? WorkSessionSteps = null);
 
 public sealed record DevWorkflowRunEventSnapshot(
     Guid Id,
@@ -362,7 +403,22 @@ public sealed record TransitionDevWorkflowRunCommand(
     string? SanitizedReason = null,
     DevWorkflowWorkItemStatus? WorkItemStatus = null);
 
-/// <summary>One node-run to create. <see cref="InputJson" /> on an entry node is what carries the operator's request to the first agent.</summary>
+/// <summary>
+///     One node-run to create. <see cref="InputJson" /> on an entry node is what carries the operator's request to the
+///     first agent.
+///     <para>
+///         <see cref="Status" /> and <see cref="OutputJson" /> are the two trailing members that let a seed land
+///         ALREADY TERMINAL, which the zero-task decomposition needs: a <c>Pending</c> row at a template key is
+///         admissible — its only inbound edge is dropped as template-sourced, leaving no edge states at all — so the
+///         tool lane would really run the template's validation commands, and a crash between a create and a follow-up
+///         transition would do exactly that. Omitting both is today's behaviour for every other caller.
+///     </para>
+///     <para>
+///         The store refuses both halves of the same rule: a seed lands <c>Pending</c> or terminal and nothing between,
+///         because a live status is a lane's claim on a row no lane has taken; and only a terminal seed may carry an
+///         output document, because that document says what the row PRODUCED.
+///     </para>
+/// </summary>
 public sealed record DevWorkflowNodeRunSeed(
     Guid NodeRunId,
     string NodeKey,
@@ -373,19 +429,29 @@ public sealed record DevWorkflowNodeRunSeed(
     string? InputJson = null,
     string? PolicyResolutionJson = null,
     Guid? MaterializedFromNodeRunId = null,
-    int? MaterializationIndex = null);
+    int? MaterializationIndex = null,
+    DevWorkflowNodeRunStatus Status = DevWorkflowNodeRunStatus.Pending,
+    string? OutputJson = null);
 
 /// <summary>
 ///     Creates node-runs on a run. A non-null <see cref="GraphJson" /> also rewrites the run's pinned graph and bumps
 ///     its revision in the same transaction — the dynamic-expansion path, recorded as <c>graph.changed</c>. A null one
 ///     is the initial materialization at run start, where the graph is already pinned and unchanged.
+///     <para>
+///         <see cref="RouteJson" /> re-records the route of the node run that PRODUCED this expansion, against the
+///         rewritten graph and inside the same transaction. Its route was computed when it settled, which was before
+///         the clone-root edges existed — so left alone it would list the authored join edge and omit every root the
+///         next tick actually admits. Both members are set together or not at all; a route needs a row to land on.
+///     </para>
 /// </summary>
 public sealed record MaterializeDevWorkflowNodesCommand(
     Guid RunId,
     long ExpectedVersion,
     Guid OperationId,
     IReadOnlyList<DevWorkflowNodeRunSeed> NodeRuns,
-    string? GraphJson = null);
+    string? GraphJson = null,
+    Guid? RouteNodeRunId = null,
+    string? RouteJson = null);
 
 /// <summary>
 ///     A node-run status move. <see cref="IncrementAttempt" /> is the retry-in-place path; the row is never duplicated.
@@ -425,6 +491,10 @@ public sealed record TransitionDevWorkflowNodeRunCommand(
     bool ClearWorkSession = false,
     string? Outcome = null,
     DevWorkflowWorkItemStatus? WorkItemStatus = null,
+
+    // What the attempt this move settles cost. Set by the publishing decorator on a terminal, Blocked or
+    // WaitingForApproval move and by nothing else, so no call site has to remember it.
+    DevWorkflowNodeTelemetry? Telemetry = null,
     /// <summary>
     ///     Buys the node run exactly one more attempt, by raising the cap its own row carries. Set only by an
     ///     operator's <c>Retry</c>, which is allowed AT the cap and widens it by one each time it is used — so
