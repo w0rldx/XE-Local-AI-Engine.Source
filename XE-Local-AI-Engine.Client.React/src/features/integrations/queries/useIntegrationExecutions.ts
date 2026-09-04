@@ -1,12 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+	getIntegrationExecutionEvents,
+	type XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionEventDto,
+} from "@/core/api/generated";
+import {
 	cancelIntegrationExecutionMutation,
-	getIntegrationExecutionEventsOptions,
+	getIntegrationExecutionEventsQueryKey,
 	getIntegrationExecutionOptions,
 	listIntegrationExecutionsOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { callWithResponseValidation, withResponseValidation } from "@/core/api/ResponseValidation";
 import {
 	toIntegrationExecution,
 	toIntegrationExecutionDetail,
@@ -60,21 +64,53 @@ export function useIntegrationExecution(executionId: string | null, options: Int
 }
 
 /**
- * The persisted timeline, always read WHOLE (`sinceSeq: 0`) rather than merged from a watermark. Only nine event
- * types are ever persisted and neither assistant type is among them, so the list is bounded by construction and a
- * full re-read each tick is cheaper than a merge. `sinceSeq` exists on the endpoint for the SSE-resume caller.
+ * The persisted timeline, read by WATERMARK until the server runs out of rows. `sinceSeq` is an EXCLUSIVE lower
+ * bound and the rows come back ascending, so a short page means "caught up" and a full one means "call again" —
+ * the contract `ListIntegrationExecutionEventsRequest` states. Asking once for the validator's maximum instead
+ * silently dropped every event past the 500th, and events ascend, so the row lost first is the terminal one that
+ * says how the run ended.
+ *
+ * A loop inside `queryFn` rather than `useInfiniteQuery` (which is what the dev-workflows event feed uses): there
+ * is no pager here. The timeline renders the whole log and re-reads it every 5 s, so one cache entry holding one
+ * ascending array keeps the `select`/`refetchInterval` contract its two consumers already have.
+ *
+ * Each refetch re-pages from sequence 0. The log is append-only and short in the ordinary case, and a re-read from
+ * the last watermark would need a merge against the previous cache entry to keep the rows it already had.
  */
 export function useIntegrationExecutionEvents(executionId: string | null, options: IntegrationQueryOptions = {}) {
 	return useQuery({
-		...withResponseValidation(
-			getIntegrationExecutionEventsOptions({
-				path: { executionId: executionId ?? "" },
-				query: { sinceSeq: 0, limit: integrationEventLimit },
-			}),
-		),
+		// The generated key for the first page's request, so this cache entry stays identifiable by the same
+		// partial-match filters every other integrations query is invalidated by.
+		queryKey: getIntegrationExecutionEventsQueryKey({
+			path: { executionId: executionId ?? "" },
+			query: { sinceSeq: 0, limit: integrationEventLimit },
+		}),
+		queryFn: async ({ signal }) => {
+			const items: XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionEventDto[] = [];
+			let sinceSeq = 0;
+			for (;;) {
+				// biome-ignore lint/performance/noAwaitInLoops: watermark paging is sequential by definition — the next `sinceSeq` is read off the page before it, so there is nothing to run in parallel.
+				const { data } = await callWithResponseValidation(
+					getIntegrationExecutionEvents({
+						path: { executionId: executionId ?? "" },
+						query: { sinceSeq, limit: integrationEventLimit },
+						signal,
+						throwOnError: true,
+					}),
+				);
+				items.push(...data.items);
+				// The next watermark is the highest sequence this page carried. Requiring it to ADVANCE is what stops a
+				// full page that reports no higher sequence from looping forever.
+				const nextSinceSeq = data.items.reduce((highest, event) => Math.max(highest, event.sequence), sinceSeq);
+				if (data.items.length < integrationEventLimit || nextSinceSeq <= sinceSeq) {
+					return items;
+				}
+				sinceSeq = nextSinceSeq;
+			}
+		},
 		enabled: executionId !== null && (options.enabled ?? true),
 		refetchInterval: options.refetchInterval,
-		select: (data) => data.items.map(toIntegrationExecutionEvent),
+		select: (data) => data.map(toIntegrationExecutionEvent),
 	});
 }
 

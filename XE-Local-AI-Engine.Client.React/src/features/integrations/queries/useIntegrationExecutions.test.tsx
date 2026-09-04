@@ -52,22 +52,39 @@ function listRoute(): URLSearchParams[] {
 	return requests;
 }
 
+function eventRow(sequence: number, eventType = "execution.accepted"): Record<string, unknown> {
+	return { executionId, sequence, eventType, detailJson: null, occurredAtUtc: 1_700_000_000_000 };
+}
+
 function eventsRoute(): URLSearchParams[] {
 	const requests: URLSearchParams[] = [];
 	server.use(
 		http.get(localApiPath(`integrations/executions/${executionId}/events`), ({ request }) => {
 			requests.push(new URL(request.url).searchParams);
-			return HttpResponse.json({
-				items: [
-					{
-						executionId,
-						sequence: 1,
-						eventType: "execution.accepted",
-						detailJson: null,
-						occurredAtUtc: 1_700_000_000_000,
-					},
-				],
-			});
+			return HttpResponse.json({ items: [eventRow(1)] });
+		}),
+	);
+	return requests;
+}
+
+/**
+ * The feed served BY WATERMARK, the way the endpoint documents it: `sinceSeq` is EXCLUSIVE, rows ascend, and a page
+ * shorter than the limit means "caught up". 600 events therefore need two requests, and the terminal event is in the
+ * second one — the row a single 500-row read used to drop.
+ */
+function pagedEventsRoute(total: number): URLSearchParams[] {
+	const requests: URLSearchParams[] = [];
+	server.use(
+		http.get(localApiPath(`integrations/executions/${executionId}/events`), ({ request }) => {
+			const params = new URL(request.url).searchParams;
+			requests.push(params);
+			const sinceSeq = Number(params.get("sinceSeq") ?? "0");
+			const limit = Number(params.get("limit") ?? "500");
+			const items = Array.from({ length: total }, (_unused, index) => index + 1)
+				.filter((sequence) => sequence > sinceSeq)
+				.slice(0, limit)
+				.map((sequence) => eventRow(sequence, sequence === total ? "execution.completed" : "execution.accepted"));
+			return HttpResponse.json({ items });
 		}),
 	);
 	return requests;
@@ -140,7 +157,7 @@ describe("useIntegrationExecutions", () => {
 		expect(firstQuery(requests).get("status")).toBe("Running");
 	});
 
-	it("reads the event list whole, from sequence zero, at the endpoint's maximum page", async () => {
+	it("reads a short event page in one request, from sequence zero, at the endpoint's maximum page size", async () => {
 		const requests = eventsRoute();
 		const { wrapper } = harness();
 
@@ -157,6 +174,53 @@ describe("useIntegrationExecutions", () => {
 			detailJson: null,
 			occurredAtUtc: 1_700_000_000_000,
 		});
+	});
+
+	// The regression F-24 named: an execution with more events than one page holds lost its tail, and events ascend,
+	// so the row lost first was the terminal one.
+	it("pages the event list on the watermark until a short page and returns every event in order", async () => {
+		const requests = pagedEventsRoute(600);
+		const { wrapper } = harness();
+
+		const { result } = renderHook(() => useIntegrationExecutionEvents(executionId), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.data).toHaveLength(600);
+		});
+		expect(requests.map((request) => request.get("sinceSeq"))).toEqual(["0", "500"]);
+		expect(requests.map((request) => request.get("limit"))).toEqual(["500", "500"]);
+		expect(result.current.data?.map((event) => event.sequence)).toEqual(
+			Array.from({ length: 600 }, (_unused, index) => index + 1),
+		);
+		expect(result.current.data?.at(-1)).toEqual({
+			sequence: 600,
+			eventType: "execution.completed",
+			detailJson: null,
+			occurredAtUtc: 1_700_000_000_000,
+		});
+	});
+
+	// Every refetch re-pages from the start: the cache entry is the WHOLE log, so a poll that resumed from the last
+	// watermark would replace it with just the tail.
+	it("re-pages from sequence zero on the refetch poll", async () => {
+		const requests = pagedEventsRoute(600);
+		const { wrapper } = harness();
+
+		const { result } = renderHook(() => useIntegrationExecutionEvents(executionId, { refetchInterval: 20 }), {
+			wrapper,
+		});
+
+		await waitFor(() => {
+			expect(result.current.data).toHaveLength(600);
+		});
+		// The poll keeps firing, so this pins the SHAPE of the traffic — every read restarts at 0 and walks to 500 —
+		// rather than an exact request count a timer race would make flaky.
+		await waitFor(() => {
+			expect(requests.length).toBeGreaterThanOrEqual(4);
+		});
+		for (const [index, request] of requests.entries()) {
+			expect(request.get("sinceSeq")).toBe(index % 2 === 0 ? "0" : "500");
+		}
 	});
 
 	it("does not read events until an execution is selected", async () => {

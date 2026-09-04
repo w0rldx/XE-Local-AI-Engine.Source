@@ -178,10 +178,10 @@ export const integrationSessionStatuses: readonly IntegrationSessionStatus[] = [
 export const integrationListLimit = 200;
 
 /**
- * The maximum ListIntegrationExecutionEventsRequestValidator accepts. The timeline re-reads the whole event list on
- * every tick (`sinceSeq: 0`), so it asks for the largest page the endpoint will serve rather than the default 200 —
- * events ascend by sequence, so a truncated read would drop the terminal event, which is the one row that says how
- * the run ended.
+ * The maximum ListIntegrationExecutionEventsRequestValidator accepts, and therefore the timeline's PAGE size: the
+ * hook walks the watermark until a page comes back short, so this is how few round-trips a long log costs, not how
+ * much of it is readable. Events ascend by sequence, so stopping at one page would drop the terminal event, which
+ * is the one row that says how the run ended.
  */
 export const integrationEventLimit = 500;
 
