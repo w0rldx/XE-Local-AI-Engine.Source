@@ -45,10 +45,15 @@ internal static class LlamaGrammarToolOffer
             new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess: false);
 
-        // The profile pool is the widest offer (it adds spawn_subagent, whose 8000-char bounds are the largest we ship).
+        // The profile pool is the widest offer (it adds spawn_subagent, whose 8000-char bounds are the largest we ship),
+        // PLUS emit_output. The profile offer excludes emit_output by design — only an integration execution is offered
+        // it — so IntegrationExecutionCoordinator unions GetIntegrationOutputOffer() in at run time, exactly as here.
+        // Without this union neither the offline compatibility tests nor the live smoke would ever compile the one
+        // schema reachable from OUTSIDE the node, and its untyped `payload` subschema is the least ordinary one we ship.
         return
         [
             .. provider.GetOfferedToolsForProfile(Model)
+                       .Concat(provider.GetIntegrationOutputOffer())
                        .Where(static tool => !string.IsNullOrWhiteSpace(tool.ParameterSchema))
                        .Select(static tool => BuildTool(tool.Name, tool.ParameterSchema!))
         ];

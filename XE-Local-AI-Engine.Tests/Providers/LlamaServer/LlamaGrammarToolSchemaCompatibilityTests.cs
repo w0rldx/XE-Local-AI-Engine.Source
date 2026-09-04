@@ -309,8 +309,13 @@ public sealed class LlamaGrammarToolSchemaCompatibilityTests
             "the serialized tools array must carry no repetition bound above the compilable limit.");
 
         // Sanity: the offer really did reach the wire, so the assertion above is not passing over an empty array.
-        AssertEx.Contains(tools.EnumerateArray().Select(static tool => tool.GetProperty("function").GetProperty("name").GetString() ?? string.Empty),
-            "run_in_agent_home");
+        var names = tools.EnumerateArray().Select(static tool => tool.GetProperty("function").GetProperty("name").GetString() ?? string.Empty).ToList();
+        AssertEx.Contains(names, "run_in_agent_home");
+
+        // F-12: emit_output is the one offer an EXTERNAL caller can reach, and the profile offer excludes it by design
+        // (IntegrationExecutionCoordinator unions it in at run time). Pinned by name here so the union in
+        // LlamaGrammarToolOffer cannot be dropped without this gate — and the live smoke — going quietly vacuous for it.
+        AssertEx.Contains(names, "emit_output");
     }
 
     [Test]
