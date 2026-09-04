@@ -8,7 +8,34 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// The hook must go through the GENERATED adapter once per page — that is what carries the shared axios instance,
+// response validation and the outer query's AbortSignal. Wrap that one export so each call and the context its
+// `queryFn` received are observable; everything else in the module stays real.
+const { adapterCalls } = vi.hoisted(() => ({
+	adapterCalls: [] as { query: unknown; signals: unknown[] }[],
+}));
+
+vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@/core/api/generated/@tanstack/react-query.gen")>();
+	return {
+		...actual,
+		getIntegrationExecutionEventsOptions: (options: Parameters<typeof actual.getIntegrationExecutionEventsOptions>[0]) => {
+			const real = actual.getIntegrationExecutionEventsOptions(options);
+			const call = { query: options.query, signals: [] as unknown[] };
+			adapterCalls.push(call);
+			return {
+				...real,
+				queryFn: (context: Parameters<NonNullable<typeof real.queryFn>>[0]) => {
+					call.signals.push(context.signal);
+					// `queryOptions()` always emits a `queryFn`, the same assertion the hook under test makes.
+					return real.queryFn!(context);
+				},
+			};
+		},
+	};
+});
 
 import { integrationEventLimit } from "@/features/integrations/models/IntegrationModels";
 import {
@@ -352,17 +379,43 @@ describe("useIntegrationExecutions", () => {
 	});
 
 	// The guard against a server that answers a full page without advancing: the loop must end rather than ask
-	// forever. Without it this route would never stop.
-	it("stops when a full page reports no higher sequence than the cursor it was given", async () => {
-		const requests = eventsPagesRoute((sinceSeq) => (sinceSeq === 0 ? sequencesEndingAt(500, 500) : sequencesEndingAt(500, 500)));
+	// forever, and the non-advancing page is DISCARDED — it is the previous page again, and the timeline keys its
+	// rows by `sequence`, so keeping it would render duplicate keys.
+	it("stops without keeping a full page that reports no higher sequence than the cursor it was given", async () => {
+		const requests = eventsPagesRoute(() => sequencesEndingAt(500, 500));
 		const { wrapper } = harness();
 
 		const { result } = renderHook(() => useIntegrationExecutionEvents(executionId), { wrapper });
 
 		await waitFor(() => {
-			expect(result.current.data).toHaveLength(1000);
+			expect(result.current.data).toHaveLength(500);
 		});
+		expect(result.current.data?.map((event) => event.sequence)).toEqual(
+			Array.from({ length: 500 }, (_unused, index) => index + 1),
+		);
 		expect(requests.map((request) => request.get("sinceSeq"))).toEqual(["0", "500"]);
+	});
+
+	// The paging loop must call the generated adapter PER PAGE, not the bare SDK fn once: only the adapter carries the
+	// shared axios instance, response validation and the outer query's AbortSignal into each request.
+	it("calls the generated adapter once per page, with that page's watermark and the outer abort signal", async () => {
+		pagedEventsRoute(600);
+		adapterCalls.length = 0;
+		const { wrapper } = harness();
+
+		const { result } = renderHook(() => useIntegrationExecutionEvents(executionId), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.data).toHaveLength(600);
+		});
+		expect(adapterCalls.map((call) => call.query)).toEqual([
+			{ sinceSeq: 0, limit: integrationEventLimit },
+			{ sinceSeq: 500, limit: integrationEventLimit },
+		]);
+		expect(adapterCalls.map((call) => call.signals.length)).toEqual([1, 1]);
+		for (const call of adapterCalls) {
+			expect(call.signals.at(0)).toBeInstanceOf(AbortSignal);
+		}
 	});
 
 	it("does not read events until an execution is selected", async () => {

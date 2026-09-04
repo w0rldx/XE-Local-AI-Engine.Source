@@ -112,11 +112,15 @@ export function useIntegrationExecutionEvents(executionId: string | null, option
 				);
 				// biome-ignore lint/performance/noAwaitInLoops: watermark paging is sequential by definition — the next `sinceSeq` is read off the page before it, so there is nothing to run in parallel.
 				const data = await page.queryFn!({ ...context, queryKey: page.queryKey });
-				items.push(...data.items);
-				// The next watermark is the highest sequence this page carried. Requiring it to ADVANCE is what stops a
-				// full page that reports no higher sequence from looping forever.
+				// The next watermark is the highest sequence this page carried, computed BEFORE the page is kept: a page
+				// reporting no higher sequence than the cursor it was given is the previous page served again, so appending
+				// it would duplicate rows the timeline keys by `sequence` as well as loop forever.
 				const nextSinceSeq = data.items.reduce((highest, event) => Math.max(highest, event.sequence), sinceSeq);
-				if (data.items.length < integrationEventLimit || nextSinceSeq <= sinceSeq) {
+				if (nextSinceSeq <= sinceSeq) {
+					return items;
+				}
+				items.push(...data.items);
+				if (data.items.length < integrationEventLimit) {
 					return items;
 				}
 				sinceSeq = nextSinceSeq;
