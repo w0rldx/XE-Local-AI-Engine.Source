@@ -5534,7 +5534,7 @@
 					},
 					"toolCatalog": {
 						"loading": "Der Werkzeugkatalog wird geladen. Bis dahin sind die Werkzeugangaben unbekannt.",
-						"failed": "Der Werkzeugkatalog konnte nicht geladen werden. Bis er gelesen werden kann, gilt jedes Werkzeug als freigabepflichtig und mit Nebenwirkungen."
+						"failed": "Der Werkzeugkatalog konnte nicht geladen werden. Bis er gelesen werden kann, gilt jedes Werkzeug als freigabepflichtig."
 					}
 				},
 				"validation": {

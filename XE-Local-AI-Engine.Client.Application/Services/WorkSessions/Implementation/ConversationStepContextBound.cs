@@ -171,7 +171,11 @@ internal sealed class ConversationStepContextBound(
         if (CompactionContextResolver.Resolve(conversation, sortOrder: 0) is { } compaction)
         {
             messages.Add(new ChatMessage(ChatRole.User, compaction.Summary.Content));
-            selected = [.. selected.Where(message => anchorSequence(message) > compaction.CoveredSequence)];
+
+            // The SAME cutoff exemption the send path applies: a turn the synopsis could not have covered but that
+            // completed a tool call survives the fold, so the estimate counts what the turn will actually carry.
+            selected = [.. selected.Where(message => anchorSequence(message) > compaction.CoveredSequence
+                                                     || ConversationContextBuilder.SurvivesCompactionForToolHistory(message, includeToolHistory))];
         }
 
         foreach (var message in selected)

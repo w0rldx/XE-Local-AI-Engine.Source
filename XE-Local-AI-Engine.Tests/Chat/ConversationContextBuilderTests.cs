@@ -127,6 +127,62 @@ public sealed class ConversationContextBuilderTests
     }
 
     [Test]
+    public void Build_WithToolHistoryOn_KeepsAFailedToolBearingTurnTheSynopsisCouldNotHaveCovered()
+    {
+        // The compaction cutoff drops every row at or below it, and the summarizer only ever saw COMPLETED, non-blank
+        // text — so a run that called save_artifact and then died had its one record of that action erased twice over:
+        // once by the summarizer skipping it, once by the cutoff. The exemption is narrow on purpose: a sendable row
+        // below the cutoff stays folded, because its text IS the synopsis.
+        var conversationId = Guid.NewGuid();
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "user", "save it"),
+            Message(conversationId, sequence: 1, "assistant", "  ", status: NodeChatMessageStatusValues.Failed) with
+            {
+                Parts = [CompletedToolPart("call-1", "save_artifact")]
+            },
+            Message(conversationId, sequence: 2, "user", "recent question")
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history, "SYNOPSIS", coversToSequence: 1),
+            Message(conversationId, sequence: 3, "user", "the new turn"),
+            selectedPath: null,
+            attachmentContext: null,
+            imageContext: null,
+            knowledgeContext: null,
+            includeToolHistory: true);
+
+        var replayed = AssertEx.NotNull(context.Single(message => message.Role == MessageRole.Assistant).ToolExchanges).Single();
+        AssertEx.Equal("call-1", replayed.CallId, "The synopsis never saw the action, so the cutoff must not erase it.");
+        AssertEx.False(context.Any(message => message.Content.Contains("save it", StringComparison.Ordinal)),
+            "Everything else the synopsis covers stays folded.");
+    }
+
+    [Test]
+    public void Build_WithToolHistoryOff_LetsTheCompactionCutoffDropAToolBearingTurn()
+    {
+        // The gate again, on the cutoff itself: chat's fold is byte-identical, parts or no parts.
+        var conversationId = Guid.NewGuid();
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "user", "save it"),
+            Message(conversationId, sequence: 1, "assistant", "  ", status: NodeChatMessageStatusValues.Failed) with
+            {
+                Parts = [CompletedToolPart("call-1", "save_artifact")]
+            },
+            Message(conversationId, sequence: 2, "user", "recent question")
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history, "SYNOPSIS", coversToSequence: 1),
+            Message(conversationId, sequence: 3, "user", "the new turn"),
+            selectedPath: null,
+            attachmentContext: null);
+
+        AssertEx.False(context.Any(static message => message.Role == MessageRole.Assistant),
+            "With the flag off the covered span is dropped whole, exactly as before.");
+    }
+
+    [Test]
     public void Build_WithToolHistoryOff_IsUnchangedByPersistedToolParts()
     {
         // The gate. Chat and every per-invocation run take the default, and for them a turn's persisted parts are a

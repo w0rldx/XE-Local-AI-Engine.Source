@@ -547,10 +547,12 @@ public sealed partial class InvocationRunner
                 contents.Add(new TextReasoningContent(message.Thinking));
             }
 
-            // A blank text part is deliberately NOT emitted: the only turns that reach here with no text are the ones
-            // whose payload is something else (image parts, replayed exchanges), and an empty TextContent alongside
-            // them is content some chat templates reject rather than ignore.
-            if (!string.IsNullOrEmpty(message.Content))
+            // The blank text part is dropped ONLY for a turn carrying replayed exchanges: Microsoft.Extensions.AI's
+            // OpenAI client takes its tool-calls-only branch only when the message has no content part, and an empty
+            // TextContent alongside tool_calls is content some chat templates reject rather than ignore. Every other
+            // turn keeps it, so an image-only vision turn still goes out as [TextContent(""), DataContent] exactly as
+            // it always has.
+            if (!string.IsNullOrEmpty(message.Content) || message.ToolExchanges is not { Count: > 0 })
             {
                 contents.Add(new TextContent(message.Content));
             }

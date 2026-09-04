@@ -6,16 +6,16 @@ import type { FormEvent } from "react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { XeLocalAiEngineClientEndpointsAuthV1NodeLoginLockedOutResponse } from "@/core/api/generated";
 import { loginNodeAuth } from "@/core/auth/api/NodeAuthApi";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { getSafeRedirectPath } from "@/core/auth/utils/RedirectPath";
 import { LanguageMenu } from "@/core/locales/components/LanguageMenu/LanguageMenu";
 
-// The node answers a locked account with a 401 carrying this body; a wrong password answers a body-less 401.
-interface LoginLockedOutBody {
-	code?: string;
-	retryAfterSeconds?: number;
-}
+// The node answers a locked account with a 401 carrying this body; a wrong password answers a body-less 401. Partial
+// of the generated contract type rather than a hand-written copy of it: a rename on the backend fails the typecheck
+// here, and every field stays optional because the code-free 401 carries none of them.
+type LoginLockedOutBody = Partial<XeLocalAiEngineClientEndpointsAuthV1NodeLoginLockedOutResponse>;
 
 // Translate the raw failure into an operator-facing message instead of surfacing axios' "Request failed with
 // status code 401". 401 = wrong password, unless the body says the account is locked out; a missing response = the

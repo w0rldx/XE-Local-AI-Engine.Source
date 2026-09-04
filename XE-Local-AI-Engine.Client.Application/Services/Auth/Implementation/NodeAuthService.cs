@@ -324,7 +324,9 @@ public sealed class NodeAuthService : INodeAuthService
 
     /// <summary>
     ///     Whole seconds still left on the user's lockout, floored at one so a caller is never told to retry in zero
-    ///     seconds, and capped at a day so an operator-set far-future <c>LockoutEnd</c> cannot overflow the int.
+    ///     seconds and saturated at <see cref="int.MaxValue" /> so an operator-set far-future <c>LockoutEnd</c> cannot
+    ///     overflow the int. Saturating rather than capping matters: a shorter number would tell a caller to retry
+    ///     while the account is still locked, which is the confusion the coded 401 exists to remove.
     /// </summary>
     private async Task<int> GetLockoutRetryAfterSecondsAsync(NodeUser user)
     {
@@ -332,7 +334,7 @@ public sealed class NodeAuthService : INodeAuthService
         var now = _timeProvider.GetUtcNow();
         var remainingSeconds = Math.Ceiling(((lockoutEnd ?? now) - now).TotalSeconds);
 
-        return (int)Math.Clamp(remainingSeconds, min: 1, max: TimeSpan.FromDays(1).TotalSeconds);
+        return (int)Math.Clamp(remainingSeconds, min: 1, max: int.MaxValue);
     }
 
     private static NodeAuthTokenResult FailedTokenResult(int? lockedOutRetryAfterSeconds = null)

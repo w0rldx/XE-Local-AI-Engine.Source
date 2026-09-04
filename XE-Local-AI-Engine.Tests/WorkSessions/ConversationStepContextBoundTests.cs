@@ -317,6 +317,27 @@ public sealed class ConversationStepContextBoundTests
     }
 
     [Test]
+    public void Project_WithToolHistoryOn_CountsATurnTheCompactionCutoffWouldOtherwiseHaveDropped()
+    {
+        // The send path keeps a turn the synopsis could not have covered but that completed a tool call, so the fold
+        // decision has to be made against a number that includes it. Counting it as absent is how the bound decides not
+        // to fold and then overflows on exactly the content it did not measure.
+        var estimator = new HeuristicTokenEstimator();
+        var failedWithSideEffect = Message(sequence: 0, "assistant", string.Empty) with
+        {
+            Status = NodeChatMessageStatusValues.Failed,
+            Parts = [ToolPart("call-1", "save_artifact", new string('r', 1_200))]
+        };
+        var conversation = Conversation([failedWithSideEffect, Message(sequence: 1, "user", "recent")], "SYNOPSIS", coversToSequence: 0);
+
+        var counted = ConversationStepContextBound.Project(conversation, estimator, modelName: null, includeToolHistory: true);
+        var folded = ConversationStepContextBound.Project(conversation, estimator);
+
+        AssertEx.True(counted > folded + 200,
+            $"The replayed exchange survives the cutoff and must be counted; the projection moved from {folded} to {counted}.");
+    }
+
+    [Test]
     public void Project_WithToolHistoryOn_CountsTheExcerptedResult_NotTheWholeOne()
     {
         var estimator = new HeuristicTokenEstimator();

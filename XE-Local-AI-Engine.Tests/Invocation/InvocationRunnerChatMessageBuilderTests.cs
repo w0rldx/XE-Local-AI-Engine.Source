@@ -62,6 +62,41 @@ public sealed class InvocationRunnerChatMessageBuilderTests
     }
 
     [Test]
+    public void BuildChatMessages_ForAnImageOnlyTurn_StillCarriesTheBlankTextPart()
+    {
+        // The wire shape of a vision turn is unchanged: ChatTurnContextBuilder.BuildImageContextAsync attaches images
+        // to a message with NO text of its own, and that turn has always gone out as [TextContent(""), DataContent].
+        // The blank part is dropped only where a tool_calls message would otherwise carry one.
+        var package = RuntimePackageBuilder.Valid()
+                                           .WithUserMessage("what is in the picture?")
+                                           .WithImageMessage(string.Empty, "image/png", [1, 2, 3], sortOrder: 1)
+                                           .Build();
+
+        var messages = InvocationRunner.BuildChatMessages(package);
+
+        var imageMessage = messages.Single(static message => message.Contents.OfType<DataContent>().Any());
+        AssertEx.Equal(expected: 2, imageMessage.Contents.Count, "An image-only turn keeps its blank text part.");
+        AssertEx.Equal(string.Empty, imageMessage.Contents.OfType<TextContent>().Single().Text);
+    }
+
+    [Test]
+    public void BuildChatMessages_ForABlankTurnCarryingExchanges_EmitsNoTextPartAtAll()
+    {
+        // The one message the blank text part IS dropped for, stated next to the image case so the two cannot drift:
+        // Microsoft.Extensions.AI's OpenAI client takes its tool-calls-only branch only when there is no content part.
+        var package = RuntimePackageBuilder.Valid()
+                                           .WithUserMessage("save it")
+                                           .WithToolExchangeMessage(string.Empty,
+                                               sortOrder: 1,
+                                               new ConversationToolExchange("call-1", "save_artifact", "{}", "saved", IsError: false))
+                                           .Build();
+
+        var messages = InvocationRunner.BuildChatMessages(package);
+
+        AssertEx.False(messages.SelectMany(static message => message.Contents).OfType<TextContent>().Any(static text => string.IsNullOrEmpty(text.Text)));
+    }
+
+    [Test]
     public void BuildChatMessages_WhenTheRecordedArgumentsAreNotJson_YieldsNullArgumentsRatherThanThrowing()
     {
         // A historical record must never be able to fault a live turn. The call still reaches the model — with no

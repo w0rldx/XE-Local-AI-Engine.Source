@@ -1907,7 +1907,7 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenAskUserCallHasABlankCallId_StillCompletesInsteadOfFaultingTheTurn()
     {
-        // ResolveToolCallCardId preserves a non-null EMPTY-STRING CallId (so the card key matches the streaming
+        // ResolveToolCallCardId resolves a blank CallId to the tool name (so the card key matches the streaming
         // lifecycle's), and a blank key would otherwise throw out of the stash and take the whole turn with it.
         var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
@@ -2593,11 +2593,15 @@ public sealed class InvocationRunnerTests
 
         // The approval lifecycle and the streaming tool-call lifecycle must resolve the SAME card id for a call so the
         // browser attaches the Approve/Deny controls to the matching card. Both go through this helper, so a present
-        // CallId wins, a null CallId falls back to the tool name, and — the previously-divergent case — a non-null
-        // EMPTY-STRING CallId resolves to the same empty string on both paths rather than one using the tool name.
+        // CallId wins and an id-less one — null or, the shape Microsoft.Extensions.AI actually permits, the empty
+        // string — falls back to the tool name on BOTH paths. Propagating the blank instead kept the two aligned but
+        // aligned them on a key every downstream consumer discards, so the call was recorded nowhere; the tool name is
+        // aligned AND usable. The streaming loop layers a "<name>#N" surrogate on top of this for a SECOND id-less call
+        // to a tool whose first is still open; the first one still resolves here, which is what keeps the approval card
+        // correlated.
         AssertEx.Equal("call-1", InvocationRunner.ResolveToolCallCardId("call-1", "run_in_agent_home"));
         AssertEx.Equal("run_in_agent_home", InvocationRunner.ResolveToolCallCardId(callId: null, "run_in_agent_home"));
-        AssertEx.Equal(string.Empty, InvocationRunner.ResolveToolCallCardId(string.Empty, "run_in_agent_home"));
+        AssertEx.Equal("run_in_agent_home", InvocationRunner.ResolveToolCallCardId(string.Empty, "run_in_agent_home"));
         AssertEx.Equal(string.Empty, InvocationRunner.ResolveToolCallCardId(callId: null, toolName: null));
     }
 
@@ -3748,6 +3752,71 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenTheProviderStreamsTwoSameNameCallsWithABlankCallId_PairsEachResultWithItsOwnCall()
+    {
+        // Microsoft.Extensions.AI rejects a NULL CallId in both content constructors (10.9.0), so the id-less shape a
+        // provider can actually produce is the empty string — and both halves of the call then carried it. Every
+        // consumer that correlates a call with its result drops a blank id (NodeChatPartAccumulator refuses one
+        // outright), so an id-less call was recorded nowhere and a caller-managed continuation never replayed it. Two
+        // such calls to one tool also collapsed onto a single card.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var lifecycle = new List<ToolCallLifecyclePayload>();
+        dispatcher.ReportToolCallLifecycleAsync(Arg.Do<ToolCallLifecyclePayload>(lifecycle.Add)).Returns(Task.CompletedTask);
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: CallIdLessToolCallUpdates());
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build();
+
+        await RunAsync(runner, package);
+
+        var requested = lifecycle.Where(static payload => payload.Phase == ToolCallLifecyclePhase.Requested).ToList();
+        var completed = lifecycle.Where(static payload => payload.Phase == ToolCallLifecyclePhase.Completed).ToList();
+
+        AssertEx.Equal(expected: 2, requested.Count, "Two calls to one tool are two calls, not one card overwritten by the second.");
+        AssertEx.Equal(expected: 2, completed.Count);
+        AssertEx.NotEqual(requested[0].ToolCallId, requested[1].ToolCallId, "A second call to the same tool must take its own surrogate id.");
+        AssertEx.True(completed.TrueForAll(static payload => !string.IsNullOrEmpty(payload.ToolCallId)),
+            "An empty id is dropped by every consumer that correlates a result with its call.");
+
+        // Same ids, in call order: results arrive in call order for a provider that emits none.
+        AssertEx.Equal(requested[0].ToolCallId, completed[0].ToolCallId);
+        AssertEx.Equal(requested[1].ToolCallId, completed[1].ToolCallId);
+        AssertEx.Equal("a.txt", completed[0].Result);
+        AssertEx.Equal("b.txt", completed[1].Result);
+        AssertEx.True(completed.TrueForAll(static payload => string.Equals(payload.ToolName, "test-tool", StringComparison.Ordinal)),
+            "The Completed side still resolves the tool name from what the Requested side recorded.");
+        AssertEx.Equal("test-tool", requested[0].ToolCallId, "The FIRST id-less call keeps the tool name, which is the id the approval card already resolves.");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenABlankCallIdToolIsCalledTwiceInSequence_DoesNotReuseTheClosedSurrogate()
+    {
+        // The sequential shape, with IDENTICAL arguments — the one that reads exactly like a streamed re-emission.
+        // Reusing the finished call's key swallowed the second call outright here, and merged the first call's
+        // arguments with the last result when the arguments differed. A surrogate is retired by its result.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var lifecycle = new List<ToolCallLifecyclePayload>();
+        dispatcher.ReportToolCallLifecycleAsync(Arg.Do<ToolCallLifecyclePayload>(lifecycle.Add)).Returns(Task.CompletedTask);
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: SequentialCallIdLessToolCallUpdates());
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build();
+
+        await RunAsync(runner, package);
+
+        var requested = lifecycle.Where(static payload => payload.Phase == ToolCallLifecyclePhase.Requested).ToList();
+        var completed = lifecycle.Where(static payload => payload.Phase == ToolCallLifecyclePhase.Completed).ToList();
+
+        AssertEx.Equal(expected: 2, requested.Count, "The second call is a call, not a re-emission of the finished one.");
+        AssertEx.Equal("test-tool", requested[0].ToolCallId, "The first id-less call keeps the tool name the approval card resolves.");
+        AssertEx.Equal("test-tool#2", requested[1].ToolCallId, "A closed surrogate is retired, never reused.");
+
+        AssertEx.Equal(expected: 2, completed.Count);
+        AssertEx.Equal("test-tool", completed[0].ToolCallId);
+        AssertEx.Equal("test-tool#2", completed[1].ToolCallId);
+        AssertEx.Equal("first", completed[0].Result);
+        AssertEx.Equal("second", completed[1].Result);
+    }
+
+    [Test]
     public async Task RunAsync_ReportsTheLastFinishReasonTheProviderStreamed()
     {
         // The benchmark ranking reads this off the terminal snapshot to tell a truncated answer from a complete one, so
@@ -3947,6 +4016,67 @@ public sealed class InvocationRunnerTests
         {
             FinishReason = last
         };
+    }
+
+    /// <summary>
+    ///     The SEQUENTIAL id-less shape: one call, its result, then the same tool called again with byte-identical
+    ///     arguments and its own result. Distinct dictionary instances carrying equal content, which is exactly what a
+    ///     re-emitted chunk of ONE call also looks like — the closed surrogate is what tells the two apart.
+    /// </summary>
+    private static async IAsyncEnumerable<AgentResponseUpdate> SequentialCallIdLessToolCallUpdates()
+    {
+        for (var call = 0; call < 2; call++)
+        {
+            yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+            {
+                new FunctionCallContent(string.Empty,
+                    "test-tool",
+                    new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["path"] = "README.md"
+                    })
+            });
+            await Task.Yield();
+
+            yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+            {
+                new FunctionResultContent(string.Empty, call == 0 ? "first" : "second")
+            });
+            await Task.Yield();
+        }
+    }
+
+    /// <summary>
+    ///     Two calls to the SAME tool with a blank CallId, then their two results — also blank, exactly as
+    ///     Microsoft.Extensions.AI copies the call's id onto the result. Blank rather than null because both content
+    ///     constructors throw on null (10.9.0), which makes the empty string the only id-less shape a provider can
+    ///     actually stream.
+    /// </summary>
+    private static async IAsyncEnumerable<AgentResponseUpdate> CallIdLessToolCallUpdates()
+    {
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionCallContent(string.Empty,
+                "test-tool",
+                new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    ["path"] = "a"
+                }),
+            new FunctionCallContent(string.Empty,
+                "test-tool",
+                new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    ["path"] = "b"
+                })
+        });
+        await Task.Yield();
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionResultContent(string.Empty, "a.txt"),
+            new FunctionResultContent(string.Empty, "b.txt")
+        });
+        await Task.Yield();
     }
 
     private static async IAsyncEnumerable<AgentResponseUpdate> RepeatedToolCallUpdates()

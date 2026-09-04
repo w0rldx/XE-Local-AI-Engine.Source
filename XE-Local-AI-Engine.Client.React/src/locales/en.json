@@ -5534,7 +5534,7 @@
 					},
 					"toolCatalog": {
 						"loading": "Loading the tool catalog. Tool facts are unknown until it arrives.",
-						"failed": "The tool catalog could not be loaded. Every tool counts as approval-requiring and side-effecting until it can be read."
+						"failed": "The tool catalog could not be loaded. Every tool counts as approval-requiring until it can be read."
 					}
 				},
 				"validation": {

@@ -77,7 +77,8 @@ internal static class ConversationContextBuilder
         if (CompactionContextResolver.Resolve(conversation, leadingContext.Count) is { } compaction)
         {
             leadingContext.Add(compaction.Summary);
-            selected = [.. selected.Where(message => anchorSequence(message) > compaction.CoveredSequence)];
+            selected = [.. selected.Where(message => anchorSequence(message) > compaction.CoveredSequence
+                                                     || SurvivesCompactionForToolHistory(message, includeToolHistory))];
         }
 
         var history = selected
@@ -110,6 +111,16 @@ internal static class ConversationContextBuilder
     private static bool IsSendable(NodeChatPersistedMessageDto message) =>
         !string.IsNullOrWhiteSpace(message.Content)
         && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal);
+
+    /// <summary>
+    ///     Whether a turn at or below the compaction cutoff outlives it anyway. The synopsis summarizes SENDABLE text
+    ///     only, so it never saw the actions a turn took: a turn the summarizer skipped — blank, failed or cancelled —
+    ///     that nonetheless completed a tool call would otherwise have its one real record erased by the fold. A
+    ///     sendable turn stays folded: its text IS in the synopsis, and re-sending it verbatim would say the same thing
+    ///     twice.
+    /// </summary>
+    internal static bool SurvivesCompactionForToolHistory(NodeChatPersistedMessageDto message, bool includeToolHistory) =>
+        includeToolHistory && !IsSendable(message) && HasCompletedToolPart(message);
 
     /// <summary>
     ///     Whether an ASSISTANT turn carries at least one completed tool part. Such a turn is kept even when it is

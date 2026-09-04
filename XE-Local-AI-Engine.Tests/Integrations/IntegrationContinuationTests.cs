@@ -359,11 +359,36 @@ public sealed class IntegrationContinuationTests
     }
 
     [Test]
-    public async Task TwoCallsInOneTurn_StayTwoWithDistinctIdsAndCollapseWhenTheProviderGaveNone()
+    public async Task ACompactionSummaryCoveringAFailedToolTurnStillCarriesItsExchange()
     {
-        // Pins the observed behaviour of both shapes rather than asserting a preference. With ids, two calls are two
-        // exchanges. Without, InvocationRunner.ResolveToolCallCardId substitutes the TOOL NAME as the id, so the
-        // accumulator's collapse-by-id makes two calls to one tool a single part — the last result wins.
+        // Compaction summarizes COMPLETED, non-blank text and then persists a cutoff past everything older — including
+        // the rows it skipped. A run that called save_artifact and then died sits below that cutoff with its side
+        // effect recorded nowhere else, so the fold would erase the model's only record of an action it took.
+        using var harness = new Harness();
+        harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
+        harness.AddHistory("assistant",
+            string.Empty,
+            [Harness.CompletedToolPart("call-1", "save_artifact", "{\"name\":\"s6.txt\"}", "saved")],
+            NodeChatMessageStatusValues.Failed);
+        harness.CompactionSummary = "SYNOPSIS";
+        harness.CompactionCoversToSequence = 0;
+
+        await harness.Coordinator.ProcessOneAsync(harness.SeedAccepted(), CancellationToken.None);
+
+        var context = Context(harness);
+        AssertEx.Contains(context, static message => message.Content.Contains("SYNOPSIS", StringComparison.Ordinal));
+        var assistant = context.Single(static message => message.Role == MessageRole.Assistant);
+        AssertEx.Equal("call-1", AssertEx.NotNull(assistant.ToolExchanges, "The fold must not erase a turn the synopsis never saw.").Single().CallId);
+    }
+
+    [Test]
+    public async Task TwoCallsInOneTurn_StayTwoExchanges_WithOrWithoutProviderCallIds()
+    {
+        // Two calls are two parts either way. With provider ids the accumulator keys on them directly; with a blank
+        // one the runner mints "<name>", then "<name>#2" (see InvocationRunnerTests
+        // .RunAsync_WhenTheProviderStreamsTwoSameNameCallsWithABlankCallId_PairsEachResultWithItsOwnCall), which is
+        // what this half raises. Before that surrogate both calls keyed on the bare tool name and collapsed into one
+        // part, losing the first call and its result outright.
         using var distinct = new Harness();
         distinct.DuringRun = (running, package) =>
         {
@@ -377,18 +402,19 @@ public sealed class IntegrationContinuationTests
         AssertEx.Equal("a.txt", distinctParts[0].Result);
         AssertEx.Equal("b.txt", distinctParts[1].Result);
 
-        using var collapsed = new Harness();
-        collapsed.DuringRun = (running, package) =>
+        using var surrogates = new Harness();
+        surrogates.DuringRun = (running, package) =>
         {
             RaiseToolCall(running, package.InvocationId, "list_files", "list_files", "{\"path\":\"a\"}", "a.txt");
-            RaiseToolCall(running, package.InvocationId, "list_files", "list_files", "{\"path\":\"b\"}", "b.txt");
+            RaiseToolCall(running, package.InvocationId, "list_files#2", "list_files", "{\"path\":\"b\"}", "b.txt");
         };
 
-        await collapsed.Coordinator.ProcessOneAsync(collapsed.SeedAccepted(), CancellationToken.None);
-        var collapsedParts = AssertEx.NotNull(AssertEx.NotNull(collapsed.TerminalizeRequest).Parts);
-        AssertEx.Equal(expected: 1, collapsedParts.Count, "Without a provider call id the tool name is the id, so the second call collapses into the first part.");
-        AssertEx.Equal("b.txt", collapsedParts[0].Result);
-        AssertEx.Equal("{\"path\":\"a\"}", collapsedParts[0].Args, "The requested phase owns the arguments; the completed phase only fills the result.");
+        await surrogates.Coordinator.ProcessOneAsync(surrogates.SeedAccepted(), CancellationToken.None);
+        var surrogateParts = AssertEx.NotNull(AssertEx.NotNull(surrogates.TerminalizeRequest).Parts);
+        AssertEx.Equal(expected: 2, surrogateParts.Count, "The surrogate keeps the second id-less call off the first one's part.");
+        AssertEx.Equal("a.txt", surrogateParts[0].Result);
+        AssertEx.Equal("{\"path\":\"a\"}", surrogateParts[0].Args, "The requested phase owns the arguments; the completed phase only fills the result.");
+        AssertEx.Equal("b.txt", surrogateParts[1].Result);
     }
 
     [Test]
