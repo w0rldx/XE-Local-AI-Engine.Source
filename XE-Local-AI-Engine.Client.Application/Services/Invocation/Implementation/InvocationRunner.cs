@@ -252,14 +252,19 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // The model-readiness duration rides the SAME helper for the same three-path reason: the cold start it measures
         // sits inside the whole-turn clock, so a turn that failed after a 200 s model load must still be able to say so.
         // Null on every turn with no local warm (Ollama, a remote provider), which is what the column means.
+        // The turn's SUMMED usage rides it too, and for a third reason: it is the turn's cost, which the envelope row
+        // records, as opposed to the last round's counts that ReportInvocationCompletedAsync puts on the message.
         async Task ReportTerminalTelemetryAsync()
         {
             try
             {
                 var efficiency = providerBudget.CaptureEfficiencySnapshot();
                 await dispatcher.ReportToolSchemaTokensAsync(package.InvocationId, efficiency.ToolSchemaTokens, efficiency.MaximumToolSchemaTokens).ConfigureAwait(false);
-                await dispatcher.ReportModelReadinessAsync(package.InvocationId,
-                                   stream?.ModelReadinessDurationMs is { } readinessMs ? (long)readinessMs : null)
+                await dispatcher.ReportTurnTelemetryAsync(package.InvocationId,
+                                   stream?.ModelReadinessDurationMs is { } readinessMs ? (long)readinessMs : null,
+                                   stream?.UsageSnapshot is { } turnUsage
+                                       ? new TurnUsageTotals(turnUsage.InputTokens, turnUsage.OutputTokens, turnUsage.TotalTokens, turnUsage.ReasoningTokens)
+                                       : null)
                                .ConfigureAwait(false);
             }
             catch (Exception exception)
@@ -570,7 +575,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             if (sendEncrypted)
             {
-                var tokenCounts = stream.UsageSnapshot?.ToTokenCounts() ?? new Dictionary<string, long>(StringComparer.Ordinal);
+                // LAST ROUND, not the turn total: these counts land on the assistant message, and the chat context meter
+                // reads the newest message's tokens as the model's context OCCUPANCY. A round's prompt is the whole
+                // conversation so far, so the final round already contains every earlier one — summing would treble it.
+                // The turn's cost is carried separately, on the run-envelope row, by ReportTurnTelemetryAsync below.
+                var tokenCounts = stream.LastRoundUsage?.ToTokenCounts() ?? new Dictionary<string, long>(StringComparer.Ordinal);
                 tokenCounts["generationDurationMs"] = generationDurationMs;
                 await sender.SendEncryptedCompletedAsync(_envelopeCryptoService.EncryptCompleted(package.ConversationId,
                         context.MessageId,
@@ -584,7 +593,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             }
             else if (sendPlain)
             {
-                if (stream.UsageSnapshot is null)
+                if (stream.LastRoundUsage is null)
                 {
                     _logger.LogWarning("Terminal model usage was not reported for invocation {InvocationId} using model {ModelName}. Token fields will remain unknown.",
                         package.InvocationId,
@@ -606,21 +615,26 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     InvocationId = package.InvocationId,
                     FinalContent = stream.ResponseBuilder.ToString(),
                     ModelUsed = resolvedModel,
-                    InputTokens = stream.UsageSnapshot?.InputTokens,
-                    OutputTokens = stream.UsageSnapshot?.OutputTokens,
-                    TokensUsed = stream.UsageSnapshot?.TotalTokens,
+                    // LAST ROUND, for the same reason as the encrypted counts above: this payload's tokens become the
+                    // assistant message's, and the meter reads them as context occupancy rather than turn cost.
+                    InputTokens = stream.LastRoundUsage?.InputTokens,
+                    OutputTokens = stream.LastRoundUsage?.OutputTokens,
+                    TokensUsed = stream.LastRoundUsage?.TotalTokens,
                     FinalReasoning = stream.ReasoningBuilder.ToString(),
-                    ReasoningTokens = stream.UsageSnapshot?.ReasoningTokens,
+                    ReasoningTokens = stream.LastRoundUsage?.ReasoningTokens,
                     GenerationDurationMs = generationDurationMs
                 }, invocationToken).ConfigureAwait(false);
             }
 
             await ReportTerminalTelemetryAsync().ConfigureAwait(false);
+            // LAST ROUND again: these reach InvocationState's token members, which the terminalize write persists onto
+            // the assistant message row (and the resume registry and the memory-extraction hook read from). The turn's
+            // cost rode ReportTurnTelemetryAsync a line above and lands on the envelope row instead.
             await dispatcher.ReportInvocationCompletedAsync(package.InvocationId,
-                stream.UsageSnapshot?.InputTokens,
-                stream.UsageSnapshot?.OutputTokens,
-                stream.UsageSnapshot?.TotalTokens,
-                stream.UsageSnapshot?.ReasoningTokens,
+                stream.LastRoundUsage?.InputTokens,
+                stream.LastRoundUsage?.OutputTokens,
+                stream.LastRoundUsage?.TotalTokens,
+                stream.LastRoundUsage?.ReasoningTokens,
                 generationDurationMs,
                 stream.FinishReason,
                 stream.ToThroughput()).ConfigureAwait(false);
@@ -755,8 +769,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
     /// <summary>
     ///     Emits the terminal token-usage counter for a completed turn (BE-01). Called once from the shared completion
-    ///     block — never the per-tool-loop usage-arrival site — so a multi-round tool run counts its final usage exactly
-    ///     once. No-op when the model reported no usage. Content-free: only the coarse provider dimension
+    ///     block — never the per-tool-loop usage-arrival site — so a multi-round tool run counts its TURN TOTAL exactly
+    ///     once (cost, so the rounds sum). No-op when the model reported no usage. Content-free: only the coarse provider dimension
     ///     (<see cref="StreamState.ProviderTag" />, local | remote), the resolved model id, and the direction tag ride the
     ///     metric — never any prompt/completion text.
     /// </summary>

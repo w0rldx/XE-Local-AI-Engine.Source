@@ -633,10 +633,14 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
         AddParameter(command, "$config_hash", string.Empty);
         AddParameter(command, "$terminal_status", terminalStatus);
         AddParameter(command, "$latency_ms", envelope.DurationMs);
-        AddParameter(command, "$prompt_tokens", promptTokens);
-        AddParameter(command, "$completion_tokens", completionTokens);
-        AddParameter(command, "$reasoning_tokens", reasoningTokens);
-        AddParameter(command, "$total_tokens", totalTokens);
+        // The envelope is the COST ledger, so it takes the turn totals summed over the turn's provider rounds when the
+        // pump supplied them. The message's own tokens are the LAST round's — context occupancy, not cost — and they
+        // remain the fallback for every caller that supplies no totals: the restart-recovery backfill, the thin cancel
+        // envelope and the platform path, whose rows therefore keep exactly the values they have always had.
+        AddParameter(command, "$prompt_tokens", envelope.TurnInputTokens ?? promptTokens);
+        AddParameter(command, "$completion_tokens", envelope.TurnOutputTokens ?? completionTokens);
+        AddParameter(command, "$reasoning_tokens", envelope.TurnReasoningTokens ?? reasoningTokens);
+        AddParameter(command, "$total_tokens", envelope.TurnTotalTokens ?? totalTokens);
         AddParameter(command, "$content_chunk_count", envelope.ContentChunkCount);
         AddParameter(command, "$reasoning_chunk_count", envelope.ReasoningChunkCount);
         AddParameter(command, "$trace_id", envelope.TraceId);

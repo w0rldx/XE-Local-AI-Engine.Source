@@ -222,7 +222,16 @@ public sealed record AgentRunEnvelopeMetadata(
     // generating. The whole-turn clock starts before the warm, so a cold turn's duration is dominated by it; recording
     // the two separately is what makes a cold arm comparable with a warm one. Null when no local warm happened
     // (Ollama, a remote provider) and on the thin interrupted/cancel path. A duration only — no model identity.
-    long? ModelReadinessMs = null);
+    long? ModelReadinessMs = null,
+    // The turn's token usage SUMMED over its provider rounds — what the turn COST. The message row's tokens are the
+    // LAST round's instead (a round's prompt is the whole conversation so far, so the final round is what the model's
+    // context HELD, which is the occupancy the chat meter reads); summing there overstated it threefold. When these are
+    // present the envelope row's prompt/completion/reasoning/total columns are written from them, otherwise from the
+    // message's tokens — so the restart-recovery backfill and the platform path, which supply none, keep today's values.
+    int? TurnInputTokens = null,
+    int? TurnOutputTokens = null,
+    int? TurnTotalTokens = null,
+    int? TurnReasoningTokens = null);
 
 public sealed record NodeChatCancelRequest(
     NodeChatMessageCorrelation Correlation,

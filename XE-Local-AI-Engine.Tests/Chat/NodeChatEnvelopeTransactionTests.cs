@@ -297,6 +297,97 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         AssertEx.Null(telemetry.MaxToolSchemaTokens);
     }
 
+    [Test]
+    public async Task TerminalizeAsync_WritesTheTurnTotalsOntoTheEnvelopeRowInsteadOfTheMessageTokens()
+    {
+        // The envelope is the COST ledger: a tool-calling turn's rounds add up there, while the message row keeps the
+        // last round's counts because that is the context the model actually held. The two numbers are deliberately
+        // different, and this is the write that has to prefer the turn totals.
+        await using var provider = await BuildProviderAsync("envelope-turn-totals.sqlite").ConfigureAwait(false);
+        var persistence = CreateService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Turn", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId).ConfigureAwait(false);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                             NodeChatMessageStatusValues.Completed,
+                             UpdatedAtUtc: 3,
+                             "answer",
+                             InputCount: 3_000,
+                             OutputCount: 30,
+                             TotalCount: 3_038,
+                             ReasoningCount: 8,
+                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(),
+                                 DurationMs: 5L,
+                                 TurnInputTokens: 6_000,
+                                 TurnOutputTokens: 60,
+                                 TurnTotalTokens: 6_078,
+                                 TurnReasoningTokens: 18)))
+                         .ConfigureAwait(false);
+
+        var tokens = await ReadEnvelopeTokensAsync(provider, correlation).ConfigureAwait(false);
+        AssertEx.Equal(expected: 6_000L, tokens.PromptTokens);
+        AssertEx.Equal(expected: 60L, tokens.CompletionTokens);
+        AssertEx.Equal(expected: 18L, tokens.ReasoningTokens);
+        AssertEx.Equal(expected: 6_078L, tokens.TotalTokens);
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_WhenNoTurnTotalsWereSupplied_WritesTheMessageTokensOntoTheEnvelopeRow()
+    {
+        // The restart-recovery backfill and the platform path report no turn totals, so their envelope rows keep the
+        // exact values they have always carried rather than silently becoming null.
+        await using var provider = await BuildProviderAsync("envelope-turn-totals-fallback.sqlite").ConfigureAwait(false);
+        var persistence = CreateService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Fallback", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId).ConfigureAwait(false);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                             NodeChatMessageStatusValues.Completed,
+                             UpdatedAtUtc: 3,
+                             "answer",
+                             InputCount: 3_000,
+                             OutputCount: 30,
+                             TotalCount: 3_038,
+                             ReasoningCount: 8,
+                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
+                         .ConfigureAwait(false);
+
+        var tokens = await ReadEnvelopeTokensAsync(provider, correlation).ConfigureAwait(false);
+        AssertEx.Equal(expected: 3_000L, tokens.PromptTokens);
+        AssertEx.Equal(expected: 30L, tokens.CompletionTokens);
+        AssertEx.Equal(expected: 8L, tokens.ReasoningTokens);
+        AssertEx.Equal(expected: 3_038L, tokens.TotalTokens);
+    }
+
+    // Reads the run-envelope row's four token columns in ONE statement with a literal command text, for the same reason
+    // as the helper below: no column name is ever interpolated into SQL.
+    private static async Task<EnvelopeTokens> ReadEnvelopeTokensAsync(ServiceProvider provider, NodeChatMessageCorrelation correlation)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT prompt_tokens, completion_tokens, reasoning_tokens, total_tokens FROM agent_execution_logs WHERE record_kind = $record_kind AND message_id = $message_id;";
+        AddParameter(command, "$record_kind", EnvelopeKind);
+        AddParameter(command, "$message_id", correlation.MessageId);
+
+        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        if (!await reader.ReadAsync().ConfigureAwait(false))
+        {
+            throw new InvalidOperationException("The run-envelope row was not found.");
+        }
+
+        return new EnvelopeTokens(await reader.IsDBNullAsync(0).ConfigureAwait(false) ? null : reader.GetInt64(0),
+            await reader.IsDBNullAsync(1).ConfigureAwait(false) ? null : reader.GetInt64(1),
+            await reader.IsDBNullAsync(2).ConfigureAwait(false) ? null : reader.GetInt64(2),
+            await reader.IsDBNullAsync(3).ConfigureAwait(false) ? null : reader.GetInt64(3));
+    }
+
+    private sealed record EnvelopeTokens(long? PromptTokens, long? CompletionTokens, long? ReasoningTokens, long? TotalTokens);
+
     // Reads the run-envelope row's schema version and both tool-schema token columns in ONE statement with a literal
     // command text, so no column name is ever interpolated into SQL.
     private static async Task<EnvelopeTelemetry> ReadEnvelopeTelemetryAsync(ServiceProvider provider, NodeChatMessageCorrelation correlation)

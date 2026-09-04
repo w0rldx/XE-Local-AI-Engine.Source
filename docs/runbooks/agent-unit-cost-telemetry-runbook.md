@@ -143,7 +143,10 @@ WHERE n.run_id IN (UPPER(:runIds)) AND n.failure_class IS NOT NULL GROUP BY fail
    that one envelope now carries the SUM over the turn's provider rounds, because the runner accumulates the usage
    each round reports instead of keeping the last (`InvocationRunner.StreamState.AddUsage`), so the shortfall this
    entry used to name is gone; a row written before that fix still holds the last round only, which is why an old
-   run's `input_tokens` is not comparable with a new one's; and **at most four
+   run's `input_tokens` is not comparable with a new one's. **The chat MESSAGE row's tokens are a different number
+   from the envelope's**: the message keeps the LAST round's counts, because a round's prompt is the whole
+   conversation so far and that is the context occupancy the chat meter renders — cost sums over rounds, occupancy
+   does not, so never read the two as the same quantity. And **at most four
    cost collections run at once per application** (`DevWorkflowNodeTelemetryCollectionPool`, a container singleton), so a
    settle arriving while four stuck collectors hold the pool is forwarded unmeasured the same way. Both losses are
    silent in the data and loud in the log — grep for `cost-collection slots are in use` and `outlived its`.

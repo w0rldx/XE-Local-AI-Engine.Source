@@ -115,8 +115,8 @@ public sealed record WorkSessionEventDto(
 ///     </para>
 ///     <para>
 ///         Every member is a STEP TOTAL read off the step's own cap scope, which is why the provider's own reported
-///         token usage is not among them: it is the TURN's number, accumulated by the invocation runner across the
-///         turn's provider rounds and written to the run envelope, and a step is not the same denominator as a turn.
+///         token usage is not among them: it is a TURN number — the last round's counts on the message, the rounds'
+///         sum on the run envelope — and a step is not the same denominator as a turn.
 ///         Estimate-versus-truth is measured per round instead, where both halves describe the same request, by
 ///         <c>ProviderCallBudgetChatClient</c>'s observed-usage write-back into the calibration store.
 ///     </para>

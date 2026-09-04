@@ -340,7 +340,7 @@ public sealed class WorkerShutdownDrainServiceTests
             return Task.CompletedTask;
         }
 
-        public Task ReportModelReadinessAsync(Guid invocationId, long? modelReadinessMs)
+        public Task ReportTurnTelemetryAsync(Guid invocationId, long? modelReadinessMs, TurnUsageTotals? usage)
         {
             return Task.CompletedTask;
         }

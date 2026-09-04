@@ -48,14 +48,22 @@ public sealed partial class InvocationRunner
         // The turn's usage, ACCUMULATED across every provider round, for the same reason AddSegmentTimings accumulates
         // llama-server's timings: FunctionInvokingChatClient runs the tool loop inside ONE RunStreamingAsync, so a
         // tool-calling turn emits one UsageContent per round and last-wins recorded only the final round (measured
-        // live: a three-round turn reported prompt 2,970 against a per-round estimate of 10,722). Private setter so the
-        // only way in is AddUsage below — an overwrite is exactly the bug this replaced.
+        // live: a three-round turn reported prompt 2,970 against a per-round estimate of 10,722). This is what the turn
+        // COST, and it feeds the token-usage metric, the efficiency record and the run-envelope row. Private setter so
+        // the only way in is AddUsage below — an overwrite is exactly the bug this replaced.
         public UsageSnapshot? UsageSnapshot { get; private set; }
 
-        /// <summary>Folds one provider round's reported usage into the turn totals. Null members stay null.</summary>
+        // The LAST provider round's usage on its own. A round's prompt is the WHOLE conversation so far, not a delta, so
+        // the final round's input count is what the model's context actually HELD when it answered — the occupancy the
+        // chat meter derives from the assistant message's tokens. Summing rounds there reads as three times the context
+        // the turn ever used (10,722 shown for a real ~3,000). Cost sums; occupancy does not.
+        public UsageSnapshot? LastRoundUsage { get; private set; }
+
+        /// <summary>Records one provider round's reported usage as the last round and folds it into the turn totals.</summary>
         public void AddUsage(UsageDetails usage)
         {
-            UsageSnapshot = UsageSnapshot.Accumulate(UsageSnapshot, usage);
+            LastRoundUsage = UsageSnapshot.From(usage);
+            UsageSnapshot = UsageSnapshot.Accumulate(UsageSnapshot, LastRoundUsage);
         }
 
         // Why generation stopped, taken from the LAST streamed update that carried a finish reason: a tool-calling turn
@@ -296,9 +304,8 @@ public sealed partial class InvocationRunner
         ///     round after it sums member-wise, null-preserving (a member neither side reported stays null) and
         ///     saturating at <see cref="int.MaxValue" /> so a pathological count cannot overflow the turn's total.
         /// </summary>
-        public static UsageSnapshot Accumulate(UsageSnapshot? total, UsageDetails usage)
+        public static UsageSnapshot Accumulate(UsageSnapshot? total, UsageSnapshot round)
         {
-            var round = From(usage);
             if (total is null)
             {
                 return round;

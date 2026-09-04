@@ -89,13 +89,40 @@ public sealed class InvocationState
 
     public string? ModelUsed { get; set; }
 
+    /// <summary>
+    ///     The LAST provider round's prompt tokens, not the turn's sum. A tool-calling turn is several provider requests
+    ///     and each one's prompt is the whole conversation so far, so the final round's count is what the model's
+    ///     context actually HELD when it answered — the occupancy the chat meter derives from the assistant message
+    ///     these tokens are persisted onto. What the turn COST is <see cref="TurnInputTokens" />, which the run-envelope
+    ///     row records instead. Cost sums across rounds; occupancy does not.
+    /// </summary>
     public int? InputTokens { get; set; }
 
+    /// <summary>The LAST provider round's completion tokens; see <see cref="InputTokens" /> for why it is not the sum.</summary>
     public int? OutputTokens { get; set; }
 
+    /// <summary>The LAST provider round's total tokens; see <see cref="InputTokens" /> for why it is not the sum.</summary>
     public int? TotalTokens { get; set; }
 
+    /// <summary>The LAST provider round's reasoning tokens; see <see cref="InputTokens" /> for why it is not the sum.</summary>
     public int? ReasoningTokens { get; set; }
+
+    /// <summary>
+    ///     The turn's prompt tokens SUMMED over its provider rounds — what the turn cost, as opposed to the context
+    ///     occupancy in <see cref="InputTokens" />. Reported once per turn by the runner on every terminal path and
+    ///     persisted onto the run-envelope row (never the message row). Null when the provider reported no usage, and on
+    ///     every platform/legacy turn, in which case the envelope falls back to the message's tokens.
+    /// </summary>
+    public int? TurnInputTokens { get; set; }
+
+    /// <summary>The turn's completion tokens summed over its provider rounds; null for the same reasons as <see cref="TurnInputTokens" />.</summary>
+    public int? TurnOutputTokens { get; set; }
+
+    /// <summary>The turn's total tokens summed over its provider rounds; null for the same reasons as <see cref="TurnInputTokens" />.</summary>
+    public int? TurnTotalTokens { get; set; }
+
+    /// <summary>The turn's reasoning tokens summed over its provider rounds; null for the same reasons as <see cref="TurnInputTokens" />.</summary>
+    public int? TurnReasoningTokens { get; set; }
 
     /// <summary>
     ///     Estimated tool-schema tokens the turn spent across all its provider rounds, read from the provider-call
@@ -202,6 +229,10 @@ public sealed class InvocationState
             OutputTokens = OutputTokens,
             TotalTokens = TotalTokens,
             ReasoningTokens = ReasoningTokens,
+            TurnInputTokens = TurnInputTokens,
+            TurnOutputTokens = TurnOutputTokens,
+            TurnTotalTokens = TurnTotalTokens,
+            TurnReasoningTokens = TurnReasoningTokens,
             ToolSchemaTokens = ToolSchemaTokens,
             MaxToolSchemaTokens = MaxToolSchemaTokens,
             ModelReadinessMs = ModelReadinessMs,

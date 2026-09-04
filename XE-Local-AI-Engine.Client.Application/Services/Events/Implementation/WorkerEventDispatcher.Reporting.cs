@@ -90,13 +90,20 @@ public sealed partial class WorkerEventDispatcher
         return Task.CompletedTask;
     }
 
-    public Task ReportModelReadinessAsync(Guid invocationId, long? modelReadinessMs)
+    public Task ReportTurnTelemetryAsync(Guid invocationId, long? modelReadinessMs, TurnUsageTotals? usage)
     {
         // A no-op when the id is not the current invocation, exactly like the reports above.
         UpdateInvocation(invocationId,
             state =>
             {
                 state.ModelReadinessMs = modelReadinessMs;
+                // The TURN's summed usage, kept apart from the state's InputTokens/OutputTokens/... which
+                // ReportInvocationCompletedAsync fills with the LAST round's counts. Both are persisted, to different
+                // rows: cost onto the envelope, occupancy onto the message.
+                state.TurnInputTokens = usage?.InputTokens;
+                state.TurnOutputTokens = usage?.OutputTokens;
+                state.TurnTotalTokens = usage?.TotalTokens;
+                state.TurnReasoningTokens = usage?.ReasoningTokens;
                 return state;
             });
 

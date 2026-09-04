@@ -414,11 +414,14 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task RunAsync_WhenSeveralProviderRoundsReportUsage_SumsTheirTokenCounts()
+    public async Task RunAsync_WhenSeveralProviderRoundsReportUsage_SendsTheLastRoundAndReportsTheSummedTurnTotals()
     {
         // A tool-calling turn is several llama-server requests inside ONE RunStreamingAsync (FunctionInvokingChatClient
-        // runs that loop internally), and each round reports its own usage. Recording the LAST one under-reported the
-        // turn by every round but the final: measured live at prompt 2,970 against a per-round estimate of 10,722.
+        // runs that loop internally), and each round reports its own usage. The two consumers want different numbers.
+        // The completion payload and the completed report become the assistant MESSAGE's tokens, which the chat meter
+        // reads as context OCCUPANCY: a round's prompt is the whole conversation so far, so the last round already
+        // contains every earlier one and summing showed 10,722 for a context that never held more than ~3,000. The
+        // turn's COST is the sum, and it rides the terminal-telemetry report onto the run-envelope row instead.
         var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var runner = CreateRunner(sender,
@@ -449,28 +452,39 @@ public sealed class InvocationRunnerTests
         await RunPlainAsync(runner, package);
 
         AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
-        AssertEx.Equal(expected: 6_000, sender.SentCompletions[0].InputTokens);
-        AssertEx.Equal(expected: 60, sender.SentCompletions[0].OutputTokens);
-        AssertEx.Equal(expected: 18, sender.SentCompletions[0].ReasoningTokens);
-        AssertEx.Equal(expected: 6_078, sender.SentCompletions[0].TokensUsed);
+        AssertEx.Equal(expected: 3_000, sender.SentCompletions[0].InputTokens);
+        AssertEx.Equal(expected: 30, sender.SentCompletions[0].OutputTokens);
+        AssertEx.Equal(expected: 8, sender.SentCompletions[0].ReasoningTokens);
+        AssertEx.Equal(expected: 3_038, sender.SentCompletions[0].TokensUsed);
         await dispatcher.Received(1)
                         .ReportInvocationCompletedAsync(package.InvocationId,
-                            Arg.Is<int?>(6_000),
-                            Arg.Is<int?>(60),
-                            Arg.Is<int?>(6_078),
-                            Arg.Is<int?>(18),
+                            Arg.Is<int?>(3_000),
+                            Arg.Is<int?>(30),
+                            Arg.Is<int?>(3_038),
+                            Arg.Is<int?>(8),
                             Arg.Any<long?>(),
                             Arg.Any<string?>(),
                             Arg.Any<InvocationThroughput?>());
+        await dispatcher.Received(1)
+                        .ReportTurnTelemetryAsync(package.InvocationId,
+                            Arg.Any<long?>(),
+                            Arg.Is<TurnUsageTotals?>(static usage => usage != null
+                                                                    && usage.InputTokens == 6_000
+                                                                    && usage.OutputTokens == 60
+                                                                    && usage.TotalTokens == 6_078
+                                                                    && usage.ReasoningTokens == 18));
     }
 
     [Test]
     public async Task RunAsync_WhenSummedUsageExceedsInt32_SaturatesInsteadOfWrapping()
     {
         // Each round is comfortably inside int range; their SUM is not. The accumulator must clamp exactly as a single
-        // oversized round does, rather than wrap negative and report a turn that consumed less than nothing.
+        // oversized round does, rather than wrap negative and report a turn that consumed less than nothing. Asserted on
+        // the turn totals, because they are the only place the rounds are added together at all.
         var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var runner = CreateRunner(sender,
+            eventDispatcher: dispatcher,
             agentUpdates: CreateUpdatesWithUsage((Text: "first", Usage: new UsageDetails
                 {
                     InputTokenCount = int.MaxValue - 10,
@@ -489,9 +503,13 @@ public sealed class InvocationRunnerTests
 
         AssertEx.Empty(sender.SentFailures);
         AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
-        AssertEx.Equal(expected: int.MaxValue, sender.SentCompletions[0].InputTokens);
-        AssertEx.Equal(expected: 10, sender.SentCompletions[0].OutputTokens);
-        AssertEx.Equal(expected: int.MaxValue, sender.SentCompletions[0].TokensUsed);
+        await dispatcher.Received(1)
+                        .ReportTurnTelemetryAsync(package.InvocationId,
+                            Arg.Any<long?>(),
+                            Arg.Is<TurnUsageTotals?>(static usage => usage != null
+                                                                    && usage.InputTokens == int.MaxValue
+                                                                    && usage.OutputTokens == 10
+                                                                    && usage.TotalTokens == int.MaxValue));
     }
 
     [Test]
@@ -1315,7 +1333,7 @@ public sealed class InvocationRunnerTests
         await RunAsync(runner, package);
 
         await dispatcher.Received(1)
-                        .ReportModelReadinessAsync(package.InvocationId, Arg.Is<long?>(static value => value >= 0));
+                        .ReportTurnTelemetryAsync(package.InvocationId, Arg.Is<long?>(static value => value >= 0), Arg.Any<TurnUsageTotals?>());
     }
 
     [Test]
@@ -1339,7 +1357,7 @@ public sealed class InvocationRunnerTests
         await RunAsync(runner, package);
 
         await dispatcher.Received(1)
-                        .ReportModelReadinessAsync(package.InvocationId, Arg.Is<long?>(static value => value == null));
+                        .ReportTurnTelemetryAsync(package.InvocationId, Arg.Is<long?>(static value => value == null), Arg.Any<TurnUsageTotals?>());
     }
 
     [Test]
