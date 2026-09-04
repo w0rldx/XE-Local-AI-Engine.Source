@@ -10820,14 +10820,27 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "No Content"
+          "202": {
+            "description": "Accepted"
           },
           "401": {
             "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -31289,6 +31302,7 @@
           "id",
           "triggerId",
           "triggerName",
+          "principalId",
           "agentDefinitionId",
           "status",
           "createdAtUtc",
@@ -31306,6 +31320,10 @@
           },
           "triggerName": {
             "type": "string"
+          },
+          "principalId": {
+            "type": "string",
+            "format": "guid"
           },
           "agentDefinitionId": {
             "type": "string",
