@@ -186,6 +186,47 @@ public sealed class IntegrationExecutionEndpointTests
         AssertEx.Empty(none.Items);
     }
 
+    /// <summary>
+    ///     F12: a repeated status is a caller-supplied array, so the malformed shapes are pinned rather than assumed.
+    ///     An EMPTY element is a binding failure and takes the whole parameter down with it — which is the answer that
+    ///     matters, because the alternative would be it binding as the default enum member and silently filtering on a
+    ///     status nobody asked for. Neither shape may ever reach a 500.
+    /// </summary>
+    [Test]
+    [Arguments("status=")]
+    [Arguments("status=Accepted&status=")]
+    public async Task List_RejectsAnEmptyStatusElementRatherThanBindingItToTheDefaultMember(string query)
+    {
+        using var client = Factory.CreateClient();
+
+        using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory, client, HttpMethod.Get, $"{ExecutionsRoute}?{query}");
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, $"'{query}' must be refused, not bound to a default status.");
+        var body = await response.Content.ReadAsStringAsync();
+        AssertEx.Contains(body, "status", StringComparison.Ordinal, "The problem body has to name the parameter the caller got wrong.");
+    }
+
+    /// <summary>
+    ///     Pinned, not chosen: FastEndpoints parses the enum case-INSENSITIVELY, so a lower-case status is a valid
+    ///     filter rather than a 400. Recorded here so a future binder change that starts rejecting it is a failing test
+    ///     rather than a silently broken caller.
+    /// </summary>
+    [Test]
+    public async Task List_AcceptsALowerCaseStatusBecauseTheBinderIsCaseInsensitive()
+    {
+        using var client = Factory.CreateClient();
+        var seeded = await SeedAsync(client, "lowercase");
+
+        using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
+            client,
+            HttpMethod.Get,
+            $"{ExecutionsRoute}?triggerId={seeded.TriggerId}&status=accepted");
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<ExecutionListBody>(IntegrationEndpointPayloads.Json));
+        AssertEx.Equal(expected: 2, body.TotalCount, "The lower-case value must filter exactly as the canonical casing does, not degrade to no filter.");
+    }
+
     [Test]
     [Arguments("limit=0")]
     [Arguments("limit=201")]
