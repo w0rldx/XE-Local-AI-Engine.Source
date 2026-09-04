@@ -18,6 +18,39 @@ public sealed class GraphWorkflowStateMachineTests
     /// <summary>The output document of a Condition node whose answer routes down the false branch.</summary>
     private const string NotOk = """{"output":{"json":{"ok":false}}}""";
 
+    /// <summary>
+    ///     A pause whose rejection HAS an out-edge — the pre-flight rule guarantees one — leading to a Condition that
+    ///     matches none of its own branches, so everything past the rejection skips and no end is reached.
+    /// </summary>
+    private const string RejectionIntoADeadEnd = """
+                                                 { "schemaVersion": 1,
+                                                   "nodes": [{ "key": "start", "kind": "Start" },
+                                                             { "key": "review", "kind": "Pause",
+                                                               "config": { "prompt": "Well?", "allowedDecisions": ["Approve", "Reject"] } },
+                                                             { "key": "shipped", "kind": "End", "config": { "outcome": "x" } },
+                                                             { "key": "check", "kind": "Condition", "config": { "path": "output.status" } },
+                                                             { "key": "a", "kind": "End", "config": { "outcome": "y" } },
+                                                             { "key": "b", "kind": "End", "config": { "outcome": "z" } }],
+                                                   "edges": [{ "key": "e1", "from": "start", "to": "review" },
+                                                             { "key": "e2", "from": "review", "to": "shipped",
+                                                               "condition": { "path": "output.decision", "op": "eq", "value": "Approve" } },
+                                                             { "key": "e3", "from": "review", "to": "check",
+                                                               "condition": { "path": "output.decision", "op": "eq", "value": "Reject" } },
+                                                             { "key": "e4", "from": "check", "to": "a", "condition": { "op": "eq", "value": "never" } },
+                                                             { "key": "e5", "from": "check", "to": "b", "condition": { "op": "eq", "value": "alsonever" } }] }
+                                                 """;
+
+    /// <summary>
+    ///     What a REAL pause stores: the composed document every kind writes — status, attempt, the branch that fired —
+    ///     with the answer, its comment and its payload under <c>output</c>. The minimal routing document
+    ///     <c>PauseOutputJson</c> writes is a pre-flight probe, not the shape a run leaves behind.
+    /// </summary>
+    private const string ComposedRejection = """
+                                             { "status": "succeeded", "attempt": 2, "branch": "rejected",
+                                               "output": { "decision": "Reject", "comment": "Not this quarter.",
+                                                           "payload": { "reason": "budget" } } }
+                                             """;
+
     [Test]
     public void EdgeState_WhileTheSourceIsStillLive_IsPending()
     {
@@ -332,24 +365,6 @@ public sealed class GraphWorkflowStateMachineTests
     [Test]
     public void Recompute_WhenAPauseIsRejectedAndNothingRoutes_IsCancelledAsGateRejected()
     {
-        const string RejectionIntoADeadEnd = """
-                                             { "schemaVersion": 1,
-                                               "nodes": [{ "key": "start", "kind": "Start" },
-                                                         { "key": "review", "kind": "Pause",
-                                                           "config": { "prompt": "Well?", "allowedDecisions": ["Approve", "Reject"] } },
-                                                         { "key": "shipped", "kind": "End", "config": { "outcome": "x" } },
-                                                         { "key": "check", "kind": "Condition", "config": { "path": "output.status" } },
-                                                         { "key": "a", "kind": "End", "config": { "outcome": "y" } },
-                                                         { "key": "b", "kind": "End", "config": { "outcome": "z" } }],
-                                               "edges": [{ "key": "e1", "from": "start", "to": "review" },
-                                                         { "key": "e2", "from": "review", "to": "shipped",
-                                                           "condition": { "path": "output.decision", "op": "eq", "value": "Approve" } },
-                                                         { "key": "e3", "from": "review", "to": "check",
-                                                           "condition": { "path": "output.decision", "op": "eq", "value": "Reject" } },
-                                                         { "key": "e4", "from": "check", "to": "a", "condition": { "op": "eq", "value": "never" } },
-                                                         { "key": "e5", "from": "check", "to": "b", "condition": { "op": "eq", "value": "alsonever" } }] }
-                                             """;
-
         var outcome = GraphWorkflowStateMachine.Recompute(GraphWorkflowRunStatus.WaitingForApproval,
             GraphWorkflowGraph.Parse(RejectionIntoADeadEnd),
             [
@@ -369,6 +384,55 @@ public sealed class GraphWorkflowStateMachineTests
         // The answer's own word, so a reader is never sent looking for a decision row that says something else.
         AssertEx.Equal("No terminal node succeeded: 'shipped' was Skipped, 'a' was Skipped, 'b' was Skipped, after the pause 'review' answered Reject.",
             AssertEx.NotNull(outcome.TerminalReason));
+    }
+
+    /// <summary>
+    ///     The refusal must be read STRUCTURALLY. A byte comparison against the minimal <c>PauseOutputJson</c> document
+    ///     recognises the pre-flight probe and misses every document a real run stores — and the run would then be
+    ///     cancelled with <c>FailureClass.None</c> and a reason that never mentions the rejection that stopped it.
+    /// </summary>
+    [Test]
+    public void Recompute_RecognisesARejectionInsideAFullyComposedPauseDocument()
+    {
+        var outcome = GraphWorkflowStateMachine.Recompute(GraphWorkflowRunStatus.WaitingForApproval,
+            GraphWorkflowGraph.Parse(RejectionIntoADeadEnd),
+            [
+                NodeRun("review", GraphWorkflowNodeRunStatus.Succeeded, ComposedRejection, GraphWorkflowNodeKind.Pause),
+                NodeRun("check", GraphWorkflowNodeRunStatus.Succeeded, """{"output":{"status":"neither"}}""", GraphWorkflowNodeKind.Condition),
+                NodeRun("shipped", GraphWorkflowNodeRunStatus.Skipped),
+                NodeRun("a", GraphWorkflowNodeRunStatus.Skipped),
+                NodeRun("b", GraphWorkflowNodeRunStatus.Skipped)
+            ]);
+
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, outcome.Status);
+        AssertEx.Equal(GraphWorkflowFailureClass.GateRejected,
+            outcome.FailureClass,
+            "the composed document carries attempt, branch, comment and payload beside the decision, and it is still a rejection.");
+        AssertEx.Equal("No terminal node succeeded: 'shipped' was Skipped, 'a' was Skipped, 'b' was Skipped, after the pause 'review' answered Reject.",
+            AssertEx.NotNull(outcome.TerminalReason));
+    }
+
+    /// <summary>An APPROVED pause is not a refusal, however the run then ended.</summary>
+    [Test]
+    public void Recompute_WithAnApprovedPauseThatRoutedNowhere_IsCancelledWithoutBlamingTheGate()
+    {
+        const string ComposedApproval = """
+                                        { "status": "succeeded", "attempt": 1, "branch": null,
+                                          "output": { "decision": "Approve", "comment": null, "payload": null } }
+                                        """;
+
+        var outcome = GraphWorkflowStateMachine.Recompute(GraphWorkflowRunStatus.WaitingForApproval,
+            GraphWorkflowGraph.Parse(RejectionIntoADeadEnd),
+            [
+                NodeRun("review", GraphWorkflowNodeRunStatus.Succeeded, ComposedApproval, GraphWorkflowNodeKind.Pause),
+                NodeRun("shipped", GraphWorkflowNodeRunStatus.Skipped),
+                NodeRun("check", GraphWorkflowNodeRunStatus.Skipped, outputJson: null, GraphWorkflowNodeKind.Condition),
+                NodeRun("a", GraphWorkflowNodeRunStatus.Skipped),
+                NodeRun("b", GraphWorkflowNodeRunStatus.Skipped)
+            ]);
+
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, outcome.Status);
+        AssertEx.Equal(GraphWorkflowFailureClass.None, outcome.FailureClass, "an approval refused nothing, so nothing may be blamed on the gate.");
     }
 
     /// <summary>

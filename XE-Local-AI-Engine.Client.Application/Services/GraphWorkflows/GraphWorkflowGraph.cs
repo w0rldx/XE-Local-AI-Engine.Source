@@ -79,6 +79,9 @@ internal sealed class GraphWorkflowGraph
 {
     private const int SupportedSchemaVersion = 1;
 
+    /// <summary>The sentence every dot-path refusal ends with, so an author reads the same rule wherever they hit it.</summary>
+    private const string DotPathRule = "A dot path is property names separated by '.', with no wildcards, indexes or functions.";
+
     /// <summary>Defaults for a node that names none. Waits and inline decisions get one try; work gets three.</summary>
     private const int DefaultWorkNodeMaxAttempts = 3;
 
@@ -467,12 +470,12 @@ internal sealed class GraphWorkflowGraph
         var bindings = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var member in value.EnumerateObject())
         {
-            if (member.Value.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(member.Value.GetString()))
+            if (member.Value.ValueKind != JsonValueKind.String || !GraphWorkflowTokens.IsDotPath(member.Value.GetString()?.Trim()))
             {
-                throw new GraphWorkflowValidationException($"The 'argumentBindings' on node '{nodeKey}' binds '{member.Name}' to something that is not a dot path.");
+                throw new GraphWorkflowValidationException($"The 'argumentBindings' on node '{nodeKey}' binds '{member.Name}' to something that is not a dot path. {DotPathRule}");
             }
 
-            bindings[member.Name] = member.Value.GetString()!;
+            bindings[member.Name] = member.Value.GetString()!.Trim();
         }
 
         return bindings;
@@ -492,7 +495,7 @@ internal sealed class GraphWorkflowGraph
         var decisions = new List<GraphWorkflowDecisionKind>();
         foreach (var entry in value.EnumerateArray())
         {
-            if (entry.ValueKind != JsonValueKind.String || !Enum.TryParse<GraphWorkflowDecisionKind>(entry.GetString(), ignoreCase: true, out var decision))
+            if (entry.ValueKind != JsonValueKind.String || !GraphWorkflowTokens.TryParseName<GraphWorkflowDecisionKind>(entry.GetString(), out var decision))
             {
                 throw new GraphWorkflowValidationException($"Node '{nodeKey}' names a decision this runtime does not offer; "
                                                            + $"expected values from {string.Join(", ", Enum.GetNames<GraphWorkflowDecisionKind>())}.");
@@ -776,16 +779,16 @@ internal sealed class GraphWorkflowGraph
     private static string? TrimmedOptionalString(JsonElement element, string name) =>
         OptionalString(element, name)?.Trim() is { Length: > 0 } value ? value : null;
 
-    /// <summary>An optional dot path, held to the same "no empty segment" rule a condition's own path is.</summary>
+    /// <summary>An optional dot path, held to the same rule a condition's own path is.</summary>
     private static string? ParseDotPath(JsonElement element, string name, string nodeKey)
     {
         var path = TrimmedOptionalString(element, name);
-        if (path is null || !path.Split('.').Any(string.IsNullOrWhiteSpace))
+        if (path is null || GraphWorkflowTokens.IsDotPath(path))
         {
             return path;
         }
 
-        throw new GraphWorkflowValidationException($"The '{name}' '{path}' on node '{nodeKey}' has an empty segment.");
+        throw new GraphWorkflowValidationException($"The '{name}' '{path}' on node '{nodeKey}' is not a dot path. {DotPathRule}");
     }
 
     private static JsonElement? OptionalElement(JsonElement element, string name) =>
@@ -818,9 +821,14 @@ internal sealed class GraphWorkflowGraph
         };
     }
 
+    /// <summary>
+    ///     A required enum member BY NAME. Never <c>Enum.TryParse</c> on its own: that accepts a numeric token, so
+    ///     <c>"kind": "9"</c> would parse into a value no member has and reach the per-kind config table as a missing
+    ///     key rather than as the refusal an author can read.
+    /// </summary>
     private static TEnum RequiredEnum<TEnum>(JsonElement element, string name, string owner)
         where TEnum : struct, Enum =>
-        Enum.TryParse<TEnum>(OptionalString(element, name), ignoreCase: true, out var parsed)
+        GraphWorkflowTokens.TryParseName<TEnum>(OptionalString(element, name), out var parsed)
             ? parsed
             : throw new GraphWorkflowValidationException($"{char.ToUpperInvariant(owner[0])}{owner[1..]} needs a '{name}' from {string.Join(", ", Enum.GetNames<TEnum>())}.");
 
@@ -833,7 +841,7 @@ internal sealed class GraphWorkflowGraph
             return fallback;
         }
 
-        return Enum.TryParse<TEnum>(raw, ignoreCase: true, out var parsed)
+        return GraphWorkflowTokens.TryParseName<TEnum>(raw, out var parsed)
             ? parsed
             : throw new GraphWorkflowValidationException($"Node '{nodeKey}' has an unknown '{name}' of '{raw}'; expected one of {string.Join(", ", Enum.GetNames<TEnum>())}.");
     }

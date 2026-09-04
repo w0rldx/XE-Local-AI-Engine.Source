@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Endpoints.GraphWorkflows.V1;
 
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -402,6 +403,74 @@ public sealed class GraphWorkflowDefinitionEndpointTests
     }
 
     /// <summary>
+    ///     A chunked body declares no Content-Length at all, and a guard that read that null as "over the cap" would
+    ///     answer 413 to every streamed request, about a size the caller never stated. The cap for a body of unknown
+    ///     length is the host's, counted as the bytes arrive.
+    /// </summary>
+    [Test]
+    public async Task GraphRoute_WithoutAContentLength_IsNotRefusedBySize()
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, Definitions)
+        {
+            Content = new UnknownLengthContent(CreateBody(GraphWorkflowGraphs.StartAgentEnd))
+        };
+        factory.AddNodeBearerToken(request);
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Null(request.Content.Headers.ContentLength, "the point of the fixture: this body declares no length.");
+        AssertEx.Equal(HttpStatusCode.Created, response.StatusCode, "a body of unknown length is not an oversized body.");
+        await store.Received(1).CreateDefinitionAsync(Arg.Any<CreateGraphWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     A wire schema version the parser does not speak must REACH the parser. As a non-nullable int an absent
+    ///     member and an explicit 0 are the same value, and normalizing both to 1 would carry an unsupported document
+    ///     straight past the one refusal that exists to stop it.
+    /// </summary>
+    [Test]
+    [Arguments("0")]
+    [Arguments("2")]
+    public async Task CreateDefinition_WithAnUnsupportedSchemaVersion_IsRefused(string schemaVersion)
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+        var graph = GraphWorkflowGraphs.StartAgentEnd.Replace("\"schemaVersion\": 1", $"\"schemaVersion\": {schemaVersion}", StringComparison.Ordinal);
+
+        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(graph)).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, $"schema version {schemaVersion} is not one this node speaks: {body}");
+        AssertEx.Contains(body, "schema version 1", StringComparison.Ordinal, body);
+        AssertEx.Empty(store.ReceivedCalls());
+    }
+
+    /// <summary>The other half: an ABSENT schema version is the editor that never sends the member, and it means 1.</summary>
+    [Test]
+    public async Task CreateDefinition_WithNoSchemaVersion_ReadsAsVersionOne()
+    {
+        var store = Store();
+        string? stored = null;
+        store.CreateDefinitionAsync(Arg.Any<CreateGraphWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call =>
+             {
+                 stored = call.Arg<CreateGraphWorkflowDefinitionCommand>().GraphJson;
+                 return Snapshot(stored);
+             });
+        await using var factory = EnabledFactory(store);
+        var graph = GraphWorkflowGraphs.StartAgentEnd.Replace("\"schemaVersion\": 1,", string.Empty, StringComparison.Ordinal);
+
+        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(graph)).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
+        using var document = JsonDocument.Parse(AssertEx.NotNull(stored));
+        AssertEx.Equal(1, document.RootElement.GetProperty("schemaVersion").GetInt32(), "the stored document says the version the parser then holds it to.");
+    }
+
+    /// <summary>
     ///     A body whose bulk is in the GRAPH rather than in a bounded field: name and description have their own length
     ///     rules, so an oversized one of those would answer 400 from the validator and prove nothing about the cap.
     /// </summary>
@@ -486,6 +555,33 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         }
 
         return request;
+    }
+
+    /// <summary>
+    ///     A body that reports no length, which is what a chunked request is. <see cref="StringContent" /> always
+    ///     computes one, so it cannot express the case at all.
+    /// </summary>
+    private sealed class UnknownLengthContent : HttpContent
+    {
+        private readonly byte[] _body;
+
+        public UnknownLengthContent(string body)
+        {
+            _body = Encoding.UTF8.GetBytes(body);
+            Headers.ContentType = new MediaTypeHeaderValue("application/json")
+            {
+                CharSet = "utf-8"
+            };
+        }
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+            stream.WriteAsync(_body.AsMemory()).AsTask();
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
     }
 
     private static TestServerWebAppFactory EnabledFactory(IGraphWorkflowStore store) =>

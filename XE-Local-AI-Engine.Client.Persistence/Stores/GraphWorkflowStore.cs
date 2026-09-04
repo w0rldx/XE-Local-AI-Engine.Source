@@ -192,9 +192,15 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
         {
             var definition = await LoadAsync(definitionId, cancellationToken).ConfigureAwait(false);
 
-            // Inside the transaction, which is the only place the answer is true: EF opens SQLite transactions as
-            // BEGIN IMMEDIATE, so a run that starts while this delete is in flight blocks on the writer lock and is
-            // either counted here or committed after a delete that has already been refused.
+            // Inside the transaction, which is the only place the answer can be true: EF opens SQLite transactions as
+            // BEGIN IMMEDIATE, so a writer that starts a run while this delete is in flight blocks on the writer lock
+            // and is either counted here or committed after a delete that has already been refused.
+            //
+            // That holds ONLY under a precondition the run store owes: run start must re-check the definition's
+            // existence and version inside the same transaction that inserts the run row. A start that reads the
+            // definition in one transaction and inserts the run in another can insert a run pinned to a definition
+            // this delete already removed, because the count below ran while that run did not yet exist. Nothing in
+            // this slice starts runs; S1's run store is where the obligation lands.
             var live = await _dbContext.GraphWorkflowRuns.AsNoTracking()
                                        .AnyAsync(entity => entity.DefinitionId == definitionId && LiveRunStatuses.Contains(entity.Status), cancellationToken)
                                        .ConfigureAwait(false);

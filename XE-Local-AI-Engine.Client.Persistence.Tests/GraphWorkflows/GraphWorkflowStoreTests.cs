@@ -94,6 +94,51 @@ public sealed class GraphWorkflowStoreTests
         AssertEx.Equal("Renamed", stillThere.Name, "The refused edit must not have landed.");
     }
 
+    /// <summary>
+    ///     The other half of the concurrency story, and the half one context cannot show: two writers each read version
+    ///     N, so the store's own pre-save version check passes for BOTH. Only the concurrency token on the row stops
+    ///     the later one from overwriting the earlier without either caller ever learning of the other.
+    /// </summary>
+    [Test]
+    public async Task UpdateDefinition_WhenAnotherContextWroteFirst_ConflictsOnTheConcurrencyToken()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        Guid definitionId;
+        int version;
+
+        await using (var seedContext = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        {
+            var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(GraphWorkflowTestFixture.StoreFor(seedContext)).ConfigureAwait(false);
+            definitionId = created.Id;
+            version = created.Version;
+        }
+
+        await using var winnerContext = fixture.CreateContext();
+        await using var loserContext = fixture.CreateContext();
+        var winner = GraphWorkflowTestFixture.StoreFor(winnerContext);
+        var loser = GraphWorkflowTestFixture.StoreFor(loserContext);
+
+        // Both TRACK the row at version N before either writes, which is what makes this a race rather than a stale
+        // PUT. Tracked, not AsNoTracking: the store's own load then resolves to this instance through the identity map
+        // and still sees version N after the winner has committed N+1 — exactly the state a second request holds.
+        _ = await winnerContext.GraphWorkflowDefinitions.SingleAsync(entity => entity.Id == definitionId).ConfigureAwait(false);
+        _ = await loserContext.GraphWorkflowDefinitions.SingleAsync(entity => entity.Id == definitionId).ConfigureAwait(false);
+
+        _ = await winner.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(definitionId, version, "Winner")).ConfigureAwait(false);
+
+        var rejection = await AssertEx.ThrowsAsync<GraphWorkflowDefinitionConflictException>(
+                                          () => loser.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(definitionId, version, "Loser")),
+                                          "The second writer still holds version N, so the row's token must refuse it.")
+                                      .ConfigureAwait(false);
+        AssertEx.True(rejection.Message.Contains("changed by another writer", StringComparison.Ordinal),
+            $"and it must be the TOKEN that refused it — the pre-save version check passes here, because this writer's view still says N: {rejection.Message}");
+
+        await using var readContext = fixture.CreateContext();
+        var read = await GraphWorkflowTestFixture.StoreFor(readContext).GetDefinitionAsync(definitionId).ConfigureAwait(false);
+        AssertEx.Equal("Winner", read.Name, "The winner's write must survive the loser's refusal.");
+        AssertEx.Equal(version + 1, read.Version, "and the version must have moved exactly once.");
+    }
+
     [Test]
     public async Task UpdateDefinition_WithoutAGraph_LeavesTheStoredOneAlone()
     {

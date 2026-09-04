@@ -59,7 +59,11 @@ internal sealed record GraphWorkflowCondition(string Path, GraphWorkflowConditio
             GraphWorkflowConditionOperator.Gt => Order(value, condition.Value) > 0,
             GraphWorkflowConditionOperator.Gte => Order(value, condition.Value) >= 0,
             GraphWorkflowConditionOperator.Lt => Order(value, condition.Value) < 0,
-            _ => Order(value, condition.Value) <= 0
+            GraphWorkflowConditionOperator.Lte => Order(value, condition.Value) <= 0,
+
+            // Unreachable: Parse accepts named members only, so there is no ninth operator to fall through to. A
+            // catch-all arm behaving as one of the eight would answer an operator nobody wrote with routing.
+            _ => throw new InvalidOperationException($"Unknown graph workflow condition operator {condition.Operator}.")
         };
     }
 
@@ -107,7 +111,23 @@ internal sealed record GraphWorkflowCondition(string Path, GraphWorkflowConditio
     {
         if (left.ValueKind == JsonValueKind.Number && right.ValueKind == JsonValueKind.Number)
         {
-            return left.GetDouble().CompareTo(right.GetDouble());
+            // Widest exact type first. Through double, 9007199254740992 and 9007199254740993 are the SAME value, so a
+            // 'gt' over ids or byte counts past 2^53 answers on a rounding artefact rather than on the numbers. Double
+            // is kept as the last resort for the tokens neither exact type reads — exponent forms out of decimal range
+            // — and a token not even double reads is not an ordering at all.
+            if (left.TryGetInt64(out var leftLong) && right.TryGetInt64(out var rightLong))
+            {
+                return leftLong.CompareTo(rightLong);
+            }
+
+            if (left.TryGetDecimal(out var leftDecimal) && right.TryGetDecimal(out var rightDecimal))
+            {
+                return leftDecimal.CompareTo(rightDecimal);
+            }
+
+            return left.TryGetDouble(out var leftDouble) && right.TryGetDouble(out var rightDouble)
+                ? leftDouble.CompareTo(rightDouble)
+                : null;
         }
 
         if (left.ValueKind == JsonValueKind.String && right.ValueKind == JsonValueKind.String)
@@ -146,13 +166,16 @@ internal sealed record GraphWorkflowCondition(string Path, GraphWorkflowConditio
                                                        + "and its source node declares no default one.");
         }
 
-        if (path.Split('.').Any(string.IsNullOrWhiteSpace))
+        if (!GraphWorkflowTokens.IsDotPath(path))
         {
-            throw new GraphWorkflowValidationException($"The condition path '{path}' on edge {edgeDescription} has an empty segment.");
+            throw new GraphWorkflowValidationException($"The condition path '{path}' on edge {edgeDescription} is not a dot path. "
+                                                       + "A dot path is property names separated by '.', with no wildcards, indexes or functions.");
         }
 
+        // By NAME: Enum.TryParse would accept "3" or "-1" and hand back an operator no member has, which Evaluate
+        // would then route on.
         var op = element.TryGetProperty("op", out var opElement) && opElement.ValueKind == JsonValueKind.String
-                                                                && Enum.TryParse<GraphWorkflowConditionOperator>(opElement.GetString(), ignoreCase: true, out var parsed)
+                                                                && GraphWorkflowTokens.TryParseName<GraphWorkflowConditionOperator>(opElement.GetString(), out var parsed)
             ? parsed
             : throw new GraphWorkflowValidationException($"The condition on edge {edgeDescription} needs an 'op' from "
                                                          + $"{string.Join(", ", Enum.GetNames<GraphWorkflowConditionOperator>())}.");

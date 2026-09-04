@@ -66,11 +66,8 @@ internal static class GraphWorkflowStateMachine
     /// <summary>How many terminal nodes a reason names one by one before it starts counting them instead.</summary>
     private const int MaxNamedNodes = 3;
 
-    /// <summary>The answers a pause REFUSES with, by the output document each one stores. Nothing varies.</summary>
-    private static readonly Dictionary<string, GraphWorkflowDecisionKind> PauseRefusals = new(StringComparer.Ordinal)
-    {
-        [PauseOutputJson(GraphWorkflowDecisionKind.Reject)] = GraphWorkflowDecisionKind.Reject
-    };
+    /// <summary>The answers a pause REFUSES with. Approve continues; a rejection is what ends the run.</summary>
+    private static readonly GraphWorkflowDecisionKind[] PauseRefusals = [GraphWorkflowDecisionKind.Reject];
 
     /// <summary>
     ///     The output document a pause produces for one answer — the document its out-edge conditions are then
@@ -353,14 +350,42 @@ internal static class GraphWorkflowStateMachine
 
     /// <summary>
     ///     Which answer a pause was REFUSED with, or <see langword="null" /> when this node run is not a refused pause.
-    ///     Matched against <see cref="PauseOutputJson" /> because the dispatcher writes a pause's output FROM that
-    ///     method and nothing else writes it at all, so this cannot drift from what a pause actually stores.
+    ///     <para>
+    ///         Read STRUCTURALLY, off <c>output.decision</c>, rather than by comparing the stored text against
+    ///         <see cref="PauseOutputJson" />: that method writes the minimal routing document a pre-flight check
+    ///         evaluates, while the composed document a real run stores carries <c>attempt</c>, <c>branch</c>, and the
+    ///         answer's own <c>comment</c> and <c>payload</c> beside the decision. A byte comparison would recognise
+    ///         the first and silently miss every one of the second, and the run's reason would then say nothing about
+    ///         the rejection that stopped it.
+    ///     </para>
+    ///     <para>
+    ///         The decision is matched case-sensitively against the enum NAME, which is what the writer serializes.
+    ///         Output that does not parse, or that carries no decision, is not a refusal.
+    ///     </para>
     /// </summary>
-    private static GraphWorkflowDecisionKind? Refusal(GraphWorkflowNodeRunSnapshot nodeRun) =>
-        nodeRun is { Kind: GraphWorkflowNodeKind.Pause, Status: GraphWorkflowNodeRunStatus.Succeeded }
-        && PauseRefusals.TryGetValue(nodeRun.OutputJson ?? string.Empty, out var decision)
-            ? decision
-            : null;
+    private static GraphWorkflowDecisionKind? Refusal(GraphWorkflowNodeRunSnapshot nodeRun)
+    {
+        if (nodeRun is not { Kind: GraphWorkflowNodeKind.Pause, Status: GraphWorkflowNodeRunStatus.Succeeded }
+            || ParseOutput(nodeRun.OutputJson) is not { ValueKind: JsonValueKind.Object } document
+            || !document.TryGetProperty("output", out var output)
+            || output.ValueKind != JsonValueKind.Object
+            || !output.TryGetProperty("decision", out var decision)
+            || decision.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        var answered = decision.GetString();
+        foreach (var refusal in PauseRefusals)
+        {
+            if (string.Equals(answered, refusal.ToString(), StringComparison.Ordinal))
+            {
+                return refusal;
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>
     ///     Where a human's answer leaves the node run it answers. Both answers SUCCEED the pause: the answer is the

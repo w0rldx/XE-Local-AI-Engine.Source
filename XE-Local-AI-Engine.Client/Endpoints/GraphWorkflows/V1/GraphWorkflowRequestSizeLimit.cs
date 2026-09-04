@@ -26,17 +26,22 @@ internal sealed class GraphWorkflowRequestSizeLimit : IRequestSizeLimitMetadata
     public long? MaxRequestBodySize => MaxBytes;
 
     /// <summary>
-    ///     Whether the request declares more body than this node accepts, recording the refusal on
+    ///     Whether the request DECLARES more body than this node accepts, recording the refusal on
     ///     <paramref name="errors" /> when it does. Content-Length is never the limit — a caller can omit or lie about
     ///     it — which is what the metadata above is for; this is the layer that answers with a message an operator can
     ///     read instead of a bare host refusal.
+    ///     <para>
+    ///         An ABSENT Content-Length is therefore NOT a refusal. A chunked body declares no length at all, and
+    ///         reading that null as "over the cap" would answer 413 to every streamed request, about a size nobody
+    ///         ever stated. The streamed case belongs to the metadata above, which counts the bytes as they arrive.
+    ///     </para>
     /// </summary>
     public static bool RefuseIfOversized(HttpRequest request, IValidationErrors errors)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(errors);
 
-        if (request.ContentLength <= MaxBytes)
+        if (request.ContentLength is not > MaxBytes)
         {
             return false;
         }

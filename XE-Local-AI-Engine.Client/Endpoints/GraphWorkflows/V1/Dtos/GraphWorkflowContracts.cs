@@ -52,7 +52,14 @@ public sealed class ValidateGraphWorkflowDefinitionRequest
 // with. There is no node or edge table anywhere: this shape is composed from the encrypted graph blob on the
 // definition row, which is the single source of routing truth.
 
-public sealed record GraphWorkflowGraph(int SchemaVersion, IReadOnlyList<GraphWorkflowGraphNode> Nodes, IReadOnlyList<GraphWorkflowGraphEdge> Edges)
+/// <remarks>
+///     <see cref="SchemaVersion" /> is NULLABLE, and that is the whole point of it: as a plain <c>int</c> an absent
+///     member and an explicit <c>0</c> both arrive as 0, the mapper cannot tell "the author omitted it" from "the
+///     author wrote a version this node does not speak", and normalizing both to 1 would smuggle an unsupported
+///     document past the parser's version refusal. Absent means 1; anything present travels verbatim and is answered
+///     by the parser.
+/// </remarks>
+public sealed record GraphWorkflowGraph(int? SchemaVersion, IReadOnlyList<GraphWorkflowGraphNode> Nodes, IReadOnlyList<GraphWorkflowGraphEdge> Edges)
 {
     public static GraphWorkflowGraph Empty { get; } = new(1, [], []);
 }

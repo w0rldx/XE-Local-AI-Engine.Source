@@ -107,8 +107,16 @@ public interface IGraphWorkflowStore
 
     /// <summary>
     ///     A hard delete, refused with <see cref="GraphWorkflowDefinitionConflictException" /> while any run that pins
-    ///     this definition is still live — checked INSIDE the transaction, so a run that starts mid-delete still wins.
-    ///     Terminal runs are unaffected: each pinned its own copy of the graph at start, so history survives the row.
+    ///     this definition is still live — checked INSIDE the transaction. Terminal runs are unaffected: each pinned
+    ///     its own copy of the graph at start, so history survives the row.
+    ///     <para>
+    ///         The transaction makes delete-vs-start safe only UNDER A PRECONDITION the run store owes: run start must
+    ///         re-read the definition's existence and version inside the SAME transaction that inserts the run row. A
+    ///         start that reads the definition first and inserts afterwards, in a second transaction, can insert a run
+    ///         pinned to a definition this delete has already removed — the live-run count here would have seen
+    ///         nothing, because the run did not exist yet. Nothing in S0 starts runs; S1's run store carries the
+    ///         obligation.
+    ///     </para>
     /// </summary>
     Task DeleteDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default);
 }

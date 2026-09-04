@@ -130,6 +130,56 @@ public sealed class GraphWorkflowGraphTests
                                            {"key":"done","kind":"End","config":{"outcome":"x"}}],
                 "edges":[{"key":"e1","from":"start","to":"agent"},{"key":"e2","from":"agent","to":"done"}]}
                """, "unknown 'reasoningEffort'")]
+
+    // Enum.TryParse accepts a NUMERIC token, so without a by-name rule "3" would parse into a kind no member has and
+    // reach the per-kind config table as a missing key — a 500 for a document an author wrote.
+    [Arguments("""{"nodes":[{"key":"a","kind":"3"}],"edges":[]}""", "needs a 'kind'")]
+    [Arguments("""{"nodes":[{"key":"a","kind":"-1"}],"edges":[]}""", "needs a 'kind'")]
+    [Arguments("""
+               {"schemaVersion":1,"nodes":[{"key":"start","kind":"Start","joinPolicy":"1"},{"key":"done","kind":"End","config":{"outcome":"x"}}],
+                "edges":[{"key":"e1","from":"start","to":"done"}]}
+               """, "unknown 'joinPolicy'")]
+    [Arguments("""
+               {"schemaVersion":1,"nodes":[{"key":"start","kind":"Start"},
+                                           {"key":"review","kind":"Pause","config":{"prompt":"Well?","allowedDecisions":["1"]}},
+                                           {"key":"done","kind":"End","config":{"outcome":"x"}}],
+                "edges":[{"key":"e1","from":"start","to":"review"},{"key":"e2","from":"review","to":"done"}]}
+               """, "does not offer")]
+
+    // Dot paths only: no wildcards, no indexes, no functions. Saved, an index or a call is a property name literally
+    // spelled that way, which no output document carries — a dead edge rather than a refusal anyone can read.
+    [Arguments("""
+               {"schemaVersion":1,"nodes":[{"key":"start","kind":"Start"},{"key":"done","kind":"End","config":{"outcome":"x","resultPath":"items[0].name"}}],
+                "edges":[{"key":"e1","from":"start","to":"done"}]}
+               """, "not a dot path")]
+    [Arguments("""
+               {"schemaVersion":1,"nodes":[{"key":"start","kind":"Start"},{"key":"done","kind":"End","config":{"outcome":"x","resultPath":"*.value"}}],
+                "edges":[{"key":"e1","from":"start","to":"done"}]}
+               """, "not a dot path")]
+    [Arguments("""
+               {"schemaVersion":1,"nodes":[{"key":"start","kind":"Start"},{"key":"done","kind":"End","config":{"outcome":"x","resultPath":"foo()"}}],
+                "edges":[{"key":"e1","from":"start","to":"done"}]}
+               """, "not a dot path")]
+    [Arguments("""
+               {"schemaVersion":1,"nodes":[{"key":"start","kind":"Start"},{"key":"done","kind":"End","config":{"outcome":"x","resultPath":"a..b"}}],
+                "edges":[{"key":"e1","from":"start","to":"done"}]}
+               """, "not a dot path")]
+    [Arguments("""
+               {"schemaVersion":1,"nodes":[{"key":"start","kind":"Start"},{"key":"done","kind":"End","config":{"outcome":"x","resultPath":"a. b"}}],
+                "edges":[{"key":"e1","from":"start","to":"done"}]}
+               """, "not a dot path")]
+    [Arguments("""
+               {"schemaVersion":1,"nodes":[{"key":"start","kind":"Start"},
+                                           {"key":"lookup","kind":"Tool","config":{"toolName":"read_file","argumentBindings":{"path":"items[0].name"}}},
+                                           {"key":"done","kind":"End","config":{"outcome":"x"}}],
+                "edges":[{"key":"e1","from":"start","to":"lookup"},{"key":"e2","from":"lookup","to":"done"}]}
+               """, "not a dot path")]
+    [Arguments("""
+               {"schemaVersion":1,"nodes":[{"key":"start","kind":"Start"},
+                                           {"key":"check","kind":"Condition","config":{"path":"output.json.*"}},
+                                           {"key":"done","kind":"End","config":{"outcome":"x"}}],
+                "edges":[{"key":"e1","from":"start","to":"check"},{"key":"e2","from":"check","to":"done"}]}
+               """, "not a dot path")]
     public void Parse_RejectsAGraphItCannotRoute(string json, string expectedMessage) =>
         AssertEx.Contains(AssertEx.Throws<GraphWorkflowValidationException>(() => GraphWorkflowGraph.Parse(json)).Message, expectedMessage);
 

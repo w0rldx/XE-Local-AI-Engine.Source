@@ -41,22 +41,23 @@ internal static class GraphWorkflowContractMapper
         var graph = JsonSerializer.Deserialize<GraphWorkflowGraph>(graphJson, GraphOptions) ?? GraphWorkflowGraph.Empty;
         return graph with
         {
-            SchemaVersion = graph.SchemaVersion == 0 ? 1 : graph.SchemaVersion,
+            SchemaVersion = graph.SchemaVersion ?? 1,
             Nodes = graph.Nodes ?? [],
             Edges = graph.Edges ?? []
         };
     }
 
     /// <summary>
-    ///     The wire graph as the document that gets stored. The schema version is written even when the author omitted
-    ///     it: the parser refuses a version it does not speak, and a literal 0 is not one.
+    ///     The wire graph as the document that gets stored. An ABSENT schema version is written as 1 — the version an
+    ///     editor that never sends the member is drawing — and a PRESENT one travels verbatim, 0 and 2 included, so
+    ///     the parser answers it with the version refusal instead of this mapper quietly making it supported.
     /// </summary>
     public static string ToGraphJson(GraphWorkflowGraph graph)
     {
         ArgumentNullException.ThrowIfNull(graph);
         return JsonSerializer.Serialize(graph with
             {
-                SchemaVersion = graph.SchemaVersion == 0 ? 1 : graph.SchemaVersion,
+                SchemaVersion = graph.SchemaVersion ?? 1,
                 Nodes = graph.Nodes ?? [],
                 Edges = graph.Edges ?? []
             },
