@@ -33,7 +33,18 @@ public sealed partial class InvocationRunner
 
         public long? ModelReadyTimestamp { get; set; }
 
-        public double? ModelReadinessDurationMs { get; set; }
+        public double? ModelReadinessDurationMs { get; private set; }
+
+        /// <summary>
+        ///     Adds one local warm's duration to the turn's readiness total. SUMMED, not assigned: a turn can warm
+        ///     twice — a dispatched fast model that fails before first output is followed by a warm of the original
+        ///     model for the fallback — and an assignment charged the turn only the second warm while the whole-turn
+        ///     clock still contained both.
+        /// </summary>
+        public void AddModelReadiness(double durationMs)
+        {
+            ModelReadinessDurationMs = (ModelReadinessDurationMs ?? 0d) + durationMs;
+        }
 
         public double? FirstOutputLatencyMs { get; set; }
 

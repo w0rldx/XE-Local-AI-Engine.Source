@@ -32,6 +32,7 @@ internal static class RunEnvelopeMapper
             MaxToolSchemaTokens = record.MaxToolSchemaTokens,
             DispatchedTier = record.DispatchedTier,
             AuthoredEffort = record.AuthoredEffort,
+            ModelReadinessMs = record.ModelReadinessMs,
             ContentChunkCount = record.ContentChunkCount,
             ReasoningChunkCount = record.ReasoningChunkCount,
             TraceId = record.TraceId,

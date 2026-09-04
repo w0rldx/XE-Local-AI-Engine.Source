@@ -66,6 +66,12 @@ public sealed class InvocationRunnerTests
 {
     private const string SkillName = "demo";
 
+    // One stubbed local warm, and the floor a turn that summed TWO of them must clear. The floor sits well under the
+    // pair and well over a single warm, so neither a fast machine nor a loaded one changes the verdict.
+    private static readonly TimeSpan WarmDelay = TimeSpan.FromMilliseconds(40);
+
+    private const long TwoWarmFloorMs = 60L;
+
     // MAF's skill-tool names, aliased once so the scoped MAAI001 suppression the [Experimental] Agent Skills surface
     // needs is not repeated at every use site below.
 #pragma warning disable MAAI001
@@ -3491,6 +3497,47 @@ public sealed class InvocationRunnerTests
         // does not leave the reader with two contradictory "reasoning effort resolved" rows for one answer.
         await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
             payload.Kind == TurnNoticeKind.EffortDispatched));
+    }
+
+    [Test]
+    public async Task Dispatch_WhenTheFallbackWarmsASecondTime_ReportsBothWarmsAsOneReadinessTotal()
+    {
+        // Two local warms in one turn: the dispatched fast model is warmed, its send fails before first output, and the
+        // original model is warmed again for the re-run. The whole-turn clock contains BOTH, so assigning the second
+        // warm's duration charged the turn only half the cold start it actually paid — the readiness total has to sum.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var observed = new List<InvocationAgentDefinition>();
+        using var stub = new StubReasoningEffortDispatcher(Decision(ReasoningTier.Fast, "qwen3-1.7b", "low", ReasoningDispatchReasons.ShortTurn));
+
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ProviderName.Returns(LlamaServerProviderConstants.ProviderName);
+        // A measurable warm: the summed pair clears the floor below, a single warm cannot. Delays only ever run long
+        // under load, so the discrimination holds on a slow machine.
+        provider.WarmModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(_ => Task.Delay(WarmDelay));
+
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(LlamaServerProviderConstants.ProviderName));
+        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(provider));
+
+        var runner = CreateRunner(sender,
+            invocationAgentFactory: CreateModelRoutedFactory("qwen3-1.7b", observed),
+            eventDispatcher: dispatcher,
+            providerResolver: resolver,
+            providerStreamResilience: NoRetryResilience(),
+            reasoningEffortDispatcherFactory: _ => stub);
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").AllowingAutoModelSwap().Build();
+
+        await RunAsync(runner, package);
+
+        AssertEx.Equal(expected: 2, observed.Count, "exactly one re-run");
+        await provider.Received(2).WarmModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await dispatcher.Received(1)
+                        .ReportTurnTelemetryAsync(package.InvocationId,
+                            Arg.Is<long?>(static value => value >= TwoWarmFloorMs),
+                            Arg.Any<TurnUsageTotals?>());
     }
 
     [Test]
