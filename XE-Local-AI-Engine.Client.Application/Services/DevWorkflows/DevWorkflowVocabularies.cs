@@ -47,6 +47,14 @@ internal static class DevWorkflowFailureClasses
 
     /// <summary>A human gate was rejected and no out-edge matched, so the run ends.</summary>
     public const string GateRejected = "GateRejected";
+
+    /// <summary>
+    ///     A work session finished, and what it finished with says the objective was NOT met: it left a task Blocked, or
+    ///     it declared as much on <c>complete_work_session</c>. NOT retryable on its own — a session that gave up
+    ///     honestly gives up again on an identical second run, and the thing that changes the answer is the operator's
+    ///     retry reason. So it goes straight to a human, who decides between Retry, Skip and Abandon.
+    /// </summary>
+    public const string ObjectiveNotMet = "ObjectiveNotMet";
 }
 
 /// <summary>

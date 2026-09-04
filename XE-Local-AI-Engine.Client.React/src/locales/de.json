@@ -5166,6 +5166,7 @@
 				"BudgetExhausted": "Budget aufgebraucht",
 				"Cancelled": "Abgebrochen",
 				"GateRejected": "An einer Freigabe abgelehnt",
+				"ObjectiveNotMet": "Der Agent hat das Ziel nicht erreicht",
 				"unknown": "Der Knoten ist fehlgeschlagen"
 			},
 			"gate": {

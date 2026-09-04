@@ -111,6 +111,7 @@ describe("dev-workflow enum label maps are complete in every locale", () => {
 				"BudgetExhausted",
 				"Cancelled",
 				"GateRejected",
+				"ObjectiveNotMet",
 				"unknown",
 			],
 		},

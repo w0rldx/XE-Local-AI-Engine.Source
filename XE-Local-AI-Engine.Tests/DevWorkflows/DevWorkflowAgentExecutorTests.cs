@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
@@ -10,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -592,6 +594,146 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Equal(expected: 1, promoted.Version);
         AssertEx.True(promoted.IsLatest);
         AssertEx.Contains(AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).OutputJson), "\"artifactCount\":1");
+    }
+
+    /// <summary>
+    ///     Live finding F1: a step that could not do the job still has to call <c>complete_work_session</c>, because
+    ///     nothing else ends a step — so a completed session is not by itself a success. A task the session left
+    ///     Blocked says which piece of work stalled, and stands the node run down for a human rather than reporting a
+    ///     green node.
+    /// </summary>
+    [Test]
+    public async Task ACompletedAgent_ThatLeftATaskBlocked_StandsTheNodeRunDownForAHuman()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        _ = await harness.ApplyAgentTaskAsync(runId,
+                             "research",
+                             "Confirm the reviewer signed the change off",
+                             AgentWorkSessionTaskStatus.Blocked,
+                             "Nothing here can read the review.")
+                         .ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "findings.md", ResearchMarkdown).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.ObjectiveNotMet, blocked.FailureClass);
+        var reason = AssertEx.NotNull(blocked.TerminalReason, "a blocked row exists to be read, so it carries why.");
+        AssertEx.Contains(reason, "Confirm the reviewer signed the change off");
+        AssertEx.Contains(reason, "Nothing here can read the review.");
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked,
+            (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status,
+            "a blocked node run blocks its work item, whatever the run status is doing.");
+        AssertEx.Equal("findings.md",
+            AssertEx.NotNull((await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).SingleOrDefault()).Name,
+            "the operator deciding on this row has to be able to read what the session produced before it stalled.");
+    }
+
+    /// <summary>
+    ///     The composed reason is additive over model-authored text, so it can outgrow the node run's
+    ///     <c>terminal_reason</c> column. It is clamped by the shared helper, which never leaves the high half of a
+    ///     surrogate pair behind.
+    /// </summary>
+    [Test]
+    [Arguments(0)]
+    [Arguments(1)]
+    public async Task ACompletedAgent_WhoseBlockedTaskOutgrowsTheReasonColumn_IsClampedWithoutSplittingASurrogate(int padding)
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        // Astral characters, because a naive slice would persist a lone surrogate. The one-unit padding shifts where
+        // the bound falls, so between the two cases it lands inside a pair whichever way the fixed lead sentence runs.
+        _ = await harness.ApplyAgentTaskAsync(runId,
+                             "research",
+                             "Confirm the reviewer signed the change off",
+                             AgentWorkSessionTaskStatus.Blocked,
+                             new string('x', padding) + string.Concat(Enumerable.Repeat("\U0001F600", 800)))
+                         .ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var reason = AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).TerminalReason);
+        AssertEx.True(reason.Length <= DevWorkflowStateMachine.MaxNodeTerminalReason,
+            $"the column bounds the reason at {DevWorkflowStateMachine.MaxNodeTerminalReason}, and SQLite will not say so.");
+        AssertEx.False(char.IsHighSurrogate(reason[^1]), "Half a surrogate pair is not valid text in the column or on the wire.");
+    }
+
+    /// <summary>
+    ///     The other honest signal: the session kept no blocked task but said so on the way out. The summary is the
+    ///     reason, because it is the only place the model was asked to put one.
+    /// </summary>
+    [Test]
+    public async Task ACompletedAgent_ThatDeclaredTheObjectiveUnmet_StandsTheNodeRunDownWithWhatItSaid()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        _ = await harness.ApplyAgentTaskAsync(runId, "research", "Read the launch args", AgentWorkSessionTaskStatus.Done).ConfigureAwait(false);
+        await harness.RequestAgentCompletionAsync(runId,
+                         "research",
+                         JsonSerializer.Serialize(new WorkSessionCompletionDetail("NOT signed off — the runtime pin is unverifiable from here.", ObjectiveMet: false)))
+                     .ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.ObjectiveNotMet, blocked.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason), "NOT signed off — the runtime pin is unverifiable from here.");
+    }
+
+    /// <summary>
+    ///     The unchanged path, pinned: a session that finished its plan and said the objective was met still succeeds,
+    ///     and still promotes what it produced onto the run.
+    /// </summary>
+    [Test]
+    public async Task ACompletedAgent_ThatMetItsObjective_StillSucceedsAndStillPromotes()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        _ = await harness.ApplyAgentTaskAsync(runId, "research", "Read the launch args", AgentWorkSessionTaskStatus.Done).ConfigureAwait(false);
+        _ = await harness.ApplyAgentTaskAsync(runId, "research", "Chase the second pin", AgentWorkSessionTaskStatus.Dropped).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "findings.md", ResearchMarkdown).ConfigureAwait(false);
+        await harness.RequestAgentCompletionAsync(runId,
+                         "research",
+                         JsonSerializer.Serialize(new WorkSessionCompletionDetail("Everything asked for is recorded.", ObjectiveMet: true)))
+                     .ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var succeeded = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, succeeded.Status);
+        AssertEx.Null(succeeded.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(succeeded.OutputJson), "\"artifactCount\":1");
+    }
+
+    /// <summary>
+    ///     A completion recorded before <c>objectiveMet</c> existed carries no member, and absent means met — so an
+    ///     upgrade cannot retroactively block a node run whose session already finished.
+    /// </summary>
+    [Test]
+    public async Task ACompletedAgent_WhoseCompletionPredatesTheArgument_StillSucceeds()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        await harness.RequestAgentCompletionAsync(runId, "research", """{"Summary":"Everything asked for is recorded."}""").ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var succeeded = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, succeeded.Status);
+        AssertEx.Null(succeeded.FailureClass);
     }
 
     /// <summary>

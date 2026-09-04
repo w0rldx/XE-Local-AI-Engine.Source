@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools.Implementation;
 
 /// <summary>
 ///     The agent lane: one work session per agent node-run attempt, driven by the run that owns it.
@@ -28,6 +29,17 @@ internal sealed class DevWorkflowAgentExecutor
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    ///     How the completion event's detail is read. Case-INSENSITIVE deliberately: the handler writes it with bare
+    ///     defaults today (PascalCase), and a later tidy-up onto the shared Web options would silently rename the
+    ///     members to camelCase — after which a case-sensitive read binds nothing, every declared unmet objective reads
+    ///     as met, and live finding F1 is back with no exception and no log line to find it by.
+    /// </summary>
+    private static readonly JsonSerializerOptions CompletionDetailOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
     /// <summary>
     ///     The ceiling this composition holds itself to, in characters.
@@ -56,6 +68,9 @@ internal sealed class DevWorkflowAgentExecutor
     ///     </para>
     /// </summary>
     private const int MaxInjectableArtifactBytes = 256 * 1024;
+
+    /// <summary>How many blocked plan tasks a terminal reason names before it counts the rest.</summary>
+    private const int MaxNamedTasks = 3;
 
     private readonly IAgentDefinitionStore _agents;
     private readonly IDevWorkflowArtifactBlobStore _blobs;
@@ -229,7 +244,7 @@ internal sealed class DevWorkflowAgentExecutor
         switch (session.Status)
         {
             case AgentWorkSessionStatus.Completed:
-                return await SucceedAsync(store, graph, run, nodeRun, nodeRuns, session, cancellationToken).ConfigureAwait(false);
+                return await CompleteAsync(store, graph, run, nodeRun, nodeRuns, session, cancellationToken).ConfigureAwait(false);
 
             case AgentWorkSessionStatus.Failed:
 
@@ -673,6 +688,106 @@ internal sealed class DevWorkflowAgentExecutor
         catch (JsonException)
         {
             return [];
+        }
+    }
+
+    /// <summary>
+    ///     What a completed session actually produced, mapped to the node run's fate.
+    ///     <para>
+    ///         A session completes for two different reasons and its status cannot tell them apart: the objective was
+    ///         met, or the step could not meet it and closed anyway because nothing else lets a step end. Reading every
+    ///         completion as a success is live finding F1 — a verify node wrote that it had NOT signed the work off and
+    ///         the run still went green — so the two honest signals a stuck session leaves are read here instead: a plan
+    ///         task it moved to <c>Blocked</c>, and the <c>objectiveMet:false</c> it may declare on
+    ///         <c>complete_work_session</c>. Either stands the row down for a human, who answers on the intervention
+    ///         gate that already exists: Retry re-attempts on a fresh session carrying their reason, Skip routes around.
+    ///     </para>
+    ///     <para>
+    ///         Not filtered by session kind: every session this executor drives was created through
+    ///         <see cref="IWorkflowOwnedWorkSessionLifecycle" /> and is <c>AgentWorkSessionKind.Workflow</c> by
+    ///         construction, so a kind check here would be a condition that cannot be false.
+    ///     </para>
+    /// </summary>
+    private async Task<int> CompleteAsync(IDevWorkflowStore store,
+        DevWorkflowGraph graph,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
+        WorkSessionDetail session,
+        CancellationToken cancellationToken)
+    {
+        var unmet = await UnmetObjectiveAsync(session.Id, cancellationToken).ConfigureAwait(false);
+        if (unmet is null)
+        {
+            return await SucceedAsync(store, graph, run, nodeRun, nodeRuns, session, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Promoted exactly as a success would be, because the STATUS carries the honesty and nothing downstream reads a
+        // Blocked row as a deliverable. The operator choosing Retry, Skip or Abandon otherwise decides on the terminal
+        // reason alone, with the report that explains the block unreadable on the session — and a Retry clears the node
+        // run's session pointer, so the run's own artifact table is the only place these survive the decision.
+        var declaredKind = graph.Nodes.GetValueOrDefault(nodeRun.NodeKey)?.Materialization?.ArtifactKind;
+        _ = await _promotion.PromoteAsync(run, nodeRun, session.Id, declaredKind, cancellationToken).ConfigureAwait(false);
+        return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.ObjectiveNotMet, unmet, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Why this completion is not a success, or <see langword="null" /> when it is one.
+    ///     <para>
+    ///         The blocked plan is read first because it is the thing the step prompt asks a stuck session for by name,
+    ///         and it says WHICH piece of work stalled — which the declaration alone does not.
+    ///     </para>
+    /// </summary>
+    private async Task<string?> UnmetObjectiveAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        // The store's own order, not re-sorted: ListTasksAsync orders by CreatedStep so a task an update re-stamped
+        // does not jump the page, and re-sorting here would name the three least recently touched tasks instead.
+        var blocked = (await _sessionStore.ListTasksAsync(sessionId, sinceSequence: 0, cancellationToken).ConfigureAwait(false))
+                      .Where(static task => task.Status == AgentWorkSessionTaskStatus.Blocked)
+                      .ToList();
+        if (blocked.Count == 0)
+        {
+            return await DeclaredUnmetAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        }
+
+        var named = string.Join("; ",
+            blocked.Take(MaxNamedTasks)
+                   .Select(static task => $"'{task.Title}' ({(string.IsNullOrWhiteSpace(task.BlockedReason) ? "the session recorded no reason" : task.BlockedReason)})"));
+        var rest = blocked.Count > MaxNamedTasks ? $", and {blocked.Count - MaxNamedTasks} more" : string.Empty;
+        return DevWorkflowStateMachine.Bounded($"The agent's work session completed with its plan still blocked: {named}{rest}.",
+            DevWorkflowStateMachine.MaxNodeTerminalReason);
+    }
+
+    /// <summary>
+    ///     The <c>objectiveMet:false</c> a session may declare on its way out, with the summary that explains it.
+    ///     <para>
+    ///         Read off the completion EVENT rather than the session row, because the row keeps only a status — and the
+    ///         event is the same row, holding the same detail record, that the work-session supervisor reads to close
+    ///         the session at all. A completion recorded before the argument existed carries no member, which reads as
+    ///         met: an upgrade cannot retroactively block a node run that already finished.
+    ///     </para>
+    /// </summary>
+    private async Task<string?> DeclaredUnmetAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        var events = await _sessionStore.ListEventsAsync(sessionId, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
+        if (events.LastOrDefault(static candidate => candidate.EventType == WorkSessionEventTypes.CompletionRequested)?.DetailJson is not { Length: > 0 } detail)
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<WorkSessionCompletionDetail>(detail, CompletionDetailOptions) is { ObjectiveMet: false } declared
+                ? DevWorkflowStateMachine.Bounded($"The agent's work session declared the objective NOT met: {declared.Summary}",
+                    DevWorkflowStateMachine.MaxNodeTerminalReason)
+                : null;
+        }
+        catch (JsonException exception)
+        {
+            // Unreadable detail is not evidence of a failure. The supervisor already completed the session on it, and
+            // inventing a block from a parse error would strand a node run a person then has to un-stick by hand.
+            _logger.LogWarning(exception, "Work session {SessionId} recorded an unreadable completion detail.", sessionId);
+            return null;
         }
     }
 

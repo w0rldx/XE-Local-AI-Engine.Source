@@ -66,7 +66,7 @@ internal static class DevWorkflowStateMachine
     ///     toward it — cut here rather than at the store, because a run that wedges on a column length is a run stopped
     ///     by punctuation.
     /// </summary>
-    private const int MaxNodeTerminalReason = 1024;
+    internal const int MaxNodeTerminalReason = 1024;
 
     /// <summary>How many terminal nodes a reason names one by one before it starts counting them instead.</summary>
     private const int MaxNamedNodes = 3;

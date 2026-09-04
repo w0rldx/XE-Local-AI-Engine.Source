@@ -132,23 +132,29 @@ internal static class WorkSessionToolDefinitions
         public const string ToolName = "complete_work_session";
 
         public const string Description =
-            "Declare the session's objective met and hand in a closing summary. Call this only when every task that "
-            + "matters is Done or Dropped and the findings tell the whole story. The session finishes at the end of "
+            "Close the session and hand in a summary of what you did and found. Call this only when every task that "
+            + "matters is Done or Dropped and the findings tell the whole story. If you could NOT meet the objective, "
+            + "call it anyway with objectiveMet false and say in the summary what is missing and why — an honest "
+            + "unmet close is read as unmet, while a silent one is read as success. The session finishes at the end of "
             + "this turn, so say anything else you still want to say before calling it.";
 
+        // objectiveMet is a plain boolean on purpose: the whole offered tools array compiles into ONE GBNF grammar for
+        // llama.cpp, and a boolean adds no repetition bound to it at all. It is optional, and absent means met, so
+        // every transcript recorded before it existed still reads as the completion it was.
         public const string ParameterSchema = """
                                               {
                                                 "type": "object",
                                                 "additionalProperties": false,
                                                 "required": ["summary"],
                                                 "properties": {
-                                                  "summary": { "type": "string", "minLength": 1 }
+                                                  "summary": { "type": "string", "minLength": 1 },
+                                                  "objectiveMet": { "type": "boolean" }
                                                 }
                                               }
                                               """;
 
         /// <summary>Handed back verbatim when the arguments would not read: a model recovers from a shape it can copy.</summary>
-        public const string ExampleArguments = """{"summary":"What the session achieved."}""";
+        public const string ExampleArguments = """{"summary":"What the session achieved.","objectiveMet":true}""";
     }
 
     /// <summary>Every work-session tool name, in offer order.</summary>

@@ -5166,6 +5166,7 @@
 				"BudgetExhausted": "Budget exhausted",
 				"Cancelled": "Cancelled",
 				"GateRejected": "Rejected at a gate",
+				"ObjectiveNotMet": "The agent did not meet the objective",
 				"unknown": "The node failed"
 			},
 			"gate": {

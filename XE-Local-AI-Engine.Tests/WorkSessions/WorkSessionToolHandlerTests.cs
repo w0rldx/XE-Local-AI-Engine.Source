@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.WorkSessions;
 
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -8,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -279,6 +281,67 @@ public sealed class WorkSessionToolHandlerTests
             entry => entry.EventType == WorkSessionEventTypes.CompletionRequested);
     }
 
+    /// <summary>
+    ///     The honesty argument, both ways. It is written onto the completion EVENT because that is where the workflow
+    ///     executor reads it back from when it decides whether the node run succeeded or has to stand down.
+    /// </summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task CompleteWorkSession_CarriesObjectiveMetOntoTheEventDetail(bool objectiveMet)
+    {
+        var factory = Host.Factory;
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
+
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        {
+            _ = await handler.ExecuteAsync($$"""{"summary":"What it came to.","objectiveMet":{{(objectiveMet ? "true" : "false")}}}""").ConfigureAwait(false);
+        }
+
+        AssertEx.Equal(objectiveMet,
+            AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false))).ObjectiveMet,
+            "The declaration is the whole point of the argument, so it has to survive to the event.");
+    }
+
+    [Test]
+    public async Task CompleteWorkSession_WithoutObjectiveMet_DeclaresNothing()
+    {
+        // Absent is not "not met": every completion recorded before the argument existed is one of these, and reading
+        // them as unmet would retroactively block node runs whose sessions finished cleanly.
+        var factory = Host.Factory;
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
+
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        {
+            _ = await handler.ExecuteAsync("""{"summary":"Everything asked for is recorded."}""").ConfigureAwait(false);
+        }
+
+        AssertEx.Null(AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false))).ObjectiveMet);
+    }
+
+    [Test]
+    public async Task CompleteWorkSession_WhenAKeyIsUnknown_StillRejectsTheWholeCall()
+    {
+        var factory = Host.Factory;
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
+
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        {
+            AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"Done.","objectiveWasMet":false}""").ConfigureAwait(false),
+                WorkSessionToolDefinitions.CompleteWorkSession.ExampleArguments);
+        }
+
+        AssertEx.False((await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false))
+                       .Any(static entry => entry.EventType == WorkSessionEventTypes.CompletionRequested),
+            "A call the deserializer refused must not close the session.");
+    }
+
     [Test]
     public async Task EveryHandler_WithoutAnAmbientConversation_FailsClosed()
     {
@@ -383,6 +446,14 @@ public sealed class WorkSessionToolHandlerTests
                     services.AddSingleton<IWorkSessionEventPublisher>(publisher);
                 }
         };
+
+    /// <summary>The completion the tool recorded, parsed the way the supervisor and the workflow executor parse it.</summary>
+    private static WorkSessionCompletionDetail? ReadCompletionDetail(IReadOnlyList<WorkSessionEventSnapshot> events)
+    {
+        var recorded = AssertEx.NotNull(events.LastOrDefault(static entry => entry.EventType == WorkSessionEventTypes.CompletionRequested),
+            "The tool records the request as an event.");
+        return JsonSerializer.Deserialize<WorkSessionCompletionDetail>(AssertEx.NotNull(recorded.DetailJson, "The event carries the completion detail."));
+    }
 
     private static IClientLocalToolHandler Handler(TestServerWebAppFactory factory, string toolName) =>
         AssertEx.NotNull(factory.Services.GetServices<IClientLocalToolHandler>().SingleOrDefault(handler => handler.ToolName == toolName),
