@@ -25,7 +25,7 @@ Two arms are two runs of the same definition on the same model and machine, one 
 
 **Two sources, added — never one.** A node's cost is `final row + every retry snapshot`. The final row holds the
 LAST attempt only, because the `Pending` reset clears the columns (`DevWorkflowStore.Mutations.cs:143-153`); the
-earlier attempts live in the `node.retry.scheduled` detail, which carries all nine additive members. Summing the
+earlier attempts live in the `node.retry.scheduled` detail, which carries all ten additive members. Summing the
 node rows alone under-reports a fail-fail-success node by two attempts. The two never overlap, so addition is the
 whole rule.
 
@@ -117,7 +117,7 @@ WHERE n.run_id IN (UPPER(:runIds)) AND n.failure_class IS NOT NULL GROUP BY fail
 1. Compare matched node keys across arms, never a fix-loop attempt against a first attempt.
 2. **Columns are last-attempt only; the total is columns + snapshots.** The `Pending` reset clears the columns
    (`DevWorkflowStore.Mutations.cs:143-153`), so a node that failed twice and succeeded reports attempt 3 in its
-   row and attempts 1 and 2 in two `node.retry.scheduled` details (all nine additive members on each).
+   row and attempts 1 and 2 in two `node.retry.scheduled` details (all ten additive members on each).
    **Quote `total = final + retries`; quote `final` alone only when the question is "what does a clean pass
    cost".** The two sources cannot double-count, because a reset row is emptied before the next attempt fills it.
    **Never put `SUM(attempt)` in the same SELECT as `SUM(input_tokens)`** — it reads as a per-attempt average and

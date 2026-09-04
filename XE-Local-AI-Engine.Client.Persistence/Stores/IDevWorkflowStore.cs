@@ -173,7 +173,9 @@ public sealed record DevWorkflowNodeRunSnapshot(
     long? AgentTurnMs = null,
     string? ServedModelName = null,
     string? RouteJson = null,
-    int? WorkSessionSteps = null);
+    int? WorkSessionSteps = null,
+    // Trailing: the thirteenth cost column, how much of AgentTurnMs was a local runtime warming (see the entity).
+    long? ModelReadinessMs = null);
 
 /// <summary>
 ///     What one node-run attempt spent and where it routed, collected at the terminal-or-blocked transition and applied

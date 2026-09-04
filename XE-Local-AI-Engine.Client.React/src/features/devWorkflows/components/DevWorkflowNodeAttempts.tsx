@@ -69,7 +69,7 @@ export function DevWorkflowNodeAttempts({ attempts, nodeRun }: DevWorkflowNodeAt
 	// carries its cost yet.
 	const rows = attempts.map((attempt) => {
 		const cost: DevWorkflowAttemptCost = nodeRun && attempt.attempt === nodeRun.attempt ? nodeRun : attempt;
-		// Three of the nine members have no place on the one-line summary, so a row carrying only those has a record
+		// Four of the ten members have no place on the one-line summary, so a row carrying only those has a record
 		// but nothing to print. The line is gated on the printable text, never on the record.
 		return { attempt, cost, summary: costSummary(t, cost) };
 	});
