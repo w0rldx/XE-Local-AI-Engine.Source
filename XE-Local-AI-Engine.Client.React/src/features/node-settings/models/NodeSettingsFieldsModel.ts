@@ -75,7 +75,7 @@ export const KV_CACHE_TYPE_DEFAULT: KvCacheType = "q8_0";
 // The shared allow-list is the only one — see core/models/KvCacheTypes.
 export const kvCacheTypeSelectValues = kvCacheTypes;
 
-export function isAllowedKvCacheType(type: string): boolean {
+function isAllowedKvCacheType(type: string): boolean {
 	return (kvCacheTypeSelectValues as readonly string[]).includes(type.trim());
 }
 
