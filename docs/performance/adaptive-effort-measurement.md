@@ -11,7 +11,7 @@ terminalization, and a turn authored with reasoning effort `auto` additionally s
 
 | Column | Value | Null when |
 |---|---|---|
-| `dispatched_tier` | `fast`, `normal` or `deep` | the turn authored a concrete effort, or the row predates the `AddAgentExecutionLogDispatchedTier` migration |
+| `dispatched_tier` | `fast`, `normal` or `deep` | the turn authored a concrete effort, or the row predates the `AddAiTrendsWave` migration |
 | `authored_effort` | `auto` | same |
 
 Both are category labels. Neither carries message content, a model's output, or any signal the dispatcher read to

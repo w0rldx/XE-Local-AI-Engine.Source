@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 /// </summary>
 public sealed class AddToolSchemaTokenTelemetryMigrationTests : IDisposable
 {
-    private const string PreTelemetryMigrationId = "20260902081629_AddDevWorkflowRuleSets";
+    private const string PreTelemetryMigrationId = "20260903104044_AddIntegrationFoundation";
 
     private static readonly string[] TelemetryColumns = ["tool_schema_tokens", "max_tool_schema_tokens"];
 

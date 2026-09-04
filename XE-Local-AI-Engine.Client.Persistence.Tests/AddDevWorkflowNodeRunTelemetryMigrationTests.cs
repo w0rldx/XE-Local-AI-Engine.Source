@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 /// </summary>
 public sealed class AddDevWorkflowNodeRunTelemetryMigrationTests : IDisposable
 {
-    private const string PreTelemetryMigrationId = "20260902081629_AddDevWorkflowRuleSets";
+    private const string PreTelemetryMigrationId = "20260903104044_AddIntegrationFoundation";
 
     /// <summary>The twelve columns of P-C1 §4.1, in the plan's own order.</summary>
     private static readonly string[] TelemetryColumns =

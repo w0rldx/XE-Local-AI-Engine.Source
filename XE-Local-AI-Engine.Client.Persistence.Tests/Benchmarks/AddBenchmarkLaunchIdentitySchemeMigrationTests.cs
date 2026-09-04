@@ -14,8 +14,8 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 /// </summary>
 public sealed class AddBenchmarkLaunchIdentitySchemeMigrationTests
 {
-    private const string PreviousMigrationId = "20260902081629_AddDevWorkflowRuleSets";
-    private const string ThisMigrationId = "20260903174337_AddBenchmarkLaunchIdentityScheme";
+    private const string PreviousMigrationId = "20260903104044_AddIntegrationFoundation";
+    private const string ThisMigrationId = "20260904121650_AddAiTrendsWave";
 
     private static readonly (string Table, string Column)[] SchemeColumns =
     [

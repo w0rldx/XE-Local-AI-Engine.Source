@@ -77,7 +77,7 @@ public sealed class AddAgentDefinitionsMigrationTests : IDisposable
             "disable_base_scaffold",
             // Added by the later AddGenerationMetadata migration (AI-drafting provenance).
             "generation_metadata_json",
-            // Added by the later AddToolSchemaTokenTelemetry migration (the per-agent tool-relevance opt-out).
+            // Added by the later AddAiTrendsWave migration (the per-agent tool-relevance opt-out).
             "disable_tool_relevance_filter"
         }), "agent_definitions should expose the mapped columns.");
 

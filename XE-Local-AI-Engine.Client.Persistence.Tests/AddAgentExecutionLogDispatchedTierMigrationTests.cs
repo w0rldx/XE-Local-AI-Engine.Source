@@ -8,20 +8,25 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Verifies the <c>AddAgentExecutionLogDispatchedTier</c> migration: it adds the two adaptive-effort dispatch
-///     columns to <c>agent_execution_logs</c>, on both an upgrade from the preceding migration and a fresh
-///     migrate-to-head; a row written before the migration reads back null on both; rollback drops them; and the model
-///     has no snapshot drift.
+///     Verifies the adaptive-effort dispatch half of the cumulative <c>AddAiTrendsWave</c> migration: it adds the two
+///     dispatch columns to <c>agent_execution_logs</c>, on both an upgrade from the preceding migration and a fresh
+///     migrate-to-head; a row written before the migration reads back null on both; rollback drops the whole wave's
+///     columns from this table while leaving everything underneath it; and the model has no snapshot drift.
 /// </summary>
 public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposable
 {
-    private const string PreDispatchMigrationId = "20260903172105_AddToolSchemaTokenTelemetry";
+    private const string PreWaveMigrationId = "20260903104044_AddIntegrationFoundation";
 
     private static readonly string[] DispatchColumns = ["dispatched_tier", "authored_effort"];
 
-    // The columns the PRECEDING migration added. EF's SQLite DropColumn is a table rebuild from the target migration's
-    // model, so a rollback that regenerated the table from a stale model would silently take these with it.
-    private static readonly string[] PrecedingMigrationColumns = ["tool_schema_tokens", "max_tool_schema_tokens"];
+    // The AI-trends wave landed as ONE cumulative migration, so rolling it back drops every slice's columns from this
+    // table, not only the two this class is named for.
+    private static readonly string[] WaveLogColumns =
+        ["dispatched_tier", "authored_effort", "tool_schema_tokens", "max_tool_schema_tokens"];
+
+    // Columns from BEFORE the wave. EF's SQLite DropColumn is a table rebuild from the target migration's model, so a
+    // rollback that regenerated the table from a stale model would silently take these with it.
+    private static readonly string[] PreWaveLogColumns = ["record_kind", "schema_version", "config_hash"];
 
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
@@ -43,7 +48,7 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreDispatchMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreWaveMigrationId).ConfigureAwait(false);
         }
 
         await using (var context = CreateContext(databasePath))
@@ -87,7 +92,7 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreDispatchMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreWaveMigrationId).ConfigureAwait(false);
         }
 
         await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
@@ -126,21 +131,28 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
         await using (var context = CreateContext(databasePath))
         {
             await context.Database.MigrateAsync().ConfigureAwait(false);
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreDispatchMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreWaveMigrationId).ConfigureAwait(false);
         }
 
         await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
         var columns = await GetColumnNamesAsync(connection, "agent_execution_logs").ConfigureAwait(false);
-        foreach (var column in DispatchColumns)
+        foreach (var column in WaveLogColumns)
         {
-            AssertEx.False(columns.Contains(column), $"Rolling back one migration should drop the {column} column.");
+            AssertEx.False(columns.Contains(column), $"Rolling back the wave should drop the {column} column.");
         }
 
-        foreach (var column in PrecedingMigrationColumns)
+        foreach (var column in PreWaveLogColumns)
         {
             AssertEx.True(columns.Contains(column),
-                $"The rollback's table rebuild must keep the preceding migration's {column} column.");
+                $"The rollback's table rebuild must keep the pre-wave {column} column.");
         }
+
+        // And it stops at the wave. The integration foundation is the migration underneath it, so its table and its
+        // conversations column are what a rollback that overshot would take next.
+        AssertEx.True((await GetColumnNamesAsync(connection, "integration_executions").ConfigureAwait(false)).Count > 0,
+            "Rolling back the wave must leave the integration foundation's tables in place.");
+        AssertEx.True((await GetColumnNamesAsync(connection, "conversations").ConfigureAwait(false)).Contains("kind"),
+            "Rolling back the wave must leave the integration foundation's conversation kind in place.");
     }
 
     [Test]

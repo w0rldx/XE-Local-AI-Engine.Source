@@ -5,7 +5,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 {
     /// <inheritdoc />
-    public partial class AddDevWorkflowNodeRunTelemetry : Migration
+    public partial class AddAiTrendsWave : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -84,6 +84,55 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                 table: "dev_workflow_node_runs",
                 type: "INTEGER",
                 nullable: true);
+
+            migrationBuilder.AddColumn<int>(
+                name: "primary_launch_identity_scheme",
+                table: "benchmark_runs",
+                type: "INTEGER",
+                nullable: true);
+
+            migrationBuilder.AddColumn<int>(
+                name: "launch_identity_scheme",
+                table: "benchmark_judge_attempts",
+                type: "INTEGER",
+                nullable: true);
+
+            migrationBuilder.AddColumn<int>(
+                name: "launch_identity_scheme",
+                table: "benchmark_comparisons",
+                type: "INTEGER",
+                nullable: true);
+
+            migrationBuilder.AddColumn<string>(
+                name: "authored_effort",
+                table: "agent_execution_logs",
+                type: "TEXT",
+                nullable: true);
+
+            migrationBuilder.AddColumn<string>(
+                name: "dispatched_tier",
+                table: "agent_execution_logs",
+                type: "TEXT",
+                nullable: true);
+
+            migrationBuilder.AddColumn<int>(
+                name: "max_tool_schema_tokens",
+                table: "agent_execution_logs",
+                type: "INTEGER",
+                nullable: true);
+
+            migrationBuilder.AddColumn<long>(
+                name: "tool_schema_tokens",
+                table: "agent_execution_logs",
+                type: "INTEGER",
+                nullable: true);
+
+            migrationBuilder.AddColumn<bool>(
+                name: "disable_tool_relevance_filter",
+                table: "agent_definitions",
+                type: "INTEGER",
+                nullable: false,
+                defaultValue: false);
         }
 
         /// <inheritdoc />
@@ -136,6 +185,38 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
             migrationBuilder.DropColumn(
                 name: "work_session_steps",
                 table: "dev_workflow_node_runs");
+
+            migrationBuilder.DropColumn(
+                name: "primary_launch_identity_scheme",
+                table: "benchmark_runs");
+
+            migrationBuilder.DropColumn(
+                name: "launch_identity_scheme",
+                table: "benchmark_judge_attempts");
+
+            migrationBuilder.DropColumn(
+                name: "launch_identity_scheme",
+                table: "benchmark_comparisons");
+
+            migrationBuilder.DropColumn(
+                name: "authored_effort",
+                table: "agent_execution_logs");
+
+            migrationBuilder.DropColumn(
+                name: "dispatched_tier",
+                table: "agent_execution_logs");
+
+            migrationBuilder.DropColumn(
+                name: "max_tool_schema_tokens",
+                table: "agent_execution_logs");
+
+            migrationBuilder.DropColumn(
+                name: "tool_schema_tokens",
+                table: "agent_execution_logs");
+
+            migrationBuilder.DropColumn(
+                name: "disable_tool_relevance_filter",
+                table: "agent_definitions");
         }
     }
 }

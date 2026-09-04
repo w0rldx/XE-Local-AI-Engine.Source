@@ -2,7 +2,7 @@
 
 **Audience:** an operator deploying a build OLDER than the one currently installed, when the two compute benchmark
 launch identities under different schemes.
-**Feature:** P-C5/S2 — `LlamaServerLaunchProjection.IdentitySchemeVersion`, migration `AddBenchmarkLaunchIdentityScheme`.
+**Feature:** P-C5/S2 — `LlamaServerLaunchProjection.IdentitySchemeVersion`, migration `AddAiTrendsWave`.
 
 ---
 
@@ -75,8 +75,10 @@ configuration), so the literals above are the values actually in the column. The
 
 ### 4. Only then deploy the older build and run the migration's `Down`
 
-`AddBenchmarkLaunchIdentityScheme`'s `Down` is a plain three-column drop. Rows that already executed keep both of their
-hashes under one scheme and compare exactly as they always did.
+The three scheme columns ride `AddAiTrendsWave`, the ONE cumulative migration the AI-trends wave landed as, so its
+`Down` drops all twenty of that wave's columns across five tables — not only these three. Rolling back past it takes
+the agent-execution-log, agent-definition and dev-workflow-node-run telemetry with it; nothing older is touched.
+Rows that already executed keep both of their hashes under one scheme and compare exactly as they always did.
 
 ---
 
