@@ -28,26 +28,85 @@ internal sealed class IntegrationApiHandler
 {
     private const string MaskedExecutionMessage = "No such execution.";
 
+    /// <summary>The session family's single masked answer. Unknown, foreign and allowlist-excluded are all this one.</summary>
+    private const string MaskedSessionMessage = "No such session.";
+
     private static readonly JsonSerializerOptions RequestSerializerOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IntegrationExternalAccess _access;
     private readonly IIntegrationInvocationService _invocations;
     private readonly IntegrationPrincipalRateLimiter _rateLimiter;
     private readonly IntegrationExecutionQueryService _executions;
+    private readonly IntegrationSessionService _sessions;
     private readonly IntegrationSseWriter _writer;
 
     public IntegrationApiHandler(IIntegrationInvocationService invocations,
         IntegrationExternalAccess access,
         IntegrationExecutionQueryService executions,
+        IntegrationSessionService sessions,
         IntegrationSseWriter writer,
         IntegrationPrincipalRateLimiter rateLimiter)
     {
         _invocations = invocations ?? throw new ArgumentNullException(nameof(invocations));
         _access = access ?? throw new ArgumentNullException(nameof(access));
         _executions = executions ?? throw new ArgumentNullException(nameof(executions));
+        _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
         _writer = writer ?? throw new ArgumentNullException(nameof(writer));
         _rateLimiter = rateLimiter ?? throw new ArgumentNullException(nameof(rateLimiter));
     }
+
+    /// <summary>
+    ///     The integrator's own session status.
+    ///     <para>
+    ///         Its ENTIRE authorisation decision is <c>IntegrationSessionService.GetForExternalCallerAsync</c>, which is
+    ///         the shared access helper and nothing else: unknown, owned by another principal, and belonging to a
+    ///         trigger this key's allowlist excludes all come back <see langword="null" /> and map to ONE 404 with a
+    ///         byte-identical body. No masking is assembled here, because separate <c>if</c>s in a handler are separate
+    ///         chances to return a distinguishable answer.
+    ///     </para>
+    /// </summary>
+    public async Task GetSessionAsync(HttpContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var caller = await AuthorizeAsync(context).ConfigureAwait(false);
+        if (caller is null)
+        {
+            return;
+        }
+
+        if (!TryReadGuidRoute(context, "sessionId", out var sessionId))
+        {
+            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedSessionMessage).ConfigureAwait(false);
+            return;
+        }
+
+        var session = await _sessions.GetForExternalCallerAsync(sessionId, caller, context.RequestAborted).ConfigureAwait(false);
+        if (session is null)
+        {
+            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedSessionMessage).ConfigureAwait(false);
+            return;
+        }
+
+        await context.Response.WriteAsJsonAsync(new IntegrationSessionStatusResponse(session.Id,
+                session.TriggerName,
+                SessionStatusName(session.Status),
+                session.ExecutionCount,
+                session.LastActivityUtc),
+            context.RequestAborted).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     The wire spelling of a session status, an explicit map for the same reason the execution one is: these
+    ///     strings are the external contract a caller branches on, so a renamed enum member must break the build here.
+    /// </summary>
+    private static string SessionStatusName(IntegrationSessionStatus status) =>
+        status switch
+        {
+            IntegrationSessionStatus.Active => "active",
+            IntegrationSessionStatus.Closed => "closed",
+            _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown integration session status.")
+        };
 
     public async Task InvokeAsync(HttpContext context)
     {
@@ -462,11 +521,13 @@ internal sealed class IntegrationApiHandler
         return true;
     }
 
-    private static bool TryReadExecutionId(HttpContext context, out Guid executionId)
+    private static bool TryReadExecutionId(HttpContext context, out Guid executionId) =>
+        TryReadGuidRoute(context, "executionId", out executionId);
+
+    private static bool TryReadGuidRoute(HttpContext context, string name, out Guid value)
     {
-        executionId = Guid.Empty;
-        return context.Request.RouteValues.TryGetValue("executionId", out var raw)
-               && Guid.TryParse(raw as string, out executionId);
+        value = Guid.Empty;
+        return context.Request.RouteValues.TryGetValue(name, out var raw) && Guid.TryParse(raw as string, out value);
     }
 
     private static IntegrationExecutionLinks Links(Guid executionId) =>

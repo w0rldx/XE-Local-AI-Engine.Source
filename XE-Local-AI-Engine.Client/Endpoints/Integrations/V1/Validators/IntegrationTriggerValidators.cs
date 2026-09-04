@@ -145,6 +145,33 @@ public sealed class ListIntegrationExecutionsRequestValidator : Validator<ListIn
 }
 
 /// <summary>
+///     Shape rules for the sessions query. Same bounds and same reasoning as the executions list: a caller asking for
+///     5,000 rows has misunderstood the endpoint, and answering 400 says so.
+/// </summary>
+public sealed class ListIntegrationSessionsRequestValidator : Validator<ListIntegrationSessionsRequest>
+{
+    public const int MaxLimit = 200;
+
+    public ListIntegrationSessionsRequestValidator()
+    {
+        When(static request => request.Status is not null,
+            () => RuleFor(static request => request.Status)
+                  .IsInEnum()
+                  .WithMessage("Filter on a known session status."));
+
+        When(static request => request.Limit is not null,
+            () => RuleFor(static request => request.Limit)
+                  .InclusiveBetween(from: 1, MaxLimit)
+                  .WithMessage($"Ask for between 1 and {MaxLimit} sessions."));
+
+        When(static request => request.Offset is not null,
+            () => RuleFor(static request => request.Offset)
+                  .GreaterThanOrEqualTo(valueToCompare: 0)
+                  .WithMessage("The offset cannot be negative."));
+    }
+}
+
+/// <summary>
 ///     Bounds on the event page. The limit shares its ceiling with the external recovery route, which reads
 ///     <see cref="IntegrationEventPage" /> too, so the two pages cannot drift.
 /// </summary>

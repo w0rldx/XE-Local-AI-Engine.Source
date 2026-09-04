@@ -135,6 +135,51 @@ public sealed class IntegrationApiRouteTests
     }
 
     [Test]
+    public async Task GetSession_WhenTheKeyIsBroad_ReportsTheSessionByItsTriggerName()
+    {
+        using var client = Factory.CreateClient();
+        var seeded = await SeedAsync(client, "session-read");
+
+        using var response = await SendAsync(client, HttpMethod.Get, IntegrationApiRoutes.Session(seeded.SessionUnderB), seeded.BroadKey);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<SessionStatusBody>(IntegrationEndpointPayloads.Json));
+        AssertEx.Equal(seeded.SessionUnderB, body.SessionId);
+        AssertEx.Equal(seeded.TriggerBName, body.TriggerName, "An integrator addresses the trigger by NAME, so the body carries it rather than an id.");
+        AssertEx.Equal("active", body.Status);
+        AssertEx.Equal(expected: 1, body.ExecutionCount);
+    }
+
+    [Test]
+    public async Task GetSession_ForANarrowKeyAForeignPrincipalAndAnUnknownId_AreOneByteIdentical404()
+    {
+        using var client = Factory.CreateClient();
+        var seeded = await SeedAsync(client, "session-mask");
+
+        using var unknown = await SendAsync(client, HttpMethod.Get, IntegrationApiRoutes.Session(Guid.NewGuid()), seeded.BroadKey);
+        using var narrow = await SendAsync(client, HttpMethod.Get, IntegrationApiRoutes.Session(seeded.SessionUnderB), seeded.NarrowKey);
+        using var foreign = await SendAsync(client, HttpMethod.Get, IntegrationApiRoutes.Session(seeded.SessionUnderB), seeded.ForeignKey);
+
+        AssertEx.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+        AssertEx.Equal(HttpStatusCode.NotFound, narrow.StatusCode, "A key scoped to another trigger must not read this session, or scoping the key buys nothing.");
+        AssertEx.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+
+        var body = await unknown.Content.ReadAsStringAsync();
+        AssertEx.Equal(body, await narrow.Content.ReadAsStringAsync(), "Three masked cases, one body: a distinguishable answer re-opens the enumeration oracle.");
+        AssertEx.Equal(body, await foreign.Content.ReadAsStringAsync());
+    }
+
+    [Test]
+    public async Task GetSession_WhenAnonymous_Returns401()
+    {
+        using var client = Factory.CreateClient();
+
+        using var response = await SendAsync(client, HttpMethod.Get, IntegrationApiRoutes.Session(Guid.NewGuid()), key: null);
+
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Test]
     public async Task ExternalFamily_NeverProducesA403()
     {
         using var client = Factory.CreateClient();
@@ -143,7 +188,8 @@ public sealed class IntegrationApiRouteTests
         {
             (HttpMethod.Post, IntegrationApiRoutes.Invoke(seeded.TriggerBName)),
             (HttpMethod.Get, IntegrationApiRoutes.Execution(seeded.ExecutionUnderB)),
-            (HttpMethod.Post, IntegrationApiRoutes.Cancel(seeded.ExecutionUnderB))
+            (HttpMethod.Post, IntegrationApiRoutes.Cancel(seeded.ExecutionUnderB)),
+            (HttpMethod.Get, IntegrationApiRoutes.Session(seeded.SessionUnderB))
         };
         var credentials = new[] { null, "xeint_notarealkey", seeded.NarrowKey, seeded.ForeignKey };
 
@@ -170,8 +216,8 @@ public sealed class IntegrationApiRouteTests
         var narrow = await GenerateKeyAsync(client, $"{prefix}-narrow", [triggerA.Id], broad.View.PrincipalId);
         var foreign = await GenerateKeyAsync(client, $"{prefix}-foreign", allowedTriggerIds: null, principalId: null);
 
-        var executionId = await SeedExecutionAsync(triggerB.Id, broad.View.PrincipalId, broad.View.KeyPrefix);
-        return new Seeded(triggerB.Name, executionId, broad.Key, narrow.Key, foreign.Key, broad.View.Id);
+        var (executionId, sessionId) = await SeedExecutionAsync(triggerB.Id, broad.View.PrincipalId, broad.View.KeyPrefix);
+        return new Seeded(triggerB.Name, executionId, sessionId, broad.Key, narrow.Key, foreign.Key, broad.View.Id);
     }
 
     private async Task<GeneratedIntegrationApiKeyBody> GenerateKeyAsync(HttpClient client, string label, Guid[]? allowedTriggerIds, Guid? principalId)
@@ -190,7 +236,7 @@ public sealed class IntegrationApiRouteTests
     ///     coordinator's channel this way, so the suite asserts on a stable <c>Accepted</c> row instead of racing a
     ///     background run that has no model to reach.
     /// </summary>
-    private async Task<Guid> SeedExecutionAsync(Guid triggerId, Guid principalId, string keyPrefix)
+    private async Task<(Guid ExecutionId, Guid SessionId)> SeedExecutionAsync(Guid triggerId, Guid principalId, string keyPrefix)
     {
         using var scope = Factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>();
@@ -214,7 +260,7 @@ public sealed class IntegrationApiRouteTests
             maxActive: 4096,
             maxActivePerPrincipal: 4096);
         AssertEx.True(admitted, "Seeding the execution row must be admitted.");
-        return executionId;
+        return (executionId, sessionId);
     }
 
     private static async Task<HttpResponseMessage> SendAsync(HttpClient client, HttpMethod method, string route, string? key)
@@ -237,6 +283,7 @@ public sealed class IntegrationApiRouteTests
 
     private sealed record Seeded(string TriggerBName,
         Guid ExecutionUnderB,
+        Guid SessionUnderB,
         string BroadKey,
         string NarrowKey,
         string ForeignKey,
@@ -252,6 +299,8 @@ public sealed class IntegrationApiRouteTests
         long? EndedAtUnixMs,
         int OutputCount,
         JsonElement Links);
+
+    private sealed record SessionStatusBody(Guid SessionId, string TriggerName, string Status, int ExecutionCount, long LastActivityUtc);
 }
 
 /// <summary>The external route strings, written out so a suite asserts the literal paths a caller has to use.</summary>
@@ -268,4 +317,7 @@ internal static class IntegrationApiRoutes
 
     public static string Cancel(Guid executionId) =>
         $"/api/local/v1/integration-api/executions/{executionId:D}/cancel";
+
+    public static string Session(Guid sessionId) =>
+        $"/api/local/v1/integration-api/sessions/{sessionId:D}";
 }

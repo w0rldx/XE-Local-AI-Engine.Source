@@ -297,3 +297,57 @@ public static class IntegrationEventPage
     public static int ClampLimit(int? limit) =>
         Math.Clamp(limit ?? DefaultLimit, min: 1, MaxLimit);
 }
+
+/// <summary>
+///     One caller-managed (or per-invocation) session as the operator surface renders it.
+///     <para>
+///         <see cref="TriggerName" /> rides along because it is the name an integrator addresses; an id alone would
+///         make the row unreadable without a second lookup. <see cref="ExecutionCount" /> and
+///         <see cref="LastActivityUtc" /> are written by the admission transaction and by every persisted event, so
+///         they are the activity indicators a UI renders rather than values it computes.
+///     </para>
+/// </summary>
+public sealed class IntegrationSessionResponse
+{
+    public required Guid Id { get; init; }
+
+    public required Guid TriggerId { get; init; }
+
+    /// <summary>Empty only when the trigger has since been deleted; the session and its executions outlive it.</summary>
+    public required string TriggerName { get; init; }
+
+    public required Guid AgentDefinitionId { get; init; }
+
+    public required IntegrationSessionStatus Status { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long LastActivityUtc { get; init; }
+
+    public required int ExecutionCount { get; init; }
+}
+
+/// <summary>
+///     Query for <c>GET integrations/sessions</c>. The same four names the executions list uses, and for the same
+///     reason: paging a bounded result client-side would hide older sessions entirely.
+/// </summary>
+public sealed class ListIntegrationSessionsRequest
+{
+    public Guid? TriggerId { get; init; }
+
+    public IntegrationSessionStatus? Status { get; init; }
+
+    public int? Limit { get; init; }
+
+    public int? Offset { get; init; }
+}
+
+/// <summary>
+///     Response envelope for <c>GET integrations/sessions</c>, ordered <c>LastActivityUtc</c> then <c>Id</c> DESCENDING
+///     by the store. That order is part of the contract: a client must render it rather than re-sort it, because a page
+///     is a window onto a larger set and a locally sorted page would be labelled "latest" while missing later rows.
+/// </summary>
+public sealed class ListIntegrationSessionsResponse
+{
+    public required IReadOnlyList<IntegrationSessionResponse> Items { get; init; }
+}

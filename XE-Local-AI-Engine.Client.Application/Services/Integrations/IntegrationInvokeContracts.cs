@@ -181,3 +181,14 @@ public sealed record IntegrationExecutionStatusResponse(Guid ExecutionId,
     long? EndedAtUnixMs,
     int OutputCount,
     IntegrationExecutionLinks Links);
+
+/// <summary>
+///     The external session GET body. Deliberately thin: a session id, the trigger NAME an integrator addresses, the
+///     status, and the two activity counters. It carries no principal, no key prefix and no conversation id — an
+///     integrator needs none of them, and each would be a fact about the node it should not learn.
+/// </summary>
+public sealed record IntegrationSessionStatusResponse(Guid SessionId,
+    string TriggerName,
+    string Status,
+    int ExecutionCount,
+    long LastActivityUtc);

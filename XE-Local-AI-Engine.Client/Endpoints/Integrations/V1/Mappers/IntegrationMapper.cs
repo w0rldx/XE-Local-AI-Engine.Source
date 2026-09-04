@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Integrations.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using ServiceIntegrationApiKeyView = XE_Local_AI_Engine.Client.Services.Integrations.IntegrationApiKeyView;
+using ServiceIntegrationSessionDto = XE_Local_AI_Engine.Client.Services.Integrations.IntegrationSessionDto;
 
 /// <summary>
 ///     Record ↔ DTO for the integration admin family, and the ONE place the <c>[Flags] IntegrationInputKinds</c> enum
@@ -66,6 +67,23 @@ internal static class IntegrationMapper
             CreatedAtUtc = view.CreatedAt.ToUnixTimeMilliseconds(),
             LastUsedAtUtc = view.LastUsedAt?.ToUnixTimeMilliseconds(),
             RevokedAtUtc = view.RevokedAt?.ToUnixTimeMilliseconds()
+        };
+    }
+
+    public static IntegrationSessionResponse ToResponse(ServiceIntegrationSessionDto session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        return new IntegrationSessionResponse
+        {
+            Id = session.Id,
+            TriggerId = session.TriggerId,
+            TriggerName = session.TriggerName,
+            AgentDefinitionId = session.AgentDefinitionId,
+            Status = session.Status,
+            CreatedAtUtc = session.CreatedAtUtc,
+            LastActivityUtc = session.LastActivityUtc,
+            ExecutionCount = session.ExecutionCount
         };
     }
 

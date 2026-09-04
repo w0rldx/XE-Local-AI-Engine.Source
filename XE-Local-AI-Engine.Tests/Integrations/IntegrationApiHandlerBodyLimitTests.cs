@@ -12,6 +12,7 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -263,6 +264,15 @@ public sealed class IntegrationApiHandlerBodyLimitTests
                     Substitute.For<IAgentExecutionLogStore>(),
                     TimeProvider.System,
                     NullLogger<IntegrationExecutionQueryService>.Instance),
+                new IntegrationSessionService(sessions,
+                    executions,
+                    triggers,
+                    Substitute.For<IIntegrationTriggerService>(),
+                    new IntegrationExternalAccess(executions, sessions, keys),
+                    Substitute.For<INodeChatPersistenceService>(),
+                    new IntegrationSessionGate(),
+                    TimeProvider.System,
+                    NullLogger<IntegrationSessionService>.Instance),
                 _writer,
                 _rateLimiter);
         }
