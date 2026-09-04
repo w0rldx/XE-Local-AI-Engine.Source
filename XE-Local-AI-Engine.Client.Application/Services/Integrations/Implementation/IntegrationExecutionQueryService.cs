@@ -46,6 +46,14 @@ public sealed class IntegrationExecutionQueryService
     public Task<IReadOnlyList<IntegrationExecutionSnapshot>> ListAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default) =>
         _executions.ListAsync(filter, cancellationToken);
 
+    /// <summary>
+    ///     The total the operator's pager labels a page with: the same filter, without its window. A second read rather
+    ///     than a field on the list result, because the sweep and the prior-outputs replay both list without ever
+    ///     wanting to pay for a COUNT.
+    /// </summary>
+    public Task<int> CountAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default) =>
+        _executions.CountAsync(filter, cancellationToken);
+
     public Task<IntegrationExecutionSnapshot?> GetAsync(Guid executionId, CancellationToken cancellationToken = default) =>
         _executions.GetByIdAsync(executionId, cancellationToken);
 

@@ -43,6 +43,28 @@ public sealed class IntegrationSessionStore(NodeChatDbContext dbContext) : IInte
         int offset,
         CancellationToken cancellationToken = default)
     {
+        // Ordered BEFORE Skip/Take, and by two columns: LastActivityUtc is a millisecond stamp, so the id tie-break is
+        // what keeps two sessions touched in the same millisecond from paging non-deterministically.
+        var entities = await Matching(triggerId, status)
+                             .OrderByDescending(row => row.LastActivityUtc)
+                             .ThenByDescending(row => row.Id)
+                             .Skip(Math.Max(val1: 0, offset))
+                             .Take(Math.Max(val1: 0, limit))
+                             .ToListAsync(cancellationToken)
+                             .ConfigureAwait(false);
+        return [.. entities.Select(ToSnapshot)];
+    }
+
+    public Task<int> CountAsync(Guid? triggerId, IntegrationSessionStatus? status, CancellationToken cancellationToken = default) =>
+        // No Skip/Take: the total a pager labels its window with is the whole matching set, not the window.
+        Matching(triggerId, status).CountAsync(cancellationToken);
+
+    /// <summary>
+    ///     The filter half of both reads, in ONE place, so a count can never disagree with the page it labels about
+    ///     which rows are in scope.
+    /// </summary>
+    private IQueryable<IntegrationSession> Matching(Guid? triggerId, IntegrationSessionStatus? status)
+    {
         var query = _dbContext.IntegrationSessions.AsNoTracking();
 
         if (triggerId is { } trigger)
@@ -55,15 +77,7 @@ public sealed class IntegrationSessionStore(NodeChatDbContext dbContext) : IInte
             query = query.Where(row => row.Status == sessionStatus);
         }
 
-        // Ordered BEFORE Skip/Take, and by two columns: LastActivityUtc is a millisecond stamp, so the id tie-break is
-        // what keeps two sessions touched in the same millisecond from paging non-deterministically.
-        var entities = await query.OrderByDescending(row => row.LastActivityUtc)
-                                  .ThenByDescending(row => row.Id)
-                                  .Skip(Math.Max(val1: 0, offset))
-                                  .Take(Math.Max(val1: 0, limit))
-                                  .ToListAsync(cancellationToken)
-                                  .ConfigureAwait(false);
-        return [.. entities.Select(ToSnapshot)];
+        return query;
     }
 
     /// <summary>

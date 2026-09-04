@@ -5571,7 +5571,6 @@
 					"deletedTrigger": "Deleted trigger",
 					"viewAria": "View session details",
 					"deleteAria": "Delete session",
-					"windowNote": "Showing up to {{limit}} most recently active sessions. Narrow by trigger or status to reach older records.",
 					"columns": {
 						"id": "Session",
 						"trigger": "Trigger",
@@ -5615,6 +5614,7 @@
 				"subtitle": "Unattended runs an integrator started through a trigger. Cancel an active run, or open one to read its recorded timeline.",
 				"filters": {
 					"allStatuses": "All",
+					"activeStatuses": "Active",
 					"trigger": "Trigger",
 					"session": "Session",
 					"allTriggers": "All triggers",
@@ -5626,7 +5626,6 @@
 					"empty": "No executions match these filters yet.",
 					"viewAria": "View execution details",
 					"cancelAria": "Cancel execution",
-					"windowNote": "Showing up to {{limit}} most recently received executions. Narrow by trigger, session or status to reach older records.",
 					"columns": {
 						"trigger": "Trigger",
 						"session": "Session",

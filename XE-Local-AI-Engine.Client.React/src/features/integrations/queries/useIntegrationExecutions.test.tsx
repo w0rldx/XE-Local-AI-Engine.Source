@@ -8,8 +8,36 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+// The hook must go through the GENERATED adapter once per page — that is what carries the shared axios instance,
+// response validation and the outer query's AbortSignal. Wrap that one export so each call and the context its
+// `queryFn` received are observable; everything else in the module stays real.
+const { adapterCalls } = vi.hoisted(() => ({
+	adapterCalls: [] as { query: unknown; signals: unknown[] }[],
+}));
+
+vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@/core/api/generated/@tanstack/react-query.gen")>();
+	return {
+		...actual,
+		getIntegrationExecutionEventsOptions: (options: Parameters<typeof actual.getIntegrationExecutionEventsOptions>[0]) => {
+			const real = actual.getIntegrationExecutionEventsOptions(options);
+			const call = { query: options.query, signals: [] as unknown[] };
+			adapterCalls.push(call);
+			return {
+				...real,
+				queryFn: (context: Parameters<NonNullable<typeof real.queryFn>>[0]) => {
+					call.signals.push(context.signal);
+					// `queryOptions()` always emits a `queryFn`, the same assertion the hook under test makes.
+					return real.queryFn!(context);
+				},
+			};
+		},
+	};
+});
+
+import { integrationEventLimit } from "@/features/integrations/models/IntegrationModels";
 import {
 	useCancelIntegrationExecution,
 	useIntegrationExecutionEvents,
@@ -46,10 +74,64 @@ function listRoute(): URLSearchParams[] {
 						outputCount: 0,
 					},
 				],
+				totalCount: 412,
 			});
 		}),
 	);
 	return requests;
+}
+
+/** The row id one page of {@link deferredListRoute} carries, which is how a test tells the pages apart. */
+function executionIdAtOffset(offset: number): string {
+	return `44444444-4444-4444-8444-${String(offset).padStart(12, "0")}`;
+}
+
+/**
+ * The list served BY PAGE, with page two held until the test releases it. `limit`/`offset` are part of the query key,
+ * so page two is a cache entry with no data of its own — this is the window in which the pager used to read a total
+ * of 0 and clamp the operator back to page one.
+ */
+function deferredListRoute(): { requests: URLSearchParams[]; releasePageTwo: () => void } {
+	const requests: URLSearchParams[] = [];
+	// `Promise.withResolvers` would say this in one line, but the project's lib target is below es2024.
+	let releasePageTwo!: () => void;
+	const pageTwo = new Promise<void>((resolve) => {
+		releasePageTwo = resolve;
+	});
+	server.use(
+		http.get(localApiPath("integrations/executions"), async ({ request }) => {
+			const params = new URL(request.url).searchParams;
+			requests.push(params);
+			const offset = Number(params.get("offset") ?? "0");
+			if (offset > 0) {
+				await pageTwo;
+			}
+			// The id is a guid because the response schema validates it as one; the offset rides in its last block so
+			// each page is identifiable.
+			return HttpResponse.json({
+				items: [
+					{
+						id: executionIdAtOffset(offset),
+						triggerId,
+						sessionId,
+						status: "Completed",
+						receivedAtUtc: 1_700_000_000_000,
+						startedAtUtc: null,
+						endedAtUtc: null,
+						failureCategory: null,
+						failureSummary: null,
+						outputCount: 0,
+					},
+				],
+				totalCount: 412,
+			});
+		}),
+	);
+	return { requests, releasePageTwo };
+}
+
+function eventRow(sequence: number, eventType = "execution.accepted"): Record<string, unknown> {
+	return { executionId, sequence, eventType, detailJson: null, occurredAtUtc: 1_700_000_000_000 };
 }
 
 function eventsRoute(): URLSearchParams[] {
@@ -57,20 +139,46 @@ function eventsRoute(): URLSearchParams[] {
 	server.use(
 		http.get(localApiPath(`integrations/executions/${executionId}/events`), ({ request }) => {
 			requests.push(new URL(request.url).searchParams);
-			return HttpResponse.json({
-				items: [
-					{
-						executionId,
-						sequence: 1,
-						eventType: "execution.accepted",
-						detailJson: null,
-						occurredAtUtc: 1_700_000_000_000,
-					},
-				],
-			});
+			return HttpResponse.json({ items: [eventRow(1)] });
 		}),
 	);
 	return requests;
+}
+
+/**
+ * The feed served BY WATERMARK, the way the endpoint documents it: `sinceSeq` is EXCLUSIVE, rows ascend, and a page
+ * shorter than the limit means "caught up". The caller decides which sequences each cursor answers with, so a test
+ * can serve holes, an exact page boundary, or a server that stops making progress.
+ */
+function eventsPagesRoute(pageFor: (sinceSeq: number) => readonly number[], terminalSequence = -1): URLSearchParams[] {
+	const requests: URLSearchParams[] = [];
+	server.use(
+		http.get(localApiPath(`integrations/executions/${executionId}/events`), ({ request }) => {
+			const params = new URL(request.url).searchParams;
+			requests.push(params);
+			const items = pageFor(Number(params.get("sinceSeq") ?? "0")).map((sequence) =>
+				eventRow(sequence, sequence === terminalSequence ? "execution.completed" : "execution.accepted"),
+			);
+			return HttpResponse.json({ items });
+		}),
+	);
+	return requests;
+}
+
+/** A contiguous log of `total` events, served in pages of the limit the client asked for. */
+function pagedEventsRoute(total: number): URLSearchParams[] {
+	return eventsPagesRoute(
+		(sinceSeq) =>
+			Array.from({ length: total }, (_unused, index) => index + 1)
+				.filter((sequence) => sequence > sinceSeq)
+				.slice(0, integrationEventLimit),
+		total,
+	);
+}
+
+/** `count` sequences ending at `lastSequence`, so a full page can carry holes rather than 1..N. */
+function sequencesEndingAt(lastSequence: number, count: number): number[] {
+	return Array.from({ length: count }, (_unused, index) => lastSequence - count + 1 + index);
 }
 
 /** The query string of the first recorded request, as a total value so the assertions need no non-null dance. */
@@ -96,7 +204,7 @@ describe("useIntegrationExecutions", () => {
 		await waitFor(() => {
 			expect(result.current.data).toBeDefined();
 		});
-		expect(result.current.data?.[0]).toEqual({
+		expect(result.current.data?.items[0]).toEqual({
 			id: executionId,
 			triggerId,
 			sessionId,
@@ -110,7 +218,19 @@ describe("useIntegrationExecutions", () => {
 		});
 	});
 
-	it("sends the bounded window and no filter on the default read", async () => {
+	it("surfaces the server's total, which is what a pager can honestly number", async () => {
+		listRoute();
+		const { wrapper } = harness();
+
+		const { result } = renderHook(() => useIntegrationExecutions(), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.data).toBeDefined();
+		});
+		expect(result.current.data?.totalCount).toBe(412);
+	});
+
+	it("sends the default page and no filter on the default read", async () => {
 		const requests = listRoute();
 		const { wrapper } = harness();
 
@@ -119,7 +239,7 @@ describe("useIntegrationExecutions", () => {
 		await waitFor(() => {
 			expect(requests).toHaveLength(1);
 		});
-		expect(firstQuery(requests).get("limit")).toBe("200");
+		expect(firstQuery(requests).get("limit")).toBe("50");
 		expect(firstQuery(requests).get("offset")).toBe("0");
 		expect(firstQuery(requests).get("status")).toBeNull();
 		expect(firstQuery(requests).get("triggerId")).toBeNull();
@@ -130,7 +250,7 @@ describe("useIntegrationExecutions", () => {
 		const requests = listRoute();
 		const { wrapper } = harness();
 
-		renderHook(() => useIntegrationExecutions({ triggerId, sessionId, status: "Running" }), { wrapper });
+		renderHook(() => useIntegrationExecutions({ triggerId, sessionId, status: ["Running"] }), { wrapper });
 
 		await waitFor(() => {
 			expect(requests).toHaveLength(1);
@@ -140,7 +260,34 @@ describe("useIntegrationExecutions", () => {
 		expect(firstQuery(requests).get("status")).toBe("Running");
 	});
 
-	it("reads the event list whole, from sequence zero, at the endpoint's maximum page", async () => {
+	// The Active chip: three states in ONE read, as a repeated parameter, rather than a union assembled in the browser
+	// out of pages that would each have their own count.
+	it("sends a status SET as a repeated query parameter", async () => {
+		const requests = listRoute();
+		const { wrapper } = harness();
+
+		renderHook(() => useIntegrationExecutions({ status: ["Accepted", "Queued", "Running"] }), { wrapper });
+
+		await waitFor(() => {
+			expect(requests).toHaveLength(1);
+		});
+		expect(firstQuery(requests).getAll("status")).toEqual(["Accepted", "Queued", "Running"]);
+	});
+
+	it("asks the server for the page it was given, not the first one", async () => {
+		const requests = listRoute();
+		const { wrapper } = harness();
+
+		renderHook(() => useIntegrationExecutions({}, { limit: 25, offset: 75 }), { wrapper });
+
+		await waitFor(() => {
+			expect(requests).toHaveLength(1);
+		});
+		expect(firstQuery(requests).get("limit")).toBe("25");
+		expect(firstQuery(requests).get("offset")).toBe("75");
+	});
+
+	it("reads a short event page in one request, from sequence zero, at the endpoint's maximum page size", async () => {
 		const requests = eventsRoute();
 		const { wrapper } = harness();
 
@@ -159,6 +306,118 @@ describe("useIntegrationExecutions", () => {
 		});
 	});
 
+	// The regression F-24 named: an execution with more events than one page holds lost its tail, and events ascend,
+	// so the row lost first was the terminal one.
+	it("pages the event list on the watermark until a short page and returns every event in order", async () => {
+		const requests = pagedEventsRoute(600);
+		const { wrapper } = harness();
+
+		const { result } = renderHook(() => useIntegrationExecutionEvents(executionId), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.data).toHaveLength(600);
+		});
+		expect(requests.map((request) => request.get("sinceSeq"))).toEqual(["0", "500"]);
+		expect(requests.map((request) => request.get("limit"))).toEqual(["500", "500"]);
+		expect(result.current.data?.map((event) => event.sequence)).toEqual(
+			Array.from({ length: 600 }, (_unused, index) => index + 1),
+		);
+		expect(result.current.data?.at(-1)).toEqual({
+			sequence: 600,
+			eventType: "execution.completed",
+			detailJson: null,
+			occurredAtUtc: 1_700_000_000_000,
+		});
+	});
+
+	// Every refetch re-pages from the start: the cache entry is the WHOLE log, so a poll that resumed from the last
+	// watermark would replace it with just the tail.
+	// Driven by an explicit refetch rather than `refetchInterval`: the timer version leaves a poll running past the
+	// test and its late request lands in the NEXT test's recorder.
+	it("re-pages from sequence zero on every refetch", async () => {
+		const requests = pagedEventsRoute(600);
+		const { wrapper } = harness();
+
+		const { result } = renderHook(() => useIntegrationExecutionEvents(executionId), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.data).toHaveLength(600);
+		});
+
+		await result.current.refetch();
+
+		expect(requests.map((request) => request.get("sinceSeq"))).toEqual(["0", "500", "0", "500"]);
+		expect(result.current.data).toHaveLength(600);
+	});
+
+	// The exact boundary: a page that is FULL says nothing about whether more exist, so the client must ask again and
+	// only the empty answer ends the read.
+	it("asks once more when the log ends exactly on a page boundary", async () => {
+		const requests = eventsPagesRoute((sinceSeq) => (sinceSeq === 0 ? sequencesEndingAt(500, 500) : []));
+		const { wrapper } = harness();
+
+		const { result } = renderHook(() => useIntegrationExecutionEvents(executionId), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.data).toHaveLength(500);
+		});
+		expect(requests.map((request) => request.get("sinceSeq"))).toEqual(["0", "500"]);
+	});
+
+	// Sequences are strictly increasing but NOT contiguous — the counter is shared — so the next cursor is the last
+	// sequence the page carried, never the row count.
+	it("takes the next cursor from the page's highest sequence, not from how many rows it held", async () => {
+		const requests = eventsPagesRoute((sinceSeq) => (sinceSeq === 0 ? sequencesEndingAt(750, 500) : []));
+		const { wrapper } = harness();
+
+		const { result } = renderHook(() => useIntegrationExecutionEvents(executionId), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.data).toHaveLength(500);
+		});
+		expect(requests.map((request) => request.get("sinceSeq"))).toEqual(["0", "750"]);
+	});
+
+	// The guard against a server that answers a full page without advancing: the loop must end rather than ask
+	// forever, and the non-advancing page is DISCARDED — it is the previous page again, and the timeline keys its
+	// rows by `sequence`, so keeping it would render duplicate keys.
+	it("stops without keeping a full page that reports no higher sequence than the cursor it was given", async () => {
+		const requests = eventsPagesRoute(() => sequencesEndingAt(500, 500));
+		const { wrapper } = harness();
+
+		const { result } = renderHook(() => useIntegrationExecutionEvents(executionId), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.data).toHaveLength(500);
+		});
+		expect(result.current.data?.map((event) => event.sequence)).toEqual(
+			Array.from({ length: 500 }, (_unused, index) => index + 1),
+		);
+		expect(requests.map((request) => request.get("sinceSeq"))).toEqual(["0", "500"]);
+	});
+
+	// The paging loop must call the generated adapter PER PAGE, not the bare SDK fn once: only the adapter carries the
+	// shared axios instance, response validation and the outer query's AbortSignal into each request.
+	it("calls the generated adapter once per page, with that page's watermark and the outer abort signal", async () => {
+		pagedEventsRoute(600);
+		adapterCalls.length = 0;
+		const { wrapper } = harness();
+
+		const { result } = renderHook(() => useIntegrationExecutionEvents(executionId), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.data).toHaveLength(600);
+		});
+		expect(adapterCalls.map((call) => call.query)).toEqual([
+			{ sinceSeq: 0, limit: integrationEventLimit },
+			{ sinceSeq: 500, limit: integrationEventLimit },
+		]);
+		expect(adapterCalls.map((call) => call.signals.length)).toEqual([1, 1]);
+		for (const call of adapterCalls) {
+			expect(call.signals.at(0)).toBeInstanceOf(AbortSignal);
+		}
+	});
+
 	it("does not read events until an execution is selected", async () => {
 		const requests = eventsRoute();
 		const { wrapper } = harness();
@@ -169,6 +428,38 @@ describe("useIntegrationExecutions", () => {
 			expect(result.current.isLoading).toBe(false);
 		});
 		expect(requests).toHaveLength(0);
+	});
+
+	// The pager bounce: page two's cache entry starts empty, so a hook that answered `undefined` there let the page
+	// read a total of 0, compute one page, and clamp back to page one while the offset-50 request was in flight.
+	it("holds the previous page's rows and total while the next page loads", async () => {
+		const { requests, releasePageTwo } = deferredListRoute();
+		const { wrapper } = harness();
+
+		const { result, rerender } = renderHook(
+			({ offset }: { offset: number }) => useIntegrationExecutions({}, { limit: 50, offset }),
+			{ wrapper, initialProps: { offset: 0 } },
+		);
+
+		await waitFor(() => {
+			expect(result.current.data?.items.at(0)?.id).toBe(executionIdAtOffset(0));
+		});
+
+		rerender({ offset: 50 });
+
+		await waitFor(() => {
+			expect(requests).toHaveLength(2);
+		});
+		expect(requests.at(1)?.get("offset")).toBe("50");
+		expect(result.current.data?.totalCount).toBe(412);
+		expect(result.current.data?.items.at(0)?.id).toBe(executionIdAtOffset(0));
+
+		releasePageTwo();
+
+		await waitFor(() => {
+			expect(result.current.data?.items.at(0)?.id).toBe(executionIdAtOffset(50));
+		});
+		expect(result.current.data?.totalCount).toBe(412);
 	});
 
 	it("refetches the list after a cancellation is accepted", async () => {

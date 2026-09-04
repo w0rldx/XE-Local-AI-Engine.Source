@@ -110,6 +110,11 @@ public sealed class IntegrationSessionEndpointTests
         var page1 = AssertEx.NotNull(await first.Content.ReadFromJsonAsync<SessionListBody>(IntegrationEndpointPayloads.Json));
         var page2 = AssertEx.NotNull(await second.Content.ReadFromJsonAsync<SessionListBody>(IntegrationEndpointPayloads.Json));
         AssertEx.NotEqual(page1.Items[0].Id, page2.Items[0].Id, "Page two must return a row page one did not, or older sessions are unreachable.");
+
+        // The pager's total is the whole filtered set: a one-row window over the trigger's two sessions still reports
+        // two, which is what lets the UI page instead of showing a bounded-window note.
+        AssertEx.Equal(expected: 2, all.TotalCount);
+        AssertEx.Equal(expected: 2, page1.TotalCount, "The total must ignore limit and offset.");
     }
 
     [Test]
@@ -219,5 +224,5 @@ public sealed class IntegrationSessionEndpointTests
         long LastActivityUtc,
         int ExecutionCount);
 
-    private sealed record SessionListBody(IReadOnlyList<SessionBody> Items);
+    private sealed record SessionListBody(IReadOnlyList<SessionBody> Items, int TotalCount);
 }

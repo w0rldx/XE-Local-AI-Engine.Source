@@ -116,6 +116,11 @@ function makeQuery<T>(data: T) {
 	return { data, isLoading: false, error: null };
 }
 
+/** A list page as the hook now returns it: the rows, plus the server's count of every row the filters match. */
+function makeListQuery<T>(items: readonly T[], totalCount = items.length) {
+	return makeQuery({ items, totalCount });
+}
+
 function renderPage() {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return render(
@@ -135,13 +140,26 @@ function lastSessionFilters(): IntegrationSessionFilters {
 	return (calls.at(-1)?.[0] ?? {}) as IntegrationSessionFilters;
 }
 
+/** The paging window the page most recently asked the sessions list for. */
+function lastSessionWindow(): { limit?: number; offset?: number } {
+	const calls = sessionHooksMock.useIntegrationSessions.mock.calls;
+	return (calls.at(-1)?.[1] ?? {}) as { limit?: number; offset?: number };
+}
+
+/** Every offset the page has asked for, in order — one entry per render, so repeats are expected and a CHANGE is not. */
+function requestedOffsets(): number[] {
+	return sessionHooksMock.useIntegrationSessions.mock.calls.map(
+		(call) => ((call[1] ?? {}) as { offset?: number }).offset ?? 0,
+	);
+}
+
 describe("IntegrationSessionsPage", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
 		useIntegrationsUiStore.setState({ selectedExecutionId: null, selectedSessionId: null });
-		sessionHooksMock.useIntegrationSessions.mockReturnValue(makeQuery(sessions));
+		sessionHooksMock.useIntegrationSessions.mockReturnValue(makeListQuery(sessions));
 		sessionHooksMock.useDeleteIntegrationSession.mockReturnValue(makeMutation());
-		executionHooksMock.useIntegrationExecutions.mockReturnValue(makeQuery(sessionExecutions));
+		executionHooksMock.useIntegrationExecutions.mockReturnValue(makeListQuery(sessionExecutions));
 		triggerHooksMock.useIntegrationTriggers.mockReturnValue(makeQuery(triggers));
 		confirmMock.mockResolvedValue(true);
 	});
@@ -206,13 +224,53 @@ describe("IntegrationSessionsPage", () => {
 		});
 	});
 
-	it("states the window and draws no pager", () => {
+	// D-2: `totalCount` counts every session the filters match, so the pager numbers the whole table rather than the
+	// page that happened to load.
+	it("shows the server's total and asks for the first page by default", () => {
+		sessionHooksMock.useIntegrationSessions.mockReturnValue(makeListQuery(sessions, 130));
 		renderPage();
 
-		const note = screen.getByTestId("integration-sessions-window-note").textContent ?? "";
-		expect(note).toContain("200");
-		expect(note.toLowerCase()).not.toContain("latest");
-		expect(screen.queryByTestId("table-pagination")).toBeNull();
+		expect(screen.getByTestId("integration-sessions-pagination-range").textContent).toContain("130");
+		expect(lastSessionWindow()).toEqual({ limit: 50, offset: 0 });
+		expect(screen.queryByTestId("integration-sessions-window-note")).toBeNull();
+	});
+
+	// The pager bounce: the page-2 cache entry starts empty, and a hook that answered `undefined` there let the total
+	// read as 0, the page count collapse to 1 and the clamp send the operator straight back to page 1. The hook holds
+	// the previous page over (`placeholderData: keepPreviousData`), which is the steady total this mock stands in for.
+	it("stays on the next page once it is asked for, and never re-asks for the first one", async () => {
+		sessionHooksMock.useIntegrationSessions.mockReturnValue(makeListQuery(sessions, 130));
+		renderPage();
+
+		fireEvent.click(within(screen.getByTestId("integration-sessions-pagination-controls")).getByText("2"));
+
+		await waitFor(() => {
+			expect(lastSessionWindow().offset).toBe(50);
+		});
+		expect(lastSessionWindow().limit).toBe(50);
+
+		const offsets = requestedOffsets();
+		expect(offsets.slice(offsets.indexOf(50))).toEqual(offsets.slice(offsets.indexOf(50)).map(() => 50));
+		expect(
+			within(screen.getByTestId("integration-sessions-pagination-controls")).getByText("2").getAttribute("data-active"),
+		).toBe("true");
+	});
+
+	it("returns to the first page when a filter changes", async () => {
+		sessionHooksMock.useIntegrationSessions.mockReturnValue(makeListQuery(sessions, 130));
+		renderPage();
+
+		fireEvent.click(within(screen.getByTestId("integration-sessions-pagination-controls")).getByText("3"));
+		await waitFor(() => {
+			expect(lastSessionWindow().offset).toBe(100);
+		});
+
+		fireEvent.click(screen.getByTestId("integration-sessions-filter-status"));
+		fireEvent.click(await screen.findByRole("option", { name: "Closed", hidden: true }));
+
+		await waitFor(() => {
+			expect(lastSessionWindow().offset).toBe(0);
+		});
 	});
 
 	it("opens the detail dialog and lists that session's executions", async () => {
@@ -225,7 +283,10 @@ describe("IntegrationSessionsPage", () => {
 		});
 		expect(screen.getByTestId("integration-session-execution-exec-1")).toBeTruthy();
 		// The executions read is scoped by sessionId server-side, not filtered in the dialog.
-		expect(executionHooksMock.useIntegrationExecutions).toHaveBeenCalledWith({ sessionId: activeSession.id });
+		expect(executionHooksMock.useIntegrationExecutions).toHaveBeenCalledWith(
+			{ sessionId: activeSession.id },
+			{ limit: 200 },
+		);
 	});
 
 	it("confirms before deleting and then deletes that session", async () => {

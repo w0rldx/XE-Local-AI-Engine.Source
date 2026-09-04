@@ -30,16 +30,20 @@ public sealed class ListIntegrationSessionsEndpoint(IntegrationSessionService se
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var rows = await _sessions.ListAsync(new IntegrationSessionFilter(req.TriggerId,
-                                       req.Status,
-                                       Math.Clamp(req.Limit ?? DefaultLimit, min: 1, ListIntegrationSessionsRequestValidator.MaxLimit),
-                                       Math.Max(req.Offset ?? 0, val2: 0)),
-                                   ct)
-                                  .ConfigureAwait(false);
+        var filter = new IntegrationSessionFilter(req.TriggerId,
+            req.Status,
+            Math.Clamp(req.Limit ?? DefaultLimit, min: 1, ListIntegrationSessionsRequestValidator.MaxLimit),
+            Math.Max(req.Offset ?? 0, val2: 0));
+
+        var rows = await _sessions.ListAsync(filter, ct).ConfigureAwait(false);
+
+        // The SAME filter instance for both reads, so the total can only ever describe the page beside it.
+        var totalCount = await _sessions.CountAsync(filter, ct).ConfigureAwait(false);
 
         await Send.OkAsync(new ListIntegrationSessionsResponse
             {
-                Items = rows.Select(IntegrationMapper.ToResponse).ToArray()
+                Items = rows.Select(IntegrationMapper.ToResponse).ToArray(),
+                TotalCount = totalCount
             },
             ct).ConfigureAwait(false);
     }

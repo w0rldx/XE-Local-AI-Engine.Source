@@ -75,6 +75,13 @@ public interface IIntegrationSessionStore
         int offset,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     How many rows the SAME filter matches, ignoring <c>limit</c> and <c>offset</c> — the total a pager needs to
+    ///     know how far the list reaches. Shares its filter code with <see cref="ListAsync" /> rather than repeating the
+    ///     predicates, so the count and the page it labels cannot disagree.
+    /// </summary>
+    Task<int> CountAsync(Guid? triggerId, IntegrationSessionStatus? status, CancellationToken cancellationToken = default);
+
     /// <summary>Closes a session so no further execution may join it. Idempotent; returns <see langword="false" /> only when no row matched.</summary>
     Task<bool> CloseAsync(Guid sessionId, long atUtc, CancellationToken cancellationToken = default);
 

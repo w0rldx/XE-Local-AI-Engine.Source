@@ -53,9 +53,9 @@
 # Options:
 #   --server <path>   llama-server executable. Default: $XE_LLAMACPP_SERVER_PATH, else the
 #                     installed runtime under the node data root (source-build first).
-#   --model <path>    Chat GGUF. Default: the smallest installed one, EXCLUDING embedding and
-#                     reranker GGUFs — those have no chat template, so they would make the run
-#                     inert in the same way a reasoning model does.
+#   --model <path>    Chat GGUF. Default: the smallest installed one, EXCLUDING embedding,
+#                     reranker and multimodal projector (mmproj) GGUFs — none of those is a chat
+#                     model, so they would make the run inert in the same way a reasoning model does.
 #   --data-root <dir> Node data root to discover under. Default: $XDG_DATA_HOME/XE-Local-AI-Engine
 #                     (i.e. ~/.local/share/XE-Local-AI-Engine).
 #   --evidence <file> Where the test writes its verdict JSON. Default: a temp file, left in place
@@ -212,14 +212,16 @@ discover_server() {
 # no chat template, so llama-server would never compile a tool grammar and the whole run would be
 # inert in exactly the way the negative control exists to catch — except it would fail confusingly
 # instead of reporting "wrong kind of model". A real model store can have an embedding GGUF sitting
-# next to the chat ones, so this is not a hypothetical.
+# next to the chat ones, so this is not a hypothetical. Multimodal projectors (mmproj-*.gguf) are
+# excluded for the same reason and are usually the SMALLEST file in the store, so without the
+# exclusion they win the size sort every time (2026-09-04: a gemma projector was auto-picked).
 discover_model() {
   local dir
   for dir in "${DATA_ROOT}/models" "${DATA_ROOT}"; do
     [[ -d "${dir}" ]] || continue
     local found
     found="$(find "${dir}" -maxdepth 2 -type f -name '*.gguf' -printf '%s\t%p\n' 2>/dev/null \
-             | grep -viE '(embed|rerank|bge-|nomic)' \
+             | grep -viE '(embed|rerank|bge-|nomic|mmproj|projector)' \
              | sort -n | head -1 | cut -f2-)"
     if [[ -n "${found}" ]]; then
       printf '%s\n' "${found}"

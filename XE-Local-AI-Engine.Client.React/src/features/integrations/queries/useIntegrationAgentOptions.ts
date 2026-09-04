@@ -43,7 +43,11 @@ export function useIntegrationAgentOptions(): IntegrationAgentOptionsResult {
 			new Map(
 				(catalogQuery.data?.tools ?? []).map((tool) => [
 					tool.name,
-					{ effectiveRequiresApproval: tool.effectiveRequiresApproval, category: tool.category },
+					{
+						effectiveRequiresApproval: tool.effectiveRequiresApproval,
+						category: tool.category,
+						unattendedBehaviour: tool.unattendedBehaviour,
+					},
 				]),
 			),
 		[catalogQuery.data],

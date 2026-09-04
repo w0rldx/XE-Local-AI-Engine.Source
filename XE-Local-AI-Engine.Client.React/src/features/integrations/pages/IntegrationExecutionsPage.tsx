@@ -8,16 +8,21 @@ import { getErrorStatus } from "@/core/api/errors/RetryClassification";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
+import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
+import { useServerTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { IntegrationExecutionDetailDialog } from "@/features/integrations/components/IntegrationExecutionDetailDialog";
 import { IntegrationExecutionTable } from "@/features/integrations/components/IntegrationExecutionTable";
 import {
+	activeIntegrationExecutionStatuses,
 	type IntegrationExecution,
 	type IntegrationExecutionFilters,
 	type IntegrationExecutionStatus,
 	integrationExecutionStatuses,
 	integrationListLimit,
+	integrationPageSize,
+	integrationPageSizeOptions,
 } from "@/features/integrations/models/IntegrationModels";
 import {
 	useCancelIntegrationExecution,
@@ -28,18 +33,50 @@ import { useIntegrationTriggers } from "@/features/integrations/queries/useInteg
 import { useIntegrationsUiStore } from "@/features/integrations/stores/IntegrationsUiStore";
 
 const ALL_VALUE = "__all__";
+const ACTIVE_VALUE = "__active__";
+
+/** The status set one chip sends. All sends none; Active sends the three in-flight states; every other chip sends its own. */
+function statusChipFilter(value: string): readonly IntegrationExecutionStatus[] | undefined {
+	if (value === ALL_VALUE) {
+		return undefined;
+	}
+	return value === ACTIVE_VALUE ? activeIntegrationExecutionStatuses : [value as IntegrationExecutionStatus];
+}
+
+/** Which chip is lit, read back off the filter. Active is the only chip that sends more than one status. */
+function statusChipValue(status: readonly IntegrationExecutionStatus[] | undefined): string {
+	if (status === undefined) {
+		return ALL_VALUE;
+	}
+	return status.length === 1 ? (status.at(0) ?? ALL_VALUE) : ACTIVE_VALUE;
+}
 
 /**
- * Active and historical integration runs on ONE page. There is no Active/History split, because the backend accepts a
- * single `status` and each of those groups covers three: the difference could only have been made up in the browser,
- * over a server-bounded window, hiding rows that match the filter but fall outside it. One chip per state maps 1:1
- * onto the parameter the endpoint actually takes.
+ * Active and historical integration runs on ONE page. Every chip maps onto the `status` parameter the endpoint takes,
+ * which is now a SET: one chip per state, plus an Active chip that sends the three in-flight states together. The
+ * difference is still never made up in the browser — that would hide rows which match the filter but fall on another
+ * page — it is asked of the server, which is also what counts the rows the pager numbers.
  */
 export function IntegrationExecutionsPage() {
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
 
 	const [filters, setFilters] = useState<IntegrationExecutionFilters>({});
+	const [page, setPage] = useState(1);
+	const [pageSize, setPageSize] = useState(integrationPageSize);
+
+	// Every filter is a server parameter, so a narrowed list is a DIFFERENT list: staying on page 4 of it would show
+	// the operator rows they did not ask to jump to, or nothing at all.
+	const applyFilters = useCallback((next: (current: IntegrationExecutionFilters) => IntegrationExecutionFilters) => {
+		setFilters(next);
+		setPage(1);
+	}, []);
+
+	// A new page size renumbers the pages, so the old page number means nothing against it.
+	const handlePageSizeChange = useCallback((next: number) => {
+		setPageSize(next);
+		setPage(1);
+	}, []);
 
 	const selectedExecutionId = useIntegrationsUiStore((state) => state.selectedExecutionId);
 	const selectExecution = useIntegrationsUiStore((state) => state.actions.selectExecution);
@@ -54,14 +91,29 @@ export function IntegrationExecutionsPage() {
 	// Polling is UNCONDITIONAL. Gating it on "any row is active" would read the very list a poll has to fetch, so an
 	// empty or all-terminal window — the first load of a fresh node included — would switch the refresh off and a run
 	// started by an integrator elsewhere would never appear.
-	const executionsQuery = useIntegrationExecutions(filters, { refetchInterval: 5000 });
+	const executionsQuery = useIntegrationExecutions(filters, {
+		refetchInterval: 5000,
+		limit: pageSize,
+		offset: (page - 1) * pageSize,
+	});
 	const triggersQuery = useIntegrationTriggers();
-	const sessionsQuery = useIntegrationSessions();
+	// A selector, not a pager: it needs every session an operator might filter by, so it asks for the validator's
+	// maximum rather than the table's page size.
+	const sessionsQuery = useIntegrationSessions({}, { limit: integrationListLimit });
 	const cancelMutation = useCancelIntegrationExecution();
 
-	const executions = useMemo(() => executionsQuery.data ?? [], [executionsQuery.data]);
+	const executions = useMemo(() => executionsQuery.data?.items ?? [], [executionsQuery.data]);
 	const triggers = useMemo(() => triggersQuery.data ?? [], [triggersQuery.data]);
-	const sessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data]);
+	const sessions = useMemo(() => sessionsQuery.data?.items ?? [], [sessionsQuery.data]);
+
+	const pagination = useServerTablePagination({
+		page,
+		pageSize,
+		totalItems: executionsQuery.data?.totalCount ?? 0,
+		pageSizeOptions: integrationPageSizeOptions,
+		onPageChange: setPage,
+		onPageSizeChange: handlePageSizeChange,
+	});
 
 	const selectedExecution = executions.find((execution) => execution.id === selectedExecutionId) ?? null;
 
@@ -81,20 +133,26 @@ export function IntegrationExecutionsPage() {
 		[sessions, t],
 	);
 
-	const handleStatusChange = useCallback((value: string): void => {
-		setFilters((current) => ({
-			...current,
-			status: value === ALL_VALUE ? undefined : (value as IntegrationExecutionStatus),
-		}));
-	}, []);
+	const handleStatusChange = useCallback(
+		(value: string): void => {
+			applyFilters((current) => ({ ...current, status: statusChipFilter(value) }));
+		},
+		[applyFilters],
+	);
 
-	const handleTriggerChange = useCallback((value: string | null): void => {
-		setFilters((current) => ({ ...current, triggerId: value === null || value === ALL_VALUE ? undefined : value }));
-	}, []);
+	const handleTriggerChange = useCallback(
+		(value: string | null): void => {
+			applyFilters((current) => ({ ...current, triggerId: value === null || value === ALL_VALUE ? undefined : value }));
+		},
+		[applyFilters],
+	);
 
-	const handleSessionChange = useCallback((value: string | null): void => {
-		setFilters((current) => ({ ...current, sessionId: value === null || value === ALL_VALUE ? undefined : value }));
-	}, []);
+	const handleSessionChange = useCallback(
+		(value: string | null): void => {
+			applyFilters((current) => ({ ...current, sessionId: value === null || value === ALL_VALUE ? undefined : value }));
+		},
+		[applyFilters],
+	);
 
 	const handleCancel = useCallback(
 		async (execution: IntegrationExecution) => {
@@ -152,11 +210,7 @@ export function IntegrationExecutionsPage() {
 
 			<SectionCard data-testid="integration-executions-card">
 				<Group gap="sm" align="flex-end">
-					<Chip.Group
-						multiple={false}
-						value={filters.status ?? ALL_VALUE}
-						onChange={(value) => handleStatusChange(value as string)}
-					>
+					<Chip.Group multiple={false} value={statusChipValue(filters.status)} onChange={(value) => handleStatusChange(value as string)}>
 						<Group
 							gap={4}
 							role="group"
@@ -165,6 +219,11 @@ export function IntegrationExecutionsPage() {
 						>
 							<Chip value={ALL_VALUE} data-testid="integration-executions-status-all">
 								{t("pages.integrations.executions.filters.allStatuses", "All")}
+							</Chip>
+							{/* One click for everything in flight. It is a real query, not a browser-side union: the endpoint
+							    takes a repeated `status`, so the count behind the pager stays the server's. */}
+							<Chip value={ACTIVE_VALUE} data-testid="integration-executions-status-active">
+								{t("pages.integrations.executions.filters.activeStatuses", "Active")}
 							</Chip>
 							{integrationExecutionStatuses.map((status) => (
 								<Chip key={status} value={status} data-testid={`integration-executions-status-${status}`}>
@@ -189,16 +248,6 @@ export function IntegrationExecutionsPage() {
 					/>
 				</Group>
 
-				{/* States what the window IS, and never calls it "the latest N": the response carries no total count, so
-				    only the server's ordering can be described, not the table's contents. */}
-				<Text size="sm" c="dimmed" data-testid="integration-executions-window-note">
-					{t("pages.integrations.executions.list.windowNote", {
-						defaultValue:
-							"Showing up to {{limit}} most recently received executions. Narrow by trigger, session or status to reach older records.",
-						limit: integrationListLimit,
-					})}
-				</Text>
-
 				{executionsQuery.isLoading ? (
 					<Group gap="sm">
 						<Loader size="sm" />
@@ -211,13 +260,18 @@ export function IntegrationExecutionsPage() {
 					</Alert>
 				) : null}
 				{!(executionsQuery.isLoading || loadError) ? (
-					<IntegrationExecutionTable
-						executions={executions}
-						triggers={triggers}
-						isCancelling={cancelMutation.isPending}
-						onView={(execution) => selectExecution(execution.id)}
-						onCancel={handleCancel}
-					/>
+					<>
+						<IntegrationExecutionTable
+							executions={executions}
+							triggers={triggers}
+							isCancelling={cancelMutation.isPending}
+							onView={(execution) => selectExecution(execution.id)}
+							onCancel={handleCancel}
+						/>
+						{/* Server-side: `totalCount` counts every row THESE filters match, so the range and the page count
+						    describe the whole table rather than the window that happened to load. */}
+						<TablePaginationFooter {...pagination} data-testid="integration-executions-pagination" />
+					</>
 				) : null}
 			</SectionCard>
 

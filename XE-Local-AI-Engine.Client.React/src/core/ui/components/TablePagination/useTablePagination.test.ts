@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 
 import { act, renderHook } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_PAGE_SIZE, useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
+import {
+	DEFAULT_PAGE_SIZE,
+	useServerTablePagination,
+	useTablePagination,
+} from "@/core/ui/components/TablePagination/useTablePagination";
 import { useTablePaginationStore } from "@/core/ui/components/TablePagination/useTablePaginationStore";
 
 const range = (count: number): number[] => Array.from({ length: count }, (_, index) => index);
@@ -115,5 +119,51 @@ describe("useTablePagination", () => {
 
 		expect(runs.result.current.pageSize).toBe(10);
 		expect(models.result.current.pageSize).toBe(DEFAULT_PAGE_SIZE);
+	});
+});
+
+describe("useServerTablePagination", () => {
+	const pageSizeOptions = [25, 50, 100];
+
+	function renderServerPagination(page: number, totalItems: number) {
+		const onPageChange = vi.fn();
+		const onPageSizeChange = vi.fn();
+		const { result } = renderHook(() =>
+			useServerTablePagination({ page, pageSize: 50, totalItems, pageSizeOptions, onPageChange, onPageSizeChange }),
+		);
+		return { footer: result.current, onPageChange };
+	}
+
+	it("describes the rows the active page holds", () => {
+		const { footer, onPageChange } = renderServerPagination(2, 130);
+
+		expect(footer.page).toBe(2);
+		expect(footer.pageCount).toBe(3);
+		expect(footer.firstItemIndex).toBe(51);
+		expect(footer.lastItemIndex).toBe(100);
+		expect(onPageChange).not.toHaveBeenCalled();
+	});
+
+	// A total that shrank under the operator (a delete, not a filter change) leaves the requested page out of range.
+	// The range must describe the page that will actually be shown, not the one that no longer exists — reading the
+	// raw page rendered "201–60 of 60" for a frame.
+	it("clamps to the last page that still exists and states its range, not the requested page's", () => {
+		const { footer, onPageChange } = renderServerPagination(5, 60);
+
+		expect(footer.page).toBe(2);
+		expect(footer.pageCount).toBe(2);
+		expect(footer.firstItemIndex).toBe(51);
+		expect(footer.lastItemIndex).toBe(60);
+		expect(onPageChange).toHaveBeenCalledExactlyOnceWith(2);
+	});
+
+	it("reports an empty table as an empty range rather than 1-0", () => {
+		const { footer, onPageChange } = renderServerPagination(1, 0);
+
+		expect(footer.page).toBe(1);
+		expect(footer.pageCount).toBe(1);
+		expect(footer.firstItemIndex).toBe(0);
+		expect(footer.lastItemIndex).toBe(0);
+		expect(onPageChange).not.toHaveBeenCalled();
 	});
 });

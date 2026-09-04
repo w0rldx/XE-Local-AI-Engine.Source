@@ -186,6 +186,12 @@ public sealed class IntegrationSessionStoreTests
             AssertEx.Equal(expected: 1, byTrigger.Count);
             AssertEx.Equal(expected: 1, byStatus.Count);
             AssertEx.Equal(closed.Id, byStatus[0].Id);
+
+            // The pager's total: the whole matching set under the SAME filter, never the window. A three-row page over
+            // seven rows must still report seven, or the UI cannot tell a full last page from one with more behind it.
+            AssertEx.Equal(expected: 7, await store.CountAsync(triggerId: null, status: null).ConfigureAwait(false));
+            AssertEx.Equal(expected: 1, await store.CountAsync(other.Id, status: null).ConfigureAwait(false));
+            AssertEx.Equal(expected: 1, await store.CountAsync(triggerId: null, IntegrationSessionStatus.Closed).ConfigureAwait(false));
         }
     }
 
