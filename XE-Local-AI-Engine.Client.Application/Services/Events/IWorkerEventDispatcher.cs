@@ -115,6 +115,16 @@ public interface IWorkerEventDispatcher
 
     Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory);
 
+    /// <summary>
+    ///     Records the turn's tool-schema token estimate on the invocation state so the terminalize write can persist it
+    ///     onto the run-envelope row. Reported by the runner immediately BEFORE each terminal report, on the completed,
+    ///     cancelled and failed paths alike, because the estimate is as interesting on a turn that ran out of context as
+    ///     on one that finished. Counts only — no tool name ever reaches this seam.
+    /// </summary>
+    /// <param name="toolSchemaTokens">Cumulative estimate across the turn's provider rounds.</param>
+    /// <param name="maxToolSchemaTokens">The largest single round's estimate.</param>
+    Task ReportToolSchemaTokensAsync(Guid invocationId, long? toolSchemaTokens, int? maxToolSchemaTokens);
+
     Task ReportToolCallRequestedAsync(ToolCallRequestPayload payload);
 
     Task ReportApprovalRequestedAsync(ApprovalRequestPayload payload);

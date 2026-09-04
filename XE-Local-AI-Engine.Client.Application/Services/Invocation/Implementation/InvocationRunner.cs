@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 
 using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
@@ -84,6 +86,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
     private readonly SpawnOptions _spawnOptions;
     private readonly AgentToolPipelineOptions _toolPipelineOptions;
+    private readonly IToolRelevanceCoreSet _toolRelevanceCoreSet;
+    private readonly ToolRelevanceOptions _toolRelevanceOptions;
 
     public InvocationRunner(Lazy<IHubMessageSender> hubSender,
         Lazy<IWorkerEventDispatcher> eventDispatcher,
@@ -101,6 +105,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IOptions<ProviderResilienceOptions> resilienceOptions,
         IOptions<AgentToolPipelineOptions> toolPipelineOptions,
         IOptions<ProviderCallBudgetOptions> providerCallBudgetOptions,
+        IOptions<ToolRelevanceOptions> toolRelevanceOptions,
+        IToolRelevanceCoreSet toolRelevanceCoreSet,
         IConfiguration configuration,
         INodeRuntimeSettings runtimeSettings,
         IOptions<SpawnOptions> spawnOptions,
@@ -136,6 +142,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _toolPipelineOptions = toolPipelineOptions.Value;
         ArgumentNullException.ThrowIfNull(providerCallBudgetOptions);
         _providerCallBudgetOptions = providerCallBudgetOptions.Value;
+        ArgumentNullException.ThrowIfNull(toolRelevanceOptions);
+        _toolRelevanceOptions = toolRelevanceOptions.Value;
+        _toolRelevanceCoreSet = toolRelevanceCoreSet ?? throw new ArgumentNullException(nameof(toolRelevanceCoreSet));
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(runtimeSettings);
         ArgumentNullException.ThrowIfNull(spawnOptions);
@@ -211,6 +220,39 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         using var providerBudgetScope = ProviderCallBudget.BeginScope(_providerCallBudgetOptions, harnessStartedTimestamp);
         var providerBudget = ProviderCallBudget.Current!;
+
+        // The turn's tool-schema token estimate, onto the invocation state so the terminalize write persists it with
+        // the envelope row. CaptureEfficiencySnapshot is a pure counter read, so calling it once per terminal path is
+        // free; it is reported on the failed and cancelled paths too, because the number is most interesting on a turn
+        // that ran out of context. Counts only — no tool name reaches this seam.
+        // Telemetry never decides an outcome: the report runs immediately BEFORE each terminal report, so on the
+        // completed path a throw here would fall into the catch below and turn a finished turn into a failed one, and
+        // on the two failure paths it would replace the real classification with its own. The shipped dispatcher
+        // cannot throw (UpdateInvocation is a logged no-op for an unknown id), which is exactly why swallowing costs
+        // nothing and why the guard is worth having against a future one that can.
+        async Task ReportToolSchemaEstimateAsync()
+        {
+            try
+            {
+                var efficiency = providerBudget.CaptureEfficiencySnapshot();
+                await dispatcher.ReportToolSchemaTokensAsync(package.InvocationId, efficiency.ToolSchemaTokens, efficiency.MaximumToolSchemaTokens).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Could not report the tool-schema token estimate for invocation {InvocationId}; the turn's outcome is unaffected.", package.InvocationId);
+            }
+        }
+
+        // Seeded in the SAME place and for the same reason as the provider budget: the send-time relevance hop runs
+        // several awaited frames below this method, an AsyncLocal write in a callee never reaches its caller, and the
+        // scope has to exist before the agent is built. Inactive by default, in which case the hop is a
+        // reference-equality pass-through and list_tools is never appended.
+        // The core set is read only when it will be USED: GetCoreToolNames reads the MCP registry live and, with any
+        // server connected, allocates a fresh catalog list plus a set per turn. On the shipped default that work would
+        // build a set nothing reads, on the hot path of every chat turn.
+        var toolRelevanceActive = _toolRelevanceOptions.Enabled && !package.DisableToolRelevanceFilter;
+        using var toolRelevanceScope = ToolRelevanceScope.BeginScope(toolRelevanceActive,
+            toolRelevanceActive ? _toolRelevanceCoreSet.GetCoreToolNames() : FrozenSet<string>.Empty);
         StreamState? stream = null;
         string? invocationOutcome = null;
 
@@ -380,6 +422,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 }, invocationToken).ConfigureAwait(false);
             }
 
+            await ReportToolSchemaEstimateAsync().ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(package.InvocationId,
                 stream.UsageSnapshot?.InputTokens,
                 stream.UsageSnapshot?.OutputTokens,
@@ -405,6 +448,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // a cancel is an outcome, not a failure. An invocation-level timeout ("watchdog") is additionally surfaced as a
             // Timeout failure below via ReportInvocationFailedAsync — the two metrics answer different questions.
             NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", InvocationLifecycleTracker.ClassifyCancellationMetricCategory(cancellationOrigin)));
+            await ReportToolSchemaEstimateAsync().ConfigureAwait(false);
             await dispatcher.ReportInvocationFailedAsync(package.InvocationId, cancellationMessage, failureCategory).ConfigureAwait(false);
             if (shouldSendHubMessages)
             {
@@ -423,6 +467,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", "operator_eject"));
             }
 
+            await ReportToolSchemaEstimateAsync().ConfigureAwait(false);
             await dispatcher.ReportInvocationFailedAsync(package.InvocationId, message, failureCategory).ConfigureAwait(false);
             if (shouldSendHubMessages)
             {
@@ -839,6 +884,22 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 }
 
                 await transport.EmitTextAsync(stream, textChunk, invocationToken).ConfigureAwait(false);
+            }
+
+            // The tool-relevance notice, drained at the end of the FIRST segment so it FOLLOWS the first assistant
+            // text exactly as HistoryTruncated does. The hop cannot reach the transport, so it leaves the two counts on
+            // the ambient scope and the runner emits them here. Counts only: the notice never names a tool. A first
+            // segment that THROWS terminalises without ever emitting it, which is deliberate — a "tools were held back"
+            // line printed under an error reads as the cause when it is not, and the numbers survive in telemetry.
+            if (isFirstSegment && ToolRelevanceScope.Current is { } relevanceState)
+            {
+                var hiddenToolCount = Volatile.Read(ref relevanceState.PendingNoticeHiddenCount);
+                if (hiddenToolCount > 0)
+                {
+                    await transport.EmitNoticeAsync(TurnNoticeKind.ToolsFiltered,
+                                       BuildToolsFilteredNoticeMessage(hiddenToolCount, Volatile.Read(ref relevanceState.PendingNoticeTotalCount)))
+                                   .ConfigureAwait(false);
+                }
             }
 
             // The first segment has drained; any resume segment past this point follows earlier output and must not be

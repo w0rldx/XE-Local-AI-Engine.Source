@@ -38795,6 +38795,7 @@
           "defaultTemporaryChat",
           "memoryExtractionEnabled",
           "disableBaseScaffold",
+          "disableToolRelevanceFilter",
           "allowedSkillIds",
           "version",
           "createdAtUtc",
@@ -38852,6 +38853,9 @@
             "type": "boolean"
           },
           "disableBaseScaffold": {
+            "type": "boolean"
+          },
+          "disableToolRelevanceFilter": {
             "type": "boolean"
           },
           "allowedSkillIds": {
@@ -38948,6 +38952,9 @@
             "type": "boolean"
           },
           "disableBaseScaffold": {
+            "type": "boolean"
+          },
+          "disableToolRelevanceFilter": {
             "type": "boolean"
           },
           "allowedSkillIds": {
@@ -39853,6 +39860,15 @@
             "format": "int32",
             "nullable": true
           },
+          "toolSchemaTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "maxToolSchemaTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
           "contentChunkCount": {
             "type": "integer",
             "format": "int32",
@@ -39939,6 +39955,9 @@
             "type": "boolean"
           },
           "disableBaseScaffold": {
+            "type": "boolean"
+          },
+          "disableToolRelevanceFilter": {
             "type": "boolean"
           },
           "allowedSkillIds": {

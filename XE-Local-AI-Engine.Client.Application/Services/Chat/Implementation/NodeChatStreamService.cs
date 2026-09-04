@@ -762,7 +762,10 @@ public sealed class NodeChatStreamService(
             SamplingOptions: request.SamplingOptions,
             Skills: resolved?.Skills,
             CustomTools: resolved?.CustomTools,
-            ReasoningBudgetEnforceable: resolution.ReasoningBudgetEnforceable));
+            ReasoningBudgetEnforceable: resolution.ReasoningBudgetEnforceable,
+            // Per-agent opt-out from the send-time tool-relevance filter; not hashed, so an opted-out agent keeps a
+            // byte-identical config hash.
+            DisableToolRelevanceFilter: resolved?.DisableToolRelevanceFilter ?? false));
     }
 
     /// <summary>

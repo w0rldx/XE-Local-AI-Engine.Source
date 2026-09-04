@@ -178,7 +178,8 @@
 			"modelSubstituted": "Model substituted",
 			"toolDisabled": "Tool disabled",
 			"historyTruncated": "History truncated",
-			"orchestrationDegraded": "Orchestration not used"
+			"orchestrationDegraded": "Orchestration not used",
+			"toolsFiltered": "Tools filtered"
 		},
 		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting."
 	},
@@ -2578,6 +2579,10 @@
 				"disableBaseScaffold": {
 					"label": "Disable base instructions scaffold",
 					"description": "Skip the layered base instructions this node normally prepends to every agent — use only the instructions written above, unmodified."
+				},
+				"disableToolRelevanceFilter": {
+					"label": "Always offer every tool",
+					"description": "Skip this node's tool-relevance filter for this agent, so every tool it may use is shown to the model on every round. Turn this on if the agent misses tools; it costs context on agents with many tools."
 				}
 			},
 			"playbook": {

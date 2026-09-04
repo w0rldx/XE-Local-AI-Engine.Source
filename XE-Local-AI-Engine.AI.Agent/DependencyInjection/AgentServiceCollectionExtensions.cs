@@ -76,6 +76,13 @@ public static class AgentServiceCollectionExtensions
                     .ValidateDataAnnotations()
                     .ValidateOnStart();
 
+        // Per-round tool-relevance offer. Off by default: with Enabled false the pipeline hop below is a
+        // reference-equality pass-through and list_tools is never appended, so the offer stays byte-identical.
+        _ = services.AddOptions<ToolRelevanceOptions>()
+                    .Bind(configuration.GetSection(ToolRelevanceOptions.Section))
+                    .ValidateDataAnnotations()
+                    .ValidateOnStart();
+
         _ = services.AddSingleton<IValidateOptions<LocalChatAgentOptions>, LocalChatAgentOptionsValidator>();
         _ = services.AddSingleton<IValidateOptions<InvocationAgentOptions>, InvocationAgentOptionsValidator>();
         _ = services.AddSingleton<IValidateOptions<OrchestrationAgentOptions>, OrchestrationAgentOptionsValidator>();
@@ -96,6 +103,10 @@ public static class AgentServiceCollectionExtensions
         // node-configured NodeToolApprovalPolicy still resolves a policy and behaves exactly as before. TryAddSingleton
         // so the composition root's plain AddSingleton<IToolApprovalPolicy, NodeToolApprovalPolicy> wins (last-wins).
         services.TryAddSingleton<IToolApprovalPolicy, PermissiveToolApprovalPolicy>();
+        // Tool-relevance ranker. The deterministic, model-free lexical selector is the shipped default and the
+        // fallback every other implementation degrades to; the node composition root Replaces it with the
+        // embedding-backed selector when one is configured, so agent-only tests keep the lexical registration.
+        services.TryAddSingleton<IToolRelevanceSelector, LexicalToolRelevanceSelector>();
         _ = services.AddSingleton<IInvocationAgentFactory, InvocationAgentFactory>();
         // Multi-agent handoff orchestration. Reuses the same IChatClient + tool registries as the single-agent
         // factory; confines all Microsoft.Agents.AI.Workflows types behind IOrchestrationRunSession.
@@ -131,6 +142,8 @@ public static class AgentServiceCollectionExtensions
             // falls back to the pinned defaults rather than throwing during a partial re-decoration.
             var pipelineOptions = serviceProvider.GetService<IOptions<AgentToolPipelineOptions>>()?.Value ?? new AgentToolPipelineOptions();
             var telemetryOptions = serviceProvider.GetService<IOptions<AgentTelemetryOptions>>()?.Value ?? new AgentTelemetryOptions();
+            var toolRelevanceOptions = serviceProvider.GetService<IOptions<ToolRelevanceOptions>>()?.Value ?? new ToolRelevanceOptions();
+            var toolRelevanceSelector = serviceProvider.GetService<IToolRelevanceSelector>() ?? new LexicalToolRelevanceSelector();
 
             // Enabling sensitive-content capture is a privacy-sensitive, deliberate opt-in — surface it loudly once so an
             // operator can never leave full prompts/reasoning/completions flowing into telemetry unnoticed.
@@ -154,6 +167,14 @@ public static class AgentServiceCollectionExtensions
                         .Use(chatClient => new ToolInvocationObservabilityChatClient(chatClient, serviceProvider.GetRequiredService<ILogger<ToolInvocationObservabilityChatClient>>()))
                         .UseFunctionInvocation(serviceProvider.GetRequiredService<ILoggerFactory>(),
                             functionInvokingChatClient => functionInvokingChatClient.MaximumIterationsPerRequest = pipelineOptions.MaximumToolIterationsPerRequest)
+                        // Below UseFunctionInvocation so the layer above keeps the WHOLE executable list (a revealed
+                        // tool is immediately callable), and ABOVE the budgeter so its EstimateTools measures the array
+                        // actually sent. Gated on an ambient ToolRelevanceScope the invocation runner seeds; without
+                        // one — or with the feature off — it returns the caller's options instance unchanged.
+                        .Use(chatClient => new ToolRelevanceChatClient(chatClient,
+                            toolRelevanceSelector,
+                            toolRelevanceOptions,
+                            serviceProvider.GetRequiredService<ILogger<ToolRelevanceChatClient>>()))
                         // Below UseFunctionInvocation so it re-budgets EVERY inner tool-loop round (and MAF participant
                         // round), and above UseOpenTelemetry so the recorded gen_ai span reflects the budgeted message
                         // set actually sent. Gated on an ambient ProviderCallBudget scope the invocation runner seeds.

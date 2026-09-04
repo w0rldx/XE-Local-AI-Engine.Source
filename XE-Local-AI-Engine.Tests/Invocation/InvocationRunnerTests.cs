@@ -3090,6 +3090,190 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenTheRelevanceHopHeldToolsBack_EmitsOneToolsFilteredNoticeAfterTheFirstAssistantText()
+    {
+        // The drain the hop cannot do itself: it leaves the pair on the ambient scope several awaited frames below the
+        // runner, and the runner turns it into the one counts-only sentence at the end of the FIRST segment — after
+        // the assistant text, exactly as HistoryTruncated does.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var chunksSentWhenTheNoticeFired = -1;
+        dispatcher.When(static call => call.ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.ToolsFiltered)))
+                  .Do(_ => chunksSentWhenTheNoticeFired = sender.SentEncryptedChunks.Count(static chunk => chunk.Kind == EncryptedChunkEnvelopeV1.ContentKind));
+        var runner = CreateRunner(sender,
+            eventDispatcher: dispatcher,
+            agentUpdates: ToolsFilteredUpdates(hidden: 5, total: 12, "Hello"),
+            toolRelevanceOptions: new ToolRelevanceOptions
+            {
+                Enabled = true
+            });
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        // The sentence is asserted verbatim: the ChatNoticeRow test renders whatever the server sends, so this is the
+        // only place the wording is pinned.
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.InvocationId == package.InvocationId
+            && payload.Kind == TurnNoticeKind.ToolsFiltered
+            && payload.Message == "5 of 12 tools were held back from this turn to save context; the assistant can list and use them by calling list_tools."));
+        AssertEx.True(chunksSentWhenTheNoticeFired >= 1, "The notice must follow the first assistant text, never precede it.");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenNoToolWasHeldBack_EmitsNoToolsFilteredNotice()
+    {
+        // Both silent shapes: the shipped default (the filter never engages) and an ACTIVE filter whose decision hid
+        // nothing — "0 of N tools were held back" is a sentence no user should ever see.
+        var shippedDefaultDispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await RunAsync(CreateRunner(new MockHubMessageSender(), eventDispatcher: shippedDefaultDispatcher, agentUpdates: CreateUpdates("Hello")),
+            RuntimePackageBuilder.Valid().Build());
+
+        var nothingHiddenDispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await RunAsync(CreateRunner(new MockHubMessageSender(),
+                eventDispatcher: nothingHiddenDispatcher,
+                agentUpdates: ToolsFilteredUpdates(hidden: 0, total: 12, "Hello"),
+                toolRelevanceOptions: new ToolRelevanceOptions
+                {
+                    Enabled = true
+                }),
+            RuntimePackageBuilder.Valid().Build());
+
+        foreach (var dispatcher in new[] { shippedDefaultDispatcher, nothingHiddenDispatcher })
+        {
+            await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.ToolsFiltered));
+        }
+    }
+
+    [Test]
+    public async Task RunAsync_WhenASecondSegmentFiltersAgain_KeepsTheNoticeToTheFirstSegmentsCounts()
+    {
+        // The drain is inside `if (isFirstSegment …)`, so an approval resume that rebinds the tool array and computes a
+        // second decision must NOT post a second "tools were held back" line under output the user has already read.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1
+                ? ToolsFilteredApprovalRequestUpdates(hidden: 5, total: 12)
+                : ToolsFilteredUpdates(hidden: 3, total: 9, "done");
+        });
+        var runner = CreateRunner(sender,
+            factory,
+            eventDispatcher: dispatcher,
+            toolRelevanceOptions: new ToolRelevanceOptions
+            {
+                Enabled = true
+            });
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("run_in_agent_home").Build();
+
+        var runTask = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        await runTask;
+
+        AssertEx.Equal(expected: 2, segment, "The resume segment must actually run, or this proves nothing.");
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.ToolsFiltered
+            && payload.Message.StartsWith("5 of 12 tools", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task RunAsync_OnACompletedTurn_ReportsTheBudgetsToolSchemaTokenEstimateBeforeTheTerminalReport()
+    {
+        // The columns are populated on the SHIPPED default (tool relevance off): the budget counts the schema either
+        // way, and that is what makes the before/after measurable at all. Cumulative across rounds, maximum per round.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var order = new List<string>();
+        dispatcher.When(static call => call.ReportToolSchemaTokensAsync(Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<int?>())).Do(_ => order.Add("estimate"));
+        dispatcher.When(static call => call.ReportInvocationCompletedAsync(Arg.Any<Guid>(),
+                            Arg.Any<int?>(),
+                            Arg.Any<int?>(),
+                            Arg.Any<int?>(),
+                            Arg.Any<int?>(),
+                            Arg.Any<long?>(),
+                            Arg.Any<string?>(),
+                            Arg.Any<InvocationThroughput?>()))
+                  .Do(_ => order.Add("completed"));
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: ToolSchemaBudgetedUpdates(640, 300));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportToolSchemaTokensAsync(package.InvocationId, 940L, 640);
+        AssertEx.True(order.SequenceEqual(["estimate", "completed"], StringComparer.Ordinal),
+            "The estimate must reach the invocation state BEFORE the terminal report, or the envelope row is written without it.");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheTurnIsCancelled_StillReportsTheToolSchemaTokenEstimate()
+    {
+        // The easiest path to lose, and the most interesting one to keep: a turn that was stopped is exactly where an
+        // operator asks what the tool schema was costing.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var order = new List<string>();
+        dispatcher.When(static call => call.ReportToolSchemaTokensAsync(Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<int?>())).Do(_ => order.Add("estimate"));
+        dispatcher.When(static call => call.ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>())).Do(_ => order.Add("terminal"));
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = CreateRunner(sender, CreateFactory(cancellationToken => ToolSchemaBudgetedThenParkedUpdates(640, started, cancellationToken)), eventDispatcher: dispatcher);
+        var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
+
+        var runTask = RunAsync(runner, package);
+        await started.Task;
+        runner.Cancel(package.InvocationId);
+        await runTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        await dispatcher.Received(1).ReportToolSchemaTokensAsync(package.InvocationId, 640L, 640);
+        AssertEx.True(order.SequenceEqual(["estimate", "terminal"], StringComparer.Ordinal));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheTurnFails_StillReportsTheToolSchemaTokenEstimate()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var order = new List<string>();
+        dispatcher.When(static call => call.ReportToolSchemaTokensAsync(Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<int?>())).Do(_ => order.Add("estimate"));
+        dispatcher.When(static call => call.ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>())).Do(_ => order.Add("terminal"));
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: ToolSchemaBudgetedThenThrowingUpdates(640));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportToolSchemaTokensAsync(package.InvocationId, 640L, 640);
+        AssertEx.True(order.SequenceEqual(["estimate", "terminal"], StringComparer.Ordinal));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheEstimateReportThrows_StillCompletesTheTurn()
+    {
+        // Telemetry never decides an outcome. The report runs immediately before the terminal report, so an unguarded
+        // throw on the completed path would fall into the catch below it and turn a finished turn into a failed one.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.ReportToolSchemaTokensAsync(Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<int?>())
+                  .Returns<Task>(static _ => throw new InvalidOperationException("the estimate seam broke"));
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: CreateUpdates("Hello"));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId,
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<long?>(),
+            Arg.Any<string?>(),
+            Arg.Any<InvocationThroughput?>());
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), Arg.Any<FailureCategory>());
+    }
+
+    [Test]
     public async Task RunAsync_WhenTheProviderRepeatsTheSameToolCall_EmitsOneRequestedEventPerDistinctCall()
     {
         // A re-emitted FunctionCallContent used to pay a fresh JsonSerializer.Serialize + dispatch + SignalR frame every
@@ -3478,7 +3662,8 @@ public sealed class InvocationRunnerTests
         UserQuestionAnswerStash? userQuestionAnswerStash = null,
         IToolApprovalAuditRecorder? approvalAuditRecorder = null,
         IToolApprovalPolicy? approvalPolicy = null,
-        IInvocationAttachmentTracker? attachmentTracker = null)
+        IInvocationAttachmentTracker? attachmentTracker = null,
+        ToolRelevanceOptions? toolRelevanceOptions = null)
     {
         var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
@@ -3557,6 +3742,10 @@ public sealed class InvocationRunnerTests
             Options.Create(new ProviderResilienceOptions()),
             Options.Create(new AgentToolPipelineOptions()),
             Options.Create(new ProviderCallBudgetOptions()),
+            // Tool relevance stays OFF by default here: every existing assertion in this file is a byte-identical-offer
+            // assertion. The notice-drain tests pass their own enabled options.
+            Options.Create(toolRelevanceOptions ?? new ToolRelevanceOptions()),
+            new FakeToolRelevanceCoreSet(),
             configuration,
             runtimeSettings,
             Options.Create(new SpawnOptions()),
@@ -4002,6 +4191,76 @@ public sealed class InvocationRunnerTests
     {
         await Task.Yield();
         yield return await Task.FromException<AgentResponseUpdate>(new InvalidOperationException("stream failed"));
+    }
+
+    // The four helpers below stand in for the two seams that write during a turn but sit several awaited frames BELOW
+    // the runner: the provider-call budget middleware, which registers each round's tool-schema token estimate, and the
+    // send-time relevance hop, which leaves the notice counts on the ambient scope. Both are AsyncLocal, so a fake
+    // agent stream — enumerated inside the runner's own scopes — reaches exactly the instances the turn under test
+    // seeded, which is the whole point: neither seam can be injected from out here.
+    private static async IAsyncEnumerable<AgentResponseUpdate> ToolsFilteredUpdates(int hidden, int total, string text)
+    {
+        RecordRelevanceDecision(hidden, total);
+        yield return new AgentResponseUpdate(ChatRole.Assistant, text);
+        await Task.Yield();
+    }
+
+    // A first segment that both filters and requests an approval, so the resume segment's own decision can be shown not
+    // to re-drain.
+    private static async IAsyncEnumerable<AgentResponseUpdate> ToolsFilteredApprovalRequestUpdates(int hidden, int total)
+    {
+        RecordRelevanceDecision(hidden, total);
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "working on it");
+        await Task.Yield();
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new ToolApprovalRequestContent("approval-run-in-agent-home", new ToolCallContent("call-run-in-agent-home"))
+        });
+        await Task.Yield();
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> ToolSchemaBudgetedUpdates(params int[] toolSchemaTokensPerRound)
+    {
+        RegisterProviderRounds(toolSchemaTokensPerRound);
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "Hello");
+        await Task.Yield();
+    }
+
+    // Rounds are registered BEFORE the park, so the estimate the cancelled path reports is a real one rather than zero.
+    private static async IAsyncEnumerable<AgentResponseUpdate> ToolSchemaBudgetedThenParkedUpdates(int toolSchemaTokens,
+        TaskCompletionSource started,
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken = default)
+    {
+        RegisterProviderRounds([toolSchemaTokens]);
+        started.TrySetResult();
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        yield break;
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> ToolSchemaBudgetedThenThrowingUpdates(int toolSchemaTokens)
+    {
+        RegisterProviderRounds([toolSchemaTokens]);
+        await Task.Yield();
+        yield return await Task.FromException<AgentResponseUpdate>(new InvalidOperationException("stream failed"));
+    }
+
+    private static void RegisterProviderRounds(IReadOnlyList<int> toolSchemaTokensPerRound)
+    {
+        var budget = AssertEx.NotNull(ProviderCallBudget.Current, "The runner seeds the provider-call budget before the agent runs.");
+        foreach (var toolSchemaTokens in toolSchemaTokensPerRound)
+        {
+            budget.RegisterProviderRound(estimatedInputTokens: 10, toolSchemaTokens);
+        }
+    }
+
+    // What the hop's single-flight factory does once one array's decision is computed: Interlocked.Exchange, so the
+    // pair the runner drains always describes ONE array rather than a sum across two.
+    private static void RecordRelevanceDecision(int hidden, int total)
+    {
+        var state = AssertEx.NotNull(ToolRelevanceScope.Current, "The runner seeds the relevance scope before the agent runs.");
+        Interlocked.Exchange(ref state.PendingNoticeHiddenCount, hidden);
+        Interlocked.Exchange(ref state.PendingNoticeTotalCount, total);
     }
 
     // The shape an HTTP client timeout takes: a TaskCanceledException on a token this node does not own, raised while

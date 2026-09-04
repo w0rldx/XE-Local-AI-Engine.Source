@@ -178,7 +178,8 @@
 			"modelSubstituted": "Modell ersetzt",
 			"toolDisabled": "Tool deaktiviert",
 			"historyTruncated": "Verlauf gekürzt",
-			"orchestrationDegraded": "Orchestrierung nicht verwendet"
+			"orchestrationDegraded": "Orchestrierung nicht verwendet",
+			"toolsFiltered": "Tools gefiltert"
 		},
 		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus."
 	},
@@ -2578,6 +2579,10 @@
 				"disableBaseScaffold": {
 					"label": "Basis-Anweisungsgerüst deaktivieren",
 					"description": "Überspringt die vom Knoten normalerweise vorangestellten Basis-Anweisungen für jeden Agenten – es werden nur die oben geschriebenen Anweisungen unverändert verwendet."
+				},
+				"disableToolRelevanceFilter": {
+					"label": "Immer alle Tools anbieten",
+					"description": "Überspringt den Tool-Relevanzfilter dieses Knotens für diesen Agenten, sodass dem Modell in jeder Runde alle nutzbaren Tools gezeigt werden. Aktivieren, wenn dem Agenten Tools fehlen; bei Agenten mit vielen Tools kostet es Kontext."
 				}
 			},
 			"playbook": {

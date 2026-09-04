@@ -208,7 +208,12 @@ public sealed record AgentRunEnvelopeMetadata(
     // Fine-grained runtime provider that served the turn (a non-sensitive category label; see AgentUsageProviders).
     // Resolved at terminalization from the run's model id; defaults to 'unknown' so a caller that does not attribute a
     // provider (the interrupted/thin-cancel path) writes a valid label and the column default is honoured.
-    string Provider = AgentUsageProviders.Unknown);
+    string Provider = AgentUsageProviders.Unknown,
+    // Tool-schema token estimate for the turn: cumulative over its provider rounds, and the largest single round.
+    // Counts only — never a tool name. Trailing optional so every existing construction site compiles unchanged, and
+    // null on the thin interrupted/cancel path that has no invocation state to read them from.
+    long? ToolSchemaTokens = null,
+    int? MaxToolSchemaTokens = null);
 
 public sealed record NodeChatCancelRequest(
     NodeChatMessageCorrelation Correlation,

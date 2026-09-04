@@ -80,4 +80,5 @@ public sealed record AgentDefinitionInput(
     bool DefaultTemporaryChat = false,
     bool MemoryExtractionEnabled = true,
     bool DisableBaseScaffold = false,
-    string? GenerationMetadataJson = null);
+    string? GenerationMetadataJson = null,
+    bool DisableToolRelevanceFilter = false);

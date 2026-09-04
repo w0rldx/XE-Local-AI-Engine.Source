@@ -323,6 +323,57 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RecoverInterruptedMessagesAsync_BackfillsEnvelopesAtTheCurrentVersionWithNullTokenColumns()
+    {
+        // The backfill stamps the CURRENT schema version even though it supplies no generation detail: a version says
+        // the field set MAY include those columns, never that they are populated. A backfilled row therefore declares
+        // the current version and leaves both token columns null.
+        await using var provider = await BuildProviderAsync("restart-recovery-envelope-version.sqlite").ConfigureAwait(false);
+        var persistence = CreatePersistenceService(provider);
+        var recovery = CreateRecoveryService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Version", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        _ = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 11).ConfigureAwait(false);
+
+        _ = await recovery.RecoverInterruptedMessagesAsync(99).ConfigureAwait(false);
+
+        var envelope = (await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false)).Single();
+        AssertEx.Equal(AgentRunEnvelope.CurrentSchemaVersion, envelope.SchemaVersion);
+        AssertEx.Null(envelope.ToolSchemaTokens);
+        AssertEx.Null(envelope.MaxToolSchemaTokens);
+    }
+
+    [Test]
+    public async Task CancelThenAuthoritativeCompletion_UpsertsTheToolSchemaTokenEstimateOverTheThinNulls()
+    {
+        // The two write modes share one column list, so the thin cancel's InsertIfAbsent writes both columns as null and
+        // the pump's authoritative Upsert then overwrites them in place — the same "the terminalize wins" rule every
+        // other run-outcome column follows, so the estimate can never be stranded on a superseded thin envelope.
+        await using var provider = await BuildProviderAsync("cancel-then-complete-tool-schema-tokens.sqlite").ConfigureAwait(false);
+        var persistence = CreatePersistenceService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("UpsertTokens", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var correlation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 11).ConfigureAwait(false);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 12).ConfigureAwait(false);
+
+        await persistence.CancelMessageAsync(new NodeChatCancelRequest(correlation, CancelledAtUtc: 13)).ConfigureAwait(false);
+        var thin = (await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false)).Single();
+        AssertEx.Null(thin.ToolSchemaTokens, "The thin cancel envelope has no invocation state to read an estimate from.");
+
+        _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                                 NodeChatMessageStatusValues.Completed,
+                                 UpdatedAtUtc: 14,
+                                 "the real answer",
+                                 Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(),
+                                     DurationMs: 1_500L,
+                                     ToolSchemaTokens: 9_001L,
+                                     MaxToolSchemaTokens: 512)))
+                             .ConfigureAwait(false);
+
+        var envelope = (await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false)).Single();
+        AssertEx.Equal(expected: 9_001L, envelope.ToolSchemaTokens);
+        AssertEx.Equal(expected: 512, envelope.MaxToolSchemaTokens);
+    }
+
+    [Test]
     public async Task CancelThenInterrupted_LeavesCancelledEnvelope_PreservingTheInvariant()
     {
         await using var provider = await BuildProviderAsync("cancel-then-interrupt-envelope.sqlite").ConfigureAwait(false);

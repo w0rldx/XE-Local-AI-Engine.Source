@@ -144,8 +144,10 @@ public static class AgentRunEnvelope
     ///     apart. v2: added reasoning/total tokens + started_at_utc lifecycle fields and the deterministic
     ///     message-id upsert key. v3: written atomically inside the terminalize transaction with the bound
     ///     agent id populated from the winning message row.
+    ///     v4: added tool_schema_tokens / max_tool_schema_tokens — the per-turn tool-schema token estimate. Nullable;
+    ///     null on rows written by the restart-recovery backfill, which supplies no generation detail.
     /// </summary>
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 }
 
 /// <summary>
@@ -239,7 +241,15 @@ public sealed record AgentRunEnvelopeRecord(
     int? ReasoningChunkCount,
     string? TraceId,
     long? StartedAtUtc,
-    long CreatedAtUtc);
+    long CreatedAtUtc,
+    // TRAILING rather than beside TotalTokens, unlike AgentRunEnvelopeResponse which does group them with the other
+    // token fields: this is a POSITIONAL record, so a member with a default can only be added at the end — inserting
+    // mid-list would either be a breaking positional change for every construction site or not compile at all.
+    // Tool-schema token estimate for the turn. DELIBERATELY wider than the int? token members above: the cumulative
+    // counter is a long at its source and P-C1 sums this column across a whole session, so narrowing it here would
+    // truncate silently. The per-round maximum stays an int, matching its own source.
+    long? ToolSchemaTokens = null,
+    int? MaxToolSchemaTokens = null);
 
 /// <summary>
 ///     Typed projection of a persisted execution-log row. Metadata only — no message content. <see cref="ErrorClass" />

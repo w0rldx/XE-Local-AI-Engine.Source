@@ -1047,6 +1047,122 @@ public sealed class InvocationAgentFactoryTests
         AssertOutboundInstructionContract(chatClient, instructions, expectedAgentName: "XeInvocation-qwen3.5:0.8b", chatClientAgent);
     }
 
+    // ---- Tool-relevance escape hatch (list_tools) ----
+    //
+    // This factory is the ONLY site in the product that appends list_tools, which is what makes the send-time
+    // relevance hop inert by construction for orchestration participants and spawned sub-agents: their arrays carry
+    // no escape hatch, and the hop refuses to filter an array that has none.
+
+    [Test]
+    public async Task CreateAsync_WithNoToolRelevanceScope_DoesNotOfferListTools()
+    {
+        using var chatClient = new CapturingChatClient();
+
+        var offered = await ResolveOfferedToolsAsync(chatClient, toolCount: 20);
+
+        AssertEx.Empty(offered.OfType<ListToolsFunction>(), "The shipped default offers exactly the tools it offered before this slice existed.");
+    }
+
+    [Test]
+    public async Task CreateAsync_UnderAnInactiveScope_DoesNotOfferListTools()
+    {
+        using var chatClient = new CapturingChatClient();
+
+        using (ToolRelevanceScope.BeginScope(active: false, new HashSet<string>(StringComparer.Ordinal)))
+        {
+            var offered = await ResolveOfferedToolsAsync(chatClient, toolCount: 20);
+
+            AssertEx.Empty(offered.OfType<ListToolsFunction>(), "The node kill-switch and the per-agent opt-out both arrive as an inactive scope.");
+        }
+    }
+
+    [Test]
+    public async Task CreateAsync_UnderAnActiveScopeAtTheThreshold_DoesNotOfferListTools()
+    {
+        using var chatClient = new CapturingChatClient();
+
+        using (ToolRelevanceScope.BeginScope(active: true, new HashSet<string>(StringComparer.Ordinal)))
+        {
+            var offered = await ResolveOfferedToolsAsync(chatClient, toolCount: 12);
+
+            AssertEx.Empty(offered.OfType<ListToolsFunction>(), "At or below the threshold nothing is ever hidden, so no escape hatch is needed.");
+        }
+    }
+
+    [Test]
+    public async Task CreateAsync_UnderAnActiveScopeAboveTheThreshold_OffersListTools()
+    {
+        using var chatClient = new CapturingChatClient();
+
+        using (ToolRelevanceScope.BeginScope(active: true, new HashSet<string>(StringComparer.Ordinal)))
+        {
+            var offered = await ResolveOfferedToolsAsync(chatClient, toolCount: 13);
+
+            AssertEx.ContainsSingle(offered, static tool => tool is ListToolsFunction);
+        }
+    }
+
+    [Test]
+    public async Task CreateAsync_ForASkillsAgent_CountsTheThreeMafSkillToolsTowardsTheThreshold()
+    {
+        // Ten resolved tools plus the three MAF skill tools is thirteen — the array the hop will measure. Counting only
+        // the resolved ten would leave a skills agent above the threshold with no escape hatch.
+        using var withSkills = new CapturingChatClient();
+        using var withoutSkills = new CapturingChatClient();
+
+        using (ToolRelevanceScope.BeginScope(active: true, new HashSet<string>(StringComparer.Ordinal)))
+        {
+            var skillsAgent = await ResolveOfferedToolsAsync(withSkills, toolCount: 10, withSkills: true);
+            AssertEx.ContainsSingle(skillsAgent, static tool => tool is ListToolsFunction);
+
+            var plainAgent = await ResolveOfferedToolsAsync(withoutSkills, toolCount: 10);
+            AssertEx.Empty(plainAgent.OfType<ListToolsFunction>(), "The same ten tools without skills stay below the threshold.");
+        }
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenTheNodePolicyTightensReadLocal_ListToolsStillRequiresNoApproval()
+    {
+        // A tightening node policy reaches the resolver as requiresApproval on every offer placeholder, and the
+        // resolver wraps each resolved executable. list_tools is appended AFTER that pass, so it is deliberately
+        // subject to neither the tighten-only compose nor AllowedToolNames — an in-process listing of names the agent
+        // is already authorised for. This exemption is stated in the design, not discovered here.
+        using var chatClient = new CapturingChatClient();
+
+        using (ToolRelevanceScope.BeginScope(active: true, new HashSet<string>(StringComparer.Ordinal)))
+        {
+            var offered = await ResolveOfferedToolsAsync(chatClient, toolCount: 13, requiresApproval: true);
+
+            AssertEx.Equal(expected: 13, offered.OfType<ApprovalRequiredAIFunction>().Count(), "Every OFFERED tool was tightened by the resolver's compose.");
+            // Had the append run before that pass, this entry would be an ApprovalRequiredAIFunction wrapper and no
+            // bare ListToolsFunction would survive in the array.
+            AssertEx.ContainsSingle(offered, static tool => tool is ListToolsFunction);
+            AssertEx.Equal(expected: 14, offered.Count, "Thirteen tightened tools plus the unwrapped escape hatch.");
+        }
+    }
+
+    // Builds an agent over `toolCount` resolvable tools, drives one turn, and returns the tool array the model was
+    // actually handed — the same observation point the production pipeline's relevance hop reads.
+    private static async Task<IReadOnlyList<AITool>> ResolveOfferedToolsAsync(CapturingChatClient chatClient,
+        int toolCount,
+        bool withSkills = false,
+        bool requiresApproval = false)
+    {
+        var names = Enumerable.Range(0, toolCount).Select(static index => $"tool_{index}").ToList();
+        var registry = new FakeToolRegistry([.. names.Select(static name => AIFunctionFactory.Create((string input) => input, name))]);
+        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
+            "Be helpful.",
+            [.. names.Select(name => InvocationToolBridge.CreateOfferPlaceholder(name, requiresApproval))],
+            [new ChatMessage(ChatRole.User, "Summarise the deployment status.")],
+            Skills: withSkills ? [new InvocationSkill("kubernetes-debug", "Debug k8s issues", "## Body")] : null);
+
+        var sut = CreateSut(chatClient, registry);
+        await using var context = await sut.CreateAsync(definition);
+        await DriveAsync(context.Agent, context);
+
+        return [.. AssertEx.NotNull(chatClient.CapturedOptions).Tools ?? []];
+    }
+
     // Mirrors the production run loop (InvocationRunner): replay the seed messages through the agent with the per-turn
     // run options, threadless, so the capturing client observes exactly what the model would receive.
     private static async Task DriveAsync(AIAgent agent, InvocationAgentContext context)

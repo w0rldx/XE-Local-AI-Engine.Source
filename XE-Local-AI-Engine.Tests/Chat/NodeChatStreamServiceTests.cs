@@ -4923,6 +4923,17 @@ public sealed class NodeChatStreamServiceTests
             return Task.CompletedTask;
         }
 
+        public Task ReportToolSchemaTokensAsync(Guid invocationId, long? toolSchemaTokens, int? maxToolSchemaTokens)
+        {
+            if (CurrentInvocation is not null)
+            {
+                CurrentInvocation.ToolSchemaTokens = toolSchemaTokens;
+                CurrentInvocation.MaxToolSchemaTokens = maxToolSchemaTokens;
+            }
+
+            return Task.CompletedTask;
+        }
+
         public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory)
         {
             if (CurrentInvocation is not null)

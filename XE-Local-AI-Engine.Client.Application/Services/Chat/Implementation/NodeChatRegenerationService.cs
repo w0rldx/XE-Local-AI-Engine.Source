@@ -250,7 +250,9 @@ public sealed class NodeChatRegenerationService(
                 SamplingOptions: samplingOptions,
                 Skills: resolved?.Skills,
                 CustomTools: resolved?.CustomTools,
-                ReasoningBudgetEnforceable: resolution.ReasoningBudgetEnforceable));
+                ReasoningBudgetEnforceable: resolution.ReasoningBudgetEnforceable,
+                // Carried exactly as the send path carries it, so a regenerated turn sees the same tool array.
+                DisableToolRelevanceFilter: resolved?.DisableToolRelevanceFilter ?? false));
 
             // Post-run adaptive-memory hook (symmetric with the send path): fired once when the pump persists a
             // Completed/Failed terminal, ONLY when the resolved agent has the playbook enabled AND opts into extraction. A

@@ -6428,6 +6428,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = z.
 	defaultTemporaryChat: z.boolean(),
 	memoryExtractionEnabled: z.boolean(),
 	disableBaseScaffold: z.boolean(),
+	disableToolRelevanceFilter: z.boolean(),
 	allowedSkillIds: z.array(z.guid()),
 	version: z
 		.int()
@@ -6452,6 +6453,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest
 	defaultTemporaryChat: z.boolean().optional(),
 	memoryExtractionEnabled: z.boolean().optional(),
 	disableBaseScaffold: z.boolean().optional(),
+	disableToolRelevanceFilter: z.boolean().optional(),
 	allowedSkillIds: z.array(z.guid()).nullish(),
 	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadata.nullish(),
 });
@@ -6791,6 +6793,12 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse = z
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
+	toolSchemaTokens: z.int().nullish(),
+	maxToolSchemaTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 	contentChunkCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -6828,6 +6836,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest
 	defaultTemporaryChat: z.boolean().optional(),
 	memoryExtractionEnabled: z.boolean().optional(),
 	disableBaseScaffold: z.boolean().optional(),
+	disableToolRelevanceFilter: z.boolean().optional(),
 	allowedSkillIds: z.array(z.guid()).nullish(),
 	generationMetadata: zXeLocalAiEngineClientEndpointsCommonGenerationMetadata.nullish(),
 });

@@ -57,6 +57,16 @@ public sealed class AgentRunEnvelopeResponse
 
     public int? TotalTokens { get; init; }
 
+    /// <summary>
+    ///     Estimated tool-schema tokens the turn spent, cumulative across its provider rounds; null on a row written
+    ///     before this field existed or by the restart-recovery backfill. A <c>long</c>, unlike the token members above,
+    ///     because its source counter is one.
+    /// </summary>
+    public long? ToolSchemaTokens { get; init; }
+
+    /// <summary>The largest single round's estimated tool-schema token count; null for the same reasons.</summary>
+    public int? MaxToolSchemaTokens { get; init; }
+
     public int? ContentChunkCount { get; init; }
 
     public int? ReasoningChunkCount { get; init; }

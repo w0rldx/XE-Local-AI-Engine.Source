@@ -56,6 +56,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasDefaultValue(false)
                         .HasColumnName("disable_base_scaffold");
 
+                    b.Property<bool>("DisableToolRelevanceFilter")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("disable_tool_relevance_filter");
+
                     b.Property<byte[]>("GenerationMetadataJson")
                         .HasColumnType("BLOB")
                         .HasColumnName("generation_metadata_json");
@@ -178,6 +184,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("latency_ms");
 
+                    b.Property<int?>("MaxToolSchemaTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("max_tool_schema_tokens");
+
                     b.Property<Guid?>("MessageId")
                         .HasColumnType("TEXT")
                         .HasColumnName("message_id");
@@ -233,6 +243,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<string>("TerminalStatus")
                         .HasColumnType("TEXT")
                         .HasColumnName("terminal_status");
+
+                    b.Property<long?>("ToolSchemaTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("tool_schema_tokens");
 
                     b.Property<int?>("TotalTokens")
                         .HasColumnType("INTEGER")

@@ -107,4 +107,18 @@ internal sealed record class AgentExecutionLog
 
     /// <summary>Unix-ms timestamp when the run started (turn open), or <c>null</c> when not known at the seam (e.g. an interrupted stream with no run state). Plaintext (structural).</summary>
     public long? StartedAtUtc { get; set; }
+
+    /// <summary>
+    ///     Estimated tool-schema tokens the turn spent, CUMULATIVE across its provider rounds, or <c>null</c> when the
+    ///     seam reported none (a memory row, or an envelope written by the restart-recovery backfill). A
+    ///     <c>long</c> because its source is: the budgeter accumulates it with <c>Interlocked.Add</c> over every round.
+    ///     Plaintext (structural) — a count, never a tool name.
+    /// </summary>
+    public long? ToolSchemaTokens { get; set; }
+
+    /// <summary>
+    ///     The largest single round's estimated tool-schema token count for the turn, or <c>null</c> when not reported.
+    ///     An <c>int</c>, matching its source (a per-round maximum, not an accumulation). Plaintext (structural).
+    /// </summary>
+    public int? MaxToolSchemaTokens { get; set; }
 }

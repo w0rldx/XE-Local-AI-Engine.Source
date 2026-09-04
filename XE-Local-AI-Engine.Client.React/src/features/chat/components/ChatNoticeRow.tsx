@@ -1,5 +1,5 @@
 import { Group, Text, ThemeIcon } from "@mantine/core";
-import { IconArrowsExchange, IconHistory, IconInfoCircle, IconToolsOff, IconUsersGroup } from "@tabler/icons-react";
+import { IconArrowsExchange, IconFilter, IconHistory, IconInfoCircle, IconToolsOff, IconUsersGroup } from "@tabler/icons-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -20,6 +20,10 @@ function noticeIcon(noticeKind: string) {
 			return IconHistory;
 		case "OrchestrationDegraded":
 			return IconUsersGroup;
+		// Its own glyph, not ToolDisabled's: a tool that was turned OFF and a tool that was merely held back but
+		// stays callable are opposite outcomes, and sharing an icon reads the optimisation as a degradation.
+		case "ToolsFiltered":
+			return IconFilter;
 		default:
 			return IconInfoCircle;
 	}
@@ -36,6 +40,8 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 			return "chat.notices.historyTruncated";
 		case "OrchestrationDegraded":
 			return "chat.notices.orchestrationDegraded";
+		case "ToolsFiltered":
+			return "chat.notices.toolsFiltered";
 		default:
 			return undefined;
 	}

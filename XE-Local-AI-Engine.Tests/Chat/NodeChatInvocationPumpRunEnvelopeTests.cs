@@ -63,6 +63,54 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
     }
 
     [Test]
+    public async Task TerminalizeAsync_CarriesTheToolSchemaTokenEstimateFromTheInvocationState()
+    {
+        // The runner reads the estimate off the provider-call budget and reports it onto the invocation state; the pump's
+        // only job is to copy it onto the envelope metadata, unchanged and unrounded. The cumulative value is a long at
+        // its source, so a value above int.MaxValue must survive this hop intact.
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        const long wideEstimate = (long)int.MaxValue + 1;
+
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Completed,
+            ModelUsed = "llama-3.1",
+            ToolSchemaTokens = wideEstimate,
+            MaxToolSchemaTokens = 4_096
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, "requested-model");
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Envelope != null
+                && request.Envelope.ToolSchemaTokens == wideEstimate
+                && request.Envelope.MaxToolSchemaTokens == 4_096),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeInterruptedAsync_LeavesTheToolSchemaTokenEstimateNull()
+    {
+        // The interrupted/thin path has no invocation state to read the counters from, so the columns stay null rather
+        // than being manufactured as zero — which is what lets a reader tell "not measured" from "measured as none".
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence);
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        _ = await pump.TerminalizeInterruptedAsync(correlation, new NodeChatPumpCursor("partial", string.Empty), wasCancelled: false);
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Envelope != null
+                && request.Envelope.ToolSchemaTokens == null
+                && request.Envelope.MaxToolSchemaTokens == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task TerminalizeAsync_FailedRun_PassesFailureCategoryInEnvelopeMetadata()
     {
         var persistence = CreatePersistence();

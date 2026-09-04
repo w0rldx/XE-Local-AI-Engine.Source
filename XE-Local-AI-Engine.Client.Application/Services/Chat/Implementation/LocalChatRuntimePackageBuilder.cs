@@ -53,6 +53,9 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             // unattended flag is an execution-context bit, not agent configuration, so the SAME agent run on a schedule
             // and run interactively keep a byte-identical hash and the cross-repo digest stays stable.
             IsUnattended = request.IsUnattended,
+            // Deliberately NOT fed into the config hash below (same reason as IsUnattended): the relevance filter
+            // narrows only the provider-bound tools array, so opting out must leave the digest byte-identical.
+            DisableToolRelevanceFilter = request.DisableToolRelevanceFilter,
             RequestedCapabilities = request.RequestedCapabilities is null ? null : [.. request.RequestedCapabilities],
             Timeouts = timeouts,
             OrchestrationSpec = request.OrchestrationSpec,
