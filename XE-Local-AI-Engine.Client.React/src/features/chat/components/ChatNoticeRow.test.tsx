@@ -118,6 +118,28 @@ describe("ChatNoticeRow", () => {
 		).toBeTruthy();
 	});
 
+	it("renders the notice detail beside the sentence when the server sent one", () => {
+		// The dispatch reason code is the only record of WHICH rule decided the turn. It was computed and then dropped
+		// on the wire, so nothing showed it; it now rides beside the sentence as the stable code it is.
+		renderWithProviders(
+			<ChatNoticeRow
+				part={noticePart({
+					noticeKind: "EffortDispatched",
+					text: "Reasoning effort 'auto' resolved to Fast (low) for this turn.",
+					detail: "fast-model-unset",
+				})}
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-notice-detail").textContent).toBe("fast-model-unset");
+	});
+
+	it("renders nothing extra for a notice that carries no detail", () => {
+		renderWithProviders(<ChatNoticeRow part={noticePart({ text: "Switched to a smaller model." })} />);
+
+		expect(screen.queryByTestId("chat-notice-detail")).toBeNull();
+	});
+
 	it("falls back gracefully for an unknown/forward-compat notice kind", () => {
 		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "SomethingNew", text: "A new kind of notice." })} />);
 

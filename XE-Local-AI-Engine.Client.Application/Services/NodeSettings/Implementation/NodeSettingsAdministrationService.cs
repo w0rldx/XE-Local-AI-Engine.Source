@@ -4,14 +4,14 @@ using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
-using XE_Local_AI_Engine.Providers.Abstractions.External;
-using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 internal sealed class NodeSettingsAdministrationService(
     INodeSettingsStore store,
     INodeRuntimeSettings runtimeSettings,
     ICapabilityReporter capabilityReporter,
     DefaultModelSelectionPolicy defaultModelSelectionPolicy,
+    IGgufModelStore ggufModelStore,
     IModelTrustResolver modelTrustResolver,
     ILocalModelProviderResolver localModelProviderResolver,
     ILogger<NodeSettingsAdministrationService> logger) : INodeSettingsAdministrationService
@@ -21,6 +21,7 @@ internal sealed class NodeSettingsAdministrationService(
 
     private readonly ICapabilityReporter _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
     private readonly DefaultModelSelectionPolicy _defaultModelSelectionPolicy = defaultModelSelectionPolicy ?? throw new ArgumentNullException(nameof(defaultModelSelectionPolicy));
+    private readonly IGgufModelStore _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
     private readonly ILocalModelProviderResolver _localModelProviderResolver = localModelProviderResolver ?? throw new ArgumentNullException(nameof(localModelProviderResolver));
     private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
     private readonly ILogger<NodeSettingsAdministrationService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -145,16 +146,16 @@ internal sealed class NodeSettingsAdministrationService(
         }
     }
 
-    private async Task<bool> IsInstalledNodeLocalModelAsync(string modelName, CancellationToken cancellationToken)
-    {
-        if (await _modelTrustResolver.ResolveAsync(modelName, cancellationToken).ConfigureAwait(false) != ModelTrustLocality.Local)
-        {
-            return false;
-        }
-
-        var providerName = await _localModelProviderResolver.ResolveProviderNameForModelAsync(modelName, cancellationToken).ConfigureAwait(false);
-        return string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase);
-    }
+    // Enforcement point 1's predicate. Shared verbatim with enforcement point 2 (the dispatcher's per-turn re-check)
+    // so a value this save accepts is exactly a value that turn admits, and the registry membership test is what stops
+    // an arbitrary string — a cloud model id included — from passing two resolvers that both default the unknown to
+    // "node-local llama.cpp".
+    private Task<bool> IsInstalledNodeLocalModelAsync(string modelName, CancellationToken cancellationToken) =>
+        NodeLocalModelGate.IsInstalledNodeLocalLlamaModelAsync(modelName,
+            _ggufModelStore,
+            _modelTrustResolver,
+            _localModelProviderResolver,
+            cancellationToken);
 
     private static string? TrimWhenProvided(string? value, string? current) =>
         value is null ? current : value.Trim();

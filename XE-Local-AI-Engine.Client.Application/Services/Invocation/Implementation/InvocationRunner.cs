@@ -338,6 +338,17 @@ public sealed partial class InvocationRunner : IInvocationRunner
             var modelWasSwapped = dispatchDecision is { } swapCandidate
                                   && !string.Equals(swapCandidate.Model, originalModel, StringComparison.Ordinal);
 
+            // The one server-side record of what `auto` decided. The dispatcher itself takes no logger by design (its
+            // inputs are the user's message and the turn's shape), so the decision is logged here, from its OUTPUT
+            // only: the tier, the stable kebab-case reason code, and whether the model was replaced. No signal value —
+            // no message length, no conversation depth, no score — and no model name or message text ever reaches this
+            // line, which is what keeps it inside the slice's logging invariant.
+            if (dispatchDecision is { } logged)
+            {
+                _logger.LogInformation("Reasoning effort 'auto' dispatched for invocation {InvocationId}: tier {Tier}, reason {ReasonCode}, model swapped {ModelWasSwapped}.",
+                    package.InvocationId, ReasoningTierLabels.For(logged.Tier), logged.ReasonCode, modelWasSwapped);
+            }
+
             // The retry below re-enters RunSingleAgentAsync, which owns the tool-relevance drain and its ToolsFiltered
             // notice — running it twice would emit that notice twice. A swap requires OfferedToolCount == 0, so a
             // swapped turn offers no tools and the drain is a no-op; this makes that dependency explicit instead of

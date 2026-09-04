@@ -56,6 +56,11 @@ function noticeLabelKey(noticeKind: string): string | undefined {
  * truncated, orchestration degraded to a single agent) — rendered inline in the ordered parts interleave, visually distinct from both the plain answer
  * (`ChatMarkdown`) and an error state: neutral/dimmed color, no red, no collapse/expand. `part.text` is the
  * backend-sanitized, user-facing sentence and is displayed verbatim (not translated).
+ *
+ * `part.detail`, when the backend sent one, follows the sentence as a small monospace code — the stable machine
+ * reason the notice fired (which adaptive-effort rule decided the turn, which model withheld the attachments). It is
+ * an identifier, not prose, so it is rendered verbatim and never translated; a notice without one renders nothing
+ * extra.
  */
 export const ChatNoticeRow = memo(function ChatNoticeRow({ part }: ChatNoticeRowProps) {
 	const { t } = useTranslation();
@@ -70,6 +75,11 @@ export const ChatNoticeRow = memo(function ChatNoticeRow({ part }: ChatNoticeRow
 			</ThemeIcon>
 			<Text size="xs" c="dimmed" style={{ overflowWrap: "anywhere" }}>
 				{part.text}
+				{part.detail ? (
+					<Text component="span" size="xs" c="dimmed" ff="monospace" opacity={0.7} ml={6} data-testid="chat-notice-detail">
+						{part.detail}
+					</Text>
+				) : null}
 			</Text>
 		</Group>
 	);

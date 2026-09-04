@@ -122,6 +122,51 @@ public sealed class NodeSettingsAdministrationServiceTests
     }
 
     [Test]
+    public async Task Save_WhenAutoEffortFastModelIsNotInstalled_IsRejected()
+    {
+        // The hole the live round found: with no cloud provider configured, `ModelTrustResolver` classifies a
+        // scheme-less id as Local and `LocalModelProviderResolver` routes an unmapped id to the default provider
+        // (llamacpp), so the pair alone accepted ANY string — a cloud model id saved with HTTP 200. Registry
+        // membership is what refuses it.
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        var service = CreateService(store, fastModelInstalled: false);
+
+        var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            AutoEffortFastModelName = "gpt-4o-mini"
+        }).ConfigureAwait(false);
+
+        AssertEx.False(result.Updated);
+        AssertEx.Equal(1, result.ValidationErrors.Count);
+        AssertEx.Equal(NodeSettingsField.AutoEffortFastModelName, result.ValidationErrors[0].Field);
+        await store.DidNotReceive().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task Save_WhenAutoEffortFastModelIsServedByOllama_IsRejected()
+    {
+        // Node-local is not enough. The swap targets a llama.cpp process — the only provider the capacity gate and the
+        // liveness probe can reason about — so an Ollama-served local model is refused at the same point.
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                        .Returns(Task.FromResult("ollama"));
+        var service = CreateService(store, localModelProviderResolver: providerResolver);
+
+        var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            AutoEffortFastModelName = "qwen3:1.7b"
+        }).ConfigureAwait(false);
+
+        AssertEx.False(result.Updated);
+        AssertEx.Equal(1, result.ValidationErrors.Count);
+        AssertEx.Equal(NodeSettingsField.AutoEffortFastModelName, result.ValidationErrors[0].Field);
+        await store.DidNotReceive().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
     public async Task Save_WhenMaxLoadedProcessesIsOne_IsRejected()
     {
         // The fast model is a SECOND chat process alongside the conversation's own, so a node capped at one slot could
@@ -321,7 +366,8 @@ public sealed class NodeSettingsAdministrationServiceTests
         IActiveCloudChatClientFactory? cloudFactory = null,
         INodeRuntimeSettings? runtimeSettings = null,
         IModelTrustResolver? modelTrustResolver = null,
-        ILocalModelProviderResolver? localModelProviderResolver = null)
+        ILocalModelProviderResolver? localModelProviderResolver = null,
+        bool fastModelInstalled = true)
     {
         var runtime = runtimeSettings ?? Substitute.For<INodeRuntimeSettings>();
         runtime.GetLlamaMaxLoadedProcessesAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(StoredNodeSettings.DefaultLlamaMaxLoadedProcesses));
@@ -347,7 +393,13 @@ public sealed class NodeSettingsAdministrationServiceTests
         reporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
         cloudResolver ??= Substitute.For<ICloudModelResolver>();
         cloudFactory ??= Substitute.For<IActiveCloudChatClientFactory>();
-        var selectionPolicy = new DefaultModelSelectionPolicy(Substitute.For<IGgufModelStore>(),
+
+        // Registry membership is the third point of the fast-model gate, and the only one that refuses an id neither
+        // resolver has ever heard of: both of them default an unknown name to node-local llama.cpp.
+        var ggufModelStore = Substitute.For<IGgufModelStore>();
+        ggufModelStore.ExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(fastModelInstalled));
+
+        var selectionPolicy = new DefaultModelSelectionPolicy(ggufModelStore,
             cloudResolver,
             cloudFactory,
             new ModelNameValidator(Options.Create(new SecurityOptions())));
@@ -355,6 +407,7 @@ public sealed class NodeSettingsAdministrationServiceTests
             runtime,
             reporter,
             selectionPolicy,
+            ggufModelStore,
             modelTrustResolver,
             localModelProviderResolver,
             NullLogger<NodeSettingsAdministrationService>.Instance);

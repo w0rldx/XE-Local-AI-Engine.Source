@@ -4,8 +4,10 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -36,7 +38,8 @@ public sealed class DefaultReasoningEffortDispatcher(
     ILocalModelProviderResolver localModelProviderResolver,
     ICapacityService capacityService,
     IModelCapabilityResolver modelCapabilityResolver,
-    ILlamaServerProcessSupervisor processSupervisor) : IReasoningEffortDispatcher
+    ILlamaServerProcessSupervisor processSupervisor,
+    IGgufModelStore ggufModelStore) : IReasoningEffortDispatcher
 {
     // NO TIER CAPS THE OUTPUT. A FAST cap was designed to bound the ANSWER, but
     // DeferredLlamaServerChatClient.ClampToGenerationRoom narrows a reasoning budget to half of
@@ -57,6 +60,7 @@ public sealed class DefaultReasoningEffortDispatcher(
     private const string OnEffort = "on";
 
     private readonly ICapacityService _capacityService = capacityService ?? throw new ArgumentNullException(nameof(capacityService));
+    private readonly IGgufModelStore _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
     private readonly ILocalModelProviderResolver _localModelProviderResolver = localModelProviderResolver ?? throw new ArgumentNullException(nameof(localModelProviderResolver));
     private readonly IModelCapabilityResolver _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
     private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
@@ -226,12 +230,15 @@ public sealed class DefaultReasoningEffortDispatcher(
                 return SwapResolution.Refused(ReasoningDispatchReasons.FastModelIsActiveModel);
             }
 
-            // Enforcement point 2 of the node-locality gate. The same pair was checked when the operator saved the
-            // setting; it runs again here because a model can be uninstalled, or an external connection re-declared,
-            // between that save and this turn. The turn's data was admitted upstream against a node-local model, and
-            // an external or cloud replacement would carry it somewhere no egress gate authorised.
-            if (!await IsNodeLocalAsync(fastModel, cancellationToken).ConfigureAwait(false)
-                || !await IsLlamaServerModelAsync(fastModel, cancellationToken).ConfigureAwait(false))
+            // Enforcement point 2 of the node-locality gate — the SAME predicate the save ran, so a value that was
+            // stored is exactly a value that swaps. It runs again here because a model can be UNINSTALLED, or an
+            // external connection re-declared, between that save and this turn: the turn's data was admitted upstream
+            // against a node-local model, and an external or cloud replacement would carry it somewhere no egress gate
+            // authorised. An uninstalled fast model degrades here, by name, instead of at warm time under the wrong
+            // reason code.
+            if (!await NodeLocalModelGate
+                       .IsInstalledNodeLocalLlamaModelAsync(fastModel, _ggufModelStore, _modelTrustResolver, _localModelProviderResolver, cancellationToken)
+                       .ConfigureAwait(false))
             {
                 return SwapResolution.Refused(ReasoningDispatchReasons.FastModelNotLocal);
             }
@@ -284,12 +291,6 @@ public sealed class DefaultReasoningEffortDispatcher(
     private async Task<bool> IsNodeLocalAsync(string model, CancellationToken cancellationToken)
     {
         return await _modelTrustResolver.ResolveAsync(model, cancellationToken).ConfigureAwait(false) == ModelTrustLocality.Local;
-    }
-
-    private async Task<bool> IsLlamaServerModelAsync(string model, CancellationToken cancellationToken)
-    {
-        var providerName = await _localModelProviderResolver.ResolveProviderNameForModelAsync(model, cancellationToken).ConfigureAwait(false);
-        return string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -461,6 +462,24 @@ public sealed class ReasoningEffortDispatcherTests
     }
 
     [Test]
+    public async Task Fast_WhenFastModelIsNotInstalled_NeverSwaps()
+    {
+        // The gate the live round found inert. `ModelTrustResolver` classifies a scheme-less id as Local whenever no
+        // cloud provider is selected for it, and `LocalModelProviderResolver` routes an unmapped id to the default
+        // provider, which is llamacpp — so on a node with no cloud provider configured that pair admits EVERY string.
+        // Registry membership is what refuses one, and it refuses it HERE, by name, instead of at warm time under
+        // `fast-model-unavailable` after a wasted swap.
+        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
+            fastModelName: "gpt-4o-mini",
+            fastModelLocality: ModelTrustLocality.Local,
+            fastModelInstalled: false);
+
+        AssertEx.Equal(ResolvedModel, decision.Model);
+        AssertEx.Equal(ReasoningDispatchReasons.FastModelNotLocal, decision.ReasonCode);
+        AssertEx.Null(decision.CapacityReservation);
+    }
+
+    [Test]
     public async Task Fast_WhenTheFastModelIsTheResolvedModel_NeverSwaps()
     {
         var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
@@ -747,7 +766,8 @@ public sealed class ReasoningEffortDispatcherTests
         LlamaServerLeaseAcquisition? leaseAcquisition = null,
         ModelCapabilitySnapshot? fastModelCapabilities = null,
         INodeRuntimeSettings? runtimeSettings = null,
-        IModelCapabilityResolver? capabilityResolver = null)
+        IModelCapabilityResolver? capabilityResolver = null,
+        bool fastModelInstalled = true)
     {
         // The resolved model is Local unless a test says otherwise. The FAST model's locality/provider default to the
         // same answer, so a test names only the gate it is exercising.
@@ -766,6 +786,12 @@ public sealed class ReasoningEffortDispatcherTests
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
         providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult(fastModelProviderName ?? LlamaServerProviderConstants.ProviderName));
+
+        // Registry membership is the load-bearing half of the locality gate: both resolvers above default an unknown
+        // id to node-local llama.cpp, so without this an arbitrary string would swap. Installed by default so a test
+        // names only the gate it is exercising.
+        var ggufModelStore = Substitute.For<IGgufModelStore>();
+        ggufModelStore.ExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(fastModelInstalled));
 
         var capacityService = Substitute.For<ICapacityService>();
         capacityService.DecideAsync(Arg.Any<CapacityRequest>(), Arg.Any<CancellationToken>())
@@ -791,7 +817,8 @@ public sealed class ReasoningEffortDispatcherTests
             providerResolver,
             capacityService,
             capabilityResolver,
-            supervisor);
+            supervisor,
+            ggufModelStore);
         return sut.DispatchAsync(request, CancellationToken.None);
     }
 

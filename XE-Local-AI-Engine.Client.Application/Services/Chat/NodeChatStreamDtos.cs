@@ -189,4 +189,11 @@ public sealed record ChatStreamEvent(
     // events only; null everywhere else, and null on a reconnect replay that cannot resolve it). The browser prefers
     // this per-request answer over the tool catalog's tool-identity flag when deciding whether to offer the session
     // button. Trailing optional so every existing event type's wire shape is unchanged.
-    bool? SessionScopeEligible = null);
+    bool? SessionScopeEligible = null,
+    // The notice's optional structured detail (AssistantNotice events only), carried verbatim from
+    // TurnNoticePayload.Detail: a stable machine code or short identifier that names WHY the notice fired, next to
+    // NoticeMessage's prose. EffortDispatched carries the kebab-case dispatch reason code, ModelSubstituted /
+    // AttachmentsWithheld / KnowledgeWithheld the effective model, OrchestrationDegraded the degradation reason.
+    // Sanitized at the source like every other notice field. Trailing optional so every existing event type's wire
+    // shape is unchanged.
+    string? NoticeDetail = null);

@@ -233,9 +233,28 @@ public sealed class ChatStreamEventMapperTests
         AssertEx.Equal(expected: 4L, mapped.Sequence);
         AssertEx.Equal(nameof(TurnNoticeKind.ModelSubstituted), mapped.NoticeKind);
         AssertEx.Equal(payload.Message, mapped.NoticeMessage);
+        // The payload's structured detail was computed at every emission site and then dropped here, so it was
+        // observable nowhere — the adaptive-effort dispatch reason code, and equally the effective model the
+        // withheld-attachment notices name.
+        AssertEx.Equal("y", mapped.NoticeDetail);
         // A notice is not a tool-call event: none of the tool-specific fields are populated.
         AssertEx.Null(mapped.ToolCallId);
         AssertEx.Null(mapped.Result);
+    }
+
+    [Test]
+    public void NoticeEvent_WhenThePayloadCarriesNoDetail_MapsANullDetail()
+    {
+        var payload = new TurnNoticePayload
+        {
+            InvocationId = Guid.NewGuid(),
+            Kind = TurnNoticeKind.HistoryTruncated,
+            Message = "Conversation history was trimmed to fit the model's context window."
+        };
+
+        var mapped = ChatStreamEventMapper.NoticeEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), payload, Timestamp, sequence: 4);
+
+        AssertEx.Null(mapped.NoticeDetail);
     }
 
     [Test]
@@ -292,6 +311,30 @@ public sealed class ChatStreamEventMapperTests
         AssertEx.Equal(nameof(TurnNoticeKind.HistoryTruncated), part.Name);
         AssertEx.Equal(payload.Message, part.Text);
         AssertEx.Equal(expected: 9, part.Sequence);
+        // No detail on the payload, so nothing is stored in the member a notice part reuses for it.
+        AssertEx.Null(part.State);
+    }
+
+    [Test]
+    public void AccumulateNotice_CarriesTheDetailOntoThePersistedPart()
+    {
+        // Live and reload must render the same notice. A notice part reuses the generic `State` member for its
+        // structured detail the way it reuses `Name` for the notice kind, so the reason code survives a reload with
+        // no new field on the persisted blob and no migration.
+        var parts = new NodeChatPartAccumulator();
+        var payload = new TurnNoticePayload
+        {
+            InvocationId = Guid.NewGuid(),
+            Kind = TurnNoticeKind.EffortDispatched,
+            Message = "Reasoning effort 'auto' resolved to Fast (low) for this turn.",
+            Detail = "fast-model-unset"
+        };
+
+        ChatStreamEventMapper.AccumulateNotice(parts, payload, sequence: 3);
+
+        var part = parts.Snapshot()[0];
+        AssertEx.Equal(nameof(TurnNoticeKind.EffortDispatched), part.Name);
+        AssertEx.Equal("fast-model-unset", part.State);
     }
 
     private static ToolCallLifecyclePayload NewPayload(string toolCallId,

@@ -872,7 +872,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         {
             if (running.Handle.HasExited)
             {
-                healths.Add(new LlamaServerProcessHealth(key.ModelName, key.Role, IsResponsive: false, "Process has exited."));
+                healths.Add(new LlamaServerProcessHealth(key.ModelName, key.Role, IsResponsive: false, "Process has exited.", HasExited: true));
                 continue;
             }
 

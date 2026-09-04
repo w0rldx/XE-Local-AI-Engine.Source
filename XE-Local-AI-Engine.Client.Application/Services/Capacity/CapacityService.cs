@@ -294,7 +294,16 @@ public sealed class CapacityService : ICapacityService
             }
 
             var health = await _supervisor.CheckHealthAsync(ct).ConfigureAwait(false);
+
+            // EXITED entries are not running. The supervisor's table keeps a crashed process until the idle reaper
+            // collects it (up to a quarter of the idle TTL), and counting a corpse as resident is wrong in both
+            // directions: it burns a loaded-process slot in the headroom check below, and it short-circuits this
+            // decision to QueueSameModel — telling the caller to serialize on a process that can never grant a lease.
+            // That is what stranded the adaptive-effort fast-model swap after its llama-server died: every later turn
+            // was refused instead of relaunching through the ordinary ensure-running path. A process that is alive but
+            // merely unresponsive still holds its VRAM and its slot, so only HasExited is filtered, never IsResponsive.
             return new RunningSnapshot(health
+                                       .Where(static process => !process.HasExited)
                                        .Select(process => new RunningKey(process.ModelName, process.Role))
                                        .ToHashSet(),
                 IsKnown: true);
