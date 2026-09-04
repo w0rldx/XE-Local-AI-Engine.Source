@@ -27,6 +27,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
     private readonly IGgufModelStore _ggufModelStore;
     private readonly IHardwareProfiler _hardwareProfiler;
     private readonly IInferenceBenchmarkHarness _harness;
+    private readonly IInferenceInvalidationEvaluator _invalidationEvaluator;
     private readonly InferenceBenchmarkVramAdmissionOptions _benchmarkVramAdmission;
     private readonly ILaunchPolicyFingerprintProvider _launchPolicyFingerprintProvider;
     private readonly ILogger<InferenceProfileService> _logger;
@@ -52,6 +53,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
         IHardwareProfiler hardwareProfiler,
         IProcessVramBudgetProbe processVramBudgetProbe,
         ILaunchPolicyFingerprintProvider launchPolicyFingerprintProvider,
+        IInferenceInvalidationEvaluator invalidationEvaluator,
         IOptions<InferenceBenchmarkVramAdmissionOptions> benchmarkVramAdmission,
         ILogger<InferenceProfileService> logger)
     {
@@ -69,6 +71,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
         ArgumentNullException.ThrowIfNull(hardwareProfiler);
         ArgumentNullException.ThrowIfNull(processVramBudgetProbe);
         ArgumentNullException.ThrowIfNull(launchPolicyFingerprintProvider);
+        ArgumentNullException.ThrowIfNull(invalidationEvaluator);
         ArgumentNullException.ThrowIfNull(benchmarkVramAdmission);
         ArgumentNullException.ThrowIfNull(logger);
 
@@ -86,6 +89,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
         _hardwareProfiler = hardwareProfiler;
         _processVramBudgetProbe = processVramBudgetProbe;
         _launchPolicyFingerprintProvider = launchPolicyFingerprintProvider;
+        _invalidationEvaluator = invalidationEvaluator;
         _benchmarkVramAdmission = benchmarkVramAdmission.Value;
         _logger = logger;
     }
@@ -182,7 +186,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
             return BenchmarkResult.Fail($"Profile {profileId} has no complete machine-readable GPU placement; re-explore after llama-fit-params is available.");
         }
 
-        if (!await FingerprintMatchesCurrentAsync(profile, filePath, ct).ConfigureAwait(false))
+        if (!await IsReplayableUnderCurrentSemanticsAsync(profile, filePath, ct).ConfigureAwait(false))
         {
             _ = await _profileStore.MarkStaleAsync(profile.Id, ct).ConfigureAwait(false);
             return BenchmarkResult.Fail($"Profile {profileId} was created under different launch semantics or model/runtime revision; re-explore before benchmarking.");
@@ -306,7 +310,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
 
         var filePath = await _ggufModelStore.ResolveModelFilePathAsync(profile.ModelName, ct).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(filePath)
-            || !await FingerprintMatchesCurrentAsync(profile, filePath, ct).ConfigureAwait(false))
+            || !await IsReplayableUnderCurrentSemanticsAsync(profile, filePath, ct).ConfigureAwait(false))
         {
             _ = await _profileStore.MarkStaleAsync(profile.Id, ct).ConfigureAwait(false);
             return ProfileActionResult.Fail($"Profile {profileId} no longer matches the active launch semantics or model/runtime revision; re-explore before freezing.");
@@ -503,20 +507,35 @@ public sealed class InferenceProfileService : IInferenceProfileService
                && string.Equals(benchmark.LaunchPolicyFingerprint, profile.LaunchPolicyFingerprint, StringComparison.Ordinal);
     }
 
+    // A GPU profile is replayable only with a concrete -ngl. Expert placement needs no separate check here: a spawn
+    // that kept its experts in system RAM is frozen with the equivalent -ot (the fit parser refuses to draft one
+    // otherwise), so -ot is the placement and it already travels through the fingerprint, BenchmarkMatchesProfile and
+    // BuildReplay. There is no CpuMoe column to consult and no pre-slice row can carry the decision unrecorded --
+    // --cpu-moe was never emitted before this slice.
     private static bool HasCompletePlacement(InferenceProfileRecord profile)
     {
         return string.Equals(profile.Backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase)
                || profile.NGpuLayers is not null;
     }
 
-    private async Task<bool> FingerprintMatchesCurrentAsync(InferenceProfileRecord profile, string modelFilePath, CancellationToken ct)
+    // The single "is this row still replayable under today's semantics" gate, used by BOTH profile-owned replay
+    // decisions (benchmark and freeze). Two axes: the versioned fingerprint identity, and the placement axis — a row
+    // that would launch an expert-offload model as fully resident is not replayable however well its hash matches, and
+    // the serving path reaches the SAME check through IInferenceInvalidationEvaluator.IsStaleAsync. Both callers mark
+    // the profile Stale on false, which is the D13 re-explore.
+    private async Task<bool> IsReplayableUnderCurrentSemanticsAsync(InferenceProfileRecord profile, string modelFilePath, CancellationToken ct)
     {
         if (profile.LaunchPolicyFingerprintVersion is null || string.IsNullOrWhiteSpace(profile.LaunchPolicyFingerprint))
         {
             return false;
         }
 
-        return await _launchPolicyFingerprintProvider.MatchesAsync(profile, modelFilePath, ct).ConfigureAwait(false);
+        if (!await _launchPolicyFingerprintProvider.MatchesAsync(profile, modelFilePath, ct).ConfigureAwait(false))
+        {
+            return false;
+        }
+
+        return !await _invalidationEvaluator.ContradictsCurrentPlacementAsync(profile, ct).ConfigureAwait(false);
     }
 
     private static InferenceProfileView ToView(InferenceProfileRecord record)

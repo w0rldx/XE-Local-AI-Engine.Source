@@ -80,6 +80,9 @@ public interface INodeRuntimeSettings
     /// <summary>The chat-role speculative-decoding <c>--spec-type</c> (stored &gt; seed <c>none</c>).</summary>
     Task<string> GetSpeculativeModeAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>The GPU chat-spawn KV-cache type <c>-ctk</c>/<c>-ctv</c> (stored &gt; seed <c>q8_0</c>).</summary>
+    Task<string> GetKvCacheTypeAsync(CancellationToken cancellationToken = default);
+
     /// <summary>The installed draft-model name for <c>draft-*</c> modes, or <see langword="null" /> when unset.</summary>
     Task<string?> GetSpeculativeDraftModelNameAsync(CancellationToken cancellationToken = default);
 
@@ -155,6 +158,9 @@ public interface INodeRuntimeSettings
 
     /// <inheritdoc cref="GetSpeculativeModeAsync" />
     string GetSpeculativeMode();
+
+    /// <inheritdoc cref="GetKvCacheTypeAsync" />
+    string GetKvCacheType();
 
     /// <inheritdoc cref="GetSpeculativeDraftModelNameAsync" />
     string? GetSpeculativeDraftModelName();

@@ -174,6 +174,9 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     public async Task<string> GetSpeculativeModeAsync(CancellationToken cancellationToken = default) =>
         ResolveSpeculativeMode(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
+    public async Task<string> GetKvCacheTypeAsync(CancellationToken cancellationToken = default) =>
+        ResolveKvCacheType(await LoadAsync(cancellationToken).ConfigureAwait(false));
+
     public async Task<string?> GetSpeculativeDraftModelNameAsync(CancellationToken cancellationToken = default) =>
         ResolveSpeculativeDraftModelName(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
@@ -227,6 +230,9 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     public string GetSpeculativeMode() =>
         ResolveSpeculativeMode(LoadStored());
+
+    public string GetKvCacheType() =>
+        ResolveKvCacheType(LoadStored());
 
     public string? GetSpeculativeDraftModelName() =>
         ResolveSpeculativeDraftModelName(LoadStored());
@@ -291,6 +297,11 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         StoredNodeSettings.IsValidSpeculativeMode(stored.SpeculativeMode) && !string.IsNullOrWhiteSpace(stored.SpeculativeMode)
             ? stored.SpeculativeMode
             : StoredNodeSettings.DefaultSpeculativeMode;
+
+    private static string ResolveKvCacheType(StoredNodeSettings stored) =>
+        StoredNodeSettings.IsValidKvCacheType(stored.KvCacheType) && !string.IsNullOrWhiteSpace(stored.KvCacheType)
+            ? stored.KvCacheType
+            : StoredNodeSettings.DefaultKvCacheType;
 
     private static string? ResolveSpeculativeDraftModelName(StoredNodeSettings stored) =>
         string.IsNullOrWhiteSpace(stored.SpeculativeDraftModelName) ? null : stored.SpeculativeDraftModelName;

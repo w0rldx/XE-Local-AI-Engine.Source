@@ -972,6 +972,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("launch_has_aux_assets");
 
+                    b.Property<int?>("LaunchIdentityScheme")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("launch_identity_scheme");
+
                     b.Property<string>("LaunchKvCacheTypeSource")
                         .HasMaxLength(16)
                         .HasColumnType("TEXT")
@@ -1166,6 +1170,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<bool?>("LaunchHasAuxAssets")
                         .HasColumnType("INTEGER")
                         .HasColumnName("launch_has_aux_assets");
+
+                    b.Property<int?>("LaunchIdentityScheme")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("launch_identity_scheme");
 
                     b.Property<string>("LaunchKvCacheTypeSource")
                         .HasMaxLength(16)
@@ -1724,6 +1732,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<bool?>("PrimaryLaunchHasAuxAssets")
                         .HasColumnType("INTEGER")
                         .HasColumnName("primary_launch_has_aux_assets");
+
+                    b.Property<int?>("PrimaryLaunchIdentityScheme")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("primary_launch_identity_scheme");
 
                     b.Property<string>("PrimaryLaunchKvCacheTypeSource")
                         .HasMaxLength(16)

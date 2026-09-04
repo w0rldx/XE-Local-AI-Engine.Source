@@ -56,6 +56,22 @@ public enum MoeFitVerdict
 }
 
 /// <summary>
+///     What the KV cache costs for one model geometry at one context target, with the element size it was computed at
+///     named on the result. Produced by <see cref="MemoryFitEstimator.EstimateKvCacheFootprint" />.
+/// </summary>
+/// <param name="BytesAtContext">Total KV-cache bytes across every layer at the requested context, or <c>0</c> when the header cannot size it.</param>
+/// <param name="BytesPerToken">
+///     <paramref name="BytesAtContext" /> divided by the requested context — the average per-token cost across all
+///     layers, so an interleaved sliding-window model reports what it actually pays rather than a full-attention figure.
+/// </param>
+/// <param name="Quant">
+///     The element size the figures were computed at. REQUIRED on the result: an unlabelled KV byte count is ambiguous
+///     by a factor of two between the fp16 ranking estimate and the <c>q8_0</c> chat launch.
+/// </param>
+/// <param name="HeadDimDerived">Whether head_dim was derived from <c>embedding_length / n_heads</c> rather than read explicitly.</param>
+public readonly record struct KvCacheFootprint(long BytesAtContext, double BytesPerToken, KvCacheQuant Quant, bool HeadDimDerived);
+
+/// <summary>
 ///     Optional explicit attention geometry read from a GGUF header, preferred over the derived
 ///     <c>head_dim = embedding_length / n_heads</c> when present. All fields are optional; passing <see langword="null" />
 ///     (or an all-null record) to <see cref="MemoryFitEstimator.Estimate" /> preserves the legacy derived-head_dim,
@@ -75,11 +91,29 @@ public enum MoeFitVerdict
 ///     local:global pattern, 2 for Gemma2). Resolved from the header or a per-arch default; <see langword="null" /> leaves
 ///     every layer full-attention (a conservative over-estimate).
 /// </param>
+/// <param name="KeyLengthMla">
+///     <c>{arch}.attention.key_length_mla</c> — the latent key dimension of Multi-head Latent Attention. Together with
+///     <paramref name="ValueLengthMla" /> it is llama.cpp's <c>is_mla()</c> test (both present and positive); under MLA
+///     the cache is a single latent K tensor per layer and NO V tensor is allocated at all.
+/// </param>
+/// <param name="ValueLengthMla">
+///     <c>{arch}.attention.value_length_mla</c> — the MLA latent value dimension. It takes part in detection only: no V
+///     cache exists under MLA, so it contributes no bytes.
+/// </param>
 public sealed record GgufAttentionShape(
     long? KeyLength = null,
     long? ValueLength = null,
     long? SlidingWindow = null,
-    long? SlidingWindowPattern = null);
+    long? SlidingWindowPattern = null,
+    long? KeyLengthMla = null,
+    long? ValueLengthMla = null)
+{
+    /// <summary>
+    ///     True when the header declares BOTH positive MLA lengths — llama.cpp's <c>is_mla()</c>. The single detection
+    ///     authority; no architecture name is ever consulted.
+    /// </summary>
+    public bool IsMla => KeyLengthMla is > 0 && ValueLengthMla is > 0;
+}
 
 /// <summary>
 ///     Optional Mixture-of-Experts facts for a GGUF model. All fields are additive/optional — omitting this record

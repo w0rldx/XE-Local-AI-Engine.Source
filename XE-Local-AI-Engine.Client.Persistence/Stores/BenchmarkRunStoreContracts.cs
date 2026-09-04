@@ -190,6 +190,12 @@ public sealed record BenchmarkFidelityAttemptRecord(
 /// </summary>
 /// <param name="KvCacheTypeSource"><c>explicit</c> when the run asked for this type, <c>auto</c> when freeze picked it.</param>
 /// <param name="KvAutoReason">Why Auto did not pick the quantized type, or <see langword="null" /> when it did.</param>
+/// <param name="LaunchIdentityScheme">
+///     The <c>LlamaServerLaunchProjection.IdentitySchemeVersion</c> <paramref name="IntendedLaunchIdentity" /> was
+///     computed under, stamped at freeze and never recomputed. <see langword="null" /> on a row frozen before the
+///     scheme was recorded, which reads as scheme <c>1</c>. A hash from one scheme says nothing about a hash from
+///     another, so work that straddles a change is failed rather than compared.
+/// </param>
 public sealed record BenchmarkRunLaunchIntent(
     string Variant,
     string KvCacheType,
@@ -197,7 +203,8 @@ public sealed record BenchmarkRunLaunchIntent(
     string? KvAutoReason,
     string FlashAttentionMode,
     string IntendedLaunchIdentity,
-    string? IntendedExecutableSha256);
+    string? IntendedExecutableSha256,
+    int? LaunchIdentityScheme = null);
 
 /// <summary>
 ///     The durable launch evidence recorded for one phase. <see cref="ReceiptJson" /> is null when the spawn never

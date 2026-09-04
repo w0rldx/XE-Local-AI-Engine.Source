@@ -421,6 +421,45 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
+    public async Task SaveNodeSettings_WhenKvCacheTypeUnknown_ReturnsValidationProblem()
+    {
+        // A junk KV type must never persist: the launch policy validates it in its constructor, so a stored bad value
+        // would fail host build on the next restart instead of degrading.
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            KvCacheType = "q5_1"
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenKvCacheTypeKnown_Saves()
+    {
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            KvCacheType = "q4_0"
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await nodeSettingsStore.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(stored => stored.KvCacheType == "q4_0"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task SaveNodeSettings_WhenDraftModeWithoutDraftModel_ReturnsValidationProblem()
     {
         // A draft-* speculative mode with no draft model must be rejected at the boundary (would fail chat-server start).

@@ -25,7 +25,7 @@ and one exact scope in every data row. An `agentic` key sees both `delegate` and
 | `delete_model` | agentic | Delete an installed model through coordinated deletion. | `model_name`. |
 | `set_default_model` | agentic | Select an installed local model as node default. | `model_name`. |
 | `get_node_settings` | agentic | Read the restricted core node-settings view. | Never returns secrets or unrestricted settings. |
-| `update_node_settings` | agentic | Apply a partial update to the exact 17-field whitelist. | See **Settings whitelist** below. |
+| `update_node_settings` | agentic | Apply a partial update to the exact 18-field whitelist. | See **Settings whitelist** below. |
 | `get_agent` | agentic | Get a saved agent by id or exact name. | `agent_id`. |
 | `create_agent` | agentic | Validate and create a saved agent. | Required `name`, `instructions`; optional definition/provenance fields. |
 | `update_agent` | agentic | Fully replace a saved agent by id or exact name. | `agent_id`, required `name`, `instructions`, plus the complete optional definition. |
@@ -50,14 +50,15 @@ and one exact scope in every data row. An `agentic` key sees both `delegate` and
 
 ## Settings whitelist
 
-`update_node_settings` accepts only these 17 optional fields:
+`update_node_settings` accepts only these 18 optional fields:
 
 `default_model_name`, `enable_tools`, `tool_capable_models`, `hugging_face_default_quant`,
 `llama_max_loaded_processes`, `llama_idle_time_to_live_seconds`, `keep_model_warm_enabled`,
 `keep_model_warm_model_name`, `keep_model_warm_interval_seconds`,
 `max_message_request_timeout_seconds`, `chat_cache_reuse`, `speculative_mode`,
 `speculative_draft_model_name`, `speculative_draft_max_tokens`,
-`speculative_draft_gpu_layers`, `reranker_model_name`, and `auto_effort_fast_model_name`.
+`speculative_draft_gpu_layers`, `kv_cache_type`, `reranker_model_name`, and
+`auto_effort_fast_model_name`.
 
 `auto_effort_fast_model_name` is refused unless it names an installed node-local llama.cpp model and
 the node keeps at least two loaded-process slots: it is the model an `auto` reasoning-effort turn may

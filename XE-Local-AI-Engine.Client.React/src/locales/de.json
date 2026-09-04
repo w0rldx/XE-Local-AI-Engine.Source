@@ -1772,6 +1772,7 @@
 					"invalid": "Eine oder mehrere Eingaben sind ungültig.",
 					"positive": "Bitte eine positive ganze Zahl eingeben.",
 					"mode": "Unbekannter Modus für spekulatives Decoding.",
+					"type": "Unbekannter KV-Cache-Typ.",
 					"required": "Wähle für diesen Modus ein Entwurfsmodell.",
 					"requiredKeepWarmModel": "Wähle ein Modell aus, das warmgehalten werden soll.",
 					"keepWarmCapacity": "Zum Warmhalten eines Modells sind mindestens zwei geladene Prozessplätze erforderlich.",
@@ -1861,15 +1862,26 @@
 				"maxPendingToolCallAgeMinutes": {
 					"label": "Max. ausstehende Tool-Aufruf-Dauer"
 				},
+				"kvCacheType": {
+					"label": "KV-Cache-Typ",
+					"description": "Eine Änderung setzt alle eingefrorenen Inferenzprofile dieses Knotens außer Kraft. Jedes Modell wird beim nächsten Laden mit dem neuen KV-Cache-Typ neu vermessen und muss erneut gebenchmarkt und eingefroren werden. q4_0 tauscht Antwortqualität gegen VRAM ein.",
+					"options": {
+						"f16": "f16 (unquantisiert)",
+						"q8_0": "q8_0 (Standard, halber KV-VRAM)",
+						"q4_0": "q4_0 (ein Viertel des KV-VRAM)"
+					}
+				},
 				"speculativeMode": {
 					"label": "Spekulatives Decoding",
-					"description": "Draft-and-Verify-Decoding erhöht den Durchsatz für einzelne Nutzer. n-Gramm-Modi brauchen kein zusätzliches Modell; Entwurfsmodelle belegen zusätzlichen VRAM, der von den Kapazitätsprüfungen noch nicht berücksichtigt wird.",
+					"description": "Draft-and-Verify-Decoding erhöht den Durchsatz für einzelne Nutzer. n-Gramm-Modi brauchen kein zusätzliches Modell; Entwurfsmodelle belegen zusätzlichen VRAM, der von den Kapazitätsprüfungen noch nicht berücksichtigt wird. DFlash und DSpark benötigen ein eigenes Entwurfsmodell und sind auf größere Entwurfsblöcke ausgelegt als die voreingestellten 3 Entwurfstoken pro Schritt (upstream verwendet 15 bzw. 7); der Server begrenzt diesen Wert nur nach unten, er muss also manuell erhöht werden.",
 					"options": {
 						"off": "Aus",
 						"ngram-mod": "n-Gramm (kein Entwurfsmodell)",
 						"ngram-cache": "n-Gramm-Cache (kein Entwurfsmodell)",
 						"draft-simple": "Entwurfsmodell (einfach)",
 						"draft-eagle3": "Entwurfsmodell (EAGLE-3)",
+						"draft-dflash": "Entwurfsmodell (DFlash)",
+						"draft-dspark": "Entwurfsmodell (DSpark)",
 						"draft-mtp": "Entwurfsmodell (MTP)"
 					}
 				},
@@ -3186,6 +3198,16 @@
 					"hint": "≈ {{gb}} GB mit {{quant}} KV-Cache",
 					"tooltip": "Nur eine Schätzung – die angezeigte Passung nutzt den Standard-fp16-KV-Cache. Ein quantisierter KV-Cache erfordert Flash Attention und passende Startparameter; die Ersparnis ist eine Schätzung, keine garantierte Kompatibilität."
 				},
+				"kvPerToken": {
+					"hint": "{{kb}} KB/Token ({{quant}} KV)",
+					"tooltip": "KV-Cache-Kosten eines Tokens bei {{context}} Kontext, berechnet mit einem {{quant}}-KV-Cache (Standard beim Chat-Start) statt mit dem fp16-Cache, den die Speicherangaben oben verwenden."
+				},
+				"attentionArch": {
+					"mla": "MLA",
+					"swa": "SWA",
+					"gqa": "GQA",
+					"mha": "MHA"
+				},
 				"catalog": {
 					"version": "Katalog v{{version}}",
 					"source": {
@@ -3277,7 +3299,8 @@
 				"status": {
 					"explored": "Erkundet",
 					"frozen": "Eingefroren",
-					"stale": "Veraltet"
+					"stale": "Veraltet",
+					"staleTooltip": "Neuvermessung erforderlich. Ein Profil wird ungültig, wenn sich seit dem Einfrieren der llama.cpp-Build, die GPU, der freie VRAM beim Einfrieren oder der KV-Cache-Typ dieses Knotens geändert hat."
 				},
 				"actions": {
 					"benchmark": "Benchmark",
@@ -4358,6 +4381,7 @@
 				"intended": "Beabsichtigt",
 				"effective": "Tatsächlich",
 				"intendedDiffers": "Der beabsichtigte und der tatsächliche Start unterscheiden sich.",
+				"identitySchemeOutdated": "Unter einem früheren Launch-Identitätsschema eingefroren; die beiden Identitäten sind nicht vergleichbar.",
 				"primaryDiffers": "Start unterscheidet sich: {{fields}}",
 				"copy": "Kopieren",
 				"copied": "Kopiert",

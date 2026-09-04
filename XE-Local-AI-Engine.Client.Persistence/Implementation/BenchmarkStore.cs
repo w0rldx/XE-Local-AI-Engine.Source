@@ -209,7 +209,8 @@ public sealed partial class BenchmarkStore(NodeChatDbContext dbContext, TimeProv
             entity.LastStreamSequence, entity.UserScore, entity.PrimaryErrorMessage, entity.Version, entity.CreatedAtUtc, entity.StartedAtUtc,
             entity.PrimaryCompletedAtUtc, entity.UpdatedAtUtc,
             ToIntent(entity.PrimaryVariant, entity.PrimaryKvCacheType, entity.PrimaryKvCacheTypeSource, entity.PrimaryKvAutoReason,
-                entity.PrimaryFlashAttentionMode, entity.PrimaryIntendedLaunchIdentity, entity.PrimaryIntendedExecutableSha256),
+                entity.PrimaryFlashAttentionMode, entity.PrimaryIntendedLaunchIdentity, entity.PrimaryIntendedExecutableSha256,
+                entity.PrimaryLaunchIdentityScheme),
             ToEvidence(entity.PrimaryLaunchReceiptJson, entity.PrimaryEnvironmentFactsJson, entity.PrimaryReceiptHash,
                 entity.PrimaryEnvironmentFactsHash, entity.PrimaryEffectiveLaunchIdentity, entity.PrimaryEffectiveBackend,
                 entity.PrimaryPlacementOffloaded, entity.PrimaryPlacementTotal, entity.PrimaryLaunchExecutableSha256,
@@ -263,11 +264,12 @@ public sealed partial class BenchmarkStore(NodeChatDbContext dbContext, TimeProv
         string? kvAutoReason,
         string? flashAttentionMode,
         string? intendedLaunchIdentity,
-        string? intendedExecutableSha256) =>
+        string? intendedExecutableSha256,
+        int? launchIdentityScheme) =>
         variant is null || kvCacheType is null || kvCacheTypeSource is null || flashAttentionMode is null || intendedLaunchIdentity is null
             ? null
             : new BenchmarkRunLaunchIntent(variant, kvCacheType, kvCacheTypeSource, kvAutoReason, flashAttentionMode,
-                intendedLaunchIdentity, intendedExecutableSha256);
+                intendedLaunchIdentity, intendedExecutableSha256, launchIdentityScheme);
 
     private static BenchmarkRunLaunchEvidence? ToEvidence(byte[]? receiptJson,
         byte[]? environmentFactsJson,
@@ -295,7 +297,7 @@ public sealed partial class BenchmarkStore(NodeChatDbContext dbContext, TimeProv
             CopyOptional(entity.JudgeRuntimeJson), entity.JudgeExecutionKey, entity.Status, CopyOptional(entity.ResultJson),
             entity.Score, entity.ErrorMessage, entity.EnqueuedAtUtc, entity.StartedAtUtc, entity.CompletedAtUtc, entity.Version,
             ToIntent(entity.Variant, entity.KvCacheType, entity.KvCacheTypeSource, entity.KvAutoReason, entity.FlashAttentionMode,
-                entity.IntendedLaunchIdentity, entity.IntendedExecutableSha256),
+                entity.IntendedLaunchIdentity, entity.IntendedExecutableSha256, entity.LaunchIdentityScheme),
             ToEvidence(entity.LaunchReceiptJson, entity.EnvironmentFactsJson, entity.ReceiptHash, entity.EnvironmentFactsHash,
                 entity.EffectiveLaunchIdentity, entity.EffectiveBackend, entity.PlacementOffloaded, entity.PlacementTotal,
                 entity.LaunchExecutableSha256, entity.LaunchHasAuxAssets, entity.LaunchKvCacheTypeSource));

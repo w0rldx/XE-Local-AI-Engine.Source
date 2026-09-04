@@ -4,9 +4,9 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default <see cref="ILlamaServerLaunchFallbackStore" />: persists the set of GPU backends whose optimized launch
-///     config (quantized KV cache + flash attention) has proven unable to reach readiness on this host to
-///     <c>llama-launch-fallback.json</c> under the cache root.
+///     Default <see cref="ILlamaServerLaunchFallbackStore" />: persists the set of (GPU backend, KV-cache type) pairs
+///     whose optimized launch config (quantized KV cache + flash attention) has proven unable to reach readiness on this
+///     host to <c>llama-launch-fallback.json</c> under the cache root.
 /// </summary>
 /// <remarks>
 ///     Mirrors <see cref="InstalledRuntimeStore" />: tolerant deserialize (absent/corrupt → empty), atomic temp-file
@@ -26,7 +26,8 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
     private readonly SemaphoreSlim _lock = new(initialCount: 1, maxCount: 1);
     private readonly string _statePath;
 
-    // Null until first load; then the authoritative in-memory snapshot of disabled variants (case-insensitive by name).
+    // Null until first load; then the authoritative in-memory snapshot of disabled "{Variant}:{kvType}" keys
+    // (case-insensitive). A legacy backend-only entry is kept as the bare "{Variant}" and disables every KV type on it.
     private HashSet<string>? _disabled;
 
     /// <summary>Creates the store under <paramref name="cacheRoot" /> (defaulting to the shared app cache root).</summary>
@@ -42,13 +43,17 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
     }
 
     /// <inheritdoc />
-    public async Task<bool> IsOptimizedConfigDisabledAsync(GpuVariant variant, CancellationToken ct)
+    public async Task<bool> IsOptimizedConfigDisabledAsync(GpuVariant variant, string kvCacheType, CancellationToken ct)
     {
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             var disabled = _disabled ??= await LoadAsync(ct).ConfigureAwait(false);
-            return disabled.Contains(variant.ToString());
+
+            // A legacy entry names the backend alone. It was written when one verdict covered every KV type, so it must
+            // keep covering every KV type — reading it as "only the current type" would silently re-enable a config this
+            // host already proved cannot reach readiness.
+            return disabled.Contains(variant.ToString()) || disabled.Contains(PairKey(variant, kvCacheType));
         }
         finally
         {
@@ -57,13 +62,13 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
     }
 
     /// <inheritdoc />
-    public async Task DisableOptimizedConfigAsync(GpuVariant variant, CancellationToken ct)
+    public async Task DisableOptimizedConfigAsync(GpuVariant variant, string kvCacheType, CancellationToken ct)
     {
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             var disabled = _disabled ??= await LoadAsync(ct).ConfigureAwait(false);
-            if (!disabled.Add(variant.ToString()))
+            if (!disabled.Add(PairKey(variant, kvCacheType)))
             {
                 return; // Already recorded — idempotent no-op, no re-write.
             }
@@ -75,6 +80,9 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
             _lock.Release();
         }
     }
+
+    private static string PairKey(GpuVariant variant, string kvCacheType) =>
+        string.Concat(variant.ToString(), ":", (kvCacheType ?? string.Empty).Trim());
 
     private async Task<HashSet<string>> LoadAsync(CancellationToken ct)
     {
@@ -90,9 +98,19 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
             var state = await JsonSerializer.DeserializeAsync<LlamaServerLaunchFallbackState>(stream, SerializerOptions, ct).ConfigureAwait(false);
             if (state?.DisabledOptimizedVariants is { } variants)
             {
+                // Legacy, backend-only entries. Read for back-compat and never written again; each disables every KV
+                // type on its backend, which preserves the pre-slice behaviour across an upgrade.
                 foreach (var name in variants.Where(static name => !string.IsNullOrWhiteSpace(name)))
                 {
                     set.Add(name);
+                }
+            }
+
+            if (state?.DisabledOptimizedConfigs is { } configs)
+            {
+                foreach (var key in configs.Where(static key => !string.IsNullOrWhiteSpace(key)))
+                {
+                    set.Add(key);
                 }
             }
         }
@@ -112,7 +130,11 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_statePath)!);
 
-        var state = new LlamaServerLaunchFallbackState([.. disabled]);
+        // Legacy backend-only entries are preserved verbatim in their own list so an older build still reads them; every
+        // new entry is a "{Variant}:{kvType}" pair and goes only into the pair list.
+        var legacy = disabled.Where(static key => !key.Contains(':', StringComparison.Ordinal)).ToArray();
+        var pairs = disabled.Where(static key => key.Contains(':', StringComparison.Ordinal)).ToArray();
+        var state = new LlamaServerLaunchFallbackState(legacy, pairs);
         var tempPath = _statePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
@@ -172,6 +194,14 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
     }
 }
 
-/// <summary>Persisted shape for <see cref="LlamaServerLaunchFallbackStore" />: the GPU backends whose optimized launch config is disabled.</summary>
-/// <param name="DisabledOptimizedVariants">Backend names (<see cref="GpuVariant" />) whose KV-quant + flash-attention config failed readiness.</param>
-public sealed record LlamaServerLaunchFallbackState(IReadOnlyList<string> DisabledOptimizedVariants);
+/// <summary>Persisted shape for <see cref="LlamaServerLaunchFallbackStore" />: the launch configs proven unable to reach readiness.</summary>
+/// <param name="DisabledOptimizedVariants">
+///     LEGACY, read-only: backend names (<see cref="GpuVariant" />) recorded before the store was keyed by KV type. An
+///     entry here disables every KV type on that backend. Nothing writes to this list any more.
+/// </param>
+/// <param name="DisabledOptimizedConfigs">
+///     <c>"{Variant}:{kvType}"</c> keys whose KV-quant + flash-attention config failed readiness. A <c>q4_0</c> failure
+///     here leaves <c>q8_0</c> on the same backend enabled.
+/// </param>
+public sealed record LlamaServerLaunchFallbackState(IReadOnlyList<string> DisabledOptimizedVariants,
+    IReadOnlyList<string>? DisabledOptimizedConfigs = null);

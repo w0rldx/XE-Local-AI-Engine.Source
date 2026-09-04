@@ -140,10 +140,16 @@ internal sealed class LlamaFitParamsProcessRunner : ILlamaFitParamsRunner
             or "-mg" or "--main-gpu"
             or "-fit" or "--fit"
             or "-fitt" or "--fit-target"
-            or "-fitc" or "--fit-ctx";
+            or "-fitc" or "--fit-ctx"
+            or "-ncmoe" or "--n-cpu-moe";
 
+    // --cpu-moe/--n-cpu-moe are expert placement, and upstream pushes them into the same tensor_buft_overrides list
+    // -ot writes (llama.cpp common/arg.cpp). The helper both fits AGAINST those overrides and echoes them back as
+    // -ot "<pattern>=CPU" (tools/fit-params/fit-params.cpp), so passing them through is what makes the fitted -ngl
+    // honest and gives the frozen replay a concrete expert placement. Dropping them fits the wrong placement.
     private static bool IsValueLessFitArgument(string argument) =>
-        argument is "--mlock" or "--mmap" or "--no-mmap" or "--no-host" or "--no-op-offload";
+        argument is "--mlock" or "--mmap" or "--no-mmap" or "--no-host" or "--no-op-offload"
+            or "-cmoe" or "--cpu-moe";
 
     private static LlamaFitParamsRunResult FailureWithStandardError(string reason,
         string standardError,

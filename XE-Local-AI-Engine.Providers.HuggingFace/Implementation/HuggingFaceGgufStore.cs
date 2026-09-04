@@ -152,7 +152,9 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             ContentIdentity: entry.Sha256 ?? $"{entry.SourceRevision}:{entry.FileName}:{entry.SizeBytes}",
             inputs.Architecture,
             inputs.ExpertCount,
-            inputs.ExpertUsedCount);
+            inputs.ExpertUsedCount,
+            inputs.AttentionKeyLengthMla,
+            inputs.AttentionValueLengthMla);
     }
 
     /// <inheritdoc />
@@ -565,7 +567,9 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 metadata.SlidingWindowPattern,
                 metadata.Architecture,
                 metadata.ExpertCount,
-                metadata.ExpertUsedCount);
+                metadata.ExpertUsedCount,
+                metadata.AttentionKeyLengthMla,
+                metadata.AttentionValueLengthMla);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -655,11 +659,13 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         long? SlidingWindowPattern = null,
         string? Architecture = null,
         long? ExpertCount = null,
-        long? ExpertUsedCount = null)
+        long? ExpertUsedCount = null,
+        long? AttentionKeyLengthMla = null,
+        long? AttentionValueLengthMla = null)
     {
         public static GgufHeaderFootprintInputs Empty { get; } = new(ParamCount: null, BlockCount: null, AttentionHeadCount: null, AttentionHeadCountKV: null,
             EmbeddingLength: null, ContextLength: null, AttentionKeyLength: null, AttentionValueLength: null, SlidingWindow: null, SlidingWindowPattern: null,
-            Architecture: null, ExpertCount: null, ExpertUsedCount: null);
+            Architecture: null, ExpertCount: null, ExpertUsedCount: null, AttentionKeyLengthMla: null, AttentionValueLengthMla: null);
     }
 
     /// <summary>The concrete repo file a model request resolves to, with the revision the download will pin.</summary>

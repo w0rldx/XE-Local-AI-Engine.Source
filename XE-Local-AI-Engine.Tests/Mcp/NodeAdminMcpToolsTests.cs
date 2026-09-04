@@ -68,6 +68,7 @@ public sealed class NodeAdminMcpToolsTests
         "keep_model_warm_enabled",
         "keep_model_warm_interval_seconds",
         "keep_model_warm_model_name",
+        "kv_cache_type",
         "llama_idle_time_to_live_seconds",
         "llama_max_loaded_processes",
         "max_message_request_timeout_seconds",
@@ -1009,7 +1010,7 @@ public sealed class NodeAdminMcpToolsTests
             10);
 
     private static NodeSettingsAgenticView SettingsView(string model) =>
-        new(model, null, null, null, null, null, null, null, null, 600, null, null, null, null, null, null, null);
+        new(model, null, null, null, null, null, null, null, null, 600, null, null, null, null, null, null, null, null);
 
     private static IEnumerable<(MethodInfo Method, McpServerToolAttribute? Attribute)> ToolMethods() =>
         typeof(NodeAdminMcpTools).GetMethods(BindingFlags.Instance | BindingFlags.Public)

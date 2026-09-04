@@ -285,6 +285,7 @@ internal static class McpAdminWireNames
             NodeSettingsField.SpeculativeMode => "speculative_mode",
             NodeSettingsField.SpeculativeDraftMaxTokens => "speculative_draft_max_tokens",
             NodeSettingsField.SpeculativeDraftGpuLayers => "speculative_draft_gpu_layers",
+            NodeSettingsField.KvCacheType => "kv_cache_type",
             NodeSettingsField.ChatCacheReuse => "chat_cache_reuse",
             NodeSettingsField.LlamaIdleTimeToLiveSeconds => "llama_idle_time_to_live_seconds",
             NodeSettingsField.KeepModelWarmModelName => "keep_model_warm_model_name",
@@ -311,6 +312,7 @@ internal static class McpAdminWireNames
             nameof(NodeSettingsAgenticPatch.SpeculativeDraftModelName) => "speculative_draft_model_name",
             nameof(NodeSettingsAgenticPatch.SpeculativeDraftMaxTokens) => "speculative_draft_max_tokens",
             nameof(NodeSettingsAgenticPatch.SpeculativeDraftGpuLayers) => "speculative_draft_gpu_layers",
+            nameof(NodeSettingsAgenticPatch.KvCacheType) => "kv_cache_type",
             nameof(NodeSettingsAgenticPatch.RerankerModelName) => "reranker_model_name",
             nameof(NodeSettingsAgenticPatch.AutoEffortFastModelName) => "auto_effort_fast_model_name",
             _ => throw new ArgumentOutOfRangeException(nameof(propertyName), propertyName, "Unknown agentic settings property.")

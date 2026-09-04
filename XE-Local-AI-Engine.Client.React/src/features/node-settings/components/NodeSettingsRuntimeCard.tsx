@@ -8,6 +8,8 @@ import {
 	nodeSettingsRestartHint,
 } from "@/features/node-settings/components/NodeSettingsFieldPresentation";
 import {
+	KV_CACHE_TYPE_DEFAULT,
+	kvCacheTypeSelectValues,
 	type NodeSettingsFieldBounds,
 	type NodeSettingsFieldsForm,
 	requiresExternalDraftModel,
@@ -59,6 +61,14 @@ export function NodeSettingsRuntimeCard({
 					mode === SPECULATIVE_DISABLED_MODE
 						? t("pages.nodeSettings.fields.speculativeMode.options.off", "Off")
 						: t(`pages.nodeSettings.fields.speculativeMode.options.${mode}`, mode),
+			})),
+		[t],
+	);
+	const kvCacheTypeOptions = useMemo(
+		() =>
+			kvCacheTypeSelectValues.map((type) => ({
+				value: type,
+				label: t(`pages.nodeSettings.fields.kvCacheType.options.${type}`, type),
 			})),
 		[t],
 	);
@@ -176,12 +186,30 @@ export function NodeSettingsRuntimeCard({
 					)}
 				</Text>
 				<Select
+					label={t("pages.nodeSettings.fields.kvCacheType.label", "KV cache type")}
+					description={
+						<>
+							{t(
+								"pages.nodeSettings.fields.kvCacheType.description",
+								"Changing this invalidates every frozen inference profile on this node. Each model re-explores with the new KV cache type the next time it loads, and must be benchmarked and frozen again. q4_0 trades answer quality for VRAM.",
+							)}
+							{nodeSettingsRestartHint(t, "kvCacheType")}
+						</>
+					}
+					data={kvCacheTypeOptions}
+					value={form.kvCacheType}
+					onChange={(value) => onChange("kvCacheType", value ?? KV_CACHE_TYPE_DEFAULT)}
+					allowDeselect={false}
+					error={nodeSettingsFieldError(t, errors, "kvCacheType")}
+					data-testid="node-settings-kv-cache-type"
+				/>
+				<Select
 					label={t("pages.nodeSettings.fields.speculativeMode.label", "Speculative decoding")}
 					description={
 						<>
 							{t(
 								"pages.nodeSettings.fields.speculativeMode.description",
-								"Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; draft models use additional VRAM not yet counted by capacity checks.",
+								"Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; draft models use additional VRAM not yet counted by capacity checks. DFlash and DSpark need their own draft model and are trained for larger draft blocks than the default 3 draft tokens per step (upstream uses 15 and 7); the server only clamps that value downwards, so raise it yourself.",
 							)}
 							{nodeSettingsRestartHint(t, "speculativeMode")}
 						</>

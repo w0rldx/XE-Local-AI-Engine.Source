@@ -262,6 +262,35 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
+    [Arguments("q5_1")]
+    [Arguments("int8")]
+    [Arguments("f32")]
+    public async Task KvCacheType_Unknown_FallsBackToNull(string type)
+    {
+        // The normalizer is the layer that must never let a bad value through: LlamaServerLaunchPolicyOptions.Validate()
+        // runs in the launch policy's constructor, so a persisted junk value would fail host build rather than degrade.
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            KvCacheType = type
+        });
+        AssertEx.Null(loaded.KvCacheType);
+    }
+
+    [Test]
+    [Arguments("f16", "f16")]
+    [Arguments("q8_0", "q8_0")]
+    [Arguments("Q4_0", "q4_0")]
+    [Arguments("  q8_0  ", "q8_0")]
+    public async Task KvCacheType_Known_IsKeptCanonical(string type, string expected)
+    {
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            KvCacheType = type
+        });
+        AssertEx.Equal(expected, loaded.KvCacheType);
+    }
+
+    [Test]
     [Arguments("9692")]
     [Arguments("v9692")]
     [Arguments("bxyz")]

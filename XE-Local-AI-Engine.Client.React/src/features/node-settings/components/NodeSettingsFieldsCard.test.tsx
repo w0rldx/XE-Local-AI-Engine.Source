@@ -394,4 +394,20 @@ describe("NodeSettingsFieldsCard — restart-required hint", () => {
 		expect(screen.getByTestId("node-settings-restart-hint-speculativeDraftModelName")).toBeTruthy();
 		expect(screen.getByTestId("node-settings-restart-hint-speculativeDraftMaxTokens")).toBeTruthy();
 	});
+
+	it("renders the KV cache type picker with a restart hint", () => {
+		renderCard();
+
+		expect(screen.getByTestId("node-settings-kv-cache-type")).toBeTruthy();
+		// LlamaServerLaunchPolicyOptions is seeded once at host build, so the operator must be told it needs a restart.
+		expect(screen.getByTestId("node-settings-restart-hint-kvCacheType")).toBeTruthy();
+	});
+
+	it.each(["draft-dflash", "draft-dspark"])("treats %s as an external-draft mode and shows its draft-model fields", (mode) => {
+		renderCard({ form: { ...toNodeSettingsFieldsForm(undefined), speculativeMode: mode } });
+
+		// Both load a second GGUF, so the draft-model picker and the draft-tokens input must appear for them.
+		expect(screen.getByTestId("node-settings-speculative-draft-model")).toBeTruthy();
+		expect(screen.getByTestId("node-settings-speculative-draft-max-tokens")).toBeTruthy();
+	});
 });

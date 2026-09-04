@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 using System.Text.Json;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
 ///     Persistence boundary for node settings data.
@@ -221,6 +222,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             ChatCacheReuse = ClampToRange(settings.ChatCacheReuse,
                 StoredNodeSettings.MinChatCacheReuse, StoredNodeSettings.MaxChatCacheReuse),
             SpeculativeMode = NormalizeSpeculativeMode(settings.SpeculativeMode),
+            KvCacheType = NormalizeKvCacheType(settings.KvCacheType),
             SpeculativeDraftModelName = TrimToNull(settings.SpeculativeDraftModelName),
             SpeculativeDraftMaxTokens = ClampToRange(settings.SpeculativeDraftMaxTokens,
                 StoredNodeSettings.MinSpeculativeDraftMaxTokens, StoredNodeSettings.MaxSpeculativeDraftMaxTokens),
@@ -313,6 +315,14 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     {
         var trimmed = TrimToNull(value);
         return StoredNodeSettings.IsValidRecommendedLlamaCppTag(trimmed) ? trimmed : null;
+    }
+
+    private static string? NormalizeKvCacheType(string? value)
+    {
+        // An unknown type falls back to null so the accessor re-seeds it to the default. This normalizer is the layer
+        // that must never let a bad value through: LlamaServerLaunchPolicyOptions.Validate() rejects one at host build,
+        // i.e. a persisted junk value would take the node down rather than degrade.
+        return LlamaServerKvCacheTypes.TryNormalize(value, out var normalized) ? normalized : null;
     }
 
     private static string? NormalizeSpeculativeMode(string? value)

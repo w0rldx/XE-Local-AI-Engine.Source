@@ -85,6 +85,10 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
                       .OrderBy(candidate => TierRank(candidate.Entry.Tier))
                       .ThenBy(candidate => candidate.Estimate.MoeVerdict == MoeFitVerdict.FitsWithExpertOffload ? 1 : 0)
                       .ThenBy(candidate => QuantLadder.QualityRank(candidate.File.Quant))
+                      // A genuine tiebreak, deliberately BELOW quant quality: it can only separate candidates whose
+                      // tier, expert-offload class and quant quality are already equal, so it never trades answer
+                      // quality for a cheaper cache. A candidate whose header cannot size the KV term sorts last.
+                      .ThenBy(candidate => candidate.KvBytesPerTokenAtCtx ?? long.MaxValue)
                       .ThenByDescending(candidate => candidate.Entry.ReleaseDate, StringComparer.Ordinal)
                       .ThenBy(candidate => candidate.Entry.Id, StringComparer.Ordinal)
                       .ToList();
@@ -166,7 +170,38 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
         var (file, estimate) = selected;
         var modelName = GgufModelName.Format(entry.GgufRepo, file.Quant);
         var kvQuantAdvisory = BuildKvQuantAdvisory(entry, file, ctxTarget, profile);
-        return new CatalogRecommendationCandidate(entry, file, estimate, modelName, installedKeys.Contains(modelName), kvQuantAdvisory);
+        var attention = BuildAttentionShape(file);
+        return new CatalogRecommendationCandidate(entry,
+            file,
+            estimate,
+            modelName,
+            installedKeys.Contains(modelName),
+            kvQuantAdvisory,
+            BuildKvBytesPerTokenAtCtx(file, ctxTarget, attention),
+            AttentionArchTag.Resolve(attention, file.AttentionHeadCount, file.AttentionHeadCountKV));
+    }
+
+    /// <summary>
+    ///     KV-cache bytes per token of context at the request's target, computed at the chat launch's own
+    ///     <see cref="KvCacheQuant.Q8_0" /> element size rather than at the ranking estimate's fp16 — the number answers
+    ///     "what will this cost me on this node". Returns <see langword="null" /> when the header cannot size the KV
+    ///     term, so an unsizeable candidate sorts last on the tiebreak instead of winning it with a zero.
+    /// </summary>
+    private static long? BuildKvBytesPerTokenAtCtx(GgufRepoFile file, int ctxTarget, GgufAttentionShape attention)
+    {
+        if (file.BlockCount is not > 0 || file.AttentionHeadCountKV is not > 0)
+        {
+            return null;
+        }
+
+        var footprint = MemoryFitEstimator.EstimateKvCacheFootprint(file.BlockCount.Value,
+            file.AttentionHeadCountKV.Value,
+            file.EmbeddingLength ?? 0,
+            file.AttentionHeadCount ?? 0,
+            ctxTarget,
+            KvCacheQuant.Q8_0,
+            attention);
+        return footprint.BytesAtContext > 0 ? (long)Math.Round(footprint.BytesPerToken) : null;
     }
 
     /// <summary>
@@ -234,6 +269,7 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
     // estimator on its legacy derived-head_dim, no-SWA path.
     private static GgufAttentionShape BuildAttentionShape(GgufRepoFile file)
     {
-        return new GgufAttentionShape(file.AttentionKeyLength, file.AttentionValueLength, file.SlidingWindow, file.SlidingWindowPattern);
+        return new GgufAttentionShape(file.AttentionKeyLength, file.AttentionValueLength, file.SlidingWindow, file.SlidingWindowPattern,
+            file.AttentionKeyLengthMla, file.AttentionValueLengthMla);
     }
 }

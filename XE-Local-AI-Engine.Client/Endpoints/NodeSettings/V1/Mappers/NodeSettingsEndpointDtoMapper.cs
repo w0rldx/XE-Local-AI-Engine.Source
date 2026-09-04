@@ -38,6 +38,7 @@ internal static class NodeSettingsEndpointDtoMapper
             MinChatCacheReuse = StoredNodeSettings.MinChatCacheReuse,
             MaxAllowedChatCacheReuse = StoredNodeSettings.MaxChatCacheReuse,
             SpeculativeMode = settings.SpeculativeMode,
+            KvCacheType = settings.KvCacheType,
             SpeculativeDraftModelName = settings.SpeculativeDraftModelName,
             SpeculativeDraftMaxTokens = settings.SpeculativeDraftMaxTokens,
             MinSpeculativeDraftMaxTokens = StoredNodeSettings.MinSpeculativeDraftMaxTokens,
@@ -112,6 +113,9 @@ internal static class NodeSettingsEndpointDtoMapper
             SpeculativeMode = request.SpeculativeMode is null
                 ? currentSettings.SpeculativeMode
                 : request.SpeculativeMode.Trim(),
+            KvCacheType = request.KvCacheType is null
+                ? currentSettings.KvCacheType
+                : request.KvCacheType.Trim(),
             SpeculativeDraftModelName = request.SpeculativeDraftModelName is null
                 ? currentSettings.SpeculativeDraftModelName
                 : request.SpeculativeDraftModelName.Trim(),

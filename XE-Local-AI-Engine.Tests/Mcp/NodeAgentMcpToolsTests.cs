@@ -80,7 +80,7 @@ public sealed class NodeAgentMcpToolsTests
             Descriptor("unavailable", 30, isAvailable: false)
         ]);
         harness.NodeSettingsAdministration.GetAgenticViewAsync(Arg.Any<CancellationToken>()).Returns(
-            new NodeSettingsAgenticView("zeta-embed", null, null, null, null, null, null, null, null, 600, null, null, null, null, null, null, null));
+            new NodeSettingsAgenticView("zeta-embed", null, null, null, null, null, null, null, null, 600, null, null, null, null, null, null, null, null));
 
         var models = await harness.Tools.ListModelsAsync(CancellationToken.None);
 

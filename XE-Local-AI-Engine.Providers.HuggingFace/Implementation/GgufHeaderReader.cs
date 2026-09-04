@@ -283,6 +283,12 @@ internal sealed class GgufHeaderReader
         var attentionKeyLength = TryGetLong(values, Arch("attention.key_length"));
         var attentionValueLength = TryGetLong(values, Arch("attention.value_length"));
 
+        // Multi-head Latent Attention (deepseek2 family): when BOTH {arch}.attention.key_length_mla and
+        // .value_length_mla are present and positive, llama.cpp's is_mla() holds and the cache is allocated as a single
+        // latent K tensor with NO V tensor at all. Detection is by these two keys only — never by architecture name.
+        var attentionKeyLengthMla = TryGetLong(values, Arch("attention.key_length_mla"));
+        var attentionValueLengthMla = TryGetLong(values, Arch("attention.value_length_mla"));
+
         // Interleaved sliding-window attention (Gemma family): a positive window means the window-limited layers hold at
         // most this many KV positions instead of the full context. The layer stride (every Nth layer is full attention)
         // comes from an explicit header key when present, else the per-architecture default (Gemma3=6, Gemma2=2).
@@ -308,7 +314,9 @@ internal sealed class GgufHeaderReader
             attentionKeyLength,
             attentionValueLength,
             slidingWindow,
-            slidingWindowPattern);
+            slidingWindowPattern,
+            attentionKeyLengthMla,
+            attentionValueLengthMla);
     }
 
     private static string? GetString(IReadOnlyDictionary<string, object> values, string key)
@@ -630,11 +638,14 @@ internal sealed record GgufHeaderMetadata(
     long? AttentionKeyLength = null,
     long? AttentionValueLength = null,
     long? SlidingWindow = null,
-    long? SlidingWindowPattern = null)
+    long? SlidingWindowPattern = null,
+    long? AttentionKeyLengthMla = null,
+    long? AttentionValueLengthMla = null)
 {
     public static GgufHeaderMetadata Empty { get; } = new(Architecture: null, QuantType: null, ParamCount: null, BlockCount: null, AttentionHeadCount: null, AttentionHeadCountKV: null,
         EmbeddingLength: null, ContextLength: null, ChatTemplate: null, ExpertCount: null, ExpertUsedCount: null,
-        AttentionKeyLength: null, AttentionValueLength: null, SlidingWindow: null, SlidingWindowPattern: null);
+        AttentionKeyLength: null, AttentionValueLength: null, SlidingWindow: null, SlidingWindowPattern: null,
+        AttentionKeyLengthMla: null, AttentionValueLengthMla: null);
 
     /// <summary>True when the GGUF declares a positive expert count — a Mixture-of-Experts model (dense models omit it).</summary>
     public bool IsMoe => ExpertCount is > 0;
