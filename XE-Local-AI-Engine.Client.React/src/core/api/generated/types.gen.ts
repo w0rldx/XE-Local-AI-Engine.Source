@@ -3367,7 +3367,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 	toolCalls?: number | null;
 	toolSchemaTokens?: number | null;
 	toolNames?: Array<string> | null;
-	providerTurnMs?: number | null;
+	agentTurnMs?: number | null;
 	servedModelName?: string | null;
 	route?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse | null;
 	workSessionSteps?: number | null;
@@ -3569,7 +3569,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCo
 	outputTokens?: number | null;
 	toolCalls?: number | null;
 	providerCalls?: number | null;
-	providerTurnMs?: number | null;
+	agentTurnMs?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1StartDevWorkflowRunRequest = {

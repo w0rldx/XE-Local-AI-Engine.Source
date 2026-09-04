@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -26,7 +28,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </remarks>
 internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
     IDevWorkflowEventPublisher publisher,
-    IDevWorkflowNodeTelemetrySource telemetry,
+    IServiceScopeFactory scopes,
     DevWorkflowGraphCache graphs,
     ILogger<PublishingDevWorkflowStore> logger,
     TimeSpan? collectionTimeout = null) : IDevWorkflowStore
@@ -34,6 +36,12 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
     /// <summary>
     ///     How long a cost collection may take before the settle goes ahead without it. It runs on a dispatcher tick,
     ///     and a measurement that delays a run is worse than a measurement that is missing.
+    ///     <para>
+    ///         It is a HARD wall-clock bound, not a request to stop: the settle stops WAITING when it expires, whether
+    ///         or not the collection notices. A collector that ignores its token, or a database call that never
+    ///         returns, therefore costs a measurement and nothing else — see <c>CollectAsync</c> for why the abandoned
+    ///         work cannot touch the mutation's own <c>DbContext</c>.
+    ///     </para>
     ///     <para>
     ///         It bounds the whole ASK, not one command: a retry route enriches every reset it carries under ONE
     ///         deadline, because the graph's width is what decides how many resets there are and a per-command budget
@@ -60,7 +68,7 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
 
     private readonly IDevWorkflowStore _inner = inner ?? throw new ArgumentNullException(nameof(inner));
     private readonly IDevWorkflowEventPublisher _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
-    private readonly IDevWorkflowNodeTelemetrySource _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
+    private readonly IServiceScopeFactory _scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
     private readonly DevWorkflowGraphCache _graphs = graphs ?? throw new ArgumentNullException(nameof(graphs));
     private readonly ILogger<PublishingDevWorkflowStore> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly TimeSpan _collectionTimeout = collectionTimeout ?? DefaultCollectionTimeout;
@@ -281,40 +289,78 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
     }
 
     /// <summary>
-    ///     The enrichment itself, under a deadline its CALLER owns — one per settle, one per retry route. Everything
-    ///     that reads a row does so on <paramref name="deadline" />; <paramref name="cancellationToken" /> is kept only
-    ///     to tell an expired deadline (swallowed, the command goes through unenriched) from a cancelled caller
-    ///     (rethrown).
+    ///     The enrichment itself, under a deadline its CALLER owns — one per settle, one per retry route.
+    ///     <para>
+    ///         The deadline is enforced by ABANDONING THE WAIT, not by asking the collection to stop. Cancellation is
+    ///         cooperative, so a collector that never observes its token — or a database call that does not — would
+    ///         otherwise hold a terminal transition or a retry route open forever, which is a workflow that never
+    ///         settles rather than a measurement that is missing. <c>WaitAsync</c> gives back the thread when the
+    ///         deadline fires and leaves the collection to finish into <see cref="ObserveLateCollection" />, where
+    ///         its result is logged and dropped.
+    ///     </para>
+    ///     <para>
+    ///         <paramref name="cancellationToken" /> is kept only to tell an expired deadline (swallowed, the command
+    ///         goes through unenriched) from a cancelled caller (rethrown).
+    ///     </para>
     /// </summary>
     private async Task<TransitionDevWorkflowNodeRunCommand> EnrichWithinDeadlineAsync(TransitionDevWorkflowNodeRunCommand command,
         CancellationToken deadline,
         CancellationToken cancellationToken)
     {
-        if (IsReAttempt(command))
-        {
-            return await EnrichReAttemptAsync(command, deadline, cancellationToken).ConfigureAwait(false);
-        }
-
-        if (!WritesTelemetry(command.TargetStatus))
+        if (!IsReAttempt(command) && !WritesTelemetry(command.TargetStatus))
         {
             return command;
         }
 
+        // Task.Run, so the boundary holds even against a collector that blocks BEFORE its first await — a call on
+        // this stack would never reach the WaitAsync below. The consequence is that a reset is offered to the
+        // collector EVENTUALLY rather than synchronously, which is what the route test waits for.
+        var startedAt = Stopwatch.GetTimestamp();
+        var collection = Task.Run(() => CollectAsync(command, deadline, cancellationToken), CancellationToken.None);
+
         try
         {
-            // The PRE-write row, and it is read for four things only: the work session, the development task, the
-            // attempt's start and the row's node type. Its Status and OutputJson are the previous attempt's and must
-            // never be the ones a route question is asked about.
-            var snapshot = await _inner.GetNodeRunAsync(command.NodeRunId, deadline).ConfigureAwait(false);
-            var routeJson = await RouteJsonAsync(command, snapshot, deadline).ConfigureAwait(false);
-            var collected = await _telemetry.CollectAsync(snapshot, command.TargetStatus, deadline).ConfigureAwait(false);
+            return await collection.WaitAsync(deadline).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            ObserveLateCollection(collection, command.NodeRunId, startedAt);
+            return command;
+        }
+    }
 
-            if (collected is null && routeJson is null)
-            {
-                return command;
-            }
+    /// <summary>
+    ///     The reads a cost collection needs, on a service scope the COLLECTION owns and disposes.
+    ///     <para>
+    ///         The isolation is the point, not tidiness. This work can outlive the settle that started it, and the
+    ///         settle's next act is to write through <c>_inner</c> — so a collection reading on the mutation's own
+    ///         <c>DbContext</c> would be a second concurrent operation on it, which is a hard failure rather than a
+    ///         lost measurement. Its own scope means its own <c>DbContext</c>, disposed when it finishes, whenever
+    ///         that is.
+    ///     </para>
+    ///     <para>
+    ///         Everything here READS. Nothing an abandoned collection can still be doing writes a row: the only write
+    ///         is the enriched command it returns, and a late return is dropped by the caller.
+    ///     </para>
+    ///     <para>
+    ///         The scope's <c>IDevWorkflowStore</c> is this same decorator around a fresh inner store; its read
+    ///         methods forward untouched, and asking for the concrete inner store instead would bind this class to a
+    ///         registration rather than to the interface it already depends on.
+    ///     </para>
+    /// </summary>
+    private async Task<TransitionDevWorkflowNodeRunCommand> CollectAsync(TransitionDevWorkflowNodeRunCommand command,
+        CancellationToken deadline,
+        CancellationToken cancellationToken)
+    {
+        using var scope = _scopes.CreateScope();
+        try
+        {
+            var reads = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
+            var telemetry = scope.ServiceProvider.GetRequiredService<IDevWorkflowNodeTelemetrySource>();
 
-            return command with { Telemetry = (collected ?? new DevWorkflowNodeTelemetry()) with { RouteJson = routeJson } };
+            return IsReAttempt(command)
+                ? await EnrichReAttemptAsync(command, reads, telemetry, deadline).ConfigureAwait(false)
+                : await EnrichSettleAsync(command, reads, telemetry, deadline).ConfigureAwait(false);
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
@@ -323,6 +369,60 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
                 command.NodeRunId);
             return command;
         }
+    }
+
+    /// <summary>
+    ///     A settle's own cost and the route it took, read on the collection's isolated scope.
+    /// </summary>
+    private async Task<TransitionDevWorkflowNodeRunCommand> EnrichSettleAsync(TransitionDevWorkflowNodeRunCommand command,
+        IDevWorkflowStore reads,
+        IDevWorkflowNodeTelemetrySource telemetry,
+        CancellationToken deadline)
+    {
+        // The PRE-write row, and it is read for four things only: the work session, the development task, the
+        // attempt's start and the row's node type. Its Status and OutputJson are the previous attempt's and must
+        // never be the ones a route question is asked about.
+        var snapshot = await reads.GetNodeRunAsync(command.NodeRunId, deadline).ConfigureAwait(false);
+        var routeJson = await RouteJsonAsync(command, snapshot, reads, deadline).ConfigureAwait(false);
+        var collected = await telemetry.CollectAsync(snapshot, command.TargetStatus, deadline).ConfigureAwait(false);
+
+        if (collected is null && routeJson is null)
+        {
+            return command;
+        }
+
+        return command with { Telemetry = (collected ?? new DevWorkflowNodeTelemetry()) with { RouteJson = routeJson } };
+    }
+
+    /// <summary>
+    ///     Watches a collection that outlived its deadline, so its completion is observed rather than left to the
+    ///     unobserved-exception handler — and says so once, at warning, with counts only. Whatever it answers is
+    ///     DROPPED: the transition it would have enriched has already gone through.
+    /// </summary>
+    private void ObserveLateCollection(Task<TransitionDevWorkflowNodeRunCommand> collection, Guid nodeRunId, long startedAt)
+    {
+        _ = collection.ContinueWith(task =>
+            {
+                var lateBy = Stopwatch.GetElapsedTime(startedAt) - _collectionTimeout;
+                if (task.IsFaulted)
+                {
+                    _logger.LogWarning(task.Exception,
+                        "A cost collection for node run {NodeRunId} outlived its {BudgetMs} ms budget and then failed {LateByMs} ms in; nothing was written.",
+                        nodeRunId,
+                        _collectionTimeout.TotalMilliseconds,
+                        lateBy.TotalMilliseconds);
+                    return;
+                }
+
+                _logger.LogWarning(
+                    "A cost collection for node run {NodeRunId} outlived its {BudgetMs} ms budget and finished {LateByMs} ms late; the result was discarded and the node run settled without it.",
+                    nodeRunId,
+                    _collectionTimeout.TotalMilliseconds,
+                    lateBy.TotalMilliseconds);
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.DenyChildAttach,
+            TaskScheduler.Default);
     }
 
     /// <summary>
@@ -337,6 +437,7 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
     /// </summary>
     private async Task<string?> RouteJsonAsync(TransitionDevWorkflowNodeRunCommand command,
         DevWorkflowNodeRunSnapshot snapshot,
+        IDevWorkflowStore reads,
         CancellationToken cancellationToken)
     {
         if (!DevWorkflowStateMachine.IsTerminal(command.TargetStatus))
@@ -350,7 +451,7 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
             OutputJson = command.OutputJson ?? snapshot.OutputJson
         };
 
-        var run = await _inner.GetRunAsync(command.RunId, cancellationToken).ConfigureAwait(false);
+        var run = await reads.GetRunAsync(command.RunId, cancellationToken).ConfigureAwait(false);
         var decision = routeSource.NodeType == DevWorkflowNodeType.HumanGate
             ? DevWorkflowStateMachine.GateDecisionFrom(routeSource.OutputJson)
             : null;
@@ -372,31 +473,22 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
     ///         clears it, but downstream, inside the store's own transition.
     ///     </para>
     /// </summary>
-    private async Task<TransitionDevWorkflowNodeRunCommand> EnrichReAttemptAsync(TransitionDevWorkflowNodeRunCommand command,
-        CancellationToken deadline,
-        CancellationToken cancellationToken)
+    private static async Task<TransitionDevWorkflowNodeRunCommand> EnrichReAttemptAsync(TransitionDevWorkflowNodeRunCommand command,
+        IDevWorkflowStore reads,
+        IDevWorkflowNodeTelemetrySource telemetry,
+        CancellationToken deadline)
     {
-        try
-        {
-            var snapshot = await _inner.GetNodeRunAsync(command.NodeRunId, deadline).ConfigureAwait(false);
+        var snapshot = await reads.GetNodeRunAsync(command.NodeRunId, deadline).ConfigureAwait(false);
 
-            // Collected as the FAILED attempt it is. The row itself may still read Running — a re-attempt is written
-            // straight over a live row — but what this cost vector describes is an attempt that is over.
-            var collected = await _telemetry.CollectAsync(snapshot, DevWorkflowNodeRunStatus.Failed, deadline).ConfigureAwait(false);
-            if (collected is null)
-            {
-                return command;
-            }
-
-            return MergeAttemptCost(command.DetailJson!, collected) is { } merged ? command with { DetailJson = merged } : command;
-        }
-        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        // Collected as the FAILED attempt it is. The row itself may still read Running — a re-attempt is written
+        // straight over a live row — but what this cost vector describes is an attempt that is over.
+        var collected = await telemetry.CollectAsync(snapshot, DevWorkflowNodeRunStatus.Failed, deadline).ConfigureAwait(false);
+        if (collected is null)
         {
-            _logger.LogWarning(exception,
-                "The failing attempt's cost could not be captured onto node run {NodeRunId}'s retry event; it re-attempts without it.",
-                command.NodeRunId);
             return command;
         }
+
+        return MergeAttemptCost(command.DetailJson!, collected) is { } merged ? command with { DetailJson = merged } : command;
     }
 
     /// <summary>

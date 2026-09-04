@@ -48,7 +48,7 @@ curl -s "$NODE/api/local/v1/development-workflows/runs/$RUN_ID/events?sinceSeq=0
            providerCalls:        (map(.providerCalls        // 0) | add),
            toolCalls:            (map(.toolCalls            // 0) | add),
            toolSchemaTokens:     (map(.toolSchemaTokens     // 0) | add),
-           providerTurnMs:       (map(.providerTurnMs       // 0) | add),
+           agentTurnMs:       (map(.agentTurnMs       // 0) | add),
            workSessionSteps:     (map(.workSessionSteps     // 0) | add)}'
 ```
 
@@ -68,10 +68,10 @@ SELECT n.node_type,
        SUM(n.estimated_input_tokens) AS estimated_input_tokens,
        SUM(n.tool_schema_tokens) AS tool_schema_tokens,
        SUM(n.provider_calls) AS provider_calls, SUM(n.tool_calls) AS tool_calls,
-       SUM(n.provider_turn_ms) AS provider_ms,
+       SUM(n.agent_turn_ms) AS agent_turn_ms,
        SUM(n.ended_at_utc - n.started_at_utc)  AS run_ms,
        SUM(n.started_at_utc - n.queued_at_utc) AS queued_ms,
-       SUM((n.ended_at_utc - n.started_at_utc) - COALESCE(n.provider_turn_ms, 0)) AS outside_provider_ms
+       SUM((n.ended_at_utc - n.started_at_utc) - COALESCE(n.agent_turn_ms, 0)) AS outside_turn_ms
 FROM dev_workflow_node_runs n
 WHERE n.run_id IN (:runIds) AND n.ended_at_utc IS NOT NULL
 GROUP BY n.node_type;
@@ -85,7 +85,7 @@ WHERE e.run_id IN (:runIds) AND e.event_type = 'node.retry.scheduled';
 -- Per-node detail. Report medians and full spread, never a mean over a handful of rows.
 SELECT n.node_key, n.served_model_name, n.attempt, n.status, n.failure_class,
        n.input_tokens, n.output_tokens, n.tool_calls, n.tool_schema_tokens,
-       n.provider_turn_ms, n.ended_at_utc - n.started_at_utc AS run_ms, n.route_json
+       n.agent_turn_ms, n.ended_at_utc - n.started_at_utc AS run_ms, n.route_json
 FROM dev_workflow_node_runs n WHERE n.run_id IN (:runIds) ORDER BY n.node_key, n.attempt;
 
 -- Route stability: did the change move the run through a different path?
@@ -143,9 +143,18 @@ WHERE n.run_id IN (:runIds) AND n.failure_class IS NOT NULL GROUP BY failure_gro
 9. N per arm and machine state (`source ~/cuda-llama/env.sh`, fresh DB) go in the report beside the numbers.
 10. **`tool_names_json` is agent-path only.** It is populated from the work-session step rows, so it is null
     on a DevTask node run and on every Tool/Gate/Parallel/Join row. A null means "no step rows to read", never "this
-    node called no tools" — use `tool_calls` for that question.
+    node called no tools" — use `tool_calls` for that question. The names are also **bounded twice at the source**:
+    sixteen distinct names per attempt, each clamped to 128 characters with a trailing `…`, and a name the model
+    emitted that matched no offered tool is not recorded at all. So this column answers "which offered tools did
+    this attempt reach for", never "what did the model type".
+11. **`agent_turn_ms` is WHOLE-turn time, not provider time.** It sums each chat-run envelope's own duration
+    (`agent_execution_logs.duration_ms`), and an envelope spans the provider rounds AND the tool loop between them.
+    Nothing persisted separates the two, so `run_ms - agent_turn_ms` is time spent **outside** the turns — queueing
+    after the node started, the settle itself — and is **not** tool time. Do not present it as a provider-versus-tools
+    split; the node drill-down does not either, where the two rows read "Agent turns" and "Outside the turns".
 
 **Defaults by question.** *Did model routing change what it cost?* — tokens and `run_ms` grouped by
 `served_model_name`. *Did tool-schema filtering pay for itself?* — `tool_schema_tokens` per node run, with
 `tool_calls` beside it as the "did filtering break tool use" guard. *Did the run take a different path?* — the route
-query. *Did a serving change move latency?* — `provider_turn_ms` at fixed token counts.
+query. *Did a serving change move latency?* — `agent_turn_ms` at fixed token counts, which moves with the tool loop
+as well as with the provider (rule 11).

@@ -172,7 +172,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             ToolCalls: nodeRun.ToolCalls,
             ToolSchemaTokens: nodeRun.ToolSchemaTokens,
             ToolNames: DevWorkflowNodeRunDocuments.ToolNames(nodeRun.ToolNamesJson),
-            ProviderTurnMs: nodeRun.ProviderTurnMs,
+            AgentTurnMs: nodeRun.AgentTurnMs,
             ServedModelName: nodeRun.ServedModelName,
             Route: Route(nodeRun.RouteJson),
             WorkSessionSteps: nodeRun.WorkSessionSteps,
@@ -230,17 +230,17 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         long? outputTokens = null;
         int? toolCalls = null;
         int? providerCalls = null;
-        long? providerTurnMs = null;
+        long? agentTurnMs = null;
         foreach (var nodeRun in nodeRuns)
         {
             inputTokens = Add(inputTokens, nodeRun.InputTokens);
             outputTokens = Add(outputTokens, nodeRun.OutputTokens);
             toolCalls = Add(toolCalls, nodeRun.ToolCalls);
             providerCalls = Add(providerCalls, nodeRun.ProviderCalls);
-            providerTurnMs = Add(providerTurnMs, nodeRun.ProviderTurnMs);
+            agentTurnMs = Add(agentTurnMs, nodeRun.AgentTurnMs);
         }
 
-        return new DevWorkflowRunCostResponse(inputTokens, outputTokens, toolCalls, providerCalls, providerTurnMs);
+        return new DevWorkflowRunCostResponse(inputTokens, outputTokens, toolCalls, providerCalls, agentTurnMs);
     }
 
     private static long? Add(long? total, long? term) => term is { } value ? (total ?? 0) + value : total;

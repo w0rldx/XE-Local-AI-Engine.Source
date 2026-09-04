@@ -108,7 +108,7 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
             steps.ToolCalls,
             steps.ToolSchemaTokens,
             ToolNamesJson(steps.ToolNames),
-            envelopes.ProviderTurnMs,
+            envelopes.AgentTurnMs,
             envelopes.ServedModelName,
             RouteJson: null,
             session.StepCount);
@@ -191,7 +191,7 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
         long? inputTokens = null;
         long? outputTokens = null;
         long? reasoningTokens = null;
-        long? providerTurnMs = null;
+        long? agentTurnMs = null;
         string? servedModelName = null;
 
         for (var page = 0; page < MaxEnvelopePages; page++)
@@ -204,7 +204,10 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
                 inputTokens = Add(inputTokens, envelope.PromptTokens);
                 outputTokens = Add(outputTokens, envelope.CompletionTokens);
                 reasoningTokens = Add(reasoningTokens, envelope.ReasoningTokens);
-                providerTurnMs = Add(providerTurnMs, envelope.DurationMs);
+                // The envelope's duration is the WHOLE chat run — provider rounds and the tool loop between them —
+                // so this sum is agent-turn time, not provider time. Nothing persisted here separates the two, which
+                // is why the column, the DTO member and the panel all say "turn".
+                agentTurnMs = Add(agentTurnMs, envelope.DurationMs);
 
                 // The store orders newest first, so the first envelope of the first page is the model that served the
                 // last turn — the receipt, as opposed to whatever the node or the agent asked for.
@@ -217,7 +220,7 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
             }
         }
 
-        return new EnvelopeTotals(inputTokens, outputTokens, reasoningTokens, providerTurnMs, servedModelName);
+        return new EnvelopeTotals(inputTokens, outputTokens, reasoningTokens, agentTurnMs, servedModelName);
     }
 
     /// <summary>A name as the column can hold it, or null when there was none to hold.</summary>
@@ -292,6 +295,6 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
     private sealed record EnvelopeTotals(long? InputTokens,
         long? OutputTokens,
         long? ReasoningTokens,
-        long? ProviderTurnMs,
+        long? AgentTurnMs,
         string? ServedModelName);
 }

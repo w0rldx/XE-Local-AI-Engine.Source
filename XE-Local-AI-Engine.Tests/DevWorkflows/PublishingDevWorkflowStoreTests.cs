@@ -19,6 +19,16 @@ public sealed class PublishingDevWorkflowStoreTests
 {
     private const long Sequence = 12;
 
+    /// <summary>The retry detail a reset carries in. Unchanged on the way out is what "forwarded unenriched" means.</summary>
+    private const string ReAttemptDetail = """{"attempt":2}""";
+
+    /// <summary>
+    ///     The bound the wall-clock tests measure "did not hang" against. Deliberately far wider than the collection
+    ///     budget they set: this box runs several suites at once, and the claim under test is that the settle returns
+    ///     at all — without the fix it waits on the collector until the test framework kills it, not until this passes.
+    /// </summary>
+    private static readonly TimeSpan Hang = TimeSpan.FromSeconds(20);
+
     private static readonly Guid RunId = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private static readonly Guid NodeRunId = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
@@ -151,7 +161,7 @@ public sealed class PublishingDevWorkflowStoreTests
     {
         const int resets = 10;
         var budget = TimeSpan.FromMilliseconds(300);
-        var telemetry = new StubDevWorkflowNodeTelemetrySource { Delay = TimeSpan.FromMinutes(1) };
+        var telemetry = new StubDevWorkflowNodeTelemetrySource { Delay = TimeSpan.FromMinutes(1), ExpectedEntries = resets };
         var (store, publisher) = Create(telemetry, budget);
         var route = new RouteDevWorkflowRetryCommand(
             new AppendDevWorkflowEventCommand(RunId, DevWorkflowVersions.Any, DevWorkflowEventTypes.NodeRetryRouted, NodeRunId),
@@ -161,6 +171,10 @@ public sealed class PublishingDevWorkflowStoreTests
         _ = await store.RouteRetryAsync(route).ConfigureAwait(false);
         elapsed.Stop();
 
+        // The elapsed bound is on the ROUTE's return, above. Offering is EVENTUAL: the decorator hands each collection
+        // to the thread pool so a collector that blocks before its first await cannot hold the route, which means the
+        // tenth reset may not have reached the collector yet at the instant the route commits.
+        await telemetry.AllEntered.WaitAsync(Hang).ConfigureAwait(false);
         AssertEx.Equal(resets, telemetry.Calls, "Every reset is still offered to the collector; only the budget is shared.");
         AssertEx.Equal(expected: 1,
             telemetry.Deadlines.Distinct().Count(),
@@ -183,6 +197,89 @@ public sealed class PublishingDevWorkflowStoreTests
         AssertEx.Equal(expected: 2, telemetry.Deadlines.Distinct().Count(), "One settle, one budget — a slow settle may not shorten the next one's.");
     }
 
+    /// <summary>
+    ///     The deadline is a WALL CLOCK, not a request. This collector never observes its token — it waits on a gate
+    ///     only the test opens — so a decorator that merely called <c>CancelAfter</c> and awaited would hold the
+    ///     terminal transition open forever and the node run would never settle.
+    ///     <para>
+    ///         The three claims are asserted together because they are one design: the settle goes ahead inside the
+    ///         budget, the ORIGINAL command is what reaches the inner store, and the abandoned collection is still
+    ///         holding a scope of its OWN — so it is not reading on the <c>DbContext</c> the mutation writes on.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ASettle_WhoseCollectorIgnoresTheDeadline_GoesAheadWithTheOriginalCommand()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var budget = TimeSpan.FromMilliseconds(300);
+        var telemetry = new StubDevWorkflowNodeTelemetrySource
+        {
+            IgnoresCancellationUntil = gate,
+            Answer = new DevWorkflowNodeTelemetry(InputTokens: 5)
+        };
+        var harness = CreateHarness(telemetry, budget);
+
+        var elapsed = Stopwatch.StartNew();
+        _ = await harness.Store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked)).ConfigureAwait(false);
+        elapsed.Stop();
+
+        // A generous bound on purpose: nothing but the test opens that gate, so ANY bounded completion is the claim.
+        // Before this change the settle waited on the collector forever and only the test framework's own timeout ended it.
+        AssertEx.True(elapsed.Elapsed < Hang,
+            $"A collector that ignores cancellation held the settle for {elapsed.ElapsedMilliseconds} ms against a {budget.TotalMilliseconds} ms budget.");
+        _ = await harness.Inner.Received(1)
+                        .TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static forwarded => forwarded.Telemetry == null),
+                            Arg.Any<CancellationToken>());
+        await AssertEx.EventuallyAsync(() => harness.Scopes.Created == 1,
+                          Hang,
+                          "The collection reads on a scope it owns, not on the one the mutation is about to write through.")
+                      .ConfigureAwait(false);
+        AssertEx.Equal(expected: 0, harness.Scopes.Disposed, "And it still holds it: the settle abandoned the wait, not the collection's resources.");
+
+        // The late arm: the collection finishes long after the transition it would have enriched, and writes nothing.
+        var callsBefore = harness.Inner.ReceivedCalls().Count();
+        gate.SetResult();
+        await telemetry.Finished.ConfigureAwait(false);
+        await AssertEx.EventuallyAsync(() => harness.Scopes.Disposed == 1, Hang, "The abandoned collection disposes its own scope when it finally lands.")
+                      .ConfigureAwait(false);
+        AssertEx.Equal(callsBefore, harness.Inner.ReceivedCalls().Count(), "A late collection is dropped — it must not reach the store at all.");
+    }
+
+    /// <summary>The same wall clock on the other write path: a retry route's resets forward unenriched rather than hanging.</summary>
+    [Test]
+    public async Task ARetryRoute_WhoseCollectorIgnoresTheDeadline_ForwardsItsResetsUnenriched()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var budget = TimeSpan.FromMilliseconds(300);
+        var telemetry = new StubDevWorkflowNodeTelemetrySource
+        {
+            IgnoresCancellationUntil = gate,
+            Answer = new DevWorkflowNodeTelemetry(InputTokens: 5)
+        };
+        var harness = CreateHarness(telemetry, budget);
+        var route = new RouteDevWorkflowRetryCommand(
+            new AppendDevWorkflowEventCommand(RunId, DevWorkflowVersions.Any, DevWorkflowEventTypes.NodeRetryRouted, NodeRunId),
+            [ReAttempt()]);
+
+        var elapsed = Stopwatch.StartNew();
+        _ = await harness.Store.RouteRetryAsync(route).ConfigureAwait(false);
+        elapsed.Stop();
+
+        AssertEx.True(elapsed.Elapsed < Hang,
+            $"The route waited {elapsed.ElapsedMilliseconds} ms on a collector that ignores cancellation, against a {budget.TotalMilliseconds} ms budget.");
+        _ = await harness.Inner.Received(1)
+                        .RouteRetryAsync(
+                            Arg.Is<RouteDevWorkflowRetryCommand>(static forwarded => forwarded.Resets[0].DetailJson == ReAttemptDetail),
+                            Arg.Any<CancellationToken>());
+        AssertEx.Equal(expected: 0, harness.Scopes.Disposed, "The abandoned collection keeps its own scope while the route commits.");
+
+        var callsBefore = harness.Inner.ReceivedCalls().Count();
+        gate.SetResult();
+        await telemetry.Finished.ConfigureAwait(false);
+        await AssertEx.EventuallyAsync(() => harness.Scopes.Disposed == 1, Hang, "It gives the scope back once it lands.").ConfigureAwait(false);
+        AssertEx.Equal(callsBefore, harness.Inner.ReceivedCalls().Count(), "And its answer reaches nothing.");
+    }
+
     private static TransitionDevWorkflowNodeRunCommand NodeRunTransition(DevWorkflowNodeRunStatus target) =>
         new(RunId, NodeRunId, DevWorkflowVersions.Any, target);
 
@@ -192,11 +289,17 @@ public sealed class PublishingDevWorkflowStoreTests
             NodeRunId,
             DevWorkflowVersions.Any,
             DevWorkflowNodeRunStatus.Pending,
-            DetailJson: """{"attempt":2}""",
+            DetailJson: ReAttemptDetail,
             IncrementAttempt: true);
 
     private static (IDevWorkflowStore Store, IDevWorkflowEventPublisher Publisher) Create(StubDevWorkflowNodeTelemetrySource? source = null,
         TimeSpan? collectionTimeout = null)
+    {
+        var harness = CreateHarness(source, collectionTimeout);
+        return (harness.Store, harness.Publisher);
+    }
+
+    private static Harness CreateHarness(StubDevWorkflowNodeTelemetrySource? source = null, TimeSpan? collectionTimeout = null)
     {
         var inner = Substitute.For<IDevWorkflowStore>();
         var result = new DevWorkflowMutationResult(RunId, Sequence, Version: 2, DevWorkflowRunStatus.Running, GraphRevision: 0);
@@ -217,13 +320,22 @@ public sealed class PublishingDevWorkflowStoreTests
         // A telemetry source that answers nothing: this suite is about the announcement, and a collector that returned
         // something would only add a second read to every probe.
         var telemetry = source ?? new StubDevWorkflowNodeTelemetrySource();
-        return (new PublishingDevWorkflowStore(inner,
+        var scopes = new RecordingTelemetryScopeFactory(inner, telemetry);
+        return new Harness(new PublishingDevWorkflowStore(inner,
+                publisher,
+                scopes,
+                new DevWorkflowGraphCache(),
+                NullLogger<PublishingDevWorkflowStore>.Instance,
+                collectionTimeout),
             publisher,
-            telemetry,
-            new DevWorkflowGraphCache(),
-            NullLogger<PublishingDevWorkflowStore>.Instance,
-            collectionTimeout), publisher);
+            inner,
+            scopes);
     }
 
     private sealed record Probe(string Method, DevWorkflowChangeKind Kind, Func<IDevWorkflowStore, Task> Invoke);
+
+    private sealed record Harness(IDevWorkflowStore Store,
+        IDevWorkflowEventPublisher Publisher,
+        IDevWorkflowStore Inner,
+        RecordingTelemetryScopeFactory Scopes);
 }

@@ -4071,7 +4071,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNod
 		.nullish(),
 	toolSchemaTokens: z.int().nullish(),
 	toolNames: z.array(z.string()).nullish(),
-	providerTurnMs: z.int().nullish(),
+	agentTurnMs: z.int().nullish(),
 	servedModelName: z.string().nullish(),
 	route: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse.nullish(),
 	workSessionSteps: z
@@ -4293,7 +4293,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRun
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	providerTurnMs: z.int().nullish(),
+	agentTurnMs: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse = z.object({

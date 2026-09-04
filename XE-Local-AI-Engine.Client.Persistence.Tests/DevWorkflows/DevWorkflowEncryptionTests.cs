@@ -19,7 +19,7 @@ public sealed class DevWorkflowEncryptionTests
         nameof(DevWorkflowNodeRun.ToolCalls),
         nameof(DevWorkflowNodeRun.ToolSchemaTokens),
         nameof(DevWorkflowNodeRun.ToolNamesJson),
-        nameof(DevWorkflowNodeRun.ProviderTurnMs),
+        nameof(DevWorkflowNodeRun.AgentTurnMs),
         nameof(DevWorkflowNodeRun.ServedModelName),
         nameof(DevWorkflowNodeRun.RouteJson),
         nameof(DevWorkflowNodeRun.WorkSessionSteps)

@@ -170,7 +170,7 @@ public sealed record DevWorkflowNodeRunSnapshot(
     int? ToolCalls = null,
     long? ToolSchemaTokens = null,
     string? ToolNamesJson = null,
-    long? ProviderTurnMs = null,
+    long? AgentTurnMs = null,
     string? ServedModelName = null,
     string? RouteJson = null,
     int? WorkSessionSteps = null);
@@ -196,7 +196,7 @@ public sealed record DevWorkflowNodeTelemetry(
     int? ToolCalls = null,
     long? ToolSchemaTokens = null,
     string? ToolNamesJson = null,
-    long? ProviderTurnMs = null,
+    long? AgentTurnMs = null,
     string? ServedModelName = null,
     string? RouteJson = null,
     int? WorkSessionSteps = null);

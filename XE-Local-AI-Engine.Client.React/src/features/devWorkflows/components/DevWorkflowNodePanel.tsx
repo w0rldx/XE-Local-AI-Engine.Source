@@ -311,8 +311,10 @@ function DevWorkflowNodeCostSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDe
 	const toolNames = nodeRun.toolNames ?? [];
 	const ranFor =
 		nodeRun.startedAtUtc != null && nodeRun.completedAtUtc != null ? nodeRun.completedAtUtc - nodeRun.startedAtUtc : null;
-	const providerMs = nodeRun.providerTurnMs ?? null;
-	const otherMs = ranFor != null && providerMs != null ? Math.max(0, ranFor - providerMs) : null;
+	// The envelope measures a WHOLE agent turn, tool loop included, so the remainder is time outside the turns —
+	// queueing after the node started, the settle itself — and is deliberately not labelled as tool time.
+	const turnMs = nodeRun.agentTurnMs ?? null;
+	const outsideTurnMs = ranFor != null && turnMs != null ? Math.max(0, ranFor - turnMs) : null;
 	const queuedFor = nodeRun.queuedAtUtc != null && nodeRun.startedAtUtc != null ? nodeRun.startedAtUtc - nodeRun.queuedAtUtc : null;
 
 	const measured =
@@ -324,7 +326,7 @@ function DevWorkflowNodeCostSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDe
 		nodeRun.toolCalls != null ||
 		nodeRun.toolSchemaTokens != null ||
 		nodeRun.workSessionSteps != null ||
-		providerMs != null ||
+		turnMs != null ||
 		nodeRun.servedModelName != null ||
 		toolNames.length > 0;
 	if (!measured && !route && queuedFor === null && ranFor === null) {
@@ -394,14 +396,14 @@ function DevWorkflowNodeCostSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDe
 			/>
 			<CostRow label={t("pages.devWorkflows.node.cost.ranFor", "Ran for")} value={duration(ranFor)} testId="dev-workflow-node-cost-ran" />
 			<CostRow
-				label={t("pages.devWorkflows.node.cost.providerTime", "Provider time")}
-				value={duration(providerMs)}
-				testId="dev-workflow-node-cost-provider-time"
+				label={t("pages.devWorkflows.node.cost.turnTime", "Agent turns")}
+				value={duration(turnMs)}
+				testId="dev-workflow-node-cost-turn-time"
 			/>
 			<CostRow
-				label={t("pages.devWorkflows.node.cost.otherTime", "Tools and loop")}
-				value={duration(otherMs)}
-				testId="dev-workflow-node-cost-other-time"
+				label={t("pages.devWorkflows.node.cost.outsideTurnTime", "Outside the turns")}
+				value={duration(outsideTurnMs)}
+				testId="dev-workflow-node-cost-outside-turn-time"
 			/>
 
 			{toolNames.length > 0 ? (

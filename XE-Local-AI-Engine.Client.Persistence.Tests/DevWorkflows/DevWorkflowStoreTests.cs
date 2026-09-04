@@ -384,7 +384,7 @@ public sealed class DevWorkflowStoreTests
                                         ToolCalls: 3,
                                         ToolSchemaTokens: 800,
                                         ToolNamesJson: """["read_document","search_web"]""",
-                                        ProviderTurnMs: 9_100,
+                                        AgentTurnMs: 9_100,
                                         ServedModelName: "qwen3-27b",
                                         RouteJson: """{"satisfied":[],"dead":["review"],"gateAnswer":null,"truncated":false}""",
                                         WorkSessionSteps: 6)))
@@ -414,7 +414,7 @@ public sealed class DevWorkflowStoreTests
         AssertEx.Null(reset.ToolCalls, Because);
         AssertEx.Null(reset.ToolSchemaTokens, Because);
         AssertEx.Null(reset.ToolNamesJson, Because);
-        AssertEx.Null(reset.ProviderTurnMs, Because);
+        AssertEx.Null(reset.AgentTurnMs, Because);
         AssertEx.Null(reset.ServedModelName, Because);
         AssertEx.Null(reset.RouteJson, Because);
         AssertEx.Null(reset.WorkSessionSteps, Because);

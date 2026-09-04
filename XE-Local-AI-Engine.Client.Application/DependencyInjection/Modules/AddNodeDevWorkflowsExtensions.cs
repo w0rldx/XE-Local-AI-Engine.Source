@@ -36,12 +36,13 @@ internal static class AddNodeDevWorkflowsExtensions
         // it. Registering the concrete type separately is what lets the decorator take it as its inner store.
         builder.Services.AddScoped<DevWorkflowStore>();
 
-        // Scoped beside the executors: it reads the work-session and execution-log stores, which are scoped, and it is
-        // resolved inside the per-tick scope the dispatcher already opens.
+        // Scoped: it reads the work-session and execution-log stores, which are scoped. The decorator below resolves
+        // it from a scope IT opens per collection rather than from the tick's scope, because a collection that
+        // overruns its deadline is abandoned and must not still be reading on the DbContext the settle then writes on.
         builder.Services.AddScoped<IDevWorkflowNodeTelemetrySource, DevWorkflowNodeTelemetrySource>();
         builder.Services.AddScoped<IDevWorkflowStore>(services => new PublishingDevWorkflowStore(services.GetRequiredService<DevWorkflowStore>(),
             services.GetRequiredService<IDevWorkflowEventPublisher>(),
-            services.GetRequiredService<IDevWorkflowNodeTelemetrySource>(),
+            services.GetRequiredService<IServiceScopeFactory>(),
             services.GetRequiredService<DevWorkflowGraphCache>(),
             services.GetRequiredService<ILogger<PublishingDevWorkflowStore>>()));
         builder.Services.TryAddSingleton<IDevWorkflowEventPublisher, NoOpDevWorkflowEventPublisher>();

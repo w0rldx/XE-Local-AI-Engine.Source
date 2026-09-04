@@ -11,6 +11,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<long>(
+                name: "agent_turn_ms",
+                table: "dev_workflow_node_runs",
+                type: "INTEGER",
+                nullable: true);
+
+            migrationBuilder.AddColumn<long>(
                 name: "estimated_input_tokens",
                 table: "dev_workflow_node_runs",
                 type: "INTEGER",
@@ -30,12 +36,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 
             migrationBuilder.AddColumn<int>(
                 name: "provider_calls",
-                table: "dev_workflow_node_runs",
-                type: "INTEGER",
-                nullable: true);
-
-            migrationBuilder.AddColumn<long>(
-                name: "provider_turn_ms",
                 table: "dev_workflow_node_runs",
                 type: "INTEGER",
                 nullable: true);
@@ -90,6 +90,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
+                name: "agent_turn_ms",
+                table: "dev_workflow_node_runs");
+
+            migrationBuilder.DropColumn(
                 name: "estimated_input_tokens",
                 table: "dev_workflow_node_runs");
 
@@ -103,10 +107,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 
             migrationBuilder.DropColumn(
                 name: "provider_calls",
-                table: "dev_workflow_node_runs");
-
-            migrationBuilder.DropColumn(
-                name: "provider_turn_ms",
                 table: "dev_workflow_node_runs");
 
             migrationBuilder.DropColumn(

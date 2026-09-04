@@ -31938,7 +31938,7 @@
               "type": "string"
             }
           },
-          "providerTurnMs": {
+          "agentTurnMs": {
             "type": "integer",
             "nullable": true
           },
@@ -32610,7 +32610,7 @@
             "format": "int32",
             "nullable": true
           },
-          "providerTurnMs": {
+          "agentTurnMs": {
             "type": "integer",
             "nullable": true
           }

@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 {
     [DbContext(typeof(NodeChatDbContext))]
-    [Migration("20260903125909_AddDevWorkflowNodeRunTelemetry")]
+    [Migration("20260903210238_AddDevWorkflowNodeRunTelemetry")]
     partial class AddDevWorkflowNodeRunTelemetry
     {
         /// <inheritdoc />
@@ -2604,6 +2604,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("agent_definition_id");
 
+                    b.Property<long?>("AgentTurnMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("agent_turn_ms");
+
                     b.Property<int>("Attempt")
                         .HasColumnType("INTEGER")
                         .HasColumnName("attempt");
@@ -2685,10 +2689,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<int?>("ProviderCalls")
                         .HasColumnType("INTEGER")
                         .HasColumnName("provider_calls");
-
-                    b.Property<long?>("ProviderTurnMs")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("provider_turn_ms");
 
                     b.Property<string>("QueueReason")
                         .HasMaxLength(64)

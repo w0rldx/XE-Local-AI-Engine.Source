@@ -374,7 +374,7 @@ public sealed record DevWorkflowRunCostResponse(long? InputTokens,
     long? OutputTokens,
     int? ToolCalls,
     int? ProviderCalls,
-    long? ProviderTurnMs);
+    long? AgentTurnMs);
 
 public sealed record DevWorkflowRunSummaryResponse(
     Guid Id,
@@ -507,8 +507,13 @@ public sealed record DevWorkflowNodeRunDetailResponse(
     /// </summary>
     IReadOnlyList<string>? ToolNames,
 
-    /// <summary>Wall-clock time inside provider turns. The rest of the node's duration is queueing, tools and the loop's own work.</summary>
-    long? ProviderTurnMs,
+    /// <summary>
+    ///     Wall-clock time inside the agent's chat turns, tool loop included — the envelope measures a whole run, and
+    ///     no provider-round-only duration is persisted anywhere this collector can read. So the node's runtime minus
+    ///     this is time spent OUTSIDE the turns, which is not the same thing as tool time and must never be labelled
+    ///     as it.
+    /// </summary>
+    long? AgentTurnMs,
 
     /// <summary>
     ///     The model that actually served the last turn — the receipt, as opposed to <see cref="ModelLabel" />, which

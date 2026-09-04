@@ -221,7 +221,7 @@ internal sealed partial class DevWorkflowStore
         nodeRun.ToolCalls = telemetry.ToolCalls ?? nodeRun.ToolCalls;
         nodeRun.ToolSchemaTokens = telemetry.ToolSchemaTokens ?? nodeRun.ToolSchemaTokens;
         nodeRun.ToolNamesJson = telemetry.ToolNamesJson ?? nodeRun.ToolNamesJson;
-        nodeRun.ProviderTurnMs = telemetry.ProviderTurnMs ?? nodeRun.ProviderTurnMs;
+        nodeRun.AgentTurnMs = telemetry.AgentTurnMs ?? nodeRun.AgentTurnMs;
         nodeRun.ServedModelName = telemetry.ServedModelName ?? nodeRun.ServedModelName;
         nodeRun.RouteJson = telemetry.RouteJson ?? nodeRun.RouteJson;
         nodeRun.WorkSessionSteps = telemetry.WorkSessionSteps ?? nodeRun.WorkSessionSteps;
@@ -238,7 +238,7 @@ internal sealed partial class DevWorkflowStore
         nodeRun.ToolCalls = null;
         nodeRun.ToolSchemaTokens = null;
         nodeRun.ToolNamesJson = null;
-        nodeRun.ProviderTurnMs = null;
+        nodeRun.AgentTurnMs = null;
         nodeRun.ServedModelName = null;
         nodeRun.RouteJson = null;
         nodeRun.WorkSessionSteps = null;

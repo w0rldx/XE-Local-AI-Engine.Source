@@ -27,7 +27,7 @@ public sealed class AddDevWorkflowNodeRunTelemetryMigrationTests : IDisposable
         "tool_calls",
         "tool_schema_tokens",
         "tool_names_json",
-        "provider_turn_ms",
+        "agent_turn_ms",
         "served_model_name",
         "route_json",
         "work_session_steps"

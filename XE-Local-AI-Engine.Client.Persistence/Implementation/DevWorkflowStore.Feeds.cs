@@ -243,7 +243,7 @@ internal sealed partial class DevWorkflowStore
             nodeRun.ToolCalls,
             nodeRun.ToolSchemaTokens,
             nodeRun.ToolNamesJson,
-            nodeRun.ProviderTurnMs,
+            nodeRun.AgentTurnMs,
             nodeRun.ServedModelName,
             nodeRun.RouteJson,
             nodeRun.WorkSessionSteps);

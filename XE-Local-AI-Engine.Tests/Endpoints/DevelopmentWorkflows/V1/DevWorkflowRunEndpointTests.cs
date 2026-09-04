@@ -588,7 +588,7 @@ public sealed class DevWorkflowRunEndpointTests
         AssertEx.Equal(expected: 4, root.GetProperty("providerCalls").GetInt32());
         AssertEx.Equal(expected: 7, root.GetProperty("toolCalls").GetInt32());
         AssertEx.Equal(expected: 320L, root.GetProperty("toolSchemaTokens").GetInt64());
-        AssertEx.Equal(expected: 8100L, root.GetProperty("providerTurnMs").GetInt64());
+        AssertEx.Equal(expected: 8100L, root.GetProperty("agentTurnMs").GetInt64());
         AssertEx.Equal(expected: 3, root.GetProperty("workSessionSteps").GetInt32());
 
         AssertEx.Equal("qwen3-27b-instruct-q4", root.GetProperty("servedModelName").GetString(), "the receipt: what actually served the last turn.");
@@ -624,7 +624,7 @@ public sealed class DevWorkflowRunEndpointTests
         foreach (var member in new[]
                  {
                      "inputTokens", "outputTokens", "reasoningTokens", "estimatedInputTokens", "providerCalls", "toolCalls", "toolSchemaTokens",
-                     "toolNames", "providerTurnMs", "servedModelName", "route", "workSessionSteps", "failureClassGroup"
+                     "toolNames", "agentTurnMs", "servedModelName", "route", "workSessionSteps", "failureClassGroup"
                  })
         {
             AssertEx.Equal(JsonValueKind.Null, root.GetProperty(member).ValueKind, $"'{member}' has nothing to report on a legacy row, which is not zero.");
@@ -716,7 +716,7 @@ public sealed class DevWorkflowRunEndpointTests
         AssertEx.Equal(expected: 340L, cost.GetProperty("outputTokens").GetInt64(), "only one node reported any.");
         AssertEx.Equal(expected: 8, cost.GetProperty("toolCalls").GetInt32());
         AssertEx.Equal(expected: 6, cost.GetProperty("providerCalls").GetInt32());
-        AssertEx.Equal(expected: 8100L, cost.GetProperty("providerTurnMs").GetInt64());
+        AssertEx.Equal(expected: 8100L, cost.GetProperty("agentTurnMs").GetInt64());
 
         var summary = document.RootElement.GetProperty("nodes").EnumerateArray().Single(node => node.GetProperty("nodeKey").GetString() == "research");
         AssertEx.Equal(expected: 1200L, summary.GetProperty("inputTokens").GetInt64());
@@ -736,7 +736,7 @@ public sealed class DevWorkflowRunEndpointTests
 
         using var document = JsonDocument.Parse(body);
         var cost = document.RootElement.GetProperty("cost");
-        foreach (var member in new[] { "inputTokens", "outputTokens", "toolCalls", "providerCalls", "providerTurnMs" })
+        foreach (var member in new[] { "inputTokens", "outputTokens", "toolCalls", "providerCalls", "agentTurnMs" })
         {
             AssertEx.Equal(JsonValueKind.Null, cost.GetProperty(member).ValueKind, $"'{member}' was never measured on this run.");
         }
@@ -1311,7 +1311,7 @@ public sealed class DevWorkflowRunEndpointTests
             ToolCalls = 7,
             ToolSchemaTokens = 320,
             ToolNamesJson = """["read_document","search_web","…"]""",
-            ProviderTurnMs = 8100,
+            AgentTurnMs = 8100,
             ServedModelName = "qwen3-27b-instruct-q4",
             RouteJson = DevWorkflowStateMachine.RouteJson(new DevWorkflowRoute(["approval"], ["dead-end"], "Approve", Truncated: true)),
             WorkSessionSteps = 3

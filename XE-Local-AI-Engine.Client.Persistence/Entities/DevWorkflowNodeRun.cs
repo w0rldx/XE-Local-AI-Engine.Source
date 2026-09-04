@@ -99,8 +99,13 @@ internal sealed class DevWorkflowNodeRun
     /// </summary>
     public string? ToolNamesJson { get; set; }
 
-    /// <summary>Chat-run turn latency summed over the envelopes — tool execution included, so it is not provider-round time.</summary>
-    public long? ProviderTurnMs { get; set; }
+    /// <summary>
+    ///     WHOLE agent turns, summed: every chat-run envelope's own duration, which spans the provider rounds AND the
+    ///     tool loop between them. It is deliberately not called provider time — nothing this attempt persists
+    ///     separates the two, so subtracting this from the node's runtime leaves what happened OUTSIDE the turns
+    ///     (queueing before the session started, the node's own settle work), not the tool loop.
+    /// </summary>
+    public long? AgentTurnMs { get; set; }
 
     /// <summary>What the provider actually SERVED, off the envelope. Beside the authored pin, never instead of it: a pin is a request, not a receipt.</summary>
     public string? ServedModelName { get; set; }

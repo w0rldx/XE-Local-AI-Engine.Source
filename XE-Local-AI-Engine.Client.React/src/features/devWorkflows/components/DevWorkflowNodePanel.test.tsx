@@ -660,7 +660,7 @@ describe("DevWorkflowNodePanel", () => {
 				toolCalls: 7,
 				toolSchemaTokens: 320,
 				toolNames: ["read_document", "search_web", "…"],
-				providerTurnMs: 40_000,
+				agentTurnMs: 40_000,
 				servedModelName: "qwen3-27b-instruct-q4",
 				workSessionSteps: 3,
 				route: { satisfied: ["approval"], dead: ["fallback"], gateAnswer: "Approve", truncated: true },
@@ -679,8 +679,8 @@ describe("DevWorkflowNodePanel", () => {
 		// The four durations: queued, total, inside provider turns, and what is left over for tools and the loop.
 		expect(screen.getByTestId("dev-workflow-node-cost-queued").textContent).toBe("2s");
 		expect(screen.getByTestId("dev-workflow-node-cost-ran").textContent).toBe("1m 00s");
-		expect(screen.getByTestId("dev-workflow-node-cost-provider-time").textContent).toBe("40s");
-		expect(screen.getByTestId("dev-workflow-node-cost-other-time").textContent).toBe("20s");
+		expect(screen.getByTestId("dev-workflow-node-cost-turn-time").textContent).toBe("40s");
+		expect(screen.getByTestId("dev-workflow-node-cost-outside-turn-time").textContent).toBe("20s");
 
 		// The estimate is suppressed while the real count is present: two numbers for one quantity invite addition.
 		expect(screen.queryByTestId("dev-workflow-node-cost-estimated")).toBeNull();

@@ -56,6 +56,18 @@ public sealed class ProviderCallBudget
     /// </summary>
     internal const int MaxDistinctToolNames = 16;
 
+    /// <summary>
+    ///     How long ONE recorded tool name may be, marker included. Bounded at the source for the same reason the
+    ///     distinct-name count is: the count caps how MANY names a carrier holds, and only this caps how BIG each of
+    ///     them is. Without it a single oversized identifier reaches the persisted step detail, and from there the
+    ///     work-session event detail, unbounded — the node-run column's own 1024-character clamp is applied later and
+    ///     only on that one carrier.
+    /// </summary>
+    internal const int MaxToolNameLength = 128;
+
+    /// <summary>The last characters of a clamped name. Unmistakably not part of any real tool identifier.</summary>
+    internal const string TruncatedToolNameMarker = "…";
+
     private readonly int _maxProviderCalls;
 
     // Names only, ordinal-sorted, bounded. The counters beside it say how MUCH a run spent; this says WHICH tools it
@@ -221,7 +233,14 @@ public sealed class ProviderCallBudget
     /// <param name="toolName">
     ///     The tool the model asked for, kept as a bounded set of distinct NAMES beside the count. The name is what
     ///     turns "this step made nine tool calls" into "and they were these four tools", which is the question a cost
-    ///     rollup actually gets asked. Null or blank records the count alone.
+    ///     rollup actually gets asked. Null or blank records the count alone — which is what the caller passes for a
+    ///     name that did NOT resolve against the tools the request offered, because a hallucinated identifier is a call
+    ///     the model attempted, not a tool this run reached for.
+    ///     <para>
+    ///         A resolved name is clamped to <see cref="MaxToolNameLength" /> HERE rather than at a reader, so every
+    ///         carrier downstream — the persisted step detail, the work-session event detail, the node-run column — is
+    ///         bounded by construction rather than by whichever of them happens to clamp.
+    ///     </para>
     /// </param>
     internal void RecordToolCallRequested(string? toolName)
     {
@@ -234,11 +253,15 @@ public sealed class ProviderCallBudget
             return;
         }
 
+        var bounded = toolName.Length <= MaxToolNameLength
+            ? toolName
+            : string.Concat(toolName.AsSpan(0, MaxToolNameLength - TruncatedToolNameMarker.Length), TruncatedToolNameMarker);
+
         lock (_toolNameGate)
         {
             if (_toolNames.Count < MaxDistinctToolNames)
             {
-                _ = _toolNames.Add(toolName);
+                _ = _toolNames.Add(bounded);
             }
         }
     }

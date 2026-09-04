@@ -40,7 +40,7 @@ public sealed class DevWorkflowAttemptCostTests
         "providerCalls",
         "toolCalls",
         "toolSchemaTokens",
-        "providerTurnMs",
+        "agentTurnMs",
         "workSessionSteps"
     ];
 
@@ -111,7 +111,7 @@ public sealed class DevWorkflowAttemptCostTests
 
         var store = new PublishingDevWorkflowStore(inner,
             Substitute.For<IDevWorkflowEventPublisher>(),
-            new StubDevWorkflowNodeTelemetrySource { Answer = new DevWorkflowNodeTelemetry(InputTokens: 5) },
+            new RecordingTelemetryScopeFactory(inner, new StubDevWorkflowNodeTelemetrySource { Answer = new DevWorkflowNodeTelemetry(InputTokens: 5) }),
             new DevWorkflowGraphCache(),
             NullLogger<PublishingDevWorkflowStore>.Instance);
 
@@ -181,7 +181,7 @@ public sealed class DevWorkflowAttemptCostTests
         AssertEx.Equal(expected: 0L, totals["inputTokens"], "No chat-run envelope was written here, so the provider-reported half is absent rather than wrong.");
         AssertEx.Equal(expected: 0L, totals["outputTokens"]);
         AssertEx.Equal(expected: 0L, totals["reasoningTokens"]);
-        AssertEx.Equal(expected: 0L, totals["providerTurnMs"]);
+        AssertEx.Equal(expected: 0L, totals["agentTurnMs"]);
 
         AssertMergedMembersMatchTheTelemetryRecord(first);
     }
@@ -281,7 +281,7 @@ public sealed class DevWorkflowAttemptCostTests
             "providerCalls" => row.ProviderCalls ?? 0,
             "toolCalls" => row.ToolCalls ?? 0,
             "toolSchemaTokens" => row.ToolSchemaTokens ?? 0,
-            "providerTurnMs" => row.ProviderTurnMs ?? 0,
+            "agentTurnMs" => row.AgentTurnMs ?? 0,
             "workSessionSteps" => row.WorkSessionSteps ?? 0,
             _ => throw new AssertionException($"'{member}' is not an additive telemetry column.")
         };

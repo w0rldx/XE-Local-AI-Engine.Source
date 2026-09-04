@@ -241,10 +241,16 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     }
 
     /// <summary>
-    ///     The bounds, all four of them: the budget's own set stops at sixteen distinct names, the collector's union
-    ///     re-caps at sixteen across steps, the serialized column stays inside 1024 characters and closes with an
-    ///     ellipsis when it had to drop names, and a step row written before the field existed reads back as no list at
-    ///     all rather than as an empty one.
+    ///     The bounds, all six of them: the budget's own set stops at sixteen distinct names, each NAME is clamped to
+    ///     128 characters with a trailing marker before it is ever kept, a name the caller could not resolve against
+    ///     the offered tools is not kept at all, the collector's union re-caps at sixteen across steps, the serialized
+    ///     column stays inside 1024 characters and closes with an ellipsis when it had to drop names, and a step row
+    ///     written before the field existed reads back as no list at all rather than as an empty one.
+    ///     <para>
+    ///         The per-name clamp and the resolution gate are the two that matter for the carriers BESIDE the column:
+    ///         the persisted step detail and the work-session event detail take the budget's set verbatim, and only a
+    ///         bound applied here bounds them.
+    ///     </para>
     /// </summary>
     [Test]
     public async Task ToolNames_AreBoundedAtEverySeam()
@@ -264,6 +270,32 @@ public sealed class DevWorkflowNodeRunTelemetryTests
             budget.RegisterProviderRound(estimatedInputTokens: 1);
             var capped = AssertEx.NotNull(cap.CaptureConsumption()).ToolNames ?? [];
             AssertEx.Equal(expected: 16, capped.Count, "The cap is enforced IN the budget, so a runaway tool loop cannot grow the set.");
+            AssertEx.True(capped.All(static name => name.Length <= ProviderCallBudget.MaxToolNameLength),
+                "Every kept name is inside the per-name bound, whatever the model asked for.");
+        }
+
+        // The per-name bound, on its own scope so the sixteen-name cap above cannot be what drops the long one.
+        using (var cap = ProviderCallBudget.BeginCallCapScope(maxProviderCalls: 4))
+        {
+            using var scope = ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+            {
+                MaxProviderCallsPerInvocation = 8
+            });
+            var budget = ProviderCallBudget.Current!;
+            budget.RecordToolCallRequested(new string('x', 400));
+
+            // What the caller passes for a name that resolved against NO offered tool: the call counts, the name does not.
+            budget.RecordToolCallRequested(toolName: null);
+            budget.RegisterProviderRound(estimatedInputTokens: 1);
+
+            var consumption = AssertEx.NotNull(cap.CaptureConsumption());
+            var kept = consumption.ToolNames ?? [];
+            AssertEx.Equal(expected: 1, kept.Count, "An unresolved name is not a tool this run reached for, so only the resolved one is kept.");
+            AssertEx.Equal(expected: ProviderCallBudget.MaxToolNameLength, kept[0].Length, "A long name is clamped at the source, not by whichever reader happens to clamp.");
+            AssertEx.True(kept[0].EndsWith('…'), "And it says it was clamped, or a prefix reads as the whole identifier.");
+            AssertEx.Equal(expected: 2,
+                budget.CaptureEfficiencySnapshot().ToolCallsRequested,
+                "Both calls are still COUNTED — dropping a name is not dropping the call it names.");
         }
 
         // A legacy row: the shape the supervisor wrote before the names existed.
@@ -498,7 +530,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         AssertEx.Null(nodeRun.ToolCalls, because);
         AssertEx.Null(nodeRun.ToolSchemaTokens, because);
         AssertEx.Null(nodeRun.ToolNamesJson, because);
-        AssertEx.Null(nodeRun.ProviderTurnMs, because);
+        AssertEx.Null(nodeRun.AgentTurnMs, because);
         AssertEx.Null(nodeRun.ServedModelName, because);
         AssertEx.Null(nodeRun.RouteJson, because);
         AssertEx.Null(nodeRun.WorkSessionSteps, because);
