@@ -502,7 +502,19 @@ public sealed record RecordDevWorkflowDecisionCommand(
     string? Comment = null,
     string? PayloadJson = null,
     string? DecidedBySubject = null,
-    int? MaxTotalAttempts = null);
+    int? MaxTotalAttempts = null,
+    /// <summary>
+    ///     The attempt the caller VALIDATED this decision against, re-checked inside the recording transaction.
+    ///     <c>ExpectedVersion</c> is <c>Any</c> here — an answer is about a node run rather than about the run's
+    ///     sequence — so this pair is the only thing between a decision and a routed reset that moved the row after
+    ///     the caller read it: the answer would otherwise be stamped with whatever attempt the reset left behind,
+    ///     orphaned on a fresh <c>Pending</c> try nobody was asked about, or recorded against the old attempt and
+    ///     later counted by the run composer's <c>operatorRetries</c> for a widening that never happened.
+    ///     <c>null</c> skips the check, for a caller with nothing to compare.
+    /// </summary>
+    int? ExpectedAttempt = null,
+    /// <summary>The status the caller validated against, checked with <see cref="ExpectedAttempt" />.</summary>
+    DevWorkflowNodeRunStatus? ExpectedStatus = null);
 
 public sealed record AppendDevWorkflowEventCommand(
     Guid RunId,

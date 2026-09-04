@@ -113,7 +113,9 @@ internal sealed partial class DevWorkflowStore
         var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken).ConfigureAwait(false);
         var now = Now();
 
-        if (command.WidenMaxAttempts)
+        // Saturating: a definition may declare int.MaxValue attempts, and wrapping to negative would refuse every
+        // attempt a node has left rather than buying it one more.
+        if (command.WidenMaxAttempts && nodeRun.MaxAttempts < int.MaxValue)
         {
             // An operator's Retry is allowed AT the cap and buys exactly one more attempt, so the cap moves with it.
             // In place, like the attempt beside it: without this the row reads "attempt 4 of 3" — the runtime saying
@@ -461,6 +463,16 @@ internal sealed partial class DevWorkflowStore
             async run =>
             {
                 var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken).ConfigureAwait(false);
+
+                // What the caller validated against, re-read under the transaction. Checked BEFORE the one-per-attempt
+                // rule below, which reads the row's CURRENT attempt and so would see a moved row as simply undecided.
+                if ((command.ExpectedAttempt is { } expectedAttempt && nodeRun.Attempt != expectedAttempt)
+                    || (command.ExpectedStatus is { } expectedStatus && nodeRun.Status != expectedStatus))
+                {
+                    throw new DevWorkflowConcurrencyException($"Node run '{nodeRun.Id}' is attempt {nodeRun.Attempt} and {nodeRun.Status}, "
+                                                              + $"but the {command.Decision} was taken on attempt {command.ExpectedAttempt} "
+                                                              + $"and {command.ExpectedStatus}.");
+                }
 
                 // One decision per node-run ATTEMPT: a node-run legitimately accumulates several over its life, but not
                 // two for the same try. The standing one is loaded rather than merely counted, because the caller that

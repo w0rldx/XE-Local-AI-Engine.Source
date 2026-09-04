@@ -100,16 +100,32 @@ public sealed class DevWorkflowNodeRunTests
         AssertEx.Equal(expected: 3, widened.Attempt);
         AssertEx.Equal(expected: 4, widened.MaxAttempts);
 
+        var third = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                    nodeRunId,
+                                    bought.Version,
+                                    DevWorkflowNodeRunStatus.Pending,
+                                    IncrementAttempt: true,
+                                    WidenMaxAttempts: true))
+                                .ConfigureAwait(false);
+        var again = (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).Single();
+        AssertEx.Equal(expected: 4, again.Attempt);
+        AssertEx.Equal(expected: 5, again.MaxAttempts, "each retry buys exactly one, so the cap tracks the decisions rather than being switched off by the first.");
+
+        // Graph validation accepts int.MaxValue for maxAttempts, and a cap that wraps to negative would refuse every
+        // attempt the node has left — the opposite of what the retry bought.
+        var saturated = Guid.NewGuid();
+        var seeded = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, saturated, "unbounded", third.Version, maxAttempts: int.MaxValue)
+                                                 .ConfigureAwait(false);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
-                            nodeRunId,
-                            bought.Version,
+                            saturated,
+                            seeded,
                             DevWorkflowNodeRunStatus.Pending,
                             IncrementAttempt: true,
                             WidenMaxAttempts: true))
                         .ConfigureAwait(false);
-        var again = (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).Single();
-        AssertEx.Equal(expected: 4, again.Attempt);
-        AssertEx.Equal(expected: 5, again.MaxAttempts, "each retry buys exactly one, so the cap tracks the decisions rather than being switched off by the first.");
+        AssertEx.Equal(int.MaxValue,
+            (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).Single(row => row.Id == saturated).MaxAttempts,
+            "a cap already at int.MaxValue saturates rather than wrapping negative.");
     }
 
     /// <summary>
@@ -241,6 +257,59 @@ public sealed class DevWorkflowNodeRunTests
         AssertEx.Equal("Try once more.", replayed.Comment);
         AssertEx.Equal("operator-subject", replayed.DecidedBySubject, "Without the subject the audit can say a gate was decided but not by whom.");
         AssertEx.Null(await store.FindDecisionByOperationAsync(seed.RunId, Guid.NewGuid()).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    ///     A decision is answered about an ATTEMPT, and <c>ExpectedVersion</c> is <c>Any</c> — so the attempt the
+    ///     caller validated against travels on the command and is re-checked here. Without it a routed reset that
+    ///     commits between the caller's read and this write leaves the answer stamped with whatever attempt the reset
+    ///     produced: orphaned on a fresh try nobody was asked about, or counted later as a widening that never
+    ///     happened.
+    /// </summary>
+    [Test]
+    public async Task RecordDecision_RefusesAnAnswerTakenOnAnAttemptTheRowHasLeft()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var nodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "implement", seed.RunVersion).ConfigureAwait(false);
+
+        // The reset: the row is now attempt 2 and Pending, which is where the operator's read of attempt 1 goes stale.
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                            nodeRunId,
+                            version,
+                            DevWorkflowNodeRunStatus.Pending,
+                            IncrementAttempt: true))
+                        .ConfigureAwait(false);
+
+        var refusal = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(seed.RunId,
+                                            Guid.NewGuid(),
+                                            nodeRunId,
+                                            DevWorkflowVersions.Any,
+                                            Guid.NewGuid(),
+                                            DevWorkflowDecisionKind.Retry,
+                                            ExpectedAttempt: 1,
+                                            ExpectedStatus: DevWorkflowNodeRunStatus.Blocked)),
+                                        "An answer about attempt 1 must not be written onto attempt 2.")
+                                    .ConfigureAwait(false);
+        AssertEx.True(refusal.Message.Contains("attempt 2", StringComparison.Ordinal), "the refusal says where the row actually stands.");
+        AssertEx.Empty(await store.ListDecisionsAsync(seed.RunId).ConfigureAwait(false), "and nothing is written, so the transaction rolled back whole.");
+
+        // The same command against the row as it now stands is admitted, so the guard refuses a MOVED row rather than
+        // every Retry that names an expectation.
+        _ = await store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(seed.RunId,
+                            Guid.NewGuid(),
+                            nodeRunId,
+                            DevWorkflowVersions.Any,
+                            Guid.NewGuid(),
+                            DevWorkflowDecisionKind.Retry,
+                            ExpectedAttempt: 2,
+                            ExpectedStatus: DevWorkflowNodeRunStatus.Pending))
+                        .ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, (await store.ListDecisionsAsync(seed.RunId).ConfigureAwait(false)).Count);
     }
 
     /// <summary>
