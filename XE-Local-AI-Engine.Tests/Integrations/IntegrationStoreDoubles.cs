@@ -193,6 +193,16 @@ internal sealed class FakeIntegrationTriggerStore : IIntegrationTriggerStore
         return snapshot;
     }
 
+    /// <summary>Repoints a seeded trigger's session policy, which is what decides whether R4-9(a) judges its agent.</summary>
+    public void SetSessionPolicy(Guid triggerId, IntegrationSessionPolicy sessionPolicy)
+    {
+        var index = _rows.FindIndex(row => row.Id == triggerId);
+        _rows[index] = _rows[index] with
+        {
+            SessionPolicy = sessionPolicy
+        };
+    }
+
     /// <summary>Disables a seeded trigger, which the accept path and the coordinator both treat as "no such trigger".</summary>
     public void Disable(Guid triggerId)
     {

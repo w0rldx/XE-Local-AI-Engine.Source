@@ -10,6 +10,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
@@ -163,6 +165,11 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                         shutdown ? "The node stopped while the execution was in flight." : "The execution failed unexpectedly.")
                     .ConfigureAwait(false);
             }
+
+            // Placed AFTER every terminal path rather than inside one of them: an execution can end at a dozen points,
+            // including the fault handler above, and a per-invocation session left Active by any of them would stay
+            // that way forever.
+            await ClosePerInvocationSessionAsync(scope.ServiceProvider, execution).ConfigureAwait(false);
         }
         finally
         {
@@ -285,6 +292,11 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                         .ConfigureAwait(false))
                 {
                     recovered++;
+
+                    // The sweep is a DIFFERENT terminal path from the run's own, and it has to close per-invocation
+                    // sessions too — otherwise a session interrupted by a restart stays Active with no execution that
+                    // could ever close it. The busy guard is bypassed by construction: the row is already terminal.
+                    await ClosePerInvocationSessionAsync(scope.ServiceProvider, row).ConfigureAwait(false);
                 }
             }
 
@@ -339,13 +351,6 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         }
 
         var persistence = services.GetRequiredService<INodeChatPersistenceService>();
-        var conversation = await persistence.GetConversationForTurnAsync(session.ConversationId, runToken).ConfigureAwait(false);
-        var seed = conversation?.Messages.FirstOrDefault(message => message.MessageId == executionId);
-        if (seed is null)
-        {
-            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.InternalFailure, "The execution's owned conversation or seed turn is missing.").ConfigureAwait(false);
-            return;
-        }
 
         // 2. A cancel that landed before this row was picked up. A row that already READS Cancelled was terminalized by
         //    the cancel path, which owns both artefacts; this one appends nothing.
@@ -383,6 +388,35 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
             return;
         }
 
+        // 3b. The compaction bound, BEFORE the conversation is read so the read sees the folded transcript. It projects
+        //     what the next turn would replay and folds only when that is over budget; every no-op outcome (no local
+        //     model, nothing foldable) is non-fatal by design.
+        //
+        //     The keep window is the CHAT window, not the work-session floor of two: a work-session step rebuilds its
+        //     state block from the database every step, so its transcript beyond the previous step is expendable. An
+        //     integration session has no state block — its transcript IS the session state — so folding to two would
+        //     delete the continuation a caller-managed session exists to deliver. It is read from the chat compaction
+        //     options rather than written as a literal, so an operator who retunes chat retunes this too.
+        await services.GetRequiredService<WorkSessionStepContextBound>()
+                      .ApplyAsync(session.ConversationId,
+                          _options.ContextBudgetTokens,
+                          effectiveModel,
+                          runToken,
+                          services.GetRequiredService<IOptions<ConversationCompactionOptions>>().Value.RecentMessagesToKeepVerbatim)
+                      .ConfigureAwait(false);
+
+        // 3c. The turn read, and the ONE shape R4-1's forward-running failure leaves behind: the execution row commits
+        //     before the conversation and the seed are written, so a row can be real and have nothing to run. Do not
+        //     repair it — the seed text is not recoverable from the row, and a run against an empty seed is a worse
+        //     outcome than a clean failure.
+        var conversation = await persistence.GetConversationForTurnAsync(session.ConversationId, runToken).ConfigureAwait(false);
+        var seed = conversation?.Messages.FirstOrDefault(message => message.MessageId == executionId);
+        if (conversation is null || seed is null)
+        {
+            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.InternalFailure, "The execution's owned conversation or seed turn is missing.").ConfigureAwait(false);
+            return;
+        }
+
         // 4. The agent's COMPLETE resolved runtime — never the raw definition instructions.
         var resolved = await services.GetRequiredService<IAgentDefinitionResolver>()
                                      .ResolveAsync(definition.Id,
@@ -399,9 +433,40 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
             return;
         }
 
+        // 4b. Ruling R4-9(a), judged against the offer this package will actually carry rather than a second resolve
+        //     that could disagree. The trigger was checked at save, but an agent definition's tools can change
+        //     afterwards, and this is the last point that sees them as they are now. A caller-managed session persists
+        //     the seed and the final assistant text and nothing else, so a continued run cannot tell an action it
+        //     already performed from prose describing one — safe only while the agent can perform none.
+        if (trigger.SessionPolicy == IntegrationSessionPolicy.CallerManaged
+            && !IIntegrationTriggerService.AllowsCallerManaged(resolved.AllowedTools))
+        {
+            await TerminalizeBeforeRunAsync(context,
+                    IntegrationFailureCategories.SessionPolicy,
+                    "The trigger's agent now offers a tool outside ToolCategory.ReadLocal, which a caller-managed session cannot host.")
+                .ConfigureAwait(false);
+            return;
+        }
+
+        // 4c. The turn's context, assembled by the SAME builder the chat send path uses, so a continued session replays
+        //     exactly as a conversation does. The seed is LIFTED OUT of the history it is already in: the accept path
+        //     persisted it before this coordinator ran, unlike the chat path where the read precedes the write, so
+        //     concatenating it again would send the caller's input twice.
+        //
+        //     selectedPath is always null — integration conversations never regenerate, so there are no variant groups.
+        //     imageContext and knowledgeContext take their defaults: an integration execution has neither.
+        var history = conversation with
+        {
+            Messages = [.. conversation.Messages.Where(message => message.MessageId != executionId)]
+        };
+        var conversationContext = ConversationContextBuilder.Build(history,
+            seed,
+            selectedPath: null,
+            attachmentContext: null);
+
         // 5. The headless package. Three things differ from the scheduler's: the conversation id is the OWNED one (a
-        //    throwaway Guid would break every by-conversation resolution downstream), the context is the seed turn read
-        //    back from it, and AllowedTools is passed THROUGH UNCHANGED.
+        //    throwaway Guid would break every by-conversation resolution downstream), the context is the session's
+        //    history through the same compaction splice chat uses, and AllowedTools is passed THROUGH UNCHANGED.
         //
         //    Approval-required tools are deliberately not stripped. For a scheduled run the scheduler's strip logs a
         //    warning an operator eventually reads; for an external integration it is silent degradation — the caller
@@ -413,15 +478,7 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                               .Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
                                   session.ConversationId,
                                   resolved.ResolvedSystemPrompt,
-                                  [
-                                      new ConversationMessageDto
-                                      {
-                                          Id = seed.MessageId,
-                                          Role = MessageRole.User,
-                                          Content = seed.Content,
-                                          SortOrder = 0
-                                      }
-                                  ],
+                                  conversationContext,
                                   effectiveModel,
                                   resolved.AgentDefinitionVersion,
                                   LocalChatLoopbackDefaults.ClientNodeId,
@@ -849,6 +906,42 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         //     separate event insert (a crash between them leaves a terminal row whose terminal event never arrives, and
         //     startup recovery scans only NON-terminal rows, so the inconsistency would be permanent).
         _ = await TerminalizeAsync(context, RunningOnly, status, failureCategory, failureSummary).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Closes the session of a terminalized <c>PerInvocation</c> execution. A per-invocation session exists for one
+    ///     run, so leaving it <c>Active</c> would show an operator a session nothing will ever join. A
+    ///     <c>CallerManaged</c> session is closed only by the operator's delete, which is the whole point of the policy.
+    ///     <para>
+    ///         Best effort and never fatal: the execution is already terminal and its caller has already been answered,
+    ///         so a failure here is a log line rather than a reason to reopen a committed terminal.
+    ///     </para>
+    /// </summary>
+    private async Task ClosePerInvocationSessionAsync(IServiceProvider services, IntegrationExecutionSnapshot execution)
+    {
+        try
+        {
+            var row = await services.GetRequiredService<IIntegrationExecutionStore>().GetByIdAsync(execution.Id, CancellationToken.None).ConfigureAwait(false);
+            if (row is null || NonTerminalStatuses.Contains(row.Status))
+            {
+                return;
+            }
+
+            var trigger = await services.GetRequiredService<IIntegrationTriggerStore>().GetByIdAsync(execution.TriggerId, CancellationToken.None).ConfigureAwait(false);
+            if (trigger is null || trigger.SessionPolicy != IntegrationSessionPolicy.PerInvocation)
+            {
+                return;
+            }
+
+            _ = await services.GetRequiredService<IntegrationSessionService>().CloseAsync(execution.SessionId, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception,
+                "The per-invocation session {SessionId} of integration execution {ExecutionId} could not be closed.",
+                execution.SessionId,
+                execution.Id);
+        }
     }
 
     /// <summary>

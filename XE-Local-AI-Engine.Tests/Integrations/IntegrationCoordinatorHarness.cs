@@ -13,13 +13,17 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -42,6 +46,7 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     private readonly long _constructedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     private Task<IAsyncDisposable>? _leaseRequest;
     private readonly Guid _agentDefinitionId = Guid.NewGuid();
+    private readonly FakeIntegrationApiKeyStore _keys = new();
     private readonly FakeIntegrationTriggerStore _triggers = new();
     private readonly FakeIntegrationSessionStore _sessions = new();
     private readonly TrackingDisposable _reservation;
@@ -58,9 +63,13 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     private TaskCompletionSource _leaseGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _ordinal;
 
-    public IntegrationCoordinatorHarness(int maxQueueAgeSeconds = 120, TimeProvider? timeProvider = null)
+    public IntegrationCoordinatorHarness(int maxQueueAgeSeconds = 120, TimeProvider? timeProvider = null, int contextBudgetTokens = 12_000)
     {
         MaxQueueAgeSeconds = maxQueueAgeSeconds;
+
+        // A CONSTRUCTOR parameter, not a settable property: the coordinator snapshots IOptions<IntegrationOptions> in
+        // its own constructor, so a value assigned afterwards would silently never be read.
+        ContextBudgetTokens = contextBudgetTokens;
         Clock = timeProvider ?? TimeProvider.System;
         _reservation = new TrackingDisposable(this);
         _lease = new TrackingAsyncDisposable(this);
@@ -160,6 +169,31 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         {
             EmitDebounceMs = EmitDebounceMs
         }));
+
+        // The per-turn context bound and the session service the coordinator resolves from its run scope. Both are real
+        // instances over recording collaborators, because WHICH keep window the fold asks for and WHETHER a
+        // per-invocation session is closed are the assertions, not the fact that a mock was called.
+        services.AddSingleton<IConversationCompactionService>(Compaction);
+        services.AddSingleton<ITokenEstimator>(new HeuristicTokenEstimator(new TokenEstimatorCalibrationStore()));
+        services.AddSingleton<IOptions<ConversationCompactionOptions>>(_ => Options.Create(new ConversationCompactionOptions
+        {
+            RecentMessagesToKeepVerbatim = ChatKeepVerbatim
+        }));
+        services.AddSingleton(_ => new WorkSessionStepContextBound(Persistence,
+            Compaction,
+            new HeuristicTokenEstimator(new TokenEstimatorCalibrationStore()),
+            NullLogger<WorkSessionStepContextBound>.Instance));
+        services.AddSingleton<IIntegrationApiKeyStore>(_keys);
+        services.AddSingleton(TriggerService);
+        services.AddSingleton(_ => new IntegrationSessionService(_sessions,
+            Executions,
+            _triggers,
+            TriggerService,
+            new IntegrationExternalAccess(Executions, _sessions, _keys),
+            Persistence,
+            SessionGate,
+            TimeProvider.System,
+            NullLogger<IntegrationSessionService>.Instance));
         _provider = services.BuildServiceProvider();
 
         Queue = Channel.CreateBounded<Guid>(8);
@@ -173,6 +207,16 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     }
 
     public IntegrationExecutionCoordinator Coordinator { get; }
+
+    /// <summary>The chat keep window the integration path must pass, rather than the work-session floor of two.</summary>
+    public const int ChatKeepVerbatim = 8;
+
+    /// <summary>Records every fold the per-turn bound asked for, including the keep window it carried.</summary>
+    public RecordingCompactionService Compaction { get; } = new();
+
+    public IntegrationSessionGate SessionGate { get; } = new();
+
+    public IIntegrationTriggerService TriggerService { get; } = Substitute.For<IIntegrationTriggerService>();
 
     /// <summary>The coordinator's own queue, so a test can drive the hosted loop instead of calling into it.</summary>
     public Channel<Guid> Queue { get; }
@@ -225,6 +269,28 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     public IReadOnlyList<AllowedToolDto> OfferedTools { get; set; } = [];
 
     public bool HideConversation { get; set; }
+
+    /// <summary>
+    ///     Completed turns already in the owned conversation, ahead of the seeds. This is what a CONTINUED session
+    ///     looks like: the accept path persisted the current seed before the coordinator ran, so the turn read already
+    ///     contains it and the earlier turns sit in front of it.
+    /// </summary>
+    public List<NodeChatPersistedMessageDto> History { get; } = [];
+
+    /// <summary>The conversation's non-destructive compaction synopsis and the anchor it folds through, when set.</summary>
+    public string? CompactionSummary { get; set; }
+
+    public int? CompactionCoversToSequence { get; set; }
+
+    /// <summary>The per-turn compaction budget the coordinator passes. Pass a low one to the constructor to make the fold fire.</summary>
+    public int ContextBudgetTokens { get; }
+
+    /// <summary>One completed turn to place ahead of the seed, in the order it is added.</summary>
+    public void AddHistory(string role, string content) =>
+        History.Add(Message(Guid.NewGuid(), role, content) with
+        {
+            Sequence = History.Count
+        });
 
     public bool RaiseTerminalState { get; set; } = true;
 
@@ -301,6 +367,26 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
 
     public void DisableTrigger() =>
         _triggers.Disable(_trigger.Id);
+
+    /// <summary>Repoints the trigger's session policy, which decides whether the caller-managed tool rule judges it.</summary>
+    public void SetSessionPolicy(IntegrationSessionPolicy sessionPolicy) =>
+        _triggers.SetSessionPolicy(_trigger.Id, sessionPolicy);
+
+    /// <summary>The owned session as the stores hold it now, so a suite can assert whether a terminal run closed it.</summary>
+    public IntegrationSessionSnapshot Session() =>
+        _sessions.Rows.Single(row => row.Id == SessionId);
+
+    /// <summary>One offered tool in the resolved runtime, so a suite can put a non-ReadLocal tool in front of the rule.</summary>
+    public static AllowedToolDto Tool(string name, XE_Local_AI_Engine.AI.Agent.Tools.ToolCategory category) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Location = ToolLocation.ClientLocal,
+            ParameterSchema = null,
+            RequiresApproval = false,
+            Category = category
+        };
 
     public void HoldLease() =>
         _leaseGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -404,14 +490,22 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
             return null;
         }
 
-        var seeds = Executions.Rows.Select(row => Message(row.Id, "user", SeedText)).ToArray();
+        // Ascending sequences, because the context builder orders in ANCHOR space: with every message at 0 the order
+        // would be an accident of insertion rather than the conversation's own.
+        var seeds = Executions.Rows.Select((row, index) => Message(row.Id, "user", SeedText) with
+                              {
+                                  Sequence = History.Count + index
+                              })
+                              .ToArray();
         return new NodeChatConversationDto(ConversationId,
             "sensor-ingest",
             UserId: null,
             CreatedAtUtc: 0,
             LastSeenUtc: 0,
             Purged: false,
-            seeds);
+            [.. History, .. seeds],
+            CompactionSummary: CompactionSummary,
+            CompactionSummaryCoversToSequence: CompactionCoversToSequence);
     }
 
     private static NodeChatPersistedMessageDto Message(Guid messageId, string role, string content) =>
@@ -449,7 +543,8 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     {
         public IntegrationOptions Value => new()
         {
-            MaxQueueAgeSeconds = harness.MaxQueueAgeSeconds
+            MaxQueueAgeSeconds = harness.MaxQueueAgeSeconds,
+            ContextBudgetTokens = harness.ContextBudgetTokens
         };
     }
 
@@ -467,5 +562,23 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
             harness.ReleaseLeaseSlot();
             return ValueTask.CompletedTask;
         }
+    }
+}
+
+/// <summary>
+///     Records every fold the per-turn context bound asked for, including the KEEP WINDOW it carried — which is the
+///     whole assertion: an integration turn must pass the chat window, not the work-session floor of two.
+/// </summary>
+internal sealed class RecordingCompactionService : IConversationCompactionService
+{
+    public List<(Guid ConversationId, int? KeepVerbatim)> Calls { get; } = [];
+
+    public Task<ConversationCompactionResult> CompactAsync(Guid conversationId,
+        string? requestedModel,
+        int? recentMessagesToKeepVerbatim,
+        CancellationToken cancellationToken = default)
+    {
+        Calls.Add((conversationId, recentMessagesToKeepVerbatim));
+        return Task.FromResult(new ConversationCompactionResult(ConversationCompactionOutcome.NothingToCompact));
     }
 }
