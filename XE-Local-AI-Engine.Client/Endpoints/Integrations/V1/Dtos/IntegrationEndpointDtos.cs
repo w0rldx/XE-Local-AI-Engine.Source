@@ -316,6 +316,13 @@ public sealed class IntegrationSessionResponse
     /// <summary>Empty only when the trigger has since been deleted; the session and its executions outlive it.</summary>
     public required string TriggerName { get; init; }
 
+    /// <summary>
+    ///     The integrator that owns the session. Operator-only, like the execution detail's: it answers "whose is
+    ///     this?" on an admin surface where every integrator's rows are visible at once. The external status route
+    ///     does not carry it.
+    /// </summary>
+    public required Guid PrincipalId { get; init; }
+
     public required Guid AgentDefinitionId { get; init; }
 
     public required IntegrationSessionStatus Status { get; init; }

@@ -3537,6 +3537,7 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionResp
 	id: z.guid(),
 	triggerId: z.guid(),
 	triggerName: z.string(),
+	principalId: z.guid(),
 	agentDefinitionId: z.guid(),
 	status: zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionStatus,
 	createdAtUtc: z.int(),
@@ -8661,11 +8662,6 @@ export const zGetInvocationMonitorResponse = zXeLocalAiEngineClientEndpointsInvo
 export const zCancelIntegrationExecutionPath = z.object({
 	executionId: z.string(),
 });
-
-/**
- * No Content
- */
-export const zCancelIntegrationExecutionResponse = z.void();
 
 /**
  * Success

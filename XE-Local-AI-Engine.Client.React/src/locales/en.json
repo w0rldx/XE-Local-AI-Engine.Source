@@ -5469,6 +5469,7 @@
 					"columns": {
 						"id": "Session",
 						"trigger": "Trigger",
+						"principal": "Principal",
 						"status": "Status",
 						"created": "Created",
 						"lastActivity": "Last activity",
@@ -5568,6 +5569,7 @@
 					"load": "Could not load integration executions.",
 					"events": "Could not load the execution timeline.",
 					"cancel": "Could not cancel the execution.",
+					"cancelConflict": "This execution had already finished.",
 					"detail": "Could not load the execution audit detail."
 				}
 			},

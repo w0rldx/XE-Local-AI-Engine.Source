@@ -2951,6 +2951,7 @@ export type XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionRespon
 	id: string;
 	triggerId: string;
 	triggerName: string;
+	principalId: string;
 	agentDefinitionId: string;
 	status: XeLocalAiEngineClientPersistenceEntitiesIntegrationSessionStatus;
 	createdAtUtc: number;
@@ -12083,16 +12084,21 @@ export type CancelIntegrationExecutionErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type CancelIntegrationExecutionError = CancelIntegrationExecutionErrors[keyof CancelIntegrationExecutionErrors];
 
 export type CancelIntegrationExecutionResponses = {
 	/**
-	 * No Content
+	 * Accepted
 	 */
-	204: void;
+	202: unknown;
 };
-
-export type CancelIntegrationExecutionResponse = CancelIntegrationExecutionResponses[keyof CancelIntegrationExecutionResponses];
 
 export type ListIntegrationTriggersData = {
 	body?: never;

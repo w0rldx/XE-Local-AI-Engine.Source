@@ -676,7 +676,13 @@ public sealed class IntegrationExecutionCoordinatorTests
 
             await harness.Queue.Writer.WriteAsync(healthy);
             await WaitUntilAsync(() => harness.Row(healthy).Status == IntegrationExecutionStatus.Completed);
-            await WaitUntilAsync(() => harness.Row(faulting).Status != IntegrationExecutionStatus.Accepted);
+            // Wait for a TERMINAL row, not merely for "no longer Accepted". The retried run passes through Queued and
+            // Running on its way to Completed, so the weaker gate returns mid-flight whenever the retry is slower than
+            // the healthy run — which is exactly what happens once the namespace is under enough parallel load. The
+            // assertion below still grades the outcome, so a run that genuinely ends Failed fails here by name.
+            await WaitUntilAsync(() => harness.Row(faulting).Status is IntegrationExecutionStatus.Completed
+                                           or IntegrationExecutionStatus.Failed
+                                           or IntegrationExecutionStatus.Cancelled);
 
             AssertEx.Equal(IntegrationExecutionStatus.Completed, harness.Row(faulting).Status,
                 "One transient read failure is retried, so the run still happens.");

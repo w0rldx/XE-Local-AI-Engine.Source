@@ -191,4 +191,41 @@ describe("useIntegrationExecutions", () => {
 			expect(requests.length).toBeGreaterThan(1);
 		});
 	});
+
+	// A 409 says the run finished first, so the row that offered the cancel button is the stale one — it has to be
+	// re-read for exactly the same reason an accepted request does.
+	it("refetches the list after a cancellation is refused as already finished", async () => {
+		const requests = listRoute();
+		server.use(
+			http.post(localApiPath(`integrations/executions/${executionId}/cancel`), () =>
+				HttpResponse.json(
+					{
+						status: 409,
+						title: "One or more errors occurred!",
+						errors: [{ name: "generalErrors", reason: "The execution has already finished." }],
+					},
+					{ status: 409 },
+				),
+			),
+		);
+		const { wrapper } = harness();
+
+		const { result } = renderHook(
+			() => ({ list: useIntegrationExecutions(), cancel: useCancelIntegrationExecution() }),
+			{ wrapper },
+		);
+
+		await waitFor(() => {
+			expect(requests).toHaveLength(1);
+		});
+
+		result.current.cancel.mutate({ path: { executionId } });
+
+		await waitFor(() => {
+			expect(result.current.cancel.isError).toBe(true);
+		});
+		await waitFor(() => {
+			expect(requests.length).toBeGreaterThan(1);
+		});
+	});
 });

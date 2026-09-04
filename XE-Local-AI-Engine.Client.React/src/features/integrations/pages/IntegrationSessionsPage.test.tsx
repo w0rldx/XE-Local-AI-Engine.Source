@@ -69,6 +69,7 @@ const activeSession: IntegrationSession = {
 	id: "5c0ffee0-0000-0000-0000-000000000001",
 	triggerId: "trigger-1",
 	triggerName: "Sensor hub",
+	principalId: "77777777-7777-4777-8777-777777777777",
 	agentDefinitionId: "agent-1",
 	status: "Active",
 	createdAtUtc: 1_700_000_000_000,
@@ -81,6 +82,7 @@ const closedSession: IntegrationSession = {
 	id: "5c0ffee0-0000-0000-0000-000000000002",
 	triggerId: "trigger-1",
 	triggerName: "",
+	principalId: "88888888-8888-4888-8888-888888888888",
 	agentDefinitionId: "agent-1",
 	status: "Closed",
 	createdAtUtc: 1_700_000_020_000,
@@ -159,6 +161,23 @@ describe("IntegrationSessionsPage", () => {
 
 		const closedRow = screen.getByTestId(`integration-session-row-${closedSession.id}`);
 		expect(within(closedRow).getByText("Deleted trigger")).toBeTruthy();
+	});
+
+	it("names the owning integrator on the row and in the detail, shortened", async () => {
+		renderPage();
+
+		// The principal, not the agent: a key rotation keeps the principal, so this is the identity an operator
+		// matches against the keys page.
+		const cell = screen.getByTestId(`integration-session-principal-${activeSession.id}`);
+		expect(cell.textContent).toBe(activeSession.principalId.slice(0, 8));
+		expect(cell.getAttribute("title")).toBe(activeSession.principalId);
+
+		fireEvent.click(screen.getByTestId(`integration-session-view-${activeSession.id}`));
+
+		await waitFor(() => {
+			expect(screen.getByTestId("integration-session-principal")).toBeTruthy();
+		});
+		expect(screen.getByTestId("integration-session-principal").getAttribute("title")).toBe(activeSession.principalId);
 	});
 
 	it("sends the trigger filter to the request rather than narrowing the window", async () => {

@@ -45,21 +45,27 @@ internal static class IntegrationPriorOutputsComposer
     ///     The session's committed <c>external.output</c> envelopes, NEWEST FIRST. They are emitted verbatim and never
     ///     re-parsed: each one is already the <c>{"contentType": …, "payload": …}</c> shape the tool wrote.
     /// </param>
-    /// <param name="byteBudget">The UTF-8 ceiling on the rendered entries and their separators.</param>
+    /// <param name="byteBudget">
+    ///     The UTF-8 ceiling on the WHOLE composed message — preamble, fence and truncation notice included, not the
+    ///     entries alone. <see cref="FixedOverheadBytes" /> comes off it before any entry is laid out.
+    /// </param>
     /// <param name="fenceNonceSeed">The per-conversation, server-secret-derived fence seed.</param>
     public static string? Compose(IReadOnlyList<string> envelopesNewestFirst, int byteBudget, string fenceNonceSeed)
     {
         ArgumentNullException.ThrowIfNull(envelopesNewestFirst);
         ArgumentNullException.ThrowIfNull(fenceNonceSeed);
 
-        if (envelopesNewestFirst.Count == 0 || byteBudget <= 0)
+        // The budget is the ceiling on the WHOLE message, so the wrapper's own bytes are spent before the first entry
+        // is measured. Budgeting the entries alone let a composed block overshoot the option by the ~500 bytes of
+        // preamble, fence and notice that surround them.
+        var remaining = byteBudget - FixedOverheadBytes;
+        if (envelopesNewestFirst.Count == 0 || remaining <= 0)
         {
             return null;
         }
 
         var kept = new List<string>(Math.Min(MaxPayloads, envelopesNewestFirst.Count));
         var truncated = false;
-        var remaining = byteBudget;
 
         // Newest first, so what survives a tight budget is what the model most recently delivered.
         foreach (var envelope in envelopesNewestFirst)
@@ -131,6 +137,29 @@ internal static class IntegrationPriorOutputsComposer
                + UntrustedContentFraming.WrapDocument(body.ToString(),
                    [new KeyValuePair<string, string?>("source", SourceLabel)],
                    fenceNonceSeed);
+    }
+
+    /// <summary>
+    ///     Everything the composed message carries around the entries: the preamble and its separator, the fence's
+    ///     markers and metadata block, and a permanent reserve for the truncation notice. MEASURED rather than
+    ///     counted by hand — the markers carry a fixed-width nonce and a multi-byte em dash, so a hand-written number
+    ///     would be wrong the moment either string is edited. The reserve is unconditional: an entry laid out on the
+    ///     assumption that nothing would be truncated is exactly the entry the notice then pushes over the budget.
+    /// </summary>
+    public static int FixedOverheadBytes { get; } = MeasureFixedOverhead();
+
+    private static int MeasureFixedOverhead()
+    {
+        // The empty-body wrap: the nonce is 32 hex characters whatever the seed, so this measures the same wrapper
+        // length the real body's fence will have.
+        var wrapper = UntrustedContentFraming.WrapDocument(string.Empty,
+            [new KeyValuePair<string, string?>("source", SourceLabel)],
+            nonceSeed: string.Empty);
+        return Encoding.UTF8.GetByteCount(Preamble)
+               + Encoding.UTF8.GetByteCount(PartSeparator)
+               + Encoding.UTF8.GetByteCount(wrapper)
+               + Encoding.UTF8.GetByteCount(PartSeparator)
+               + Encoding.UTF8.GetByteCount(TruncationNotice);
     }
 
     private static string Label(int index) =>

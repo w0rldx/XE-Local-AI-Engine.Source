@@ -6,6 +6,7 @@ using System.Threading.Channels;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Integrations.Tools;
 
 /// <summary>One mapped event before the buffer mints its sequence. Plumbing between the pure half and the appending half.</summary>
 internal sealed record IntegrationStreamEventDraft(string Type, string? ContentType, JsonElement? Payload);
@@ -106,7 +107,10 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
     public static IntegrationStreamEventDraft Completed(string? streamedContent, int maxOutputBytes) =>
         new(IntegrationStreamEventTypes.AssistantCompleted, ContentType: null, Text(TruncateToUtf8ByteBudget(streamedContent ?? string.Empty, maxOutputBytes)));
 
-    /// <summary>Both phases map; nothing else on the payload crosses to an external caller.</summary>
+    /// <summary>
+    ///     Both phases map; nothing else on the payload crosses to an external caller. The result text itself is never
+    ///     mapped — only the name and the outcome.
+    /// </summary>
     public static IntegrationStreamEventDraft? ToolLifecycle(ToolCallLifecyclePayload payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
@@ -124,11 +128,26 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
                 Json(new
                 {
                     name = payload.ToolName,
-                    ok = !payload.IsError
+                    ok = !payload.IsError && IsToolOutcomeOk(payload)
                 })),
             _ => null
         };
     }
+
+    /// <summary>
+    ///     <see cref="ToolCallLifecyclePayload.IsError" /> is set from the function-invocation pipeline's EXCEPTION and
+    ///     nothing else, so a tool that refuses by returning a sentence reports a successful call. <c>emit_output</c>
+    ///     refuses that way on every policy path on purpose — a throw would end the model's turn and would replace the
+    ///     sentence it reads with the pipeline's own — which left an external caller with no machine-readable signal at
+    ///     all: a refused emit looked exactly like a delivered one except for the missing <c>external.output</c> frame.
+    ///     <para>
+    ///         So this one tool is graded on its RESULT as well. Scoped to <c>emit_output</c> by name: every other tool
+    ///         keeps the exception-only meaning of <c>ok</c>, and no tool-result text is put on the wire either way.
+    ///     </para>
+    /// </summary>
+    private static bool IsToolOutcomeOk(ToolCallLifecyclePayload payload) =>
+        !string.Equals(payload.ToolName, EmitOutputToolDefinition.ToolName, StringComparison.Ordinal)
+        || EmitOutputToolDefinition.IsDelivered(payload.Result);
 
     /// <summary>
     ///     Cuts at a whole-rune boundary against a UTF-8 BYTE budget. A surrogate-only guard bounds nothing: a 3-byte

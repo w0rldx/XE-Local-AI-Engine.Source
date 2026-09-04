@@ -23,6 +23,26 @@ internal static class EmitOutputToolDefinition
 {
     public const string ToolName = "emit_output";
 
+    /// <summary>
+    ///     The opening words of the ONE acknowledgement the handler returns after a payload actually reached the
+    ///     caller. Every other sentence it returns is a policy refusal.
+    ///     <para>
+    ///         It lives here rather than in the handler because two components need it: the handler composes the
+    ///         sentence, and the stream mapper grades <c>tool.completed.ok</c> with it. A refusal deliberately does not
+    ///         throw — a throw would have the function-invocation pipeline replace the sentence the model reads with
+    ///         its own <c>Error: Function failed.</c> — so the result text is the only signal that survives the pipeline.
+    ///     </para>
+    /// </summary>
+    public const string DeliveredPrefix = "Output delivered to the caller";
+
+    /// <summary>
+    ///     Whether an <c>emit_output</c> tool result reports a DELIVERED payload rather than a refusal. Prefix, not
+    ///     equality: the acknowledgement carries the byte count and media type, and the shared tool-result budget can
+    ///     clip a long result from the RIGHT, so only the opening is stable.
+    /// </summary>
+    public static bool IsDelivered(string? result) =>
+        result is not null && result.StartsWith(DeliveredPrefix, StringComparison.Ordinal);
+
     /// <summary>What a call that names no media type is recorded and streamed as.</summary>
     public const string DefaultContentType = "application/json";
 
