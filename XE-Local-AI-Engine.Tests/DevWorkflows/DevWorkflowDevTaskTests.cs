@@ -729,7 +729,7 @@ public sealed class DevWorkflowDevTaskTests
         var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, implemented.Status, AssertEx.NotNull(implemented.OutputJson));
         AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, implemented.FailureClass);
-        AssertEx.Contains(AssertEx.NotNull(implemented.TerminalReason), "review rounds");
+        AssertEx.Contains(AssertEx.NotNull(implemented.TerminalReason), "of its rounds");
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
             (await ReadTaskAsync(harness, onlyOneRound).ConfigureAwait(false)).Status,
             "a round it cannot finish is not asked for, so the task keeps the approval it earned.");
@@ -1233,6 +1233,55 @@ public sealed class DevWorkflowDevTaskTests
 
     private static Task<(Guid ProjectId, Guid TaskId)> SeedDevelopmentTaskAsync(DevWorkflowHarness harness) =>
         harness.SeedDevelopmentProjectAsync();
+
+    /// <summary>
+    ///     A <c>DevTask</c> node whose deterministic gate FAILS asks for a coder round, and does not re-run the gate
+    ///     against the attempt it has just judged.
+    ///     <para>
+    ///         The failed gate used to return the task to <c>InProgress</c> — behind a succeeded coder attempt, the
+    ///         exact state the next-action decision reads as "implemented, validate it" — so every tick of this loop
+    ///         re-ran the whole command profile against the same patch. Measured live on 2026-09-04: 289 validation
+    ///         runs in 25 minutes and 282 report rows on one task, zero coder rounds, ended only by cancelling the run.
+    ///         The negative control is three symbols together, not one: <c>TargetFor</c> back to <c>InProgress</c>,
+    ///         <c>FinalizeValidationAsync</c>'s argument guard re-widened to admit it, and its bounded
+    ///         <c>CurrentReviewRound++</c> removed. That makes the loop below run the gate once per tick and this
+    ///         assertion count them. Reverting <c>TargetFor</c> ALONE fails differently and uninterestingly — the
+    ///         store's argument guard throws and the executor settles the node run on it.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ADevTaskNodeWhoseGateFailsAsksForACoderRoundInsteadOfRevalidatingTheSameAttempt()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        harness.Chain.FailTheDeterministicGate();
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var events = await ListDevelopmentEventsAsync(harness, projectId).ConfigureAwait(false);
+        var validations = events.Count(static entry => entry.EventType == "ValidationStarted");
+        AssertEx.Equal(expected: 1,
+            validations,
+            $"the gate judged one coder attempt once; running it again against the same attempt is the livelock: {string.Join(", ", harness.Chain.Actions)}");
+
+        AssertEx.Contains(harness.Chain.Actions,
+            static action => action == nameof(DevelopmentTaskStatus.ChangesRequested),
+            $"the failed gate left the task where a CODER round starts: {string.Join(", ", harness.Chain.Actions)}");
+        var task = await ReadTaskAsync(harness, taskId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, task.CurrentReviewRound, "and the failure spent a round, which is the only thing bounding the rework loop.");
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status, "the rework round is running: this node run is working, not stuck.");
+        var running = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
+            running.Status,
+            $"a working node run carries no terminal: {running.TerminalReason ?? running.OutputJson}");
+    }
+
+    private static async Task<IReadOnlyList<DevelopmentEventSnapshot>> ListDevelopmentEventsAsync(DevWorkflowHarness harness, Guid projectId)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ListEventsAsync(projectId).ConfigureAwait(false);
+    }
 
     private static Task<DevelopmentTaskSnapshot> ReadTaskAsync(DevWorkflowHarness harness, Guid taskId) =>
         harness.ReadDevelopmentTaskAsync(taskId);

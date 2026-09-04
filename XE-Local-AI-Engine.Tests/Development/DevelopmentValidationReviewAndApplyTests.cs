@@ -20,6 +20,8 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -235,7 +237,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     }
 
     [Test]
-    public async Task ValidationFailure_ReturnsTaskToInProgressAndCannotStartReviewer()
+    public async Task ValidationFailure_MovesTaskToChangesRequestedAndCannotStartReviewer()
     {
         var repository = await CreateRepositoryAsync().ConfigureAwait(false);
         await using var provider = await BuildProviderAsync(new WritingCoderModel("trailing whitespace \n"), new ApprovingReviewerModel()).ConfigureAwait(false);
@@ -267,7 +269,11 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
 
         AssertEx.False(validation.Passed);
         var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
-        AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
+        AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested,
+            task.Status,
+            "a failed gate hands the failure to the coder; leaving it InProgress asked for the same validation again.");
+        AssertEx.Equal(expected: 1, task.CurrentReviewRound, "and it spends a round, which is what bounds the rework loop.");
+        AssertEx.Contains(AssertEx.NotNull(task.BlockedReason), "Deterministic validation failed", StringComparison.Ordinal);
         await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
                           Guid.NewGuid(),
                           Guid.NewGuid(),
@@ -280,13 +286,13 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
 
     /// <summary>
     ///     Dependency-manifest rejection, asserted as the shape of the failure rather than only its wording. A change is a
-    ///     verdict: the task returns to <c>InProgress</c> carrying <c>dependency_manifest_changed</c>, the report
+    ///     verdict: the task moves to <c>ChangesRequested</c> carrying <c>dependency_manifest_changed</c>, the report
     ///     records it, and the attempt is NOT aborted as a security violation the way the test-write policy aborts.
     ///     The distinction is the point — "delete the failing test" is an attack, "add a package" is a legitimate task
     ///     this version cannot serve, and an agent can only retry usefully if it can tell which one it hit.
     /// </summary>
     [Test]
-    public async Task Validation_WhenTheAttemptChangesADependencyManifest_ReturnsToInProgressWithTheSpecificCode()
+    public async Task Validation_WhenTheAttemptChangesADependencyManifest_ReturnsToChangesRequestedWithTheSpecificCode()
     {
         var repository = await CreateRepositoryAsync().ConfigureAwait(false);
         await using var provider = await BuildProviderAsync(new WritingCoderModel("<Project />\n", "Directory.Packages.props"),
@@ -325,7 +331,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                     .ConfigureAwait(false);
 
         AssertEx.False(validation.Passed);
-        AssertEx.Equal(DevelopmentTaskStatus.InProgress, validation.TaskStatus);
+        AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, validation.TaskStatus);
         var report = await ReadValidationReportAsync(scope.ServiceProvider, validation.ArtifactId, seed.TaskId).ConfigureAwait(false);
         AssertEx.Equal(DevelopmentValidationFailureCodes.DependencyManifestChanged, report.FailureCode);
         AssertEx.Contains(AssertEx.NotNull(report.FailureDetail), "Directory.Packages.props", StringComparison.Ordinal);
@@ -334,7 +340,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         // egress cannot resolve the change anyway.
         AssertEx.Empty(report.Commands);
         var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
-        AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
+        AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, task.Status);
     }
 
     [Test]
@@ -761,8 +767,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             .ConfigureAwait(false);
 
         AssertEx.False(validation.Passed);
-        AssertEx.Equal(DevelopmentTaskStatus.InProgress, validation.TaskStatus);
-        AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
+        AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, validation.TaskStatus);
+        AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, task.Status);
 
         // The build is what rejected it: the whitespace check and the restore ahead of it both succeeded.
         AssertCommandSucceeded(commands, DevelopmentCommandIds.GitDiffCheck);
@@ -795,8 +801,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             .ConfigureAwait(false);
 
         AssertEx.False(validation.Passed);
-        AssertEx.Equal(DevelopmentTaskStatus.InProgress, validation.TaskStatus);
-        AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
+        AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, validation.TaskStatus);
+        AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, task.Status);
 
         // The change compiles — only the test rejected it, which is the signal the old default could not see at all.
         AssertCommandSucceeded(commands, DevelopmentCommandIds.GitDiffCheck);
@@ -838,8 +844,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             .ConfigureAwait(false);
 
         AssertEx.False(validation.Passed);
-        AssertEx.Equal(DevelopmentTaskStatus.InProgress, validation.TaskStatus);
-        AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
+        AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, validation.TaskStatus);
+        AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, task.Status);
 
         // Everything up to the test command is genuinely green — this is not a build failure wearing a different hat.
         AssertCommandSucceeded(commands, DevelopmentCommandIds.GitDiffCheck);
@@ -900,8 +906,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             .ConfigureAwait(false);
 
         AssertEx.False(validation.Passed);
-        AssertEx.Equal(DevelopmentTaskStatus.InProgress, validation.TaskStatus);
-        AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
+        AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, validation.TaskStatus);
+        AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, task.Status);
 
         AssertCommandSucceeded(commands, DevelopmentCommandIds.GitDiffCheck);
         AssertCommandSucceeded(commands, DevelopmentCommandIds.DotnetRestore);
@@ -910,6 +916,275 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
 
         AssertEx.Equal(expected: 1, TestOutcome(commands).Failed);
         AssertEx.Equal(DevelopmentValidationFailureCodes.TestsFailed, report.FailureCode);
+    }
+
+    /// <summary>
+    ///     THE LIVELOCK PIN. A task whose deterministic validation keeps failing must keep asking the CODER for rounds
+    ///     until its review budget runs out, and must never be handed the same validation twice for one coder attempt.
+    ///     <para>
+    ///         Before the failed gate routed to <c>ChangesRequested</c>, it returned the task to <c>InProgress</c> —
+    ///         which, behind a succeeded coder attempt, is exactly the state <c>StartNextActionAsync</c> reads as
+    ///         "implemented, validate it". Every tick re-ran the whole command profile against the same patch.
+    ///         Measured live on 2026-09-04: 289 validation runs in 25 minutes, 282 report rows on one task, zero coder
+    ///         rounds, ended only by cancelling the run. The loop below is bounded so that failure mode exhausts the
+    ///         ticks and fails the assertion instead of hanging.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AFailingGateSpendsCoderRoundsUntilTheBudgetIsGone_AndNeverValidatesOneAttemptTwice()
+    {
+        const int TickCeiling = 24;
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("trailing whitespace \n"), new ApprovingReviewerModel()).ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var coder = scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>();
+        var validator = scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>();
+        var seed = Seed(repository);
+        var repositoryBinding = Binding(seed, repository);
+        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>().CreateProjectAsync(seed).ConfigureAwait(false);
+        var service = CreateManagementService(scope.ServiceProvider);
+
+        var actions = new List<string>();
+        var validatedAttempts = new List<Guid>();
+        var coderRounds = 0;
+        for (var tick = 0; tick < TickCeiling; tick++)
+        {
+            var action = await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid()).ConfigureAwait(false);
+            actions.Add(action.Action);
+            if (action.Action == "Blocked")
+            {
+                break;
+            }
+
+            if (action.Action == "Validation")
+            {
+                // WHICH attempt this validation is about, read before it runs: two entries for one id is the livelock.
+                validatedAttempts.Add((await store.ListAttemptsAsync(seed.TaskId).ConfigureAwait(false))
+                    .Last(attempt => attempt.Role == DevelopmentAttemptRole.Coder && attempt.Status == Client.Persistence.Entities.DevelopmentAttemptStatus.Succeeded)
+                    .Id);
+                _ = await validator.RunAsync(seed.TaskId, repositoryBinding).ConfigureAwait(false);
+                continue;
+            }
+
+            coderRounds++;
+            _ = await coder.RunAsync(action.AttemptId!.Value, repositoryBinding).ConfigureAwait(false);
+        }
+
+        var trail = string.Join(", ", actions);
+        AssertEx.Contains(actions, static action => action == "Blocked", $"the loop has to END, and on the budget rather than on the tick ceiling: {trail}");
+        AssertEx.Equal(validatedAttempts.Count,
+            validatedAttempts.Distinct().Count(),
+            $"no coder attempt may be validated twice — that repetition IS the livelock: {trail}");
+
+        // Every validation is preceded by the coder round it judges, so "Validation" never follows "Validation".
+        AssertEx.Empty(actions.Zip(actions.Skip(1)).Where(static pair => pair is { First: "Validation", Second: "Validation" }),
+            $"a failed gate hands the round to the coder; asking for validation again is the state the fix removes: {trail}");
+
+        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentTaskStatus.Blocked, task.Status, "and it ends where a rejected FINAL review round ends, by the same route.");
+        AssertEx.Contains(AssertEx.NotNull(task.BlockedReason), "maximum number of rounds");
+        AssertEx.Equal(task.MaxReviewRounds, task.CurrentReviewRound, "the failing gate spent the rounds, which is what bounded the loop.");
+        AssertEx.Equal(task.MaxReviewRounds, validatedAttempts.Count, "one validation per round, no more.");
+        AssertEx.Equal(task.MaxReviewRounds,
+            coderRounds,
+            "and one CODER round per round: the budget check runs before the rework attempt, so the task is stood down "
+            + "the moment the budget is gone rather than after a whole model attempt that could never reach a review.");
+    }
+
+    /// <summary>
+    ///     The coder round a failed gate asks for is told what the gate found, or it re-implements blind. Same route a
+    ///     reviewer's rejection travels — the task's own event log — which is why the failed hop has to leave the task
+    ///     somewhere a coder round starts from.
+    /// </summary>
+    [Test]
+    public async Task TheRoundAFailedGateAsksForIsBriefedWithTheGatesOwnComplaint()
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("trailing whitespace \n"), new ApprovingReviewerModel()).ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var seed = Seed(repository);
+        var repositoryBinding = Binding(seed, repository);
+        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>().CreateProjectAsync(seed).ConfigureAwait(false);
+        var service = CreateManagementService(scope.ServiceProvider);
+
+        var first = await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid()).ConfigureAwait(false);
+        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>()
+                       .RunAsync(first.AttemptId!.Value, repositoryBinding)
+                       .ConfigureAwait(false);
+        AssertEx.Equal("Validation", (await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid()).ConfigureAwait(false)).Action);
+        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>().RunAsync(seed.TaskId, repositoryBinding).ConfigureAwait(false);
+
+        var rework = await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid()).ConfigureAwait(false);
+
+        AssertEx.Equal("Attempt", rework.Action);
+        AssertEx.Equal(DevelopmentAttemptRole.Coder, rework.Role, "the failure is the coder's to fix, not something to re-measure.");
+        var feedback = AssertEx.NotNull((await store.GetExecutionSnapshotAsync(rework.AttemptId!.Value).ConfigureAwait(false)).PreviousRoundFeedback,
+            "the round must be told what the gate found.");
+        AssertEx.Contains(feedback, "Deterministic validation failed", StringComparison.Ordinal);
+        AssertEx.Contains(feedback, DevelopmentValidationFailureCodes.CommandFailed, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     THE EXCEPTION-PATH PIN. A deterministic validation gets ONE automatic re-run, then a human.
+    ///     <para>
+    ///         The gate's <c>catch</c> returns the task to <c>InProgress</c> behind a succeeded coder attempt, which is
+    ///         the state the next-action decision reads as "implemented, validate it" — so before the recovery was
+    ///         counted, a validation that threw deterministically re-ran for as long as anything kept asking, running
+    ///         the whole command profile each time. Same symptom as the failed-gate livelock, different door.
+    ///     </para>
+    ///     <para>
+    ///         The throw is real rather than injected: a repository binding whose identity hash does not match the
+    ///         persisted one is refused by <c>DevelopmentWorkspaceProvider.PrepareAsync</c> every single time, which is
+    ///         exactly the deterministic fault the bound exists for. The loop is bounded so the old behaviour exhausts
+    ///         the ticks and fails the count instead of hanging.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AValidationThatAlwaysThrowsRecoversOnceAndThenStandsTheTaskDown()
+    {
+        const int TickCeiling = 10;
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ApprovingReviewerModel()).ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var coder = scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>();
+        var validator = scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>();
+        var seed = Seed(repository);
+        var repositoryBinding = Binding(seed, repository);
+        var refusedBinding = repositoryBinding with
+        {
+            RepositoryIdentityHash = "not-the-persisted-repository-identity"
+        };
+        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>().CreateProjectAsync(seed).ConfigureAwait(false);
+        var service = CreateManagementService(scope.ServiceProvider);
+
+        var actions = new List<string>();
+        var statusAfterEachValidation = new List<DevelopmentTaskStatus>();
+        for (var tick = 0; tick < TickCeiling; tick++)
+        {
+            DevelopmentNextActionResult action;
+            try
+            {
+                action = await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid()).ConfigureAwait(false);
+            }
+            catch (DevelopmentInvalidTransitionException)
+            {
+                // A stood-down task has no executable next action at all, which is the end of this loop and the
+                // assertion that the next action after Blocked is not another validation.
+                actions.Add("None");
+                break;
+            }
+
+            actions.Add(action.Action);
+            if (action.Action == "Validation")
+            {
+                _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => validator.RunAsync(seed.TaskId, refusedBinding))
+                                  .ConfigureAwait(false);
+                statusAfterEachValidation.Add((await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Status);
+                continue;
+            }
+
+            _ = await coder.RunAsync(action.AttemptId!.Value, repositoryBinding).ConfigureAwait(false);
+        }
+
+        var trail = string.Join(", ", actions);
+        AssertEx.Equal(expected: 2,
+            statusAfterEachValidation.Count,
+            $"one implementation gets one free re-run of a validation that throws, and then a human: {trail}");
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, statusAfterEachValidation[0], "the FIRST throw is treated as transient and re-run once.");
+        AssertEx.Equal(DevelopmentTaskStatus.Blocked, statusAfterEachValidation[1], "the second throw on the same implementation goes to a human.");
+        AssertEx.Equal("None", actions[^1], $"and a stood-down task is offered no next action at all, least of all another validation: {trail}");
+
+        var blocked = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentTaskStatus.Blocked, blocked.Status);
+        var reason = AssertEx.NotNull(blocked.BlockedReason);
+        AssertEx.Contains(reason, "failed twice", StringComparison.Ordinal);
+        AssertEx.Contains(reason,
+            nameof(DevelopmentWorkspaceSecurityException),
+            StringComparison.Ordinal,
+            "the exception TYPE is named, because its message is the one string on this path nothing has sanitized.");
+        AssertEx.False(reason.Contains(repository, StringComparison.OrdinalIgnoreCase), $"and the reason names no host path: {reason}");
+    }
+
+    /// <summary>
+    ///     The free re-run is per IMPLEMENTATION, not per task: a new coder attempt has not been tried yet, so its
+    ///     first throw is transient again. Without that the second implementation of any task that ever hit a
+    ///     transient validation fault would be stood down on its first hiccup.
+    /// </summary>
+    [Test]
+    public async Task TheFreeReRunIsCountedPerCoderAttemptAndResetsOnTheNextOne()
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ApprovingReviewerModel()).ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
+        var coder = scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>();
+        var validator = scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>();
+        var seed = Seed(repository);
+        var repositoryBinding = Binding(seed, repository);
+        var refusedBinding = repositoryBinding with
+        {
+            RepositoryIdentityHash = "not-the-persisted-repository-identity"
+        };
+        _ = await coordinator.CreateProjectAsync(seed).ConfigureAwait(false);
+        var service = CreateManagementService(scope.ServiceProvider);
+
+        var first = await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid()).ConfigureAwait(false);
+        _ = await coder.RunAsync(first.AttemptId!.Value, repositoryBinding).ConfigureAwait(false);
+        AssertEx.Equal("Validation", (await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid()).ConfigureAwait(false)).Action);
+        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => validator.RunAsync(seed.TaskId, refusedBinding)).ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Status);
+
+        // A genuinely new implementation, which nothing has tried to validate yet.
+        var second = Guid.NewGuid();
+        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
+                                 second,
+                                 Guid.NewGuid(),
+                                 DevelopmentAttemptRole.Coder,
+                                 "coder-local",
+                                 "local",
+                                 (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Version))
+                             .ConfigureAwait(false);
+        _ = await coder.RunAsync(second, repositoryBinding).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => validator.RunAsync(seed.TaskId, refusedBinding)).ConfigureAwait(false);
+
+        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress,
+            task.Status,
+            "the count is keyed on the coder attempt, so a new implementation gets its own free re-run.");
+        AssertEx.Null(task.BlockedReason);
+    }
+
+    /// <summary>
+    ///     The real service over the scope's real store and coordinator. Everything Dev Mode's next-action decision does
+    ///     NOT read is a substitute; the supervisor is one deliberately, so the test drives the coder runner and the
+    ///     validation runner itself in the order the service asks for them.
+    /// </summary>
+    private static IDevelopmentManagementService CreateManagementService(IServiceProvider services)
+    {
+        var supervisor = Substitute.For<IDevelopmentAttemptExecutionSupervisor>();
+        _ = supervisor.StartAttempt(Arg.Any<Guid>(), Arg.Any<DevelopmentAttemptRole>()).Returns(true);
+        _ = supervisor.StartValidation(Arg.Any<Guid>()).Returns(true);
+        return new DevelopmentManagementService(services.GetRequiredService<IDevelopmentStore>(),
+            services.GetRequiredService<IDevelopmentCoordinator>(),
+            supervisor,
+            services.GetRequiredService<IDevelopmentArtifactBlobStore>(),
+            services.GetRequiredService<IDevelopmentApplyService>(),
+            services.GetRequiredService<IDevelopmentRepositoryBindingService>(),
+            Substitute.For<IActiveCloudChatClientFactory>(),
+            new FakeModelTrustResolver(),
+            Substitute.For<IDevelopmentCommandProfileDetector>(),
+            Substitute.For<IDevelopmentProfileBackfillService>(),
+            Substitute.For<IDevelopmentTemplateStore>(),
+            Substitute.For<IDevWorkflowStore>(),
+            Options.Create(new DevWorkflowOptions
+            {
+                Enabled = true
+            }),
+            TimeProvider.System);
     }
 
     private static DevelopmentCommandProfile SlnxProfile() =>

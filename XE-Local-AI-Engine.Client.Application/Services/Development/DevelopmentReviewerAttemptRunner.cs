@@ -288,7 +288,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
             "\n", DevelopmentTestWritePolicy.Prompt(profile),
             Policy(snapshot.WorkflowPolicyText),
             OperatorInstruction(snapshot.OperatorInstruction),
-            "\nReview round: ", task.CurrentReviewRound, " of ", task.MaxReviewRounds,
+            "\nRound: ", task.CurrentReviewRound, " of ", task.MaxReviewRounds,
             "\nValidated subject: ", validation.SubjectHash,
             "\nValidation profile: ", validation.CommandProfileVersion,
             "\nValidation passed: ", validation.Passed,

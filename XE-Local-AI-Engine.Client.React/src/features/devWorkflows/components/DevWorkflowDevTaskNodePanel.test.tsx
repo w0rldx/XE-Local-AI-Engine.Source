@@ -39,7 +39,7 @@ describe("DevWorkflowDevTaskNodePanel", () => {
 		);
 
 		expect(screen.getByTestId("dev-workflow-node-devtask-stage").textContent).toBe("Awaiting apply");
-		expect(screen.getByTestId("dev-workflow-node-devtask-round").textContent).toBe("review round 2");
+		expect(screen.getByTestId("dev-workflow-node-devtask-round").textContent).toBe("round 2");
 
 		fireEvent.click(screen.getByTestId("dev-workflow-node-development-link"));
 

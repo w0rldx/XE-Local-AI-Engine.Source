@@ -5210,7 +5210,7 @@
 				"noReport": "Noch kein Bericht.",
 				"devTask": "Entwicklungsaufgabe",
 				"openDevelopment": "Development Mode öffnen",
-				"devTaskReviewRound": "Prüfrunde {{round}}",
+				"devTaskReviewRound": "Runde {{round}}",
 				"devTaskNoStage": "Diese Aufgabe hat noch keinen Stand gemeldet.",
 				"devTaskEvidence": "Development Mode zeigt Versuche, Patch und Prüfnachweise dieser Aufgabe. Die Freigabe, mit der ein Patch übernommen wird, ist ein Gate-Knoten in diesem Workflow.",
 				"objective": "Zielvorgabe",

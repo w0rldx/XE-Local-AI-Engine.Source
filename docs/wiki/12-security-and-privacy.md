@@ -530,7 +530,7 @@ two sandboxes, not one sandbox with two postures.
    `**/packages.lock.json`, `**/NuGet.config`, the npm/yarn/pnpm lockfiles, `**/Cargo.toml`, `**/Cargo.lock`,
    `**/requirements*.txt`, `**/pyproject.toml`, `**/uv.lock` or `**/poetry.lock`. Added counts as much as
    modified — a new `Directory.Packages.props` changes resolution for the whole tree. This is a **verdict, not a
-   `DevelopmentWorkspaceSecurityException`**: the task returns to `InProgress` carrying the reason, because
+   `DevelopmentWorkspaceSecurityException`**: the task moves to `ChangesRequested` carrying the reason, because
    "delete the failing test" is an attack and "add a package" is a legitimate task this version cannot serve.
    The set is code-owned and versioned with `DevelopmentCommandProfileCatalog.CurrentVersion`; a packaging system
    missing from it is a hole, not a gap in coverage.

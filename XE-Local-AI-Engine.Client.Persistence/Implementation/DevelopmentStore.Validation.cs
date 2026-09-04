@@ -125,7 +125,7 @@ public sealed partial class DevelopmentStore
         ArgumentNullException.ThrowIfNull(command);
         ValidateArtifactCommand(command.Artifact);
         if (command.Artifact.Kind != DevelopmentArtifactKind.ValidationReport
-            || command.TargetStatus is not (DevelopmentTaskStatus.InReview or DevelopmentTaskStatus.InProgress))
+            || command.TargetStatus is not (DevelopmentTaskStatus.InReview or DevelopmentTaskStatus.ChangesRequested))
         {
             throw new ArgumentException("Validation finalization requires a validation artifact and a review or rework target.", nameof(command));
         }
@@ -145,6 +145,8 @@ public sealed partial class DevelopmentStore
                 {
                     throw new DevelopmentInvalidTransitionException("Only an active deterministic validation can be finalized.");
                 }
+
+                EnsureLegalTransition(task.Status, command.TargetStatus);
 
                 var attemptId = command.Artifact.AttemptId
                                 ?? throw new DevelopmentInvalidTransitionException("A validation artifact must identify its coder attempt.");
@@ -172,9 +174,36 @@ public sealed partial class DevelopmentStore
                     }
 
                     task.CurrentReviewRound++;
+
+                    // A gate that PASSES clears the last failure's sentence. Nothing else on the recovery path does:
+                    // not the coder round StartAttemptAsync starts, not FinalizeReviewAsync, not CompleteApplyAsync —
+                    // so without this an approved, applied task kept rendering "Deterministic validation failed" under
+                    // a green badge in the Development overview, which reads it with no status gate.
+                    task.BlockedReason = null;
                 }
                 else
                 {
+                    // A failed gate SPENDS a round, exactly as a reviewer's rejection does. It has to: the round budget
+                    // is the only bound on this loop, and a rejection that cost nothing let a task whose deterministic
+                    // validation fails deterministically ask for coder rounds forever. Charged here rather than on the
+                    // hop into review because this hop never enters review, and the count is what StartNextActionAsync
+                    // reads to stand a task down once the budget is gone — the same stand-down a task gets when the
+                    // FINAL reviewer round rejects it, reached by the same route and with the same reason.
+                    //
+                    // Bounded rather than unconditional so the count can never exceed the maximum. Reaching the cap is
+                    // unreachable on the live path (StartNextActionAsync blocks a task at the cap BEFORE it schedules
+                    // validation), and this store method is callable on its own, so the branch answers what a caller at
+                    // the cap should get: the task still lands at ChangesRequested carrying the reason, and the block
+                    // arrives one coder round later off the count that is already at its limit.
+                    if (task.CurrentReviewRound < task.MaxReviewRounds)
+                    {
+                        task.CurrentReviewRound++;
+                    }
+
+                    // The reason reaches the next coder round through the event log, as a reviewer's does. This column
+                    // is the OPERATOR-facing copy — the same widening TransitionTaskAsync makes for its own rework
+                    // target. It is overwritten by the next failure and cleared by the next PASS, above.
+                    task.BlockedReason = command.SanitizedReason;
                     artifact.IsValid = false;
                     await _dbContext.DevelopmentArtifacts
                                     .Where(entity => entity.TaskId == task.Id

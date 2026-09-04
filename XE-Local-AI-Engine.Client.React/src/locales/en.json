@@ -5210,7 +5210,7 @@
 				"noReport": "No report yet.",
 				"devTask": "Development task",
 				"openDevelopment": "Open Development Mode",
-				"devTaskReviewRound": "review round {{round}}",
+				"devTaskReviewRound": "round {{round}}",
 				"devTaskNoStage": "This task has not reported a stage yet.",
 				"devTaskEvidence": "Dev Mode shows this task's attempts, patch and validation evidence. The approval that lets a patch land is a gate node in this workflow.",
 				"objective": "Objective",
