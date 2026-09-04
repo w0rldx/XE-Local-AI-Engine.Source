@@ -186,7 +186,7 @@ export function DevWorkflowNodePanel({
 
 				<DevWorkflowNodeCostSection nodeRun={nodeRun} />
 
-				<DevWorkflowNodeAttempts attempts={attempts} />
+				<DevWorkflowNodeAttempts attempts={attempts} nodeRun={nodeRun} />
 
 				{nodeType === "Agent" ? <DevWorkflowAgentNodePanel nodeRun={nodeRun} /> : null}
 				{nodeType === "Tool" ? <DevWorkflowToolNodePanel nodeRun={nodeRun} onShowArtifacts={onShowArtifacts} /> : null}

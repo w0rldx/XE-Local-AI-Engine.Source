@@ -111,7 +111,8 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
             envelopes.AgentTurnMs,
             envelopes.ServedModelName,
             RouteJson: null,
-            session.StepCount);
+            session.StepCount,
+            envelopes.ModelReadinessMs);
     }
 
     /// <summary>
@@ -192,6 +193,7 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
         long? outputTokens = null;
         long? reasoningTokens = null;
         long? agentTurnMs = null;
+        long? modelReadinessMs = null;
         string? servedModelName = null;
 
         for (var page = 0; page < MaxEnvelopePages; page++)
@@ -209,6 +211,11 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
                 // is why the column, the DTO member and the panel all say "turn".
                 agentTurnMs = Add(agentTurnMs, envelope.DurationMs);
 
+                // Summed beside it rather than subtracted from it: agent_turn_ms stays the whole-turn wall clock it has
+                // always been, and a reader who wants the warm-equivalent time takes the difference. Null-preserving, so
+                // a conversation whose turns all ran warm records null rather than a zero that would claim otherwise.
+                modelReadinessMs = Add(modelReadinessMs, envelope.ModelReadinessMs);
+
                 // The store orders newest first, so the first envelope of the first page is the model that served the
                 // last turn — the receipt, as opposed to whatever the node or the agent asked for.
                 servedModelName ??= Clamp(envelope.ModelName, MaxServedModelName);
@@ -220,7 +227,7 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
             }
         }
 
-        return new EnvelopeTotals(inputTokens, outputTokens, reasoningTokens, agentTurnMs, servedModelName);
+        return new EnvelopeTotals(inputTokens, outputTokens, reasoningTokens, agentTurnMs, modelReadinessMs, servedModelName);
     }
 
     /// <summary>A name as the column can hold it, or null when there was none to hold.</summary>
@@ -296,5 +303,6 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
         long? OutputTokens,
         long? ReasoningTokens,
         long? AgentTurnMs,
+        long? ModelReadinessMs,
         string? ServedModelName);
 }

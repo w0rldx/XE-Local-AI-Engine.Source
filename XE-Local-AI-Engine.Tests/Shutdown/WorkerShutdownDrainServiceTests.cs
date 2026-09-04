@@ -340,6 +340,11 @@ public sealed class WorkerShutdownDrainServiceTests
             return Task.CompletedTask;
         }
 
+        public Task ReportTurnTelemetryAsync(Guid invocationId, long? modelReadinessMs, TurnUsageTotals? usage)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort)
         {
             return Task.CompletedTask;

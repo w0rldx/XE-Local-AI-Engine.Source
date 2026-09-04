@@ -40775,6 +40775,10 @@
             "type": "string",
             "nullable": true
           },
+          "modelReadinessMs": {
+            "type": "integer",
+            "nullable": true
+          },
           "contentChunkCount": {
             "type": "integer",
             "format": "int32",

@@ -299,6 +299,7 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
             entity.ToolSchemaTokens,
             entity.MaxToolSchemaTokens,
             entity.DispatchedTier,
-            entity.AuthoredEffort);
+            entity.AuthoredEffort,
+            entity.ModelReadinessMs);
     }
 }

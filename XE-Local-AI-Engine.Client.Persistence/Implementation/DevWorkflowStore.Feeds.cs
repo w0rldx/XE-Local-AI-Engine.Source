@@ -246,7 +246,8 @@ internal sealed partial class DevWorkflowStore
             nodeRun.AgentTurnMs,
             nodeRun.ServedModelName,
             nodeRun.RouteJson,
-            nodeRun.WorkSessionSteps);
+            nodeRun.WorkSessionSteps,
+            nodeRun.ModelReadinessMs);
 
     private static DevWorkflowArtifactSnapshot ArtifactSnapshot(DevWorkflowArtifact artifact, IReadOnlyDictionary<Guid, int> latestVersions) =>
         new(artifact.Id,
