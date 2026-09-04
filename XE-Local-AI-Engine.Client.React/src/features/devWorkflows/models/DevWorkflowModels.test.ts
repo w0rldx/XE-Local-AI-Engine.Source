@@ -281,10 +281,11 @@ describe("devWorkflowAttemptLabel", () => {
 		expect(devWorkflowAttemptLabel(t, devWorkflowAttemptCounts(2, 3, 0))).toContain("pages.devWorkflows.nodes.attempt ");
 	});
 
-	it("names the operator retry and the declared cap, and counts the retries for the plural form", () => {
+	it("hands the retry key both maxima and the retry count, so the copy can say what capacity was added", () => {
 		const label = devWorkflowAttemptLabel(t, devWorkflowAttemptCounts(5, 5, 2));
 
 		expect(label).toContain("pages.devWorkflows.nodes.attemptOperatorRetry");
+		expect(label).toContain('"maxAttempts":5');
 		expect(label).toContain('"cap":3');
 		expect(label).toContain('"count":2');
 	});

@@ -162,7 +162,7 @@ describe("DevWorkflowGraphView", () => {
 		expect(screen.getByTestId("dev-workflow-graph-node-attempt-node-research").textContent).toBe("attempt 3 of 3");
 	});
 
-	it("carries the operator-retry count onto the card, so the canvas says who granted the extra attempt", () => {
+	it("carries the operator-retry count onto the card, so the canvas names the declared cap too", () => {
 		renderWithProviders(
 			<DevWorkflowGraphView
 				run={chainRun([
@@ -180,7 +180,7 @@ describe("DevWorkflowGraphView", () => {
 		);
 
 		expect(screen.getByTestId("dev-workflow-graph-node-attempt-node-research").textContent).toBe(
-			"attempt 4 (operator retry, cap 3)",
+			"attempt 4 of 4 (cap 3, +1 from an operator retry)",
 		);
 	});
 

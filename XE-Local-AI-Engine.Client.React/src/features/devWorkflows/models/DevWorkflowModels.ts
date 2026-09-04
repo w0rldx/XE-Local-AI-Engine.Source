@@ -305,15 +305,21 @@ export interface DevWorkflowAttemptCounts {
 }
 
 /**
- * The rendered attempt sentence. One helper rather than the same branch at each of the three surfaces, because the
- * branch is the point of FU2-3: the two keys say different things about who granted the attempt.
+ * The rendered attempt sentence. One helper rather than the same branch at each of the three surfaces.
+ *
+ * The retry wording describes GRANTED CAPACITY, never who started the attempt on screen. `operatorRetries` is a
+ * cumulative delta on the row, so a Retry taken before the cap was reached widens the budget for every later attempt
+ * — including the ordinary automatic ones. "attempt 3 (operator retry)" would then credit a human with an attempt the
+ * runtime started by itself. So both halves stay visible: the ordinary "N of M", plus what the definition declared
+ * and how much an operator added to it.
  */
 export function devWorkflowAttemptLabel(t: TFunction, counts: DevWorkflowAttemptCounts): string {
 	return counts.operatorRetries > 0
-		? t("pages.devWorkflows.nodes.attemptOperatorRetry", "attempt {{attempt}} (operator retry, cap {{cap}})", {
-				...counts,
-				count: counts.operatorRetries,
-			})
+		? t(
+				"pages.devWorkflows.nodes.attemptOperatorRetry",
+				"attempt {{attempt}} of {{maxAttempts}} (cap {{cap}}, +1 from an operator retry)",
+				{ ...counts, count: counts.operatorRetries },
+			)
 		: t("pages.devWorkflows.nodes.attempt", "attempt {{attempt}} of {{maxAttempts}}", { ...counts });
 }
 

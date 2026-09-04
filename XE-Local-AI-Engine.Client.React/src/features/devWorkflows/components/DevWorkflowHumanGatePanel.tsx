@@ -1,5 +1,6 @@
 import { Alert, Anchor, Badge, Button, Group, Stack, Text, Textarea } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
+import type { TFunction } from "i18next";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -12,9 +13,11 @@ import {
 	asDevWorkflowDecisionKind,
 	type DevWorkflowDecisionKind,
 	type DevWorkflowNodeRunDetailResponse,
+	type DevWorkflowNodeType,
 	devWorkflowNodeAwaitsHuman,
 	toDevWorkflowDecisionKinds,
 	toDevWorkflowNodeStatus,
+	toDevWorkflowNodeType,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
 
 export interface DevWorkflowDecisionSubmission {
@@ -46,6 +49,33 @@ const decisionColors: Partial<Record<DevWorkflowDecisionKind, string>> = {
 };
 
 const COMMENT_MAX = 8000;
+
+/**
+ * Only promise the comment reaches the retried work where it actually does. An Agent node always folds it into the
+ * next attempt's objective; a DevTask node hands it to the next coder round, and only while the task is being reworked;
+ * a Tool node never reads it. A blanket promise on a Tool retry is a lie the operator finds out about afterwards.
+ */
+function commentHint(
+	allowedDecisions: readonly DevWorkflowDecisionKind[],
+	nodeType: DevWorkflowNodeType,
+	t: TFunction,
+): string {
+	if (allowedDecisions.includes("Retry")) {
+		if (nodeType === "Agent") {
+			return t(
+				"pages.devWorkflows.gate.commentHintRetry",
+				"Required when you reject or ask for changes. A retry reason is passed to the next attempt.",
+			);
+		}
+		if (nodeType === "DevTask") {
+			return t(
+				"pages.devWorkflows.gate.commentHintRetryDevTask",
+				"Required when you reject or ask for changes. A retry reason is handed to the next coder round when the implementation is being reworked.",
+			);
+		}
+	}
+	return t("pages.devWorkflows.gate.commentHint", "Required when you reject or ask for changes.");
+}
 
 /**
  * The one decision surface, serving BOTH an open human gate (`WaitingForApproval`) and a stopped node needing an
@@ -212,14 +242,7 @@ export function DevWorkflowHumanGatePanel({
 
 			<Textarea
 				label={t("pages.devWorkflows.gate.commentLabel", "Comment")}
-				description={
-					allowedDecisions.includes("Retry")
-						? t(
-								"pages.devWorkflows.gate.commentHintRetry",
-								"Required when you reject or ask for changes. A retry reason is passed to the next attempt.",
-							)
-						: t("pages.devWorkflows.gate.commentHint", "Required when you reject or ask for changes.")
-				}
+				description={commentHint(allowedDecisions, toDevWorkflowNodeType(nodeRun.nodeType), t)}
 				value={comment}
 				maxLength={COMMENT_MAX}
 				autosize={true}

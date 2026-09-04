@@ -661,19 +661,19 @@ describe("DevWorkflowNodePanel", () => {
 		);
 	});
 
-	it("says a human granted the extra attempt, and names the cap the definition declared", () => {
+	it("names the declared cap and the capacity an operator added, not who started this attempt", () => {
 		renderPanel(devWorkflowNodeRunDetail({ attempt: 4, maxAttempts: 4, operatorRetries: 1 }));
 
 		expect(screen.getByTestId("dev-workflow-node-panel-label").closest("[data-testid='dev-workflow-node-panel']")?.textContent).toContain(
-			"attempt 4 (operator retry, cap 3)",
+			"attempt 4 of 4 (cap 3, +1 from an operator retry)",
 		);
 	});
 
-	it("counts the retries once more than one widened the cap", () => {
+	it("sums the capacity once more than one retry widened the cap", () => {
 		renderPanel(devWorkflowNodeRunDetail({ attempt: 5, maxAttempts: 5, operatorRetries: 2 }));
 
 		expect(screen.getByTestId("dev-workflow-node-panel-label").closest("[data-testid='dev-workflow-node-panel']")?.textContent).toContain(
-			"attempt 5 (operator retries ×2, cap 3)",
+			"attempt 5 of 5 (cap 3, +2 from operator retries)",
 		);
 	});
 });
