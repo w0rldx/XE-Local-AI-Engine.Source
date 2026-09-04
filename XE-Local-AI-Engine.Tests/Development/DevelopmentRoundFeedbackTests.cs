@@ -23,7 +23,7 @@ public sealed class DevelopmentRoundFeedbackTests
     {
         var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot("Node 'validate' rejected this implementation: 3 of 15 tests failed."),
             Session(),
-            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null),
+            Profile(),
             Carried());
 
         AssertEx.Contains(prompt, "Feedback from the previous round:");
@@ -38,7 +38,7 @@ public sealed class DevelopmentRoundFeedbackTests
     {
         var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null),
             Session(),
-            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null),
+            Profile(),
             Carried());
 
         AssertEx.False(prompt.Contains("Feedback from the previous round", StringComparison.Ordinal),
@@ -61,7 +61,7 @@ public sealed class DevelopmentRoundFeedbackTests
 
         var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(reason),
             Session(),
-            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null),
+            Profile(),
             Carried());
 
         AssertEx.Contains(prompt, "Feedback from the previous round:");
@@ -113,7 +113,7 @@ public sealed class DevelopmentRoundFeedbackTests
     {
         var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null, WorkflowPolicy),
             Session(),
-            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null),
+            Profile(),
             Carried());
 
         AssertEx.Contains(prompt, "Policy (rule sets applied by the workflow):");
@@ -129,7 +129,7 @@ public sealed class DevelopmentRoundFeedbackTests
     {
         var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null),
             Session(),
-            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null),
+            Profile(),
             Carried());
 
         AssertEx.False(prompt.Contains("Policy (rule sets applied by the workflow)", StringComparison.Ordinal),
@@ -144,7 +144,7 @@ public sealed class DevelopmentRoundFeedbackTests
     [Test]
     public void TheReviewerPromptCarriesTheSamePolicyTheCoderWasGiven()
     {
-        var prompt = DevelopmentReviewerAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null, WorkflowPolicy), Task(), Validation());
+        var prompt = DevelopmentReviewerAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null, WorkflowPolicy), Task(), Validation(), Profile());
 
         AssertEx.Contains(prompt, "Policy (rule sets applied by the workflow):");
         AssertEx.Contains(prompt, "Never touch production without an approved plan.");
@@ -154,7 +154,7 @@ public sealed class DevelopmentRoundFeedbackTests
     [Test]
     public void WithNoWorkflowPolicy_TheReviewerPromptSaysNothingAboutOne()
     {
-        var prompt = DevelopmentReviewerAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null), Task(), Validation());
+        var prompt = DevelopmentReviewerAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null), Task(), Validation(), Profile());
 
         AssertEx.False(prompt.Contains("Policy (rule sets applied by the workflow)", StringComparison.Ordinal),
             "a review of an ordinary Dev Mode task has no workflow policy to hold it to.");
@@ -171,7 +171,7 @@ public sealed class DevelopmentRoundFeedbackTests
     {
         var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null),
             Session(),
-            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null),
+            Profile(),
             Carried("src/Calculator.cs", "tests/CalculatorTests.cs"));
 
         AssertEx.Contains(prompt, "Files in this shared workspace that already differ from the base commit");
@@ -185,7 +185,7 @@ public sealed class DevelopmentRoundFeedbackTests
     {
         var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null),
             Session(),
-            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null),
+            Profile(),
             Carried());
 
         AssertEx.False(prompt.Contains("Files in this shared workspace that already differ", StringComparison.Ordinal),
@@ -203,13 +203,123 @@ public sealed class DevelopmentRoundFeedbackTests
 
         var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null),
             Session(),
-            DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null),
+            Profile(),
             carried);
 
         AssertEx.Contains(prompt, "src/File00.cs, src/File01.cs");
         AssertEx.Contains(prompt, "src/File19.cs (+3 more)");
         AssertEx.False(prompt.Contains("src/File20.cs", StringComparison.Ordinal), "the twenty-first path is past the bound.");
     }
+
+    /// <summary>
+    ///     P2, live 2026-09-04: the reviewer judged a coder round against requirements the operator had already
+    ///     amended, because the operator's Retry reason reached the coder alone. It rejected work that passed
+    ///     validation 4 of 4 and demanded an edit the test-write policy forbids, and the loop could not be broken.
+    /// </summary>
+    [Test]
+    public void TheReviewerIsToldWhatTheOperatorAmendedTheRequirementsWith()
+    {
+        var prompt = DevelopmentReviewerAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null, operatorInstruction: OperatorSaid),
+            Task(),
+            Validation(),
+            Profile());
+
+        AssertEx.Contains(prompt, "Operator instruction. This AMENDS the requirements and the acceptance criteria above, wherever they conflict:");
+        AssertEx.Contains(prompt, "keep the Square test in tests/Calc.Tests/SquareTests.cs");
+        AssertEx.Contains(prompt, "Work implementing it is not a requirement violation on that point; judge everything else as usual.");
+        AssertEx.Contains(prompt, "It does not amend the workspace test-write policy, which is enforced and cannot be waived.");
+
+        // Still the whole brief: the amendment is added to what the reviewer judges against, never in place of it.
+        AssertEx.Contains(prompt, "It has to do the thing.");
+    }
+
+    /// <summary>
+    ///     The other half of the deadlock: a reviewer that has never been told the test-write policy asks for the one
+    ///     change no coder round is allowed to make, and every round that obeys is refused.
+    /// </summary>
+    [Test]
+    public void TheReviewerIsToldTheTestWritePolicyItMustNotAskAnyoneToBreak()
+    {
+        var prompt = DevelopmentReviewerAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null), Task(), Validation(), Profile());
+
+        AssertEx.Contains(prompt, "may not be modified, deleted or renamed; adding new files is allowed");
+        AssertEx.Contains(prompt, "never request a change the test-write policy forbids");
+
+        // The enforced rule is a glob set, not a notion of "test file": tests/**/*.cs protects fixtures and helpers
+        // as firmly as it protects a test class, and a reviewer told only the paraphrase asks for what Ensure refuses.
+        AssertEx.Contains(prompt, "Protected test patterns:");
+        AssertEx.Contains(prompt, "tests/**/*.cs");
+    }
+
+    [Test]
+    public void WithNoOperatorInstruction_TheReviewerPromptSaysNothingAboutOne()
+    {
+        var prompt = DevelopmentReviewerAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null), Task(), Validation(), Profile());
+
+        AssertEx.False(prompt.Contains("Operator instruction", StringComparison.Ordinal),
+            "nobody has amended this task, and an empty heading would read as someone who had.");
+    }
+
+    /// <summary>
+    ///     The coder's side of P2. Retry 3 said "this outranks the reviewer" in as many words and the coder still did
+    ///     what the reviewer had asked, because the operator's sentence arrived under "Feedback from the previous
+    ///     round" — a heading that reads as one round's note next to the task's own requirements.
+    /// </summary>
+    [Test]
+    public void TheCoderIsToldTheOperatorOutranksTheReviewerAndTheRequirements()
+    {
+        var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot("The reviewer asked for the test to move into CalculatorTests.cs.",
+                operatorInstruction: OperatorSaid),
+            Session(),
+            Profile(),
+            Carried());
+
+        AssertEx.Contains(prompt,
+            "Operator instruction. This OUTRANKS the requirements, the acceptance criteria and any reviewer feedback below, wherever they conflict:");
+        AssertEx.Contains(prompt, "keep the Square test in tests/Calc.Tests/SquareTests.cs");
+        AssertEx.Contains(prompt, "Where it contradicts the requirements above, the operator has amended them");
+        AssertEx.Contains(prompt, "It does not amend the workspace test-write policy, which is enforced and cannot be waived.");
+
+        AssertEx.True(prompt.IndexOf("Operator instruction", StringComparison.Ordinal)
+                      < prompt.IndexOf("Feedback from the previous round", StringComparison.Ordinal),
+            "the ranking is only credible if the sentence that wins is read first.");
+    }
+
+    /// <summary>The coder is told the rule prospectively; the refusal sentence only ever reaches a lost attempt.</summary>
+    [Test]
+    public void TheCoderIsToldTheTestWritePolicyBeforeItSpendsAnAttemptOnIt()
+    {
+        var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot(previousRoundFeedback: null),
+            Session(),
+            Profile(),
+            Carried());
+
+        AssertEx.Contains(prompt, "may not be modified, deleted or renamed; adding new files is allowed");
+        AssertEx.Contains(prompt, "Protected test patterns:");
+        AssertEx.Contains(prompt, "**/*Tests.cs");
+        AssertEx.Contains(prompt, "tests/**/*.cs", message: "a whole test directory is protected, not only files that look like tests.");
+    }
+
+    [Test]
+    public void WithNoOperatorInstruction_TheCoderPromptSaysNothingAboutOne()
+    {
+        var prompt = DevelopmentCoderAttemptRunner.BuildPrompt(Snapshot("The reviewer asked for another round."),
+            Session(),
+            Profile(),
+            Carried());
+
+        AssertEx.False(prompt.Contains("Operator instruction", StringComparison.Ordinal),
+            "an ordinary rework round has a reviewer behind it, not a person, and must not be told a person outranks one.");
+    }
+
+    /// <summary>What the operator said on the live round this fix comes from, shortened to its operative half.</summary>
+    private const string OperatorSaid =
+        "An operator retried the 'implement' step of the workflow driving this task, and said: tests/Calc.Tests/CalculatorTests.cs is "
+        + "base-committed and the test-write policy forbids editing it, so keep the Square test in tests/Calc.Tests/SquareTests.cs.";
+
+    /// <summary>The project's own command profile, which owns the protected-test globs both prompts now name.</summary>
+    private static DevelopmentCommandProfile Profile() =>
+        DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null);
 
     /// <summary>What an earlier attempt on the same task left in the shared workspace.</summary>
     private static IReadOnlySet<string> Carried(params string[] paths) =>
@@ -272,7 +382,9 @@ public sealed class DevelopmentRoundFeedbackTests
                 ManifestVersion = 1
             });
 
-    private static DevelopmentExecutionSnapshot Snapshot(string? previousRoundFeedback, string? workflowPolicyText = null) =>
+    private static DevelopmentExecutionSnapshot Snapshot(string? previousRoundFeedback,
+        string? workflowPolicyText = null,
+        string? operatorInstruction = null) =>
         new(Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
@@ -298,5 +410,6 @@ public sealed class DevelopmentRoundFeedbackTests
             AttemptVersion: 1,
             CommandProfileJson: null,
             previousRoundFeedback,
-            workflowPolicyText);
+            workflowPolicyText,
+            operatorInstruction);
 }

@@ -16,11 +16,17 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///         recorded in the casing every reader expects, and where the next round's brief comes from.
 ///     </para>
 /// </summary>
+// SqliteFileProbe.ReleasePooledHandles is SqliteConnection.ClearAllPools, which is process-global: one test's
+// teardown kills a sibling's in-flight connection. Latent while the class was small, reproducible once it was not.
+[NotInParallel]
 public sealed class DevelopmentReworkEdgeTests : IDisposable
 {
     private const string Reason = "The validate node rejected this implementation: 3 of 15 tests failed.";
 
     private const string Policy = "## Policy: House rules\nNever touch production without an approved plan.";
+
+    private const string OperatorReason =
+        "An operator retried the 'implement' step of the workflow driving this task, and said: keep the Square test in its own new file.";
 
     private readonly DevelopmentTestFixture _fixture = new();
 
@@ -101,6 +107,174 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
         AssertEx.Equal(Reason,
             (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).PreviousRoundFeedback,
             "the rework round's own execution snapshot is where the coder prompt reads the previous round from.");
+    }
+
+    /// <summary>
+    ///     P2, live 2026-09-04. An operator's amendment has to reach the REVIEWER, and it has to still be there several
+    ///     hops later — the round it corrects is the review, not the coder round it starts. It is also not read as the
+    ///     previous round's feedback, so the prompts that rank the two can never render the same sentence twice.
+    ///     <para>
+    ///         Free of the status gate on purpose: a Dev Mode task's requirements are immutable, so this is the only
+    ///         channel that can amend one, and an amendment that expired at the next event would be undone by the
+    ///         reviewer it exists to correct — which is exactly the deadlock it was written for. What DOES end it is
+    ///         the node run that made it, which the test below this one pins.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AnOperatorsAmendmentReachesTheReviewersSnapshotAndIsNotTheRoundsFeedback()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+
+        var asked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                   Guid.NewGuid(),
+                                   DevelopmentTaskStatus.ChangesRequested,
+                                   version,
+                                   OperatorReason,
+                                   OperatorDirected: true))
+                               .ConfigureAwait(false);
+
+        // The whole way round to the next review: the coder round the retry asked for, its gate, and the review.
+        foreach (var status in new[] { DevelopmentTaskStatus.InProgress, DevelopmentTaskStatus.Validation, DevelopmentTaskStatus.InReview })
+        {
+            asked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), status, asked.Version)).ConfigureAwait(false);
+        }
+
+        var attemptId = Guid.NewGuid();
+        _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
+                           attemptId,
+                           Guid.NewGuid(),
+                           DevelopmentAttemptRole.Reviewer,
+                           "local-model",
+                           "local",
+                           asked.Version))
+                       .ConfigureAwait(false);
+
+        var snapshot = await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false);
+        AssertEx.Equal(OperatorReason,
+            snapshot.OperatorInstruction,
+            "the reviewer judged against requirements the operator had already amended, and sent the amendment straight back.");
+        AssertEx.Null(snapshot.PreviousRoundFeedback,
+            "a person's sentence answers one field or the other, never both, or a prompt that ranks them renders it twice.");
+    }
+
+    /// <summary>
+    ///     The amendment is bounded by the node run that made it, exactly as the workflow's policy text beside it is,
+    ///     and by the same row. Without that bound an operator's "skip the flaky auth test for now" on retry 1 would
+    ///     govern every later round of the task, and every later reviewer would be told not to ask for it back — which
+    ///     permanently disarms the reward-hacking control with no route to withdraw it.
+    /// </summary>
+    [Test]
+    public async Task AnOperatorsAmendmentStopsGoverningWhenTheNodeRunThatMadeItSettles()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var ruleSets = new[] { new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash") };
+
+        // The node run's dispatch, then the operator's Retry inside it, then the round it asked for.
+        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), Policy, ruleSets).ConfigureAwait(false);
+        var attemptId = await ReworkThenStartCoderAttemptAsync(store, seed.TaskId, version, OperatorReason, operatorDirected: true).ConfigureAwait(false);
+
+        AssertEx.Equal(OperatorReason,
+            (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).OperatorInstruction,
+            "the round the operator paid for is inside the node run that wrote the instruction.");
+
+        // The clear every terminal path of a node run writes.
+        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), string.Empty, []).ConfigureAwait(false);
+
+        AssertEx.Null((await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).OperatorInstruction,
+            "what a person told one node run must not go on outranking the requirements of every round after it.");
+    }
+
+    /// <summary>
+    ///     The fall-through the exclusion opens, and the whole point of ranking the two fields: with a reviewer's
+    ///     complaint behind the operator's amendment, the round is told BOTH — the operator first and above, the
+    ///     reviewer below — rather than the operator's sentence shadowing a complaint nobody has answered yet.
+    /// </summary>
+    [Test]
+    public async Task AnOperatorsAmendmentDoesNotShadowTheReviewerComplaintItOverrides()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+
+        // Round N: the reviewer asks for changes. Round N's coder round runs and is refused, leaving the task where a
+        // Retry can reach it, and the operator overrides the reviewer.
+        var reviewed = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                      Guid.NewGuid(),
+                                      DevelopmentTaskStatus.ChangesRequested,
+                                      version,
+                                      Reason))
+                                  .ConfigureAwait(false);
+        var refused = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                     Guid.NewGuid(),
+                                     DevelopmentTaskStatus.InProgress,
+                                     reviewed.Version))
+                                 .ConfigureAwait(false);
+        var attemptId = await ReworkThenStartCoderAttemptAsync(store, seed.TaskId, refused.Version, OperatorReason, operatorDirected: true).ConfigureAwait(false);
+
+        var snapshot = await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false);
+        AssertEx.Equal(OperatorReason, snapshot.OperatorInstruction);
+        AssertEx.Equal(Reason,
+            snapshot.PreviousRoundFeedback,
+            "the complaint the operator is overriding is still what the round has to answer, so the round must be able to read it.");
+    }
+
+    /// <summary>
+    ///     A Retry written by the build before this change carries the plain outcome, so it answers the old field and
+    ///     not the new one — the previous behaviour, unchanged, for any task in flight across the upgrade. Graceful
+    ///     degradation by construction rather than by migration, which is why it is pinned rather than fixed.
+    /// </summary>
+    [Test]
+    public async Task ARetryRecordedBeforeThisChangeIsStillReadAsTheRoundsFeedback()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+
+        // Byte-for-byte what the older build wrote: the same operator sentence, without the flag that marks it.
+        var attemptId = await ReworkThenStartCoderAttemptAsync(store, seed.TaskId, version, OperatorReason, operatorDirected: false).ConfigureAwait(false);
+
+        var snapshot = await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false);
+        AssertEx.Null(snapshot.OperatorInstruction, "nothing recorded it as a person's, and this store does not guess from the sentence.");
+        AssertEx.Equal(OperatorReason, snapshot.PreviousRoundFeedback, "so it keeps reaching the round exactly as it did before.");
+    }
+
+    /// <summary>Asks for a rework round with the given reason, then starts the coder attempt it asked for.</summary>
+    private static async Task<Guid> ReworkThenStartCoderAttemptAsync(IDevelopmentStore store,
+        Guid taskId,
+        long version,
+        string reason,
+        bool operatorDirected)
+    {
+        var asked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
+                                   Guid.NewGuid(),
+                                   DevelopmentTaskStatus.ChangesRequested,
+                                   version,
+                                   reason,
+                                   OperatorDirected: operatorDirected))
+                               .ConfigureAwait(false);
+        var running = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
+                                     Guid.NewGuid(),
+                                     DevelopmentTaskStatus.InProgress,
+                                     asked.Version))
+                                 .ConfigureAwait(false);
+        var attemptId = Guid.NewGuid();
+        _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(taskId,
+                           attemptId,
+                           Guid.NewGuid(),
+                           DevelopmentAttemptRole.Coder,
+                           "local-model",
+                           "local",
+                           running.Version))
+                       .ConfigureAwait(false);
+        return attemptId;
     }
 
     /// <summary>

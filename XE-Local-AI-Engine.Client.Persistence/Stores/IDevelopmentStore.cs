@@ -72,7 +72,14 @@ public sealed record DevelopmentTransitionTaskCommand(
     DevelopmentTaskStatus TargetStatus,
     long ExpectedTaskVersion,
     string? Reason = null,
-    string? ApprovedSubjectHash = null);
+    string? ApprovedSubjectHash = null,
+
+    /// <summary>
+    ///     That a PERSON wrote <see cref="Reason" />, rather than a reviewer, a gate or a workflow's own fix loop. It
+    ///     is what lets the prompts rank it: an operator's sentence amends the task's immutable requirements, and a
+    ///     reviewer's does not.
+    /// </summary>
+    bool OperatorDirected = false);
 
 public sealed record DevelopmentStartValidationCommand(
     Guid TaskId,
@@ -215,7 +222,27 @@ public sealed record DevelopmentExecutionSnapshot(
     ///         both answer nothing rather than replaying a snapshot nothing is enforcing any more.
     ///     </para>
     /// </summary>
-    string? WorkflowPolicyText = null);
+    string? WorkflowPolicyText = null,
+
+    /// <summary>
+    ///     The last thing a PERSON told this task to do differently, or nothing. Read from the task's own event log
+    ///     like the two above, and disjoint from <see cref="PreviousRoundFeedback" />: whichever of the two a row is,
+    ///     it is never both.
+    ///     <para>
+    ///         Free of the STATUS gate <see cref="PreviousRoundFeedback" /> carries, and that is the difference. A Dev
+    ///         Mode task's requirements are immutable — there is no PUT and no PATCH — so an operator's retry reason is
+    ///         the ONLY way to amend a task that was mis-specified, and an amendment that expired at the next event
+    ///         would be undone by the very next reviewer round. Live on 2026-09-04 that is exactly what happened: the
+    ///         operator moved a test out of a base-committed file the test-write policy protects, and the reviewer,
+    ///         reading only the original requirements, sent it straight back in.
+    ///     </para>
+    ///     <para>
+    ///         Bounded in time by the same row <see cref="WorkflowPolicyText" /> is bounded by, so the two fields on
+    ///         this record have one lifetime rather than two: an instruction stops governing when the node-run attempt
+    ///         that carried it stops driving the task. It does not follow the task into a second node run.
+    ///     </para>
+    /// </summary>
+    string? OperatorInstruction = null);
 
 /// <summary>
 ///     One rule set as a workflow's policy event names it. The hash is what lets the Dev Mode audit and the workflow's

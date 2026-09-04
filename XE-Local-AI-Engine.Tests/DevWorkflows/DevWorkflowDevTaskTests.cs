@@ -1195,6 +1195,18 @@ public sealed class DevWorkflowDevTaskTests
 
         await harness.DecideAsync(runId, "implement", DevWorkflowDecisionKind.Retry, comment: "Do not add a test file; extend the existing negate tests.")
                      .ConfigureAwait(false);
+
+        // Read WHILE the node run is still live. An OPERATOR instruction, not the previous round's feedback: the two
+        // are separate fields because the prompts rank them, a person's sentence amending the task's immutable
+        // requirements and outranking a reviewer's. It is bounded by the node run that made it, so the read has to
+        // happen before the settle rather than after — see the last assertion in this test.
+        var snapshot = await AdvanceUntilTheOperatorIsQuotedAsync(harness, runId, taskId).ConfigureAwait(false);
+        var said = AssertEx.NotNull(snapshot.OperatorInstruction,
+            "the round the operator paid for must be told what they said, or it redoes exactly what was refused.");
+        AssertEx.Contains(said, "extend the existing negate tests");
+        AssertEx.Contains(said, "implement", message: "and which step of the workflow the person was answering.");
+        AssertEx.Null(snapshot.PreviousRoundFeedback, "nothing reviewed this round, so there is no previous round to quote.");
+
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
         var retried = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
@@ -1204,10 +1216,8 @@ public sealed class DevWorkflowDevTaskTests
             retried.Status,
             $"the round the retry asked for ran to AwaitingApply: {retried.TerminalReason ?? retried.OutputJson}");
 
-        var feedback = AssertEx.NotNull((await ReadCoderSnapshotAsync(harness, taskId).ConfigureAwait(false)).PreviousRoundFeedback,
-            "the round the operator paid for must be told what they said, or it redoes exactly what was refused.");
-        AssertEx.Contains(feedback, "extend the existing negate tests");
-        AssertEx.Contains(feedback, "implement", message: "and which step of the workflow the person was answering.");
+        AssertEx.Null((await ReadCoderSnapshotAsync(harness, taskId).ConfigureAwait(false)).OperatorInstruction,
+            "and it stops governing the moment the node run that made it settles, or it would outrank the requirements of every round after.");
 
         // The tick after the asked-for round walks the task back to InProgress with no attempt this node run is
         // answerable for, so it reaches the guard a SECOND time on the same attempt with the reason still on its
@@ -1311,6 +1321,29 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>The brief the task's latest coder attempt was composed from — the channel a rework reason travels down.</summary>
+    /// <summary>
+    ///     Ticks one at a time until the round the operator asked for is running and carries their sentence. One at a
+    ///     time because the instruction is bounded by the node run: advancing straight to quiescence settles the node
+    ///     run, which correctly revokes it, and would read as if it had never arrived.
+    /// </summary>
+    private static async Task<DevelopmentExecutionSnapshot> AdvanceUntilTheOperatorIsQuotedAsync(DevWorkflowHarness harness,
+        Guid runId,
+        Guid taskId,
+        int maxTicks = 20)
+    {
+        for (var tick = 0; tick < maxTicks; tick++)
+        {
+            _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+            var snapshot = await ReadCoderSnapshotAsync(harness, taskId).ConfigureAwait(false);
+            if (snapshot.OperatorInstruction is not null)
+            {
+                return snapshot;
+            }
+        }
+
+        throw new InvalidOperationException($"No coder round quoting the operator started within {maxTicks} ticks.");
+    }
+
     private static async Task<DevelopmentExecutionSnapshot> ReadCoderSnapshotAsync(DevWorkflowHarness harness, Guid taskId)
     {
         await using var scope = harness.Services.CreateAsyncScope();

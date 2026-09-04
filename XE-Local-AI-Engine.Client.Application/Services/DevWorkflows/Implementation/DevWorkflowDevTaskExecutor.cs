@@ -677,7 +677,8 @@ internal sealed class DevWorkflowDevTaskExecutor
 
     /// <summary>
     ///     Hands the operator's reason for retrying this node run to the task's next coder round, and answers whether
-    ///     it wrote one.
+    ///     it wrote one. Marked <c>OperatorDirected</c>, which is what lets the coder and reviewer prompts rank a
+    ///     person's sentence above the task's own immutable requirements and above a reviewer's feedback.
     ///     <para>
     ///         Only from <c>InProgress</c> with a coder attempt that did NOT succeed, which is where a blocked-then-
     ///         retried implementation lands: the next action there is a coder round either way, so the change request
@@ -734,7 +735,8 @@ internal sealed class DevWorkflowDevTaskExecutor
                                      operationId,
                                      DevelopmentTaskStatus.ChangesRequested,
                                      task.Version,
-                                     $"An operator retried the '{nodeRun.NodeKey}' step of the workflow driving this task, and said: {said}"),
+                                     $"An operator retried the '{nodeRun.NodeKey}' step of the workflow driving this task, and said: {said}",
+                                     OperatorDirected: true),
                                  cancellationToken)
                              .ConfigureAwait(false);
             return true;

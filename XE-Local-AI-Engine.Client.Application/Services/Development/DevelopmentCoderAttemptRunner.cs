@@ -367,7 +367,9 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         return string.Concat("Task: ", snapshot.Title,
             "\nRequirements:\n", snapshot.Requirements,
             "\nAcceptance criteria:\n", snapshot.AcceptanceCriteriaJson,
+            "\n", DevelopmentTestWritePolicy.Prompt(profile),
             Policy(snapshot.WorkflowPolicyText),
+            OperatorInstruction(snapshot.OperatorInstruction),
             Feedback(snapshot.PreviousRoundFeedback),
             "\nBase commit: ", session.BaseCommit,
             Carried(carriedFiles),
@@ -403,6 +405,25 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                     carriedFiles,
                     MaxPromptedCarriedPaths),
                 "List them in changedFiles unless you return one to its base-commit content; a file you revert or delete back to the base commit is NOT a changed file.");
+
+    /// <summary>
+    ///     What a person told this task to do differently, and that it outranks everything else in the prompt. Live on
+    ///     2026-09-04 the operator's sentence arrived under the "Feedback from the previous round" heading, which reads
+    ///     as one round's note: the coder weighed the task's own requirements higher and did the thing the operator had
+    ///     just told it not to do, three retries running. The requirements are immutable, so an operator who wrote them
+    ///     wrong has no other way to correct them, and saying which one wins is the whole content of the fix.
+    ///     <para>
+    ///         Bounded before it arrives — the decision comment is cut to the workflow's own ceiling on the way onto the
+    ///         node run's inputs — so this only decides whether there is a section at all.
+    ///     </para>
+    /// </summary>
+    private static string OperatorInstruction(string? instruction) =>
+        string.IsNullOrWhiteSpace(instruction)
+            ? string.Empty
+            : string.Concat("\nOperator instruction. This OUTRANKS the requirements, the acceptance criteria and any reviewer feedback below, wherever they conflict:\n",
+                instruction,
+                "\nDo what it says. Where it contradicts the requirements above, the operator has amended them: follow the operator, and say in your summary which requirement you are not meeting and why.",
+                "\nIt does not amend the workspace test-write policy, which is enforced and cannot be waived.");
 
     /// <summary>
     ///     What the last round was told to fix, when there was one. Without this a rework round is handed the SAME
