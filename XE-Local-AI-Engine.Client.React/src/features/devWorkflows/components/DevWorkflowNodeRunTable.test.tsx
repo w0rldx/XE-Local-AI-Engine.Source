@@ -224,6 +224,31 @@ describe("DevWorkflowNodeRunTable", () => {
 		expect(screen.getByTestId(`dev-workflow-node-cost-${devWorkflowTestIds.nodeRun}`).textContent).toBe("– / 340 tok");
 	});
 
+	it("says a no-op validation row validated nothing, rather than letting it read as a pass", () => {
+		// D12: a zero-task decomposition seeds its template's checks as Succeeded — the join behind them would never let
+		// the apply through otherwise — but the row stands for work that did not happen, and this table is where an
+		// operator reads a run.
+		renderWithProviders(
+			<DevWorkflowNodeRunTable
+				nodes={[
+					devWorkflowNodeRunSummary({
+						nodeKey: "validate",
+						label: "Validate",
+						nodeType: "Tool",
+						status: "Succeeded",
+						completedAtUtc: 1_700_000_001_000,
+						validationNotApplicable: true,
+					}),
+				]}
+				onSelect={() => undefined}
+			/>,
+		);
+
+		expect(screen.getByTestId(`dev-workflow-node-not-applicable-${devWorkflowTestIds.nodeRun}`).textContent).toBe(
+			"nothing to validate",
+		);
+	});
+
 	it("renders an empty state rather than an empty table", () => {
 		renderWithProviders(<DevWorkflowNodeRunTable nodes={[]} onSelect={vi.fn()} />);
 

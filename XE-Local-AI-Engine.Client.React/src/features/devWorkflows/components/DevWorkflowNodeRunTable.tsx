@@ -169,6 +169,19 @@ export function DevWorkflowNodeRunTable({ nodes, selectedNodeRunId, onSelect }: 
 													{t("pages.devWorkflows.nodes.materialized", "generated")}
 												</Badge>
 											) : null}
+											{/* D12: the row is a real `Succeeded` check — it has to be, or the join behind it would
+											    never let the apply through — but it stands for work that did not happen. Said HERE
+											    and not only in the drill-down, because this table is where an operator reads a run. */}
+											{node.validationNotApplicable ? (
+												<Badge
+													size="xs"
+													variant="outline"
+													color="gray"
+													data-testid={`dev-workflow-node-not-applicable-${node.id}`}
+												>
+													{t("pages.devWorkflows.nodes.notApplicable", "nothing to validate")}
+												</Badge>
+											) : null}
 											{node.hasStaleInputs ? (
 												<Badge size="xs" variant="light" color="orange" data-testid={`dev-workflow-node-stale-${node.id}`}>
 													{t("pages.devWorkflows.nodes.staleInputs", "Stale inputs")}

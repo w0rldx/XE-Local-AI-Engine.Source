@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 
 /// <summary>
 ///     The agent lane: one work session per agent node-run attempt, driven by the run that owns it.
@@ -65,10 +66,12 @@ internal sealed class DevWorkflowAgentExecutor
     private readonly DevWorkflowRetryPolicy _retries;
     private readonly IAgentWorkSessionStore _sessionStore;
     private readonly IWorkflowOwnedWorkSessionLifecycle _sessions;
+    private readonly WorkSessionWriteDeclarationGuard _writes;
 
     public DevWorkflowAgentExecutor(IWorkflowOwnedWorkSessionLifecycle sessions,
         IAgentWorkSessionStore sessionStore,
         IAgentDefinitionStore agents,
+        WorkSessionWriteDeclarationGuard writes,
         DevWorkflowArtifactPromotion promotion,
         IDevWorkflowArtifactBlobStore blobs,
         DevWorkflowRetryPolicy retries,
@@ -79,6 +82,7 @@ internal sealed class DevWorkflowAgentExecutor
         _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
         _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
         _agents = agents ?? throw new ArgumentNullException(nameof(agents));
+        _writes = writes ?? throw new ArgumentNullException(nameof(writes));
         _promotion = promotion ?? throw new ArgumentNullException(nameof(promotion));
         _blobs = blobs ?? throw new ArgumentNullException(nameof(blobs));
         _retries = retries ?? throw new ArgumentNullException(nameof(retries));
@@ -166,8 +170,16 @@ internal sealed class DevWorkflowAgentExecutor
             return written + await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Configuration, exception.Message, cancellationToken)
                 .ConfigureAwait(false);
         }
+        catch (DevWorkflowPolicyException exception)
+        {
+            // GRAPH-C4-2's runtime half. NOT Configuration: nothing is misconfigured — the node's agent may do more
+            // than the definition admits to, and only a person can say whether that is meant. Policy blocks for a
+            // human rather than failing the run, and a retry would produce the same answer.
+            return written + await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Policy, exception.Message, cancellationToken)
+                .ConfigureAwait(false);
+        }
 
-        if (!await TryDriveAsync(session, node, cancellationToken).ConfigureAwait(false))
+        if (!await TryDriveAsync(session, graph, node, cancellationToken).ConfigureAwait(false))
         {
             // Lost the admission race between the capacity read and the start. The row stays Queued with its reason and
             // keeps the session it already owns, so the next tick starts that one rather than creating a second.
@@ -233,6 +245,23 @@ internal sealed class DevWorkflowAgentExecutor
 
             case AgentWorkSessionStatus.Failed:
 
+                // GRAPH-C4-2's runtime half, read back — from the RECORD of the refusal, never re-decided here. The
+                // send refuses a turn whose own tool offer widened past what the node declared — a definition edited
+                // between two steps, or deleted so the turn falls back to the default persona — and all the session can
+                // do about it is stop. The row it wrote is what turns that stop into this lane's own refusal, carrying
+                // the class and the sentence rather than "the agent's work session failed".
+                //
+                // Asking the guard again instead would answer about the definition as it stands NOW: an operator who
+                // restored or narrowed it between the refusal and this poll would send the node run down the retryable
+                // provider-failure path, losing the Policy class for a refusal that really happened. A historical cause
+                // is read, not recomputed. The node's declaration is still consulted first, off the run's PINNED graph,
+                // so an ordinary provider failure costs nothing but a dictionary miss.
+                if (DeclarationRequired(graph, graph.Nodes.GetValueOrDefault(nodeRun.NodeKey))
+                    && await ReadWriteGateRefusalAsync(sessionId, cancellationToken).ConfigureAwait(false) is { } refusal)
+                {
+                    return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Policy, refusal, cancellationToken).ConfigureAwait(false);
+                }
+
                 // The retry policy's answer, not this lane's: a provider failure is retryable, and whether THIS one is
                 // re-attempted depends on the node's cap, the run's budget and whether the node routes its failures
                 // upstream — none of which is the session's business.
@@ -265,7 +294,7 @@ internal sealed class DevWorkflowAgentExecutor
                 // resuming it here would undo the operator's command with the run still reading Pausing.
                 return run.Status is DevWorkflowRunStatus.Pausing or DevWorkflowRunStatus.Cancelling
                     ? 0
-                    : await ResumeAsync(store, run, graph.Nodes.GetValueOrDefault(nodeRun.NodeKey), nodeRun, session, cancellationToken).ConfigureAwait(false);
+                    : await ResumeAsync(store, run, graph, graph.Nodes.GetValueOrDefault(nodeRun.NodeKey), nodeRun, session, cancellationToken).ConfigureAwait(false);
 
             default:
                 // Running, or parked on a question it asked. Still working; nothing to write.
@@ -314,8 +343,9 @@ internal sealed class DevWorkflowAgentExecutor
         }
 
         var agentDefinitionId = await ResolveAgentAsync(node, cancellationToken).ConfigureAwait(false);
+        await EnsureDeclaredWhatItCanWriteAsync(graph, node, agentDefinitionId, cancellationToken).ConfigureAwait(false);
         var objective = await ComposeObjectiveAsync(store, graph, run, node, nodeRun, cancellationToken).ConfigureAwait(false);
-        var created = await _sessions.CreateAsync(node.Label, objective, agentDefinitionId, RuntimeOf(node), cancellationToken).ConfigureAwait(false);
+        var created = await _sessions.CreateAsync(node.Label, objective, agentDefinitionId, RuntimeOf(graph, node), cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -382,11 +412,11 @@ internal sealed class DevWorkflowAgentExecutor
     ///         cannot change what a running node dispatches on.
     ///     </para>
     /// </summary>
-    private async Task<bool> TryDriveAsync(WorkSessionDetail session, DevWorkflowGraphNode? node, CancellationToken cancellationToken)
+    private async Task<bool> TryDriveAsync(WorkSessionDetail session, DevWorkflowGraph graph, DevWorkflowGraphNode? node, CancellationToken cancellationToken)
     {
         try
         {
-            var runtime = RuntimeOf(node);
+            var runtime = RuntimeOf(graph, node);
             _ = session.Status switch
             {
                 AgentWorkSessionStatus.Draft => await _sessions.StartAsync(session.Id, runtime, cancellationToken).ConfigureAwait(false),
@@ -405,14 +435,63 @@ internal sealed class DevWorkflowAgentExecutor
     }
 
     /// <summary>
-    ///     What the node authored for its session to run on, or null when it authored neither and the bound agent's own
+    ///     What the node authored for its session to run on, plus whether that session's turns have to keep proving
+    ///     they were declared. Null when the node authored no pin and needs no proof, and the bound agent's own
     ///     configuration is the whole answer. A node run whose key is not in the run's graph — nothing produces one, but
     ///     the lookup is a dictionary miss away — reads as "no override" rather than failing a resume over a label.
+    ///     <para>
+    ///         Re-supplied on every start and resume, which is what makes the refusal flag the right place for
+    ///         <c>GRAPH-C4-2</c>'s per-turn half: it is read off the run's PINNED graph each time, so nothing an
+    ///         operator edits mid-run can widen what a running session is allowed to be offered.
+    ///     </para>
     /// </summary>
-    private static WorkSessionRuntimeOverride? RuntimeOf(DevWorkflowGraphNode? node) =>
-        node is { } present && (present.ModelProfile is not null || present.ReasoningEffort is not null)
-            ? new WorkSessionRuntimeOverride(present.ModelProfile, present.ReasoningEffort)
-            : null;
+    private static WorkSessionRuntimeOverride? RuntimeOf(DevWorkflowGraph graph, DevWorkflowGraphNode? node)
+    {
+        var runtime = new WorkSessionRuntimeOverride(node?.ModelProfile, node?.ReasoningEffort, DeclarationRequired(graph, node));
+        return runtime.IsEmpty ? null : runtime;
+    }
+
+    /// <summary>
+    ///     <c>GRAPH-C4-2</c>'s runtime half at the seam where the session is CREATED: an Agent node whose bound agent
+    ///     will really be offered a tool that writes or runs commands has to have SAID so, or the template has to have
+    ///     waived the rule once and in writing.
+    ///     <para>
+    ///         The structural half alone would be inert by construction — it can only bite on an apply node, which Y3
+    ///         already gates, and on a declaration an author volunteered. What a node may actually do is decided when
+    ///         the binding is resolved, so the question is asked there.
+    ///     </para>
+    ///     <para>
+    ///         This one is the EARLY answer, not the whole of it. It refuses before a session exists, where the refusal
+    ///         costs nothing and reads as configuration rather than as a stopped session — but the thing it judges is
+    ///         mutable, so <see cref="ArmedFor" /> hands the same question to every turn the session then takes.
+    ///     </para>
+    ///     <para>
+    ///         A node that already declares <c>WriteExecute</c> is not asked at all: its declaration has dragged it
+    ///         into the structural rule's gate requirement at save, which is the stronger answer and the earlier one.
+    ///     </para>
+    /// </summary>
+    private async Task EnsureDeclaredWhatItCanWriteAsync(DevWorkflowGraph graph, DevWorkflowGraphNode node, Guid agentDefinitionId, CancellationToken cancellationToken)
+    {
+        if (!DeclarationRequired(graph, node))
+        {
+            return;
+        }
+
+        if (await _writes.InspectAsync(agentDefinitionId, node.ModelProfile, cancellationToken).ConfigureAwait(false) is { } refusal)
+        {
+            throw new DevWorkflowPolicyException(refusal);
+        }
+    }
+
+    /// <summary>
+    ///     Whether this node has to declare what its agent can write: it declares no <c>WriteExecute</c> of its own and
+    ///     its template waives nothing. Both halves are read off the run's pinned graph, so an operator editing the
+    ///     definition cannot move them mid-run.
+    /// </summary>
+    private static bool DeclarationRequired(DevWorkflowGraph graph, DevWorkflowGraphNode? node) =>
+        node is { NodeType: DevWorkflowNodeType.Agent }
+        && !graph.AllowUngatedWrites
+        && !DevWorkflowGraph.Effects(node).Contains(DevWorkflowNodeEffect.WriteExecute);
 
     private async Task<Guid> ResolveAgentAsync(DevWorkflowGraphNode node, CancellationToken cancellationToken)
     {
@@ -702,6 +781,7 @@ internal sealed class DevWorkflowAgentExecutor
     /// </summary>
     private async Task<int> ResumeAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
+        DevWorkflowGraph graph,
         DevWorkflowGraphNode? node,
         DevWorkflowNodeRunSnapshot nodeRun,
         WorkSessionDetail session,
@@ -718,7 +798,7 @@ internal sealed class DevWorkflowAgentExecutor
                 .ConfigureAwait(false);
         }
 
-        if (!_sessions.HasCapacity || !await TryDriveAsync(session, node, cancellationToken).ConfigureAwait(false))
+        if (!_sessions.HasCapacity || !await TryDriveAsync(session, graph, node, cancellationToken).ConfigureAwait(false))
         {
             // The slot is held by another session. The row stays Running — it has not stopped working, it is waiting for
             // its own continuation — and the next tick asks again.
@@ -752,6 +832,23 @@ internal sealed class DevWorkflowAgentExecutor
         {
             return null;
         }
+    }
+
+    /// <summary>
+    ///     The sentence the write-declaration gate stopped this session with, or <see langword="null" /> when nothing
+    ///     stopped it that way.
+    ///     <para>
+    ///         Read off the step row the supervisor wrote at the moment of the refusal — the outcome tag is the stable
+    ///         code and its detail is the sentence — so the answer is a fact about what happened rather than a verdict
+    ///         about what the agent definition currently allows. The LAST such row wins for the same reason a terminal
+    ///         reason does: it is the one the session settled on.
+    ///     </para>
+    /// </summary>
+    private async Task<string?> ReadWriteGateRefusalAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        var events = await _sessionStore.ListEventsAsync(sessionId, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
+        var refused = events.LastOrDefault(static entry => string.Equals(entry.Outcome, WorkSessionEventTypes.WriteGateOutcome, StringComparison.Ordinal));
+        return WorkSessionEventTypes.ReadWriteGateDetail(refused?.DetailJson);
     }
 
     private static string FailureOutput(DevWorkflowNodeRunSnapshot nodeRun, WorkSessionDetail session, string failureClass) =>

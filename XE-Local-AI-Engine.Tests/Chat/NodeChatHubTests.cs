@@ -126,6 +126,38 @@ public sealed class NodeChatHubTests
         AssertEx.False(exception.Message.Contains("aaaa", StringComparison.Ordinal), "the rejection must not echo the message content");
     }
 
+    /// <summary>
+    ///     <c>RefuseUndeclaredWrites</c> is a server-set field: only the development-workflow runtime arms it, on the
+    ///     requests it builds itself. It travels on the same record the hub forwards, so a client can put it on the
+    ///     wire — and the hub clears it, because nothing arriving here is running a workflow node and a client-armed
+    ///     rule could only make that client's own turn refuse.
+    /// </summary>
+    [Test]
+    public async Task SendMessage_WhenAClientArmsTheWriteDeclarationFlag_ClearsItBeforeTheStreamService()
+    {
+        var recorder = new RecordingNodeChatStreamService();
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<INodeChatStreamService>();
+                services.AddSingleton<INodeChatStreamService>(recorder);
+            }
+        };
+        await using var connection = CreateHubConnection(factory);
+        await connection.StartAsync().ConfigureAwait(false);
+
+        await foreach (var _ in connection.StreamAsync<ChatStreamEvent>("SendMessage",
+                           new NodeChatStreamRequest(Guid.NewGuid(), "hello", RefuseUndeclaredWrites: true)).ConfigureAwait(false))
+        {
+            // The scrub is what this pins; the stream itself is the recorder's fixed single event.
+        }
+
+        AssertEx.True(recorder.Invoked, "the send itself is not rejected — only the field is dropped.");
+        AssertEx.False(AssertEx.NotNull(recorder.LastRequest).RefuseUndeclaredWrites,
+            "a client may not arm GRAPH-C4-2's runtime half on a turn no workflow node is driving.");
+    }
+
     [Test]
     public async Task SendMessage_WhenTheOperatorLowersTheCap_RejectsAtTheConfiguredLimit()
     {
@@ -209,11 +241,15 @@ public sealed class NodeChatHubTests
     {
         public bool Invoked { get; private set; }
 
+        /// <summary>The request the hub actually handed down, which is not always the one the client put on the wire.</summary>
+        public NodeChatStreamRequest? LastRequest { get; private set; }
+
         public async IAsyncEnumerable<ChatStreamEvent> SendMessageAsync(NodeChatStreamRequest request,
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
             Invoked = true;
+            LastRequest = request;
             await Task.Yield();
             cancellationToken.ThrowIfCancellationRequested();
             yield return new ChatStreamEvent(ChatStreamEventTypes.AssistantCompleted,

@@ -403,7 +403,22 @@ public sealed record TransitionDevWorkflowRunCommand(
     string? SanitizedReason = null,
     DevWorkflowWorkItemStatus? WorkItemStatus = null);
 
-/// <summary>One node-run to create. <see cref="InputJson" /> on an entry node is what carries the operator's request to the first agent.</summary>
+/// <summary>
+///     One node-run to create. <see cref="InputJson" /> on an entry node is what carries the operator's request to the
+///     first agent.
+///     <para>
+///         <see cref="Status" /> and <see cref="OutputJson" /> are the two trailing members that let a seed land
+///         ALREADY TERMINAL, which the zero-task decomposition needs: a <c>Pending</c> row at a template key is
+///         admissible — its only inbound edge is dropped as template-sourced, leaving no edge states at all — so the
+///         tool lane would really run the template's validation commands, and a crash between a create and a follow-up
+///         transition would do exactly that. Omitting both is today's behaviour for every other caller.
+///     </para>
+///     <para>
+///         The store refuses both halves of the same rule: a seed lands <c>Pending</c> or terminal and nothing between,
+///         because a live status is a lane's claim on a row no lane has taken; and only a terminal seed may carry an
+///         output document, because that document says what the row PRODUCED.
+///     </para>
+/// </summary>
 public sealed record DevWorkflowNodeRunSeed(
     Guid NodeRunId,
     string NodeKey,
@@ -414,7 +429,9 @@ public sealed record DevWorkflowNodeRunSeed(
     string? InputJson = null,
     string? PolicyResolutionJson = null,
     Guid? MaterializedFromNodeRunId = null,
-    int? MaterializationIndex = null);
+    int? MaterializationIndex = null,
+    DevWorkflowNodeRunStatus Status = DevWorkflowNodeRunStatus.Pending,
+    string? OutputJson = null);
 
 /// <summary>
 ///     Creates node-runs on a run. A non-null <see cref="GraphJson" /> also rewrites the run's pinned graph and bumps

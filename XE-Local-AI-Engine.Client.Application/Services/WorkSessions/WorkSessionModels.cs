@@ -179,10 +179,26 @@ public sealed record WorkSessionArtifactContent(WorkSessionArtifactDto Artifact,
 ///         lives, and it re-supplies this on every start and resume.
 ///     </para>
 /// </summary>
-public sealed record WorkSessionRuntimeOverride(string? ModelProfile, string? ReasoningEffort)
+/// <param name="ModelProfile">The model this session's turns run on, or null to leave that to the agent.</param>
+/// <param name="ReasoningEffort">The reasoning effort those turns run at, or null to leave that to the agent.</param>
+/// <param name="RefuseUndeclaredWrites">
+///     <c>GRAPH-C4-2</c>'s runtime half, carried per drive because the thing it judges is mutable. Set by a
+///     development-workflow Agent node that declares no <c>WriteExecute</c> capability and whose template waives
+///     nothing: every turn of that session must then be refused if the agent definition it re-resolves would offer a
+///     tool that writes files or runs commands. Checked once at creation it is not checked at all — the definition can
+///     be edited between two steps, or deleted so the turn falls back to the default persona and its whole offer.
+///     <para>
+///         Default <see langword="false" />, which is every other caller and today's behaviour exactly.
+///     </para>
+/// </param>
+public sealed record WorkSessionRuntimeOverride(string? ModelProfile, string? ReasoningEffort, bool RefuseUndeclaredWrites = false)
 {
-    /// <summary>Nothing pinned, which is the shape every caller but the workflow runtime has.</summary>
-    public bool IsEmpty => string.IsNullOrWhiteSpace(ModelProfile) && string.IsNullOrWhiteSpace(ReasoningEffort);
+    /// <summary>
+    ///     Nothing pinned and nothing to enforce, which is the shape every caller but the workflow runtime has. The
+    ///     refusal flag counts: a node that pins no model and no effort still has to have its turns judged, and the
+    ///     supervisor drops an override this reports empty.
+    /// </summary>
+    public bool IsEmpty => string.IsNullOrWhiteSpace(ModelProfile) && string.IsNullOrWhiteSpace(ReasoningEffort) && !RefuseUndeclaredWrites;
 }
 
 /// <summary>

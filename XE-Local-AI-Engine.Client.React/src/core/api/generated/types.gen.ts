@@ -3419,6 +3419,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph
 	schemaVersion?: number;
 	nodes?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphNode>;
 	edges?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphEdge>;
+	allowUngatedWrites?: boolean | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphNode = {
@@ -3441,6 +3442,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph
 		[key: string]: string;
 	} | null;
 	toolMode?: string | null;
+	maxLoopIterations?: number | null;
 	isTemplate?: boolean | null;
 };
 
@@ -3719,6 +3721,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 	inputTokens?: number | null;
 	outputTokens?: number | null;
 	toolCalls?: number | null;
+	validationNotApplicable?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunCostResponse = {

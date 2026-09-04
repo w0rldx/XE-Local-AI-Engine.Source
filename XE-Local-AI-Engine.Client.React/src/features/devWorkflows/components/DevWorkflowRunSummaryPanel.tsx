@@ -50,7 +50,11 @@ export function DevWorkflowRunSummaryPanel({
 	const { t } = useTranslation();
 	const definitionId = selectedDefinitionId;
 
-	const statuses = nodes.map((node) => toDevWorkflowNodeStatus(node.status));
+	// D12's no-op rows are in neither figure: a check that had nothing to check is a succeeded row standing for work
+	// that did not happen, and counting it as done reports a run that decomposed into nothing as having completed a
+	// validation. Left out of the total as well, so the fraction stays "of the work there was".
+	const counted = nodes.filter((node) => !node.validationNotApplicable);
+	const statuses = counted.map((node) => toDevWorkflowNodeStatus(node.status));
 	const running = statuses.filter((status) => status === "Running").length;
 	const queued = statuses.filter((status) => status === "Queued").length;
 	const done = statuses.filter((status) => status === "Succeeded" || status === "Skipped").length;
@@ -145,7 +149,7 @@ export function DevWorkflowRunSummaryPanel({
 								running,
 								queued,
 								done,
-								total: nodes.length,
+								total: counted.length,
 							})}
 						</Text>
 						{pendingDecisionCount > 0 ? (

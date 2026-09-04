@@ -116,7 +116,15 @@ public sealed record NodeChatStreamRequest(
     // refuses the adaptive-effort model swap on it: a session step is autonomous, and a step served by a model neither
     // the graph's author nor the operator chose is not their decision. Trailing optional so the SignalR hub forwards the
     // record unchanged.
-    bool IsWorkSessionTurn = false);
+    bool IsWorkSessionTurn = false,
+    // GRAPH-C4-2's runtime half, carried on the turn it judges. Set by a work session a development-workflow Agent node
+    // drives when that node declares no WriteExecute capability and its template waives nothing: the send resolves the
+    // agent definition ONCE and refuses before it sends if that resolution's own tool offer carries a tool which writes
+    // files or runs commands. It rides the request rather than being asked ahead of the send because the definition is
+    // mutable — a check that resolves it separately is answering about a projection the turn may no longer use. False
+    // everywhere else, so every ordinary send is unchanged. Trailing optional so the SignalR hub forwards the record
+    // unchanged.
+    bool RefuseUndeclaredWrites = false);
 
 public sealed record ChatStreamEvent(
     string Type,

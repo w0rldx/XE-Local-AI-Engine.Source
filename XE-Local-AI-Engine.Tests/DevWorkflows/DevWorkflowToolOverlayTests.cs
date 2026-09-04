@@ -82,12 +82,14 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
                                               "schemaVersion": 1,
                                               "nodes": [
                                                 { "nodeKey": "implement", "nodeType": "DevTask", "label": "Implement", "nodeTimeoutSeconds": 900 },
+                                                { "nodeKey": "validate", "nodeType": "Tool", "label": "Validate the implementation" },
                                                 { "nodeKey": "integrationapproval", "nodeType": "HumanGate", "label": "Approve integration" },
                                                 { "nodeKey": "integrate", "nodeType": "Tool", "toolMode": "Apply", "label": "Apply the approved patches" },
                                                 { "nodeKey": "fullvalidate", "nodeType": "Tool", "label": "Validate the integrated result" }
                                               ],
                                               "edges": [
-                                                { "from": "implement", "to": "integrationapproval" },
+                                                { "from": "implement", "to": "validate" },
+                                                { "from": "validate", "to": "integrationapproval" },
                                                 { "from": "integrationapproval", "to": "integrate", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
                                                 { "from": "integrate", "to": "fullvalidate" }
                                               ]

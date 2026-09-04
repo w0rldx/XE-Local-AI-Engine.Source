@@ -41,6 +41,33 @@ public sealed class DevWorkflowIntegrationApplyTests
                                                """;
 
     /// <summary>
+    ///     A gate parting into two branches that each carry their own validation, converging on an <c>Any</c> join.
+    ///     Under <c>Any</c> only one branch may run, so BOTH have to carry the property the apply is judged on — which
+    ///     is exactly why the structural rule combines an <c>Any</c> join's inbound edges with AND.
+    /// </summary>
+    private const string TwoValidatedBranchesIntoAnAnyJoin = """
+                                                             {
+                                                               "schemaVersion": 1,
+                                                               "nodes": [
+                                                                 { "nodeKey": "route", "nodeType": "HumanGate", "label": "Which way" },
+                                                                 { "nodeKey": "alphacheck", "nodeType": "Tool", "label": "Validate alpha" },
+                                                                 { "nodeKey": "betacheck", "nodeType": "Tool", "label": "Validate beta" },
+                                                                 { "nodeKey": "merge", "nodeType": "Join", "joinPolicy": "Any", "label": "Merge" },
+                                                                 { "nodeKey": "approval", "nodeType": "HumanGate", "label": "Approve integration" },
+                                                                 { "nodeKey": "integrate", "nodeType": "Tool", "toolMode": "Apply", "label": "Apply the approved patches" }
+                                                               ],
+                                                               "edges": [
+                                                                 { "from": "route", "to": "alphacheck", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                                 { "from": "route", "to": "betacheck", "condition": { "path": "decision", "op": "eq", "value": "Reject" } },
+                                                                 { "from": "alphacheck", "to": "merge" },
+                                                                 { "from": "betacheck", "to": "merge" },
+                                                                 { "from": "merge", "to": "approval" },
+                                                                 { "from": "approval", "to": "integrate", "condition": { "path": "decision", "op": "eq", "value": "Approve" } }
+                                                               ]
+                                                             }
+                                                             """;
+
+    /// <summary>
     ///     Two independent implementation branches, each behind its OWN human gate and its own apply node. The shape a
     ///     run has whenever more than one thing is integrated separately, and the one a run-wide enumeration gets wrong.
     /// </summary>
@@ -50,18 +77,22 @@ public sealed class DevWorkflowIntegrationApplyTests
                                                 "nodes": [
                                                   { "nodeKey": "fork", "nodeType": "Parallel", "label": "Fork" },
                                                   { "nodeKey": "alphaimplement", "nodeType": "DevTask", "label": "Implement alpha", "nodeTimeoutSeconds": 900 },
+                                                  { "nodeKey": "alphacheck", "nodeType": "Tool", "label": "Validate alpha" },
                                                   { "nodeKey": "alphaapproval", "nodeType": "HumanGate", "label": "Approve alpha" },
                                                   { "nodeKey": "alphaapply", "nodeType": "Tool", "toolMode": "Apply", "label": "Apply alpha" },
                                                   { "nodeKey": "betaimplement", "nodeType": "DevTask", "label": "Implement beta", "nodeTimeoutSeconds": 900 },
+                                                  { "nodeKey": "betacheck", "nodeType": "Tool", "label": "Validate beta" },
                                                   { "nodeKey": "betaapproval", "nodeType": "HumanGate", "label": "Approve beta" },
                                                   { "nodeKey": "betaapply", "nodeType": "Tool", "toolMode": "Apply", "label": "Apply beta" }
                                                 ],
                                                 "edges": [
                                                   { "from": "fork", "to": "alphaimplement" },
                                                   { "from": "fork", "to": "betaimplement" },
-                                                  { "from": "alphaimplement", "to": "alphaapproval" },
+                                                  { "from": "alphaimplement", "to": "alphacheck" },
+                                                  { "from": "alphacheck", "to": "alphaapproval" },
                                                   { "from": "alphaapproval", "to": "alphaapply", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
-                                                  { "from": "betaimplement", "to": "betaapproval" },
+                                                  { "from": "betaimplement", "to": "betacheck" },
+                                                  { "from": "betacheck", "to": "betaapproval" },
                                                   { "from": "betaapproval", "to": "betaapply", "condition": { "path": "decision", "op": "eq", "value": "Approve" } }
                                                 ]
                                               }
@@ -478,6 +509,40 @@ public sealed class DevWorkflowIntegrationApplyTests
         AssertEx.Contains(alphaReport, alpha.ToString("D"));
         AssertEx.False(alphaReport.Contains(beta.ToString("D"), StringComparison.Ordinal),
             $"and alpha's lane does not re-offer beta's task either, already-applied or not: {alphaReport}");
+    }
+
+    /// <summary>
+    ///     Two mutually exclusive branches that each carry their OWN validation, converging on an <c>Any</c> join ahead
+    ///     of the gate and the apply — the shape <c>GRAPH-C4-3</c>'s structural half demands of an <c>Any</c>
+    ///     convergence, since only one branch may have run.
+    ///     <para>
+    ///         Driven down one branch, the other branch's validation lands <c>Skipped</c>, and the apply must run
+    ///         anyway: the runtime pre-check asks about the SATISFIED provenance, so a row belonging to work that was
+    ///         correctly not done is not in it. A rule that asked "did every validate ancestor succeed" blocks here,
+    ///         on a branch the run was right to skip.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AnApplyBehindAnAnyJoinRunsOnTheBranchThatWasTaken()
+    {
+        await using var harness = DevWorkflowHarness.WithAScriptedChain();
+        var (projectId, _) = await harness.SeedDevelopmentProjectAsync().ConfigureAwait(false);
+        harness.Tools.Answer("alphacheck", FakeDevWorkflowToolCommands.Passing());
+        var runId = await harness.StartRunAsync(TwoValidatedBranchesIntoAnAnyJoin, "Add the feature.", projectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "route", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "approval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Skipped,
+            (await harness.ReadNodeRunAsync(runId, "betacheck").ConfigureAwait(false)).Status,
+            "the branch the gate did not take is skipped, which is what makes this the case that matters.");
+        var integrate = await harness.ReadNodeRunAsync(runId, "integrate").ConfigureAwait(false);
+        AssertEx.NotEqual(DevWorkflowNodeRunStatus.Pending, integrate.Status, "the apply was dispatched at all, or this asserts nothing about the pre-check.");
+        AssertEx.False((integrate.TerminalReason ?? string.Empty).Contains("GRAPH-C4-3", StringComparison.Ordinal),
+            $"the branch that ran carried its own validation, and that is the only one the apply is judged on: {integrate.FailureClass} — {integrate.TerminalReason}");
     }
 
     /// <summary>A second task on the project, walked up the scripted chain until its patch is waiting to be applied.</summary>

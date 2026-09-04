@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.WorkSessions;
 
+using System.Text.Json;
+
 /// <summary>
 ///     The event-type tags the runtime appends on top of the ones the store writes for its own mutations
 ///     (<c>SessionCreated</c>, <c>SessionStatusChanged</c>, <c>WorkPlanApplied</c>, <c>FindingRecorded</c>,
@@ -25,10 +27,11 @@ internal static class WorkSessionEventTypes
     ///     the scope they are collected in is disposed when the step ends.
     ///     <para>
     ///         The outcome tells them apart. <c>Completed</c> is an ordinary step. Anything else names what stopped it:
-    ///         <c>ProviderCallBudget</c>, the per-step provider-call cap, or <c>ToolGate</c>, the allow-list check that
-    ///         refuses a step BEFORE it is sent (the only outcome whose row carries no consumption detail — nothing
-    ///         ran). None of them is a failure: the session stays runnable and the step resumes from the state block,
-    ///         so none may ever be written as <see cref="StepFailed" />.
+    ///         <c>ProviderCallBudget</c>, the per-step provider-call cap; <c>ToolGate</c>, the allow-list check that
+    ///         refuses a step BEFORE it is sent; or <see cref="WriteGateOutcome" />. The two gate outcomes carry no
+    ///         consumption detail — nothing ran. Neither <c>Completed</c> nor a clipped step is a failure: the session
+    ///         stays runnable and the step resumes from the state block, so neither may ever be written as
+    ///         <see cref="StepFailed" />.
     ///     </para>
     ///     <para>
     ///         A step stopped through the cancellation registry — paused, cancelled, an expired park, a blown deadline
@@ -46,6 +49,31 @@ internal static class WorkSessionEventTypes
 
     /// <summary>A park outlived <c>MaxParkedSeconds</c> and the step was cancelled to free the node's invocation slot.</summary>
     public const string ParkTimedOut = "ParkTimedOut";
+
+    /// <summary>
+    ///     The <see cref="StepEnded" /> outcome for a turn the write-declaration guard refused before it was sent
+    ///     (<c>GRAPH-C4-2</c>). Unlike the other outcomes here this one IS terminal — the session settles Failed — and
+    ///     its row is the durable record of WHY, carrying the refusal sentence as its detail.
+    ///     <para>
+    ///         It lives here rather than on the supervisor because the development-workflow lane reads it back: the run
+    ///         that owns the session has to answer with this rule's own failure class, and a cause re-derived from the
+    ///         definition's CURRENT state would answer differently the moment an operator put the definition back.
+    ///     </para>
+    /// </summary>
+    public const string WriteGateOutcome = "WriteGate";
+
+    /// <summary>
+    ///     Puts a <see cref="WriteGateOutcome" /> row's refusal sentence into the event's detail, and takes it back out.
+    ///     The pair lives here so the supervisor that writes the row and the development-workflow poll that reads it
+    ///     cannot disagree about the encoding; the detail column is JSON everywhere else on this log, so the sentence
+    ///     travels as a JSON string rather than as raw text.
+    /// </summary>
+    public static string WriteGateDetail(string refusal) =>
+        JsonSerializer.Serialize(refusal);
+
+    /// <inheritdoc cref="WriteGateDetail" />
+    public static string? ReadWriteGateDetail(string? detailJson) =>
+        detailJson is null ? null : JsonSerializer.Deserialize<string>(detailJson);
 }
 
 /// <summary>The phase tag that rides inside a supervisor event's derived operation id, making a replayed step idempotent.</summary>
@@ -62,4 +90,11 @@ internal static class WorkSessionStepPhases
     ///     real row the retried step writes when it actually runs.
     /// </summary>
     public const string ToolGate = "tool-gate";
+
+    /// <summary>
+    ///     A step the write-declaration guard stopped before it was sent (<c>GRAPH-C4-2</c>). Its own phase for the
+    ///     same reason as <see cref="ToolGate" />: sharing one would let idempotency swallow the row a step that really
+    ///     ran would write.
+    /// </summary>
+    public const string WriteGate = "write-gate";
 }

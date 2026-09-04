@@ -98,3 +98,18 @@ internal static class DevWorkflowNodeOutputStatuses
     public const string Succeeded = "succeeded";
     public const string Failed = "failed";
 }
+
+/// <summary>
+///     The <c>verdict</c> of a node run's output document, for the answers a status alone cannot carry.
+///     <para>
+///         One value today. A zero-task decomposition writes an already-succeeded row at each of its template's
+///         validation nodes — so an apply downstream reads a validation that really did run for this run — and that
+///         row has to say it validated NOTHING rather than let a reader take it for a check that passed. The
+///         <c>status</c> stays <c>succeeded</c> because routing reads it and a conditional out-edge on the template's
+///         validation node must fire exactly as a real pass would.
+///     </para>
+/// </summary>
+internal static class DevWorkflowNodeOutputVerdicts
+{
+    public const string ValidationNotApplicable = "validation-not-applicable";
+}

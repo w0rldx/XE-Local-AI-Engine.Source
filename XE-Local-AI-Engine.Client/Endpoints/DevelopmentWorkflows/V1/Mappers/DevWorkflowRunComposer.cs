@@ -226,7 +226,11 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             SkipWaived: skipWaived,
             InputTokens: nodeRun.InputTokens,
             OutputTokens: nodeRun.OutputTokens,
-            ToolCalls: nodeRun.ToolCalls);
+            ToolCalls: nodeRun.ToolCalls,
+
+            // Asked of the contract, not of a spelling of the token repeated here: the same verdict decides the
+            // drill-down's note, this row's badge and whether the run header counts the row as work.
+            ValidationNotApplicable: DevWorkflowGraphContract.ValidationWasNotApplicable(nodeRun.OutputJson));
 
     /// <summary>
     ///     The waived verdict as the wire carries it: only a <c>Skipped</c> row has one, and a run whose pinned graph

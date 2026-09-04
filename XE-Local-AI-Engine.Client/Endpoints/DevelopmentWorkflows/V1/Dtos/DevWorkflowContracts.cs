@@ -208,7 +208,15 @@ public sealed class DevWorkflowArtifactRequest
 // with. There is no edge table anywhere: this shape is composed from the encrypted graph blob on the definition row or
 // the run row, which is the single source of routing truth.
 
-public sealed record DevWorkflowGraph(int SchemaVersion, IReadOnlyList<DevWorkflowGraphNode> Nodes, IReadOnlyList<DevWorkflowGraphEdge> Edges)
+public sealed record DevWorkflowGraph(int SchemaVersion,
+    IReadOnlyList<DevWorkflowGraphNode> Nodes,
+    IReadOnlyList<DevWorkflowGraphEdge> Edges,
+    /// <summary>
+    ///     The template's own waiver of the rule that a node writing outside its sandbox is reached through a human
+    ///     gate. Absent means <c>false</c>: the rule is new, so nothing already stored can be relying on the waiver, and
+    ///     a definition written before this field keeps every byte it had.
+    /// </summary>
+    bool? AllowUngatedWrites = null)
 {
     public static DevWorkflowGraph Empty { get; } = new(1, [], []);
 }
@@ -238,6 +246,12 @@ public sealed record DevWorkflowGraphNode(
     DevWorkflowMaterialization? Materialization,
     IReadOnlyDictionary<string, string>? RequiredCapabilities,
     string? ToolMode,
+    /// <summary>
+    ///     How many times this node's fix loop may re-run before the run stops and asks a human. Only meaningful beside
+    ///     a <c>RetryTarget</c>, and refused without one. Absent means no per-loop cap at all — the run-wide attempt
+    ///     budget is what bounds it then, exactly as it does today.
+    /// </summary>
+    int? MaxLoopIterations,
     /// <summary>
     ///     Whether this node belongs to a materialization template subtree — a clone-in-waiting the run gives no node
     ///     run to. DERIVED on the way out from the runtime's own parser, never authored and never stored: the save path
@@ -460,7 +474,14 @@ public sealed record DevWorkflowNodeRunSummaryResponse(
     /// </summary>
     long? InputTokens,
     long? OutputTokens,
-    int? ToolCalls);
+    int? ToolCalls,
+    /// <summary>
+    ///     The row is a <c>Succeeded</c> check that had nothing to check — the verdict a zero-task decomposition seeds
+    ///     onto its template's validations (D12). Carried on the SUMMARY rather than left to the drill-down because the
+    ///     run header counts these rows and the node table renders them: without it a run that decomposed into no work
+    ///     reports its template check as completed work, which is the one thing that row does not stand for.
+    /// </summary>
+    bool ValidationNotApplicable);
 
 /// <summary>
 ///     The drill-down. <see cref="WorkSessionId" /> is the whole of the agent view: it links out to the EXISTING

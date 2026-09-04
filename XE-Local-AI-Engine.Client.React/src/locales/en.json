@@ -5103,7 +5103,8 @@
 				"columnCost": "Cost",
 				"costTokens": "{{input}} / {{output}} tok",
 				"costToolCalls_one": "{{count}} tool call",
-				"costToolCalls_other": "{{count}} tool calls"
+				"costToolCalls_other": "{{count}} tool calls",
+				"notApplicable": "nothing to validate"
 			},
 			"events": {
 				"title": "Events",
@@ -5298,6 +5299,7 @@
 				"loadFailed": "Could not load this node's report.",
 				"unreadable": "This node's report could not be read, so its result cannot be trusted. Open it in the artifacts tab to see what was stored.",
 				"refused": "No report was written, so there is nothing here that evidences what this node did.",
+				"notApplicable": "Nothing was decomposed for this run, so this check had nothing to validate.",
 				"priorAttempt": "The stored report is attempt {{reportAttempt}}'s, and this node is on attempt {{attempt}}. It is not the current result — open it from the artifacts tab if you want the earlier evidence.",
 				"passed": "Validation passed",
 				"failed": "Validation failed",
@@ -5362,7 +5364,22 @@
 				"retryTargetPlaceholder": "Retry this node itself",
 				"toolMode": "tool mode: {{mode}}",
 				"materialization": "materializes {{template}} (max {{max}})",
-				"requiredCapabilities": "requires {{count}} capability(s)",
+				"requiredCapabilities": "Declared capabilities",
+				"allowUngatedWrites": "Allow ungated writes",
+				"allowUngatedWritesHelp": "Lets a node in this template write to the repository without a human gate on every path into it.",
+				"maxLoopIterations": "Fix-loop cap",
+				"maxLoopIterationsPlaceholder": "No cap",
+				"maxLoopIterationsHelp": "How many times this node may route back before the run stops and asks you. An operator retry does not count.",
+				"requiredCapabilitiesHint": "What this node's agent is allowed to do beyond reading. Declaring a write needs a human gate on every path into it.",
+				"capabilityReason": "Why {{effect}}?",
+				"capabilityReasonRequired": "A declared capability needs a reason.",
+				"effectDerived": "Follows from what this node runs.",
+				"effects": {
+					"ReadLocal": "reads the repository",
+					"WriteExecute": "writes the repository or runs commands",
+					"Orchestration": "orchestrates other agents",
+					"Network": "reaches the network"
+				},
 				"edges": "Edges",
 				"addEdge": "Add edge",
 				"noEdges": "This template has no edges yet.",
@@ -5383,7 +5400,13 @@
 					"orphan": "Nothing reaches “{{subject}}”, so it would never run.",
 					"unknownRetryTarget": "“{{subject}}” retries to a node this template does not declare.",
 					"retryTargetNotAncestor": "“{{subject}}” retries to a node that cannot reach it. A retry target has to be upstream.",
-					"joinAnyNeedsTwoInbound": "“{{subject}}” joins on Any but has fewer than two inbound edges."
+					"joinAnyNeedsTwoInbound": "“{{subject}}” joins on Any but has fewer than two inbound edges.",
+					"deadGateEdge": "“{{subject}}” is a human gate with an out-edge no answer would ever take, so nothing behind it would run.",
+					"orphanedGateEdge": "The edge {{subject}} leaves a human gate and no answer would ever take it. Condition it on an answer the gate can give.",
+					"strandedBranch": "“{{subject}}” cannot reach an end of the run: every path out of it goes through a gate edge that can never fire.",
+					"ungatedWrite": "“{{subject}}” can write to the repository and a run can reach it without anyone being asked. Put a human gate on every path into it, or allow ungated writes on this template and say why.",
+					"applyWithoutValidation": "“{{subject}}” applies approved patches and a run can reach it with no validation having run. Put a Tool node in Validate mode on every path into it.",
+					"templateValidationLeaf": "“{{subject}}” validates inside a materialization template and no edge leaves it, so it would count as an end of the run. Give it an edge to the template’s join node."
 				}
 			},
 			"devTaskStatus": {

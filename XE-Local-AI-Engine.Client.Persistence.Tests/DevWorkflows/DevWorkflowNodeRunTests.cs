@@ -302,6 +302,85 @@ public sealed class DevWorkflowNodeRunTests
                           .ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     A seed may land ALREADY TERMINAL, which the zero-task decomposition's no-op verdict row needs: the row
+    ///     stands for a check that did not have to run, and it is never transitioned, so the store stamps what a
+    ///     transition would have — the status, the output document and both timestamps — at the create.
+    ///     <para>
+    ///         Seeding it <c>Pending</c> and transitioning it afterwards would leave a window in which a crash left an
+    ///         admissible row at a template key, and the tool lane would really run that template's commands.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task Materialize_SeedsATerminalRowWithWhatItProduced()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        const string Output = """{"status":"succeeded","attempt":1,"verdict":"validation-not-applicable"}""";
+        var nodeRunId = Guid.NewGuid();
+        _ = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(seed.RunId,
+                           seed.RunVersion,
+                           Guid.NewGuid(),
+                           [
+                               new DevWorkflowNodeRunSeed(nodeRunId,
+                                   "validate",
+                                   DevWorkflowNodeType.Tool,
+                                   Status: DevWorkflowNodeRunStatus.Succeeded,
+                                   OutputJson: Output)
+                           ]))
+                       .ConfigureAwait(false);
+
+        var nodeRun = await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, nodeRun.Status);
+        AssertEx.Equal(Output, nodeRun.OutputJson, "the row says what it produced, which is the whole evidence that it did not have to run.");
+        AssertEx.True(nodeRun.StartedAtUtc is not null && nodeRun.EndedAtUtc is not null,
+            "a row nothing will transition still needs the two timestamps a reader reads a duration off.");
+    }
+
+    /// <summary>
+    ///     And the other half of the same rule: an output document describes what a node run PRODUCED, so a seed that
+    ///     has not ended cannot carry one. Refused outside the transaction, as a caller mistake rather than a lost race.
+    /// </summary>
+    [Test]
+    public async Task Materialize_RefusesAnOutputDocumentOnASeedThatHasNotEnded()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        _ = await AssertEx.ThrowsAsync<ArgumentException>(() => store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(seed.RunId,
+                              seed.RunVersion,
+                              Guid.NewGuid(),
+                              [new DevWorkflowNodeRunSeed(Guid.NewGuid(), "validate", DevWorkflowNodeType.Tool, OutputJson: "{}")])),
+                          "A pending row that already says what it produced is a caller saying two things at once.")
+                      .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     And the same rule from the other side: a seed may land waiting or finished, never live. A <c>Running</c> seed
+    ///     with no output document slips past the rule above and writes a row with no start time and no lane behind it,
+    ///     which nothing would ever come back to transition.
+    /// </summary>
+    [Test]
+    public async Task Materialize_RefusesASeedInALiveStatus()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        _ = await AssertEx.ThrowsAsync<ArgumentException>(() => store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(seed.RunId,
+                              seed.RunVersion,
+                              Guid.NewGuid(),
+                              [new DevWorkflowNodeRunSeed(Guid.NewGuid(), "validate", DevWorkflowNodeType.Tool, Status: DevWorkflowNodeRunStatus.Running)])),
+                          "A row created Running is a row no lane ever took.")
+                      .ConfigureAwait(false);
+    }
+
     /// <summary>Materializing the same node key twice is a transition error, not a raw constraint violation.</summary>
     [Test]
     public async Task Materialize_RejectsANodeKeyTheRunAlreadyCarries()

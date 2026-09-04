@@ -32916,6 +32916,10 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphEdge"
             }
+          },
+          "allowUngatedWrites": {
+            "type": "boolean",
+            "nullable": true
           }
         }
       },
@@ -33000,6 +33004,11 @@
           },
           "toolMode": {
             "type": "string",
+            "nullable": true
+          },
+          "maxLoopIterations": {
+            "type": "integer",
+            "format": "int32",
             "nullable": true
           },
           "isTemplate": {
@@ -33964,6 +33973,9 @@
             "type": "integer",
             "format": "int32",
             "nullable": true
+          },
+          "validationNotApplicable": {
+            "type": "boolean"
           }
         }
       },
