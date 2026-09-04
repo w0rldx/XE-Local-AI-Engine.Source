@@ -33,7 +33,9 @@ internal static class WorkSessionToolDefinitions
             "Keep the work session's plan current. Send a batch of operations: add a new task, update one, mark one "
             + "complete, or drop one that is no longer needed. Use 'add' for work you have discovered, set status "
             + "'Active' on the task you are working on right now, and 'complete' as soon as a task is genuinely done. "
-            + "Task ids come from the work session state block.";
+            + "Task ids come from the work session state block, and the result of a call names the id of every "
+            + "task its 'add' operations created — use those ids to update, complete or drop a task you added "
+            + "in this same step.";
 
         public const string ParameterSchema = """
                                               {
