@@ -356,6 +356,12 @@ public sealed record DevWorkflowRunResponse(
 ///     <c>Any</c> join can admit on one. For a human gate, the node's own output document is authoritative.
 /// </param>
 /// <param name="Dead">The out-edges whose condition did not fire.</param>
+/// <param name="Waived">
+///     The out-edges of a node run whose SKIP the state machine waived — an operator's own skip rather than one that
+///     cascaded off something dead. Its own bucket because neither of the others is true of it: a waived edge does not
+///     admit an <c>Any</c> successor the way a satisfied one does, and it does not kill an <c>All</c> one the way a
+///     dead one does. Empty on a row written before this bucket existed, which is also what it means.
+/// </param>
 /// <param name="GateAnswer">The decision a human gate settled on; null on every other node type.</param>
 /// <param name="Truncated">
 ///     Whether keys were dropped to keep the stored document inside its column bound. A truncated route must be shown
@@ -363,6 +369,7 @@ public sealed record DevWorkflowRunResponse(
 /// </param>
 public sealed record DevWorkflowNodeRouteResponse(IReadOnlyList<string> Satisfied,
     IReadOnlyList<string> Dead,
+    IReadOnlyList<string> Waived,
     string? GateAnswer,
     bool Truncated);
 
@@ -430,7 +437,21 @@ public sealed record DevWorkflowNodeRunSummaryResponse(
     long? StartedAtUtc,
     long? CompletedAtUtc,
     long Sequence,
-
+    /// <summary>
+    ///     For a <c>Skipped</c> row only: whether the state machine WAIVES this skip, so a downstream <c>All</c> join
+    ///     carries on past it as long as a sibling arrived. <c>false</c> means the skip is dead and the join will skip
+    ///     with it; <c>null</c> means the question does not apply — any other status — or that the pinned graph could
+    ///     not be routed to answer it.
+    ///     <para>
+    ///         Computed on the SERVER because it cannot be read off this row. A skip an operator chose and one that
+    ///         cascaded off a Failed ancestor are the same status, and the ancestor that decides which is which is not
+    ///         necessarily among the join's own dependencies — so a client judging by status alone tells an operator
+    ///         the join carries on in exactly the case where the runtime skips it. The verdict comes from the same
+    ///         predicate the dispatcher admits by (<c>DevWorkflowStateMachine.WaivedSkipNodeKeys</c>), which is what
+    ///         stops the two from drifting.
+    ///     </para>
+    /// </summary>
+    bool? SkipWaived,
     /// <summary>
     ///     What the node run's LAST attempt cost, three headline numbers of the twelve the drill-down carries. Null on
     ///     a row with nothing to report — a structural node, a row written before this was collected, or a collection

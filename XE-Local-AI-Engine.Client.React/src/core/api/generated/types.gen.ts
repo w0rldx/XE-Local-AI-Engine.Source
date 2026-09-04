@@ -3384,6 +3384,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppli
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse = {
 	satisfied?: Array<string>;
 	dead?: Array<string>;
+	waived?: Array<string>;
 	gateAnswer?: string | null;
 	truncated?: boolean;
 };
@@ -3559,6 +3560,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 	startedAtUtc?: number | null;
 	completedAtUtc?: number | null;
 	sequence?: number;
+	skipWaived?: boolean | null;
 	inputTokens?: number | null;
 	outputTokens?: number | null;
 	toolCalls?: number | null;

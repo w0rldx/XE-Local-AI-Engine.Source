@@ -135,6 +135,14 @@ WHERE n.run_id IN (:runIds) AND n.failure_class IS NOT NULL GROUP BY failure_gro
    still skip on a dead sibling edge and an `Any` join can admit on one (`DevWorkflowStateMachine.cs:186-192`). For
    `Gate` nodes, `output_json.branch` is authoritative (written at `DevWorkflowDispatcher.cs:985-994`). The same
    route reaches an operator on the node drill-down as `route`, with `truncated` saying whether keys were dropped.
+   **The document has three buckets, not two: `satisfied`, `dead` and `waived`.** A `waived` out-edge belongs to a
+   node run whose own skip the state machine excused — an operator's skip rather than one that cascaded off
+   something dead — and it is neither of the others, so do not fold it into either when you read or aggregate. It
+   does not admit an `Any` successor the way a satisfied edge does, and it does not kill an `All` one the way a dead
+   edge does; a downstream `All` join carries on past it as long as a sibling arrived. The buckets are the three
+   states `DevWorkflowStateMachine.EdgeState` can answer for a terminal source, one for one, which is what stops the
+   recorded route and the routing that actually happened from answering differently. A row written before this
+   bucket existed simply omits `waived`, which reads back as the empty list it means.
 7. `tool_schema_tokens` is schema tokens **shipped across rounds**, not schema size. A tool-schema *budget* would
    be the size; this column is what those schemas cost to send, summed over every round of the attempt.
 8. **The recipe cannot be re-run over runs older than the envelope retention window** (30 days,

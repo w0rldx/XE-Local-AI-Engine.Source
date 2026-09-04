@@ -4003,6 +4003,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowApp
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse = z.object({
 	satisfied: z.array(z.string()).optional(),
 	dead: z.array(z.string()).optional(),
+	waived: z.array(z.string()).optional(),
 	gateAnswer: z.string().nullish(),
 	truncated: z.boolean().optional(),
 });
@@ -4271,6 +4272,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNod
 	startedAtUtc: z.int().nullish(),
 	completedAtUtc: z.int().nullish(),
 	sequence: z.int().optional(),
+	skipWaived: z.boolean().nullish(),
 	inputTokens: z.int().nullish(),
 	outputTokens: z.int().nullish(),
 	toolCalls: z

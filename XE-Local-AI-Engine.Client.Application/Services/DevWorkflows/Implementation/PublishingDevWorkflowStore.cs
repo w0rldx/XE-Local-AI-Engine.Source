@@ -456,7 +456,13 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
             ? DevWorkflowStateMachine.GateDecisionFrom(routeSource.OutputJson)
             : null;
 
-        return DevWorkflowStateMachine.RouteJson(DevWorkflowStateMachine.RouteTaken(_graphs.Resolve(run), routeSource, decision));
+        // The run's other rows, because whether a SKIP was waived is a walk back over the graph rather than something
+        // this row carries. Without them a waived skip's out-edges would record as dead, which is the exact reading the
+        // dispatcher does not make.
+        var nodeRuns = await reads.ListNodeRunsAsync(command.RunId, cancellationToken).ConfigureAwait(false);
+        var nodeRunsByKey = nodeRuns.ToDictionary(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal);
+
+        return DevWorkflowStateMachine.RouteJson(DevWorkflowStateMachine.RouteTaken(_graphs.Resolve(run), routeSource, nodeRunsByKey, decision));
     }
 
     /// <summary>

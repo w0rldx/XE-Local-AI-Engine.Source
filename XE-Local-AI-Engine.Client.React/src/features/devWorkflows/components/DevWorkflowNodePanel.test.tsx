@@ -371,9 +371,13 @@ describe("DevWorkflowNodePanel", () => {
 
 	it("badges a DEAD inbound branch dead rather than satisfied, which is what the join will do with it", () => {
 		// LIVE-3 P2: the verdict came off `waitingOnNodeKeys`, which the runtime sends only while the join is Pending and
-		// which drops every SETTLED source — so a Skipped branch arrived as "not waited on" and read SATISFIED. Under the
-		// C1 rule (`DevWorkflowStateMachine.EdgeState`) a source that settled any way but Succeeded makes the edge DEAD,
-		// and that dead edge is precisely why an `All` join skips. The panel said the opposite of what was about to happen.
+		// which drops every SETTLED source — so a Skipped branch arrived as "not waited on" and read SATISFIED. Under
+		// `DevWorkflowStateMachine.EdgeState` a Failed or Cancelled source makes the edge DEAD, and that dead edge is
+		// precisely why an `All` join skips. The panel said the opposite of what was about to happen.
+		//
+		// C1 then split the third case back out: a Skipped source is WAIVED, because a skip a person chose is not a
+		// reason to throw away what its siblings carried. WHICH skip that is comes off the row as `skipWaived`, which
+		// the server computes: the ancestor that decides it need not be in this list at all.
 		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Join", nodeKey: "join", label: "Join" }), {
 			run: devWorkflowRun({
 				graph: {
@@ -390,7 +394,7 @@ describe("DevWorkflowNodePanel", () => {
 				nodes: [
 					devWorkflowNodeRunSummary({ id: "n0", nodeKey: "join" }),
 					devWorkflowNodeRunSummary({ id: "n1", nodeKey: "landed", label: "Landed", status: "Succeeded" }),
-					devWorkflowNodeRunSummary({ id: "n2", nodeKey: "skipped", label: "Skipped one", status: "Skipped" }),
+					devWorkflowNodeRunSummary({ id: "n2", nodeKey: "skipped", label: "Skipped one", status: "Skipped", skipWaived: true }),
 					devWorkflowNodeRunSummary({ id: "n3", nodeKey: "failed", label: "Failed one", status: "Failed" }),
 					devWorkflowNodeRunSummary({ id: "n4", nodeKey: "cancelled", label: "Cancelled one", status: "Cancelled" }),
 					devWorkflowNodeRunSummary({ id: "n5", nodeKey: "live", label: "Live one", status: "Running" }),
@@ -398,13 +402,17 @@ describe("DevWorkflowNodePanel", () => {
 			}),
 		});
 
-		for (const key of ["skipped", "failed", "cancelled"]) {
+		for (const key of ["failed", "cancelled"]) {
 			const row = screen.getByTestId(`dev-workflow-node-dependency-${key}`).textContent ?? "";
 			// `All` is the default policy, so the wording names the consequence: the join skips.
 			expect(row).toContain("dead — the join skips once nothing is pending");
 			expect(row).not.toContain("satisfied");
 			expect(row).not.toContain("outstanding");
 		}
+		const excused = screen.getByTestId("dev-workflow-node-dependency-skipped").textContent ?? "";
+		expect(excused).toContain("skipped — the join carries on if a sibling succeeded");
+		expect(excused).not.toContain("satisfied");
+		expect(excused).not.toContain("outstanding");
 		expect(screen.getByTestId("dev-workflow-node-dependency-landed").textContent).toContain("satisfied");
 		// Unsettled is a WAIT, not a verdict — the same answer `EdgeState` gives for a source that has not landed.
 		expect(screen.getByTestId("dev-workflow-node-dependency-live").textContent).toContain("outstanding");
@@ -663,7 +671,7 @@ describe("DevWorkflowNodePanel", () => {
 				agentTurnMs: 40_000,
 				servedModelName: "qwen3-27b-instruct-q4",
 				workSessionSteps: 3,
-				route: { satisfied: ["approval"], dead: ["fallback"], gateAnswer: "Approve", truncated: true },
+				route: { satisfied: ["approval"], dead: ["fallback"], waived: ["excused-leaf"], gateAnswer: "Approve", truncated: true },
 			}),
 		);
 
@@ -693,9 +701,24 @@ describe("DevWorkflowNodePanel", () => {
 
 		expect(screen.getByTestId("dev-workflow-node-cost-route-satisfied").textContent).toBe("satisfied → approval");
 		expect(screen.getByTestId("dev-workflow-node-cost-route-dead").textContent).toBe("not taken → fallback");
+		// Its own row, because a waived edge is neither of the other two: it did not admit this successor and it did
+		// not kill it either. Folding it into one of them is what would make the panel disagree with the runtime.
+		expect(screen.getByTestId("dev-workflow-node-cost-route-waived").textContent).toBe("excused → excused-leaf");
 		expect(screen.getByTestId("dev-workflow-node-cost-route-gate-answer").textContent).toContain("Approve");
 		// A shortened route MUST say so, or a two-key list reads as the whole route.
 		expect(screen.getByTestId("dev-workflow-node-cost-route-truncated")).toBeDefined();
+	});
+
+	it("draws no excused row for an ordinary route, so an empty bucket is not read as a claim", () => {
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				status: "Succeeded",
+				route: { satisfied: ["approval"], dead: [], waived: [], gateAnswer: null, truncated: false },
+			}),
+		);
+
+		expect(screen.getByTestId("dev-workflow-node-cost-route-satisfied").textContent).toBe("satisfied → approval");
+		expect(screen.queryByTestId("dev-workflow-node-cost-route-waived")).toBeNull();
 	});
 
 	it("shows the estimate only where the real input count is missing", () => {

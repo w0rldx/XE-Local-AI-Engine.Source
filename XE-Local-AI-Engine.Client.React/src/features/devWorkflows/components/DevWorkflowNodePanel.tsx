@@ -451,6 +451,15 @@ function DevWorkflowNodeCostSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDe
 							nodes: (route.dead ?? []).join(", ") || "—",
 						})}
 					</Text>
+					{/* Only a waived skip fills this, so the row is drawn only when there is one — an always-present
+					    "excused → —" would read as a claim about every other node run that there was nothing to excuse. */}
+					{(route.waived ?? []).length > 0 ? (
+						<Text size="xs" data-testid="dev-workflow-node-cost-route-waived">
+							{t("pages.devWorkflows.node.cost.routeWaived", "excused → {{nodes}}", {
+								nodes: (route.waived ?? []).join(", "),
+							})}
+						</Text>
+					) : null}
 					{route.gateAnswer ? (
 						<Text size="xs" data-testid="dev-workflow-node-cost-route-gate-answer">
 							{t("pages.devWorkflows.node.cost.gateAnswer", "answered {{answer}}", {
@@ -461,7 +470,7 @@ function DevWorkflowNodeCostSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDe
 					<Text size="xs" c="dimmed">
 						{t(
 							"pages.devWorkflows.node.cost.routeGateNote",
-							"A satisfied edge means its condition fired, not that the successor ran — a join can still skip on a dead sibling edge.",
+							"A satisfied edge means its condition fired, not that the successor ran — a join can still skip on a dead sibling edge. An excused edge left this node's own skip without killing an All join, but it admits nobody on its own.",
 						)}
 					</Text>
 				</Stack>

@@ -32001,6 +32001,12 @@
               "type": "string"
             }
           },
+          "waived": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "gateAnswer": {
             "type": "string",
             "nullable": true
@@ -32572,6 +32578,10 @@
           },
           "sequence": {
             "type": "integer"
+          },
+          "skipWaived": {
+            "type": "boolean",
+            "nullable": true
           },
           "inputTokens": {
             "type": "integer",

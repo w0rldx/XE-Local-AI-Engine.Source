@@ -22,7 +22,7 @@ public static class DevWorkflowNodeRunDocuments
     /// <summary>
     ///     A stored route, or null when the column is empty or unreadable — the node then simply has no route to show.
     ///     <para>
-    ///         Neither list is ever null on the way out, and a plain deserialize cannot promise that: a document that
+    ///         No list is ever null on the way out, and a plain deserialize cannot promise that: a document that
     ///         omits <c>satisfied</c> lands a null list, and the generated client validates the response with zod,
     ///         which accepts a missing member and REJECTS a null one. An absent list is therefore an empty list, and a
     ///         null ELEMENT is dropped for the same reason — one bad entry costs its own key, not the whole read.
@@ -30,7 +30,7 @@ public static class DevWorkflowNodeRunDocuments
     /// </summary>
     public static DevWorkflowRoute? TryParseRoute(string? routeJson) =>
         Read<StoredRoute>(routeJson) is { } route
-            ? new DevWorkflowRoute(Names(route.Satisfied), Names(route.Dead), route.GateAnswer, route.Truncated)
+            ? new DevWorkflowRoute(Names(route.Satisfied), Names(route.Dead), Names(route.Waived), route.GateAnswer, route.Truncated)
             : null;
 
     /// <summary>
@@ -62,6 +62,13 @@ public static class DevWorkflowNodeRunDocuments
         }
     }
 
-    /// <summary>The stored document, whose two lists may be absent — <see cref="TryParseRoute" /> is what normalises them.</summary>
-    private sealed record StoredRoute(IReadOnlyList<string?>? Satisfied, IReadOnlyList<string?>? Dead, string? GateAnswer, bool Truncated);
+    /// <summary>
+    ///     The stored document, whose lists may be absent — <see cref="TryParseRoute" /> is what normalises them. A row
+    ///     written before the waived bucket existed simply omits it, which reads back as the empty list it means.
+    /// </summary>
+    private sealed record StoredRoute(IReadOnlyList<string?>? Satisfied,
+        IReadOnlyList<string?>? Dead,
+        IReadOnlyList<string?>? Waived,
+        string? GateAnswer,
+        bool Truncated);
 }

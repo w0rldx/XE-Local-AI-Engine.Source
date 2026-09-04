@@ -541,7 +541,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         string.Join(", ", (await ReadEventsAsync(runId).ConfigureAwait(false)).Select(static entry => entry.EventType));
 
     /// <summary>Records a decision the way the endpoint will: a durable row the next tick turns into a transition.</summary>
-    public async Task DecideAsync(Guid runId, string nodeKey, DevWorkflowDecisionKind decision, string? subject = "operator")
+    public async Task DecideAsync(Guid runId, string nodeKey, DevWorkflowDecisionKind decision, string? subject = "operator", string? comment = null)
     {
         var nodeRun = await ReadNodeRunAsync(runId, nodeKey).ConfigureAwait(false);
         await using var scope = Services.CreateAsyncScope();
@@ -552,6 +552,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
                            DevWorkflowVersions.Any,
                            Guid.NewGuid(),
                            decision,
+                           Comment: comment,
                            DecidedBySubject: subject))
                        .ConfigureAwait(false);
     }

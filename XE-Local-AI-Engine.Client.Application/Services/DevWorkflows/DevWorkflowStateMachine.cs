@@ -13,6 +13,13 @@ internal enum DevWorkflowEdgeState
     /// <summary>The source succeeded and this edge's condition (if any) fired.</summary>
     Satisfied,
 
+    /// <summary>
+    ///     The source was Skipped, and nothing upstream of it refused it — so a person did. It carries nothing, but it
+    ///     is not a reason to throw away what its siblings carried. Excused rather than satisfied: an <c>Any</c> join
+    ///     still needs a branch that actually arrived.
+    /// </summary>
+    Waived,
+
     /// <summary>The source settled in a way this edge can never fire on. Nothing downstream of it will ever come.</summary>
     Dead
 }
@@ -54,7 +61,11 @@ internal readonly record struct DevWorkflowRunOutcome(DevWorkflowRunStatus Statu
 /// </summary>
 /// <param name="GateAnswer">The decision token a human gate settled on; null on every other node type.</param>
 /// <param name="Truncated">Whether keys were dropped to keep the serialized document inside the column's bound.</param>
-public sealed record DevWorkflowRoute(IReadOnlyList<string> Satisfied, IReadOnlyList<string> Dead, string? GateAnswer, bool Truncated);
+public sealed record DevWorkflowRoute(IReadOnlyList<string> Satisfied,
+    IReadOnlyList<string> Dead,
+    IReadOnlyList<string> Waived,
+    string? GateAnswer,
+    bool Truncated);
 
 /// <summary>
 ///     The run and node-run state machines, as pure functions over persisted rows and the parsed graph.
@@ -72,10 +83,18 @@ internal static class DevWorkflowStateMachine
     /// <summary>The schema's own bound on the RUN's <c>terminal_reason</c> (<c>DevWorkflowRunConfiguration</c>).</summary>
     private const int MaxTerminalReason = 512;
 
+    /// <summary>
+    ///     The NODE RUN's own bound (<c>DevWorkflowNodeRunConfiguration</c>), twice the run's. A cascaded skip's reason
+    ///     quotes the reason above it, so a long chain under a verbose operator comment is the one shape that can grow
+    ///     toward it — cut here rather than at the store, because a run that wedges on a column length is a run stopped
+    ///     by punctuation.
+    /// </summary>
+    private const int MaxNodeTerminalReason = 1024;
+
     /// <summary>How many terminal nodes a reason names one by one before it starts counting them instead.</summary>
     private const int MaxNamedNodes = 3;
 
-    /// <summary>How many successor keys each half of a route names. A fan-out wider than this is a shape, not a list.</summary>
+    /// <summary>How many successor keys each bucket of a route names. A fan-out wider than this is a shape, not a list.</summary>
     private const int MaxRoutedKeys = 8;
 
     /// <summary>The schema's own bound on the node run's <c>route_json</c> (<c>DevWorkflowNodeRunConfiguration</c>).</summary>
@@ -143,26 +162,92 @@ internal static class DevWorkflowStateMachine
         status is DevWorkflowRunStatus.Completed or DevWorkflowRunStatus.Failed or DevWorkflowRunStatus.Cancelled;
 
     /// <summary>
-    ///     Whether an inbound edge lets its target through, given the source node run — or <see langword="null" /> when
-    ///     the source has not been materialized yet, which is itself a wait rather than a refusal.
+    ///     Whether an inbound edge lets its target through, read off the run's node runs — <c>Pending</c> when the
+    ///     source has no row yet, because a source that has not been materialized is a wait rather than a refusal.
+    ///     <para>
+    ///         <c>Failed</c> and <c>Cancelled</c> sources kill every out-edge: neither produced the output a condition
+    ///         would read, and treating "no output" as a passing condition is how a run routes on evidence it never
+    ///         had. So does a <c>Succeeded</c> source whose condition did not fire — the branch a gate did not take.
+    ///     </para>
+    ///     <para>
+    ///         A <c>Skipped</c> source is the one that parts company with them, because a skip has two origins the row
+    ///         itself cannot tell apart. One is a PERSON: an operator looked at a node that could never succeed — one
+    ///         slice of a decomposition whose file did not exist — and decided the run should carry on without it. The
+    ///         other slices did their work, and skipping the join over the one that was excused throws all of it away;
+    ///         live, a single Skip on one clone's implementation cancelled a run whose every sibling had succeeded. The
+    ///         other origin is a CASCADE off something dead — a failed ancestor, or a gate branch nothing routed down —
+    ///         where the skip is the run being told where it may not go, and carrying on past it would be routing on
+    ///         work that was never done.
+    ///     </para>
+    ///     <para>
+    ///         The difference is readable from the GRAPH rather than from a column, which is why no new one was added:
+    ///         a skip is WAIVED when every path back from it is itself Satisfied or Waived, because that is exactly the
+    ///         case where nothing upstream refused it and only a person could have. One dead path behind it and it
+    ///         stays <c>Dead</c>, so a not-taken branch and a failed branch's tail keep the semantics they have always
+    ///         had. That recursion is why this needs the graph and the whole dictionary rather than one source row.
+    ///     </para>
     /// </summary>
-    public static DevWorkflowEdgeState EdgeState(DevWorkflowGraphEdge edge, DevWorkflowNodeRunSnapshot? source)
+    public static DevWorkflowEdgeState EdgeState(DevWorkflowGraphEdge edge,
+        DevWorkflowGraph graph,
+        IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> nodeRunsByKey)
     {
         ArgumentNullException.ThrowIfNull(edge);
+        ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(nodeRunsByKey);
 
-        if (source is null || !IsTerminal(source.Status))
+        return EdgeState(edge, graph, nodeRunsByKey, new Dictionary<string, bool>(StringComparer.Ordinal), new HashSet<string>(StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    ///     Which of a run's SKIPPED node runs the state machine WAIVES — the skips a person chose, as opposed to the
+    ///     ones that cascaded off something dead. Exactly the question <see cref="EdgeState" /> asks before it answers
+    ///     <c>Waived</c> rather than <c>Dead</c>, asked here for a whole run at once.
+    ///     <para>
+    ///         Exposed because the answer is NOT readable from a skipped row on its own, and a read model that guesses
+    ///         from status alone gets it backwards on the shape that matters: a failed node, a skip cascaded off it,
+    ///         and a join beside a succeeded sibling. There the runtime skips the join, and the failed ancestor need
+    ///         not be among the join's own dependencies for a client to see. Rather than mirror this recursion in the
+    ///         browser, the API sends the verdict — which is why this is the state machine's own predicate and not a
+    ///         second one shaped like it.
+    ///     </para>
+    ///     <para>
+    ///         ONE memo across every skipped row, not one per row: it is the same walk over the same graph, and
+    ///         re-running it per skip is what turns a wide fan-out of skips into a quadratic one.
+    ///     </para>
+    /// </summary>
+    public static IReadOnlySet<string> WaivedSkipNodeKeys(DevWorkflowGraph graph,
+        IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> nodeRunsByKey)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(nodeRunsByKey);
+
+        var waived = new Dictionary<string, bool>(StringComparer.Ordinal);
+        var resolving = new HashSet<string>(StringComparer.Ordinal);
+        return new HashSet<string>(nodeRunsByKey.Where(entry => entry.Value.Status == DevWorkflowNodeRunStatus.Skipped
+                                                                && IsWaived(entry.Key, graph, nodeRunsByKey, waived, resolving))
+                                                .Select(static entry => entry.Key),
+            StringComparer.Ordinal);
+    }
+
+    private static DevWorkflowEdgeState EdgeState(DevWorkflowGraphEdge edge,
+        DevWorkflowGraph graph,
+        IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> nodeRunsByKey,
+        Dictionary<string, bool> waived,
+        HashSet<string> resolving)
+    {
+        if (nodeRunsByKey.GetValueOrDefault(edge.From) is not { } source || !IsTerminal(source.Status))
         {
             return DevWorkflowEdgeState.Pending;
         }
 
-        // Failed, Cancelled and Skipped sources kill every out-edge: none of them produced the output a condition would
-        // read, and treating "no output" as a passing condition is how a run routes on evidence it never had.
-        if (source.Status != DevWorkflowNodeRunStatus.Succeeded)
+        if (source.Status == DevWorkflowNodeRunStatus.Succeeded)
         {
-            return DevWorkflowEdgeState.Dead;
+            return Fires(edge, source.OutputJson) ? DevWorkflowEdgeState.Satisfied : DevWorkflowEdgeState.Dead;
         }
 
-        return Fires(edge, source.OutputJson) ? DevWorkflowEdgeState.Satisfied : DevWorkflowEdgeState.Dead;
+        return source.Status == DevWorkflowNodeRunStatus.Skipped && IsWaived(edge.From, graph, nodeRunsByKey, waived, resolving)
+            ? DevWorkflowEdgeState.Waived
+            : DevWorkflowEdgeState.Dead;
     }
 
     /// <summary>
@@ -177,6 +262,20 @@ internal static class DevWorkflowStateMachine
     ///         deliberately never instantiated, and its edges are the authored shape the clones' own edges stand in for.
     ///     </para>
     ///     <para>
+    ///         <c>Waived</c> gets a bucket of its OWN rather than being folded into either half, because no fold is
+    ///         true under both join policies: a waived edge does not admit an <c>Any</c> successor, which is what
+    ///         <c>satisfied</c> would claim, and it does not kill an <c>All</c> one, which is what <c>dead</c> would
+    ///         claim. The three buckets are the three states <see cref="EdgeState" /> can answer for a terminal
+    ///         source, one for one, which is the only shape that keeps the record and the routing from answering
+    ///         differently.
+    ///     </para>
+    ///     <para>
+    ///         Whether a skip was WAIVED is not readable off the source row — it is a walk back over the graph — so
+    ///         the run's other rows come in as <paramref name="nodeRunsByKey" />. <paramref name="source" /> is laid
+    ///         over that dictionary at its own key, because the caller projects the command's target status and output
+    ///         onto it before asking and the stored row is still the previous attempt's.
+    ///     </para>
+    ///     <para>
     ///         A non-terminal source is REFUSED rather than recorded, because <see cref="EdgeState" /> answers
     ///         <c>Pending</c> for one and <see cref="DevWorkflowRoute" /> has no bucket for that. The caller computes a
     ///         route only for a terminal settle; <c>Blocked</c> and <c>WaitingForApproval</c> get no route at all,
@@ -184,24 +283,37 @@ internal static class DevWorkflowStateMachine
     ///     </para>
     /// </summary>
     /// <param name="decision">The gate's answer, for a <c>HumanGate</c> source. Recorded as the route's gate answer; the edge verdicts come from the output document either way, which is what keeps it agreeing with <see cref="GateEdgeFires" />.</param>
-    internal static DevWorkflowRoute RouteTaken(DevWorkflowGraph graph, DevWorkflowNodeRunSnapshot source, DevWorkflowDecisionKind? decision)
+    internal static DevWorkflowRoute RouteTaken(DevWorkflowGraph graph,
+        DevWorkflowNodeRunSnapshot source,
+        IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> nodeRunsByKey,
+        DevWorkflowDecisionKind? decision)
     {
         ArgumentNullException.ThrowIfNull(graph);
         ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(nodeRunsByKey);
         if (!IsTerminal(source.Status))
         {
             throw new ArgumentException($"A route may only be taken from a terminal node run; '{source.NodeKey}' is {source.Status}.", nameof(source));
         }
 
+        var rows = new Dictionary<string, DevWorkflowNodeRunSnapshot>(nodeRunsByKey, StringComparer.Ordinal)
+        {
+            [source.NodeKey] = source
+        };
+
         var satisfied = new List<string>();
         var dead = new List<string>();
+        var waived = new List<string>();
         var edges = graph.TemplateKeys.Contains(source.NodeKey) ? [] : graph.OutboundEdges(source.NodeKey);
         foreach (var edge in edges)
         {
-            switch (EdgeState(edge, source))
+            switch (EdgeState(edge, graph, rows))
             {
                 case DevWorkflowEdgeState.Satisfied:
                     satisfied.Add(edge.To);
+                    break;
+                case DevWorkflowEdgeState.Waived:
+                    waived.Add(edge.To);
                     break;
 
                 // Dead, and only Dead: Pending needs a source that is null or non-terminal, and both are refused above.
@@ -211,8 +323,12 @@ internal static class DevWorkflowStateMachine
             }
         }
 
-        var truncated = satisfied.Count > MaxRoutedKeys || dead.Count > MaxRoutedKeys;
-        return new DevWorkflowRoute([.. satisfied.Take(MaxRoutedKeys)], [.. dead.Take(MaxRoutedKeys)], decision?.ToString(), truncated);
+        var truncated = satisfied.Count > MaxRoutedKeys || dead.Count > MaxRoutedKeys || waived.Count > MaxRoutedKeys;
+        return new DevWorkflowRoute([.. satisfied.Take(MaxRoutedKeys)],
+            [.. dead.Take(MaxRoutedKeys)],
+            [.. waived.Take(MaxRoutedKeys)],
+            decision?.ToString(),
+            truncated);
     }
 
     /// <summary>
@@ -227,19 +343,20 @@ internal static class DevWorkflowStateMachine
 
         var satisfied = route.Satisfied.ToList();
         var dead = route.Dead.ToList();
+        var waived = route.Waived.ToList();
         var truncated = route.Truncated;
         while (true)
         {
-            var json = JsonSerializer.Serialize(new DevWorkflowRoute(satisfied, dead, route.GateAnswer, truncated), JsonOptions);
-            if (json.Length <= MaxRouteJson || (satisfied.Count == 0 && dead.Count == 0))
+            var json = JsonSerializer.Serialize(new DevWorkflowRoute(satisfied, dead, waived, route.GateAnswer, truncated), JsonOptions);
+            if (json.Length <= MaxRouteJson || (satisfied.Count == 0 && dead.Count == 0 && waived.Count == 0))
             {
                 return json;
             }
 
-            // Drop from the longer list, so a route with one satisfied edge and nine dead ones keeps the edge that says
+            // Drop from the longest list, so a route with one satisfied edge and nine dead ones keeps the edge that says
             // where the run went rather than losing it to the ones that say where it did not.
-            var longer = satisfied.Count >= dead.Count ? satisfied : dead;
-            longer.RemoveAt(longer.Count - 1);
+            var longest = new[] { satisfied, dead, waived }.MaxBy(static list => list.Count)!;
+            longest.RemoveAt(longest.Count - 1);
             truncated = true;
         }
     }
@@ -261,6 +378,70 @@ internal static class DevWorkflowStateMachine
         return Enum.TryParse<DevWorkflowDecisionKind>(decision.GetString(), out var parsed) ? parsed : null;
     }
 
+    /// <summary>
+    ///     Whether a Skipped node's own skip was a person's choice rather than something upstream refusing it. The
+    ///     question is asked under the node's OWN join policy, because that policy is what decides which of its
+    ///     dependencies ever had to arrive. Under <c>All</c> every one of them did, so a skip is a person's only when
+    ///     they all read <c>Satisfied</c> or <c>Waived</c>. Under <c>Any</c> one arriving was the whole contract: a
+    ///     node admitted on one satisfied edge RAN, and if it then blocked and an operator skipped it, the Dead sibling
+    ///     it was never waiting on is not what caused that. Judging it with an <c>All</c> predicate regardless is how
+    ///     one such skip read as a cascade and took a downstream <c>All</c> join's surviving work down with it.
+    ///     <para>
+    ///         A node with NO inbound edges is vacuously waived under either policy, and that is the right answer
+    ///         rather than a gap — an entry node has nothing upstream that could have refused it, so an operator is
+    ///         the only thing that can have skipped it. An <c>Any</c> node whose edges are Dead and Waived with none
+    ///         Satisfied stays <c>Dead</c>: nothing arrived, so it never had an admission of its own to lose.
+    ///     </para>
+    ///     <para>
+    ///         A <c>Pending</c> dependency waives nothing under either policy, which is the conservative half of the
+    ///         old rule kept intact: a source still to settle may yet die, and answering now is answering ahead of it.
+    ///     </para>
+    ///     <para>
+    ///         Two collections, and both are load-bearing. <paramref name="waived" /> MEMOIZES: a diamond reaches the
+    ///         same ancestor down two paths, and re-walking it is what turns a wide fan-out into an exponential one.
+    ///         <paramref name="resolving" /> is the cycle guard, and it has to be separate from the memo because it is
+    ///         popped again on the way out — a node still on the stack is not an answer, whereas one the memo holds is.
+    ///         The graph is a validated DAG so the guard should never fire; refusing to waive is the answer that keeps
+    ///         the old behaviour if a malformed one ever reaches here.
+    ///     </para>
+    /// </summary>
+    private static bool IsWaived(string nodeKey,
+        DevWorkflowGraph graph,
+        IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> nodeRunsByKey,
+        Dictionary<string, bool> waived,
+        HashSet<string> resolving)
+    {
+        if (waived.TryGetValue(nodeKey, out var known))
+        {
+            return known;
+        }
+
+        if (!resolving.Add(nodeKey))
+        {
+            return false;
+        }
+
+        var states = Dependencies(graph, nodeKey)
+                     .Select(edge => EdgeState(edge, graph, nodeRunsByKey, waived, resolving))
+                     .ToList();
+        var nothingRefusedIt = states.All(static state => state is DevWorkflowEdgeState.Satisfied or DevWorkflowEdgeState.Waived);
+        var answer = graph.Nodes.GetValueOrDefault(nodeKey)?.JoinPolicy == DevWorkflowJoinPolicy.Any
+            ? nothingRefusedIt || states.Contains(DevWorkflowEdgeState.Satisfied)
+            : nothingRefusedIt;
+        _ = resolving.Remove(nodeKey);
+        waived[nodeKey] = answer;
+        return answer;
+    }
+
+    /// <summary>
+    ///     The inbound edges that are DEPENDENCIES. An edge whose source is a materialization TEMPLATE is not one: the
+    ///     template is the one node deliberately never instantiated, so its edge into the join can never be satisfied
+    ///     and can never die either — it is the authored shape the clones' own edges stand in for, and reading it as a
+    ///     dependency would leave every decomposing run waiting on a row that is never written.
+    /// </summary>
+    private static IEnumerable<DevWorkflowGraphEdge> Dependencies(DevWorkflowGraph graph, string nodeKey) =>
+        graph.InboundEdges(nodeKey).Where(edge => !graph.TemplateKeys.Contains(edge.From));
+
     /// <summary>Whether one edge's condition accepts one output document. The only place either question is answered.</summary>
     private static bool Fires(DevWorkflowGraphEdge edge, string? outputJson) =>
         DevWorkflowCondition.Evaluate(edge.Condition, ParseOutput(outputJson));
@@ -275,10 +456,23 @@ internal static class DevWorkflowStateMachine
     ///         carries it — which is why the materializer preserves that edge on the expanding path too.
     ///     </para>
     ///     <para>
-    ///         An edge whose source is a materialization TEMPLATE is not a dependency and is dropped here. The template
-    ///         is the one node deliberately never instantiated, so its edge into the join can never be satisfied and can
-    ///         never die either — it is the authored shape the clones' own edges stand in for, and reading it as a
-    ///         dependency would leave every decomposing run waiting on a row that is never written.
+    ///         Under <c>All</c>, one DEAD edge still skips the join, and one WAIVED edge no longer does. A person who
+    ///         skips one leaf of a fan-out is saying the run should go on without it, so the join goes on as long as
+    ///         something actually arrived — a satisfied sibling. With every edge waived nothing arrived, so it skips,
+    ///         and because that node's own inbound edges were all waived, its skip is waived in turn: the cascade runs
+    ///         on exactly as far as the excusing does, and stops at the first node a satisfied edge reaches.
+    ///     </para>
+    ///     <para>
+    ///         Which is what makes the seeded <c>feature-development-v1</c> shape worth naming: its join also has the
+    ///         <c>decompose → join</c> edge, Satisfied from the moment the decomposition succeeded. So if an operator
+    ///         skips EVERY clone, that one edge still carries the join and the verification node runs — over a task
+    ///         package and no implementations. That is accepted rather than overlooked: verify is an agent asked to
+    ///         judge what was produced, and judging that nothing was is a better answer than a run that goes terminal
+    ///         without saying so. The skipped clones reach its objective by name, so it is judging with the facts.
+    ///     </para>
+    ///     <para>
+    ///         <c>Any</c> is untouched: <c>Waived</c> is not <c>Satisfied</c>, and a merge that exists to carry ONE
+    ///         live branch cannot be carried by a branch nobody ran.
     ///     </para>
     /// </summary>
     public static DevWorkflowNodeAdmission Admission(DevWorkflowGraphNode node,
@@ -289,10 +483,11 @@ internal static class DevWorkflowStateMachine
         ArgumentNullException.ThrowIfNull(graph);
         ArgumentNullException.ThrowIfNull(nodeRunsByKey);
 
-        var states = graph.InboundEdges(node.NodeKey)
-                          .Where(edge => !graph.TemplateKeys.Contains(edge.From))
-                          .Select(edge => EdgeState(edge, nodeRunsByKey.GetValueOrDefault(edge.From)))
-                          .ToList();
+        var waived = new Dictionary<string, bool>(StringComparer.Ordinal);
+        var resolving = new HashSet<string>(StringComparer.Ordinal);
+        var states = Dependencies(graph, node.NodeKey)
+                     .Select(edge => EdgeState(edge, graph, nodeRunsByKey, waived, resolving))
+                     .ToList();
 
         // Pending outranks Dead under BOTH policies, and for the same reason: the answer is not allowed to depend on
         // which branch happened to land first. A dead inbound edge already settles what an `All` join will DO — it can
@@ -306,11 +501,110 @@ internal static class DevWorkflowStateMachine
 
         if (node.JoinPolicy == DevWorkflowJoinPolicy.All)
         {
-            return states.Contains(DevWorkflowEdgeState.Dead) ? DevWorkflowNodeAdmission.Skip : DevWorkflowNodeAdmission.Eligible;
+            if (states.Contains(DevWorkflowEdgeState.Dead))
+            {
+                return DevWorkflowNodeAdmission.Skip;
+            }
+
+            // Zero edges is the vacuous case above; otherwise something has to have ARRIVED. Every edge waived means
+            // every branch was excused and none of them carried anything here.
+            return states.Count == 0 || states.Contains(DevWorkflowEdgeState.Satisfied)
+                ? DevWorkflowNodeAdmission.Eligible
+                : DevWorkflowNodeAdmission.Skip;
         }
 
         // Any: one satisfied branch is enough, but only once no sibling could still satisfy one.
         return states.Contains(DevWorkflowEdgeState.Satisfied) ? DevWorkflowNodeAdmission.Eligible : DevWorkflowNodeAdmission.Skip;
+    }
+
+    /// <summary>
+    ///     Why a node run <see cref="Admission" /> answered <c>Skip</c> for is being skipped, in the words its
+    ///     <c>terminal_reason</c> keeps. A cascaded skip used to record nothing at all, which left an operator reading
+    ///     fourteen Skipped rows with no way to tell which one of them the decision was and which thirteen followed it
+    ///     — and left the downstream evidence with nothing to quote.
+    ///     <para>
+    ///         Names ONE dead dependency, because a skip needs one cause rather than a list — and prefers a branch that
+    ///         broke or was skipped over one a condition merely routed past. Both are dead, but only the first is news:
+    ///         a gate taking its other branch is the graph working, and naming it first reads as the cause when a real
+    ///         refusal is sitting beside it.
+    ///     </para>
+    ///     <para>
+    ///         With NO dead dependency the node is being skipped because every branch into it was excused, and then the
+    ///         only account of why is the one the excused row already carries — which for a person's decision is the
+    ///         operator's own sentence. It is PROPAGATED rather than restated, because the node someone actually
+    ///         skipped is routinely not the one a downstream reader sees: on the seeded template an operator skips
+    ///         <c>implement#task</c>, its <c>validate#task</c> clone is skipped behind it, and the clone is what the
+    ///         verification node's producing-ancestor walk stops at. Restating it generically there is how the comment
+    ///         explaining the whole thing failed to reach the agent asked to judge it.
+    ///     </para>
+    ///     <para>
+    ///         Sanitized by construction as far as this class writes it — every word is fixed text or a node key. The
+    ///         propagated tail is another row's <c>terminal_reason</c>, which is the operator comment the decision path
+    ///         already bounded and sanitized before it was stored.
+    ///     </para>
+    /// </summary>
+    public static string SkipReason(DevWorkflowGraphNode node,
+        DevWorkflowGraph graph,
+        IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> nodeRunsByKey)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(nodeRunsByKey);
+
+        var waived = new Dictionary<string, bool>(StringComparer.Ordinal);
+        var resolving = new HashSet<string>(StringComparer.Ordinal);
+        var dead = new List<string>();
+        string? excused = null;
+        foreach (var edge in Dependencies(graph, node.NodeKey))
+        {
+            switch (EdgeState(edge, graph, nodeRunsByKey, waived, resolving))
+            {
+                case DevWorkflowEdgeState.Dead:
+                    dead.Add(edge.From);
+                    break;
+                case DevWorkflowEdgeState.Waived:
+                    excused ??= edge.From;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        if (dead.Count > 0)
+        {
+            var cause = dead.Find(key => nodeRunsByKey.GetValueOrDefault(key)?.Status != DevWorkflowNodeRunStatus.Succeeded) ?? dead[0];
+            return nodeRunsByKey.GetValueOrDefault(cause)?.Status switch
+            {
+                DevWorkflowNodeRunStatus.Skipped => $"Skipped: upstream '{cause}' was skipped.",
+
+                // Succeeded and still dead means its condition did not accept this edge — the branch was not taken.
+                DevWorkflowNodeRunStatus.Succeeded => $"Skipped: upstream '{cause}' routed elsewhere.",
+                _ => $"Skipped: upstream '{cause}' did not succeed."
+            };
+        }
+
+        // Every branch excused: quote the first one's own reason, so a chain of them carries the original sentence.
+        if (excused is not null && nodeRunsByKey.GetValueOrDefault(excused)?.TerminalReason is { Length: > 0 } carried)
+        {
+            return Bounded($"Skipped: upstream '{excused}' was {char.ToLowerInvariant(carried[0])}{carried[1..]}", MaxNodeTerminalReason);
+        }
+
+        return "Skipped: every step before this one was skipped.";
+    }
+
+    /// <summary>
+    ///     At most <paramref name="max" /> UTF-16 units of <paramref name="text" />, never ending on the high half of a
+    ///     surrogate pair: a plain slice can cut an emoji in two and persist a lone surrogate, which is not valid text.
+    /// </summary>
+    public static string Bounded(string text, int max)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (text.Length <= max)
+        {
+            return text;
+        }
+
+        return text[..(char.IsHighSurrogate(text[max - 1]) ? max - 1 : max)];
     }
 
     /// <summary>

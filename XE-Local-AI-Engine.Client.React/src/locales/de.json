@@ -4963,6 +4963,8 @@
 				"satisfied": "erfüllt",
 				"dead": "tot – dieser Zweig trägt den Join nicht",
 				"deadAll": "tot – der Join wird übersprungen, sobald nichts mehr offen ist",
+				"waivedAll": "übersprungen – der Join läuft weiter, wenn ein Geschwisterzweig erfolgreich war",
+				"skipped": "übersprungen",
 				"notMaterialized": "noch nicht angelegt",
 				"template": "Vorlage – wird pro Aufgabe erzeugt"
 			},
@@ -5228,8 +5230,9 @@
 					"routeTruncated": "gekürzt",
 					"routeSatisfied": "erfüllt → {{nodes}}",
 					"routeDead": "nicht genommen → {{nodes}}",
+					"routeWaived": "entschuldigt → {{nodes}}",
 					"gateAnswer": "beantwortet mit {{answer}}",
-					"routeGateNote": "Eine erfüllte Kante bedeutet, dass ihre Bedingung zutraf, nicht dass der Nachfolger lief — ein Join kann trotzdem über eine tote Geschwisterkante übersprungen werden."
+					"routeGateNote": "Eine erfüllte Kante bedeutet, dass ihre Bedingung zutraf, nicht dass der Nachfolger lief — ein Join kann trotzdem über eine tote Geschwisterkante übersprungen werden. Eine entschuldigte Kante lässt das übersprungene Node stehen, ohne einen All-Join zu töten, admittiert aber für sich allein niemanden."
 				},
 				"failureGroup": {
 					"Cancelled": "Abgebrochen",

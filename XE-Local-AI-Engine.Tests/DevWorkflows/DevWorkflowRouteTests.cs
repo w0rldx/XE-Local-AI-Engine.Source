@@ -32,6 +32,7 @@ public sealed class DevWorkflowRouteTests
     public void RouteTaken_AgreesWithEdgeState()
     {
         var checkedEdges = 0;
+        var waivedEdges = 0;
         foreach (var (fixtureName, graphJson) in FixtureGraphs())
         {
             var graph = DevWorkflowGraph.Parse(graphJson);
@@ -42,25 +43,47 @@ public sealed class DevWorkflowRouteTests
                     // The gate document is the one output any fixture edge has a condition over, so it is what makes
                     // the Satisfied half non-empty rather than trivially agreeing on an all-dead route.
                     var source = NodeRun(node.NodeKey, status, """{"status":"Succeeded","decision":"Approve"}""", node.NodeType);
-                    var route = DevWorkflowStateMachine.RouteTaken(graph, source, decision: null);
+
+                    // Every OTHER node succeeded. Waivedness is a walk back over the graph, so a source judged against
+                    // an empty run could never answer Waived and the sweep would pass without ever seeing that bucket.
+                    var rows = graph.Nodes.Values
+                                    .ToDictionary(other => other.NodeKey,
+                                        other => other.NodeKey == node.NodeKey
+                                            ? source
+                                            : NodeRun(other.NodeKey,
+                                                DevWorkflowNodeRunStatus.Succeeded,
+                                                """{"status":"Succeeded","decision":"Approve"}""",
+                                                other.NodeType),
+                                        StringComparer.Ordinal);
+                    var route = DevWorkflowStateMachine.RouteTaken(graph, source, rows, decision: null);
                     var expected = graph.TemplateKeys.Contains(node.NodeKey) ? [] : graph.OutboundEdges(node.NodeKey);
 
                     var where = $"{fixtureName}/{node.NodeKey}/{status}";
                     AssertEx.Equal(expected.Count,
-                        route.Satisfied.Count + route.Dead.Count,
+                        route.Satisfied.Count + route.Dead.Count + route.Waived.Count,
                         $"{where}: every surviving out-edge is judged exactly once, and a template's are dropped.");
                     AssertEx.False(route.Truncated, $"{where}: no fixture fans out past the eight-key bound.");
 
                     foreach (var edge in expected)
                     {
-                        var state = DevWorkflowStateMachine.EdgeState(edge, source);
-                        var satisfied = state == DevWorkflowEdgeState.Satisfied;
-                        AssertEx.Equal(satisfied,
+                        var state = DevWorkflowStateMachine.EdgeState(edge, graph, rows);
+                        AssertEx.Equal(state == DevWorkflowEdgeState.Satisfied,
                             route.Satisfied.Contains(edge.To, StringComparer.Ordinal),
                             $"{where} → '{edge.To}': the route must agree with EdgeState, which answered {state}.");
-                        AssertEx.Equal(!satisfied,
+                        AssertEx.Equal(state == DevWorkflowEdgeState.Dead,
                             route.Dead.Contains(edge.To, StringComparer.Ordinal),
                             $"{where} → '{edge.To}': the route must agree with EdgeState, which answered {state}.");
+                        AssertEx.Equal(state == DevWorkflowEdgeState.Waived,
+                            route.Waived.Contains(edge.To, StringComparer.Ordinal),
+                            $"{where} → '{edge.To}': the route must agree with EdgeState, which answered {state}.");
+                        AssertEx.NotEqual(DevWorkflowEdgeState.Pending,
+                            state,
+                            $"{where} → '{edge.To}': a terminal source has no Pending out-edge, which is why the record has no bucket for one.");
+                        if (state == DevWorkflowEdgeState.Waived)
+                        {
+                            waivedEdges++;
+                        }
+
                         checkedEdges++;
                     }
 
@@ -74,6 +97,8 @@ public sealed class DevWorkflowRouteTests
         }
 
         AssertEx.True(checkedEdges > 0, "A fixture sweep that judged no edge would pass vacuously.");
+        AssertEx.True(waivedEdges > 0,
+            "and one that never produced a Waived edge would not be checking the bucket that folding into either half would have broken.");
     }
 
     /// <summary>
@@ -89,10 +114,11 @@ public sealed class DevWorkflowRouteTests
         var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.DecompositionSubtree);
         var template = graph.TemplateKeys.First(key => graph.OutboundEdges(key).Count > 0);
 
-        var route = DevWorkflowStateMachine.RouteTaken(graph, NodeRun(template, DevWorkflowNodeRunStatus.Succeeded), decision: null);
+        var route = DevWorkflowStateMachine.RouteTaken(graph, NodeRun(template, DevWorkflowNodeRunStatus.Succeeded), NoOtherRows, decision: null);
 
         AssertEx.Empty(route.Satisfied, "A template routes nowhere.");
         AssertEx.Empty(route.Dead, "A template's out-edges are dropped, not killed — nothing was ever waiting on them.");
+        AssertEx.Empty(route.Waived, "and nothing excused them either.");
     }
 
     /// <summary>
@@ -109,7 +135,7 @@ public sealed class DevWorkflowRouteTests
     {
         var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.ResearchPlanApproval);
 
-        _ = AssertEx.Throws<ArgumentException>(() => DevWorkflowStateMachine.RouteTaken(graph, NodeRun("research", status), decision: null),
+        _ = AssertEx.Throws<ArgumentException>(() => DevWorkflowStateMachine.RouteTaken(graph, NodeRun("research", status), NoOtherRows, decision: null),
             $"EdgeState answers Pending for a {status} source, and the route document cannot express that.");
     }
 
@@ -129,7 +155,7 @@ public sealed class DevWorkflowRouteTests
             DevWorkflowStateMachine.GateOutputJson(decision),
             DevWorkflowNodeType.HumanGate);
 
-        var route = DevWorkflowStateMachine.RouteTaken(graph, source, decision);
+        var route = DevWorkflowStateMachine.RouteTaken(graph, source, NoOtherRows, decision);
 
         AssertEx.Equal(decision.ToString(), route.GateAnswer, "The answer is recorded as its own token, not left to be inferred.");
         foreach (var edge in graph.OutboundEdges("approve"))
@@ -169,10 +195,13 @@ public sealed class DevWorkflowRouteTests
     public void RouteJson_CapsTheKeysAndFitsTheColumnBound()
     {
         var graph = DevWorkflowGraph.Parse(WideFanOut(successors: 12, keyLength: 100));
-        var route = DevWorkflowStateMachine.RouteTaken(graph, NodeRun("start", DevWorkflowNodeRunStatus.Succeeded, nodeType: DevWorkflowNodeType.Parallel), decision: null);
+        var route = DevWorkflowStateMachine.RouteTaken(graph,
+            NodeRun("start", DevWorkflowNodeRunStatus.Succeeded, nodeType: DevWorkflowNodeType.Parallel),
+            NoOtherRows,
+            decision: null);
 
         AssertEx.True(route.Truncated, "Twelve successors do not fit eight slots, and a short list must never read as a complete one.");
-        AssertEx.Equal(expected: 8, route.Dead.Count + route.Satisfied.Count, "Each half is capped at eight keys.");
+        AssertEx.Equal(expected: 8, route.Dead.Count + route.Satisfied.Count + route.Waived.Count, "Each bucket is capped at eight keys.");
 
         var json = DevWorkflowStateMachine.RouteJson(route);
         AssertEx.True(json.Length <= 1024, $"route_json is bounded at 1024 characters; this one was {json.Length}.");
@@ -181,6 +210,7 @@ public sealed class DevWorkflowRouteTests
         AssertEx.True(document.RootElement.GetProperty("truncated").GetBoolean(), "The trimmed document has to say so.");
         AssertEx.True(document.RootElement.TryGetProperty("satisfied", out _), "The document keeps its shape after trimming.");
         AssertEx.True(document.RootElement.TryGetProperty("dead", out _), "The document keeps its shape after trimming.");
+        AssertEx.True(document.RootElement.TryGetProperty("waived", out _), "The document keeps its shape after trimming.");
     }
 
     /// <summary>A route that fits is serialized whole, in the shape the runbook's queries read.</summary>
@@ -190,9 +220,10 @@ public sealed class DevWorkflowRouteTests
         var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.ApprovalBranches);
         var route = DevWorkflowStateMachine.RouteTaken(graph,
             NodeRun("approve", DevWorkflowNodeRunStatus.Succeeded, DevWorkflowStateMachine.GateOutputJson(DevWorkflowDecisionKind.Approve), DevWorkflowNodeType.HumanGate),
+            NoOtherRows,
             DevWorkflowDecisionKind.Approve);
 
-        AssertEx.Equal("""{"satisfied":["ship"],"dead":["revise"],"gateAnswer":"Approve","truncated":false}""",
+        AssertEx.Equal("""{"satisfied":["ship"],"dead":["revise"],"waived":[],"gateAnswer":"Approve","truncated":false}""",
             DevWorkflowStateMachine.RouteJson(route));
     }
 
@@ -200,7 +231,7 @@ public sealed class DevWorkflowRouteTests
     [Test]
     public void TryParseRoute_ReadsBackWhatRouteJsonWrote()
     {
-        var route = new DevWorkflowRoute(["ship"], ["revise"], "Approve", Truncated: true);
+        var route = new DevWorkflowRoute(["ship"], ["revise"], ["excused"], "Approve", Truncated: true);
 
         var json = DevWorkflowStateMachine.RouteJson(route);
         var parsed = AssertEx.NotNull(DevWorkflowNodeRunDocuments.TryParseRoute(json));
@@ -220,6 +251,7 @@ public sealed class DevWorkflowRouteTests
 
         AssertEx.Empty(parsed.Satisfied);
         AssertEx.Empty(parsed.Dead);
+        AssertEx.Empty(parsed.Waived, "including on a row written before the waived bucket existed.");
         AssertEx.Equal("Approve", parsed.GateAnswer, "and the members the document DID carry survive.");
 
         var withNull = AssertEx.NotNull(DevWorkflowNodeRunDocuments.TryParseRoute("""{"satisfied":["ship",null],"dead":[]}"""));
@@ -253,6 +285,13 @@ public sealed class DevWorkflowRouteTests
         AssertEx.Null(DevWorkflowNodeRunDocuments.ToolNames("[oops"));
         AssertEx.Null(DevWorkflowNodeRunDocuments.ToolNames(toolNamesJson: null));
     }
+
+    /// <summary>
+    ///     For the cases whose source is Succeeded or a template: waivedness never arises, so the run's other rows add
+    ///     nothing and their absence is the honest fixture.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> NoOtherRows =
+        new Dictionary<string, DevWorkflowNodeRunSnapshot>(StringComparer.Ordinal);
 
     /// <summary>Every graph fixture the runtime suites route over, by name, so a new one joins the sweep for free.</summary>
     private static IEnumerable<(string Name, string GraphJson)> FixtureGraphs() =>

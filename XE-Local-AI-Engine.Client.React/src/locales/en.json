@@ -4963,6 +4963,8 @@
 				"satisfied": "satisfied",
 				"dead": "dead — this branch will not carry the join",
 				"deadAll": "dead — the join skips once nothing is pending",
+				"waivedAll": "skipped — the join carries on if a sibling succeeded",
+				"skipped": "skipped",
 				"notMaterialized": "not created yet",
 				"template": "template — materializes per task"
 			},
@@ -5228,8 +5230,9 @@
 					"routeTruncated": "shortened",
 					"routeSatisfied": "satisfied → {{nodes}}",
 					"routeDead": "not taken → {{nodes}}",
+					"routeWaived": "excused → {{nodes}}",
 					"gateAnswer": "answered {{answer}}",
-					"routeGateNote": "A satisfied edge means its condition fired, not that the successor ran — a join can still skip on a dead sibling edge."
+					"routeGateNote": "A satisfied edge means its condition fired, not that the successor ran — a join can still skip on a dead sibling edge. An excused edge left this node's own skip without killing an All join, but it admits nobody on its own."
 				},
 				"failureGroup": {
 					"Cancelled": "Cancelled",
