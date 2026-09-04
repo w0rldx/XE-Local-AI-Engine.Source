@@ -6074,6 +6074,7 @@
 			"passwordLabel": "Passwort",
 			"signInButton": "Anmelden",
 			"errorIncorrectPassword": "Falsches Passwort. Bitte erneut versuchen.",
+			"errorLockedOut": "Zu viele fehlgeschlagene Anmeldeversuche. Dieses Konto ist gesperrt. Versuche es in {{minutes}} Min. erneut.",
 			"errorNodeUnreachable": "Node nicht erreichbar. Prüfe, ob sie läuft, und versuche es erneut.",
 			"errorGeneric": "Anmeldung fehlgeschlagen. Bitte erneut versuchen."
 		},
