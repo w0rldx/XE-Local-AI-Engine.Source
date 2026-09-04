@@ -195,6 +195,28 @@ internal static class GraphWorkflowGraphs
                                               }
                                               """;
 
+    /// <summary>
+    ///     One branch comparing against an EXPLICIT JSON null, beside one whose operator takes no value at all. The
+    ///     two absences are different — a value that is null, and no value member — and a round trip that collapses
+    ///     them turns the first into the second, which the parser refuses.
+    /// </summary>
+    public const string ConditionOnExplicitNull = """
+                                                  {
+                                                    "schemaVersion": 1,
+                                                    "nodes": [
+                                                      { "key": "start", "kind": "Start" },
+                                                      { "key": "check", "kind": "Condition", "config": { "path": "output.json.reason" } },
+                                                      { "key": "unset", "kind": "End", "config": { "outcome": "completed" } },
+                                                      { "key": "given", "kind": "End", "config": { "outcome": "completed" } }
+                                                    ],
+                                                    "edges": [
+                                                      { "key": "e1", "from": "start", "to": "check" },
+                                                      { "key": "e2", "from": "check", "to": "unset", "condition": { "op": "eq", "value": null } },
+                                                      { "key": "e3", "from": "check", "to": "given", "condition": { "op": "exists" } }
+                                                    ]
+                                                  }
+                                                  """;
+
     /// <summary>Two End nodes, so "the run reached an end" is not the same question as "the last node succeeded".</summary>
     public const string TwoEnds = """
                                   {

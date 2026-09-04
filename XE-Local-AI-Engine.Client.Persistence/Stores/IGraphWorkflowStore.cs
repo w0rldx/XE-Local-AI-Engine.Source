@@ -67,12 +67,13 @@ public sealed record CreateGraphWorkflowDefinitionCommand(
 ///     A partial edit: every optional member left null means "leave it alone", which is what lets a rename travel
 ///     without the caller re-sending a graph it never read.
 ///     <para>
-///         With ONE exception: <see cref="NodeCount" /> is required whenever <see cref="GraphJson" /> is, and a graph
-///         without it is refused with an <see cref="ArgumentException" />. The count is denormalized so the definition
-///         list never decrypts a blob, so a new graph beside the old graph's count is precisely the lie that column
-///         exists to prevent. <see cref="SchemaVersion" /> stays optional: this node understands one schema version and
-///         the parser refuses every other, so a graph that reached the store IS that version and the stored value
-///         already says so.
+///         With ONE exception: <see cref="NodeCount" /> and <see cref="GraphJson" /> travel TOGETHER or not at all, and
+///         either one without the other is refused with an <see cref="ArgumentException" />. The count is denormalized
+///         so the definition list never decrypts a blob, which makes both halves of that the same lie: a new graph
+///         beside the old graph's count, or a new count beside the graph it was not taken from. The count is derived,
+///         never edited. <see cref="SchemaVersion" /> stays optional: this node understands one schema version and the
+///         parser refuses every other, so a graph that reached the store IS that version and the stored value already
+///         says so.
 ///     </para>
 /// </summary>
 public sealed record UpdateGraphWorkflowDefinitionCommand(

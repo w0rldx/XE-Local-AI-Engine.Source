@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1;
 
 using FastEndpoints;
-using FluentValidation.Results;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -25,12 +24,23 @@ public sealed class CreateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefiniti
     {
         Post(LocalApiRoutes.GraphWorkflows.Definitions);
         Policies(NodeAuthorizationPolicies.Operator);
-        Description(static builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest));
+        Options(static builder => builder.WithMetadata(new GraphWorkflowRequestSizeLimit()));
+        // 201 is what the success path actually sends, so it is declared: the generated client narrows the create
+        // response off this, and a route documented as 200 only would type the one status it never answers.
+        Description(static builder => builder.Produces<GraphWorkflowDefinitionResponse>(StatusCodes.Status201Created)
+                                             .ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                                             .ProducesProblem(StatusCodes.Status413PayloadTooLarge));
     }
 
     public override async Task HandleAsync(CreateGraphWorkflowDefinitionRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
+
+        if (GraphWorkflowRequestSizeLimit.RefuseIfOversized(HttpContext.Request, this))
+        {
+            await Send.ErrorsAsync(StatusCodes.Status413PayloadTooLarge, ct).ConfigureAwait(false);
+            return;
+        }
 
         try
         {
@@ -45,21 +55,7 @@ public sealed class CreateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefiniti
         }
         catch (GraphWorkflowValidationException exception)
         {
-            foreach (var error in exception.Result.Errors)
-            {
-                // The node or edge key becomes the failure's property name, which is what lets the editor draw the
-                // complaint on the offending element. A whole-document failure has no element, so it goes to
-                // FastEndpoints' own general-errors field rather than to a key nothing on the canvas answers to.
-                if (error.Key is { } key)
-                {
-                    AddError(new ValidationFailure(key, error.Message));
-                }
-                else
-                {
-                    AddError(error.Message);
-                }
-            }
-
+            GraphWorkflowValidationErrors.AddTo(this, exception.Result);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
     }

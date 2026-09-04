@@ -23,11 +23,19 @@ public sealed class ValidateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefini
     {
         Post(LocalApiRoutes.GraphWorkflows.DefinitionsValidate);
         Policies(NodeAuthorizationPolicies.Operator);
+        Options(static builder => builder.WithMetadata(new GraphWorkflowRequestSizeLimit()));
+        Description(static builder => builder.ProducesProblem(StatusCodes.Status413PayloadTooLarge));
     }
 
     public override async Task HandleAsync(ValidateGraphWorkflowDefinitionRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
+
+        if (GraphWorkflowRequestSizeLimit.RefuseIfOversized(HttpContext.Request, this))
+        {
+            await Send.ErrorsAsync(StatusCodes.Status413PayloadTooLarge, ct).ConfigureAwait(false);
+            return;
+        }
 
         var result = _definitions.Validate(GraphWorkflowContractMapper.ToGraphJson(req.Graph));
 

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1;
 
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 // Requests. Route parameters bind by name, so the property names here are the wire names.
 
@@ -30,6 +31,11 @@ public sealed class UpdateGraphWorkflowDefinitionRequest
 
     public string? Name { get; init; }
 
+    /// <summary>
+    ///     Null leaves the stored description alone; an EMPTY string clears it. The two are distinct on purpose — a
+    ///     rename that carries no description must not wipe one, and an author who deleted the text must be able to
+    ///     say so without a second verb.
+    /// </summary>
     public string? Description { get; init; }
 
     public GraphWorkflowGraph? Graph { get; init; }
@@ -87,11 +93,22 @@ public sealed record GraphWorkflowGraphEdge(string Key, string From, string To, 
 ///     closed, and the edge would silently never fire.
 ///     <para>
 ///         <see cref="Path" /> is optional: a conditional edge leaving a <c>Condition</c> node inherits that node's
-///         <c>config.path</c>. <see cref="Value" /> is nullable so the two operators that take none (<c>Exists</c>,
-///         <c>NotExists</c>) round-trip as the absent member they are stored as.
+///         <c>config.path</c>.
+///     </para>
+///     <para>
+///         <see cref="Value" /> is a NON-nullable <see cref="JsonElement" /> whose <see cref="JsonValueKind.Undefined" />
+///         means "no such member", which is the only shape that keeps the two absences apart. As a
+///         <c>JsonElement?</c> it could not: a JSON <c>null</c> and a missing member both land as <c>null</c>, the
+///         written document drops the member either way, and <c>{"op":"eq","value":null}</c> — a comparison the
+///         evaluator answers — comes back out as the one thing the parser refuses, a value-taking operator with no
+///         value. Undefined is what the ignore condition below skips on the way out, so the two operators that take no
+///         value (<c>Exists</c>, <c>NotExists</c>) still round-trip as the absent member they are stored as.
 ///     </para>
 /// </summary>
-public sealed record GraphWorkflowEdgeCondition(string? Path, string Op, JsonElement? Value);
+public sealed record GraphWorkflowEdgeCondition(string? Path,
+    string Op,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    JsonElement Value);
 
 // Responses. Enums cross the wire as their NAMES and are typed string here; the client re-narrows them.
 

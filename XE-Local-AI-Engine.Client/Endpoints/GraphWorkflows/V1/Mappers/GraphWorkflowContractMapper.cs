@@ -9,15 +9,23 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     encrypted at rest, so a mapper reading one would hand the operator ciphertext.
 ///     <para>
 ///         The graph crosses in BOTH directions here, and deliberately as a deserialize-and-reserialize of the same
-///         field list rather than a projection: a definition read back, edited and saved has to keep every field it
-///         arrived with. Per-kind node settings and an edge condition's value ride as raw <see cref="JsonElement" />,
-///         which is what keeps a boolean a boolean — stringified, it would compare against a real boolean as a type
-///         mismatch, the evaluator fails closed, and the edge would silently never fire.
+///         field list rather than a projection: what survives a round trip is exactly the members these wire records
+///         enumerate, and a member the stored document carries that they do not is DROPPED on the way back out. That
+///         is safe only because every member the runtime reads is enumerated — a document written to a schema version
+///         this node does not speak is refused by the parser rather than quietly trimmed here. Per-kind node settings
+///         and an edge condition's value ride as raw <see cref="JsonElement" />, which is what keeps a boolean a
+///         boolean — stringified, it would compare against a real boolean as a type mismatch, the evaluator fails
+///         closed, and the edge would silently never fire.
 ///     </para>
 /// </summary>
 internal static class GraphWorkflowContractMapper
 {
-    /// <summary>The stored document's own shape: camelCase, nulls omitted, so a round trip through here still parses.</summary>
+    /// <summary>
+    ///     The stored document's own shape: camelCase, nulls omitted, so a round trip through here still parses. An
+    ///     edge condition's <c>value</c> is the one member this must NOT drop when it is null: it carries its own
+    ///     ignore condition, and an absent value is a <see cref="JsonValueKind.Undefined" /> element rather than a
+    ///     null, so an explicit <c>null</c> survives both directions while an absent one stays absent.
+    /// </summary>
     private static readonly JsonSerializerOptions GraphOptions = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull

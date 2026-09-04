@@ -26,6 +26,11 @@ public interface IGraphWorkflowDefinitionService
     ///     A partial edit under optimistic concurrency: every null member leaves the stored value alone, so a rename
     ///     travels without the caller echoing back a graph it never read. A non-null graph is validated and its node
     ///     count written alongside it.
+    ///     <para>
+    ///         <paramref name="description" /> distinguishes the two absences: null leaves the stored description
+    ///         alone, an EMPTY string clears it. Collapsing them would mean an author who deleted the text had no way
+    ///         to say so, or a rename that carried no description silently wiped one.
+    ///     </para>
     /// </summary>
     Task<GraphWorkflowDefinitionSnapshot> UpdateAsync(Guid definitionId,
         int expectedVersion,

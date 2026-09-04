@@ -94,6 +94,15 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
                                  nameof(command));
             graph = Utf8(command.GraphJson);
         }
+        else if (command.NodeCount is not null)
+        {
+            // The mirror refusal, for the same reason: a count written WITHOUT the graph it counts leaves the stored
+            // document beside a number that is not its own, and the list reports that number without ever opening the
+            // blob that would contradict it. The count is not an editable field — it is derived, and it travels with
+            // what it is derived from.
+            throw new ArgumentException("A graph workflow definition edit that carries a node count must carry the graph it counts with it.",
+                nameof(command));
+        }
 
         if (command.NodeCount is < 0)
         {
@@ -129,10 +138,6 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
             // stored value already says so. The day a second version ships, this line becomes a lie and the command
             // has to carry it — which is why it is spelled out rather than defaulted quietly.
             definition.SchemaVersion = command.SchemaVersion ?? definition.SchemaVersion;
-        }
-        else if (command.NodeCount is { } nodeCount)
-        {
-            definition.NodeCount = nodeCount;
         }
 
         definition.Version++;

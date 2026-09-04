@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1;
 
 using FastEndpoints;
-using FluentValidation.Results;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -20,14 +19,22 @@ public sealed class UpdateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefiniti
     {
         Put(LocalApiRoutes.GraphWorkflows.DefinitionById);
         Policies(NodeAuthorizationPolicies.Operator);
+        Options(static builder => builder.WithMetadata(new GraphWorkflowRequestSizeLimit()));
         Description(static builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                              .Produces(StatusCodes.Status404NotFound)
+                                             .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
                                              .ProducesConflictProblemDetails());
     }
 
     public override async Task HandleAsync(UpdateGraphWorkflowDefinitionRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
+
+        if (GraphWorkflowRequestSizeLimit.RefuseIfOversized(HttpContext.Request, this))
+        {
+            await Send.ErrorsAsync(StatusCodes.Status413PayloadTooLarge, ct).ConfigureAwait(false);
+            return;
+        }
 
         // A null graph leaves the stored one alone — a rename must not have to echo a graph back to keep it. Runs that
         // already pinned this definition are unaffected either way: they carry their own snapshot.
@@ -40,21 +47,7 @@ public sealed class UpdateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefiniti
         }
         catch (GraphWorkflowValidationException exception)
         {
-            foreach (var error in exception.Result.Errors)
-            {
-                // The node or edge key becomes the failure's property name, which is what lets the editor draw the
-                // complaint on the offending element. A whole-document failure has no element, so it goes to
-                // FastEndpoints' own general-errors field rather than to a key nothing on the canvas answers to.
-                if (error.Key is { } key)
-                {
-                    AddError(new ValidationFailure(key, error.Message));
-                }
-                else
-                {
-                    AddError(error.Message);
-                }
-            }
-
+            GraphWorkflowValidationErrors.AddTo(this, exception.Result);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
     }

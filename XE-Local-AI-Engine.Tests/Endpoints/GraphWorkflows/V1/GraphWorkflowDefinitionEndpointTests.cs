@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Tests.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -185,6 +186,14 @@ public sealed class GraphWorkflowDefinitionEndpointTests
             "the stored graph must keep the boolean, not a string spelling of one.");
         using var document = JsonDocument.Parse(body);
         AssertEx.Equal(JsonValueKind.True, ConditionValueKind(document.RootElement.GetProperty("graph")), "and the read back must too.");
+
+        // config is raw JSON on the way through, and a response schema is the member most able to be flattened by a
+        // mapper that thought it understood the shape. An Agent that loses it stops answering in JSON at all.
+        var schema = NodeByKey(storedDocument.RootElement, "analyze").GetProperty("config").GetProperty("responseJsonSchema");
+        AssertEx.Equal("object", schema.GetProperty("type").GetString(), "the stored config must keep the response schema verbatim.");
+        AssertEx.Equal("boolean",
+            schema.GetProperty("properties").GetProperty("requiresReview").GetProperty("type").GetString(),
+            "including the nested property the condition edges branch on.");
     }
 
     /// <summary>
@@ -210,6 +219,14 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         using var storedDocument = JsonDocument.Parse(AssertEx.NotNull(stored));
         AssertPosition(storedDocument.RootElement, "the stored graph");
+
+        // The Tool node's own config members, which no other kind carries: a mapper that projected a common subset
+        // would drop exactly these, and the tool would run with no arguments and nothing bound to its inputs.
+        var toolConfig = NodeByKey(storedDocument.RootElement, "lookup").GetProperty("config");
+        AssertEx.Equal("notes.md", toolConfig.GetProperty("arguments").GetProperty("path").GetString(), "the stored config must keep the literal arguments.");
+        AssertEx.Equal("output.json.path",
+            toolConfig.GetProperty("argumentBindings").GetProperty("path").GetString(),
+            "and the bindings that overwrite them from an upstream output.");
         using var document = JsonDocument.Parse(body);
         AssertPosition(document.RootElement.GetProperty("graph"), "the response");
         AssertEx.False(NodeByKey(document.RootElement.GetProperty("graph"), "peek").TryGetProperty("position", out var absent) && absent.ValueKind != JsonValueKind.Null,
@@ -294,6 +311,117 @@ public sealed class GraphWorkflowDefinitionEndpointTests
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, "a missing definition is a 404, never the catch-all 500.");
     }
+
+    /// <summary>
+    ///     An explicit <c>null</c> is a condition value the evaluator compares — <c>Compare</c> has a null arm — and a
+    ///     missing member is not one at all. A round trip that collapses the two turns a working equality into the one
+    ///     shape the parser refuses, so the save that follows the edit answers 400 for a graph the author never
+    ///     changed.
+    /// </summary>
+    [Test]
+    public async Task Definition_KeepsAnExplicitNullConditionValueThroughTheRoundTrip()
+    {
+        var store = Store();
+        string? stored = null;
+        store.CreateDefinitionAsync(Arg.Any<CreateGraphWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call =>
+             {
+                 stored = call.Arg<CreateGraphWorkflowDefinitionCommand>().GraphJson;
+                 return Snapshot(stored);
+             });
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.ConditionOnExplicitNull)).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
+        using var storedDocument = JsonDocument.Parse(AssertEx.NotNull(stored));
+        AssertExplicitNullCondition(storedDocument.RootElement, "the stored graph");
+        using var document = JsonDocument.Parse(body);
+        AssertExplicitNullCondition(document.RootElement.GetProperty("graph"), "the response");
+    }
+
+    /// <summary>
+    ///     The count is denormalized onto the row so the list never decrypts a blob, so it has to arrive WITH the graph
+    ///     it was taken from. A graph reaching the store beside the previous graph's count is the one lie that column
+    ///     exists to prevent.
+    /// </summary>
+    [Test]
+    public async Task UpdateDefinition_WithAGraph_SendsItAndItsNodeCountTogether()
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory,
+                                       "PUT",
+                                       Definition,
+                                       $$"""{"version":4,"name":"renamed","graph":{{GraphWorkflowGraphs.StartAgentEnd}}}""")
+                                   .ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await store.Received(1)
+                   .UpdateDefinitionAsync(Arg.Is<UpdateGraphWorkflowDefinitionCommand>(command => command.GraphJson != null && command.NodeCount == 3),
+                       Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     Null and empty are different edits: null leaves the stored description alone, an empty string clears it. An
+    ///     author who deleted the text has no other way to say so.
+    /// </summary>
+    [Test]
+    public async Task UpdateDefinition_WithAnEmptyDescription_ClearsIt()
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "PUT", Definition, """{"version":4,"description":""}""").ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await store.Received(1)
+                   .UpdateDefinitionAsync(Arg.Is<UpdateGraphWorkflowDefinitionCommand>(command => command.Description == string.Empty),
+                       Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     The graph-carrying routes cap their body. Without one they inherit the host's 30 MB default, and a body that
+    ///     size is bound, parsed by the runtime's parser and hashed before the node cap could refuse it.
+    /// </summary>
+    [Test]
+    [Arguments("POST", Definitions)]
+    [Arguments("PUT", Definition)]
+    [Arguments("POST", Validate)]
+    public async Task GraphRoute_WithABodyOverTheCap_Returns413AndNeverReachesTheStore(string method, string route)
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, method, route, OversizedBody()).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode, $"{method} {route} must refuse a body over the cap.");
+        AssertEx.Empty(store.ReceivedCalls());
+    }
+
+    /// <summary>
+    ///     A body whose bulk is in the GRAPH rather than in a bounded field: name and description have their own length
+    ///     rules, so an oversized one of those would answer 400 from the validator and prove nothing about the cap.
+    /// </summary>
+    private static string OversizedBody()
+    {
+        var graph = GraphWorkflowGraphs.StartAgentEnd.Replace("Analyze the input.", new string('a', (int)GraphWorkflowRequestSizeLimit.MaxBytes), StringComparison.Ordinal);
+        return $$"""{"definitionId":"22222222-2222-2222-2222-222222222222","version":4,"name":"Triage","graph":{{graph}}}""";
+    }
+
+    private static void AssertExplicitNullCondition(JsonElement graph, string where)
+    {
+        AssertEx.Equal(JsonValueKind.Null,
+            EdgeByKey(graph, "e2").GetProperty("condition").GetProperty("value").ValueKind,
+            $"{where} must keep the explicit null as a null the evaluator can compare, not as a missing member.");
+        AssertEx.False(EdgeByKey(graph, "e3").GetProperty("condition").TryGetProperty("value", out _),
+            $"{where} must leave an operator that takes no value carrying none, rather than inventing a null for it.");
+    }
+
+    private static JsonElement EdgeByKey(JsonElement graph, string key) =>
+        graph.GetProperty("edges").EnumerateArray().First(edge => edge.GetProperty("key").GetString() == key);
 
     private static JsonValueKind ConditionValueKind(JsonElement graph) =>
         graph.GetProperty("edges")

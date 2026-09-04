@@ -154,6 +154,41 @@ public sealed class GraphWorkflowStoreTests
     }
 
     /// <summary>
+    ///     The mirror of the rule above, and the reason it is a rule rather than a courtesy: the node count is DERIVED
+    ///     from the graph, so a count arriving without one would sit beside a document it was not taken from — and the
+    ///     definition list, which reports that column precisely so it never has to decrypt a blob, would report it as
+    ///     the truth about a graph it never opened.
+    /// </summary>
+    [Test]
+    public async Task UpdateDefinition_WithANodeCountButNoGraph_IsRefused()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = GraphWorkflowTestFixture.StoreFor(context);
+        var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store).ConfigureAwait(false);
+
+        var refusal = await AssertEx.ThrowsAsync<ArgumentException>(
+                                        () => store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id,
+                                            created.Version,
+                                            NodeCount: 99)),
+                                        "A node count without the graph it counts must be refused rather than written.")
+                                    .ConfigureAwait(false);
+
+        AssertEx.Equal(nameof(ArgumentException), refusal.GetType().Name, "and refused as an argument fault, not as a conflict or a not-found.");
+
+        var unchanged = await store.GetDefinitionAsync(created.Id).ConfigureAwait(false);
+        AssertEx.Equal(created.NodeCount, unchanged.NodeCount, "The refused edit must not have rewritten the count.");
+        AssertEx.Equal(created.Version, unchanged.Version, "nor bumped the version.");
+
+        // The negative control: the SAME edit with neither member is an ordinary rename, so the refusal above is about
+        // the orphaned count and not about the command being rejected for some other reason.
+        var renamed = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id, created.Version, Name: "Renamed")).ConfigureAwait(false);
+
+        AssertEx.Equal("Renamed", renamed.Name);
+        AssertEx.Equal(created.NodeCount, renamed.NodeCount, "and a rename leaves the count exactly where the graph put it.");
+    }
+
+    /// <summary>
     ///     The conflict the create path owns, and its negative control. Both halves matter: the unique index refusing a
     ///     duplicate id IS "already exists", and a write that failed for any other reason is NOT — answering 409 to a
     ///     node whose table is gone would hide the real fault behind a retryable-looking one.
