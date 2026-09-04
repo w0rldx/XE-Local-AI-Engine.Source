@@ -3500,6 +3500,22 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task AddModelReadiness_SumsEveryWarmAndStaysNullUntilOneHappens()
+    {
+        // Fixed arithmetic, no clock: the runner test above measures the real two-warm path but reads a wall-clock
+        // threshold, which a last-write-wins regression could still clear on a slow worker. This one cannot.
+        var stream = new InvocationRunner.StreamState();
+
+        AssertEx.Null(stream.ModelReadinessDurationMs, "no warm happened, and null is what says so — zero would claim a proven warm start");
+
+        stream.AddModelReadiness(1_500d);
+        AssertEx.Equal(expected: 1_500d, stream.ModelReadinessDurationMs);
+
+        stream.AddModelReadiness(2_500d);
+        AssertEx.Equal(expected: 4_000d, stream.ModelReadinessDurationMs, "the second warm adds to the first rather than replacing it");
+    }
+
+    [Test]
     public async Task Dispatch_WhenTheFallbackWarmsASecondTime_ReportsBothWarmsAsOneReadinessTotal()
     {
         // Two local warms in one turn: the dispatched fast model is warmed, its send fails before first output, and the
