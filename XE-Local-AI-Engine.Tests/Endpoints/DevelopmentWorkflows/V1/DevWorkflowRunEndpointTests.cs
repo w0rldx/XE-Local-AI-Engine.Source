@@ -579,7 +579,7 @@ public sealed class DevWorkflowRunEndpointTests
     }
 
     /// <summary>
-    ///     The drill-down carries all twelve cost columns, and the two documents arrive PARSED: the route as its own
+    ///     The drill-down carries all thirteen cost columns, and the two documents arrive PARSED: the route as its own
     ///     object and the tool names as an array. The route document is produced by the runtime's own writer here, so
     ///     writer and reader are pinned to one shape rather than to two spellings of it.
     ///     <para>
@@ -588,7 +588,7 @@ public sealed class DevWorkflowRunEndpointTests
     ///     </para>
     /// </summary>
     [Test]
-    public async Task GetNodeRun_CarriesTheTwelveCostColumnsWithBothDocumentsParsed()
+    public async Task GetNodeRun_CarriesTheThirteenCostColumnsWithBothDocumentsParsed()
     {
         var store = Store();
         store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(ResearchNodeRunWithCost());
@@ -608,6 +608,9 @@ public sealed class DevWorkflowRunEndpointTests
         AssertEx.Equal(expected: 7, root.GetProperty("toolCalls").GetInt32());
         AssertEx.Equal(expected: 320L, root.GetProperty("toolSchemaTokens").GetInt64());
         AssertEx.Equal(expected: 8100L, root.GetProperty("agentTurnMs").GetInt64());
+        AssertEx.Equal(expected: 2700L,
+            root.GetProperty("modelReadinessMs").GetInt64(),
+            "the slice of the turns that was a local runtime warming rather than generating.");
         AssertEx.Equal(expected: 3, root.GetProperty("workSessionSteps").GetInt32());
 
         AssertEx.Equal("qwen3-27b-instruct-q4", root.GetProperty("servedModelName").GetString(), "the receipt: what actually served the last turn.");
@@ -627,7 +630,7 @@ public sealed class DevWorkflowRunEndpointTests
 
     /// <summary>
     ///     A node run written before this slice — which is every row already in an operator's database — answers null
-    ///     for all twelve rather than zero. Zero would say the attempt cost nothing.
+    ///     for all thirteen rather than zero. Zero would say the attempt cost nothing.
     /// </summary>
     [Test]
     public async Task GetNodeRun_OnARowFromBeforeTheSlice_AnswersNullForEveryCostMember()
@@ -644,7 +647,7 @@ public sealed class DevWorkflowRunEndpointTests
         foreach (var member in new[]
                  {
                      "inputTokens", "outputTokens", "reasoningTokens", "estimatedInputTokens", "providerCalls", "toolCalls", "toolSchemaTokens",
-                     "toolNames", "agentTurnMs", "servedModelName", "route", "workSessionSteps", "failureClassGroup"
+                     "toolNames", "agentTurnMs", "modelReadinessMs", "servedModelName", "route", "workSessionSteps", "failureClassGroup"
                  })
         {
             AssertEx.Equal(JsonValueKind.Null, root.GetProperty(member).ValueKind, $"'{member}' has nothing to report on a legacy row, which is not zero.");
@@ -1529,7 +1532,7 @@ public sealed class DevWorkflowRunEndpointTests
             CreatedAtUtc: 10);
 
     /// <summary>
-    ///     The agent node run, carrying the twelve as a real settle would have written them. The route document is
+    ///     The agent node run, carrying the thirteen as a real settle would have written them. The route document is
     ///     built with the RUNTIME's own writer, so this test cannot pass against a reader that invented its own shape.
     /// </summary>
     private static DevWorkflowNodeRunSnapshot ResearchNodeRunWithCost() =>
@@ -1549,6 +1552,7 @@ public sealed class DevWorkflowRunEndpointTests
             ToolSchemaTokens = 320,
             ToolNamesJson = """["read_document","search_web","…"]""",
             AgentTurnMs = 8100,
+            ModelReadinessMs = 2700,
             ServedModelName = "qwen3-27b-instruct-q4",
             RouteJson = DevWorkflowStateMachine.RouteJson(new DevWorkflowRoute(["approval"], ["dead-end"], ["excused"], "Approve", Truncated: true)),
             WorkSessionSteps = 3

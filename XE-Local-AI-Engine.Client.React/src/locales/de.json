@@ -5276,6 +5276,7 @@
 					"queuedFor": "In der Warteschlange",
 					"ranFor": "Laufzeit",
 					"turnTime": "Agent-Turns",
+					"modelReadiness": "Modellbereitschaft",
 					"outsideTurnTime": "Außerhalb der Turns",
 					"toolNames": "Aufgerufene Tools",
 					"toolNamesTruncated": "…und weitere",

@@ -5276,6 +5276,7 @@
 					"queuedFor": "Queued for",
 					"ranFor": "Ran for",
 					"turnTime": "Agent turns",
+					"modelReadiness": "Model readiness",
 					"outsideTurnTime": "Outside the turns",
 					"toolNames": "Tools called",
 					"toolNamesTruncated": "…and more",

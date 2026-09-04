@@ -780,7 +780,7 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.queryByTestId("dev-workflow-node-rule-sets")).toBeNull();
 	});
 
-	it("renders the cost section with the twelve columns, the tool chips and the route", () => {
+	it("renders the cost section with the thirteen columns, the tool chips and the route", () => {
 		renderPanel(
 			devWorkflowNodeRunDetail({
 				status: "Succeeded",
@@ -796,6 +796,7 @@ describe("DevWorkflowNodePanel", () => {
 				toolSchemaTokens: 320,
 				toolNames: ["read_document", "search_web", "…"],
 				agentTurnMs: 40_000,
+				modelReadinessMs: 12_000,
 				servedModelName: "qwen3-27b-instruct-q4",
 				workSessionSteps: 3,
 				route: { satisfied: ["approval"], dead: ["fallback"], waived: ["excused-leaf"], gateAnswer: "Approve", truncated: true },
@@ -815,6 +816,8 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.getByTestId("dev-workflow-node-cost-queued").textContent).toBe("2s");
 		expect(screen.getByTestId("dev-workflow-node-cost-ran").textContent).toBe("1m 00s");
 		expect(screen.getByTestId("dev-workflow-node-cost-turn-time").textContent).toBe("40s");
+		// Part OF the agent turns, not beside them: the wait for llama-server to launch and load the model.
+		expect(screen.getByTestId("dev-workflow-node-cost-model-readiness").textContent).toBe("12s");
 		expect(screen.getByTestId("dev-workflow-node-cost-outside-turn-time").textContent).toBe("20s");
 
 		// The estimate is suppressed while the real count is present: two numbers for one quantity invite addition.
@@ -846,6 +849,31 @@ describe("DevWorkflowNodePanel", () => {
 
 		expect(screen.getByTestId("dev-workflow-node-cost-route-satisfied").textContent).toBe("satisfied → approval");
 		expect(screen.queryByTestId("dev-workflow-node-cost-route-waived")).toBeNull();
+	});
+
+	// A cloud-served node, and one that reused an already-loaded model, warmed nothing. A "0s" row would claim the
+	// launch was instant instead of saying it never happened.
+	it("draws no model-readiness row when no turn warmed a local runtime", () => {
+		renderPanel(devWorkflowNodeRunDetail({ status: "Succeeded", agentTurnMs: 40_000, modelReadinessMs: null }));
+
+		expect(screen.getByTestId("dev-workflow-node-cost-turn-time").textContent).toBe("40s");
+		expect(screen.queryByTestId("dev-workflow-node-cost-model-readiness")).toBeNull();
+	});
+
+	// Readiness alone is still a measurement, so the section must show the row rather than "nothing was recorded".
+	it("counts a lone model-readiness reading as something recorded", () => {
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				status: "Succeeded",
+				queuedAtUtc: null,
+				startedAtUtc: null,
+				completedAtUtc: null,
+				modelReadinessMs: 12_000,
+			}),
+		);
+
+		expect(screen.getByTestId("dev-workflow-node-cost-model-readiness").textContent).toBe("12s");
+		expect(screen.queryByTestId("dev-workflow-node-cost-none")).toBeNull();
 	});
 
 	it("shows the estimate only where the real input count is missing", () => {

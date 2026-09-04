@@ -34053,6 +34053,10 @@
           "failureClassGroup": {
             "type": "string",
             "nullable": true
+          },
+          "modelReadinessMs": {
+            "type": "integer",
+            "nullable": true
           }
         }
       },

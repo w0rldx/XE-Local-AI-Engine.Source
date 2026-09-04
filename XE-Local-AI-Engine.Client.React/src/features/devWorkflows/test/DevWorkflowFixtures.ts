@@ -158,6 +158,8 @@ export function devWorkflowNodeRunDetail(overrides: Partial<NodeRunDetailRespons
 		hasRejectBranch: false,
 		failureClass: null,
 		terminalReason: null,
+		// Explicit rather than absent: the default node run warmed no local runtime, which is not a zero-length warm.
+		modelReadinessMs: null,
 		decisions: [],
 		...overrides,
 	};

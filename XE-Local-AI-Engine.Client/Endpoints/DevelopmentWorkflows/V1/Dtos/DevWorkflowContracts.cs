@@ -594,7 +594,14 @@ public sealed record DevWorkflowNodeRunDetailResponse(
     ///     (<c>AgentUnitFailureClass</c>), so a workflow node run, a chat run envelope and a Development attempt can be
     ///     grouped together in a report. Null exactly when the row records no failure. Nothing routes on it.
     /// </summary>
-    string? FailureClassGroup);
+    string? FailureClassGroup,
+
+    /// <summary>
+    ///     How much of <see cref="AgentTurnMs" /> the turns spent WAITING for a local runtime — llama-server launching
+    ///     and loading the model — rather than generating. Null when no turn warmed one, which is every cloud-served
+    ///     node and every node that reused an already-loaded model, and is not zero.
+    /// </summary>
+    long? ModelReadinessMs);
 
 /// <summary>
 ///     Which rule text actually applied, by content hash. Names the document without copying its body, so the audit
