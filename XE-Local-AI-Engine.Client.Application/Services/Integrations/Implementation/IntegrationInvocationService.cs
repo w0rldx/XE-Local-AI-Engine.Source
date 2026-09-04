@@ -76,7 +76,13 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
 
         var triggerName = IIntegrationTriggerService.NormalizeName(request.TriggerName);
         var trigger = await _triggers.GetByNameAsync(triggerName, cancellationToken).ConfigureAwait(false);
-        if (trigger is null || !trigger.Enabled || !Allows(key, trigger.Id))
+
+        // The allowlist is parsed and scanned BEFORE the combined decision, never short-circuited behind the trigger
+        // lookup. A `trigger is null || !Allows(...)` reads identically and behaves identically, but it does strictly
+        // less work for a name that does not exist than for one that exists and is not allowlisted — which is a timing
+        // signal for trigger-name existence behind two byte-identical 404s.
+        var allowed = Allows(key, trigger?.Id ?? Guid.Empty);
+        if (trigger is null || !trigger.Enabled || !allowed)
         {
             return Rejected(IntegrationAcceptOutcome.TriggerNotFound, TriggerNotFoundMessage);
         }
@@ -95,13 +101,29 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             : null;
         try
         {
+            // 3. Dedup, scoped to (principal, request id) — the pair the unique index covers. A FOREIGN request id is
+            //    simply not found, so one integrator can never preclaim another's and force it a permanent 409.
+            //
+            //    It runs BEFORE the session gate and before the input checks, and that order is the whole point of
+            //    `requestId`: a retry happens exactly when the original 202 was lost, which is exactly when the
+            //    original execution is still running on the session it named. Resolving the session first answered
+            //    such a retry with SessionBusy 409, and a session closed since answered SessionClosed — in both cases
+            //    hiding the execution id the caller was retrying to learn. Nothing here needs the session: the
+            //    fingerprint covers the principal, the trigger name, the requested session id and the raw body.
+            var fingerprint = IntegrationRequestFingerprint.Compute(key.PrincipalId, triggerName, request.SessionId, request.RawBody.Span);
+            var duplicate = await ResolveDuplicateAsync(key.PrincipalId, request.RequestId, fingerprint, cancellationToken).ConfigureAwait(false);
+            if (duplicate is not null)
+            {
+                return duplicate;
+            }
+
             var gate = await _sessions.ResolveForInvocationAsync(request.SessionId, trigger, caller, cancellationToken).ConfigureAwait(false);
             if (gate.Outcome != IntegrationAcceptOutcome.Accepted)
             {
                 return Rejected(gate.Outcome, gate.Message);
             }
 
-            // 3. Inputs, then the composed seed measured against its ceiling. The composer never truncates: silently
+            // 4. Inputs, then the composed seed measured against its ceiling. The composer never truncates: silently
             //    trimming an external payload changes the meaning of the request without telling the caller.
             if (!AcceptsInputs(trigger, request.Inputs, out var inputsMessage))
             {
@@ -112,15 +134,6 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             if (IntegrationSeedComposer.Utf8ByteCount(seed) > _options.MaxSeedBytes)
             {
                 return Rejected(IntegrationAcceptOutcome.InputsRejected, "The composed request is larger than this node accepts.");
-            }
-
-            // 4. Dedup, scoped to (principal, request id) — the pair the unique index covers. A FOREIGN request id is
-            //    simply not found, so one integrator can never preclaim another's and force it a permanent 409.
-            var fingerprint = IntegrationRequestFingerprint.Compute(key.PrincipalId, triggerName, request.SessionId, request.RawBody.Span);
-            var duplicate = await ResolveDuplicateAsync(key.PrincipalId, request.RequestId, fingerprint, cancellationToken).ConfigureAwait(false);
-            if (duplicate is not null)
-            {
-                return duplicate;
             }
 
             return await AdmitAsync(request, key.PrincipalId, trigger, gate.Existing, seed, fingerprint, cancellationToken).ConfigureAwait(false);

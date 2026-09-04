@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Integrations;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -309,6 +309,26 @@ public sealed class EmitOutputToolHandlerTests
     }
 
     [Test]
+    public async Task MalformedArguments_DoNotPutTheModelsPropertyNameInTheLog()
+    {
+        // UnmappedMemberHandling.Disallow makes the parser quote the unexpected PROPERTY NAME, and that name is
+        // model-produced: a prompt can steer generated text into it. Attaching the exception carried that straight
+        // into the debug log, against the no prompt/request/response content rule.
+        using var fixture = new Fixture();
+        using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
+
+        var answer = await fixture.Handler.ExecuteAsync("""{"payload":{"a":1},"customer-secret-launch-code":true}""").ConfigureAwait(false);
+
+        AssertEx.Contains(answer, "Send exactly this shape");
+        AssertEx.Empty(fixture.Logger.Entries.Where(entry => entry.Message.Contains("customer-secret-launch-code", StringComparison.Ordinal)
+                                                             || entry.Exception?.Message.Contains("customer-secret-launch-code", StringComparison.Ordinal) == true));
+        AssertEx.True(fixture.Logger.HasEntry(LogLevel.Debug, "could not read its arguments"),
+            "The refusal is still reported, with the execution id an operator can act on.");
+        AssertEx.Empty(fixture.Logger.Entries.Where(static entry => entry.Exception is not null),
+            "No parser exception may be attached to this entry at all: its message is what carries the property name.");
+    }
+
+    [Test]
     public async Task TheAcknowledgementDoesNotContainThePayload()
     {
         using var fixture = new Fixture();
@@ -381,7 +401,7 @@ public sealed class EmitOutputToolHandlerTests
                 }),
                 Buffer,
                 TimeProvider.System,
-                NullLogger<EmitOutputToolHandler>.Instance);
+                Logger);
 
             StoreCap = maxOutputBytesPerExecution;
             Executions.OutputCapOverride = preCheckCap is null ? null : maxOutputBytesPerExecution;
@@ -398,6 +418,9 @@ public sealed class EmitOutputToolHandlerTests
         public FakeIntegrationExecutionStore Executions { get; } = new();
 
         public RecordingBuffer Buffer { get; }
+
+        /// <summary>The handler's own log, so a suite can assert what a refusal did and did NOT write.</summary>
+        public RecordingLogger<EmitOutputToolHandler> Logger { get; } = new();
 
         public EmitOutputToolHandler Handler { get; }
 

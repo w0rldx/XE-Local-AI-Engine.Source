@@ -120,11 +120,13 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
         {
             request = JsonSerializer.Deserialize<EmitOutputRequest>(jsonArguments, SerializerOptions);
         }
-        catch (JsonException exception)
+        catch (JsonException)
         {
-            // The parser's message names a CLR type and, for an unknown property, never the property the model should
-            // have used. That goes to the log; the model gets a shape it can copy.
-            _logger.LogDebug(exception, "{ToolName} could not read its arguments.", ToolName);
+            // The exception is deliberately NOT attached. Under UnmappedMemberHandling.Disallow the parser's message
+            // quotes the unexpected PROPERTY NAME, which the model produced and which can therefore carry response
+            // content — logging it would break the no prompt/request/response content rule. A fixed sentence plus the
+            // ids is everything an operator can act on anyway; the model gets a shape it can copy.
+            _logger.LogDebug("{ToolName} could not read its arguments for integration execution {ExecutionId}.", ToolName, execution.Id);
             return $"{ToolName} arguments were not valid JSON for this tool. Send exactly this shape and no other keys: "
                    + """{"contentType": "application/json", "payload": {"ok": true}}""";
         }

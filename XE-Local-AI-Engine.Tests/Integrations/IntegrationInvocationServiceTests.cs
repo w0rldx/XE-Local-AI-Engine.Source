@@ -381,6 +381,85 @@ public sealed class IntegrationInvocationServiceTests
         AssertEx.Equal(expected: 2, harness.Executions.Rows.Count, "The row is committed; the failed terminalize leaves it for the restart sweep.");
     }
 
+    [Test]
+    public async Task Accept_WhenAByteIdenticalRetryNamesABusySession_ReturnsTheOriginalExecutionRatherThan409()
+    {
+        // The state a retry actually happens in: the original 202 was lost, so the original execution is still running
+        // on the session the caller named. Resolving the session BEFORE the dedup answered SessionBusy 409 and hid the
+        // execution id the caller was retrying to learn — which is the entire purpose of requestId.
+        var harness = new IntegrationInvokeHarness();
+        var trigger = harness.SeedTrigger("sensor-feed", sessionPolicy: IntegrationSessionPolicy.CallerManaged);
+        var session = harness.SeedSession(trigger.Id);
+        var requestId = Guid.NewGuid();
+        var body = """{"requestId":"x","inputs":[]}"""u8.ToArray();
+
+        var first = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, sessionId: session.Id).ConfigureAwait(false);
+        AssertEx.Equal(IntegrationAcceptOutcome.Accepted, first.Outcome);
+
+        // Nothing terminalized the first execution, so the session is busy — exactly the live state of a lost 202.
+        var replay = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, sessionId: session.Id).ConfigureAwait(false);
+
+        AssertEx.Equal(IntegrationAcceptOutcome.Duplicate, replay.Outcome);
+        AssertEx.Equal(first.ExecutionId, replay.ExecutionId);
+        AssertEx.Equal(expected: 1, harness.Executions.Rows.Count, "A duplicate writes no second row.");
+    }
+
+    [Test]
+    public async Task Accept_WhenAByteIdenticalRetryNamesAClosedSession_ReturnsTheOriginalExecutionRatherThan409()
+    {
+        var harness = new IntegrationInvokeHarness();
+        var trigger = harness.SeedTrigger("sensor-feed", sessionPolicy: IntegrationSessionPolicy.CallerManaged);
+        var session = harness.SeedSession(trigger.Id);
+        var requestId = Guid.NewGuid();
+        var body = """{"requestId":"x","inputs":[]}"""u8.ToArray();
+
+        var first = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, sessionId: session.Id).ConfigureAwait(false);
+        harness.Executions.Complete(first.ExecutionId!.Value);
+        _ = await harness.Sessions.CloseAsync(session.Id, atUtc: 5).ConfigureAwait(false);
+
+        var replay = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, sessionId: session.Id).ConfigureAwait(false);
+
+        AssertEx.Equal(IntegrationAcceptOutcome.Duplicate, replay.Outcome);
+        AssertEx.Equal(first.ExecutionId, replay.ExecutionId);
+    }
+
+    [Test]
+    public async Task Accept_WhenARetryOnABusySessionCarriesADifferentBody_IsStill409()
+    {
+        // The other half of the reorder: moving dedup ahead of the session gate must not turn a genuine conflict into
+        // anything softer.
+        var harness = new IntegrationInvokeHarness();
+        var trigger = harness.SeedTrigger("sensor-feed", sessionPolicy: IntegrationSessionPolicy.CallerManaged);
+        var session = harness.SeedSession(trigger.Id);
+        var requestId = Guid.NewGuid();
+
+        _ = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: """{"a":1}"""u8.ToArray(), sessionId: session.Id).ConfigureAwait(false);
+        var conflict = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: """{"a": 1}"""u8.ToArray(), sessionId: session.Id).ConfigureAwait(false);
+
+        AssertEx.Equal(IntegrationAcceptOutcome.RequestConflict, conflict.Outcome);
+        AssertEx.Null(conflict.ExecutionId);
+    }
+
+    [Test]
+    public async Task Accept_LooksUpTheTriggerTheSameWayForAnUnknownNameAndAnUnauthorizedOne()
+    {
+        // Both answer one byte-identical 404. The fix is that the allowlist parse runs unconditionally, so the two
+        // paths also do the same work; the observable half of that is the trigger read itself, which must happen on
+        // the unknown-name path too rather than being skipped as an obvious rejection.
+        var harness = new IntegrationInvokeHarness();
+        var allowed = harness.SeedTrigger("allowed-feed");
+        var excluded = harness.SeedTrigger("excluded-feed");
+        harness.RestrictKeyTo(allowed.Id);
+
+        var unauthorized = await harness.AcceptAsync(excluded.Name).ConfigureAwait(false);
+        var unknown = await harness.AcceptAsync("no-such-feed").ConfigureAwait(false);
+
+        AssertEx.Equal(IntegrationAcceptOutcome.TriggerNotFound, unauthorized.Outcome);
+        AssertEx.Equal(IntegrationAcceptOutcome.TriggerNotFound, unknown.Outcome);
+        AssertEx.Equal(unauthorized.Message, unknown.Message, "One body for both, so only the work done can tell them apart.");
+        AssertEx.Equal(expected: 2, harness.Triggers.NameLookups, "Both paths perform the trigger read; neither short-circuits past it.");
+    }
+
     private static IntegrationInputDto Text(string text) =>
         new(IntegrationInputKinds.Text, text, Label: null, Json: null);
 

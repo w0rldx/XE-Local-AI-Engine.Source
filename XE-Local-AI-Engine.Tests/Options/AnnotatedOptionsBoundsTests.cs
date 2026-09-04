@@ -168,7 +168,17 @@ public sealed class AnnotatedOptionsBoundsTests
             error => error.MemberNames.Contains(nameof(IntegrationOptions.EventBufferMaxBytes), StringComparer.Ordinal),
             "A 64 KiB ring with a 256 KiB per-output ceiling drops every event the moment a big one lands.");
 
-        AssertEx.Empty(Validate(new IntegrationOptions { EventBufferMaxBytes = 262_144, MaxOutputBytes = 262_144 })
+        // Equality used to be accepted, and it is exactly the case that fails in production: MaxOutputBytes bounds the
+        // persisted {contentType, payload} envelope, but the ring measures the whole serialized stream event around it.
+        AssertEx.Contains(Validate(new IntegrationOptions { EventBufferMaxBytes = 262_144, MaxOutputBytes = 262_144 }),
+            error => error.MemberNames.Contains(nameof(IntegrationOptions.EventBufferMaxBytes), StringComparer.Ordinal),
+            "A ring sized to the payload envelope alone cannot hold the stream event that wraps it.");
+
+        AssertEx.Empty(Validate(new IntegrationOptions
+            {
+                EventBufferMaxBytes = 262_144 + IntegrationOptions.MaxStreamEventEnvelopeBytes,
+                MaxOutputBytes = 262_144
+            })
             .Where(static error => error.MemberNames.Contains(nameof(IntegrationOptions.EventBufferMaxBytes), StringComparer.Ordinal)));
 
         AssertEx.Contains(Validate(new IntegrationOptions { MaxOutputBytes = 262_144, MaxOutputBytesPerExecution = 131_072 }),

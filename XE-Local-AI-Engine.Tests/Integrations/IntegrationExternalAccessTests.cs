@@ -82,6 +82,48 @@ public sealed class IntegrationExternalAccessTests
     }
 
     [Test]
+    public async Task ResolveExecution_DoesTheSameStoreWorkWhetherTheRowExistsOrNot()
+    {
+        // The masked bodies were already byte-identical, but the WORK was not: a row that exists and is merely outside
+        // the key's allowlist performed the key query and the allowlist scan, while an unknown id skipped both. That
+        // difference is measurable from a same-host process holding a narrow key, and it answers "does this execution
+        // id exist" behind two identical 404s.
+        var fixture = new Fixture();
+        var caller = new IntegrationCallerIdentity(fixture.PrincipalId, NarrowPrefix);
+
+        var existing = fixture.SeedExecution(fixture.TriggerB, fixture.PrincipalId);
+        var before = fixture.KeyReads;
+        AssertEx.Equal(IntegrationAccessOutcome.Masked, (await fixture.Access.ResolveExecutionAsync(existing, caller)).Outcome);
+        var forExisting = fixture.KeyReads - before;
+
+        before = fixture.KeyReads;
+        AssertEx.Equal(IntegrationAccessOutcome.Masked, (await fixture.Access.ResolveExecutionAsync(Guid.NewGuid(), caller)).Outcome);
+        var forUnknown = fixture.KeyReads - before;
+
+        AssertEx.Equal(forExisting, forUnknown, "An existing-but-disallowed execution must cost exactly what an unknown one costs.");
+        AssertEx.Equal(expected: 1, forExisting, "Both paths perform the key read; neither short-circuits past it.");
+    }
+
+    [Test]
+    public async Task ResolveSession_DoesTheSameStoreWorkWhetherTheRowExistsOrNot()
+    {
+        var fixture = new Fixture();
+        var caller = new IntegrationCallerIdentity(fixture.PrincipalId, NarrowPrefix);
+
+        var existing = fixture.SeedSession(fixture.TriggerB, fixture.PrincipalId);
+        var before = fixture.KeyReads;
+        AssertEx.Equal(IntegrationAccessOutcome.Masked, (await fixture.Access.ResolveSessionAsync(existing, caller)).Outcome);
+        var forExisting = fixture.KeyReads - before;
+
+        before = fixture.KeyReads;
+        AssertEx.Equal(IntegrationAccessOutcome.Masked, (await fixture.Access.ResolveSessionAsync(Guid.NewGuid(), caller)).Outcome);
+        var forUnknown = fixture.KeyReads - before;
+
+        AssertEx.Equal(forExisting, forUnknown, "An existing-but-disallowed session must cost exactly what an unknown one costs.");
+        AssertEx.Equal(expected: 1, forExisting);
+    }
+
+    [Test]
     public async Task ResolveSession_AppliesTheSameRuleAgainstTheSessionsTrigger()
     {
         var fixture = new Fixture();
@@ -217,6 +259,9 @@ public sealed class IntegrationExternalAccessTests
             _sessions.Reassign(seeded.Id, principalId);
             return sessionId;
         }
+
+        /// <summary>Key reads served so far, which is the observable half of the constant-shape rule.</summary>
+        public int KeyReads => _keys.GetByPrefixCalls;
 
         public void NarrowBroadKeyToTriggerA()
         {

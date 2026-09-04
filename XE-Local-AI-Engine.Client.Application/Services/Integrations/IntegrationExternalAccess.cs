@@ -85,13 +85,14 @@ public sealed class IntegrationExternalAccess
     {
         ArgumentNullException.ThrowIfNull(caller);
 
+        // The resource read and the key/allowlist read BOTH happen, then ONE combined decision. Short-circuiting on a
+        // missing or foreign row skipped the key query and the allowlist scan, so an execution id that exists and is
+        // merely out of allowlist did measurably more work than one that does not exist — a timing signal for id
+        // existence behind two byte-identical 404s.
         var execution = await _executions.GetByIdAsync(executionId, cancellationToken).ConfigureAwait(false);
-        if (execution is null || execution.PrincipalId != caller.PrincipalId)
-        {
-            return Masked;
-        }
+        var allowed = await AllowsAsync(caller, execution?.TriggerId ?? Guid.Empty, cancellationToken).ConfigureAwait(false);
 
-        return await AllowsAsync(caller, execution.TriggerId, cancellationToken).ConfigureAwait(false)
+        return execution is not null && execution.PrincipalId == caller.PrincipalId && allowed
             ? new IntegrationAccessResult(IntegrationAccessOutcome.Allowed, execution, Session: null)
             : Masked;
     }
@@ -106,12 +107,12 @@ public sealed class IntegrationExternalAccess
         // same non-result, so there is no loaded row here for a later edit to start reading. The allowlist is the
         // second limb and stays here, because it is an authorisation rule rather than a persistence one.
         var session = await _sessions.GetForPrincipalAsync(sessionId, caller.PrincipalId, cancellationToken).ConfigureAwait(false);
-        if (session is null)
-        {
-            return Masked;
-        }
 
-        return await AllowsAsync(caller, session.TriggerId, cancellationToken).ConfigureAwait(false)
+        // Same constant shape as the execution path above: the key read and the allowlist scan run whether or not the
+        // session resolved, so the two masked outcomes cost the same.
+        var allowed = await AllowsAsync(caller, session?.TriggerId ?? Guid.Empty, cancellationToken).ConfigureAwait(false);
+
+        return session is not null && allowed
             ? new IntegrationAccessResult(IntegrationAccessOutcome.Allowed, Execution: null, session)
             : Masked;
     }

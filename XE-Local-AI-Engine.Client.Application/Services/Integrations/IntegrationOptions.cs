@@ -16,6 +16,21 @@ public sealed class IntegrationOptions : IValidatableObject
 {
     public const string Section = "Integrations";
 
+    /// <summary>
+    ///     The worst-case bytes a serialized <see cref="IntegrationStreamEvent" /> adds around an
+    ///     <c>external.output</c> payload envelope: the <c>type</c>, <c>sequence</c>, two GUIDs, <c>occurredAtUtc</c>
+    ///     and their property names. <see cref="MaxOutputBytes" /> bounds only the persisted
+    ///     <c>{"contentType": …, "payload": …}</c> envelope, but the replay ring measures the whole stream event, so
+    ///     comparing the two directly accepted an output that could never fit in the ring: it landed, the ring trimmed
+    ///     it away immediately, and a caller already streaming a 200 got the close without its committed output.
+    ///     <para>
+    ///         Pinned rather than computed, so a bound is a constant an operator can reason about.
+    ///         <c>IntegrationOptionsEnvelopeOverheadTests</c> measures a maximal event and fails if the real overhead
+    ///         ever grows past this; the headroom over the measured ~200 bytes is the margin for a longer event type.
+    ///     </para>
+    /// </summary>
+    public const int MaxStreamEventEnvelopeBytes = 512;
+
     /// <summary>The narrowest replay window allowed: below this a caller could not realistically re-attach after a drop.</summary>
     private static readonly TimeSpan MinEventBufferTtl = TimeSpan.FromSeconds(10);
 
@@ -139,11 +154,12 @@ public sealed class IntegrationOptions : IValidatableObject
         }
 
         // One output event larger than the whole ring's byte cap trims the ring to empty the moment it lands, which
-        // costs every event before it and hands the reader a gap for a run that is still producing.
-        if (EventBufferMaxBytes < MaxOutputBytes)
+        // costs every event before it and hands the reader a gap for a run that is still producing. The comparison is
+        // against the payload envelope PLUS the stream event around it, because that is what the ring measures.
+        if (EventBufferMaxBytes < (long)MaxOutputBytes + MaxStreamEventEnvelopeBytes)
         {
             yield return new ValidationResult(
-                $"{Section}:{nameof(EventBufferMaxBytes)} must be at least {nameof(MaxOutputBytes)}.",
+                $"{Section}:{nameof(EventBufferMaxBytes)} must be at least {nameof(MaxOutputBytes)} plus {MaxStreamEventEnvelopeBytes} bytes of stream-event envelope.",
                 [nameof(EventBufferMaxBytes), nameof(MaxOutputBytes)]);
         }
 
