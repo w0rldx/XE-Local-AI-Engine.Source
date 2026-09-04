@@ -41,6 +41,7 @@ new column.
 curl -s "$NODE/api/local/v1/development-workflows/runs/$RUN_ID/events?sinceSeq=0&limit=200" \
   | jq '[.items[] | select(.eventType == "node.retry.scheduled") | (.detailJson | fromjson)]
         | {attempts: length,
+           measuredAttempts: (map(select(.inputTokens != null)) | length),
            inputTokens:          (map(.inputTokens          // 0) | add),
            outputTokens:         (map(.outputTokens         // 0) | add),
            reasoningTokens:      (map(.reasoningTokens      // 0) | add),
@@ -61,6 +62,10 @@ attempt cost) and `total`
 
 ```sql
 -- Final-attempt rollup. :runIds is the arm's run id list. Add the retry arm above for the true total.
+-- Every id is wrapped in UPPER() because the column stores the GUID upper-case while every id the product hands
+-- an operator (the API response, the URL in the browser, the run-start payload) is lower-case, and SQLite compares
+-- text case-sensitively: an unwrapped lower-case id matches no row and returns an empty result with no error.
+-- With more than one id per arm, repeat the wrapper per id: UPPER('id-a'), UPPER('id-b').
 SELECT n.node_type,
        COUNT(*) AS node_runs,
        SUM(n.input_tokens)  AS input_tokens,   SUM(n.output_tokens) AS output_tokens,
@@ -73,24 +78,24 @@ SELECT n.node_type,
        SUM(n.started_at_utc - n.queued_at_utc) AS queued_ms,
        SUM((n.ended_at_utc - n.started_at_utc) - COALESCE(n.agent_turn_ms, 0)) AS outside_turn_ms
 FROM dev_workflow_node_runs n
-WHERE n.run_id IN (:runIds) AND n.ended_at_utc IS NOT NULL
+WHERE n.run_id IN (UPPER(:runIds)) AND n.ended_at_utc IS NOT NULL
 GROUP BY n.node_type;
 
 -- How many earlier attempts the retry arm above must have summed. Counting them here and summing their cost
 -- there is the check that the two agree; SUM(attempt) beside SUM(tokens) is still forbidden. See rule 2.
 SELECT COUNT(*) AS retried_attempts
 FROM dev_workflow_run_events e
-WHERE e.run_id IN (:runIds) AND e.event_type = 'node.retry.scheduled';
+WHERE e.run_id IN (UPPER(:runIds)) AND e.event_type = 'node.retry.scheduled';
 
 -- Per-node detail. Report medians and full spread, never a mean over a handful of rows.
 SELECT n.node_key, n.served_model_name, n.attempt, n.status, n.failure_class,
        n.input_tokens, n.output_tokens, n.tool_calls, n.tool_schema_tokens,
        n.agent_turn_ms, n.ended_at_utc - n.started_at_utc AS run_ms, n.route_json
-FROM dev_workflow_node_runs n WHERE n.run_id IN (:runIds) ORDER BY n.node_key, n.attempt;
+FROM dev_workflow_node_runs n WHERE n.run_id IN (UPPER(:runIds)) ORDER BY n.node_key, n.attempt;
 
 -- Route stability: did the change move the run through a different path?
 SELECT n.node_key, n.route_json, COUNT(*) AS times
-FROM dev_workflow_node_runs n WHERE n.run_id IN (:runIds)
+FROM dev_workflow_node_runs n WHERE n.run_id IN (UPPER(:runIds))
 GROUP BY n.node_key, n.route_json ORDER BY n.node_key;
 
 -- Cross-unit failure rollup (the AgentUnitFailureClass table as SQL; the FailureCategory and [code] arms live
@@ -103,7 +108,7 @@ SELECT CASE n.failure_class
          WHEN 'Cancelled'     THEN 'Cancelled'     ELSE 'Internal' END AS failure_group,
        COUNT(*) AS n
 FROM dev_workflow_node_runs n
-WHERE n.run_id IN (:runIds) AND n.failure_class IS NOT NULL GROUP BY failure_group;
+WHERE n.run_id IN (UPPER(:runIds)) AND n.failure_class IS NOT NULL GROUP BY failure_group;
 ```
 
 **Reading rules.**
@@ -114,8 +119,11 @@ WHERE n.run_id IN (:runIds) AND n.failure_class IS NOT NULL GROUP BY failure_gro
    **Quote `total = final + retries`; quote `final` alone only when the question is "what does a clean pass
    cost".** The two sources cannot double-count, because a reset row is emptied before the next attempt fills it.
    **Never put `SUM(attempt)` in the same SELECT as `SUM(input_tokens)`** — it reads as a per-attempt average and
-   is not one.
-3. **Node-run tokens are a lower bound**, for seven separate reasons: a replayed step keeps the first attempt's
+   is not one. In the jq above, `attempts` counts RESETS and `measuredAttempts` counts the ones that carried a cost
+   vector; the two differ because a Tool node's reset has `attempt`, `failureClass`, `reason` and `delayUntil` and
+   nothing else — a Tool node run has neither a work session nor a development task to read. Divide a retry-arm
+   total by `measuredAttempts`, never by `attempts`.
+3. **Node-run tokens are a lower bound**, for eight separate reasons: a replayed step keeps the first attempt's
    numbers (`WorkSessionModels.cs:120-125`); some envelopes are written after the fact by crash recovery
    (`NodeChatRestartRecoveryService`); a step that spawned sub-agents ran more than one budget
    (`WorkSessionModels.cs:115-118`) whose invocations may not share the conversation; the envelope read is
@@ -127,7 +135,11 @@ WHERE n.run_id IN (:runIds) AND n.failure_class IS NOT NULL GROUP BY failure_gro
    budget** (`PublishingDevWorkflowStore.RouteRetryAsync` opens a single 5 s deadline before the loop over
    `command.Resets`), so every reset is offered a collection *while that budget lasts* and, once it is spent, the
    remaining resets are forwarded unenriched with no collection started at all — those attempts get no
-   `node.retry.scheduled` cost vector, and the retry-arm total below under-counts by exactly them; and **at most four
+   `node.retry.scheduled` cost vector, and the retry-arm total below under-counts by exactly them; **a multi-round
+   turn writes ONE chat-run envelope**, and `input_tokens` / `output_tokens` / `reasoning_tokens` are summed over
+   ENVELOPES (`DevWorkflowNodeTelemetrySource.CollectEnvelopesAsync` adds one `PromptTokens` per envelope), so that
+   one envelope reports what the provider said on it and NOT the sum over the turn's provider rounds — three settled
+   agent nodes of 3, 5 and 7 provider calls each wrote exactly one envelope; and **at most four
    cost collections run at once per application** (`DevWorkflowNodeTelemetryCollectionPool`, a container singleton), so a
    settle arriving while four stuck collectors hold the pool is forwarded unmeasured the same way. Both losses are
    silent in the data and loud in the log — grep for `cost-collection slots are in use` and `outlived its`.
@@ -148,10 +160,17 @@ WHERE n.run_id IN (:runIds) AND n.failure_class IS NOT NULL GROUP BY failure_gro
    bucket existed simply omits `waived`, which reads back as the empty list it means.
 7. `tool_schema_tokens` is schema tokens **shipped across rounds**, not schema size. A tool-schema *budget* would
    be the size; this column is what those schemas cost to send, summed over every round of the attempt.
+   **Never compare it against `input_tokens`, and never divide one into the other**: this column, `provider_calls`
+   and `tool_calls` are summed per ROUND off the work-session step rows, while `input_tokens` is summed per
+   ENVELOPE (rule 3), so the denominators differ and `tool_schema_tokens` larger than `input_tokens` is the
+   expected reading of a multi-round turn, not a collector bug.
 8. **The recipe cannot be re-run over runs older than the envelope retention window** (30 days,
    `AgentExecutionLogRetentionOptions.RetentionDays`): `dev_workflow_node_runs` outlives `agent_execution_logs`, so
    a collector bug is unrecoverable for old runs. Snapshot query output per arm at measurement time.
 9. N per arm and machine state (`source ~/cuda-llama/env.sh`, fresh DB) go in the report beside the numbers.
+   **The machine state includes whether the model was already resident when the arm started**, and both arms must
+   be in the same state — one cold arm against one warm one reports a latency change that is only the model load
+   (rule 11).
 10. **`tool_names_json` is agent-path only.** It is populated from the work-session step rows, so it is null
     on a DevTask node run and on every Tool/Gate/Parallel/Join row. A null means "no step rows to read", never "this
     node called no tools" — use `tool_calls` for that question. The names are also **bounded twice at the source**:
@@ -163,6 +182,9 @@ WHERE n.run_id IN (:runIds) AND n.failure_class IS NOT NULL GROUP BY failure_gro
     Nothing persisted separates the two, so `run_ms - agent_turn_ms` is time spent **outside** the turns — queueing
     after the node started, the settle itself — and is **not** tool time. Do not present it as a provider-versus-tools
     split; the node drill-down does not either, where the two rows read "Agent turns" and "Outside the turns".
+    **On the first turn against a cold runtime it also contains the inference-server launch and the model load.**
+    The same node, same model and same 3 provider calls measured 206,273 ms cold against 27,697 ms warm — 7.4x,
+    none of it the agent. Compare it only between arms that started in the same runtime state (rule 9).
 
 **Defaults by question.** *Did model routing change what it cost?* — tokens and `run_ms` grouped by
 `served_model_name`. *Did tool-schema filtering pay for itself?* — `tool_schema_tokens` per node run, with
