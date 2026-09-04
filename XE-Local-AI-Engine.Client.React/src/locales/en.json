@@ -4994,7 +4994,9 @@
 				"number": "attempt {{attempt}}",
 				"noEvidence": "no record of this attempt in the events loaded so far",
 				"interrupted": "interrupted and re-dispatched {{count}}×",
-				"session": "transcript"
+				"session": "transcript",
+				"total": "Total across attempts: {{summary}}",
+				"totalPartial": "Total across the attempts on record: {{summary}} — at least one earlier attempt left no record, so the real total is higher."
 			},
 			"structural": {
 				"dependencies": "Dependencies",

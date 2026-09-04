@@ -190,30 +190,104 @@ describe("DevWorkflowNodePanel", () => {
 
 	it("lists prior attempts from the event log, which is the only place they exist", () => {
 		const nodeRunId = devWorkflowNodeRunDetail().id;
-		renderPanel(devWorkflowNodeRunDetail({ attempt: 2, maxAttempts: 3 }), {
-			events: [
-				devWorkflowRunEvent({
-					id: "attached-1",
-					sequence: 1,
-					eventType: "worksession.attached",
-					nodeRunId,
-					detailJson: JSON.stringify({ workSessionId: sessionId, attempt: 1, sessionResumes: 0 }),
-				}),
-				devWorkflowRunEvent({
-					id: "retry-1",
-					sequence: 2,
-					eventType: "node.retry.scheduled",
-					nodeRunId,
-					outcome: "provider-error",
-				}),
-			],
-		});
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				attempt: 2,
+				maxAttempts: 3,
+				inputTokens: 1200,
+				outputTokens: 340,
+				providerCalls: 4,
+				toolCalls: 7,
+				agentTurnMs: 40_000,
+			}),
+			{
+				events: [
+					devWorkflowRunEvent({
+						id: "attached-1",
+						sequence: 1,
+						eventType: "worksession.attached",
+						nodeRunId,
+						detailJson: JSON.stringify({ workSessionId: sessionId, attempt: 1, sessionResumes: 0 }),
+					}),
+					devWorkflowRunEvent({
+						id: "retry-1",
+						sequence: 2,
+						eventType: "node.retry.scheduled",
+						nodeRunId,
+						outcome: "provider-error",
+						// The nine additive members the retry payload carries. They are the ONLY record of what the attempt
+						// they close spent: the node-run row keeps the last attempt's numbers and overwrites the rest.
+						detailJson: JSON.stringify({
+							attempt: 1,
+							inputTokens: 1000,
+							outputTokens: 200,
+							reasoningTokens: 50,
+							estimatedInputTokens: 990,
+							providerCalls: 2,
+							toolCalls: 1,
+							toolSchemaTokens: 100,
+							agentTurnMs: 30_000,
+							workSessionSteps: 2,
+						}),
+					}),
+				],
+			},
+		);
 
 		expect(screen.getByTestId("dev-workflow-node-attempt-1").textContent).toContain("provider-error");
 		// Attempt 2 is the one running: the row exists because the node-run says so, with nothing claimed about it yet.
 		expect(screen.getByTestId("dev-workflow-node-attempt-2")).toBeDefined();
 		fireEvent.click(screen.getByTestId("dev-workflow-node-attempt-session-1"));
 		expect(navigate).toHaveBeenCalledWith({ to: "/work-sessions/$sessionId", params: { sessionId } });
+
+		// What the retried attempt cost, from its own event, and what the current one cost, from the node-run row.
+		const first = screen.getByTestId("dev-workflow-node-attempt-cost-1").textContent ?? "";
+		expect(first).toContain("Input tokens 1,000");
+		expect(first).toContain("Output tokens 200");
+		expect(first).toContain("Agent turns 30s");
+		expect(screen.getByTestId("dev-workflow-node-attempt-cost-2").textContent).toContain("Input tokens 1,200");
+
+		// `total = final + retries`, which is the number an operator cannot obtain from either source alone.
+		const total = screen.getByTestId("dev-workflow-node-attempts-total").textContent ?? "";
+		expect(total).toContain("Total across attempts");
+		expect(total).toContain("Input tokens 2,200");
+		expect(total).toContain("Output tokens 540");
+		expect(total).toContain("Provider calls 6");
+		expect(total).toContain("Tool calls 8");
+		expect(total).not.toContain("the real total is higher");
+	});
+
+	it("draws no total for a node that spends no tokens, so a Tool retry does not get a row of zeroes", () => {
+		const nodeRunId = devWorkflowNodeRunDetail().id;
+		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Tool", attempt: 2, maxAttempts: 3 }), {
+			events: [devWorkflowRunEvent({ id: "retry-tool", sequence: 2, eventType: "node.retry.scheduled", nodeRunId })],
+		});
+
+		expect(screen.queryByTestId("dev-workflow-node-attempts-total")).toBeNull();
+	});
+
+	it("says the total is a floor when an earlier attempt's event never loaded, rather than printing a wrong number", () => {
+		// A tail-anchored page set reaches attempt 2's retry but not attempt 1's, so attempt 1 recorded nothing. Adding
+		// the two it CAN see and calling that the total would understate what the run paid, silently.
+		const nodeRunId = devWorkflowNodeRunDetail().id;
+		renderPanel(devWorkflowNodeRunDetail({ attempt: 3, maxAttempts: 3, inputTokens: 500, providerCalls: 1 }), {
+			events: [
+				devWorkflowRunEvent({
+					id: "retry-2",
+					sequence: 9,
+					eventType: "node.retry.scheduled",
+					nodeRunId,
+					outcome: "provider-error",
+					detailJson: JSON.stringify({ attempt: 2, inputTokens: 300, providerCalls: 2 }),
+				}),
+			],
+		});
+
+		expect(screen.queryByTestId("dev-workflow-node-attempt-cost-1")).toBeNull();
+		expect(screen.getByTestId("dev-workflow-node-attempt-cost-2").textContent).toContain("Input tokens 300");
+		const total = screen.getByTestId("dev-workflow-node-attempts-total").textContent ?? "";
+		expect(total).toContain("Input tokens 800");
+		expect(total).toContain("the real total is higher");
 	});
 
 	it("still offers the transcript of an attempt whose row the store wrote in PascalCase", () => {

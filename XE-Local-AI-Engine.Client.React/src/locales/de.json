@@ -4994,7 +4994,9 @@
 				"number": "Versuch {{attempt}}",
 				"noEvidence": "kein Nachweis zu diesem Versuch in den bisher geladenen Ereignissen",
 				"interrupted": "unterbrochen und {{count}}× neu gestartet",
-				"session": "Transkript"
+				"session": "Transkript",
+				"total": "Gesamt über alle Versuche: {{summary}}",
+				"totalPartial": "Gesamt über die erfassten Versuche: {{summary}} — zu mindestens einem früheren Versuch liegt kein Nachweis vor, der tatsächliche Gesamtwert ist also höher."
 			},
 			"structural": {
 				"dependencies": "Abhängigkeiten",

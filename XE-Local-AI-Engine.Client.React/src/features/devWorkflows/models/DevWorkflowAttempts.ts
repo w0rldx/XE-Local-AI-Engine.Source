@@ -31,7 +31,38 @@ const closingEventTypes: readonly string[] = [
 	devWorkflowAttemptEventTypes.cancelled,
 ];
 
-export interface DevWorkflowNodeAttempt {
+/**
+ * The nine ADDITIVE members a `node.retry.scheduled` payload carries — the same nine the settled node-run row carries,
+ * under the same names, so a total is `final + retries` and nothing else. `servedModelName`, `toolNames` and `route`
+ * are deliberately NOT here: they describe one attempt's shape rather than a quantity, and carrying them per attempt
+ * would invite a sum that means nothing.
+ */
+export interface DevWorkflowAttemptCost {
+	readonly inputTokens?: number | null;
+	readonly outputTokens?: number | null;
+	readonly reasoningTokens?: number | null;
+	readonly estimatedInputTokens?: number | null;
+	readonly providerCalls?: number | null;
+	readonly toolCalls?: number | null;
+	readonly toolSchemaTokens?: number | null;
+	readonly agentTurnMs?: number | null;
+	readonly workSessionSteps?: number | null;
+}
+
+/** Read both to populate an attempt and to ask whether one recorded anything at all. */
+export const devWorkflowAttemptCostFields = [
+	"inputTokens",
+	"outputTokens",
+	"reasoningTokens",
+	"estimatedInputTokens",
+	"providerCalls",
+	"toolCalls",
+	"toolSchemaTokens",
+	"agentTurnMs",
+	"workSessionSteps",
+] as const satisfies readonly (keyof DevWorkflowAttemptCost)[];
+
+export interface DevWorkflowNodeAttempt extends DevWorkflowAttemptCost {
 	readonly attempt: number;
 	/** The event's own outcome token, rendered verbatim — the client narrows no vocabulary it does not own. */
 	readonly outcome?: string;
@@ -43,14 +74,7 @@ export interface DevWorkflowNodeAttempt {
 	readonly interruptedCount: number;
 }
 
-interface MutableAttempt {
-	attempt: number;
-	outcome?: string;
-	closedBy?: string;
-	workSessionId?: string;
-	occurredAtUtc?: number;
-	interruptedCount: number;
-}
+type MutableAttempt = { -readonly [K in keyof DevWorkflowNodeAttempt]: DevWorkflowNodeAttempt[K] };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
@@ -170,6 +194,17 @@ export function devWorkflowNodeAttempts(
 			row.outcome = event.outcome ?? undefined;
 			row.closedBy = type;
 			row.occurredAtUtc = event.occurredAtUtc;
+			// What the attempt this event closes actually SPENT. The retry payload is the only place it survives: the
+			// node-run row keeps the LAST attempt's numbers and nothing else, so a retried node can otherwise never be
+			// added up. Non-numbers are ignored rather than coerced — a payload that stated no number stated nothing.
+			if (type === devWorkflowAttemptEventTypes.retryScheduled) {
+				for (const name of devWorkflowAttemptCostFields) {
+					const value = field(detail, name);
+					if (typeof value === "number") {
+						row[name] = value;
+					}
+				}
+			}
 			// A retry closes this attempt AND opens the next; the other four close it for good.
 			counter = Math.max(counter, type === devWorkflowAttemptEventTypes.retryScheduled ? attempt + 1 : attempt);
 		}
