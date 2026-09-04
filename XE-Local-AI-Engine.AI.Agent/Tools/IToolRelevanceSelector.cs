@@ -61,10 +61,14 @@ public sealed record ToolRelevanceSelection(IReadOnlyList<string> OfferedNames, 
 public interface IToolRelevanceSelector
 {
     /// <summary>
-    ///     Selects the tools to offer. At or below <paramref name="threshold" /> candidates, or with a blank
-    ///     <paramref name="query" />, every name is returned and nothing is hidden WITHOUT the ranker being invoked.
+    ///     Selects the tools to offer. At or below <paramref name="threshold" /> candidates, or with a
+    ///     <paramref name="query" /> that carries no content word, every name is returned and nothing is hidden WITHOUT
+    ///     the ranker being invoked.
     /// </summary>
-    /// <param name="query">The turn's relevance query (the last user message's text); blank takes the fast path.</param>
+    /// <param name="query">
+    ///     The turn's relevance query (the last user message's text). Blank — and, for the lexical selector, a query
+    ///     that is nothing but function words — takes the fast path.
+    /// </param>
     /// <param name="candidates">Every offered tool, in the order the outbound array carries them.</param>
     /// <param name="threshold">Candidate count above which ranking engages. A trigger, not a cap.</param>
     /// <param name="cancellationToken">Cancels the selection.</param>
