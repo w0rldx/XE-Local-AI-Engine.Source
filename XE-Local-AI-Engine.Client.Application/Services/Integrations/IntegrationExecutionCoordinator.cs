@@ -460,10 +460,18 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         {
             Messages = [.. conversation.Messages.Where(message => message.MessageId != executionId)]
         };
+        //     A CALLER-MANAGED continuation additionally carries one framed document replaying the session's committed
+        //     external.output payloads, in the builder's existing attachmentContext slot — so it lands at slot 0, ahead
+        //     of the synopsis and the verbatim turns, which is the same placement and the same reason an uploaded
+        //     attachment gets: it is reference material to read BEFORE the recent turns, not a turn of its own.
+        var priorOutputs = trigger.SessionPolicy == IntegrationSessionPolicy.CallerManaged
+            ? await BuildPriorOutputsAsync(services, session, executionId, runToken).ConfigureAwait(false)
+            : null;
+
         var conversationContext = ConversationContextBuilder.Build(history,
             seed,
             selectedPath: null,
-            attachmentContext: null);
+            priorOutputs);
 
         // 5. The headless package. Three things differ from the scheduler's: the conversation id is the OWNED one (a
         //    throwaway Guid would break every by-conversation resolution downstream), the context is the session's
@@ -929,6 +937,78 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         //     separate event insert (a crash between them leaves a terminal row whose terminal event never arrives, and
         //     startup recovery scans only NON-terminal rows, so the inconsistency would be permanent).
         _ = await TerminalizeAsync(context, RunningOnly, status, failureCategory, failureSummary).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Replays the session's committed <c>external.output</c> payloads back to the model as DATA, so a continued run
+    ///     can tell a result it already delivered from prose it merely wrote — the property a caller-managed session
+    ///     cannot otherwise have while tool parts are not persisted.
+    ///     <para>
+    ///         Two reads, no new store method: the session's most recent executions newest-first, then each one's
+    ///         persisted events. The CURRENT execution is skipped (it has committed nothing yet) and so is any row whose
+    ///         <c>OutputCount</c> is zero, so a session of pure-prose turns costs one indexed query and no more.
+    ///     </para>
+    ///     <para>
+    ///         Only COMMITTED rows are read, which is what makes the replay match what the caller actually received: a
+    ///         reserved-but-abandoned sequence never became a row, so it leaves no trace here.
+    ///     </para>
+    /// </summary>
+    private async Task<ConversationMessageDto?> BuildPriorOutputsAsync(IServiceProvider services,
+        IntegrationSessionSnapshot session,
+        Guid currentExecutionId,
+        CancellationToken cancellationToken)
+    {
+        var store = services.GetRequiredService<IIntegrationExecutionStore>();
+        var executions = await store.ListAsync(new IntegrationExecutionFilter(TriggerId: null,
+                    session.Id,
+                    Status: null,
+                    IntegrationPriorOutputsComposer.MaxPayloads,
+                    Offset: 0),
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        var envelopes = new List<string>(IntegrationPriorOutputsComposer.MaxPayloads);
+        foreach (var execution in executions)
+        {
+            if (execution.Id == currentExecutionId || execution.OutputCount == 0)
+            {
+                continue;
+            }
+
+            // ponytail: a single page rather than a paging loop — an execution's persisted rows are bounded by the
+            // 40-iteration tool cap (a handful of phase events, at most 80 tool.* and at most 40 external.output). If
+            // MaximumToolIterationsPerRequest is ever raised, raise this with it.
+            var events = await store.ListEventsAsync(execution.Id, sinceSequence: 0, limit: 200, cancellationToken).ConfigureAwait(false);
+            for (var index = events.Count - 1; index >= 0; index--)
+            {
+                var persisted = events[index];
+                if (string.Equals(persisted.EventType, IntegrationStreamEventTypes.ExternalOutput, StringComparison.Ordinal)
+                    && persisted.DetailJson is { } detail)
+                {
+                    // Already the composed {"contentType": …, "payload": …} envelope the tool wrote, and DECRYPTED by
+                    // the store. Emitted verbatim: nothing is re-parsed.
+                    envelopes.Add(detail);
+                }
+            }
+
+            if (envelopes.Count >= IntegrationPriorOutputsComposer.MaxPayloads)
+            {
+                break;
+            }
+        }
+
+        var content = IntegrationPriorOutputsComposer.Compose(envelopes,
+            _options.PriorOutputsContextBytes,
+            services.GetRequiredService<IUntrustedContentFenceSeedProvider>().DeriveSeed(session.ConversationId));
+        return content is null
+            ? null
+            : new ConversationMessageDto
+            {
+                Id = Guid.NewGuid(),
+                Role = MessageRole.User,
+                Content = content,
+                SortOrder = 0
+            };
     }
 
     /// <summary>

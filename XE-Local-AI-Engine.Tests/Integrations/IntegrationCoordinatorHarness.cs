@@ -187,6 +187,7 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         // A REAL offer provider and a settable approval policy: WHICH tools the coordinator unions in, and what the
         // node policy then does to their approval flag, are the assertions.
         services.AddSingleton<ILocalToolOfferProvider>(IntegrationToolOfferFactory.Create());
+        services.AddSingleton(FenceSeeds);
         services.AddSingleton<IToolApprovalPolicy>(_ => ToolApprovalPolicy);
         services.AddSingleton<IIntegrationApiKeyStore>(_keys);
         services.AddSingleton(TriggerService);
@@ -222,6 +223,19 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     public IntegrationSessionGate SessionGate { get; } = new();
 
     public IIntegrationTriggerService TriggerService { get; } = Substitute.For<IIntegrationTriggerService>();
+
+    /// <summary>
+    ///     The prior-outputs fence seed. Fixed rather than derived from a node key, so the fenced block is byte-stable
+    ///     across runs of one test and a suite can assert on its markers.
+    /// </summary>
+    public IUntrustedContentFenceSeedProvider FenceSeeds { get; } = BuildFenceSeeds();
+
+    private static IUntrustedContentFenceSeedProvider BuildFenceSeeds()
+    {
+        var provider = Substitute.For<IUntrustedContentFenceSeedProvider>();
+        _ = provider.DeriveSeed(Arg.Any<Guid>()).Returns("integration-harness-fence-seed");
+        return provider;
+    }
 
     /// <summary>
     ///     The node's approval policy. Permissive by default — the identity compose, so the default path is unchanged —
