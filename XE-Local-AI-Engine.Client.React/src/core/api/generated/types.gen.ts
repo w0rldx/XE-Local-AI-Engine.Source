@@ -3277,6 +3277,104 @@ export type XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceB
 	acknowledgeCustomSourceRisk: boolean;
 };
 
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse = {
+	id?: string;
+	name?: string;
+	description?: string | null;
+	graph?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
+	graphHash?: string;
+	nodeCount?: number;
+	schemaVersion?: number;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph = {
+	schemaVersion?: number;
+	nodes?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphNode>;
+	edges?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphEdge>;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphNode = {
+	key?: string;
+	kind?: string;
+	label?: string | null;
+	position?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodePosition | null;
+	maxAttempts?: number | null;
+	timeoutSeconds?: number | null;
+	joinPolicy?: string | null;
+	config?: unknown;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodePosition = {
+	x?: number;
+	y?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphEdge = {
+	key?: string;
+	from?: string;
+	to?: string;
+	label?: string | null;
+	sourceHandle?: string | null;
+	condition?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowEdgeCondition | null;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowEdgeCondition = {
+	path?: string | null;
+	op?: string;
+	value?: unknown;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1CreateGraphWorkflowDefinitionRequest = {
+	name: string;
+	description?: string | null;
+	graph: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowDefinitionsResponse = {
+	definitions?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionSummaryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionSummaryResponse = {
+	id?: string;
+	name?: string;
+	description?: string | null;
+	graphHash?: string;
+	nodeCount?: number;
+	schemaVersion?: number;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1UpdateGraphWorkflowDefinitionRequest = {
+	version?: number;
+	name: string;
+	description?: string | null;
+	graph?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph | null;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionResponse = {
+	valid?: boolean;
+	errors?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse>;
+	nodeCount?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse = {
+	key?: string | null;
+	message?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionRequest = {
+	graph: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
+};
+
 export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse = {
 	revision: string;
 	connections?: Array<XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse>;
@@ -13136,6 +13234,217 @@ export type StartStableDiffusionCppSourceBuildResponses = {
 
 export type StartStableDiffusionCppSourceBuildResponse =
 	StartStableDiffusionCppSourceBuildResponses[keyof StartStableDiffusionCppSourceBuildResponses];
+
+export type ListGraphWorkflowDefinitionsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/graph-workflows/definitions";
+};
+
+export type ListGraphWorkflowDefinitionsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListGraphWorkflowDefinitionsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowDefinitionsResponse;
+};
+
+export type ListGraphWorkflowDefinitionsResponse =
+	ListGraphWorkflowDefinitionsResponses[keyof ListGraphWorkflowDefinitionsResponses];
+
+export type CreateGraphWorkflowDefinitionData = {
+	body: XeLocalAiEngineClientEndpointsGraphWorkflowsV1CreateGraphWorkflowDefinitionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/graph-workflows/definitions";
+};
+
+export type CreateGraphWorkflowDefinitionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type CreateGraphWorkflowDefinitionError = CreateGraphWorkflowDefinitionErrors[keyof CreateGraphWorkflowDefinitionErrors];
+
+export type CreateGraphWorkflowDefinitionResponses = {
+	/**
+	 * Created
+	 */
+	201: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse;
+};
+
+export type CreateGraphWorkflowDefinitionResponse =
+	CreateGraphWorkflowDefinitionResponses[keyof CreateGraphWorkflowDefinitionResponses];
+
+export type DeleteGraphWorkflowDefinitionData = {
+	body?: never;
+	path: {
+		definitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/graph-workflows/definitions/{definitionId}";
+};
+
+export type DeleteGraphWorkflowDefinitionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type DeleteGraphWorkflowDefinitionError = DeleteGraphWorkflowDefinitionErrors[keyof DeleteGraphWorkflowDefinitionErrors];
+
+export type DeleteGraphWorkflowDefinitionResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteGraphWorkflowDefinitionResponse =
+	DeleteGraphWorkflowDefinitionResponses[keyof DeleteGraphWorkflowDefinitionResponses];
+
+export type GetGraphWorkflowDefinitionData = {
+	body?: never;
+	path: {
+		definitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/graph-workflows/definitions/{definitionId}";
+};
+
+export type GetGraphWorkflowDefinitionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type GetGraphWorkflowDefinitionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse;
+};
+
+export type GetGraphWorkflowDefinitionResponse = GetGraphWorkflowDefinitionResponses[keyof GetGraphWorkflowDefinitionResponses];
+
+export type UpdateGraphWorkflowDefinitionData = {
+	body: XeLocalAiEngineClientEndpointsGraphWorkflowsV1UpdateGraphWorkflowDefinitionRequest;
+	path: {
+		definitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/graph-workflows/definitions/{definitionId}";
+};
+
+export type UpdateGraphWorkflowDefinitionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type UpdateGraphWorkflowDefinitionError = UpdateGraphWorkflowDefinitionErrors[keyof UpdateGraphWorkflowDefinitionErrors];
+
+export type UpdateGraphWorkflowDefinitionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse;
+};
+
+export type UpdateGraphWorkflowDefinitionResponse =
+	UpdateGraphWorkflowDefinitionResponses[keyof UpdateGraphWorkflowDefinitionResponses];
+
+export type ValidateGraphWorkflowDefinitionData = {
+	body: XeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/graph-workflows/definitions/validate";
+};
+
+export type ValidateGraphWorkflowDefinitionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ValidateGraphWorkflowDefinitionError =
+	ValidateGraphWorkflowDefinitionErrors[keyof ValidateGraphWorkflowDefinitionErrors];
+
+export type ValidateGraphWorkflowDefinitionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionResponse;
+};
+
+export type ValidateGraphWorkflowDefinitionResponse =
+	ValidateGraphWorkflowDefinitionResponses[keyof ValidateGraphWorkflowDefinitionResponses];
 
 export type DeleteExternalProviderConnectionData = {
 	body?: never;
