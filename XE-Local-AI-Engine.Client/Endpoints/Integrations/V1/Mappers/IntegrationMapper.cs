@@ -79,6 +79,7 @@ internal static class IntegrationMapper
             Id = session.Id,
             TriggerId = session.TriggerId,
             TriggerName = session.TriggerName,
+            PrincipalId = session.PrincipalId,
             AgentDefinitionId = session.AgentDefinitionId,
             Status = session.Status,
             CreatedAtUtc = session.CreatedAtUtc,

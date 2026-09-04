@@ -82,6 +82,7 @@ public sealed class IntegrationSessionEndpointTests
         var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<SessionBody>(IntegrationEndpointPayloads.Json));
         AssertEx.Equal(seeded.SessionIds[0], body.Id);
         AssertEx.Equal(seeded.TriggerName, body.TriggerName, "The trigger NAME is what an integrator addresses, so the row carries it rather than an id alone.");
+        AssertEx.Equal(seeded.PrincipalId, body.PrincipalId, "The operator surface names the OWNING integrator; without it the admin UI cannot say whose session a row is.");
         AssertEx.Equal(expected: 1, body.ExecutionCount);
         AssertEx.Equal("Active", body.Status);
     }
@@ -179,7 +180,7 @@ public sealed class IntegrationSessionEndpointTests
         var first = await AdmitAsync(store, trigger.Id, principalId, keyPrefix, receivedAtUtc: 1_000);
         var second = await AdmitAsync(store, trigger.Id, principalId, keyPrefix, receivedAtUtc: 2_000);
         _ = await AdmitAsync(store, Guid.NewGuid(), principalId, keyPrefix, receivedAtUtc: 3_000);
-        return new Seeded(trigger.Id, triggerName, [first, second]);
+        return new Seeded(trigger.Id, triggerName, principalId, [first, second]);
     }
 
     /// <summary>
@@ -206,11 +207,12 @@ public sealed class IntegrationSessionEndpointTests
         return sessionId;
     }
 
-    private sealed record Seeded(Guid TriggerId, string TriggerName, IReadOnlyList<Guid> SessionIds);
+    private sealed record Seeded(Guid TriggerId, string TriggerName, Guid PrincipalId, IReadOnlyList<Guid> SessionIds);
 
     private sealed record SessionBody(Guid Id,
         Guid TriggerId,
         string TriggerName,
+        Guid PrincipalId,
         Guid AgentDefinitionId,
         string Status,
         long CreatedAtUtc,
