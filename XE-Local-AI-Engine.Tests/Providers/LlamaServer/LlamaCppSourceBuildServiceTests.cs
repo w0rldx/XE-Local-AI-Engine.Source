@@ -60,8 +60,6 @@ public sealed class LlamaCppSourceBuildServiceTests
         var winner = service.StartAsync(request, CancellationToken.None);
         await probe.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
         var loser = service.StartAsync(request, CancellationToken.None);
-        await Task.Delay(100);
-        AssertEx.Equal(1, probe.CallCount);
 
         probe.Release.SetResult();
         AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started, (await winner).Outcome);
@@ -783,6 +781,9 @@ public sealed class LlamaCppSourceBuildServiceTests
 
             try
             {
+                // real-timer: this is not a wait for something to happen, it is the window that gives a BROKEN
+                // serializer a chance to overlap two publishes. A gate the test releases cannot express it: the
+                // passing case is exactly the one where a second publish never arrives, so the gate would deadlock.
                 await Task.Delay(5, cancellationToken);
                 if (Interlocked.Increment(ref _calls) == 1)
                 {

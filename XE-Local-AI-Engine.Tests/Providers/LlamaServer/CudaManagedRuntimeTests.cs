@@ -179,11 +179,15 @@ public sealed class CudaManagedRuntimeTests
         var held = await first.AcquireAsync(CancellationToken.None);
         var contender = second.AcquireAsync(CancellationToken.None);
 
-        await Task.Delay(200, CancellationToken.None);
-        AssertEx.False(contender.IsCompleted, "A second node must wait for the record lock rather than interleave.");
+        // real-timer: the blocking point is a real OS file lock (FileShare.None) that AcquireAsync polls every 25ms.
+        // It takes no TimeProvider and exposes no seam, so "the contender is still waiting" can only be observed by
+        // giving it a bounded real chance to finish and requiring that it does not.
+        var raced = await Task.WhenAny(contender, Task.Delay(TimeSpan.FromMilliseconds(200), CancellationToken.None));
+        AssertEx.False(ReferenceEquals(raced, contender), "A second node must wait for the record lock rather than interleave.");
 
+        // The positive leg is deterministic: releasing the holder must let the contender through, and promptly.
         held.Dispose();
-        (await contender).Dispose();
+        (await contender.WaitAsync(TimeSpan.FromSeconds(10), CancellationToken.None)).Dispose();
     }
 
     /// <summary>

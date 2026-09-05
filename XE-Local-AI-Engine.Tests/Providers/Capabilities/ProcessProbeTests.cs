@@ -68,7 +68,8 @@ public sealed class ProcessProbeTests
             var value = AssertEx.NotNull(result);
             AssertEx.True(value.TimedOut);
 
-            // Wait well past the descendant's 2s sleep; the marker must remain absent because the tree was killed.
+            // real-timer: the subject is a REAL orphaned OS process. Nothing in-process can signal "the sleep we
+            // reaped did not go on to touch the marker", so outliving its 2s sleep is the only way to observe it.
             await Task.Delay(TimeSpan.FromSeconds(3.5), CancellationToken.None);
             AssertEx.False(File.Exists(marker), "the process tree must be killed on timeout so the descendant never runs.");
         }
