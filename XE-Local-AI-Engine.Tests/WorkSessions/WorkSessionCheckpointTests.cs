@@ -55,7 +55,7 @@ public sealed class WorkSessionCheckpointTests
         // checkpoint's prose half stayed null, on exactly the sessions whose checkpoint is the only record of them.
         var compaction = new StubCompactionService(new ConversationCompactionResult(ConversationCompactionOutcome.NothingToCompact))
         {
-            ResultByKeepVerbatim = keep => keep == WorkSessionStepContextBound.SessionKeepVerbatim
+            ResultByKeepVerbatim = keep => keep == ConversationStepContextBound.SessionKeepVerbatim
                 ? new ConversationCompactionResult(ConversationCompactionOutcome.Compacted, "Two steps in, one document read.")
                 : new ConversationCompactionResult(ConversationCompactionOutcome.NothingToCompact)
         };
@@ -66,7 +66,7 @@ public sealed class WorkSessionCheckpointTests
 
         await ComposeAsync(factory, sessionId).ConfigureAwait(false);
 
-        AssertEx.Equal<int?>(WorkSessionStepContextBound.SessionKeepVerbatim,
+        AssertEx.Equal<int?>(ConversationStepContextBound.SessionKeepVerbatim,
             compaction.LastKeepVerbatim,
             "The checkpoint folds with the session window, not the configured chat default.");
         AssertEx.Equal("Two steps in, one document read.",

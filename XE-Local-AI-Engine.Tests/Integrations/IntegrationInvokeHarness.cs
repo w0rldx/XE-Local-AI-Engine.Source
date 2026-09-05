@@ -67,18 +67,11 @@ internal sealed class IntegrationInvokeHarness
         // IntegrationSessionUnavailableException backstop observable rather than assumed.
         Executions.Sessions = Sessions;
 
-        // The caller-managed tool-category predicate is a substitute here: WHAT it decides is the point, and resolving
-        // a real agent offer would drag the agent resolver, node settings and the model resolver into every accept.
-        TriggerService = Substitute.For<IIntegrationTriggerService>();
-        _ = TriggerService.AllowsCallerManagedAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-                          .Returns(_ => AgentIsReadLocalOnly);
-
         Access = new IntegrationExternalAccess(Executions, Sessions, _keyStore);
         SessionGate = new IntegrationSessionGate();
         SessionService = new IntegrationSessionService(Sessions,
             Executions,
             Triggers,
-            TriggerService,
             Access,
             Persistence,
             SessionGate,
@@ -116,14 +109,6 @@ internal sealed class IntegrationInvokeHarness
     public IntegrationSessionGate SessionGate { get; }
 
     public IntegrationSessionService SessionService { get; }
-
-    public IIntegrationTriggerService TriggerService { get; }
-
-    /// <summary>
-    ///     What the R4-9(a) tool-category predicate answers. Default true, so the caller-managed happy path needs no
-    ///     arrangement and the refusal case is one assignment.
-    /// </summary>
-    public bool AgentIsReadLocalOnly { get; set; } = true;
 
     public INodeChatPersistenceService Persistence { get; }
 

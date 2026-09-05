@@ -7,8 +7,8 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 
 /// <summary>
-///     Creates a trigger. 400 when the target agent is missing or a caller-managed policy names an agent whose tools
-///     are not read-only; 409 when the normalised name is already taken.
+///     Creates a trigger. 400 when the target agent is missing or is an orchestrator; 409 when the normalised name is
+///     already taken.
 /// </summary>
 public sealed class CreateIntegrationTriggerEndpoint(IIntegrationTriggerService triggerService)
     : Endpoint<CreateIntegrationTriggerRequest, IntegrationTriggerView>

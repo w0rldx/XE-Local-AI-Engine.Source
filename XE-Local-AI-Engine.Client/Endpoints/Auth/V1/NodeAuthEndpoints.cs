@@ -68,7 +68,11 @@ public sealed class NodeLoginEndpoint(INodeAuthService authService) : Endpoint<N
         Post(LocalApiRoutes.Auth.Login);
         AllowAnonymous();
         Options(static options => options.RequireRateLimiting(NodeAuthRateLimits.AuthPolicy));
-        Description(static descriptor => descriptor.AutoTagOverride("Auth"));
+
+        // The locked-out 401 carries a body where a wrong-password 401 carries none, so it has to be in the contract:
+        // without it the generated client types the 401 as empty and the SPA has to hand-write the shape it reads.
+        Description(static descriptor => descriptor.Produces<NodeLoginLockedOutResponse>(StatusCodes.Status401Unauthorized)
+                                                   .AutoTagOverride("Auth"));
     }
 
     public override async Task HandleAsync(NodeLoginRequest req, CancellationToken ct)

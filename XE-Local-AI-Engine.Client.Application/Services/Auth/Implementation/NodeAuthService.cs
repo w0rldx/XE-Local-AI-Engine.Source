@@ -121,7 +121,14 @@ public sealed class NodeAuthService : INodeAuthService
         if (!signInResult.Succeeded)
         {
             _logger.LogWarning("Node login failed for user {UserId}: {Reason}.", user.Id, GetSignInFailureReason(signInResult));
-            return FailedTokenResult();
+
+            // A locked-out login is the ONE failure that is reported distinguishably: an operator who mistyped five
+            // times otherwise reads "incorrect password" while holding the right one, and has no way to learn that
+            // waiting is the fix. This tells a caller that an email exists once five attempts have been spent, which
+            // is accepted on a loopback-only node whose login is additionally capped at 10 requests/minute per IP.
+            return signInResult.IsLockedOut
+                ? FailedTokenResult(await GetLockoutRetryAfterSecondsAsync(user).ConfigureAwait(false))
+                : FailedTokenResult();
         }
 
         return await CreateTokenResultAsync(user, cancellationToken).ConfigureAwait(false);
@@ -315,9 +322,29 @@ public sealed class NodeAuthService : INodeAuthService
         return _dbContext.Users.AnyAsync(user => user.SetupCompleted, cancellationToken);
     }
 
-    private static NodeAuthTokenResult FailedTokenResult()
+    /// <summary>
+    ///     Whole seconds still left on the user's lockout, floored at one so a caller is never told to retry in zero
+    ///     seconds and saturated at <see cref="int.MaxValue" /> so an operator-set far-future <c>LockoutEnd</c> cannot
+    ///     overflow the int. Saturating rather than capping matters: a shorter number would tell a caller to retry
+    ///     while the account is still locked, which is the confusion the coded 401 exists to remove.
+    /// </summary>
+    private async Task<int> GetLockoutRetryAfterSecondsAsync(NodeUser user)
     {
-        return new NodeAuthTokenResult(Succeeded: false, AccessToken: null, AccessTokenExpiresAtUtc: null, RefreshToken: null, RefreshTokenExpiresAtUtc: null);
+        var lockoutEnd = await _userManager.GetLockoutEndDateAsync(user).ConfigureAwait(false);
+        var now = _timeProvider.GetUtcNow();
+        var remainingSeconds = Math.Ceiling(((lockoutEnd ?? now) - now).TotalSeconds);
+
+        return (int)Math.Clamp(remainingSeconds, min: 1, max: int.MaxValue);
+    }
+
+    private static NodeAuthTokenResult FailedTokenResult(int? lockedOutRetryAfterSeconds = null)
+    {
+        return new NodeAuthTokenResult(Succeeded: false,
+            AccessToken: null,
+            AccessTokenExpiresAtUtc: null,
+            RefreshToken: null,
+            RefreshTokenExpiresAtUtc: null,
+            LockedOutRetryAfterSeconds: lockedOutRetryAfterSeconds);
     }
 
     private static string GetSignInFailureReason(SignInResult result)

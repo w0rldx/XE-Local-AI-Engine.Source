@@ -522,33 +522,58 @@ public sealed partial class InvocationRunner
         };
     }
 
-    private static IReadOnlyList<ChatMessage> BuildChatMessages(RuntimePackage package)
+    /// <summary>
+    ///     Renders the package's conversation context as the provider-bound message list. Internal rather than private
+    ///     for the unit tests that pin the tool-history replay shape (the assembly already grants
+    ///     <c>InternalsVisibleTo</c> to the test project); not part of the public contract.
+    /// </summary>
+    internal static IReadOnlyList<ChatMessage> BuildChatMessages(RuntimePackage package)
     {
-        return package.ConversationContext
-                      .OrderBy(message => message.SortOrder)
-                      .Select(static message =>
-                      {
-                          var contents = new List<AIContent>();
-                          if (!string.IsNullOrEmpty(message.Thinking))
-                          {
-                              contents.Add(new TextReasoningContent(message.Thinking));
-                          }
+        ArgumentNullException.ThrowIfNull(package);
 
-                          contents.Add(new TextContent(message.Content));
+        var messages = new List<ChatMessage>(package.ConversationContext.Count);
+        foreach (var message in package.ConversationContext.OrderBy(static message => message.SortOrder))
+        {
+            // Replayed tool history first, so the model reads call -> result -> the turn's own text in the order it
+            // happened. Only the integration coordinator attaches these, and only for a caller-managed session.
+            if (message.ToolExchanges is { Count: > 0 } exchanges)
+            {
+                ConversationToolExchangeMessages.Append(messages, exchanges);
+            }
 
-                          // Vision (multimodal) parts: the turn assembler attaches these only for a vision-capable
-                          // effective model, so an image never reaches a model that cannot see it.
-                          if (message.Images is { Count: > 0 } images)
-                          {
-                              foreach (var image in images)
-                              {
-                                  contents.Add(new DataContent(image.Data, image.MediaType));
-                              }
-                          }
+            var contents = new List<AIContent>();
+            if (!string.IsNullOrEmpty(message.Thinking))
+            {
+                contents.Add(new TextReasoningContent(message.Thinking));
+            }
 
-                          return new ChatMessage(MapRole(message.Role), contents);
-                      })
-                      .ToList();
+            // The blank text part is dropped ONLY for a turn carrying replayed exchanges: Microsoft.Extensions.AI's
+            // OpenAI client takes its tool-calls-only branch only when the message has no content part, and an empty
+            // TextContent alongside tool_calls is content some chat templates reject rather than ignore. Every other
+            // turn keeps it, so an image-only vision turn still goes out as [TextContent(""), DataContent] exactly as
+            // it always has.
+            if (!string.IsNullOrEmpty(message.Content) || message.ToolExchanges is not { Count: > 0 })
+            {
+                contents.Add(new TextContent(message.Content));
+            }
+
+            // Vision (multimodal) parts: the turn assembler attaches these only for a vision-capable
+            // effective model, so an image never reaches a model that cannot see it.
+            if (message.Images is { Count: > 0 } images)
+            {
+                foreach (var image in images)
+                {
+                    contents.Add(new DataContent(image.Data, image.MediaType));
+                }
+            }
+
+            if (contents.Count > 0)
+            {
+                messages.Add(new ChatMessage(MapRole(message.Role), contents));
+            }
+        }
+
+        return messages;
     }
 
     /// <summary>

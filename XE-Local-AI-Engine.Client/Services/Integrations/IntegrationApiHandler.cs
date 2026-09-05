@@ -467,13 +467,6 @@ internal sealed class IntegrationApiHandler
             case IntegrationAcceptOutcome.InputsRejected:
                 await WriteMessageAsync(context, StatusCodes.Status422UnprocessableEntity, result.Message).ConfigureAwait(false);
                 return;
-            case IntegrationAcceptOutcome.SessionPolicyRejected:
-                await WriteMessageAsync(context,
-                        StatusCodes.Status422UnprocessableEntity,
-                        result.Message,
-                        IntegrationFailureCategories.SessionPolicy)
-                    .ConfigureAwait(false);
-                return;
             case IntegrationAcceptOutcome.QueueFull:
                 context.Response.Headers.RetryAfter = "5";
                 await WriteMessageAsync(context, StatusCodes.Status503ServiceUnavailable, result.Message).ConfigureAwait(false);

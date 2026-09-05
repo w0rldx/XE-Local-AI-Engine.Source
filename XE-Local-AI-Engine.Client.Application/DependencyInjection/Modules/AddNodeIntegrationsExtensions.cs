@@ -63,7 +63,6 @@ internal static class AddNodeIntegrationsExtensions
             serviceProvider.GetRequiredService<IIntegrationSessionStore>(),
             serviceProvider.GetRequiredService<IIntegrationExecutionStore>(),
             serviceProvider.GetRequiredService<IIntegrationTriggerStore>(),
-            serviceProvider.GetRequiredService<IIntegrationTriggerService>(),
             serviceProvider.GetRequiredService<IntegrationExternalAccess>(),
             serviceProvider.GetRequiredService<INodeChatPersistenceService>(),
             serviceProvider.GetRequiredService<IntegrationSessionGate>(),

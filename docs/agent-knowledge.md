@@ -178,6 +178,14 @@ The assembly guard deliberately snapshots after a runner's own build and before 
 
 Do not wrap the whole project validator in one outer lock: its internally locked trees would become pass-throughs and regain unsafe parallel build/test overlap. Prevention and detection must remain separate layers.
 
+### After ANY failed build, rebuild to green before trusting a `--no-build` gate
+
+A build that fails in project B leaves B's output directory untouched, including B's copies of dependencies that did compile, so a `--no-build` test run loads a pre-change copy of a product assembly that itself built fresh. Prevents grading old code as new (2026-09-04: three real passes read as failures in a shared worktree after another agent's compile error). Authority: reproduced from scratch with a two-project solution; `scripts/assembly-guard.sh` cannot see it (it compares output before/after a run, not output already stale at start).
+
+### A full test-suite run can poison its own worktree's generated NuGet props
+
+A fixture that restores under an isolated `HOME` rewrites `obj/*.nuget.g.props` with a since-deleted package root; the next Release build fails `CS0006` on every analyzer assembly. It looks exactly like the MSBuild node-reuse trap, but the cure is `dotnet restore` with `NUGET_PACKAGES` pinned to the real store, not a build-server shutdown. Authority: reproduced in the S5 worktree 2026-09-04.
+
 ### Never classify a cancellation from a `CancellationToken.Register` callback
 
 Registration callbacks race disposal and execute synchronously. They may signal/kill, but must not own terminal classification or throw the final exception. Classify after the awaited operation observes authoritative cancellation state.
@@ -197,7 +205,7 @@ For an automated spike compile, read the existing `DefineConstants`, append `P0_
 ### The full Tests module balloons to ~3.5 GB — it is a framework leak, not a fixture bug
 
 - Use `TestServerWebAppFactory`, not `WebApplicationFactory<Program>`; entry-point resolution roots host graphs for process lifetime.
-- `AddRateLimiter` creates an undisposed replenishment timer per host. Test composition uses `NoOpRateLimiterOptionsProvider`; real rate-limit tests opt into one shared host.
+- `AddRateLimiter` creates an undisposed replenishment timer per host. `ConfigureServices` computes every permit limit *outside* the `AddRateLimiter` lambda so its closure captures ints rather than `builder`, and raises them under `builder.Environment.IsEnvironment("Testing")` (auth 10 → 10,000/min) so a test host neither roots the disposed host graph nor throttles the single loopback partition every integration test shares.
 - Avoid per-test providers that create long-lived MCP SDK registries/clients. Use the keyed/shared fixture pattern.
 - `scripts/run-tests-memory-safe.sh` is the whole-module runner. A low `DOTNET_GCHeapHardLimit` is not a valid leak verdict; size-cap tests allocate large payloads.
 
@@ -506,7 +514,7 @@ Schema bounds are advisory to the model but handler validation is authoritative.
 - Drive `INodeChatStreamService.SendMessageAsync`, not `IInvocationRunner`, so conversation persistence, approvals, resume, and terminalization remain intact.
 - Pause/cancel/deadline must call `INodeChatStreamCancellationRegistry.TryCancel`; merely stopping enumeration leaves the run and node-wide slot alive. Persist terminal writes with `CancellationToken.None`.
 - `MaxConcurrentSessions` is admission only; `WorkerEventDispatcher` still serializes invocation node-wide. Bound parks with `MaxParkedSeconds`.
-- Before each step, `WorkSessionStepContextBound` projects history and force-compacts over `StepContextBudgetTokens`; checkpoint compaction is too late and keeps too much.
+- Before each step, `ConversationStepContextBound` projects history and force-compacts over `StepContextBudgetTokens`; checkpoint compaction is too late and keeps too much.
 - A step's inner tool loop resends earlier results/reasoning. Cap with `MaxProviderCallsPerStep`; hitting it ends the **step** as outcome `ProviderCallBudget`, not the session.
 - `StepEnded`/`StepFailed` detail carries content-free totals from the caller-seeded `ProviderCallCapScope`. Do not read the run's inner `AsyncLocal` after enumeration or record the last-round `UsageSnapshot` as a turn total. Cancelled steps omit counts because unwind races them.
 - `ToolResultBudgetScope` is ambient, tighten-only, and must be seeded before enumeration. All ClientLocal/Custom/MCP tools wrap through `BudgetedToolResultAIFunction`.
@@ -1008,6 +1016,14 @@ The 60-second stream-idle watchdog covers time inside tool handlers. Human waits
 
 `StreamIdleWatchdog.WithIdleTimeout` wraps the whole streaming call, including function execution. The human wait must occur after a `ToolApprovalRequestContent` terminates that segment. Delegate-scope inbound MCP, schedulers, and children strip approval-required tools because they cannot answer. Agentic-scope root inbound execution is the only auto-approval exception and requires the audit record to succeed **before** invocation.
 
+### A tool handler that throws does NOT end the turn on Microsoft.Extensions.AI 10.9.0
+
+The loop runs a further provider round; what the throw destroys is the handler's sentence, replaced by the pipeline's fixed `Error: Function failed.` (`IncludeDetailedErrors` is left `false`), so the model retries blind. Prevents the wrong inference that returning instead of throwing is about turn lifetime. Authority: measured with a standalone probe against the pinned package; `EmitOutputToolHandler.ExecuteAsync` carried the wrong claim until 4d7ee3ea.
+
+### Persisted chat parts are a render/reload record, not model context
+
+A persisted `NodeChatMessagePart` reaches the model only through `ConversationContextBuilder.Build(includeToolHistory: true)` → `ConversationMessageDto.ToolExchanges` → `InvocationRunner.BuildChatMessages`, and only the integration execution coordinator asks for it, for a `CallerManaged` session — and only off the FULL read (`GetConversationAsync`): `GetConversationForTurnAsync` blanks `metadata_json` for every non-user row the compaction synopsis covers, which is exactly where the parts live, so a replay fed by the capped turn read is silently empty once the session compacts (`NodeChatTurnReadCapTests`). Chat has written those parts since long before any of this and never replayed one. Prevents assuming a continued turn "sees" its own tool calls because the SPA renders them — the S6 kickoff assumed chat already replayed parts, and it never did, so half of D-7 was new code rather than plumbing. Authority: `IntegrationContinuationTests.ACallerManagedContinuationReplaysTheCallItsResultAndThenTheTurnsText`, this pass 2026-09-04.
+
 ### MAF traps
 
 - `ChatClientAgentOptions` has no `Instructions`; use `ChatOptions.Instructions`.
@@ -1206,6 +1222,10 @@ Monaco stays behind shared `CodeEditor`: import `editor.api` and chosen Monarch 
 
 
 A bounded Mantine `NumberInput`/`Slider` that distinguishes “unset” from override needs a post-mount `ready` guard before persistence. Mantine can emit min/default on mount and overwrite a deliberate null. Capability flags for file/image chat input remain static client constants; do not wait for a backend capabilities endpoint that is not part of this contract.
+
+### hey-api's generated `queryFn` builds its request from `queryKey[0]`, not from the options it closed over
+
+Re-using a generated `*Options()` adapter for a different page inside a hand-written `queryFn` must pass that page's own `queryKey` in the context (`page.queryFn({ ...context, queryKey: page.queryKey })`), or every call re-requests the first page and a watermark loop never advances. Authority: `useIntegrationExecutionEvents` rework, pinned by `useIntegrationExecutions.test.tsx` ("calls the generated adapter once per page…").
 
 ### Races and flashes
 

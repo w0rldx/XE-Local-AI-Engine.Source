@@ -75,7 +75,7 @@ below is an explicit ruling rather than a default.
    |---|---|---|
    | `approval-required` | R4-5 | an unattended run invoked an approval-gated tool, which cannot be answered; `Running → Failed` |
    | `queue-timeout` | R4-8 | a still-`Queued` execution exceeded `MaxQueueAgeSeconds` before the lease came free; `Queued → Failed` |
-   | `session-policy` | R4-9 | a `CallerManaged` trigger resolved to an agent offering a tool outside `ToolCategory.ReadLocal`; rejected before the run started |
+   | `session-policy` | R4-9 | **historical** — written before R6-1, when a `CallerManaged` trigger resolved to an agent offering a tool outside `ToolCategory.ReadLocal`; no longer produced, and kept only because those rows render it verbatim |
 
    A category outside those ten is a bug rather than an extension point. The column is content-free by contract and the
    UI renders the value directly.
@@ -257,3 +257,9 @@ they do.
 | R5-5 | Two rate-limit layers: a coarse per-IP route ceiling and a per-principal limiter inside the handlers. | S1 |
 | R5-6 | The final buffer API, including `Abandon` and `LowestPendingReservation`. | S1–S3 |
 | R5-7 | `IpRateLimitPerMinute` joins the options class, making it fifteen members. | S0 |
+
+### Round 6
+
+| # | Rule | Owner |
+|---|---|---|
+| R6-1 | Caller-managed sessions persist their tool parts through the chat primitive (`NodeChatPartAccumulator`) and replay them as function call/result content on continuation, so a continued turn can tell an action it performed from prose describing one. The `ReadLocal`-only restriction on caller-managed triggers is withdrawn at save, at accept and at run. **Supersedes R4-9(a)**; R4-9(b)'s prior-outputs framing stays, and R2-12 is amended to "no persistence of their OWN". | S6 |

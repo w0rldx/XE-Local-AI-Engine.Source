@@ -279,6 +279,32 @@ public sealed class RuntimePackageValidatorTests
     }
 
     [Test]
+    public void Validate_WhenMessageHasBlankContentButToolExchanges_IsValid()
+    {
+        // The same exemption images have, for the same reason: a caller-managed turn that called a tool and then died
+        // has no text of its own, and its replayed exchanges ARE its payload. Without this the validator would reject
+        // exactly the turn the replay exists to carry.
+        var package = RuntimePackageBuilder.Valid().Build() with
+        {
+            ConversationContext =
+            [
+                new ConversationMessageDto
+                {
+                    Id = Guid.NewGuid(),
+                    Role = MessageRole.Assistant,
+                    Content = "   ",
+                    SortOrder = 0,
+                    ToolExchanges = [new ConversationToolExchange("call-1", "save_artifact", "{}", "saved", IsError: false)]
+                }
+            ]
+        };
+
+        var result = _validator.Validate(package);
+
+        AssertEx.True(result.IsValid);
+    }
+
+    [Test]
     public void Validate_WhenMessageHasBlankContentAndNoImages_IsInvalid()
     {
         // The image carve-out must not loosen the blank-content fault for an ordinary text message with no image parts.
