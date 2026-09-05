@@ -593,17 +593,22 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             // EVERY Retry goes through the merge, including one typed with nothing in the box: the merge is also what
             // DROPS an earlier retry's reason, and a silent Retry that skipped it would leave the previous operator's
             // sentence on the row for a try they said nothing about.
-            Action<Utf8JsonWriter>? writeRetryReason = settled.Comment?.Trim() is { Length: > 0 } retried
+            Action<Utf8JsonWriter>? writeRetryMembers = incrementAttempt
                 ? writer =>
                 {
-                    writer.WriteString(DevWorkflowNodeInputs.OperatorRetryReason, DevWorkflowStateMachine.Bounded(retried, MaxDecisionComment));
+                    if (settled.Comment?.Trim() is { Length: > 0 } retried)
+                    {
+                        writer.WriteString(DevWorkflowNodeInputs.OperatorRetryReason, DevWorkflowStateMachine.Bounded(retried, MaxDecisionComment));
+                    }
 
-                    // The attempt this reason is FOR. Without it the members would be read again by every later
-                    // automatic re-attempt, quoting a person who said nothing about that try.
+                    // The attempt this decision bought, written even when nothing was typed. Without it the members
+                    // would be read again by every later automatic re-attempt, quoting a person who said nothing about
+                    // that try — and a lane that acts on the RETRY rather than on the sentence (the DevTask lane widens
+                    // its task's round cap on one) could not tell a person's re-attempt from the policy's.
                     writer.WriteNumber(DevWorkflowNodeInputs.OperatorRetryAttempt, nodeRun.Attempt + 1);
                 }
                 : null;
-            var retryInput = incrementAttempt ? DevWorkflowNodeInputs.Merge(nodeRun.InputJson, writeRetryReason) : null;
+            var retryInput = incrementAttempt ? DevWorkflowNodeInputs.Merge(nodeRun.InputJson, writeRetryMembers) : null;
 
             _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
                                    nodeRun.Id,

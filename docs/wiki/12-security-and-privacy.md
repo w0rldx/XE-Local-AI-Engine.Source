@@ -542,6 +542,16 @@ two sandboxes, not one sandbox with two postures.
    failed deterministic gate costs one exactly as a reviewer rejection does, and a task that exhausts it is stood
    down at `Blocked` rather than reworked again.
 
+   **A task's round budget is immutable except that an operator's Retry widens it by one.** That is the single
+   edge out of `Blocked`, and `DevelopmentStore.TransitionTaskAsync` refuses it to any command that does not also
+   widen the cap, so a task cannot be let out of `Blocked` into a round it has no budget to finish. Only
+   `DevWorkflowDevTaskExecutor.CarryOperatorRetryAsync` sets it, once per node-run attempt under the retry's own
+   operation id, and only for a task whose block IS the round cap — a task blocked on anything a round cannot fix
+   is left where it is. Before this, a Retry on a workflow node blocked at the cap re-dispatched the node, which
+   re-read a task still at its cap and stood itself down about two seconds later, spending one of the node's own
+   attempts each time and never starting a coder round, so the reason typed into the retry box could not reach a
+   model.
+
    **Known ceilings of the rework surface**, recorded so they are not re-discovered as bugs:
    an operator instruction on a task **no workflow ever drove** has no `WorkflowPolicyApplied` row to bound it and
    therefore governs every later round of that task; a **reviewer's** request for changes never reaches the task's

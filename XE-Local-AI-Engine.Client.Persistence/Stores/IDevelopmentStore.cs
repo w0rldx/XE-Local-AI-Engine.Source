@@ -79,7 +79,15 @@ public sealed record DevelopmentTransitionTaskCommand(
     ///     is what lets the prompts rank it: an operator's sentence amends the task's immutable requirements, and a
     ///     reviewer's does not.
     /// </summary>
-    bool OperatorDirected = false);
+    bool OperatorDirected = false,
+
+    /// <summary>
+    ///     Raises the task's <c>MaxReviewRounds</c> by one, and is the ONLY thing that opens the single edge out of
+    ///     <c>Blocked</c>. A person who retries a workflow node stopped at "all N rounds used" is buying the task the
+    ///     round it needs, the same way that click already buys the node one more attempt — and a task let out of
+    ///     Blocked without one would spend a whole coder round to be stood down again on the same sentence.
+    /// </summary>
+    bool WidenReviewRounds = false);
 
 public sealed record DevelopmentStartValidationCommand(
     Guid TaskId,

@@ -314,6 +314,20 @@ public sealed partial class DevelopmentStore
                 EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
                 EnsureLegalTransition(task.Status, command.TargetStatus);
 
+                // The widening is what PAYS for the edge out of Blocked, so the two are checked together. A rework
+                // asked of a task at its round cap without one runs a whole coder attempt — its tokens and its
+                // duration — and is stood down again by StartNextActionAsync before it can reach a review, which is
+                // exactly the two-second no-op loop this edge exists to end.
+                if (task.Status == DevelopmentTaskStatus.Blocked && !command.WidenReviewRounds)
+                {
+                    throw new DevelopmentInvalidTransitionException("A blocked development task can only be reworked by a retry that widens its review-round cap.");
+                }
+
+                if (command.WidenReviewRounds)
+                {
+                    task.MaxReviewRounds++;
+                }
+
                 var now = Now();
                 task.Status = command.TargetStatus;
                 task.UpdatedAtUtc = now;
