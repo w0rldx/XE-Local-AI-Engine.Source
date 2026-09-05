@@ -138,8 +138,7 @@ public sealed class SupervisorLifecycleTests
         var ejectTask = supervisor.EjectAsync("model-a", ModelRole.Chat, force: false, CancellationToken.None);
 
         // While the lease is held the eject is still draining (not complete, process not yet killed).
-        await Task.Delay(TimeSpan.FromMilliseconds(100));
-        AssertEx.False(ejectTask.IsCompleted, "The eject should still be draining while a lease is held.");
+        await AssertEx.StaysIncompleteAsync(ejectTask, "The eject should still be draining while a lease is held.");
         AssertEx.False(launcher.Handles.Single().WasTreeKilled, "The process must not be killed while draining.");
 
         lease!.Dispose(); // releasing the lease lets the drain complete.

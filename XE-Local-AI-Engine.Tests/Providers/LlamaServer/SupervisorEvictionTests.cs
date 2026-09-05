@@ -12,6 +12,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class SupervisorEvictionTests
 {
+    /// <summary>Enough wall clock for several passes of the reaper's ~1 s cadence, which runs on the real clock.</summary>
+    private static readonly TimeSpan SeveralReaperPasses = TimeSpan.FromSeconds(3);
+
     [Test]
     public async Task EnsureRunning_CapFullOfActiveProcesses_NewDistinctModel_Rejects()
     {
@@ -164,7 +167,12 @@ public sealed class SupervisorEvictionTests
         // Push the process far past the TTL while its lease is held: LastUsedUtc is stamped per ensure/reuse (not per
         // token), so a generation outrunning the idle window LOOKS idle — the reaper must skip it, not kill it mid-flight.
         time.Advance(TimeSpan.FromMinutes(10));
-        await Task.Delay(TimeSpan.FromSeconds(3)); // several real reaper passes at the ~1s cadence
+
+        // real-timer: the reaper's cadence timer resolves through AdvanceableTimeProvider.CreateTimer, which falls
+        // through to the real provider, so only wall clock produces a reaper pass. Making this deterministic needs a
+        // fake timer in the shared AdvanceableTimeProvider (Providers/LlamaServer/SupervisorTestDoubles.cs) or a
+        // pass counter on LlamaServerIdleReaper; neither exists, and both live outside this file.
+        await Task.Delay(SeveralReaperPasses);
         AssertEx.False(launcher.Handles.Single().WasTreeKilled, "The reaper must never kill a leased process, even past the TTL.");
         AssertEx.Equal(expected: 1, supervisor.CountRunningProcesses());
 

@@ -69,8 +69,7 @@ public sealed class SupervisorGateScopeTests
         await AssertEx.EventuallyAsync(() => probe.Probing == 1, TimeSpan.FromSeconds(3), "The reuse liveness probe never started.");
 
         var mutation = supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
-        await Task.Delay(50);
-        AssertEx.False(mutation.IsCompleted,
+        await AssertEx.StaysIncompleteAsync(mutation,
             "A runtime mutation must not even decide until every ensure already inside the gate has left it.");
 
         probe.Release();

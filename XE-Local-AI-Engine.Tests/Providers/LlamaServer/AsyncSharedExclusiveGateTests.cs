@@ -30,8 +30,7 @@ public sealed class AsyncSharedExclusiveGateTests
         await gate.EnterSharedAsync(CancellationToken.None);
 
         var exclusive = gate.EnterExclusiveAsync(CancellationToken.None);
-        await Task.Delay(50);
-        AssertEx.False(exclusive.IsCompleted, "An exclusive acquire must not be admitted while a shared holder is inside.");
+        await AssertEx.StaysIncompleteAsync(exclusive, "An exclusive acquire must not be admitted while a shared holder is inside.");
 
         gate.ExitShared();
         await exclusive.WaitAsync(TimeSpan.FromSeconds(3));
@@ -45,8 +44,7 @@ public sealed class AsyncSharedExclusiveGateTests
         await gate.EnterExclusiveAsync(CancellationToken.None);
 
         var shared = gate.EnterSharedAsync(CancellationToken.None);
-        await Task.Delay(50);
-        AssertEx.False(shared.IsCompleted, "No shared holder may be admitted while the exclusive holder runs.");
+        await AssertEx.StaysIncompleteAsync(shared, "No shared holder may be admitted while the exclusive holder runs.");
 
         gate.ExitExclusive();
         await shared.WaitAsync(TimeSpan.FromSeconds(3));
@@ -59,13 +57,12 @@ public sealed class AsyncSharedExclusiveGateTests
         using var gate = new AsyncSharedExclusiveGate();
         await gate.EnterSharedAsync(CancellationToken.None);
         var exclusive = gate.EnterExclusiveAsync(CancellationToken.None);
-        await Task.Delay(50);
+        await AssertEx.StaysIncompleteAsync(exclusive, "The exclusive acquire must be parked on the shared drain before the late shared acquire arrives.");
 
         // Queued behind the exclusive waiter. Without FIFO admission a steady stream of these (every inference request
         // takes the gate shared) would postpone an operator runtime mutation indefinitely.
         var lateShared = gate.EnterSharedAsync(CancellationToken.None);
-        await Task.Delay(50);
-        AssertEx.False(lateShared.IsCompleted, "A shared acquire arriving after an exclusive waiter must queue behind it.");
+        await AssertEx.StaysIncompleteAsync(lateShared, "A shared acquire arriving after an exclusive waiter must queue behind it.");
 
         gate.ExitShared();
         await exclusive.WaitAsync(TimeSpan.FromSeconds(3));
@@ -83,7 +80,7 @@ public sealed class AsyncSharedExclusiveGateTests
         await gate.EnterSharedAsync(CancellationToken.None);
         using var cancellation = new CancellationTokenSource();
         var abandoned = gate.EnterExclusiveAsync(cancellation.Token);
-        await Task.Delay(50);
+        await AssertEx.StaysIncompleteAsync(abandoned, "The abandoned acquire must reach its drain wait before it is cancelled.");
 
         await cancellation.CancelAsync();
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => abandoned);

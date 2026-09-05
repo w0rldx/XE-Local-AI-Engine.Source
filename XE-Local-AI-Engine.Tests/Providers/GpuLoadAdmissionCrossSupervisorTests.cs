@@ -41,7 +41,7 @@ public sealed class GpuLoadAdmissionCrossSupervisorTests
 
         // The image load competes for the SAME gate — it must not launch while the LLM holds it.
         var imageRun = image.EnsureRunningAsync("image-model", CancellationToken.None);
-        await Task.Delay(150).ConfigureAwait(false);
+        await AssertEx.StaysIncompleteAsync(imageRun, "The image load must stay queued while the LLM holds the shared gate.").ConfigureAwait(false);
         AssertEx.Equal(0, imageLauncher.LaunchCount);
 
         // Release the LLM's readiness → it releases the gate → the image load is admitted and launches.
