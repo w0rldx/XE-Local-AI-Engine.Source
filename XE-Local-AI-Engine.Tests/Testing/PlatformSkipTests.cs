@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
-///     Proves that TUnit's built-in platform gates really skip, so the ~120 tests that carry
+///     Proves that TUnit's built-in platform gates really skip, so the 137 tests that carry
 ///     <c>[RunOn]</c>/<c>[ExcludeOn]</c> instead of an <c>if (!OperatingSystem.IsX()) return;</c> guard cannot go back
 ///     to reporting green on a platform where they did not run.
 ///     <para>

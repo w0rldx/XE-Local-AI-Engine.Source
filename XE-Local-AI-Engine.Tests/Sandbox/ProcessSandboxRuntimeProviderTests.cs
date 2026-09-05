@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
@@ -650,7 +651,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
 
     [Test]
     [RunOn(OS.Linux)]
-    [NotInParallel("XE_SANDBOX_CANARY")]
+    // No [NotInParallel] key: the canary name carries a fresh Guid, so this test shares no variable with anything.
     public async Task ProcessSandboxProvider_Execute_DoesNotLeakWorkerEnvironment_ButAllowlistedAndRequestVarsAppear()
     {
         // Linux-only: uses `printenv` and /bin/sh. Windows env behavior is covered by the same allow-list logic.
@@ -731,7 +732,6 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         if (printenv is null)
         {
             Skip("This host has no printenv to read the child environment with.");
-            return;
         }
 
         string[] names = ["ProgramData", "ProgramFiles", "ProgramFiles(x86)", "ALLUSERSPROFILE"];
@@ -976,7 +976,6 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         if (!containment.SupportsProcessGroup)
         {
             Skip("this host has no setsid, so no marker is written and the ordering seam does not exist");
-            return;
         }
 
         var markerStore = new BlockingMarkerStore(TimeSpan.FromSeconds(1.5));
@@ -1059,7 +1058,6 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         if (!containment.SupportsNetworkIsolation)
         {
             Skip($"this host cannot create an empty network namespace: {containment.NetworkIsolationUnavailableReason}");
-            return;
         }
 
         // The socket probe needs bash: /bin/sh is dash on this distro and dash has no /dev/tcp, so a dash probe would
@@ -1068,7 +1066,6 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         if (!File.Exists(bashPath))
         {
             Skip("bash is required for the /dev/tcp egress probe");
-            return;
         }
 
         using var provider = CreateHostProvider();
@@ -1135,7 +1132,6 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         if (resolved != SandboxNetworkPolicy.None)
         {
             Skip($"this host cannot deny egress, so AgentHome correctly stays Unrestricted: {HostContainment().NetworkIsolationUnavailableReason}");
-            return;
         }
 
         var handle = await provider.CreateOrAttachAsync(new SandboxCreateRequest
@@ -1237,7 +1233,6 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         if (!containment.SupportsResourceLimits)
         {
             Skip($"this host cannot impose cgroup ceilings: {containment.ResourceLimitsUnavailableReason}");
-            return;
         }
 
         // Allocate ~256 MiB into a shell variable. Run it TWICE against different ceilings: the generous run is the
@@ -1294,7 +1289,6 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         if (!containment.SupportsResourceLimits)
         {
             Skip($"this host cannot impose cgroup ceilings: {containment.ResourceLimitsUnavailableReason}");
-            return;
         }
 
         using var provider = CreateHostProvider();
@@ -1333,7 +1327,6 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         if (!containment.SupportsProcessGroup)
         {
             Skip("this host has no setsid, so no process-group marker is written");
-            return;
         }
 
         var markerStore = new RecordingMarkerStore();
@@ -1393,6 +1386,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     ///     that silently passes on a host without the mechanism is worse than no test: it reports that egress denial or
     ///     a memory ceiling works when nothing was exercised at all.
     /// </summary>
+    [DoesNotReturn]
     private static void Skip(string reason)
     {
         throw new SkipTestException(reason);
