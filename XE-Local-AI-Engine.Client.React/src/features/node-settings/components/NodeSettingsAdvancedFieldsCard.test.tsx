@@ -55,6 +55,7 @@ function renderCard(): void {
 
 function expectInputSuffix(testId: string, suffix: string): void {
 	const input = screen.getByTestId(testId) as HTMLInputElement;
+	// biome-ignore lint/suspicious/noMisplacedAssertion: the whole point of `expectInputSuffix` is to assert for its callers, which are tests.
 	expect(input.value).toMatch(new RegExp(`${suffix}$`));
 }
 

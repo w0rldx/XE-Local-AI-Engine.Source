@@ -86,6 +86,7 @@ function renderForm(initialValues: BenchmarkProjectDraft, props: Record<string, 
 /** Presses Save by submitting the form element, which is what the Save button does. */
 function save(container: HTMLElement): void {
 	const form = container.querySelector("form");
+	// biome-ignore lint/suspicious/noMisplacedAssertion: guard inside a helper every caller runs from within a test — it fails the caller, not module load.
 	expect(form).not.toBeNull();
 	fireEvent.submit(form as HTMLFormElement);
 }

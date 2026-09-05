@@ -57,6 +57,7 @@ function expectDocumentOrder(elements: HTMLElement[]): void {
 		const current = elements[index] as HTMLElement;
 		const next = elements[index + 1] as HTMLElement;
 		const following = (current.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+		// biome-ignore lint/suspicious/noMisplacedAssertion: the whole point of `expectDocumentOrder` is to assert for its callers, which are tests.
 		expect(following, `part ${index} must render before part ${index + 1}`).toBe(true);
 	}
 }
