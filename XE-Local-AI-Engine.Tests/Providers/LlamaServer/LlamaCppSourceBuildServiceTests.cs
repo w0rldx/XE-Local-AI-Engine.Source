@@ -8,18 +8,15 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 [NotInParallel]
 public sealed class LlamaCppSourceBuildServiceTests
 {
     [Test]
+    [ExcludeOn(OS.Linux)]
     public async Task Start_NonLinux_FailsBeforeProbeOrActivityReservation()
     {
-        if (OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
         var signal = new CudaManagedBuildSignal();
@@ -43,13 +40,10 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Start_ConcurrentCaller_WaitsForStartTransactionAndCannotRecoverWinnerWorkTree()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
@@ -81,13 +75,10 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
     public async Task StartupStop_BlockingBuild_CancelsAndAwaitsProcessTree()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
@@ -157,13 +148,10 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Start_WhenRuntimeMutationLeaseUnavailable_ReturnsBusyAfterSingleProbe()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
         var signal = new CudaManagedBuildSignal();
@@ -182,13 +170,10 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Start_WhenDiskInsufficient_ReturnsProbeDetailsWithoutRuntimeAdmission()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var report = new LlamaCppSourceBuildPrerequisiteReport(false,
             [new LlamaCppSourceBuildPrerequisiteItem("free-disk", false, "insufficient")]);
         using var temp = new TempDirectory();
@@ -213,13 +198,10 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Start_WhenToolMissing_ReturnsProbeDetailsWithoutRuntimeAdmission()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var report = new LlamaCppSourceBuildPrerequisiteReport(false,
             [new LlamaCppSourceBuildPrerequisiteItem("cmake", false, "missing")]);
         using var temp = new TempDirectory();
@@ -244,13 +226,10 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Start_WhenAnotherBuildOwnsReservation_ReturnsBusyWithoutReplacingOwner()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
         var signal = new CudaManagedBuildSignal();
@@ -270,13 +249,10 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Cancel_CustomCpu_IsRejectedByLegacyPredicateAndGenericCancelRetainsActiveRuntime()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
         var (previousState, previousServer) = await SeedActiveRuntimeAsync(temp.Path, store);
@@ -312,13 +288,10 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Recover_ActiveRuntimeWithoutFitHelper_DiscardsTreeRecordAndSignal()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
         var (_, server) = await SeedActiveRuntimeAsync(temp.Path, store);
@@ -344,13 +317,10 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Start_WhenResolvedCommitMismatches_StopsBeforeCmakeAndRecordsNothing()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
@@ -374,13 +344,10 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Start_WhenUnexpectedAdoptionFailure_UsesGenericSourceBuildMessage()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
@@ -415,13 +382,10 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Quantizer_BuiltAndAdopted_OnSourceBuild()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
@@ -465,13 +429,10 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Quantizer_Missing_DoesNotFailAdoption()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
@@ -505,13 +466,10 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Start_OfficialCpu_UsesPinnedCommitScrubbedGitAndCpuMatrix()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         var stubs = Path.Combine(temp.Path, "stubs");
         Directory.CreateDirectory(stubs);
@@ -577,13 +535,10 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Start_OfficialExplicitCommit_BuildsAndRecordsExplicitRevision()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var commit = "abcdefabcdefabcdefabcdefabcdefabcdefabcd";
         using var temp = new TempDirectory();
         var stubs = Path.Combine(temp.Path, "stubs");

@@ -5,18 +5,16 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 [NotInParallel]
 public sealed class LlamaCppSourceBuildPrerequisiteTests
 {
     [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Probe_Cpu_DoesNotRequireCudaOrVulkanTools()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         WriteCommonTools(temp.Path);
         using var path = new PathScope(temp.Path);
@@ -29,13 +27,10 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Probe_Vulkan_RequiresGlslcAndVulkanInfoButNotNvcc()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         WriteCommonTools(temp.Path);
         using var path = new PathScope(temp.Path);
@@ -50,13 +45,10 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Probe_Cuda_RequiresNvidiaCompilerAndDriverProbe()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         WriteCommonTools(temp.Path);
         using var path = new PathScope(temp.Path);

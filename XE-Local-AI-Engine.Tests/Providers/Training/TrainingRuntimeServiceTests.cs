@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using static TrainingRuntimeTestInfrastructure;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Drives the runtime phase machine end to end against a fake subprocess runner and a pre-seeded uv cache. The real
@@ -15,13 +16,9 @@ using static TrainingRuntimeTestInfrastructure;
 public sealed class TrainingRuntimeServiceTests
 {
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Install_HappyPath_WalksEveryPhaseAndRecordsTheInstalledState()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var harness = new Harness(SucceedingRunner());
 
         var result = await harness.Service.InstallAsync(CancellationToken.None);
@@ -57,13 +54,9 @@ public sealed class TrainingRuntimeServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Install_UsesTheLockfileStrictlyAndScrubsTheEnvironment()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         Environment.SetEnvironmentVariable("XE_TRAINING_TEST_SECRET", "must-not-leak");
         try
         {
@@ -89,13 +82,9 @@ public sealed class TrainingRuntimeServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Install_WhenTheLockfileIsMissing_FailsWithoutTouchingTheActiveRuntime()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var harness = new Harness(SucceedingRunner());
         File.Delete(Path.Combine(harness.ScriptsDirectory, "uv.lock"));
 
@@ -109,13 +98,9 @@ public sealed class TrainingRuntimeServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Install_WhenTheProbeReportsADifferentContract_RefusesToAdopt()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var harness = new Harness(SucceedingRunner("""{"contractVersion":99,"ready":true,"cudaAvailable":true}"""));
 
         _ = await harness.Service.InstallAsync(CancellationToken.None);
@@ -129,13 +114,9 @@ public sealed class TrainingRuntimeServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Install_WhenTheProbeCannotReachTheGpu_RefusesToAdopt()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var harness = new Harness(SucceedingRunner("""{"contractVersion":1,"ready":false,"cudaAvailable":false,"python":"3.13.15"}"""));
 
         _ = await harness.Service.InstallAsync(CancellationToken.None);
@@ -145,13 +126,9 @@ public sealed class TrainingRuntimeServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Install_WhenTheProbeReportsImportFailures_NamesThePackagesWithoutTheTraceback()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         const string handshake =
             """{"contractVersion":1,"ready":false,"cudaAvailable":true,"errors":{"unsloth":"RuntimeError: PyTorch and torchvision were compiled with different CUDA major versions"}}""";
         using var harness = new Harness(SucceedingRunner(handshake));
@@ -166,13 +143,9 @@ public sealed class TrainingRuntimeServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Install_WhenTheAdoptFails_RollsThePreviousRuntimeBack()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var harness = new Harness(SucceedingRunner());
 
         // Land a working runtime first.
@@ -220,13 +193,9 @@ public sealed class TrainingRuntimeServiceTests
     ///     gone even though nothing was ever adopted.
     /// </summary>
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Install_WhenTheStateWriteFailsAfterTheSwap_RestoresBothThePreviousRuntimeAndItsStateRecord()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var harness = new Harness(SucceedingRunner());
         _ = await harness.Service.InstallAsync(CancellationToken.None);
         await harness.Service.DrainAsync(CancellationToken.None);
@@ -275,13 +244,9 @@ public sealed class TrainingRuntimeServiceTests
     ///     harmed anything, so the node keeps the runtime it had and only carries the failure as the error.
     /// </summary>
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Install_WhenAReprovisionFailsBeforeAdopting_KeepsThePreviousRuntimeUsable()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var harness = new Harness(SucceedingRunner());
         _ = await harness.Service.InstallAsync(CancellationToken.None);
         await harness.Service.DrainAsync(CancellationToken.None);
@@ -298,13 +263,9 @@ public sealed class TrainingRuntimeServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Remove_DeletesTheVenvAndTheStateRecord()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var harness = new Harness(SucceedingRunner());
         _ = await harness.Service.InstallAsync(CancellationToken.None);
         await harness.Service.DrainAsync(CancellationToken.None);
@@ -320,13 +281,9 @@ public sealed class TrainingRuntimeServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Install_WhenPrerequisitesFail_RefusesAndDistinguishesDiskFromEverythingElse()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var disk = new Harness(SucceedingRunner(), StubPrerequisiteProbe.Unsatisfied(TrainingRuntimePrerequisiteKeys.FreeDisk));
         var diskResult = await disk.Service.InstallAsync(CancellationToken.None);
         AssertEx.Equal(TrainingRuntimeInstallOutcome.InsufficientDisk, diskResult.Outcome);
@@ -342,13 +299,9 @@ public sealed class TrainingRuntimeServiceTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public void Recover_RestoresABackupLeftBehindByAnInterruptedAdopt()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var harness = new Harness(SucceedingRunner());
         var backup = TrainingRuntimeLayout.BackupVenv(harness.CacheRoot);
         _ = Directory.CreateDirectory(backup);

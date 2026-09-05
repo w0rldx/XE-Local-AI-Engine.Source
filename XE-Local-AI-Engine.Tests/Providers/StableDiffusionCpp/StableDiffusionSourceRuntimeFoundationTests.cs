@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 public sealed class StableDiffusionSourceRuntimeFoundationTests
 {
@@ -529,13 +530,9 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
     public async Task CommandRunner_StreamsOutputBeforeProcessCompletes()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         var runner = new StableDiffusionSourceCommandRunner();
         var firstLine = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -562,13 +559,9 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
     public async Task CommandRunner_TimeoutTerminatesHungCommand()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         var runner = new StableDiffusionSourceCommandRunner();
 
@@ -583,13 +576,9 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
 
     [Test]
     [NotInParallel]
+    [ExcludeOn(OS.Windows)]
     public async Task CommandRunner_ScrubsInheritedEnvironmentAndClosesStandardInput()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         var previousCudaHome = Environment.GetEnvironmentVariable("CUDA_HOME");
         var previousCudaPath = Environment.GetEnvironmentVariable("CUDA_PATH");
         var previousPoison = Environment.GetEnvironmentVariable("XE_SOURCE_BUILD_POISON");
@@ -627,13 +616,9 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
 
     [Test]
     [NotInParallel]
+    [ExcludeOn(OS.Windows)]
     public async Task PrerequisiteProbe_ScrubsInheritedEnvironmentAndClosesStandardInput()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         var previousCudaHome = Environment.GetEnvironmentVariable("CUDA_HOME");
         var previousCudaPath = Environment.GetEnvironmentVariable("CUDA_PATH");
         var previousPoison = Environment.GetEnvironmentVariable("XE_SOURCE_BUILD_POISON");
@@ -752,13 +737,9 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
     public async Task PrerequisiteProbe_CallerCancellationTerminatesSpawnedProcess()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         var pidPath = Path.Combine(temp.Path, "probe.pid");
         using var cancellation = new CancellationTokenSource();

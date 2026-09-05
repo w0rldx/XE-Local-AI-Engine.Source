@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 using Infra = GgufStoreTestInfrastructure;
+using OS = TUnit.Core.Enums.OS;
 
 public sealed class GgufImportFoundationTests
 {
@@ -604,13 +605,9 @@ public sealed class GgufImportFoundationTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
     public async Task Importer_CopiesFromValidatedHandle_AndRejectsPathReplacement()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var paths = new ImportPaths();
         var bytes = BuildCausalGguf().Concat(new byte[200_000]).ToArray();
         var source = paths.WriteSource(bytes, "source.gguf");

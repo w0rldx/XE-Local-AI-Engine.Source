@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     In-app CUDA build service security + orchestration must-fixes, exercised with PATH script stubs for
@@ -18,13 +19,10 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class CudaBuildServiceTests
 {
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task BuildService_VerifiesCommitSha_HardFailsOnMismatch()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var stubDir = Path.Combine(dir.Path, "stubs");
         Directory.CreateDirectory(stubDir);
@@ -47,13 +45,10 @@ public sealed class CudaBuildServiceTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task BuildService_RunsWithScrubbedEnv()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var stubDir = Path.Combine(dir.Path, "stubs");
         Directory.CreateDirectory(stubDir);
@@ -96,13 +91,10 @@ public sealed class CudaBuildServiceTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task BuildService_SingleFlight_SecondStartRejected()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var stubDir = Path.Combine(dir.Path, "stubs");
         Directory.CreateDirectory(stubDir);
@@ -127,13 +119,10 @@ public sealed class CudaBuildServiceTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task BuildService_WhenValidationFails_DoesNotRecord()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var stubDir = Path.Combine(dir.Path, "stubs");
         Directory.CreateDirectory(stubDir);
@@ -155,13 +144,10 @@ public sealed class CudaBuildServiceTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task CudaBuildService_WhenComputeCapMalformed_UsesDefaultArch()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var stubDir = Path.Combine(dir.Path, "stubs");
         Directory.CreateDirectory(stubDir);
@@ -206,13 +192,10 @@ public sealed class CudaBuildServiceTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task CudaBuildService_WhenComputeCapValid_UsesDetectedArchOnly()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var stubDir = Path.Combine(dir.Path, "stubs");
         Directory.CreateDirectory(stubDir);
@@ -240,13 +223,10 @@ public sealed class CudaBuildServiceTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Prereq_WhenAllPresent_CanBuildTrue()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var stubDir = Path.Combine(dir.Path, "stubs");
         Directory.CreateDirectory(stubDir);
@@ -271,13 +251,10 @@ public sealed class CudaBuildServiceTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Prereq_WhenToolMissing_ItemUnsatisfiedWithReason()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var stubDir = Path.Combine(dir.Path, "stubs");
         Directory.CreateDirectory(stubDir);

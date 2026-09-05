@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
+using OS = TUnit.Core.Enums.OS;
 
 public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 {
@@ -1378,13 +1379,9 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     ///     </para>
     /// </summary>
     [Test]
+    [RunOn(OS.Linux)]
     public async Task WorkspaceProvider_WritesBuildConfigurationBarrierAboveTheWorkspaceAndNotInsideIt()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var repository = await CreateRepositoryAsync().ConfigureAwait(false);
         var data = Path.Combine(_root, "barrier-data");
         Directory.CreateDirectory(data);

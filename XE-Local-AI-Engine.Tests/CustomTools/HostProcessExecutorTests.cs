@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.CustomTools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Host command executor + executable guard: an interpreter/symlink executable is rejected at execution time, a
@@ -45,13 +46,9 @@ public sealed class HostProcessExecutorTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ExecutableGuard_RejectsSymlink()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var target = Path.Combine(_scratch, "real-tool");
         await File.WriteAllTextAsync(target, "#!/bin/sh\nexit 0\n");
         var link = Path.Combine(_scratch, "link-tool");
@@ -63,12 +60,10 @@ public sealed class HostProcessExecutorTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ExecuteAsync_Timeout_ReturnsNonThrowingIncompleteResult()
     {
-        if (!OperatingSystem.IsLinux() || !File.Exists("/bin/sh"))
-        {
-            return;
-        }
+        Skip.Unless(File.Exists("/bin/sh"), "This host has no /bin/sh, which every script in this test needs.");
 
         var script = await CreateScriptAsync("#!/bin/sh\nsleep 60\n");
         var config = $$"""{"executable":"{{script}}","argsTemplate":[],"timeoutSeconds":1,"env":[]}""";
@@ -80,12 +75,10 @@ public sealed class HostProcessExecutorTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ExecuteAsync_ScrubsSecretEnvValueFromOutput()
     {
-        if (!OperatingSystem.IsLinux() || !File.Exists("/bin/sh"))
-        {
-            return;
-        }
+        Skip.Unless(File.Exists("/bin/sh"), "This host has no /bin/sh, which every script in this test needs.");
 
         const string secret = "top-secret-value-9f3a";
         var script = await CreateScriptAsync("#!/bin/sh\necho \"$MY_SECRET\"\n");
@@ -99,12 +92,10 @@ public sealed class HostProcessExecutorTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ExecuteAsync_ParameterizedFlagValue_DoesNotInjectEndOfOptionsMarker()
     {
-        if (!OperatingSystem.IsLinux() || !File.Exists("/bin/sh"))
-        {
-            return;
-        }
+        Skip.Unless(File.Exists("/bin/sh"), "This host has no /bin/sh, which every script in this test needs.");
 
         // printf one arg per line so we can see the exact argv the child received.
         var script = await CreateScriptAsync("#!/bin/sh\nprintf '%s\\n' \"$@\"\n");

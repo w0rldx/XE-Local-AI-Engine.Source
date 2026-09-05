@@ -172,6 +172,9 @@ public sealed class TrustedBinaryResolverTests
             {
                 var file = System.IO.Path.Combine(Path, binaryName);
                 File.WriteAllText(file, "#!/bin/sh\nexit 0\n");
+
+                // A real branch, not a vacuous skip: only the Unix mode below is platform-specific, and the fixture
+                // is still constructible everywhere.
                 if (!OperatingSystem.IsLinux())
                 {
                     return;
