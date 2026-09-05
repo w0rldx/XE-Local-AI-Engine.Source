@@ -21,7 +21,10 @@ public sealed class NodeSettingsAdministrationServiceTests
     [Test]
     public async Task ApplyAgenticPatchAsync_ChangesApprovedFieldsAndPreservesExcludedFields()
     {
-        var current = new StoredNodeSettings
+        // Asserted through the record the store actually HOLDS afterwards, not through the validation preview: a write
+        // path that projected the patch onto the right record but then persisted a different one — dropping
+        // DefaultModelName or EnableTools on the way to disk — passed an assertion made against the preview.
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings
         {
             DefaultModelName = "old",
             CustomToolsEnabled = true,
@@ -29,8 +32,8 @@ public sealed class NodeSettingsAdministrationServiceTests
             MaxResponseSizeMb = 42,
             VoiceFeatureEnabled = true,
             ToolApprovalPolicy = new NodeToolApprovalPolicySettings()
-        };
-        var store = NewSubstituteStore(current);
+        });
+        var approvalPolicy = store.Current.ToolApprovalPolicy;
         var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
@@ -41,23 +44,20 @@ public sealed class NodeSettingsAdministrationServiceTests
         }).ConfigureAwait(false);
 
         AssertEx.True(result.Updated, "a valid agentic patch must be saved.");
-        AssertEx.Equal("new", result.Settings.DefaultModelName);
+        AssertEx.Equal(expected: 1, store.WriteCount, "an uncontended patch writes exactly once.");
+        AssertEx.Equal("new", store.Current.DefaultModelName);
+        AssertEx.Equal(false, store.Current.EnableTools);
+        AssertEx.Equal(512, store.Current.ChatCacheReuse);
+        // The excluded fields come from the write-time record, because that is where a partial patch takes every field
+        // it does not name from.
+        AssertEx.Equal(true, store.Current.CustomToolsEnabled);
+        AssertEx.Equal("http://127.0.0.1:11434", store.Current.OllamaEndpoint);
+        AssertEx.Equal(42, store.Current.MaxResponseSizeMb);
+        AssertEx.Equal(true, store.Current.VoiceFeatureEnabled);
+        AssertEx.True(ReferenceEquals(store.Current.ToolApprovalPolicy, approvalPolicy));
+        AssertEx.Equal("new", result.Settings.DefaultModelName, "and the caller is told what was written.");
         AssertEx.Equal(false, result.Settings.EnableTools);
         AssertEx.Equal(512, result.Settings.ChatCacheReuse);
-        AssertEx.Equal(true, result.Settings.CustomToolsEnabled);
-        AssertEx.Equal("http://127.0.0.1:11434", result.Settings.OllamaEndpoint);
-        AssertEx.Equal(42, result.Settings.MaxResponseSizeMb);
-        AssertEx.Equal(true, result.Settings.VoiceFeatureEnabled);
-        AssertEx.NotNull(result.Settings.ToolApprovalPolicy);
-        // The excluded fields are asserted against the WRITE-TIME record the mutation is handed, because that is where
-        // a partial patch takes every field it does not name from.
-        await store.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
-                Persisted(mutate, current).CustomToolsEnabled == current.CustomToolsEnabled
-                && Persisted(mutate, current).OllamaEndpoint == current.OllamaEndpoint
-                && Persisted(mutate, current).MaxResponseSizeMb == current.MaxResponseSizeMb
-                && Persisted(mutate, current).VoiceFeatureEnabled == current.VoiceFeatureEnabled
-                && ReferenceEquals(Persisted(mutate, current).ToolApprovalPolicy, current.ToolApprovalPolicy)),
-            Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
