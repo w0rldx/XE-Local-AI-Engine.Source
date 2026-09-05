@@ -618,6 +618,11 @@ public sealed record DevWorkflowNodeRunDetailResponse(
     ///         remote or Ollama model, a model the node never loaded itself, a host with no readable global-free
     ///         figure, or a row written before the column existed.
     ///     </para>
+    ///     <para>
+    ///         This and <see cref="VramAdmittedBytes" /> are one pair, written once per attempt by the first settle
+    ///         that carries a reading and never rewritten after that — so the two can never describe different loads.
+    ///         A settle with no reading leaves the pair open for a later one, and a re-attempt clears it.
+    ///     </para>
     /// </summary>
     long? VramFreeAtLoadBytes,
 

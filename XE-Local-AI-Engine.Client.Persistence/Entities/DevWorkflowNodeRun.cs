@@ -130,6 +130,12 @@ internal sealed class DevWorkflowNodeRun
     ///         nobody measured — a remote or Ollama model, a model the node never loaded itself, a host with no
     ///         readable global-free figure (non-NVIDIA or CPU-only), or a row written before this column existed.
     ///     </para>
+    ///     <para>
+    ///         Written ONCE per attempt, and with <see cref="VramAdmittedBytes" /> as one pair: the first settle of the
+    ///         attempt that carries a reading writes both, and no later settle rewrites them, so the two members can
+    ///         never come from different loads. A settle carrying neither member is not that settle — it leaves the
+    ///         pair open for a later one. A re-attempt clears both, which is what re-opens the pair.
+    ///     </para>
     /// </summary>
     public long? VramFreeAtLoadBytes { get; set; }
 

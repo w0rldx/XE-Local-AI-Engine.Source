@@ -216,6 +216,10 @@ WHERE n.run_id IN (UPPER(:runIds)) AND n.failure_class IS NOT NULL GROUP BY fail
     profiling or variant-moved spawn measures nothing but replaces the process the earlier figures described, so both
     columns go null rather than report bytes for a process that is gone. Neither is re-measured at settle time and
     neither is llama.cpp's own `--list-devices` process budget, which is a different axis and is not read on this path.
+    The two are written as one **pair, once per attempt**: the first settle of the attempt that actually carries a
+    reading writes both columns, and no later settle of that attempt rewrites them, so the pair can never mix one
+    load's free-VRAM figure with another load's admitted bytes. A settle that carries neither leaves the pair open for
+    a later settle of the same attempt; a re-attempt clears both, which is what re-opens them.
     **A warm run reports an EARLIER load's figures** — possibly one from another node run, or from before this run
     started — so read `model_readiness_ms` beside them: a **small** readiness there means the warmer waited for
     nothing, which means the load these bytes describe predates the run and the device may have looked different by
