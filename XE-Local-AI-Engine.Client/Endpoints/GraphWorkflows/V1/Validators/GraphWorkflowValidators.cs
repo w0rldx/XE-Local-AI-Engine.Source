@@ -40,12 +40,16 @@ public sealed class UpdateGraphWorkflowDefinitionRequestValidator : Validator<Up
 
         // Omitted means unchanged, so only a PRESENT value is bounded. Blank-but-present is a caller mistake, not a
         // request to clear a name the definition cannot do without.
-        When(static request => request.Name is not null,
-            () => RuleFor(static request => request.Name)
-                  .NotEmpty()
-                  .WithMessage("A graph workflow definition needs a name.")
-                  .MaximumLength(GraphWorkflowRequestLimits.MaxNameLength)
-                  .WithMessage($"The name is longer than the {GraphWorkflowRequestLimits.MaxNameLength}-character limit."));
+        // Chained `.When(...)`, never the block `When(pred, () => ...)` form: only the chained one sets the
+        // per-component condition FastEndpoints' schema processor reads, and with the block form it saw an
+        // unconditional NotEmpty and emitted this OPTIONAL member as required on the wire. The rules are unchanged —
+        // a condition at the end of a chain covers every validator before it (ApplyConditionTo.AllValidators default).
+        RuleFor(static request => request.Name)
+            .NotEmpty()
+            .WithMessage("A graph workflow definition needs a name.")
+            .MaximumLength(GraphWorkflowRequestLimits.MaxNameLength)
+            .WithMessage($"The name is longer than the {GraphWorkflowRequestLimits.MaxNameLength}-character limit.")
+            .When(static request => request.Name is not null);
 
         RuleFor(static request => request.Description)
             .MaximumLength(GraphWorkflowRequestLimits.MaxDescriptionLength)

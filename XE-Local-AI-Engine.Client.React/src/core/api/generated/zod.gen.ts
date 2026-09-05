@@ -160,9 +160,9 @@ export const zXeLocalAiEngineClientEndpointsWorkSessionsV1CreateWorkSessionReque
 export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsWorkSessionsV1UpdateWorkSessionRequest = z.object({
-	title: z.string().min(0).max(200),
-	objective: z.string().min(0).max(8000),
-	agentDefinitionId: z.guid().min(1),
+	title: z.string().min(0).max(200).nullish(),
+	objective: z.string().min(0).max(8000).nullish(),
+	agentDefinitionId: z.guid().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionTaskResponse = z.object({
@@ -4024,8 +4024,8 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowDef
 });
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1UpdateGraphWorkflowDefinitionRequest = z.object({
-	version: z.int().gt(0).max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }).optional(),
-	name: z.string().min(0).max(200),
+	version: z.int().gt(0).max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	name: z.string().min(0).max(200).nullish(),
 	description: z.string().min(0).max(1024).nullish(),
 	graph: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph.nullish(),
 });
@@ -4299,8 +4299,8 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkf
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowDefinitionRequest = z.object({
-	version: z.int().gt(0).max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }).optional(),
-	name: z.string().min(0).max(200),
+	version: z.int().gt(0).max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	name: z.string().min(0).max(200).nullish(),
 	graph: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph.nullish(),
 });
 
@@ -4499,7 +4499,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkf
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowRuleSetRequest = z.object({
-	version: z.int().gt(0).max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }).optional(),
+	version: z.int().gt(0).max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	name: z.string().min(0).max(255),
 	description: z.string().min(0).max(1024).nullish(),
 	body: z.string().min(0).max(4096),
@@ -4762,8 +4762,8 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkf
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowWorkItemRequest = z.object({
-	title: z.string().min(0).max(200),
-	request: z.string().min(0).max(8000),
+	title: z.string().min(0).max(200).nullish(),
+	request: z.string().min(0).max(8000).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse = z.object({
@@ -9339,7 +9339,7 @@ export const zCreateDevWorkflowDefinitionBody =
 	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowDefinitionRequest;
 
 /**
- * Success
+ * Created
  */
 export const zCreateDevWorkflowDefinitionResponse =
 	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse;
@@ -9421,7 +9421,7 @@ export const zListDevWorkflowRuleSetsResponse =
 export const zCreateDevWorkflowRuleSetBody = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowRuleSetRequest;
 
 /**
- * Success
+ * Created
  */
 export const zCreateDevWorkflowRuleSetResponse = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetResponse;
 
@@ -9553,7 +9553,7 @@ export const zCreateDevWorkflowWorkItemBody =
 	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowWorkItemRequest;
 
 /**
- * Success
+ * Created
  */
 export const zCreateDevWorkflowWorkItemResponse =
 	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse;

@@ -96,6 +96,10 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         AssertEx.Equal("/xe-runtime/tmp", environment["TEMP"]);
         AssertEx.Equal("/xe-runtime/nuget", environment["NUGET_PACKAGES"]);
         AssertEx.Equal("/xe-runtime/dotnet", environment["DOTNET_CLI_HOME"]);
+
+        // Node reuse OFF, or the per-task NUGET_PACKAGES above outlives the task: a reusable MSBuild worker keeps it
+        // and a later restore on this box attaches to that worker and restores against a deleted directory.
+        AssertEx.Equal("1", environment["MSBUILDDISABLENODEREUSE"]);
         AssertEx.Empty(environment.Values.Where(value => value.Contains(session.RuntimePath, StringComparison.Ordinal)));
     }
 

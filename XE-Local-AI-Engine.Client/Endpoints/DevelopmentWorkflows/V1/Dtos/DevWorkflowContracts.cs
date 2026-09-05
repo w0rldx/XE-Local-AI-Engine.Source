@@ -65,7 +65,13 @@ public sealed class UpdateDevWorkflowDefinitionRequest
 {
     public Guid DefinitionId { get; init; }
 
-    public int Version { get; init; }
+    /// <summary>
+    ///     <c>required</c> is what puts <c>version</c> in the schema's <c>required</c> array, and it is the only thing
+    ///     that does: the validator's <c>GreaterThan(0)</c> is the one rule shape FastEndpoints' schema processor does
+    ///     not read requiredness from, so a caller generated against the old spec could omit the member and get a 400
+    ///     from a contract that never said the field was mandatory.
+    /// </summary>
+    public required int Version { get; init; }
 
     public string? Name { get; init; }
 
@@ -100,7 +106,8 @@ public sealed class UpdateDevWorkflowRuleSetRequest
 {
     public Guid RuleSetId { get; init; }
 
-    public int Version { get; init; }
+    /// <summary>See <see cref="UpdateDevWorkflowDefinitionRequest.Version" /> for why this carries <c>required</c>.</summary>
+    public required int Version { get; init; }
 
     public string Name { get; init; } = string.Empty;
 
