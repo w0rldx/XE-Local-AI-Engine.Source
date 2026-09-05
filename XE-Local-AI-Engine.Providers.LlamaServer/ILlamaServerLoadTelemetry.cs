@@ -77,7 +77,8 @@ public sealed record LlamaServerLoadObservation(
     LlamaServerPlacementOutcome Placement,
     LlamaServerLoadAttemptKind AttemptKind,
     SpeculativeModeClass SpeculativeModeClass,
-    // Trailing, so every existing positional construction keeps compiling and reads back what it always did.
+    // Required: every construction site must supply the model name. Only the two long? members below are
+    // trailing-optional, so a caller that measured nothing keeps constructing as it always did.
     string ModelName,
     long? GlobalFreeVramBytesAtLoad = null,
     long? AdmittedVramBytes = null);
