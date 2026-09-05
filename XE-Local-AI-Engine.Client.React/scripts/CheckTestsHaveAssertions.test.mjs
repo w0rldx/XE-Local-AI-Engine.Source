@@ -100,6 +100,35 @@ it("finds nothing", () => {
 	assert.deepEqual(names(source), ["finds nothing"]);
 });
 
+test("reads JSX tags as markup, not as regex literals that swallow the rest of the line", () => {
+	const source = `it("renders and asserts on one line", () => {
+	render(<><Foo /></>); expect(x).toBe(1);
+});
+
+it("only renders", () => {
+	render(<Foo attr={value} />);
+});
+
+it("closes a paired tag", () => {
+	render(<Panel>{children}</Panel>);
+});
+`;
+	assert.deepEqual(names(source), ["only renders", "closes a paired tag"]);
+});
+
+test("still reads a regex after an arrow as a literal", () => {
+	const source = `it("filters", () => {
+	const kept = items.filter((name) => /\\(ok\\)/.test(name));
+	expect(kept).toHaveLength(1);
+});
+
+it("filters without asserting", () => {
+	items.filter((name) => /\\(ok\\)/.test(name));
+});
+`;
+	assert.deepEqual(names(source), ["filters without asserting"]);
+});
+
 test("every real Vitest file in src passes the guard", () => {
 	assert.ok(checkTestsHaveAssertions() > 300);
 });

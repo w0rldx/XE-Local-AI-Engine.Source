@@ -24,6 +24,7 @@ const blank = (character) => (character === "\n" || character === "\r" ? charact
 function maskLiterals(source) {
 	const output = source.split("");
 	let previous = "";
+	let beforePrevious = "";
 	let index = 0;
 	while (index < source.length) {
 		const character = source[index];
@@ -45,8 +46,16 @@ function maskLiterals(source) {
 			continue;
 		}
 		const quoted = character === '"' || character === "'" || character === "`";
-		// A `/` after a value is division; after an operator, a bracket or nothing it opens a regex literal.
-		const regex = character === "/" && (previous === "" || /[(,=:[!&|?{};+\-*%<>~^]/.test(previous));
+		// A `/` after a value is division; after an operator, a bracket or nothing it opens a regex literal. JSX is why
+		// `<` and `>` are NOT in that set: `</Foo>`, `<Foo></Foo>` and `</>` would each start a fake regex that blanks
+		// the rest of the line, hiding a real `expect(` sharing it. The one `>` that does precede a regex is the arrow
+		// of `=>`, and a `/` followed by `>` closes a self-closing element rather than opening anything.
+		const regex =
+			character === "/" &&
+			next !== ">" &&
+			(previous === "" ||
+				/[(,=:[!&|?{};+\-*%~^]/.test(previous) ||
+				(previous === ">" && beforePrevious === "="));
 		if (quoted || regex) {
 			const terminator = quoted ? character : "/";
 			index += 1;
@@ -64,11 +73,13 @@ function maskLiterals(source) {
 				output[index] = blank(inner);
 				index += 1;
 			}
+			beforePrevious = previous;
 			previous = "x";
 			index += 1;
 			continue;
 		}
 		if (!/\s/.test(character)) {
+			beforePrevious = previous;
 			previous = character;
 		}
 		index += 1;
