@@ -230,7 +230,8 @@ internal sealed partial class DevWorkflowStore
     /// <summary>
     ///     Writes the cost columns a settle collected. Member-wise and null-skipping, so a collector that could answer
     ///     only half the question — an agent node whose envelopes are gone, a structural node that has a route and
-    ///     nothing else — leaves the rest of the row alone instead of blanking it.
+    ///     nothing else — leaves the rest of the row alone instead of blanking it. The two VRAM columns are the one
+    ///     exception: they are a PAIR from a single observation, written together and only once per attempt.
     /// </summary>
     private static void ApplyTelemetry(DevWorkflowNodeRun nodeRun, DevWorkflowNodeTelemetry? telemetry)
     {
@@ -249,8 +250,20 @@ internal sealed partial class DevWorkflowStore
         nodeRun.ToolNamesJson = telemetry.ToolNamesJson ?? nodeRun.ToolNamesJson;
         nodeRun.AgentTurnMs = telemetry.AgentTurnMs ?? nodeRun.AgentTurnMs;
         nodeRun.ModelReadinessMs = telemetry.ModelReadinessMs ?? nodeRun.ModelReadinessMs;
-        nodeRun.VramFreeAtLoadBytes = telemetry.VramFreeAtLoadBytes ?? nodeRun.VramFreeAtLoadBytes;
-        nodeRun.VramAdmittedBytes = telemetry.VramAdmittedBytes ?? nodeRun.VramAdmittedBytes;
+
+        // NOT the null-coalescing merge the columns above use. These two are one reading of the BOX at the run's load,
+        // so they must come from a single observation and the FIRST settle of an attempt has to win: a later settle
+        // would otherwise splice in a reload that happened after the attempt's work, and a member-wise merge could pair
+        // one load's free-VRAM figure with another load's admitted figure. A re-attempt's ClearTelemetry resets both to
+        // null, which is what re-opens the pair for the new attempt's first settle.
+        if (nodeRun.VramFreeAtLoadBytes is null
+            && nodeRun.VramAdmittedBytes is null
+            && (telemetry.VramFreeAtLoadBytes is not null || telemetry.VramAdmittedBytes is not null))
+        {
+            nodeRun.VramFreeAtLoadBytes = telemetry.VramFreeAtLoadBytes;
+            nodeRun.VramAdmittedBytes = telemetry.VramAdmittedBytes;
+        }
+
         nodeRun.ServedModelName = telemetry.ServedModelName ?? nodeRun.ServedModelName;
         nodeRun.RouteJson = telemetry.RouteJson ?? nodeRun.RouteJson;
         nodeRun.WorkSessionSteps = telemetry.WorkSessionSteps ?? nodeRun.WorkSessionSteps;

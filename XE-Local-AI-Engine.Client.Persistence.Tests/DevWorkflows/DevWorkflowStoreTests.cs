@@ -420,6 +420,53 @@ public sealed class DevWorkflowStoreTests
         AssertEx.Null(reset.WorkSessionSteps, Because);
     }
 
+    /// <summary>
+    ///     The two VRAM columns are a reading of the BOX at the run's load, not a running total: the FIRST settle of an
+    ///     attempt owns them, so a re-settle that saw a later load cannot rewrite them — and a re-attempt, whose
+    ///     ClearTelemetry empties both, re-opens them for its own first settle.
+    /// </summary>
+    [Test]
+    public async Task ResettleWithinAnAttempt_KeepsTheFirstVramPair_AndAReattemptTakesTheNewOne()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var nodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "research", seed.RunVersion).ConfigureAwait(false);
+
+        var first = await SettleAsync(version, freeBytes: 7_340_032_000L, admittedBytes: 5_368_709_120L).ConfigureAwait(false);
+        var second = await SettleAsync(first, freeBytes: 1_073_741_824L, admittedBytes: 536_870_912L).ConfigureAwait(false);
+
+        var resettled = await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 7_340_032_000L, resettled.VramFreeAtLoadBytes, "The first settle's reading is the one that belongs to this attempt's load.");
+        AssertEx.Equal(expected: 5_368_709_120L, resettled.VramAdmittedBytes, "And its partner, or the row would pair two different loads' figures.");
+
+        var retried = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                     nodeRunId,
+                                     second,
+                                     DevWorkflowNodeRunStatus.Pending,
+                                     IncrementAttempt: true))
+                                 .ConfigureAwait(false);
+        _ = await SettleAsync(retried.Version, freeBytes: 1_073_741_824L, admittedBytes: 536_870_912L).ConfigureAwait(false);
+
+        var reattempted = await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1_073_741_824L, reattempted.VramFreeAtLoadBytes, "The re-attempt's clean slate is what re-opens the pair.");
+        AssertEx.Equal(expected: 536_870_912L, reattempted.VramAdmittedBytes);
+
+        async Task<long> SettleAsync(long expectedVersion, long freeBytes, long admittedBytes)
+        {
+            var result = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                        nodeRunId,
+                                        expectedVersion,
+                                        DevWorkflowNodeRunStatus.Failed,
+                                        Telemetry: new DevWorkflowNodeTelemetry(VramFreeAtLoadBytes: freeBytes, VramAdmittedBytes: admittedBytes)))
+                                    .ConfigureAwait(false);
+            return result.Version;
+        }
+    }
+
     /// <summary>Performs one competing write, on its own connection, inside the first save it intercepts.</summary>
     private sealed class CompetingWriteInterceptor(Func<Task> write) : SaveChangesInterceptor
     {
