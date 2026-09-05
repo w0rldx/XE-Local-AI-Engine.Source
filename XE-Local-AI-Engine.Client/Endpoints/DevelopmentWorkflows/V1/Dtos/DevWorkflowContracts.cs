@@ -598,8 +598,9 @@ public sealed record DevWorkflowNodeRunDetailResponse(
 
     /// <summary>
     ///     How much of <see cref="AgentTurnMs" /> the turns spent WAITING for a local runtime — llama-server launching
-    ///     and loading the model — rather than generating. Null when no turn warmed one, which is every cloud-served
-    ///     node and every node that reused an already-loaded model, and is not zero.
+    ///     and loading the model — rather than generating. Zero when the model was already resident (the warmer ran and
+    ///     waited for nothing); null when no turn went through the local-runtime warmer at all — a cloud-served node,
+    ///     or a row written before the column existed — which is unmeasured, not a proven warm start.
     /// </summary>
     long? ModelReadinessMs);
 

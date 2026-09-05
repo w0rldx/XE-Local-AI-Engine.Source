@@ -314,8 +314,8 @@ function DevWorkflowNodeCostSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDe
 	// The envelope measures a WHOLE agent turn, tool loop included, so the remainder is time outside the turns —
 	// queueing after the node started, the settle itself — and is deliberately not labelled as tool time.
 	const turnMs = nodeRun.agentTurnMs ?? null;
-	// How much of those turns was the local runtime launching and loading rather than generating. Null on a
-	// cloud-served node and on one that reused a loaded model, which is not the same claim as zero.
+	// How much of those turns was the local runtime launching and loading rather than generating. Zero means the
+	// model was already resident; null means no turn went through the warmer (cloud-served, or a pre-column row).
 	const readinessMs = nodeRun.modelReadinessMs ?? null;
 	const outsideTurnMs = ranFor != null && turnMs != null ? Math.max(0, ranFor - turnMs) : null;
 	const queuedFor = nodeRun.queuedAtUtc != null && nodeRun.startedAtUtc != null ? nodeRun.startedAtUtc - nodeRun.queuedAtUtc : null;
