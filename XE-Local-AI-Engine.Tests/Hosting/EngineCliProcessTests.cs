@@ -11,6 +11,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 [NotInParallel]
 public sealed class EngineCliProcessTests : IDisposable
 {
+    /// <summary>The engine's deterministic "--port is taken" exit code; it never falls back to another port.</summary>
+    private const int PortInUseExitCode = 6;
+
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-engine-cli-" + Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -55,9 +58,27 @@ public sealed class EngineCliProcessTests : IDisposable
     public async Task McpOnlyPrimaryServe_EmitsCanonicalReadinessSupportsStatusAndEnforcesPortAndLeaseExits()
     {
         Directory.CreateDirectory(_root);
-        var port = FindFreeLoopbackPort();
-        await using var engine = StartServing(["--setup", "--mcp-only", "--port", port.ToString(CultureInfo.InvariantCulture)]);
-        var readyLine = await engine.ReadReadyLineAsync().ConfigureAwait(false);
+
+        // A port number obtained by binding :0 and releasing is only a candidate — another process on
+        // the box can claim it before this child binds it, and the engine then exits with
+        // PortInUseExitCode. Retry on that signal with a fresh candidate rather than trusting the
+        // released port. The port-is-honoured property below still asserts the exact winning number.
+        var serving = await LoopbackPort.BindWithRetryAsync(async candidate =>
+        {
+            var started = StartServing(["--setup", "--mcp-only", "--port", candidate.ToString(CultureInfo.InvariantCulture)]);
+            var line = await started.ReadReadyLineAsync().ConfigureAwait(false);
+            if (line is null)
+            {
+                await started.DisposeAsync().ConfigureAwait(false);
+                return null;
+            }
+
+            return new ServingEngine(started, candidate, line);
+        }).ConfigureAwait(false);
+
+        await using var engine = serving.Engine;
+        var port = serving.Port;
+        var readyLine = serving.ReadyLine;
         var ready = AssertEx.NotNull(DesktopPortStore.ReadReady(_root));
 
         AssertEx.Equal($"XE_READY=1 XE_VERSION={ready.Version} XE_URL={ready.Url} XE_MCP_URL={ready.McpUrl} XE_DATA_DIR={ready.DataDir}", readyLine);
@@ -79,13 +100,15 @@ public sealed class EngineCliProcessTests : IDisposable
 
         var occupiedRoot = Path.Combine(Path.GetTempPath(), "xe-engine-cli-occupied-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(occupiedRoot);
-        var occupiedPort = FindFreeLoopbackPort();
-        using var listener = new TcpListener(IPAddress.Loopback, occupiedPort);
+        // The port is the subject here, so hold the listener rather than releasing a candidate: the
+        // engine must see it occupied for the whole child run.
+        using var listener = new TcpListener(IPAddress.Loopback, port: 0);
         listener.Start();
+        var occupiedPort = ((IPEndPoint)listener.LocalEndpoint).Port;
         var occupied = await RunAsync(["--mcp-only", "--port", occupiedPort.ToString(CultureInfo.InvariantCulture)],
             launchMode: null,
             occupiedRoot).ConfigureAwait(false);
-        AssertEx.Equal(expected: 6, occupied.ExitCode, occupied.CombinedOutput);
+        AssertEx.Equal(PortInUseExitCode, occupied.ExitCode, occupied.CombinedOutput);
         Directory.Delete(occupiedRoot, recursive: true);
     }
 
@@ -194,12 +217,7 @@ public sealed class EngineCliProcessTests : IDisposable
         return startInfo;
     }
 
-    private static int FindFreeLoopbackPort()
-    {
-        using var listener = new TcpListener(IPAddress.Loopback, port: 0);
-        listener.Start();
-        return ((IPEndPoint)listener.LocalEndpoint).Port;
-    }
+    private sealed record ServingEngine(RunningEngine Engine, int Port, string ReadyLine);
 
     private sealed record CommandResult(int ExitCode, string StandardOutput, string StandardError)
     {
@@ -220,7 +238,12 @@ public sealed class EngineCliProcessTests : IDisposable
 
         internal string StandardOutput => string.Join(Environment.NewLine, _standardOutput);
 
-        internal async Task<string> ReadReadyLineAsync()
+        /// <summary>
+        ///     Returns the canonical readiness line, or <c>null</c> when the engine exited with
+        ///     <see cref="PortInUseExitCode" /> before printing it — the one pre-readiness exit the caller
+        ///     may retry on a fresh port. Every other pre-readiness exit throws with the child's stderr.
+        /// </summary>
+        internal async Task<string?> ReadReadyLineAsync()
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
             while (await _process.StandardOutput.ReadLineAsync(timeout.Token).ConfigureAwait(false) is { } line)
@@ -232,7 +255,15 @@ public sealed class EngineCliProcessTests : IDisposable
                 }
             }
 
-            throw new InvalidOperationException($"The engine exited before readiness. stderr: {await _standardError.ConfigureAwait(false)}");
+            await _process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+            if (_process.ExitCode == PortInUseExitCode)
+            {
+                return null;
+            }
+
+            throw new InvalidOperationException(
+                $"The engine exited with code {_process.ExitCode.ToString(CultureInfo.InvariantCulture)} before readiness. "
+                + $"stderr: {await _standardError.ConfigureAwait(false)}");
         }
 
         public async ValueTask DisposeAsync()
