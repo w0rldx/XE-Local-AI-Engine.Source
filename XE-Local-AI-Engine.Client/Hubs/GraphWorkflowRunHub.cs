@@ -88,10 +88,14 @@ public sealed class GraphWorkflowRunHub(IGraphWorkflowStore store, IGraphWorkflo
         var events = await _store.ListEventsAsync(runId, afterSeq, replayLimit + 1, cancellationToken).ConfigureAwait(false);
         var replayed = events.Take(replayLimit).ToList();
 
-        // The watermark the subscriber may resume from is the highest row it has actually SEEN. The run's own sequence
-        // was read before the group join and before this page, so a change committed in between would leave a client
-        // resuming past events this snapshot never carried.
-        var lastSeq = Math.Max(detail.Run.Seq, replayed.Count == 0 ? 0 : replayed[^1].Seq);
+        // The watermark the subscriber may resume from is the last row it was actually HANDED, and nothing else — the
+        // same rule the event endpoint pages by, so a client can move between the two without a gap or a repeat.
+        //
+        // Deliberately NOT the run's own sequence: on a truncated page that number is past the events this snapshot
+        // carried, and a client resuming from it would skip every row between the cap and the run — for good, because
+        // nothing ever replays them again. An empty page keeps the caller's own watermark for the same reason: it has
+        // seen nothing new, so it has moved nowhere.
+        var lastSeq = replayed.Count == 0 ? afterSeq : replayed[^1].Seq;
         return new GraphWorkflowRunSubscriptionSnapshot(runId,
             detail.Run.Status.ToString(),
             detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Queued),

@@ -56,18 +56,30 @@ public sealed class GraphWorkflowRunHubTests
     }
 
     /// <summary>
-    ///     The watermark is the highest row the subscriber was actually handed. The run's own sequence is read before
-    ///     the group join and before the replay page, so a change committed in between leaves it behind the events this
-    ///     snapshot carries — and a client resuming from it would skip them.
+    ///     The watermark is the last row the subscriber was actually handed, whichever side of the run's own sequence
+    ///     it falls. Here it is past it: the run row is read before the group join and before the replay page, so an
+    ///     event committed in between is delivered by this snapshot and the cursor has to say so.
     /// </summary>
     [Test]
-    public async Task SubscribeRun_WhenTheReplayOutrunsTheRunItWasReadFrom_ReportsTheHigherWatermark()
+    public async Task SubscribeRun_WhenTheReplayOutrunsTheRunItWasReadFrom_ReportsTheDeliveredWatermark()
     {
         using var fixture = CreateHub(Store([Event(10), Event(12)]), Runs());
 
         var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0).ConfigureAwait(false);
 
         AssertEx.Equal(expected: 12L, snapshot.LastSeq, "the run row read 9; the page delivered 12, and that is what the client has seen.");
+    }
+
+    /// <summary>An empty page moves the subscriber nowhere: it has seen nothing new, so its own watermark stands.</summary>
+    [Test]
+    public async Task SubscribeRun_WithNothingAfterTheWatermark_KeepsTheCallersOwnWatermark()
+    {
+        using var fixture = CreateHub(Store(), Runs());
+
+        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 4).ConfigureAwait(false);
+
+        AssertEx.Empty(snapshot.Events);
+        AssertEx.Equal(expected: 4L, snapshot.LastSeq, "the run row read 9, but nothing between 4 and 9 was delivered for the client to skip past.");
     }
 
     [Test]
@@ -90,6 +102,35 @@ public sealed class GraphWorkflowRunHubTests
 
         AssertEx.Equal(ReplayLimit, snapshot.Events.Count);
         AssertEx.True(snapshot.ReplayTruncated, "the cap is observed one row over it, never inferred from a full page.");
+        AssertEx.Equal((long)ReplayLimit,
+            snapshot.LastSeq,
+            "the cursor is the last row DELIVERED, not the run's own sequence: taking that would skip every event the cap cut off.");
+    }
+
+    /// <summary>
+    ///     What the cursor is FOR: a truncated snapshot has to be resumable, and the events the cap cut off have to be
+    ///     reachable from the watermark it handed back. Nothing replays them a second time, so a cursor past them would
+    ///     lose them for good.
+    /// </summary>
+    [Test]
+    public async Task SubscribeRun_ResumedFromItsOwnCursor_DeliversExactlyTheEventsTheCapCutOff()
+    {
+        using var fixture = CreateHub(PagingStore([.. Enumerable.Range(1, 7).Select(sequence => Event(sequence))]), Runs());
+
+        var first = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0).ConfigureAwait(false);
+        AssertEx.True(first.ReplayTruncated);
+        AssertEx.Equal(expected: 5L, first.LastSeq);
+
+        var second = await fixture.Hub.SubscribeRun(RunId, first.LastSeq).ConfigureAwait(false);
+        AssertEx.False(second.ReplayTruncated, "two rows are left and the cap is five.");
+        AssertEx.Equal(expected: 2, second.Events.Count, "exactly the rest, with nothing repeated.");
+        AssertEx.Equal(expected: 6L, second.Events[0].Seq, "and in order, starting one past the cursor.");
+        AssertEx.Equal(expected: 7L, second.Events[1].Seq);
+        AssertEx.Equal(expected: 7L, second.LastSeq);
+
+        var third = await fixture.Hub.SubscribeRun(RunId, second.LastSeq).ConfigureAwait(false);
+        AssertEx.Empty(third.Events);
+        AssertEx.Equal(second.LastSeq, third.LastSeq, "a caught-up subscriber keeps the watermark it came with.");
     }
 
     [Test]
@@ -160,6 +201,23 @@ public sealed class GraphWorkflowRunHubTests
     {
         var store = Substitute.For<IGraphWorkflowStore>();
         store.ListEventsAsync(RunId, Arg.Any<long>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(events ?? []);
+        return store;
+    }
+
+    /// <summary>
+    ///     A store that actually PAGES: it honours the watermark and the limit it is called with, which is what a test
+    ///     about resuming from a cursor needs — one that answers the same rows whatever it is asked cannot see a gap.
+    /// </summary>
+    private static IGraphWorkflowStore PagingStore(IReadOnlyList<GraphWorkflowRunEventSnapshot> all)
+    {
+        var store = Substitute.For<IGraphWorkflowStore>();
+        store.ListEventsAsync(RunId, Arg.Any<long>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+             .Returns(call =>
+             {
+                 IReadOnlyList<GraphWorkflowRunEventSnapshot> page =
+                     [.. all.Where(@event => @event.Seq > call.ArgAt<long>(1)).Take(call.ArgAt<int>(2))];
+                 return page;
+             });
         return store;
     }
 
