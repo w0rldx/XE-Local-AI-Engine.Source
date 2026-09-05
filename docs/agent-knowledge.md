@@ -394,6 +394,18 @@ Plain `aspire stop` cleaned the tested stacks in later measurements, but the ori
 
 A user-secret key and `.data/node.key` can disagree. `dev-start.sh` always supplies the file, so data written under the old user secret fails later protected reads without naming the cause. Prefer `XE_NODE_OPERATOR_SECRET_FILE` pointing to the correct historical key; deleting `.data/node-sqlite/`, `dp-keys/`, and encrypted credential files is destructive fallback. `dev_ensure_node_operator_secret` warns when it mints a key beside existing data.
 
+### The Dev-workflow and Graph-workflow surfaces answer 404 unless their flags are set at `dev-start` time
+
+- Start an isolated host that actually serves them by putting the flags in the shell environment of the start script:
+
+  ```bash
+  DevWorkflows__Enabled=true GraphWorkflows__Enabled=true WorkSessions__Enabled=true scripts/dev-start.sh
+  ```
+
+- `AppHost.cs` forwards no such variable to the `app` resource; the flags reach the Client process as inherited process environment through `aspire` and DCP. They must therefore be on the `dev-start.sh` invocation itself, and they are read once at startup (`Program.cs`, `areDevWorkflowsEnabled`/`areGraphWorkflowsEnabled`), so changing one needs a restart.
+- `DevWorkflowOptions.Section` and `GraphWorkflowOptions.Section` default to disabled; only `WorkSessions:Enabled` ships `true` in `appsettings.json`. One pair is enforced at startup: `DevWorkflowOptionsValidator` fails the host when DevWorkflows is on with WorkSessions off, because every workflow agent node runs as a work session. GraphWorkflows carries no such coupling — `GraphWorkflowOptionsValidator` checks only its own budgets — so it starts on its own.
+- Prevents burning a live round on a "wrong route": each gate is a request-path middleware registered ahead of `LocalApiSecurityMiddleware` in `Program.cs`, deliberately so the switch cannot be probed by status code — which also means a disabled feature and a mistyped path are indistinguishable from the response alone.
+
 ### Locked runtime decisions — do not "helpfully" reintroduce
 
 - **Docker is off inference.** ADR 0004 permits it only for Development Mode build/test/lint. No Docker in model hosting/acquisition, embedding, image generation, or chat; HostAgent and sandbox gRPC stay deleted. Current implementation status belongs in `docs/roadmaps/development-mode-container-status.md`.
