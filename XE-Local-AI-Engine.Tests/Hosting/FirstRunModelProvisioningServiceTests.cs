@@ -72,6 +72,29 @@ public sealed class FirstRunModelProvisioningServiceTests
     }
 
     [Test]
+    public async Task CleanDesktopState_WhenTheOperatorSelectsAModelWhileTheDownloadRuns_KeepsTheOperatorsChoice()
+    {
+        // The skip precondition is checked BEFORE the download, and the download runs for minutes. An operator who
+        // installs and picks their own model in that window had it silently reverted to the auto-provisioned one,
+        // because the post-download write assigned DefaultModelName unconditionally.
+        var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings(),
+            siblingWriteBeforeTheUpdate: latest => latest with
+            {
+                DefaultModelName = "operator/picked:Q8_0"
+            });
+        using var service = BuildService(isDesktop: true,
+            [],
+            new RecordingBinaryManager(),
+            new FakeDownloadCoordinator(GgufDownloadPhase.Completed),
+            settingsStore);
+
+        await RunAsync(service);
+
+        AssertEx.Equal("operator/picked:Q8_0", settingsStore.Current.DefaultModelName,
+            "a selection made during the download must not be reverted to the first-run model.");
+    }
+
+    [Test]
     public async Task NotDesktopMode_NoOps_NoDownload_NoSelection()
     {
         var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Completed);
