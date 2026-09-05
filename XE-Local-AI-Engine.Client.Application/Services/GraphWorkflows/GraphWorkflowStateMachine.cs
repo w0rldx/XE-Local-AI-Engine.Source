@@ -39,9 +39,10 @@ internal enum GraphWorkflowNodeAdmission
 }
 
 /// <summary>
-///     What recomputing a run's status concluded, and — when the answer is <c>Cancelled</c> — why. A status alone
-///     cannot carry that: a run whose tail was abandoned has no failing node run to read the reason off, because
-///     nothing failed.
+///     What recomputing a run's status concluded, and — when the answer is <c>Failed</c> or <c>Cancelled</c> — why. A
+///     status alone cannot carry that: a run whose tail was abandoned has no failing node run to read the reason off,
+///     because nothing failed, and a run that DID fail would otherwise report class <c>None</c> while the node under it
+///     names the real one.
 /// </summary>
 internal readonly record struct GraphWorkflowRunOutcome(GraphWorkflowRunStatus Status,
     GraphWorkflowFailureClass FailureClass = GraphWorkflowFailureClass.None,
@@ -314,9 +315,17 @@ internal static class GraphWorkflowStateMachine
     /// </summary>
     private static GraphWorkflowRunOutcome Terminalize(GraphWorkflowGraph graph, IReadOnlyList<GraphWorkflowNodeRunSnapshot> nodeRuns)
     {
-        if (nodeRuns.Any(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Failed))
+        // The failing node's own class and reason are carried up rather than dropped: a run reading Failed with class
+        // None, while the node under it reads Interrupted, tells an operator nothing about why it stopped. Which failed
+        // node is picked matters when several did, so it is the lowest NODE KEY ordinally — the row order here is the
+        // store's, and a positional "first" would let two readers of the same run disagree.
+        var failed = nodeRuns.Where(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Failed)
+                             .MinBy(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal);
+        if (failed is not null)
         {
-            return new GraphWorkflowRunOutcome(GraphWorkflowRunStatus.Failed);
+            return new GraphWorkflowRunOutcome(GraphWorkflowRunStatus.Failed,
+                failed.FailureClass,
+                Bounded(string.IsNullOrWhiteSpace(failed.Error) ? $"Node '{failed.NodeKey}' failed." : $"Node '{failed.NodeKey}' failed: {failed.Error}", MaxTerminalReason));
         }
 
         var ends = nodeRuns.Where(nodeRun => graph.TerminalNodeKeys.Contains(nodeRun.NodeKey)).ToList();
