@@ -36,6 +36,11 @@ public interface ILlamaServerLaunchPolicy
     ///     <paramref name="variant" /> at <paramref name="kvCacheType" />, so future <see cref="ResolveAsync" /> calls
     ///     emit the safe config for that pair. A failure at one KV type says nothing about the others, so the verdict is
     ///     scoped to the type that actually failed.
+    ///     <para>
+    ///         Bookkeeping, never fatal: the caller is a safe retry that has already reached readiness, so a verdict
+    ///         that cannot be persisted is logged and swallowed rather than thrown. A lost verdict costs one failed
+    ///         spawn, which re-records it; throwing here would instead kill a process that is already serving.
+    ///     </para>
     /// </summary>
     Task RecordOptimizedConfigFailedAsync(GpuVariant variant, string kvCacheType, CancellationToken ct);
 }

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -284,48 +285,50 @@ public sealed class SupervisorLaunchFallbackTests
         return resolver;
     }
 
-    /// <summary>Health probe whose readiness wait fails once (the optimized spawn) then succeeds (the safe retry).</summary>
     /// <summary>
-    ///     Post-readiness bookkeeping still decides whether this spawn produced a serving process. When persisting the
-    ///     safe-retry verdict throws, the child is tree-killed and the spawn fails — so the Ready observation must
-    ///     never have been raised, or the host's last-load VRAM cache would hold a load for a process that never
-    ///     served. Exactly one observation per attempt, and both of them failures.
+    ///     The safe-retry verdict is BOOKKEEPING and must never be fatal to a process that already reached readiness.
+    ///     By the time it is written the process is registered and a concurrent caller can already have been handed
+    ///     its endpoint, so a write that throws must leave the spawn exactly as a successful one: the process
+    ///     registered, the endpoint returned, and ONE Ready observation for it. The lost verdict is a Warning, and
+    ///     the next spawn pays for it by retrying the optimized config once.
     /// </summary>
     [Test]
-    public async Task EnsureRunning_WhenRecordingTheSafeRetryVerdictThrows_RaisesNoReadyObservation()
+    public async Task EnsureRunning_WhenRecordingTheSafeRetryVerdictThrows_KeepsTheProcessAndRaisesOneReadyObservation()
     {
         var telemetry = new FakeLlamaServerLoadTelemetry();
+        var policyLogger = new RecordingLogger<LlamaServerLaunchPolicy>();
         await using var supervisor = SupervisorFactory.Create(new FakeProcessLauncher(),
-            // Every optimized candidate fails readiness and every safe retry reaches it, so each restart attempt gets
-            // all the way to the verdict write — which is the step that then throws.
-            healthProbe: new OnlySafeRetryReachesReadinessHealthProbe(),
+            // The optimized candidate fails readiness and the safe retry reaches it, so the spawn gets all the way to
+            // the verdict write — which is the step that then throws.
+            healthProbe: new FirstReadinessFailsHealthProbe(),
+            options: new LlamaServerSupervisorOptions
+            {
+                IdleTimeToLive = TimeSpan.FromHours(1),
+                MaxLoadedProcesses = 3,
+                // One attempt, so the observation sequence below is the whole story rather than the first of several.
+                MaxRestartAttempts = 1
+            },
             variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
-            launchFallbackStore: new ThrowingOnWriteFallbackStore(),
+            launchPolicy: new LlamaServerLaunchPolicy(new LlamaServerLaunchPolicyOptions(),
+                new ThrowingOnWriteFallbackStore(),
+                policyLogger),
             loadTelemetry: telemetry);
 
-        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None));
+        var endpoint = await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
 
+        AssertEx.NotNull(endpoint);
+        AssertEx.Equal(expected: 1, supervisor.CountRunningProcesses());
         var observations = telemetry.Observations.ToArray();
-        AssertEx.True(observations.Any(observation => observation.AttemptKind == LlamaServerLoadAttemptKind.SafeRetry),
-            "The safe retry has to have run, or this test proves nothing about the step after readiness.");
-        AssertEx.False(observations.Any(observation => observation.Outcome == LlamaServerReadinessOutcome.Ready),
-            "Every safe retry reached readiness and was then killed by the failing verdict write. A Ready observation would tell the host — and its last-load VRAM cache — that a process which never served had loaded.");
+        AssertEx.Equal(expected: 2, observations.Length);
+        AssertEx.Equal(LlamaServerLoadAttemptKind.Primary, observations[0].AttemptKind);
+        AssertEx.Equal(LlamaServerReadinessOutcome.Failed, observations[0].Outcome);
+        AssertEx.Equal(LlamaServerLoadAttemptKind.SafeRetry, observations[1].AttemptKind);
+        AssertEx.Equal(LlamaServerReadinessOutcome.Ready, observations[1].Outcome);
+        AssertEx.True(policyLogger.HasEntry(LogLevel.Warning, "Could not persist the optimized-config failure"),
+            "A verdict that was dropped has to be said out loud, or the next spawn's repeat of the optimized config has no explanation.");
     }
 
-    /// <summary>Fails every odd readiness wait and passes every even one: the optimized candidate never gets ready, the safe retry always does.</summary>
-    private sealed class OnlySafeRetryReachesReadinessHealthProbe : ILlamaServerHealthProbe
-    {
-        private int _readinessCalls;
-
-        public Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct) =>
-            Task.FromResult(Interlocked.Increment(ref _readinessCalls) % 2 == 0);
-
-        public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct) => Task.FromResult(true);
-
-        public Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct) => Task.FromResult<int?>(null);
-    }
-
-    /// <summary>Reads normally; the WRITE the safe-retry verdict needs fails, which is what aborts the launch.</summary>
+    /// <summary>Reads normally; the WRITE the safe-retry verdict needs fails, which is what the policy has to absorb.</summary>
     private sealed class ThrowingOnWriteFallbackStore : ILlamaServerLaunchFallbackStore
     {
         public Task<bool> IsOptimizedConfigDisabledAsync(GpuVariant variant, string kvCacheType, CancellationToken ct) => Task.FromResult(false);
@@ -334,6 +337,7 @@ public sealed class SupervisorLaunchFallbackTests
             throw new IOException("The launch-fallback state file could not be replaced.");
     }
 
+    /// <summary>Health probe whose readiness wait fails once (the optimized spawn) then succeeds (the safe retry).</summary>
     private sealed class FirstReadinessFailsHealthProbe : ILlamaServerHealthProbe
     {
         private int _readinessCalls;

@@ -1431,6 +1431,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     }
                     else if (candidate.Plan is { } safeRetryPlan)
                     {
+                        // Deliberately after the _processes registration above, and safe there because the policy
+                        // absorbs a verdict it cannot persist (see ILlamaServerLaunchPolicy). The endpoint is already
+                        // reachable by a concurrent EnsureRunningAsync, so an exception out of this line would
+                        // tree-kill a process another caller holds — to save a cache entry the next spawn re-records.
                         await _launchPolicy.RecordOptimizedConfigFailedAsync(variant, safeRetryPlan.KvCacheType, ct).ConfigureAwait(false);
                     }
                     else

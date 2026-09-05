@@ -98,10 +98,26 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
     }
 
     /// <inheritdoc />
-    public Task RecordOptimizedConfigFailedAsync(GpuVariant variant, string kvCacheType, CancellationToken ct)
+    public async Task RecordOptimizedConfigFailedAsync(GpuVariant variant, string kvCacheType, CancellationToken ct)
     {
         _logger.LogWarning("Recording optimized llama-server launch config (KV-cache quant + flash attention) as unsupported for backend {Variant} at KV-cache type {KvCacheType}; future spawns of that pair will use the safe config.", variant, kvCacheType);
-        return _fallbackStore.DisableOptimizedConfigAsync(variant, kvCacheType, ct);
+        try
+        {
+            await _fallbackStore.DisableOptimizedConfigAsync(variant, kvCacheType, ct).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The verdict is BOOKKEEPING, and this is the one owner of what a lost one costs: the store's own ponytail
+            // note already prices it at one failed spawn. The only caller is a safe retry that has ALREADY reached
+            // readiness, so letting an unwritable cache root or a contended file out of here would tree-kill a serving
+            // process — and one a concurrent EnsureRunningAsync may already have been handed — to save a cache entry.
+            // (The store handles lock contention itself and swallows the read path's legacy rewrite; what still
+            // escapes is the state write.)
+            _logger.LogWarning(exception,
+                "Could not persist the optimized-config failure for backend {Variant} at KV-cache type {KvCacheType}; the spawn keeps its process and the next spawn will retry the optimized config once.",
+                variant,
+                kvCacheType);
+        }
     }
 
     /// <summary>Derives (<c>-t</c>, <c>-tb</c>) for a CPU build; a GPU build gets both null — no thread flags.</summary>
