@@ -178,7 +178,10 @@ function renderPage(): void {
 }
 
 describe("NodeSettings (generated hey-api data layer)", () => {
+	// Cleared BEFORE each test, not after: the global `afterEach(cleanup)` in `src/test/Cleanup.ts` runs after this
+	// file's own hooks (Vitest stacks them), so clearing there would drop the unmount's calls into the next test.
 	beforeEach(() => {
+		vi.clearAllMocks();
 		installJsdomEnvironmentMocks();
 		generatedMock.getNodeSettingsOptions.mockReturnValue({
 			queryKey: ["getNodeSettings"],
@@ -259,7 +262,6 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		// The developer-mode test writes `xe-developer-mode`, and localStorage is one jsdom object shared by the whole
 		// file: left behind, it decides for every later test whether the developer-only cards mount.
 		localStorage.clear();
-		vi.clearAllMocks();
 	});
 
 	it("loads settings through the generated query options", async () => {

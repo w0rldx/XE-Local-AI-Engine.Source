@@ -170,7 +170,6 @@ function requestedOffsets(): number[] {
 	);
 }
 
-/** Clicks one status chip and waits for the status SET the query is then asked for (undefined for the All chip). */
 /** Clicks a status chip and asserts the statuses the executions query was re-read with. */
 async function expectChipSendsStatuses(label: string, expected: readonly string[] | undefined): Promise<void> {
 	fireEvent.click(within(screen.getByTestId("integration-executions-status-chips")).getByText(label));

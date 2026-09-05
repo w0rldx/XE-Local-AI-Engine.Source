@@ -2,7 +2,7 @@
 
 import { MantineProvider } from "@mantine/core";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { confirmMock, hooksMock, toastMock } = vi.hoisted(() => ({
 	confirmMock: vi.fn(),
@@ -51,7 +51,12 @@ function renderPanel(): void {
 }
 
 describe("McpWorkspaceAllowlistPanel", () => {
+	// Cleared BEFORE each test, not after: the global `afterEach(cleanup)` in `src/test/Cleanup.ts` runs after this
+	// file's own hooks (Vitest stacks them), so clearing here would drop the unmount's calls into the next test.
+	// `restoreMocks` covers the `vi.spyOn` console spies below but NOT these `vi.fn()` doubles: in Vitest 4
+	// `vi.restoreAllMocks()` only touches spies, so a `vi.fn()` call history still has to be cleared by hand.
 	beforeEach(() => {
+		vi.clearAllMocks();
 		Object.defineProperty(window, "matchMedia", {
 			writable: true,
 			value: vi.fn().mockImplementation((query: string) => ({
@@ -78,12 +83,6 @@ describe("McpWorkspaceAllowlistPanel", () => {
 		hooksMock.create.isPending = false;
 		hooksMock.remove.isPending = false;
 		confirmMock.mockResolvedValue(true);
-	});
-
-	// `restoreMocks` covers the `vi.spyOn` console spies below but NOT these `vi.fn()` doubles: in Vitest 4
-	// `vi.restoreAllMocks()` only touches spies, so a `vi.fn()` call history still has to be cleared by hand.
-	afterEach(() => {
-		vi.clearAllMocks();
 	});
 
 	it("shows loading, load-error retry, empty, and pending states", () => {
