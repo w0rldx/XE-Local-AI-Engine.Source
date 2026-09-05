@@ -10,7 +10,7 @@ per-attempt history lives on the run's `node.retry.scheduled` events.
 
 A workflow node run is the unit a cost question is actually about: one attempt, one agent or one development task,
 one settle. Before this slice the numbers existed only inside a live budget object that was disposed when the step
-ended, so the only honest answer to "did that change make it cheaper" was to watch a terminal. The twelve columns
+ended, so the only honest answer to "did that change make it cheaper" was to watch a terminal. The fifteen columns
 below are that answer written down, and this page is how to read them without over-claiming.
 
 **Nothing here routes anything.** Every column is written at the transition that settles an attempt and read by

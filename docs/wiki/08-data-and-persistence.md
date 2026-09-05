@@ -250,7 +250,7 @@ Tests use `NullNodeSqliteKeyHolder` (a fixed zero key) plus a non-encrypting mig
 - **Cloud creds & operator secrets are not in this DB.** Don't add a "credentials" table — credentials live in DataProtection files and the WorkerHub layer; see [Security & Privacy](12-security-and-privacy.md).
 - **Go through stores.** Don't expose `DbSet`s or return entities across the transport boundary; map to records/DTOs in the store layer.
 
-## Node-run cost telemetry: twelve plaintext columns, and why they are not encrypted
+## Node-run cost telemetry: fifteen plaintext columns, and why they are not encrypted
 
 `dev_workflow_node_runs` carries fifteen nullable columns recording what one node-run **attempt** cost: `input_tokens`, `output_tokens`, `reasoning_tokens`, `estimated_input_tokens`, `provider_calls`, `tool_calls`, `tool_schema_tokens`, `tool_names_json`, `agent_turn_ms`, `served_model_name`, `route_json` and `work_session_steps` (migration `AddAiTrendsWave`), `model_readiness_ms` (migration `AddModelReadinessTelemetry`), and `vram_free_at_load_bytes` + `vram_admitted_bytes` (migration `AddVramAtLoadTelemetry`). They are written at ONE place — the publishing store decorator, on a terminal, `Blocked` or `WaitingForApproval` transition — so a call site added later is covered without anyone remembering to. A collection that throws or overruns its deadline leaves nulls and the transition proceeds unchanged.
 
