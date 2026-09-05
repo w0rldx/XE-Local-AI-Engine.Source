@@ -34,21 +34,29 @@ internal sealed record GraphWorkflowInFlight<TResult>(CancellationTokenSource Ca
 ///         still being driven.
 ///     </para>
 ///     <para>
-///         Nothing instantiates this in the run engine yet — the agent lane that does lands in the next phase, and the
-///         tool lane after it. Its contract is asserted directly instead.
+///         The agent lane is its first instance; the tool lane is the second. Its contract is also asserted directly,
+///         because the two things that keep a drain from spinning — a stop that answers no on a repeat, and an entry
+///         that outlives the work until a poll has SEEN it land — are properties of this class rather than of either.
 ///     </para>
 /// </summary>
 internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
 {
     private readonly ConcurrentDictionary<Guid, GraphWorkflowInFlight<TResult>> _inflight = new();
     private readonly SemaphoreSlim _lane;
+    private readonly Action<GraphWorkflowInFlight<TResult>>? _onDiscard;
     private readonly CancellationTokenSource _shutdown = new();
     private int _disposed;
 
-    public GraphWorkflowInFlightLane(int slots)
+    /// <summary>
+    ///     <paramref name="onDiscard" /> is what an executor whose work needs more than a cancelled token to unwind
+    ///     hooks into every drop — including the superseded ones, which never come through the executor at all. It runs
+    ///     before the token is cancelled and must not block.
+    /// </summary>
+    public GraphWorkflowInFlightLane(int slots, Action<GraphWorkflowInFlight<TResult>>? onDiscard = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(slots);
         _lane = new SemaphoreSlim(slots, slots);
+        _onDiscard = onDiscard;
     }
 
     /// <summary>Whether this node run's work is being driven right now, or has landed and not yet been consumed.</summary>
@@ -74,7 +82,7 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
     public async Task<GraphWorkflowInFlight<TResult>?> TryStartAsync(Guid nodeRunId,
         int attempt,
         Guid invocationId,
-        Func<CancellationToken, Task<TResult>> work,
+        Func<StrongBox<bool>, CancellationToken, Task<TResult>> work,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(work);
@@ -88,7 +96,11 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
         }
 
         var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
-        var flight = new GraphWorkflowInFlight<TResult>(cancellation, RunAsync(work, cancellation.Token), attempt, invocationId, new StrongBox<bool>(value: false));
+
+        // The box is the lane's to make and the work's to flip: it is the only thing the poll can read about a turn
+        // that has started but does not yet hold the node-wide slot it is waiting for.
+        var leaseAcquired = new StrongBox<bool>(value: false);
+        var flight = new GraphWorkflowInFlight<TResult>(cancellation, RunAsync(work, leaseAcquired, cancellation.Token), attempt, invocationId, leaseAcquired);
         if (_inflight.TryAdd(nodeRunId, flight))
         {
             return flight;
@@ -143,6 +155,7 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
             return;
         }
 
+        _onDiscard?.Invoke(flight);
         await flight.Cancellation.CancelAsync().ConfigureAwait(false);
         _ = DisposeWhenDoneAsync(flight);
     }
@@ -200,11 +213,11 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
     }
 
     /// <summary>The caller's work, with the slot released whatever it ends as.</summary>
-    private async Task<TResult> RunAsync(Func<CancellationToken, Task<TResult>> work, CancellationToken cancellationToken)
+    private async Task<TResult> RunAsync(Func<StrongBox<bool>, CancellationToken, Task<TResult>> work, StrongBox<bool> leaseAcquired, CancellationToken cancellationToken)
     {
         try
         {
-            return await work(cancellationToken).ConfigureAwait(false);
+            return await work(leaseAcquired, cancellationToken).ConfigureAwait(false);
         }
         finally
         {

@@ -56,6 +56,10 @@ internal static class AddNodeGraphWorkflowsExtensions
         // The five kinds that run inside the tick. A singleton because it holds nothing per run — only the output cap.
         builder.Services.AddSingleton<GraphWorkflowInlineExecutor>();
 
+        // The Agent lane. Registered as one of the executor SET the dispatcher asks which kind it owns, so adding a
+        // lane is a registration and nothing else: the tick's dispatch switch has no per-kind arm to grow.
+        builder.Services.AddSingleton<IGraphWorkflowNodeExecutor, GraphWorkflowAgentExecutor>();
+
         // BEFORE the dispatcher: hosted services start in registration order, and the dispatcher's pumps must not begin
         // admitting node runs a restart has not judged yet.
         builder.Services.AddHostedService<GraphWorkflowStartupReconciler>();

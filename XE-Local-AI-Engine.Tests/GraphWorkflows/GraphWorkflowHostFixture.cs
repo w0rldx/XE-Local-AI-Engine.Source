@@ -31,7 +31,15 @@ public sealed class GraphWorkflowHostFixture : IAsyncInitializer, IAsyncDisposab
     ///         anything.
     ///     </para>
     /// </summary>
-    public static TestServerWebAppFactory NewFactory(params (string Key, string Value)[] configuration)
+    public static TestServerWebAppFactory NewFactory(params (string Key, string Value)[] configuration) =>
+        NewFactory(configureServices: null, configuration);
+
+    /// <summary>
+    ///     The same host with one more registration pass, for a slice whose lane needs seams a unit-test host cannot
+    ///     satisfy on its own. <paramref name="configureServices" /> runs AFTER the signal recorder, so it may replace
+    ///     anything including that.
+    /// </summary>
+    public static TestServerWebAppFactory NewFactory(Action<IServiceCollection>? configureServices, params (string Key, string Value)[] configuration)
     {
         var settings = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
@@ -45,10 +53,11 @@ public sealed class GraphWorkflowHostFixture : IAsyncInitializer, IAsyncDisposab
         return new TestServerWebAppFactory
         {
             AdditionalConfiguration = settings,
-            ConfigureAdditionalTestServices = static services =>
+            ConfigureAdditionalTestServices = services =>
             {
                 services.RemoveAll<IGraphWorkflowDispatcherSignal>();
                 services.AddSingleton<IGraphWorkflowDispatcherSignal, RecordingGraphWorkflowDispatcherSignal>();
+                configureServices?.Invoke(services);
             }
         };
     }

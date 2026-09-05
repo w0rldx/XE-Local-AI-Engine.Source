@@ -8,7 +8,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The tick, over the real store and a real database. Nothing is faked: the only reason a run stops short here is
-///     that this build ships no lane, so an <c>Agent</c> node has no executor — which is itself one of the assertions.
+///     that this build ships no <c>Tool</c> lane, so a Tool node has no executor — which is itself one of the
+///     assertions. The Agent lane it does ship is exercised by <c>GraphWorkflowAgentExecutorTests</c>.
 /// </summary>
 public sealed class GraphWorkflowDispatcherTests
 {
@@ -164,19 +165,19 @@ public sealed class GraphWorkflowDispatcherTests
     }
 
     /// <summary>
-    ///     The absent case, asserted rather than assumed: this build registers no lane, so the dispatch switch has no
-    ///     arm for an <c>Agent</c> node and the node run says so instead of queueing behind a lane that never arrives.
+    ///     The absent case, asserted rather than assumed: this build registers no <c>Tool</c> lane, so the dispatch
+    ///     switch has no arm for one and the node run says so instead of queueing behind a lane that never arrives.
     ///     A failed node run is what makes the RUN fail.
     /// </summary>
     [Test]
     public async Task ANodeKindWithNoExecutorInThisBuild_FailsValidationFailedAndFailsTheRun()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineWithAgent).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.ToolNode).ConfigureAwait(false);
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
-        var analyze = await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false);
+        var analyze = await harness.ReadNodeRunAsync(runId, "lookup").ConfigureAwait(false);
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
         AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass);
         AssertEx.Contains(analyze.Error, "no executor for that kind");
