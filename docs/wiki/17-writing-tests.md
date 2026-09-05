@@ -46,12 +46,16 @@ A test ends in an explicit assertion and is binary green/red with no human step 
 
 - Assert with `AssertEx.*` (C#), `expect(…)` (Vitest), `assert`/`pytest.raises` (Python), `Should` (Pester). A test
   that only exercises code has verified nothing. `pnpm run validate` runs `CheckTestsHaveAssertions.mjs` over the
-  frontend suite; no analyzer in this stack reliably detects an assertion-less TUnit test, so on the backend the
-  rule is enforced in review.
+  frontend suite; no analyzer in this stack detects an assertion-less TUnit test at all, so on the backend the
+  rule is enforced in review only.
 - Never read a log line, console output or a report to decide pass/fail. The assertion is the result.
-- Never `return` early because the OS, GPU or tool is missing — that reports a green pass. Skip visibly: the
-  platform skip attributes in `XE-Local-AI-Engine.Tests/Testing/` for an OS gate, `Skip.Test("<why>")` after a
-  probe for a capability you cannot name up front (`Testing/SymlinkSupport.cs`, `Testing/JunctionSupport.cs`).
+- Never `return` early because the OS, GPU or tool is missing — that reports a green pass. Skip visibly: TUnit's
+  own `[RunOn(OS.Linux)]` / `[ExcludeOn(OS.Windows)]` (`using OS = TUnit.Core.Enums.OS;` — that namespace's
+  `LogLevel` collides with the logging one) for an OS gate, `Skip.Test("<why>")` after a probe for a capability
+  you cannot name up front (`Testing/SymlinkSupport.cs`, `Testing/JunctionSupport.cs`). A guard that depends on
+  more than the OS keeps `Skip.Unless(...)` in the body on top of the attribute. `[RunOn]` is invisible to the
+  CA1416 platform analyzer, so a method that calls a Linux-only API also carries
+  `[UnsupportedOSPlatform("windows")]`. Proof: `XE-Local-AI-Engine.Tests/Testing/PlatformSkipTests.cs`.
 - A test that logs a problem and stays green has the same defect as one with no assertion at all.
 
 ### Mocking policy
@@ -155,7 +159,11 @@ defect. Use `vi.useFakeTimers()` or `waitFor`.
 **"X did not happen" needs the same discipline.** Sleeping N ms and then asserting nothing happened can only fail
 when the code gets *slower* — a real regression that fires the event late still reads green. Instead drive the code
 to an observable blocking point through a gate the test controls, assert the negative there, then release the gate
-and assert the positive. `AssertEx.EventuallyAsync` with a `TestBudgets` timeout covers that positive half.
+and assert the positive. `AssertEx.StaysIncompleteAsync(task, message)` is the negative, called once the code has
+observably reached its gate; `AssertEx.CompletesAsync(task, TestBudgets.Contended, message)` is the positive, with
+a failure deadline. Both build on `AssertEx.SettleAsync()`, the primitive that drains the scheduler — it is
+deterministic only when everything in flight is a thread-pool continuation, so a real timer or real I/O between the
+call and the gate still needs a "reached" signal from a fake.
 
 A real timer is allowed only when the subject is a real OS process, or when the delay is the subject's own input.
 Mark it with a `// real-timer:` comment naming why, so a later reader does not "fix" it into a fake clock.
@@ -235,10 +243,15 @@ and env stubs reset themselves — store and `localStorage` state does not. Ever
 
 ### A test that only runs on one OS
 
-Gate it with the platform skip attributes in `XE-Local-AI-Engine.Tests/Testing/`, never with
+Gate it with TUnit's `[RunOn(OS.Linux)]` / `[ExcludeOn(OS.Windows)]` (`OS` is `TUnit.Core.Enums.OS`, imported as
+`using OS = TUnit.Core.Enums.OS;` because that namespace's `LogLevel` collides with the logging one), never with
 `if (!OperatingSystem.IsWindows()) return;` — an early return reports a green pass on every platform that cannot
-run the test. When the gate is a capability you have to probe rather than name (symlinks, NTFS junctions), probe
-once and call `Skip.Test("<why>")`, the shape of `Testing/SymlinkSupport.cs` and `Testing/JunctionSupport.cs`.
+run the test. Both are `SkipAttribute` subclasses whose reason names the platform; the proof test is
+`XE-Local-AI-Engine.Tests/Testing/PlatformSkipTests.cs`. A guard that depends on more than the OS keeps
+`Skip.Unless(...)` in the body on top of the attribute. `[RunOn]` is invisible to the CA1416 platform analyzer, so
+a method that calls a Linux-only API also carries `[UnsupportedOSPlatform("windows")]`. When the gate is a
+capability you have to probe rather than name (symlinks, NTFS junctions), probe once and call `Skip.Test("<why>")`,
+the shape of `Testing/SymlinkSupport.cs` and `Testing/JunctionSupport.cs`.
 
 ### Browser E2E
 
