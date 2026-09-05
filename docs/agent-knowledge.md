@@ -244,12 +244,24 @@ Any fixture combining the real Client content root with redirected node data mus
 request onto a fresh record and persists it verbatim erases them. Dropping `MachineKey` is silent: the next start mints
 a fresh GUID, and because inference profiles are keyed by machine key, every frozen profile on the box is orphaned —
 the resolver never finds one, each model re-fits from scratch forever, the rows still read `Frozen` through the
-profiles endpoint, and nothing is logged. `NodeSettingsAdministrationService.SaveTrustedMergedAsync` now re-applies
-`current.MachineKey` before validation, so every caller of that entry point is covered; `ApplyAgenticPatchAsync` was
-already safe because it starts from `current with {…}`. Guards:
+profiles endpoint, and nothing is logged.
+
+Carrying the value over at the *start* of the save is not enough, because the load and the write are far apart:
+`IMachineKeyProvider` mints on the same node and can land between them, and this file is written WHOLE, so a save that
+re-applies the key it LOADED overwrites one minted since. Both paths therefore persist through
+`INodeSettingsStore.UpdateAsync`, whose mutation runs under the store's own lock and reads the record as it is at write
+time — `NodeSettingsAdministrationService.ValidateAndSaveAsync` saves `settings with { MachineKey = latest.MachineKey }`
+(covering every caller, including `ApplyAgenticPatchAsync`, which was already safe against plain erasure because it
+starts from `current with {…}`), and `MachineKeyProvider` mints as
+`latest.MachineKey is empty ? latest with { MachineKey = fresh } : latest`, caching the key the store actually holds
+rather than the one it generated. `SaveTrustedMergedAsync` still carries the key over up front as well: that copy owns
+the record the call VALIDATES and returns, including on the rejection paths that never reach a write. Guards:
 `NodeSettingsAdministrationServiceTests.SaveTrustedMerged_WhenTheIncomingRecordHasNoMachineKey_PreservesTheStoredOne`
-and `NodeSettingsEndpointTests.SaveNodeSettings_WhenValid_PreservesTheStoredMachineKey`. Authority: live evidence,
-fu-b round 2a, 2026-09-05. Do not "fix" this by adding `MachineKey` to the request or response DTO.
+and `…_WhenTheMachineKeyIsMintedBetweenTheLoadAndTheWrite_PersistsTheMintedOne`,
+`NodeSettingsEndpointTests.SaveNodeSettings_WhenValid_PreservesTheStoredMachineKey`, and
+`MachineKeyProviderTests.MachineKey_WhenTwoProvidersMintConcurrently_AgreeOnTheOneStoredKey`. Authority: live evidence,
+fu-b round 2a, 2026-09-05. Do not "fix" this by adding `MachineKey` to the request or response DTO, and do not write
+this file with a bare `SaveAsync` composed from an earlier `LoadAsync`.
 
 ### The one temp artifact that is meant to survive: the migrated SQLite template
 

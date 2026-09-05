@@ -60,7 +60,8 @@ public sealed class NodeSettingsEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal(expected: 600, settings.MaxMessageRequestTimeoutSeconds);
-        await nodeSettingsStore.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(stored => stored.MaxMessageRequestTimeoutSeconds == 600),
+        await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
+                Persisted(mutate).MaxMessageRequestTimeoutSeconds == 600),
             Arg.Any<CancellationToken>());
         await capabilityReporter.Received(1).ReportToApiAsync(Arg.Any<CancellationToken>());
     }
@@ -85,7 +86,10 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        await nodeSettingsStore.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(stored => stored.MachineKey == "abc"),
+        // The key comes off the record the store holds when the write runs, not off the one the request carried:
+        // that is what survives a key minted between this save's load and its write.
+        await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
+                Persisted(mutate, new StoredNodeSettings { MachineKey = "abc" }).MachineKey == "abc"),
             Arg.Any<CancellationToken>());
     }
 
@@ -105,7 +109,7 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
         await capabilityReporter.DidNotReceiveWithAnyArgs().ReportToApiAsync(Arg.Any<CancellationToken>());
     }
 
@@ -116,7 +120,13 @@ public sealed class NodeSettingsEndpointTests
         var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
         nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
                          .Returns(_ => saved ?? new StoredNodeSettings());
-        await nodeSettingsStore.SaveAsync(Arg.Do<StoredNodeSettings>(settings => saved = settings), Arg.Any<CancellationToken>());
+        // The save is a read-modify-write, so the round-trip fake has to apply the mutation the way the store does.
+        nodeSettingsStore.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+                         .Returns(call =>
+                         {
+                             saved = call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(saved ?? new StoredNodeSettings());
+                             return Task.FromResult(saved);
+                         });
 
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
@@ -190,12 +200,13 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        await nodeSettingsStore.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(stored => stored.MaxMessageRequestTimeoutSeconds == 300
-                                                                                           && stored.RecommendedLlamaCppTag == "b9692"
-                                                                                           && stored.OllamaEndpoint == "http://127.0.0.1:11434"
-                                                                                           && stored.KeepModelWarmEnabled == true
-                                                                                           && stored.KeepModelWarmModelName == "keep-me-warm"
-                                                                                           && stored.KeepModelWarmIntervalSeconds == 180),
+        await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
+                Persisted(mutate).MaxMessageRequestTimeoutSeconds == 300
+                && Persisted(mutate).RecommendedLlamaCppTag == "b9692"
+                && Persisted(mutate).OllamaEndpoint == "http://127.0.0.1:11434"
+                && Persisted(mutate).KeepModelWarmEnabled == true
+                && Persisted(mutate).KeepModelWarmModelName == "keep-me-warm"
+                && Persisted(mutate).KeepModelWarmIntervalSeconds == 180),
             Arg.Any<CancellationToken>());
     }
 
@@ -215,7 +226,7 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -234,7 +245,7 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -253,7 +264,7 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -271,7 +282,7 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -290,7 +301,7 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -315,7 +326,7 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -341,7 +352,7 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -367,7 +378,7 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -393,7 +404,7 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -418,7 +429,7 @@ public sealed class NodeSettingsEndpointTests
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
         var error = document.RootElement.GetProperty("errors")[0];
         AssertEx.Equal("autoEffortFastModelName", error.GetProperty("name").GetString());
-        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -461,7 +472,7 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -479,7 +490,8 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        await nodeSettingsStore.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(stored => stored.KvCacheType == "q4_0"),
+        await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
+                Persisted(mutate).KvCacheType == "q4_0"),
             Arg.Any<CancellationToken>());
     }
 
@@ -499,7 +511,7 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -518,7 +530,8 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        await nodeSettingsStore.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(stored => stored.SpeculativeMode == "ngram-mod"),
+        await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
+                Persisted(mutate).SpeculativeMode == "ngram-mod"),
             Arg.Any<CancellationToken>());
     }
 
@@ -538,7 +551,8 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        await nodeSettingsStore.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(stored => stored.SpeculativeMode == "draft-simple" && stored.SpeculativeDraftModelName == "my-draft"),
+        await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
+                Persisted(mutate).SpeculativeMode == "draft-simple" && Persisted(mutate).SpeculativeDraftModelName == "my-draft"),
             Arg.Any<CancellationToken>());
     }
 
@@ -565,7 +579,7 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -767,4 +781,12 @@ public sealed class NodeSettingsEndpointTests
         await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
         return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions).ConfigureAwait(false));
     }
+
+    /// <summary>
+    ///     The record a save actually persists. The administration service writes through
+    ///     <see cref="INodeSettingsStore.UpdateAsync" />, so what lands is its mutation applied to the settings the
+    ///     store holds AT WRITE TIME — not to the record the request produced.
+    /// </summary>
+    private static StoredNodeSettings Persisted(Func<StoredNodeSettings, StoredNodeSettings> mutate, StoredNodeSettings? latest = null) =>
+        mutate(latest ?? new StoredNodeSettings());
 }
