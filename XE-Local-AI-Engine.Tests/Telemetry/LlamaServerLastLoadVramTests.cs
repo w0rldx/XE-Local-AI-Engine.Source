@@ -79,6 +79,24 @@ public sealed class LlamaServerLastLoadVramTests
         AssertEx.Null(telemetry.TryGetLastReadyLoad("llama-3.1", ModelRole.Chat));
     }
 
+    /// <summary>
+    ///     An unadmitted reload measured nothing, but it still REPLACED the process the earlier reading described, so
+    ///     the key is cleared rather than left reporting bytes for a process that no longer exists. Contrast
+    ///     <see cref="RecordLoad_NonReadyAttempt_LeavesTheLastSuccessfulReadingAlone" />: a failed attempt never
+    ///     replaced anything, so it leaves the admitted reading standing.
+    /// </summary>
+    [Test]
+    public void RecordLoad_UnadmittedReadyReload_ClearsTheEarlierReading()
+    {
+        var telemetry = new NodeMetricsLlamaServerLoadTelemetry();
+        telemetry.RecordLoad(Observation("llama-3.1", ModelRole.Chat, LlamaServerReadinessOutcome.Ready, globalFree: 7_000, admitted: 5_000));
+
+        telemetry.RecordLoad(Observation("llama-3.1", ModelRole.Chat, LlamaServerReadinessOutcome.Ready, globalFree: null, admitted: null));
+
+        AssertEx.Null(telemetry.TryGetLastReadyLoad("llama-3.1", ModelRole.Chat),
+            "A direct, profiling or variant-moved reload carries no admission, and the old process it replaced is gone.");
+    }
+
     private static LlamaServerLoadObservation Observation(string modelName,
         ModelRole role,
         LlamaServerReadinessOutcome outcome,

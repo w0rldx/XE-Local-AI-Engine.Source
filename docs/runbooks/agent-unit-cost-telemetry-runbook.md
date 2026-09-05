@@ -209,9 +209,11 @@ WHERE n.run_id IN (UPPER(:runIds)) AND n.failure_class IS NOT NULL GROUP BY fail
 13. **`vram_free_at_load_bytes` and `vram_admitted_bytes` describe a LOAD, not this attempt.** Every other column
     counts what the attempt spent; these two read the box at one moment. `vram_free_at_load_bytes` is the
     machine-global free VRAM the capacity gate measured immediately before it admitted the most recent SUCCESSFUL
-    load of the model in `served_model_name`; `vram_admitted_bytes` is the GPU bytes that same admission reserved
-    for the process. Neither is re-measured at settle time and neither is llama.cpp's own `--list-devices` process
-    budget, which is a different axis and is not read on this path.
+    load of the model in `served_model_name` **that carried a capacity admission**; `vram_admitted_bytes` is the GPU
+    bytes that same admission reserved for the process. An **unadmitted reload clears the reading**: a direct,
+    profiling or variant-moved spawn measures nothing but replaces the process the earlier figures described, so both
+    columns go null rather than report bytes for a process that is gone. Neither is re-measured at settle time and
+    neither is llama.cpp's own `--list-devices` process budget, which is a different axis and is not read on this path.
     **A warm run reports an EARLIER load's figures** — possibly one from another node run, or from before this run
     started — so read `model_readiness_ms` beside them: zero there means the warmer waited for nothing, which means
     the load these bytes describe predates the run and the device may have looked different by the time it started;

@@ -118,7 +118,9 @@ internal sealed class DevWorkflowNodeRun
 
     /// <summary>
     ///     Machine-global free VRAM in bytes as the capacity gate measured it just before the most recent SUCCESSFUL
-    ///     load of the model that served this run — not necessarily a load this run caused.
+    ///     load of the model that served this run THAT CARRIED A CAPACITY ADMISSION — not necessarily a load this run
+    ///     caused, and an unadmitted reload since (a direct, profiling or variant-moved spawn) clears the reading
+    ///     rather than letting it describe the process that reload replaced.
     ///     <para>
     ///         <b>A warm run reports the EARLIER load's figures.</b> <see cref="ModelReadinessMs" /> is what separates
     ///         the two: zero there means the warmer waited for nothing, so the load these bytes describe predates the

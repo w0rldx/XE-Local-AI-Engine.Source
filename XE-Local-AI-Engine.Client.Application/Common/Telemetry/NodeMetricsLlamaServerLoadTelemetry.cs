@@ -13,18 +13,22 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 /// <remarks>
 ///     Process-lifetime singleton. The remembered figures are report-only and deliberately not persisted: they describe
 ///     one load of one process, and a value carried across a restart would describe a process that no longer exists.
-///     Only a <see cref="LlamaServerReadinessOutcome.Ready" /> load writes an entry — a failed or cancelled attempt
+///     Only a <see cref="LlamaServerReadinessOutcome.Ready" /> load touches an entry — a failed or cancelled attempt
 ///     never became the model that served anything, and overwriting a good reading with its numbers would misattribute
-///     them. Entries are keyed like the layer-placement report and bounded the same way: by the set of installed models.
+///     them. A Ready load that carried NO capacity admission (a direct, profiling or variant-moved spawn, so both
+///     figures are null) writes nothing but CLEARS the key: it replaced the process the earlier reading described, and
+///     a reading kept past that would report bytes for a process that no longer exists.
+///     Entries are keyed like the layer-placement report and bounded the same way: by the set of installed models.
 /// </remarks>
 internal sealed class NodeMetricsLlamaServerLoadTelemetry : ILlamaServerLoadTelemetry
 {
     private readonly ConcurrentDictionary<LoadKey, LlamaServerVramAtLoad> _lastReadyLoads = new();
 
     /// <summary>
-    ///     The VRAM figures of the most recent successful load of this <c>(model, role)</c>, or <see langword="null" />
-    ///     when no such load has been observed in this process — a remote or Ollama model, a model already resident
-    ///     before the node started, or a node that has not loaded it at all.
+    ///     The VRAM figures of the most recent successful load of this <c>(model, role)</c> THAT CARRIED A CAPACITY
+    ///     ADMISSION, or <see langword="null" /> when there is no such load to report — a remote or Ollama model, a
+    ///     model already resident before the node started, a node that has not loaded it at all, or an unadmitted
+    ///     reload since, which clears the reading rather than letting it describe a replaced process.
     /// </summary>
     public LlamaServerVramAtLoad? TryGetLastReadyLoad(string modelName, ModelRole role)
     {
@@ -35,12 +39,21 @@ internal sealed class NodeMetricsLlamaServerLoadTelemetry : ILlamaServerLoadTele
 
     public void RecordLoad(LlamaServerLoadObservation observation)
     {
-        if (observation.Outcome == LlamaServerReadinessOutcome.Ready
-            && !string.IsNullOrWhiteSpace(observation.ModelName)
-            && (observation.GlobalFreeVramBytesAtLoad is not null || observation.AdmittedVramBytes is not null))
+        if (observation.Outcome == LlamaServerReadinessOutcome.Ready && !string.IsNullOrWhiteSpace(observation.ModelName))
         {
-            _lastReadyLoads[new LoadKey(observation.ModelName, observation.Role)] =
-                new LlamaServerVramAtLoad(observation.GlobalFreeVramBytesAtLoad, observation.AdmittedVramBytes);
+            var key = new LoadKey(observation.ModelName, observation.Role);
+            if (observation.GlobalFreeVramBytesAtLoad is null && observation.AdmittedVramBytes is null)
+            {
+                // This load measured nothing (a direct, profiling or variant-moved spawn carries no admission), but it
+                // still REPLACED whatever process the key described. Leaving the earlier entry would report an
+                // admitted process that no longer exists, so the stale reading is dropped rather than kept.
+                _ = _lastReadyLoads.TryRemove(key, out _);
+            }
+            else
+            {
+                _lastReadyLoads[key] =
+                    new LlamaServerVramAtLoad(observation.GlobalFreeVramBytesAtLoad, observation.AdmittedVramBytes);
+            }
         }
 
         var role = Role(observation.Role);
