@@ -88,6 +88,11 @@ public sealed class StartGraphWorkflowRunRequestValidator : Validator<StartGraph
 
 public sealed class ListGraphWorkflowRunsRequestValidator : Validator<ListGraphWorkflowRunsRequest>
 {
+    /// <summary>The status names, read once. An enum's names do not change between requests, and asking for them does allocate.</summary>
+    private static readonly string[] StatusNames = Enum.GetNames<GraphWorkflowRunStatus>();
+
+    private static readonly string StatusNameList = string.Join(", ", StatusNames);
+
     public ListGraphWorkflowRunsRequestValidator()
     {
         RuleFor(static request => request.Limit)
@@ -97,8 +102,8 @@ public sealed class ListGraphWorkflowRunsRequestValidator : Validator<ListGraphW
         // Refused here rather than in the endpoint so an unknown token answers 400 with the name it did not recognise,
         // instead of the endpoint's Enum.Parse throwing its way to a 500.
         RuleFor(static request => request.Status)
-            .Must(static status => status is not null && Enum.GetNames<GraphWorkflowRunStatus>().Contains(status, StringComparer.OrdinalIgnoreCase))
-            .WithMessage($"status must be one of {string.Join(", ", Enum.GetNames<GraphWorkflowRunStatus>())}.")
+            .Must(static status => status is not null && StatusNames.Contains(status, StringComparer.OrdinalIgnoreCase))
+            .WithMessage($"status must be one of {StatusNameList}.")
             .When(static request => request.Status is not null);
     }
 }

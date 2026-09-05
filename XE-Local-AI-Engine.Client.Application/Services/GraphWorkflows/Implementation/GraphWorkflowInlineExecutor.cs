@@ -140,9 +140,9 @@ internal sealed class GraphWorkflowInlineExecutor(IOptions<GraphWorkflowOptions>
             // own output document, so without the predecessor's payload they would inspect {} and never fire.
             GraphWorkflowNodeKind.Condition or GraphWorkflowNodeKind.Parallel => GraphWorkflowDocuments.PassThroughOutput(inputJson),
             GraphWorkflowNodeKind.Join => GraphWorkflowDocuments.JoinOutput(upstream),
-            GraphWorkflowNodeKind.End => GraphWorkflowDocuments.EndOutput(((GraphWorkflowEndConfig)node.Config).Outcome,
-                ((GraphWorkflowEndConfig)node.Config).ResultPath,
-                inputJson),
+
+            // Bound once. The parser refuses an End node without its config, so the arm below is unreachable for one.
+            GraphWorkflowNodeKind.End when node.Config is GraphWorkflowEndConfig end => GraphWorkflowDocuments.EndOutput(end.Outcome, end.ResultPath, inputJson),
             _ => GraphWorkflowDocuments.EmptyObject
         };
 
