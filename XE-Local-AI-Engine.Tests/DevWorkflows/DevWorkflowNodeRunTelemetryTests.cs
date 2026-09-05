@@ -2,12 +2,14 @@ namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
 using System.Globalization;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
@@ -539,6 +541,81 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         AssertEx.Equal("qwen3-1.7b-gguf:q8_0", collected.ServedModelName);
         AssertEx.Equal(expected: 7_340_032_000L, collected.VramFreeAtLoadBytes, "The served name is the load key, compared the way every other (model, role) key is.");
         AssertEx.Equal(expected: 5_368_709_120L, collected.VramAdmittedBytes);
+    }
+
+    /// <summary>
+    ///     The same join, driven through the REAL host instead of constructed doubles: the observation is recorded on
+    ///     the container's registered <see cref="ILlamaServerLoadTelemetry" />, and a real node run's settle — real
+    ///     store, real collector, real envelope row — is what reads it back. What this pins beyond the unit test is the
+    ///     WIRING: the interface the supervisor is handed and the concrete cache the collector is injected with have to
+    ///     resolve to ONE instance, or every observation a live node makes lands in a cache nothing reads.
+    ///     <para>
+    ///         Both halves run on one host, because the second is only meaningful against the first: an unadmitted
+    ///         Ready reload of the same key CLEARS the reading, so the next node run reports nulls rather than bytes
+    ///         for a process that no longer exists.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task VramAtLoad_RecordedOnTheRegisteredSeam_ReachesARealNodeRunsColumns()
+    {
+        const string servedName = "qwen3-1.7b-gguf:q8_0";
+
+        await using var harness = new DevWorkflowHarness();
+        var loads = harness.Services.GetRequiredService<ILlamaServerLoadTelemetry>();
+        loads.RecordLoad(LoadObservation("Qwen3-1.7B-GGUF:Q8_0", globalFree: 7_340_032_000, admitted: 5_368_709_120));
+
+        var admitted = await SettleAgentNodeServedByAsync(harness, servedName).ConfigureAwait(false);
+
+        AssertEx.Equal(servedName, admitted.ServedModelName, "The envelope's own model name is the key the collector joins on.");
+        AssertEx.Equal(expected: 7_340_032_000L,
+            admitted.VramFreeAtLoadBytes,
+            "The registered seam and the collector's cache have to be one instance, or a live node's observation reaches no reader.");
+        AssertEx.Equal(expected: 5_368_709_120L, admitted.VramAdmittedBytes);
+
+        // A Ready reload that carried no admission replaced the process the reading described, so the key is dropped.
+        loads.RecordLoad(LoadObservation("qwen3-1.7B-gguf:Q8_0", globalFree: null, admitted: null));
+
+        var cleared = await SettleAgentNodeServedByAsync(harness, servedName).ConfigureAwait(false);
+
+        AssertEx.Equal(servedName, cleared.ServedModelName, "The same model still served, which is what makes the nulls a clearing rather than a miss.");
+        AssertEx.Null(cleared.VramFreeAtLoadBytes, "An unadmitted reload drops the reading rather than letting it describe a replaced process.");
+        AssertEx.Null(cleared.VramAdmittedBytes);
+    }
+
+    /// <summary>
+    ///     Drives one agent node run to <c>Succeeded</c> on <paramref name="harness" />, with a run envelope on its own
+    ///     conversation naming <paramref name="servedModelName" /> as the model that served it. The envelope is seeded
+    ///     through the same parameterized SQL the run-envelope endpoint tests use, because no store API writes one: the
+    ///     real write is the terminalize command's own statement, which needs a provider and a model.
+    /// </summary>
+    private static async Task<DevWorkflowNodeRunSnapshot> SettleAgentNodeServedByAsync(DevWorkflowHarness harness, string servedModelName)
+    {
+        var runId = await harness.StartRunAsync(AgentThenGate).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var sessionId = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
+        await using (var scope = harness.Services.CreateAsyncScope())
+        {
+            var session = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().GetAsync(sessionId).ConfigureAwait(false);
+            var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+            _ = await dbContext.Database.ExecuteSqlAsync($"""
+                                                          INSERT INTO agent_execution_logs
+                                                              (id, record_kind, schema_version, agent_definition_id, conversation_id, message_id,
+                                                               invocation_id, model_name, provider, config_hash, terminal_status, latency_ms, success,
+                                                               created_at_utc)
+                                                          VALUES ({Guid.NewGuid()}, {(int)AgentExecutionLogRecordKind.ChatRunEnvelope}, {AgentRunEnvelope.CurrentSchemaVersion},
+                                                                  {Guid.NewGuid()}, {session.ConversationId}, {Guid.NewGuid()},
+                                                                  {Guid.NewGuid()}, {servedModelName}, 'local', '', 'completed', 1500, 1,
+                                                                  {DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()});
+                                                          """).ConfigureAwait(false);
+        }
+
+        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, research.Status, "The node has to have settled, or nothing collected its cost at all.");
+        return research;
     }
 
     private static LlamaServerLoadObservation LoadObservation(string modelName, long? globalFree, long? admitted) =>
