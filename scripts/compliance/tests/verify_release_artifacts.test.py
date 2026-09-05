@@ -14,7 +14,8 @@ from unittest import mock
 MODULE_PATH = Path(__file__).resolve().parents[1] / "verify_release_artifacts.py"
 REPOSITORY_ROOT = MODULE_PATH.parents[2]
 SPEC = importlib.util.spec_from_file_location("verify_release_artifacts", MODULE_PATH)
-assert SPEC and SPEC.loader
+assert SPEC is not None
+assert SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 

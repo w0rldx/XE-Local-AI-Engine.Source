@@ -16,6 +16,7 @@ const judgeStates: BenchmarkJudgeState[] = ["none", "queued", "running", "succee
 
 function badge(container: HTMLElement): HTMLElement {
 	const element = container.querySelector("[aria-label]");
+	// biome-ignore lint/suspicious/noMisplacedAssertion: guard inside a helper every caller runs from within a test — it fails the caller, not module load.
 	expect(element).not.toBeNull();
 	return element as HTMLElement;
 }

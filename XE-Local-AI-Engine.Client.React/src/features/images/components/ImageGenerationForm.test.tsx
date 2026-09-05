@@ -45,6 +45,7 @@ function renderForm() {
 // selector: the base rule plus one media block per declared breakpoint.
 function responsiveRulesFor(element: HTMLElement): string {
 	const generated = Array.from(element.classList).find((name) => name.startsWith("__m__"));
+	// biome-ignore lint/suspicious/noMisplacedAssertion: guard inside a helper every caller runs from within a test — it fails the caller, not module load.
 	expect(generated).toBeTruthy();
 	return Array.from(document.querySelectorAll("style"))
 		.map((tag) => tag.textContent ?? "")

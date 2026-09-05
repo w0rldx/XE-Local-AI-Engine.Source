@@ -25,7 +25,8 @@ POLICY_SCHEMA_PATH = REPOSITORY_ROOT / "docs/performance/schemas/inference-compa
 POLICY_EXAMPLE_PATH = REPOSITORY_ROOT / "docs/performance/policies/generic-inference-throughput-policy.example.json"
 PACKAGE_PATH = MODULE_PATH.parent / "inference_evidence"
 SPEC = importlib.util.spec_from_file_location("capture_inference_evidence", MODULE_PATH)
-assert SPEC and SPEC.loader
+assert SPEC is not None
+assert SPEC.loader is not None
 capture = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(capture)
 
@@ -2295,7 +2296,8 @@ import sys
 
 module_path = pathlib.Path(os.environ["CAPTURE_MODULE"])
 spec = importlib.util.spec_from_file_location("arbitrary_capture_loader_name", module_path)
-assert spec and spec.loader
+assert spec is not None
+assert spec.loader is not None
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 print(json.dumps({
@@ -2365,7 +2367,8 @@ sys.modules["unrelated"] = types.ModuleType("unrelated")
 before = list(sys.path)
 module_path = pathlib.Path(os.environ["CAPTURE_MODULE"])
 spec = importlib.util.spec_from_file_location("unrelated.arbitrary_collision_test", module_path)
-assert spec and spec.loader
+assert spec is not None
+assert spec.loader is not None
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 print(json.dumps({
@@ -2411,7 +2414,8 @@ modules = []
 for index, raw_path in enumerate(json.loads(os.environ["CAPTURE_MODULES"])):
     path = pathlib.Path(raw_path)
     spec = importlib.util.spec_from_file_location(f"worktree_copy_{index}", path)
-    assert spec and spec.loader
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     modules.append(module)

@@ -10,7 +10,8 @@ from pathlib import Path
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "verify_remote_velopack_assets.py"
 SPEC = importlib.util.spec_from_file_location("verify_remote_velopack_assets", MODULE_PATH)
-assert SPEC and SPEC.loader
+assert SPEC is not None
+assert SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 PINNED_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "velopack-1.2.0-linux-output.json"

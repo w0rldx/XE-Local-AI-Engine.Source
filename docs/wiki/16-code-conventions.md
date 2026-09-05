@@ -135,6 +135,9 @@ service belongs in its own file (same folder/namespace).
 
 Backend tests are **TUnit** (`[Test]`) on Microsoft.Testing.Platform, with a project **`AssertEx`** helper
 (`AssertEx.Equal/NotNull`) and **NSubstitute** for mocks — **no** xUnit/Shouldly/FluentAssertions/Moq.
+Reach for a substitute only after the real thing and the repo's fake seam (`FakeOllama`,
+`RecordingHubMessageSender`, MSW) have been ruled out, and never for the gate, cipher or migration the test exists
+to verify — [17-writing-tests.md §1a](17-writing-tests.md#1a-test-principles).
 Scope a run with `--treenode-filter` (not `--filter`). See
 [13-testing-and-validation.md](13-testing-and-validation.md).
 
