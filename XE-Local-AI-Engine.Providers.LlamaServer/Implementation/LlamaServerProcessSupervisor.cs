@@ -1339,7 +1339,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     LlamaServerReadinessOutcome.Ready,
                     placement.Outcome,
                     candidate.AttemptKind,
-                    speculative);
+                    speculative,
+                    admitted);
                 readinessRecorded = true;
 
                 // The load window is over and the banner has been read. From here the child's raised-verbosity output is
@@ -1527,7 +1528,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     outcome,
                     variant == GpuVariant.Cpu ? LlamaServerPlacementOutcome.Cpu : LlamaServerPlacementOutcome.Unknown,
                     candidate.AttemptKind,
-                    speculative);
+                    speculative,
+                    admitted);
                 readinessRecorded = true;
             }
         }
@@ -1686,11 +1688,17 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         LlamaServerReadinessOutcome outcome,
         LlamaServerPlacementOutcome placement,
         LlamaServerLoadAttemptKind attemptKind,
-        SpeculativeDecodingSettings speculative)
+        SpeculativeDecodingSettings speculative,
+        ProcessLaunchAdmission? admitted)
     {
         var speculativeModeClass = key.Role == ModelRole.Chat
             ? speculative.ModeClass ?? SpeculativeModeClass.Disabled
             : SpeculativeModeClass.Disabled;
+
+        // Both byte figures are whatever the admission ALREADY knew — the free-VRAM reading the capacity gate took
+        // under its decision gate, and the GPU bytes it reserved. Nothing is probed here: a load must not pay for a
+        // second nvidia-smi call, and a figure measured after the weights landed would answer a different question.
+        // An unadmitted spawn (direct, profiling, test) or one whose variant moved off the admission reports neither.
         var observation = new LlamaServerLoadObservation(key.Role,
             variant,
             runtimeVersion,
@@ -1699,7 +1707,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             outcome,
             placement,
             attemptKind,
-            speculativeModeClass);
+            speculativeModeClass,
+            key.ModelName,
+            admitted?.GlobalFreeVramBytesAtAdmission,
+            admitted?.Allocation.Footprint.GpuBytes);
         try
         {
             _loadTelemetry.RecordLoad(observation);

@@ -247,7 +247,9 @@ internal sealed partial class DevWorkflowStore
             nodeRun.ServedModelName,
             nodeRun.RouteJson,
             nodeRun.WorkSessionSteps,
-            nodeRun.ModelReadinessMs);
+            nodeRun.ModelReadinessMs,
+            nodeRun.VramFreeAtLoadBytes,
+            nodeRun.VramAdmittedBytes);
 
     private static DevWorkflowArtifactSnapshot ArtifactSnapshot(DevWorkflowArtifact artifact, IReadOnlyDictionary<Guid, int> latestVersions) =>
         new(artifact.Id,

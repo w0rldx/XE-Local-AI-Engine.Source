@@ -206,6 +206,22 @@ WHERE n.run_id IN (UPPER(:runIds)) AND n.failure_class IS NOT NULL GROUP BY fail
     swap. Do not read a `fast-model-*` code as the reason a swap fired.
     (`IReasoningEffortDispatcher.cs`; live-validated `Plans/ai-trends-2026-09-02/progress/c2-report.md` §4.)
 
+12. **`vram_free_at_load_bytes` and `vram_admitted_bytes` describe a LOAD, not this attempt.** Every other column
+    counts what the attempt spent; these two read the box at one moment. `vram_free_at_load_bytes` is the
+    machine-global free VRAM the capacity gate measured immediately before it admitted the most recent SUCCESSFUL
+    load of the model in `served_model_name`; `vram_admitted_bytes` is the GPU bytes that same admission reserved
+    for the process. Neither is re-measured at settle time and neither is llama.cpp's own `--list-devices` process
+    budget, which is a different axis and is not read on this path.
+    **A warm run reports an EARLIER load's figures** — possibly one from another node run, or from before this run
+    started — so read `model_readiness_ms` beside them: null there means no turn of this attempt warmed a runtime,
+    which means the load these bytes describe predates the run and the device may have looked different by the time
+    it started. Both are NULL, never zero, when nobody measured: a remote provider or Ollama model, a model the node
+    never loaded itself, a non-NVIDIA or CPU-only host with no readable global-free figure, a DevTask node run (they
+    are agent-path only, like `tool_names_json`), and every row written before the columns existed. Zero in
+    `vram_admitted_bytes` is different — it is a real answer, meaning a CPU-placed allocation reserved no VRAM.
+    **Do not sum them across attempts.** They are excluded from the retry snapshot's additive vector for that reason,
+    so a re-attempt's row carries only its own reading and the earlier attempts' readings are not recoverable.
+
 **Defaults by question.** *Did model routing change what it cost?* — tokens and `run_ms` grouped by
 `served_model_name`. *Did tool-schema filtering pay for itself?* — `tool_schema_tokens` per node run, with
 `tool_calls` beside it as the "did filtering break tool use" guard. *Did the run take a different path?* — the route
