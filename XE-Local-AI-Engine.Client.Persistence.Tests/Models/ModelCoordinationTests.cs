@@ -83,8 +83,18 @@ public sealed class ModelCoordinationTests
         var second = HoldReadUntilReleasedAsync(domain, ["0:model:BETA"], secondAcquired, release.Task);
 
         await Task.WhenAll(firstAcquired.Task, secondAcquired.Task).WaitAsync(TimeSpan.FromSeconds(30));
+
+        // The property under test: the second flow acquired its OWN read lease while the first still holds one.
+        // Ownership is per-logical-flow, so the sibling is not rejected the way SameFlowNestedAcquisitionIsRejected
+        // proves a nested acquisition inside a single flow is.
+        AssertEx.False(first.IsCompleted, "The first sibling flow must still hold its read lease when the second acquires.");
+        AssertEx.False(second.IsCompleted, "The second sibling flow must still hold its read lease when the first does.");
+
         release.SetResult();
         await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(30));
+
+        AssertEx.True(first.IsCompletedSuccessfully && second.IsCompletedSuccessfully,
+            "Neither sibling flow may fault: both must acquire and release their own read lease.");
     }
 
     [Test]
