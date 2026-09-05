@@ -237,6 +237,20 @@ Do not use a huge shell glob; it can hit `ARG_MAX`.
 
 Any fixture combining the real Client content root with redirected node data must remove `INodeDataDirectory` and register `FakeNodeDataDirectory`. Otherwise first-launch migration moves credential/settings files out of the checkout and teardown deletes them. `ServiceProviderValidationTests.HostCreation_LeavesTheContentRootNodeSettingsWhereItIs` is the guard.
 
+### A node-settings save path must carry the local-only members over from the stored record
+
+`StoredNodeSettings` holds members the wire DTO deliberately never carries: `MachineKey` (minted node-side by
+`IMachineKeyProvider`, never sent to the client) and `ToolApprovalPolicy` (no operator field yet). A save that maps a
+request onto a fresh record and persists it verbatim erases them. Dropping `MachineKey` is silent: the next start mints
+a fresh GUID, and because inference profiles are keyed by machine key, every frozen profile on the box is orphaned —
+the resolver never finds one, each model re-fits from scratch forever, the rows still read `Frozen` through the
+profiles endpoint, and nothing is logged. `NodeSettingsAdministrationService.SaveTrustedMergedAsync` now re-applies
+`current.MachineKey` before validation, so every caller of that entry point is covered; `ApplyAgenticPatchAsync` was
+already safe because it starts from `current with {…}`. Guards:
+`NodeSettingsAdministrationServiceTests.SaveTrustedMerged_WhenTheIncomingRecordHasNoMachineKey_PreservesTheStoredOne`
+and `NodeSettingsEndpointTests.SaveNodeSettings_WhenValid_PreservesTheStoredMachineKey`. Authority: live evidence,
+fu-b round 2a, 2026-09-05. Do not "fix" this by adding `MachineKey` to the request or response DTO.
+
 ### The one temp artifact that is meant to survive: the migrated SQLite template
 
 The MVID-keyed `/tmp/xe-local-ai-engine-tests-template-*.sqlite` cache intentionally survives teardown. It is atomically published and invalidates on migration/seed assembly rebuild. Delete it to force recreation. Set `UsePreMigratedDatabase=false` only when testing migrations themselves.

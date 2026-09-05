@@ -261,6 +261,29 @@ public sealed class NodeSettingsAdministrationServiceTests
     }
 
     [Test]
+    public async Task SaveTrustedMerged_WhenTheIncomingRecordHasNoMachineKey_PreservesTheStoredOne()
+    {
+        // The wire DTO cannot carry MachineKey, so the endpoint's merged record always arrives without one. Saving it
+        // verbatim orphaned every frozen inference profile after the next restart minted a fresh key.
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
+        {
+            MachineKey = "abc"
+        });
+        var service = CreateService(store);
+
+        var result = await service.SaveTrustedMergedAsync(new StoredNodeSettings
+        {
+            ChatCacheReuse = 512
+        }).ConfigureAwait(false);
+
+        AssertEx.True(result.Updated);
+        AssertEx.Equal("abc", result.Settings.MachineKey);
+        await store.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(saved => saved.MachineKey == "abc"),
+            Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
     public async Task SaveTrustedMerged_WhenTheFastModelChangesToANonLocalOne_IsRejected()
     {
         // The change itself is still refused on the endpoint's path, not only the MCP patch's.

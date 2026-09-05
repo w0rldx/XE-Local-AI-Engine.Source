@@ -42,7 +42,18 @@ internal sealed class NodeSettingsAdministrationService(
     {
         ArgumentNullException.ThrowIfNull(settings);
         var current = await GetTrustedSettingsAsync(cancellationToken).ConfigureAwait(false);
-        return await ValidateAndSaveAsync(settings, current, cancellationToken).ConfigureAwait(false);
+
+        // LOCAL-ONLY members ride along from the stored record instead of from the caller. MachineKey is minted
+        // node-side by IMachineKeyProvider and is deliberately absent from the wire DTO, so a caller that builds a
+        // StoredNodeSettings out of a request has no value to supply and saving its record verbatim would erase the
+        // key. That is silent data loss: the next start mints a fresh key, and every frozen inference profile — keyed
+        // by machine key — is orphaned while still reading as frozen.
+        var merged = settings with
+        {
+            MachineKey = current.MachineKey
+        };
+
+        return await ValidateAndSaveAsync(merged, current, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<NodeSettingsAdministrationResult> ApplyAgenticPatchAsync(NodeSettingsAgenticPatch patch,

@@ -66,6 +66,30 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
+    public async Task SaveNodeSettings_WhenValid_PreservesTheStoredMachineKey()
+    {
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
+                         .Returns(new StoredNodeSettings
+                         {
+                             MachineKey = "abc"
+                         });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            MaxMessageRequestTimeoutSeconds = 600
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await nodeSettingsStore.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(stored => stored.MachineKey == "abc"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task SaveNodeSettings_WhenOutOfRange_ReturnsValidationProblem()
     {
         var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
