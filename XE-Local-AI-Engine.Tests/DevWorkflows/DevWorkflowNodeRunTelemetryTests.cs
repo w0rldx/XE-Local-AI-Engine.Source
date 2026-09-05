@@ -510,6 +510,37 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         AssertEx.Null(collected.VramAdmittedBytes);
     }
 
+    /// <summary>
+    ///     The two sides have to agree on ONE identifier: the supervisor keys its load record by the process's
+    ///     <c>ProcessKey.ModelName</c>, and the run envelope carries the runner's resolved model name (unprefixed) as
+    ///     `served_model_name`. A real repo id with a quant suffix, joined across a case difference, is the shape that
+    ///     would break first if either side ever prefixed or normalised its half.
+    /// </summary>
+    [Test]
+    public async Task VramAtLoad_JoinsTheServedModelNameToTheLoadKeyForARealRepoId()
+    {
+        var conversationId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var sessions = Substitute.For<IAgentWorkSessionStore>();
+        sessions.GetAsync(sessionId, Arg.Any<CancellationToken>()).Returns(Session(sessionId, conversationId));
+        sessions.ListEventsAsync(sessionId, Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns([]);
+
+        var logs = Substitute.For<IAgentExecutionLogStore>();
+        logs.ListRunEnvelopesAsync(conversationId, Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns([Envelope(conversationId, "qwen3-1.7b-gguf:q8_0", durationMs: 2_100)]);
+
+        var loads = new NodeMetricsLlamaServerLoadTelemetry();
+        loads.RecordLoad(LoadObservation("Qwen3-1.7B-GGUF:Q8_0", globalFree: 7_340_032_000, admitted: 5_368_709_120));
+
+        var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs, development: null, localModelLoads: loads)
+                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None)
+                                               .ConfigureAwait(false));
+
+        AssertEx.Equal("qwen3-1.7b-gguf:q8_0", collected.ServedModelName);
+        AssertEx.Equal(expected: 7_340_032_000L, collected.VramFreeAtLoadBytes, "The served name is the load key, compared the way every other (model, role) key is.");
+        AssertEx.Equal(expected: 5_368_709_120L, collected.VramAdmittedBytes);
+    }
+
     private static LlamaServerLoadObservation LoadObservation(string modelName, long? globalFree, long? admitted) =>
         new(ModelRole.Chat,
             GpuVariant.Cuda,
