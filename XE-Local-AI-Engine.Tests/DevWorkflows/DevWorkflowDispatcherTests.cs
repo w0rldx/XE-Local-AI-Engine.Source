@@ -481,7 +481,7 @@ public sealed class DevWorkflowDispatcherTests
         await dispatcher.StartAsync(CancellationToken.None).ConfigureAwait(false);
         dispatcher.Signal(runId);
 
-        await Task.Delay(200).ConfigureAwait(false);
+        await AssertEx.SettleAsync().ConfigureAwait(false);
         AssertEx.Equal(DevWorkflowRunStatus.Pending, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
     }
 
