@@ -289,7 +289,44 @@
 			"timeline": {
 				"title": "Durable event timeline",
 				"projectScope": "Not tied to a task",
-				"reason": "Sent back:"
+				"reason": "Sent back:",
+				"eventType": {
+					"ProjectCreated": "Project created",
+					"TaskCreated": "Task created",
+					"TaskTransitioned": "Task transitioned",
+					"AttemptStarted": "Attempt started",
+					"AttemptTerminalized": "Attempt ended",
+					"AttemptInterrupted": "Attempt interrupted",
+					"ValidationStarted": "Validation started",
+					"ValidationFinalized": "Validation finalized",
+					"ReviewFinalized": "Review finalized",
+					"EvidenceInvalidated": "Evidence superseded",
+					"ArtifactAttached": "Artifact attached",
+					"ApplyStarted": "Apply started",
+					"ApplyCompleted": "Apply completed",
+					"ApplyBlocked": "Apply blocked",
+					"WorkflowPolicyApplied": "Workflow policy",
+					"WorkspaceSecretsDetected": "Secrets detected"
+				},
+				"outcome": {
+					"Created": "Created",
+					"Started": "Started",
+					"Terminalized": "Ended",
+					"Interrupted": "Interrupted",
+					"Transitioned": "Status changed",
+					"TransitionedByOperator": "Changed by operator",
+					"Attached": "Attached",
+					"Detected": "Detected",
+					"Applied": "Applied",
+					"Cleared": "Cleared",
+					"Invalidated": "Superseded",
+					"Passed": "Passed",
+					"Failed": "Failed",
+					"Approved": "Approved",
+					"ChangesRequested": "Changes requested",
+					"Blocked": "Blocked",
+					"Completed": "Completed"
+				}
 			},
 			"empty": {
 				"title": "No Development projects yet",
@@ -430,7 +467,11 @@
 					"predecessor": "Predecessor",
 					"activity": "Current activity",
 					"subject": "Subject",
-					"events": "Durable events"
+					"events": "Durable events",
+					"prompts": "Prompts",
+					"promptRole": "{{role}} prompt",
+					"promptRoleOrdinal": "{{role}} prompt {{index}}",
+					"noPrompts": "No prompt was recorded for this attempt yet."
 				}
 			},
 			"artifacts": {

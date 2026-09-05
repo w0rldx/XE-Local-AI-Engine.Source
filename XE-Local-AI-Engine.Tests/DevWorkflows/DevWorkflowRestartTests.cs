@@ -1,8 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -367,6 +372,72 @@ public sealed class DevWorkflowRestartTests
     }
 
     /// <summary>
+    ///     FU3-4 race B. A <c>Retry</c> recorded before the crash and never applied has spent no attempt for a sum over
+    ///     <c>Attempt</c> to see, but the dispatcher turns it into one on its first tick after this boot. Counting only
+    ///     that sum handed an interrupted sandbox row the very slot the pending decision had already promised, and the
+    ///     run made one more re-attempt than it allows. Recovery counts spent PLUS reserved, exactly as the live retry
+    ///     policy and the store's own admission do.
+    /// </summary>
+    [Test]
+    public async Task ARestartWithAPendingRetryAlreadyReservingTheLastSlot_DoesNotSpendItTwice()
+    {
+        await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxTotalAttempts", "1"));
+        var runId = await harness.StartRunAsync("""
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [{ "nodeKey": "validate-a", "nodeType": "Tool" },
+                                                            { "nodeKey": "validate-b", "nodeType": "Tool" }],
+                                                  "edges": [{ "from": "validate-a", "to": "validate-b" }]
+                                                }
+                                                """)
+                                 .ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+
+        // The answer is durable and the attempt it buys is not: the host died before the dispatcher could turn this
+        // decision into one. It reserves the run's only re-attempt all the same.
+        await harness.DecideAsync(runId, "validate-a", DevWorkflowDecisionKind.Retry).ConfigureAwait(false);
+        await harness.TransitionNodeRunAsync(runId, "validate-b", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+
+        await harness.RestartAsync().ConfigureAwait(false);
+
+        var unfunded = await harness.ReadNodeRunAsync(runId, "validate-b").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, unfunded.Status, "The pending Retry has promised the only slot, so nothing is left for the interrupted row.");
+        AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, unfunded.FailureClass);
+        AssertEx.Equal(expected: 1, unfunded.Attempt, "A row nothing could pay for must not read as having tried again.");
+    }
+
+    /// <summary>
+    ///     FU3-4 race C. The run-wide budget is not the only bound: a node run also carries its OWN cap, which the live
+    ///     path checks before every automatic re-attempt. Recovery bypassed that check entirely, so an interrupted row
+    ///     already at its cap was reset to <c>Pending</c> with one attempt more than it declares — the runtime reporting
+    ///     that it broke its own budget, on a run with plenty of room left.
+    /// </summary>
+    [Test]
+    public async Task ARestartOfAnInterruptedRowAlreadyAtItsOwnCap_BlocksItRatherThanIncrementingPastTheCap()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync("""
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [{ "nodeKey": "validate", "nodeType": "Tool", "maxAttempts": 1 }],
+                                                  "edges": []
+                                                }
+                                                """)
+                                 .ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+
+        await harness.RestartAsync().ConfigureAwait(false);
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status, "The run-wide budget is untouched; this row simply has no attempt of its own left.");
+        AssertEx.Equal(expected: 1, blocked.Attempt, "1 of 1 must not become 2 of 1.");
+        AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason),
+            "as many as it allows",
+            message: "And it says which cap ran out, so nobody reads it as the run-wide budget.");
+    }
+
+    /// <summary>
     ///     A node run that keeps moving under recovery is settled by its last pass rather than left in flight. Nothing
     ///     downstream would ever pick it up — the dispatcher admits <c>Pending</c> rows and follows <c>Running</c> agent
     ///     ones, and no boot is scheduled to try again — so a row recovery walked away from would wedge its run for
@@ -573,5 +644,116 @@ public sealed class DevWorkflowRestartTests
                           .ConfigureAwait(false);
         _ = await harness.Agent.GetAsync(superseded).ConfigureAwait(false);
         _ = await harness.Agent.GetAsync(owned).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     A budget refusal landing on the pass that would have SETTLED must not end recovery. A refused collapse rolls
+    ///     back whole and writes nothing, so counting it as one of the three passes spends the settling pass on a
+    ///     judgement that never applied — and the stranded Tool row is left <c>Running</c>, one of the two states
+    ///     nothing downstream recovers. The run then waits for somebody to restart the host again.
+    /// </summary>
+    [Test]
+    public async Task ARecoveryRefusedItsBudgetOnEveryPassItHad_StillSettlesTheRowOnAnUncountedPass()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleTool).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+
+        // Three refusals is exactly the number of passes recovery has, so the last of them lands on the settling one.
+        var (logger, collapses) = await RecoverWithARefusingStoreAsync(harness, refusals: 3).ConfigureAwait(false);
+
+        AssertEx.Empty(await harness.ReadInterruptedNodeRunsAsync().ConfigureAwait(false),
+            "No node run may be left Queued or Running: the dispatcher admits Pending rows and follows Running AGENT ones, so nothing picks a stranded Tool row up.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status);
+        AssertEx.Equal(expected: 4, collapses, "A refused pass wrote nothing, so it must not consume one of the three.");
+        AssertEx.False(logger.HasEntry(LogLevel.Warning, "gave up"), "The cap was never reached, so nothing was left unsettled.");
+    }
+
+    /// <summary>
+    ///     The bound on the above. A writer that refuses EVERY pass is one recovery cannot outrace, so it stops after
+    ///     <c>RecoveryPasses + 2</c> attempts rather than spinning before the dispatcher. What it must not do is return
+    ///     silently: the rows it leaves behind are in the states nothing repairs, so the run and each of them are named.
+    /// </summary>
+    [Test]
+    public async Task ARecoveryRefusedItsBudgetForever_StopsAtTheCapAndNamesTheRowsItLeftUnsettled()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleTool).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+
+        var (logger, collapses) = await RecoverWithARefusingStoreAsync(harness, refusals: int.MaxValue).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 5, collapses, "RecoveryPasses + 2 attempts: an extra pass per refusal, and a persistent refusal still terminates.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
+            (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status,
+            "Every collapse rolled back, so the row stands exactly as the dead host left it. The log is what makes that findable.");
+        AssertEx.ContainsSingle(logger.Entries,
+            entry => entry.Level == LogLevel.Warning
+                     && entry.Message.Contains("gave up", StringComparison.Ordinal)
+                     && entry.Message.Contains(runId.ToString(), StringComparison.Ordinal)
+                     && entry.Message.Contains("validate (Running)", StringComparison.Ordinal),
+            "The cap names the run and the node runs it could not settle, so this does not have to be found by noticing the run stopped moving.");
+    }
+
+    /// <summary>
+    ///     One startup recovery over the harness's real database, with a store that refuses the first
+    ///     <paramref name="refusals" /> collapses the way the real one does when a human <c>Retry</c> commits between a
+    ///     pass composing its verdicts and writing them. Everything else is the real store, so a collapse that gets
+    ///     through settles the rows for real.
+    /// </summary>
+    private static async Task<(RecordingLogger<DevWorkflowStartupReconciler> Logger, int Collapses)> RecoverWithARefusingStoreAsync(DevWorkflowHarness harness,
+        int refusals)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        var real = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
+        var collapses = 0;
+
+        var store = Substitute.For<IDevWorkflowStore>();
+        _ = store.ListInterruptedNodeRunsAsync(Arg.Any<CancellationToken>()).Returns(call => real.ListInterruptedNodeRunsAsync(call.Arg<CancellationToken>()));
+        _ = store.ListNodeRunsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                 .Returns(call => real.ListNodeRunsAsync(call.ArgAt<Guid>(0), call.Arg<CancellationToken>()));
+        _ = store.ListDecisionsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                 .Returns(call => real.ListDecisionsAsync(call.ArgAt<Guid>(0), call.Arg<CancellationToken>()));
+        _ = store.ListOwnedWorkSessionIdsAsync(Arg.Any<CancellationToken>()).Returns(call => real.ListOwnedWorkSessionIdsAsync(call.Arg<CancellationToken>()));
+        _ = store.ReconcileNonTerminalNodeRunsAsync(Arg.Any<string>(),
+                     Arg.Any<IReadOnlyList<DevWorkflowNodeRunVerdict>>(),
+                     Arg.Any<DevWorkflowUnjudgedNodeRunBlock?>(),
+                     Arg.Any<CancellationToken>())
+                 .Returns(call => ++collapses <= refusals
+                     ? throw new DevWorkflowRetryBudgetExceededException("This run has already spent or promised 1 re-attempts, which is as many "
+                                                                        + "re-attempts as this run allows, so it cannot be retried again.")
+                     : real.ReconcileNonTerminalNodeRunsAsync(call.ArgAt<string>(0),
+                         call.ArgAt<IReadOnlyList<DevWorkflowNodeRunVerdict>>(1),
+                         call.ArgAt<DevWorkflowUnjudgedNodeRunBlock?>(2),
+                         call.Arg<CancellationToken>()));
+
+        var logger = new RecordingLogger<DevWorkflowStartupReconciler>();
+        await new DevWorkflowStartupReconciler(ScopesServing(scope.ServiceProvider, store),
+                  harness.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
+                  logger)
+              .StartAsync(CancellationToken.None)
+              .ConfigureAwait(false);
+
+        return (logger, collapses);
+    }
+
+    /// <summary>
+    ///     The container's own scopes with one service swapped, which is the smallest seam that lets a test refuse the
+    ///     reconciler's collapse: everything else it resolves — the session lifecycle, the work-session store — is the
+    ///     real registration, so the recovery under test is the wired one.
+    /// </summary>
+    private static IServiceScopeFactory ScopesServing(IServiceProvider scoped, IDevWorkflowStore store)
+    {
+        var serving = Substitute.For<IServiceProvider>();
+        _ = serving.GetService(Arg.Any<Type>()).Returns(call => call.Arg<Type>() == typeof(IDevWorkflowStore) ? store : scoped.GetService(call.Arg<Type>()));
+
+        var scope = Substitute.For<IServiceScope>();
+        _ = scope.ServiceProvider.Returns(serving);
+
+        var scopes = Substitute.For<IServiceScopeFactory>();
+        _ = scopes.CreateScope().Returns(scope);
+        return scopes;
     }
 }

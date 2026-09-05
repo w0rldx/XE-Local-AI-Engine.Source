@@ -170,7 +170,7 @@ public sealed partial class DevelopmentStore
                 {
                     if (task.CurrentReviewRound >= task.MaxReviewRounds)
                     {
-                        throw new DevelopmentInvalidTransitionException("The configured maximum review rounds has been reached.");
+                        throw new DevelopmentInvalidTransitionException("The configured maximum number of rounds has been reached.");
                     }
 
                     task.CurrentReviewRound++;

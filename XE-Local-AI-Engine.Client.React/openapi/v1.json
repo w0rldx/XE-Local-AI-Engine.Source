@@ -5967,6 +5967,16 @@
           },
           "403": {
             "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsNodeSettingsV1NodeSettingsConflictResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -27092,6 +27102,18 @@
           "outputPer1M": {
             "type": "number",
             "format": "double"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsNodeSettingsV1NodeSettingsConflictResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
           }
         }
       },

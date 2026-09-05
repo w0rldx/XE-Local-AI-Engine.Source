@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -29,6 +30,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
     private readonly IDevelopmentCloudAttemptContextService _cloudContext;
     private readonly IDevelopmentCoderModel _coderModel;
     private readonly IDevelopmentAttemptLiveBroker? _liveBroker;
+    private readonly ILogger<DevelopmentCoderAttemptRunner> _logger;
     private readonly DevelopmentOptions _options;
     private readonly IDevelopmentPatchEvidenceService _patchEvidence;
     private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
@@ -44,9 +46,11 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         IDevelopmentCoderModel coderModel,
         IDevelopmentCloudAttemptContextService cloudContext,
         IOptions<DevelopmentOptions> options,
+        ILogger<DevelopmentCoderAttemptRunner> logger,
         IDevelopmentAttemptLiveBroker? liveBroker = null,
         TimeProvider? timeProvider = null)
     {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _workspaceProvider = workspaceProvider ?? throw new ArgumentNullException(nameof(workspaceProvider));
         _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
@@ -90,6 +94,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
             // the same set decides both what the coder is told and what ValidateSubmission will forgive.
             var carriedFiles = await _patchEvidence.ListChangedPathsAsync(session, timeout.Token).ConfigureAwait(false);
             var prompt = BuildPrompt(snapshot, session, profile, carriedFiles);
+            await PersistPromptAsync(snapshot, prompt, session, repository, profile).ConfigureAwait(false);
             var cloudContext = await CreateCloudContextAsync(snapshot, tools, timeout.Token).ConfigureAwait(false);
             var model = await _coderModel.RunAsync(snapshot.ModelId,
                 prompt,
@@ -214,10 +219,81 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
             cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<Guid> PersistArtifactAsync(DevelopmentExecutionSnapshot snapshot,
+    /// <summary>
+    ///     Records what this attempt TOLD the model, before the model is called.
+    ///     <para>
+    ///         Before the call is the whole point: the attempts whose prompt an operator most needs are the ones that
+    ///         time out, exhaust their tool loop or lose their evidence check, and none of those reach
+    ///         <see cref="PersistEvidenceAsync" />. It carries a base commit but no subject hash or manifest hash,
+    ///         because at prompt-build time the subject this attempt will produce does not exist yet.
+    ///     </para>
+    ///     <para>
+    ///         Written under <see cref="CancellationToken.None" />, for the same reason
+    ///         <c>TerminalizeAttemptAsync</c> already is on the failure path: the record of what happened must not be
+    ///         cancelled by the thing that made it worth recording. Passing the attempt's own deadline here meant a
+    ///         timed-out attempt — the case named above — still left nothing.
+    ///     </para>
+    ///     <para>
+    ///         Best-effort, and deliberately so: a failure to record an observation must never become a new way for a
+    ///         Development attempt to fail. The blob write enforces <c>MaxArtifactBytes</c> as it does for every other
+    ///         kind, and the sanitizer redacts rather than rejects, so the ordinary outcome of an oversized or
+    ///         path-heavy prompt is a bounded artifact, not a lost attempt. The swallow is logged, because a feature
+    ///         whose own failure is invisible is the defect this item exists to fix, one layer in.
+    ///     </para>
+    /// </summary>
+    private async Task PersistPromptAsync(DevelopmentExecutionSnapshot snapshot,
+        string prompt,
+        DevelopmentWorkspaceSession session,
+        DevelopmentRepositoryBinding repository,
+        DevelopmentCommandProfile profile)
+    {
+        try
+        {
+            var sanitized = DevelopmentArtifactSanitizer.SanitizePromptText(prompt,
+                profile.ProtectedPaths,
+                DevelopmentArtifactSanitizer.ResolveProtectedRoots(repository.RepositoryRoot, session));
+            _ = await PersistArtifactAsync(snapshot,
+                DevelopmentArtifactKind.Prompt,
+                Encoding.UTF8.GetBytes(sanitized),
+                session.BaseCommit,
+                subjectHash: null,
+                manifestHash: null,
+                inputIds: null,
+                profile.ComputeDigest(),
+                CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception,
+                "Development coder prompt for attempt {AttemptId} on task {TaskId} was not recorded.",
+                snapshot.AttemptId,
+                snapshot.TaskId);
+        }
+    }
+
+    private Task<Guid> PersistArtifactAsync(DevelopmentExecutionSnapshot snapshot,
         DevelopmentArtifactKind kind,
         byte[] content,
         DevelopmentPatchEvidence evidence,
+        IReadOnlyList<Guid>? inputIds,
+        string profileDigest,
+        CancellationToken cancellationToken) =>
+        PersistArtifactAsync(snapshot,
+            kind,
+            content,
+            evidence.BaseCommit,
+            evidence.SubjectHash,
+            evidence.ManifestHash,
+            inputIds,
+            profileDigest,
+            cancellationToken);
+
+    private async Task<Guid> PersistArtifactAsync(DevelopmentExecutionSnapshot snapshot,
+        DevelopmentArtifactKind kind,
+        byte[] content,
+        string baseCommit,
+        string? subjectHash,
+        string? manifestHash,
         IReadOnlyList<Guid>? inputIds,
         string profileDigest,
         CancellationToken cancellationToken)
@@ -234,9 +310,9 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                                 written.ContentHash,
                                 written.ByteCount,
                                 ManagedReference: written.OpaqueReference,
-                                BaseCommit: evidence.BaseCommit,
-                                SubjectHash: evidence.SubjectHash,
-                                ChangedFilesManifestHash: evidence.ManifestHash,
+                                BaseCommit: baseCommit,
+                                SubjectHash: subjectHash,
+                                ChangedFilesManifestHash: manifestHash,
                                 InputArtifactIdsJson: inputIds is null ? null : JsonSerializer.SerializeToUtf8Bytes(inputIds, JsonOptions),
                                 CommandProfileVersion: DevelopmentWorkspaceTools.ProfileVersion,
                                 CommandProfileDigest: profileDigest),

@@ -17,7 +17,11 @@ internal static class DevWorkflowNodeInputs
     /// <summary>What the operator said when they retried this node run, for the ONE attempt their decision started.</summary>
     public const string OperatorRetryReason = "operatorRetryReason";
 
-    /// <summary>The attempt that reason belongs to, so a reader can tell it is about this try rather than an earlier one.</summary>
+    /// <summary>
+    ///     The attempt a person's Retry bought, so a reader can tell it is about this try rather than an earlier one.
+    ///     Written by EVERY Retry, a silent one included: the acts a Retry pays for do not depend on anything being
+    ///     typed, so the marker cannot either.
+    /// </summary>
     public const string OperatorRetryAttempt = "operatorRetryAttempt";
 
     /// <summary>
@@ -95,6 +99,26 @@ internal static class DevWorkflowNodeInputs
         {
             return null;
         }
+    }
+
+    /// <summary>
+    ///     Whether these inputs say a PERSON's Retry bought <paramref name="attempt" />, whether or not they typed
+    ///     anything into the box.
+    ///     <para>
+    ///         The reason cannot answer this, because a silent Retry has none — and the DevTask lane needs the act
+    ///         rather than the sentence: a Retry on a node whose task is Blocked at its round cap widens that cap by
+    ///         one, and a silent Retry buys the round exactly as a spoken one does. Reading it off the attempt is what
+    ///         separates the act from the ordinary automatic re-attempt that follows it.
+    ///     </para>
+    /// </summary>
+    public static bool IsOperatorRetry(string? inputJson, int attempt)
+    {
+        using var document = Parse(inputJson);
+        return document is not null
+               && document.RootElement.TryGetProperty(OperatorRetryAttempt, out var carried)
+               && carried.ValueKind == JsonValueKind.Number
+               && carried.TryGetInt32(out var number)
+               && number == attempt;
     }
 
     /// <summary>The operator's retry reason these inputs carry for <paramref name="attempt" />, or nothing.</summary>

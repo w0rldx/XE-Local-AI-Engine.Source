@@ -21,8 +21,10 @@ public sealed class NodeSettingsAdministrationServiceTests
     [Test]
     public async Task ApplyAgenticPatchAsync_ChangesApprovedFieldsAndPreservesExcludedFields()
     {
-        var store = Substitute.For<INodeSettingsStore>();
-        var current = new StoredNodeSettings
+        // Asserted through the record the store actually HOLDS afterwards, not through the validation preview: a write
+        // path that projected the patch onto the right record but then persisted a different one — dropping
+        // DefaultModelName or EnableTools on the way to disk — passed an assertion made against the preview.
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings
         {
             DefaultModelName = "old",
             CustomToolsEnabled = true,
@@ -30,8 +32,8 @@ public sealed class NodeSettingsAdministrationServiceTests
             MaxResponseSizeMb = 42,
             VoiceFeatureEnabled = true,
             ToolApprovalPolicy = new NodeToolApprovalPolicySettings()
-        };
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(current);
+        });
+        var approvalPolicy = store.Current.ToolApprovalPolicy;
         var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
@@ -42,21 +44,253 @@ public sealed class NodeSettingsAdministrationServiceTests
         }).ConfigureAwait(false);
 
         AssertEx.True(result.Updated, "a valid agentic patch must be saved.");
-        AssertEx.Equal("new", result.Settings.DefaultModelName);
+        AssertEx.Equal(expected: 1, store.WriteCount, "an uncontended patch writes exactly once.");
+        AssertEx.Equal("new", store.Current.DefaultModelName);
+        AssertEx.Equal(false, store.Current.EnableTools);
+        AssertEx.Equal(512, store.Current.ChatCacheReuse);
+        // The excluded fields come from the write-time record, because that is where a partial patch takes every field
+        // it does not name from.
+        AssertEx.Equal(true, store.Current.CustomToolsEnabled);
+        AssertEx.Equal("http://127.0.0.1:11434", store.Current.OllamaEndpoint);
+        AssertEx.Equal(42, store.Current.MaxResponseSizeMb);
+        AssertEx.Equal(true, store.Current.VoiceFeatureEnabled);
+        AssertEx.True(ReferenceEquals(store.Current.ToolApprovalPolicy, approvalPolicy));
+        AssertEx.Equal("new", result.Settings.DefaultModelName, "and the caller is told what was written.");
         AssertEx.Equal(false, result.Settings.EnableTools);
         AssertEx.Equal(512, result.Settings.ChatCacheReuse);
-        AssertEx.Equal(true, result.Settings.CustomToolsEnabled);
-        AssertEx.Equal("http://127.0.0.1:11434", result.Settings.OllamaEndpoint);
-        AssertEx.Equal(42, result.Settings.MaxResponseSizeMb);
-        AssertEx.Equal(true, result.Settings.VoiceFeatureEnabled);
-        AssertEx.NotNull(result.Settings.ToolApprovalPolicy);
-        await store.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
-                Persisted(mutate).CustomToolsEnabled == current.CustomToolsEnabled
-                && Persisted(mutate).OllamaEndpoint == current.OllamaEndpoint
-                && Persisted(mutate).MaxResponseSizeMb == current.MaxResponseSizeMb
-                && Persisted(mutate).VoiceFeatureEnabled == current.VoiceFeatureEnabled
-                && ReferenceEquals(Persisted(mutate).ToolApprovalPolicy, current.ToolApprovalPolicy)),
-            Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task ApplyAgenticPatch_WhenASiblingWriterAppendsAToolCapableModelBetweenTheLoadAndTheWrite_KeepsItsEntry()
+    {
+        // The patch is PARTIAL, so every field it does not name must come from the record the write lands on. Building
+        // the whole saved record from the snapshot loaded before validation wrote that snapshot's ToolCapableModels
+        // back over the registrar's append, silently un-registering a model the operator had just made tool-capable.
+        // One-shot: a sibling writer lands once. The service re-validates and retries when the record moved under it,
+        // so a hook that fired on every write would model a writer that never stops rather than a single race.
+        var siblingHasWritten = false;
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings
+            {
+                ToolCapableModels = ["already-approved"]
+            },
+            siblingWriteBeforeTheUpdate: latest =>
+            {
+                if (siblingHasWritten)
+                {
+                    return latest;
+                }
+
+                siblingHasWritten = true;
+                return latest with
+                {
+                    ToolCapableModels = [.. latest.ToolCapableModels ?? [], "registered-while-the-patch-validated"]
+                };
+            });
+        var service = CreateService(store);
+
+        var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            ChatCacheReuse = 512
+        }).ConfigureAwait(false);
+
+        AssertEx.True(result.Updated);
+        AssertEx.Equal(expected: 512, store.Current.ChatCacheReuse, "the patched field still lands.");
+        AssertEx.True(store.Current.ToolCapableModels?.Contains("registered-while-the-patch-validated") == true,
+            "a sibling writer's registration must survive a patch that never names ToolCapableModels.");
+        AssertEx.True(store.Current.ToolCapableModels?.Contains("already-approved") == true,
+            "and the entries that were already stored stay.");
+        AssertEx.Equal(expected: 512, result.Settings.ChatCacheReuse);
+        AssertEx.True(result.Settings.ToolCapableModels?.Contains("registered-while-the-patch-validated") == true,
+            "the caller is told what was actually written, not what it validated.");
+    }
+
+    [Test]
+    public async Task SaveTrustedMerged_WhenASiblingAppendsAToolCapableModelBetweenTheLoadAndTheWrite_KeepsItsEntry()
+    {
+        // The HTTP save is a partial merge in disguise: the wire DTO's fields are all optional, so the endpoint's
+        // mapper resolves every OMITTED one from the record it is handed. Handed a snapshot loaded before validation,
+        // a request that changes only ChatCacheReuse wrote that snapshot's ToolCapableModels back over the registrar's
+        // append — silently un-registering a model the operator had just made tool-capable.
+        var siblingHasWritten = false;
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings
+            {
+                ToolCapableModels = ["already-approved"]
+            },
+            siblingWriteBeforeTheUpdate: latest =>
+            {
+                if (siblingHasWritten)
+                {
+                    return latest;
+                }
+
+                siblingHasWritten = true;
+                return latest with
+                {
+                    ToolCapableModels = [.. latest.ToolCapableModels ?? [], "registered-while-the-save-validated"]
+                };
+            });
+        var service = CreateService(store);
+
+        // Request-shaped: only ChatCacheReuse is supplied, every other field comes from the record this is applied to.
+        var result = await service.SaveTrustedMergedAsync(static record => new StoredNodeSettings
+        {
+            ChatCacheReuse = 512,
+            ToolCapableModels = record.ToolCapableModels,
+            DefaultModelName = record.DefaultModelName
+        }).ConfigureAwait(false);
+
+        AssertEx.True(result.Updated);
+        AssertEx.Equal(expected: 512, store.Current.ChatCacheReuse, "the field the request changed still lands.");
+        AssertEx.True(store.Current.ToolCapableModels?.Contains("registered-while-the-save-validated") == true,
+            "a sibling registration must survive a save whose request never named ToolCapableModels.");
+        AssertEx.True(store.Current.ToolCapableModels?.Contains("already-approved") == true,
+            "and the entries that were already stored stay.");
+        AssertEx.True(result.Settings.ToolCapableModels?.Contains("registered-while-the-save-validated") == true,
+            "the caller is told what was actually written, not what it validated.");
+    }
+
+    [Test]
+    public async Task ApplyAgenticPatch_WhenTheRecordKeepsChangingOnEveryAttempt_RefusesInsteadOfWritingUnvalidatedState()
+    {
+        // A writer that never stops. Every attempt finds the record moved, so no attempt ever validates the record its
+        // write would land on. Spending the last attempt writing the projection anyway persisted state nothing had
+        // validated — the exact composition NodeSettingsPolicy exists to keep off disk, reached by exhausting a retry.
+        var siblingWrites = 0;
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings
+            {
+                KeepModelWarmModelName = "warm-model",
+                KeepModelWarmIntervalSeconds = 60,
+                LlamaIdleTimeToLiveSeconds = 900,
+                LlamaMaxLoadedProcesses = 4
+            },
+            siblingWriteBeforeTheUpdate: latest => latest with
+            {
+                ToolCapableModels = [.. latest.ToolCapableModels ?? [], $"sibling-{++siblingWrites}"]
+            });
+        var service = CreateService(store);
+
+        var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            KeepModelWarmEnabled = true
+        }).ConfigureAwait(false);
+
+        AssertEx.False(result.Updated, "a save that never validated the record it would land on must not report success.");
+        AssertEx.True(result.Conflicted, "and the caller must be able to tell a conflict from a rejection.");
+        AssertEx.Equal(expected: 0, result.ValidationErrors.Count, "nothing the caller sent was wrong.");
+        AssertEx.True(store.Current.KeepModelWarmEnabled is not true, "the unvalidated patch must not reach disk.");
+        // One no-op write per attempt: UpdateAsync is the only way to read the write-time record under the store's
+        // lock and it always persists, so each attempt rewrites the record unchanged.
+        AssertEx.Equal(expected: 3, store.WriteCount);
+    }
+
+    [Test]
+    public async Task ApplyAgenticPatch_WhenASiblingChangesAValidatedFieldBetweenTheLoadAndTheWrite_RevalidatesAgainstTheWriteTimeRecord()
+    {
+        // Two individually valid updates must not compose into an invalid record. This patch validates "keep model
+        // warm on" against the stored warm model, and a sibling clears that model in the window. Re-applying the
+        // projection to the cleared record persists keep-warm ENABLED WITH NO MODEL SELECTED — precisely the state
+        // NodeSettingsPolicy exists to keep off disk, reached without either writer ever proposing it.
+        var siblingHasWritten = false;
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings
+            {
+                KeepModelWarmModelName = "warm-model",
+                KeepModelWarmIntervalSeconds = 60,
+                LlamaIdleTimeToLiveSeconds = 900,
+                LlamaMaxLoadedProcesses = 4
+            },
+            siblingWriteBeforeTheUpdate: latest =>
+            {
+                if (siblingHasWritten)
+                {
+                    return latest;
+                }
+
+                siblingHasWritten = true;
+                return latest with
+                {
+                    KeepModelWarmModelName = null
+                };
+            });
+        var service = CreateService(store);
+
+        var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            KeepModelWarmEnabled = true
+        }).ConfigureAwait(false);
+
+        AssertEx.False(result.Updated, "the re-validation against the write-time record must refuse the patch.");
+        AssertEx.Equal(expected: 1, result.ValidationErrors.Count);
+        AssertEx.Equal(NodeSettingsField.KeepModelWarmModelName, result.ValidationErrors[0].Field);
+        AssertEx.True(store.Current.KeepModelWarmEnabled is not true,
+            "keep-warm must never reach disk enabled with no model selected.");
+        // The retry is visible in the write count. The attempt that found the record moved still costs one write:
+        // UpdateAsync is the only way to read the write-time record under the store's lock, and it always persists —
+        // that write rewrites the record unchanged. The re-validation then rejects, so no second write follows.
+        AssertEx.Equal(expected: 1, store.WriteCount);
+    }
+
+    [Test]
+    public async Task ApplyAgenticPatch_WhenASiblingChangesTheDefaultModelBeforeTheWrite_InvalidatesTheTransitionItActuallyReplaced()
+    {
+        // The cloud-client cache is invalidated for a TRANSITION, so its "previous" has to be the value the write
+        // actually replaced. Taken from the pre-validation snapshot it named a model that was already superseded, so a
+        // transition off the sibling's cloud selection went unnoticed and the cached client stayed.
+        var siblingHasWritten = false;
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings
+            {
+                DefaultModelName = "snapshot-model"
+            },
+            siblingWriteBeforeTheUpdate: latest =>
+            {
+                if (siblingHasWritten)
+                {
+                    return latest;
+                }
+
+                siblingHasWritten = true;
+                return latest with
+                {
+                    DefaultModelName = "sibling-picked-model"
+                };
+            });
+        var cloudResolver = Substitute.For<ICloudModelResolver>();
+        var service = CreateService(store, cloudResolver: cloudResolver);
+
+        var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            DefaultModelName = "patched-model"
+        }).ConfigureAwait(false);
+
+        AssertEx.True(result.Updated);
+        AssertEx.Equal("patched-model", store.Current.DefaultModelName);
+        await cloudResolver.Received(1).IsCloudModelAsync("sibling-picked-model", Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await cloudResolver.DidNotReceive().IsCloudModelAsync("snapshot-model", Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        // The no-op write from the attempt that found the record moved, then the write the re-validated attempt made.
+        AssertEx.Equal(expected: 2, store.WriteCount);
+    }
+
+    [Test]
+    public async Task ApplyAgenticPatch_ReturnsTheRecordTheStorePersisted_NotTheOneTheMutationProduced()
+    {
+        // The store normalizes what it writes and returns the normalized record, so the caller has to be told that
+        // one. Reporting the mutation's own output instead described a record that is not what is on disk.
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        store.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+             .Returns(call => Task.FromResult(call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(new StoredNodeSettings()) with
+             {
+                 ToolCapableModels = ["normalized-by-the-store"]
+             }));
+        var service = CreateService(store);
+
+        var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            ToolCapableModels = ["  not-yet-normalized  "]
+        }).ConfigureAwait(false);
+
+        AssertEx.True(result.Updated);
+        AssertEx.Equal(expected: 1, result.Settings.ToolCapableModels!.Count);
+        AssertEx.Equal("normalized-by-the-store", result.Settings.ToolCapableModels[0]);
     }
 
     [Test]
@@ -85,8 +319,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         // The fast model may be moved a turn's whole context onto, and that context was admitted upstream against a
         // node-local model. An external server is a process this node does not own, so the setting is refused before
         // it can ever be stored — the same pair the dispatcher re-checks per turn.
-        var store = Substitute.For<INodeSettingsStore>();
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        var store = NewSubstituteStore(new StoredNodeSettings());
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
         providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult("external"));
@@ -106,8 +339,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     [Test]
     public async Task Save_WhenAutoEffortFastModelIsCloud_IsRejected()
     {
-        var store = Substitute.For<INodeSettingsStore>();
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        var store = NewSubstituteStore(new StoredNodeSettings());
         var trustResolver = Substitute.For<IModelTrustResolver>();
         trustResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(ModelTrustLocality.Cloud));
         var service = CreateService(store, modelTrustResolver: trustResolver);
@@ -128,8 +360,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         // scheme-less id as Local and `LocalModelProviderResolver` routes an unmapped id to the default provider
         // (llamacpp), so the pair alone accepted ANY string — a cloud model id saved with HTTP 200. Registry
         // membership is what refuses it.
-        var store = Substitute.For<INodeSettingsStore>();
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        var store = NewSubstituteStore(new StoredNodeSettings());
         var service = CreateService(store, fastModelInstalled: false);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
@@ -148,8 +379,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     {
         // Node-local is not enough. The swap targets a llama.cpp process — the only provider the capacity gate and the
         // liveness probe can reason about — so an Ollama-served local model is refused at the same point.
-        var store = Substitute.For<INodeSettingsStore>();
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        var store = NewSubstituteStore(new StoredNodeSettings());
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
         providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult("ollama"));
@@ -171,8 +401,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     {
         // The fast model is a SECOND chat process alongside the conversation's own, so a node capped at one slot could
         // never admit it: the setting would look configured and silently never apply.
-        var store = Substitute.For<INodeSettingsStore>();
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        var store = NewSubstituteStore(new StoredNodeSettings());
         var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
@@ -192,8 +421,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     {
         // The shipped default. A patch that never mentions the setting must neither set it nor pay for the locality
         // lookup that guards it.
-        var store = Substitute.For<INodeSettingsStore>();
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
+        var store = NewSubstituteStore(new StoredNodeSettings
         {
             AutoEffortFastModelName = "qwen3-1.7b"
         });
@@ -217,8 +445,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         // The guard validates a CHANGE, not the merged result. Uninstalling the configured fast model must not turn
         // every save of every other setting into a rejection naming a field the operator never touched; the
         // dispatcher's per-turn re-check is what keeps the stale value from ever being used.
-        var store = Substitute.For<INodeSettingsStore>();
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
+        var store = NewSubstituteStore(new StoredNodeSettings
         {
             AutoEffortFastModelName = "qwen3-1.7b"
         });
@@ -242,18 +469,17 @@ public sealed class NodeSettingsAdministrationServiceTests
     {
         // The same rule on the endpoint's path, which hands the service an already-merged snapshot: the fast model
         // rides along unchanged in every save, so re-validating it there would block the settings page outright.
-        var store = Substitute.For<INodeSettingsStore>();
         var stored = new StoredNodeSettings
         {
             AutoEffortFastModelName = "qwen3-1.7b"
         };
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(stored);
+        var store = NewSubstituteStore(stored);
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
         providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult("external"));
         var service = CreateService(store, localModelProviderResolver: providerResolver);
 
-        var result = await service.SaveTrustedMergedAsync(stored with { ChatCacheReuse = 512 }).ConfigureAwait(false);
+        var result = await service.SaveTrustedMergedAsync(_ => stored with { ChatCacheReuse = 512 }).ConfigureAwait(false);
 
         AssertEx.True(result.Updated);
         AssertEx.Equal("qwen3-1.7b", result.Settings.AutoEffortFastModelName);
@@ -265,14 +491,13 @@ public sealed class NodeSettingsAdministrationServiceTests
     {
         // The wire DTO cannot carry MachineKey, so the endpoint's merged record always arrives without one. Saving it
         // verbatim orphaned every frozen inference profile after the next restart minted a fresh key.
-        var store = Substitute.For<INodeSettingsStore>();
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
+        var store = NewSubstituteStore(new StoredNodeSettings
         {
             MachineKey = "abc"
         });
         var service = CreateService(store);
 
-        var result = await service.SaveTrustedMergedAsync(new StoredNodeSettings
+        var result = await service.SaveTrustedMergedAsync(_ => new StoredNodeSettings
         {
             ChatCacheReuse = 512
         }).ConfigureAwait(false);
@@ -292,11 +517,14 @@ public sealed class NodeSettingsAdministrationServiceTests
         // null the request carried back over the fresh key — orphaning every frozen inference profile silently. The
         // guard is that the write happens as a read-modify-write under the store's lock, so the mutation sees the
         // record as it is AT WRITE TIME.
-        var store = new InterleavingNodeSettingsStore(new StoredNodeSettings(),
-            mintedBeforeTheWrite: "minted-while-the-save-was-validating");
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings(),
+            siblingWriteBeforeTheUpdate: latest => latest with
+            {
+                MachineKey = "minted-while-the-save-was-validating"
+            });
         var service = CreateService(store);
 
-        var result = await service.SaveTrustedMergedAsync(new StoredNodeSettings
+        var result = await service.SaveTrustedMergedAsync(_ => new StoredNodeSettings
         {
             ChatCacheReuse = 512
         }).ConfigureAwait(false);
@@ -312,14 +540,13 @@ public sealed class NodeSettingsAdministrationServiceTests
     public async Task SaveTrustedMerged_WhenTheFastModelChangesToANonLocalOne_IsRejected()
     {
         // The change itself is still refused on the endpoint's path, not only the MCP patch's.
-        var store = Substitute.For<INodeSettingsStore>();
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        var store = NewSubstituteStore(new StoredNodeSettings());
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
         providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                         .Returns(Task.FromResult("external"));
         var service = CreateService(store, localModelProviderResolver: providerResolver);
 
-        var result = await service.SaveTrustedMergedAsync(new StoredNodeSettings
+        var result = await service.SaveTrustedMergedAsync(_ => new StoredNodeSettings
         {
             AutoEffortFastModelName = "ext:studio/qwen3-1.7b"
         }).ConfigureAwait(false);
@@ -333,8 +560,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     [Test]
     public async Task ApplyAgenticPatchAsync_WhenMergedPolicyRejects_DoesNotSave()
     {
-        var store = Substitute.For<INodeSettingsStore>();
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        var store = NewSubstituteStore(new StoredNodeSettings());
         var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
@@ -352,8 +578,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     [Test]
     public async Task ApplyAgenticPatchAsync_WhenFieldRangeIsInvalid_DoesNotNormalizeSaveOrReport()
     {
-        var store = Substitute.For<INodeSettingsStore>();
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        var store = NewSubstituteStore(new StoredNodeSettings());
         var reporter = Substitute.For<ICapabilityReporter>();
         var service = CreateService(store, reporter: reporter);
 
@@ -371,8 +596,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     [Test]
     public async Task ApplyAgenticPatchAsync_WhenToolCapableModelsIsEmpty_DoesNotSave()
     {
-        var store = Substitute.For<INodeSettingsStore>();
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        var store = NewSubstituteStore(new StoredNodeSettings());
         var service = CreateService(store);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
@@ -388,8 +612,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     [Test]
     public async Task ApplyAgenticPatchAsync_DefaultModelCloudTransition_UsesSharedCacheInvalidationPolicy()
     {
-        var store = Substitute.For<INodeSettingsStore>();
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
+        var store = NewSubstituteStore(new StoredNodeSettings
         {
             DefaultModelName = "old-cloud"
         });
@@ -470,37 +693,17 @@ public sealed class NodeSettingsAdministrationServiceTests
         mutate(latest ?? new StoredNodeSettings());
 
     /// <summary>
-    ///     A store whose stored record gains a machine key AFTER the service has loaded it and before the write — the
-    ///     interleaving <c>IMachineKeyProvider</c> produces against a settings save on the same node.
+    ///     A substitute store holding <paramref name="current" />, wired to honour
+    ///     <see cref="INodeSettingsStore.UpdateAsync" />'s contract: it runs the mutation against the record it holds
+    ///     and RETURNS what it persisted, which is the record the service now hands back to its caller. NSubstitute's
+    ///     own auto-value for that call is a null record, which no real store may return.
     /// </summary>
-    private sealed class InterleavingNodeSettingsStore(StoredNodeSettings initial, string mintedBeforeTheWrite) : INodeSettingsStore
+    private static INodeSettingsStore NewSubstituteStore(StoredNodeSettings current)
     {
-        public StoredNodeSettings Current { get; private set; } = initial;
-
-        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(Current);
-
-        public StoredNodeSettings Load(CancellationToken cancellationToken = default) =>
-            Current;
-
-        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
-        {
-            Current = settings;
-            return Task.CompletedTask;
-        }
-
-        public Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
-        {
-            ArgumentNullException.ThrowIfNull(mutate);
-
-            // The sibling writer got here first: the mutation must be applied to THIS record, not to the one the
-            // caller read before it existed.
-            Current = Current with
-            {
-                MachineKey = mintedBeforeTheWrite
-            };
-            Current = mutate(Current);
-            return Task.FromResult(Current);
-        }
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(current);
+        store.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+             .Returns(call => Task.FromResult(call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(current)));
+        return store;
     }
 }

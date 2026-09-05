@@ -289,7 +289,44 @@
 			"timeline": {
 				"title": "Dauerhafte Ereignis-Chronik",
 				"projectScope": "Keiner Aufgabe zugeordnet",
-				"reason": "Zurückgewiesen:"
+				"reason": "Zurückgewiesen:",
+				"eventType": {
+					"ProjectCreated": "Projekt erstellt",
+					"TaskCreated": "Aufgabe erstellt",
+					"TaskTransitioned": "Aufgabenstatus gewechselt",
+					"AttemptStarted": "Versuch gestartet",
+					"AttemptTerminalized": "Versuch beendet",
+					"AttemptInterrupted": "Versuch unterbrochen",
+					"ValidationStarted": "Prüfung gestartet",
+					"ValidationFinalized": "Prüfung abgeschlossen",
+					"ReviewFinalized": "Review abgeschlossen",
+					"EvidenceInvalidated": "Nachweis überholt",
+					"ArtifactAttached": "Artefakt angehängt",
+					"ApplyStarted": "Übernahme gestartet",
+					"ApplyCompleted": "Übernahme abgeschlossen",
+					"ApplyBlocked": "Übernahme blockiert",
+					"WorkflowPolicyApplied": "Workflow-Richtlinie",
+					"WorkspaceSecretsDetected": "Secrets erkannt"
+				},
+				"outcome": {
+					"Created": "Erstellt",
+					"Started": "Gestartet",
+					"Terminalized": "Beendet",
+					"Interrupted": "Unterbrochen",
+					"Transitioned": "Status geändert",
+					"TransitionedByOperator": "Vom Bediener geändert",
+					"Attached": "Angehängt",
+					"Detected": "Erkannt",
+					"Applied": "Angewendet",
+					"Cleared": "Aufgehoben",
+					"Invalidated": "Überholt",
+					"Passed": "Bestanden",
+					"Failed": "Fehlgeschlagen",
+					"Approved": "Genehmigt",
+					"ChangesRequested": "Änderungen angefordert",
+					"Blocked": "Blockiert",
+					"Completed": "Abgeschlossen"
+				}
 			},
 			"empty": {
 				"title": "Noch keine Entwicklungsprojekte",
@@ -430,7 +467,11 @@
 					"predecessor": "Vorgänger",
 					"activity": "Aktuelle Aktivität",
 					"subject": "Subjekt",
-					"events": "Dauerhafte Ereignisse"
+					"events": "Dauerhafte Ereignisse",
+					"prompts": "Prompts",
+					"promptRole": "{{role}}-Prompt",
+					"promptRoleOrdinal": "{{role}}-Prompt {{index}}",
+					"noPrompts": "Für diesen Versuch wurde noch kein Prompt aufgezeichnet."
 				}
 			},
 			"artifacts": {

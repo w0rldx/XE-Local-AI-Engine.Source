@@ -526,7 +526,8 @@ internal sealed partial class DevWorkflowStore
                      entity.NodeType,
                      entity.Status,
                      entity.Attempt,
-                     entity.WorkSessionId))
+                     entity.WorkSessionId,
+                     entity.MaxAttempts))
                  .ToListAsync(cancellationToken)
                  .ConfigureAwait(false)
     ];
@@ -591,7 +592,8 @@ internal sealed partial class DevWorkflowStore
                     nodeRun.NodeType,
                     nodeRun.Status,
                     nodeRun.Attempt,
-                    nodeRun.WorkSessionId));
+                    nodeRun.WorkSessionId,
+                    nodeRun.MaxAttempts));
 
                 // Re-dispatchable means clean: a row sitting at Pending must not carry a terminal reason, or the UI
                 // reads "the engine restarted" as this attempt's outcome. The reason is on the node.interrupted event.
@@ -615,6 +617,17 @@ internal sealed partial class DevWorkflowStore
             foreach (var (run, command) in repairs)
             {
                 EnsureVersion(run, command.ExpectedVersion);
+
+                // Recovery's own admissions go through the same writer-lock count every other re-attempt does: the
+                // caller decided what it could afford from a read taken before this transaction opened, and a human
+                // Retry recorded since then would otherwise be spent twice. A refusal aborts the whole collapse,
+                // which is exactly the "recovery that dies before it commits" contract — nothing is half-repaired and
+                // the caller re-judges.
+                if (command is { MaxTotalAttempts: { } budget, IncrementAttempt: true })
+                {
+                    await EnsureRetryBudgetAsync(run.Id, budget, cost: 1, cancellationToken).ConfigureAwait(false);
+                }
+
                 var outcome = await ApplyNodeRunTransitionAsync(run, command, cancellationToken).ConfigureAwait(false);
                 _ = AddEvent(run, outcome.EventType, outcome.NodeRunId, outcome.Outcome, command.OperationId, outcome.DetailJson);
                 run.Version++;

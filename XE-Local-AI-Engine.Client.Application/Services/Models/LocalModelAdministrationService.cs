@@ -79,11 +79,19 @@ internal sealed class LocalModelAdministrationService(
         }
 
         var selectedModelName = modelName!.Trim();
-        var settings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false) ?? new StoredNodeSettings();
-        var previousModelName = settings.DefaultModelName;
-        await nodeSettingsStore.SaveAsync(settings with
+
+        // Read-modify-write under the store's lock. The settings record is whole-file, so a save built from a record
+        // loaded before validation would write back every field a concurrent writer (a machine-key mint, the
+        // external-provider reconciliation pass) changed in that window. The previous name is read inside the mutation
+        // for the same reason: the transition the cache is invalidated for is the one that actually happened on disk.
+        string? previousModelName = null;
+        await nodeSettingsStore.UpdateAsync(latest =>
         {
-            DefaultModelName = selectedModelName
+            previousModelName = latest.DefaultModelName;
+            return latest with
+            {
+                DefaultModelName = selectedModelName
+            };
         }, cancellationToken).ConfigureAwait(false);
 
         await defaultModelSelectionPolicy

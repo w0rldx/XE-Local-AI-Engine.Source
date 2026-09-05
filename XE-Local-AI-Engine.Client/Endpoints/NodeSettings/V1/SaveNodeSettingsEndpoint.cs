@@ -14,18 +14,35 @@ public sealed class SaveNodeSettingsEndpoint(INodeSettingsAdministrationService 
     {
         Put(LocalApiRoutes.NodeSettings.Settings);
         Policies(NodeAuthorizationPolicies.Operator);
+        // Only the 409 is declared: FastEndpoints already advertises the 200 and, because the host configures
+        // Errors.UseProblemDetails(), a ProblemDetails 400. Declaring those explicitly re-labelled the 400 as the
+        // FastEndpoints ErrorResponse shape, which is not what this endpoint actually sends.
+        Description(builder => builder.Produces<NodeSettingsConflictResponse>(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(SaveNodeSettingsRequest req, CancellationToken ct)
     {
-        var currentSettings = await _administrationService.GetTrustedSettingsAsync(ct).ConfigureAwait(false);
-        var settings = req.ToStoredSettings(currentSettings);
-
+        // The merge, not a merged record, and no load of its own: this request is optional field by optional field, so
+        // every field it omits is resolved from the record the service applies this to — the one the write lands on.
+        // Resolving them from a snapshot loaded here instead wrote that snapshot back over every field a sibling
+        // writer had changed while this save validated.
+        //
         // Cross-field guards run on the MERGED result in NodeSettingsPolicy — the boundary validator only sees the
         // request, not the current stored state, and some rules need the EFFECTIVE runtime value (stored > appsettings
         // seed > default) for a knob the request omitted. The policy stops at the first violation, matching the
         // one-error-at-a-time response this endpoint has always sent.
-        var result = await _administrationService.SaveTrustedMergedAsync(settings, ct).ConfigureAwait(false);
+        var result = await _administrationService.SaveTrustedMergedAsync(current => req.ToStoredSettings(current), ct).ConfigureAwait(false);
+        if (result.Conflicted)
+        {
+            // Nothing was written: the stored record changed under every validation attempt. Operator-facing, and the
+            // same request usually succeeds on a reload.
+            await Send.ResultAsync(Results.Conflict(new NodeSettingsConflictResponse
+            {
+                Message = "Node settings changed while this save was being validated. Reload and retry."
+            })).ConfigureAwait(false);
+            return;
+        }
+
         if (!result.Updated)
         {
             foreach (var policyError in result.ValidationErrors)

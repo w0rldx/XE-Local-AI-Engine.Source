@@ -267,6 +267,13 @@ public sealed record DevWorkflowDecisionSnapshot(
 ///     collapse — what it was doing is the useful fact; where it landed is always <c>Pending</c>, unless a repair moved
 ///     it further.
 /// </summary>
+/// <param name="MaxAttempts">
+///     The row's OWN per-node cap, projected here so restart recovery can refuse to increment a row past it. The live
+///     path already checks it before every automatic re-attempt; recovery bypassed that check entirely and reset an
+///     interrupted row at its cap to <c>Pending</c> with one more attempt than it declares (FU3-4). Defaulted to
+///     <see cref="int.MaxValue" /> — "no cap" — so a projection that forgets it admits, which is what recovery did
+///     before, rather than blocking every row it sees.
+/// </param>
 public sealed record DevWorkflowReconciledNodeRun(
     Guid NodeRunId,
     Guid RunId,
@@ -274,7 +281,8 @@ public sealed record DevWorkflowReconciledNodeRun(
     DevWorkflowNodeType NodeType,
     DevWorkflowNodeRunStatus Status,
     int Attempt,
-    Guid? WorkSessionId);
+    Guid? WorkSessionId,
+    int MaxAttempts = int.MaxValue);
 
 /// <summary>
 ///     One judged node-run: the row as the caller observed it, and what to do with it once the collapse has confirmed
@@ -514,7 +522,20 @@ public sealed record TransitionDevWorkflowNodeRunCommand(
     ///     <c>Attempt</c> never exceeds the row's own <c>MaxAttempts</c>, and the retry policy's cap check goes on
     ///     meaning what it says instead of the run reporting that it broke its own budget.
     /// </summary>
-    bool WidenMaxAttempts = false);
+    bool WidenMaxAttempts = false,
+    /// <summary>
+    ///     The run-wide re-attempt budget this move has to fit inside, admitted INSIDE the mutation's own transaction —
+    ///     the same field, and the same reason, as <see cref="RecordDevWorkflowDecisionCommand.MaxTotalAttempts" />.
+    ///     Set only by an automatic re-attempt; <see langword="null" /> means no budget applies, which is every other
+    ///     transition.
+    ///     <para>
+    ///         Carried at all because the automatic path checked the budget on a read taken before its write and then
+    ///         committed with no re-check: a human <c>Retry</c> committing in that window spent the same last slot, and
+    ///         the run made one more re-attempt than it allows (FU3-4). Only a count taken under the writer lock
+    ///         refuses the second.
+    ///     </para>
+    /// </summary>
+    int? MaxTotalAttempts = null);
 
 /// <summary>
 ///     One cross-node retry route, as the single decision it is: the <c>node.retry.routed</c> event that records it and
@@ -524,7 +545,15 @@ public sealed record TransitionDevWorkflowNodeRunCommand(
 /// <param name="Resets">
 ///     The node-run moves the route implies, applied IN ORDER after the event. Each must name <c>Route.RunId</c>.
 /// </param>
-public sealed record RouteDevWorkflowRetryCommand(AppendDevWorkflowEventCommand Route, IReadOnlyList<TransitionDevWorkflowNodeRunCommand> Resets);
+/// <param name="MaxTotalAttempts">
+///     The run-wide re-attempt budget the WHOLE cascade has to fit inside, admitted inside this command's transaction.
+///     Top-level rather than per reset because a route's cost is <paramref name="Resets" />.Count — admitting a fan-out one
+///     attempt at a time is how a run overspends its budget by the width of its graph. <see langword="null" /> means no
+///     budget applies.
+/// </param>
+public sealed record RouteDevWorkflowRetryCommand(AppendDevWorkflowEventCommand Route,
+    IReadOnlyList<TransitionDevWorkflowNodeRunCommand> Resets,
+    int? MaxTotalAttempts = null);
 
 public sealed record AttachDevWorkflowWorkSessionCommand(
     Guid RunId,
@@ -941,7 +970,20 @@ public interface IDevWorkflowStore
 
 public sealed class DevWorkflowConcurrencyException(string message, Exception? innerException = null) : InvalidOperationException(message, innerException);
 
-public sealed class DevWorkflowInvalidTransitionException(string message) : InvalidOperationException(message);
+public class DevWorkflowInvalidTransitionException(string message) : InvalidOperationException(message);
+
+/// <summary>
+///     The one invalid transition that is an ACCOUNTING refusal rather than an illegal move: the run has no re-attempt
+///     left to spend on this act. Its own type because the automatic retry path converts it to a Blocked node run with
+///     the <c>BudgetExhausted</c> class, and catching the base type there would relabel every illegal move — a row
+///     settled terminal under the tick, say — as budget exhaustion on a run with its whole budget intact.
+///     <para>
+///         Derived rather than separate so every existing <c>catch</c> of the base type (endpoint mapping, validation
+///         translation) goes on behaving exactly as it does today. Public rather than internal because the retry
+///         policy that catches it lives in the application assembly.
+///     </para>
+/// </summary>
+public sealed class DevWorkflowRetryBudgetExceededException(string message) : DevWorkflowInvalidTransitionException(message);
 
 public sealed class DevWorkflowNotFoundException(string message) : InvalidOperationException(message);
 

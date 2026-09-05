@@ -105,11 +105,14 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
         DevelopmentAttemptRole role,
         CancellationToken cancellationToken)
     {
+        // Hoisted out of the try only so the failure paths below can name the task the attempt belonged to. Null
+        // there means the failure beat the snapshot read, which is itself worth seeing in the line.
+        DevelopmentExecutionSnapshot? execution = null;
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-            var execution = await store.GetExecutionSnapshotAsync(attemptId, cancellationToken).ConfigureAwait(false);
+            execution = await store.GetExecutionSnapshotAsync(attemptId, cancellationToken).ConfigureAwait(false);
             var repository = await scope.ServiceProvider.GetRequiredService<IDevelopmentRepositoryBindingService>()
                                         .ResolveExecutionAsync(execution, cancellationToken)
                                         .ConfigureAwait(false);
@@ -135,6 +138,17 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
 
             var completed = (await store.ListAttemptsAsync(execution.TaskId, CancellationToken.None).ConfigureAwait(false))
                 .Single(attempt => attempt.Id == attemptId);
+
+            // The literal words "attempt finished" open the message on purpose: they are what an operator greps the
+            // backend stdout for, and an interpolated id between them would break the search. The same phrase is
+            // repeated verbatim in both catch blocks below, because a grep that only hits on healthy runs would miss
+            // exactly the runs this item exists for — the failing ones. Both runners rethrow after terminalizing, so
+            // this statement is reachable only for Succeeded.
+            _logger.LogInformation("Development attempt finished: role={Role} attempt={AttemptId} task={TaskId} status={Status}.",
+                role,
+                attemptId,
+                execution.TaskId,
+                completed.Status);
             _ = _liveBroker.TryPublish(ToLiveUpdate(execution,
                 DevelopmentAttemptLiveUpdateKind.Terminal,
                 completed.Status,
@@ -144,11 +158,26 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            _logger.LogInformation("Development attempt {AttemptId} execution was cancelled.", attemptId);
+            _logger.LogInformation("Development attempt finished: role={Role} attempt={AttemptId} task={TaskId} status={Status}.",
+                role,
+                attemptId,
+                execution?.TaskId,
+                DevelopmentAttemptStatus.Cancelled);
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "Development attempt {AttemptId} execution failed.", attemptId);
+            // Derived exactly as both runners derive the status they terminalize with, rather than assumed to be
+            // Failed: a runner's OWN deadline expiring is an OperationCanceledException that does not satisfy the
+            // filter above, so calling it Failed here would contradict the attempt row it just wrote. The one
+            // terminal status never logged from this method is Interrupted, which no attempt run produces — it is
+            // written by DevelopmentStore.ReconcileRunningAttemptsAsync at host startup, for attempts whose process
+            // died before any catch here could run.
+            _logger.LogError(exception,
+                "Development attempt finished: role={Role} attempt={AttemptId} task={TaskId} status={Status}.",
+                role,
+                attemptId,
+                execution?.TaskId,
+                exception is OperationCanceledException ? DevelopmentAttemptStatus.Cancelled : DevelopmentAttemptStatus.Failed);
         }
         finally
         {
@@ -216,9 +245,18 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
             var repository = await scope.ServiceProvider.GetRequiredService<IDevelopmentRepositoryBindingService>()
                                         .ResolveProjectAsync(task.ProjectId, cancellationToken)
                                         .ConfigureAwait(false);
-            _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>()
-                           .RunAsync(taskId, repository, cancellationToken)
-                           .ConfigureAwait(false);
+            var result = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>()
+                                    .RunAsync(taskId, repository, cancellationToken)
+                                    .ConfigureAwait(false);
+
+            // The gate's verdict was computed and returned all along and then discarded here, which is why a live
+            // scan of the backend log found zero hits for "Deterministic validation" across three full rounds. The
+            // runner's result carries no failure reason of its own, so the failing gate's own complaint stays where
+            // it already lives: the ValidationReport artifact and the task's blocked reason.
+            _logger.LogInformation("Deterministic validation for task {TaskId} finished: passed={Passed} target={Target}.",
+                taskId,
+                result.Passed,
+                result.TaskStatus);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

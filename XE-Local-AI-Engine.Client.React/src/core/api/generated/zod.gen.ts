@@ -1907,6 +1907,10 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 	usageRates: z.record(z.string(), zXeLocalAiEngineClientServicesNodeSettingsModelRate).nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsConflictResponse = z.object({
+	message: z.string(),
+});
+
 export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest = z.object({
 	maxMessageRequestTimeoutSeconds: z
 		.int()

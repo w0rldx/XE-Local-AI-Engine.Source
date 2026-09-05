@@ -348,7 +348,17 @@ export function ValidationReportView({ artifact }: { readonly artifact: Developm
 
 /** Every artifact kind other than the git patch is a JSON document (manifest, validation/review reports). */
 function artifactLanguage(kind: string | undefined): string {
-	return kind === "Patch" ? "diff" : "json";
+	if (kind === "Patch") {
+		return "diff";
+	}
+
+	// A prompt is plain text, not a document. Falling through to the JSON arm rendered it unhighlighted and, worse,
+	// as something an operator would read as malformed JSON.
+	if (kind === "Prompt") {
+		return "plaintext";
+	}
+
+	return "json";
 }
 
 /**

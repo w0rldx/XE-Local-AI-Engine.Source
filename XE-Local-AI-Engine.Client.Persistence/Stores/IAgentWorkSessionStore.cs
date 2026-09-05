@@ -237,6 +237,13 @@ public interface IAgentWorkSessionStore
 
     Task<IReadOnlyList<WorkSessionEventSnapshot>> ListEventsAsync(Guid sessionId, long sinceSequence = 0, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     The newest event of one type, or <see langword="null" /> when the session recorded none. One ordered read
+    ///     instead of the whole log: a caller asking "what did this session last declare" used to materialize and
+    ///     decrypt every event ever written to it just to keep the final row.
+    /// </summary>
+    Task<WorkSessionEventSnapshot?> FindLatestEventAsync(Guid sessionId, string eventType, CancellationToken cancellationToken = default);
+
     Task<WorkSessionArtifactSnapshot> GetArtifactAsync(Guid artifactId, CancellationToken cancellationToken = default);
 
     Task<WorkSessionCheckpointSnapshot?> GetLatestCheckpointAsync(Guid sessionId, CancellationToken cancellationToken = default);

@@ -309,6 +309,23 @@ public sealed class NodeAdminMcpToolsTests
     }
 
     [Test]
+    public async Task UpdateNodeSettings_WhenTheSaveConflicts_ReportsAConflictRatherThanAFieldRejection()
+    {
+        // A conflict names no field and nothing the agent sent was wrong, so mapping it onto the validation failure
+        // code told a tool-using agent to "correct" a field that was never the problem instead of retrying.
+        var harness = new Harness();
+        harness.Settings.ApplyAgenticPatchAsync(Arg.Any<NodeSettingsAgenticPatch>(), Arg.Any<CancellationToken>())
+               .Returns(NodeSettingsAdministrationResult.Conflict(new StoredNodeSettings()));
+
+        var response = await harness.Tools.UpdateNodeSettingsAsync(CancellationToken.None, chat_cache_reuse: 512);
+
+        AssertEx.False(response.Updated, "and the audit failure signal stays !Updated.");
+        AssertEx.Equal(McpAdminToolFailureCodes.SettingsConflict, response.FailureCode!);
+        AssertEx.Equal(expected: 0, response.RejectedFields.Count);
+        AssertEx.True(AssertEx.NotNull(response.DisplayMessage).Contains("retry", StringComparison.Ordinal));
+    }
+
+    [Test]
     public async Task SettingsAndAgentCrud_ForwardExactApplicationContractsAndMapFailures()
     {
         var harness = new Harness();
