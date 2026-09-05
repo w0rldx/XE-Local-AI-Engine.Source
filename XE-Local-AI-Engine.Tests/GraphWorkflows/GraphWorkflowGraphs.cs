@@ -408,4 +408,23 @@ internal static class GraphWorkflowGraphs
                                             ]
                                           }
                                           """;
+
+    /// <summary>
+    ///     The same shape with the <c>Agent</c> held to ONE attempt, against the three a work node gets by default, so
+    ///     a failure it carries has nowhere to go and the retry stage has to refuse it.
+    /// </summary>
+    public const string InlineWithSingleAttemptAgent = """
+                                                       {
+                                                         "schemaVersion": 1,
+                                                         "nodes": [
+                                                           { "key": "start", "kind": "Start" },
+                                                           { "key": "analyze", "kind": "Agent", "maxAttempts": 1, "config": { "instructions": "Judge it." } },
+                                                           { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                         ],
+                                                         "edges": [
+                                                           { "key": "e1", "from": "start", "to": "analyze" },
+                                                           { "key": "e2", "from": "analyze", "to": "done" }
+                                                         ]
+                                                       }
+                                                       """;
 }

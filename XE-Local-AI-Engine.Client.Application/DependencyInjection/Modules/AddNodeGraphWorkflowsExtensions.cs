@@ -56,6 +56,10 @@ internal static class AddNodeGraphWorkflowsExtensions
         // The five kinds that run inside the tick. A singleton because it holds nothing per run — only the output cap.
         builder.Services.AddSingleton<GraphWorkflowInlineExecutor>();
 
+        // BEFORE the dispatcher: hosted services start in registration order, and the dispatcher's pumps must not begin
+        // admitting node runs a restart has not judged yet.
+        builder.Services.AddHostedService<GraphWorkflowStartupReconciler>();
+
         // One instance under three service types: the loop, the signal every command path calls after its commit, and
         // the hosted service that starts the two pumps. Its own DisposeAsync is idempotent, because the container
         // tracks each factory registration's result for disposal separately.
