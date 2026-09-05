@@ -71,6 +71,32 @@ public sealed class GraphWorkflowRunServiceTests
         _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() => StartAsync(second, requestId)).ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     The same caller bug, in the shape the fast path cannot catch. Two concurrent starts sharing a request id but
+    ///     naming different definitions can BOTH miss the lookup; the loser of the unique index is then answered with
+    ///     the winner's run, which is a run of a definition it never asked for. It has to be refused there too.
+    /// </summary>
+    [Test]
+    public async Task StartAsync_WithTwoConcurrentStartsOfDifferentDefinitionsSharingARequestId_WritesOneRunAndRefusesTheOther()
+    {
+        var requestId = Guid.NewGuid();
+        var first = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
+        var second = await SeedDefinitionAsync(GraphWorkflowGraphs.BranchOnJson).ConfigureAwait(false);
+
+        // Each in its own DI scope, because the store and its DbContext are scoped: one scope would serialize them
+        // through a single change tracker and prove nothing about two writers.
+        var outcomes = await Task.WhenAll(TryStartAsync(first, requestId), TryStartAsync(second, requestId)).ConfigureAwait(false);
+
+        AssertEx.ContainsSingle(outcomes, outcome => outcome.Detail is not null, "one start wins the request id — either of them may.");
+        AssertEx.ContainsSingle(outcomes, outcome => outcome.Refusal is not null, "and the other is refused rather than handed the winner's run.");
+
+        var winner = AssertEx.NotNull(outcomes.Single(static outcome => outcome.Detail is not null).Detail);
+        await using var scope = Host.Factory.Services.CreateAsyncScope();
+        var stored = AssertEx.NotNull(await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().FindRunByRequestAsync(requestId).ConfigureAwait(false));
+        AssertEx.Equal(winner.Run.Id, stored.Id, "one run row holds the request id.");
+        AssertEx.Equal(winner.Run.DefinitionId, stored.DefinitionId, "and it is a run of the definition that won, not of the one that lost.");
+    }
+
     /// <summary>A start against a version that has since been edited answers a conflict rather than running a graph the caller never saw.</summary>
     [Test]
     public async Task StartAsync_WithAStaleDefinitionVersion_Conflicts()
@@ -309,6 +335,19 @@ public sealed class GraphWorkflowRunServiceTests
         return created.Id;
     }
 
+    /// <summary>One start, with its refusal captured rather than thrown, so both racers can be inspected together.</summary>
+    private async Task<StartOutcome> TryStartAsync(Guid definitionId, Guid requestId)
+    {
+        try
+        {
+            return new StartOutcome(await StartAsync(definitionId, requestId).ConfigureAwait(false), Refusal: null);
+        }
+        catch (GraphWorkflowInvalidTransitionException refusal)
+        {
+            return new StartOutcome(Detail: null, refusal);
+        }
+    }
+
     /// <summary>One start in a scope of its own, which is what makes the concurrency test two writers rather than one.</summary>
     private async Task<GraphWorkflowRunDetail> StartAsync(Guid definitionId, Guid requestId, int? definitionVersion = null)
     {
@@ -317,4 +356,7 @@ public sealed class GraphWorkflowRunServiceTests
                           .StartAsync(definitionId, requestId, inputJson: null, definitionVersion)
                           .ConfigureAwait(false);
     }
+
+    /// <summary>What one racer came back with: a run, or the refusal it was given instead.</summary>
+    private sealed record StartOutcome(GraphWorkflowRunDetail? Detail, GraphWorkflowInvalidTransitionException? Refusal);
 }
