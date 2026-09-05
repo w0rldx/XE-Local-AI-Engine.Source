@@ -107,8 +107,9 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
         }
 
         // Something is already being driven for this row. The caller checks that first; reaching here means it raced
-        // itself, and the entry that won is the one the poll will settle. Disposed the same way every other exit path
-        // disposes: once the work it just started has unwound, because cancelling it does not end it synchronously.
+        // itself, and the entry that won is the one the poll will settle. The loser is unwound like any other discard —
+        // cancelled, then disposed once its work has noticed, because a token source nothing owns is a leak whatever
+        // the race that produced it.
         await cancellation.CancelAsync().ConfigureAwait(false);
         _ = DisposeWhenDoneAsync(flight);
         return null;

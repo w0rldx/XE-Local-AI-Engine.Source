@@ -28,6 +28,43 @@ public sealed class GraphWorkflowAgentExecutorTests
     public required GraphWorkflowAgentHostFixture Host { get; init; }
 
     /// <summary>
+    ///     The linear <c>Start → Agent → End</c> walk, one layer per tick, which is the shape the dispatcher suite could
+    ///     only assert with every node inline while this build had no lane. A node is admitted against the rows as they
+    ///     were at the START of the admission, so its successor waits for the tick after — and an Agent node spends one
+    ///     extra tick on the <c>Queued</c> hop it takes and the inline kinds do not.
+    /// </summary>
+    [Test]
+    public async Task ALinearStartAgentEndRun_WalksOneLayerPerTick()
+    {
+        const string instructions = "linear-start-agent-end";
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(Graph(instructions, agentConfig: null, SingleAttempt), """{"seed":3}""").ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, await harness.AdvanceAsync(runId).ConfigureAwait(false), "the first tick only moves the run out of Pending.");
+        AssertEx.Equal(GraphWorkflowRunStatus.Running, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "start").ConfigureAwait(false)).Status);
+
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "start").ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending,
+            (await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false)).Status,
+            "the successor waits for the tick after the one that succeeded its predecessor.");
+
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Queued,
+            (await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false)).Status,
+            "an Agent node is admitted to a QUEUE, not to a slot: the dispatch tick never writes Running.");
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "done").ConfigureAwait(false)).Status);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false)).Status);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "done").ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Contains(await harness.ReadEventTrailAsync(runId).ConfigureAwait(false), "node.queued, node.started, node.completed");
+    }
+
+    /// <summary>
     ///     An unattended run has no approval round-trip, so an approval-gated tool would surface a request nobody can
     ///     answer. It is stripped from the offer AND named in the log, because a silently narrower offer is how a node
     ///     comes to behave differently from the agent an operator configured.
