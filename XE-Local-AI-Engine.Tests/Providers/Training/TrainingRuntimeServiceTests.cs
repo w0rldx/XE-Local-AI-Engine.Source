@@ -58,6 +58,8 @@ public sealed class TrainingRuntimeServiceTests
     [NotInParallel("XE_TRAINING_TEST_SECRET")]
     public async Task Install_UsesTheLockfileStrictlyAndScrubsTheEnvironment()
     {
+        // Captured, not assumed absent: restoring to null would delete a value the surrounding process owns.
+        var previousSecret = Environment.GetEnvironmentVariable("XE_TRAINING_TEST_SECRET");
         Environment.SetEnvironmentVariable("XE_TRAINING_TEST_SECRET", "must-not-leak");
         try
         {
@@ -78,7 +80,7 @@ public sealed class TrainingRuntimeServiceTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("XE_TRAINING_TEST_SECRET", null);
+            Environment.SetEnvironmentVariable("XE_TRAINING_TEST_SECRET", previousSecret);
         }
     }
 
