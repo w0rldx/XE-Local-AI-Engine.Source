@@ -250,6 +250,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         try
         {
             var sanitized = DevelopmentArtifactSanitizer.SanitizePromptText(prompt,
+                profile.ProtectedPaths,
                 DevelopmentArtifactSanitizer.ResolveProtectedRoots(repository.RepositoryRoot, session));
             _ = await PersistArtifactAsync(snapshot,
                 DevelopmentArtifactKind.Prompt,

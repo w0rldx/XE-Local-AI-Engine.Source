@@ -183,7 +183,7 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
                               + RepositoryRoot
                               + "/src/Lib/Calculator.cs\nfailing test ApplyThinkingSwitch_MarkerAbsent_BodyHasNoChatTemplateKwargs\n";
 
-        var sanitized = DevelopmentArtifactSanitizer.SanitizePromptText(Prompt, RepositoryRoot);
+        var sanitized = DevelopmentArtifactSanitizer.SanitizePromptText(Prompt, [], RepositoryRoot);
 
         AssertEx.False(sanitized.Contains(RepositoryRoot, StringComparison.Ordinal), sanitized);
         AssertEx.Contains(sanitized, "[REDACTED:development-path]/src/Lib/Calculator.cs");
@@ -215,52 +215,63 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
         var prompt = DevelopmentTestWritePolicy.Prompt(profile)
                      + "\nFiles in this shared workspace that already differ from the base commit: "
                      + RepositoryRoot
-                     + "/src/Lib/Calculator.cs\ncould not open /etc/shadow, nor \"/etc/shadow\", nor XE_HOME=/etc/shadow, nor (/etc/shadow), nor */etc/shadow\n";
+                     + "/src/Lib/Calculator.cs\ncould not open /etc/shadow, nor \"/etc/shadow\", nor XE_HOME=/etc/shadow, nor (/etc/shadow), "
+                     + "nor */etc/shadow, nor **/etc/shadow\n";
 
-        var sanitized = DevelopmentArtifactSanitizer.SanitizePromptText(prompt, RepositoryRoot);
+        var sanitized = DevelopmentArtifactSanitizer.SanitizePromptText(prompt, profile.ProtectedPaths, RepositoryRoot);
 
         // The whole rendered line, separators and all — the actual text, not "nothing was redacted". Asserting the
         // nine globs one at a time would pass against a line whose commas and spaces had been eaten around them.
         AssertEx.Contains(sanitized, DevelopmentTestWritePolicy.Prompt(profile));
 
-        // The relaxation is not a hole. A path under a protected root still loses the root, and an unrelated absolute
-        // path is still redacted at every delimiter a prompt puts in front of one — including a single literal '*',
-        // which is not the glob token and does not buy an exemption.
+        // Preserving the literals is not a hole. A path under a protected root still loses the root, and an unrelated
+        // absolute path is still redacted at every delimiter a prompt puts in front of one — including '*' and '**',
+        // neither of which buys an exemption any more.
         AssertEx.False(sanitized.Contains(RepositoryRoot, StringComparison.Ordinal), sanitized);
         AssertEx.Contains(sanitized, "[REDACTED:development-path]/src/Lib/Calculator.cs");
         AssertEx.False(sanitized.Contains("/etc/shadow", StringComparison.Ordinal), sanitized);
     }
 
     /// <summary>
-    ///     The exemption above is the <c>**</c> glob token and nothing wider. A single <c>*</c> glued to a real
-    ///     absolute path is the shape that would turn a legibility fix into a leak, because <c>SanitizeText</c> is the
-    ///     boundary <see cref="DevelopmentCloudContextBuilder" /> crosses when it sends requirements and file excerpts
-    ///     to a cloud provider — so <c>*/etc/shadow</c>, and a C comment closer butted against a path inside an
-    ///     excerpt, must still redact.
+    ///     What replaced the glob exemption. The pass preserves the LITERALS the caller names and nothing that merely
+    ///     looks like one, so a path written in glob shape is redacted like any other.
     ///     <para>
-    ///         The second half asserts the residual that remains rather than hiding it: a real absolute path written
-    ///         immediately after <c>**</c> survives, because that prefix is indistinguishable from a glob at this
-    ///         layer. It is accepted for the same reason the <c>]</c> exclusion's residual is — the engine's own roots
-    ///         are replaced by literal match in the pass BEFORE these patterns, whatever precedes them, so what
-    ///         survives is an unrelated path a model volunteered. Asserting it makes any future widening a decision.
+    ///         Codex rated the earlier <c>(?&lt;!\*\*)</c> lookbehind a P1 for exactly this: it exempted every '/'
+    ///         after '**', so <c>**/home/alice/private</c> in repository output or model prose crossed the boundary
+    ///         <see cref="DevelopmentCloudContextBuilder" /> uses to reach a cloud provider. A lookbehind can only
+    ///         recognise a shape; <c>SanitizePromptText</c> knows the strings.
     ///     </para>
     /// </summary>
     [Test]
-    public void SanitizePromptText_ExemptsTheDoubleStarGlobTokenOnly_AndPinsTheResidualPathAfterIt()
+    public void SanitizePromptText_PreservesOnlyTheNamedGlobLiterals_AndRedactsEveryPathWrittenInGlobShape()
     {
-        var single = DevelopmentArtifactSanitizer.SanitizePromptText("could not open */etc/shadow", RepositoryRoot);
+        var profile = DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.DotnetSlnx, "Calc.slnx");
+
+        // A single '*' and a '**' are both just text in front of a real absolute path.
+        var single = DevelopmentArtifactSanitizer.SanitizePromptText("could not open */etc/shadow", profile.ProtectedPaths, RepositoryRoot);
 
         AssertEx.False(single.Contains("/etc/shadow", StringComparison.Ordinal), single);
         AssertEx.Contains(single, "[REDACTED:development-path]");
 
-        var comment = DevelopmentArtifactSanitizer.SanitizePromptText("close the block */etc/shadow is still a host path", RepositoryRoot);
+        // The P1 itself: the shape that used to ride the lookbehind out to a cloud provider.
+        var doubled = DevelopmentArtifactSanitizer.SanitizePromptText("excluded: **/home/alice/private", profile.ProtectedPaths, RepositoryRoot);
 
-        AssertEx.False(comment.Contains("/etc/shadow", StringComparison.Ordinal), comment);
+        AssertEx.False(doubled.Contains("/home/alice", StringComparison.Ordinal), doubled);
+        AssertEx.Contains(doubled, "[REDACTED:development-path]");
 
-        // Documented residual, pinned deliberately: '**' exempts whatever follows it, so this path is NOT redacted.
-        var residual = DevelopmentArtifactSanitizer.SanitizePromptText("excluded: **/home/user/repo/x.cs", RepositoryRoot);
+        // A preserved literal glued to a real path keeps the literal and still redacts the path: the placeholder covers
+        // exactly the pattern's own characters, so the '/' that starts the host path is left to the generic pass.
+        var glued = DevelopmentArtifactSanitizer.SanitizePromptText("excluded: **/*Tests.cs/home/alice/private",
+            profile.ProtectedPaths,
+            RepositoryRoot);
 
-        AssertEx.Contains(residual, "**/home/user/repo/x.cs");
+        AssertEx.Contains(glued, "**/*Tests.cs");
+        AssertEx.False(glued.Contains("/home/alice", StringComparison.Ordinal), glued);
+
+        // A literal the caller did NOT name is not preserved, however glob-shaped it looks.
+        var unnamed = DevelopmentArtifactSanitizer.SanitizePromptText("excluded: **/*.rs", profile.ProtectedPaths, RepositoryRoot);
+
+        AssertEx.False(unnamed.Contains("**/*.rs", StringComparison.Ordinal), unnamed);
     }
 
     [Test]

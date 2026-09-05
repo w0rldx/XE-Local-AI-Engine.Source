@@ -218,7 +218,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
     {
         try
         {
-            var sanitized = DevelopmentArtifactSanitizer.SanitizePromptText(prompt, protectedRoots);
+            var sanitized = DevelopmentArtifactSanitizer.SanitizePromptText(prompt, profile.ProtectedPaths, protectedRoots);
             var prepared = await _evidence.PrepareAsync(snapshot,
                 DevelopmentArtifactKind.Prompt,
                 Encoding.UTF8.GetBytes(sanitized),
