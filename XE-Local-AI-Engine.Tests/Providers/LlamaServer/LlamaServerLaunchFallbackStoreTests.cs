@@ -176,6 +176,35 @@ public sealed class LlamaServerLaunchFallbackStoreTests
         using var siblingLock = new FileStream(root.LockPath, FileMode.Open, FileAccess.Write, FileShare.None);
     }
 
+    [Test]
+    public async Task OpenReader_DoesNotBlockTheReplace_AndSeesTheMergedDocumentNext()
+    {
+        using var root = new TempCacheRoot();
+        await File.WriteAllTextAsync(root.StatePath, """{"disabledOptimizedConfigs":["Cuda:q4_0"]}""");
+
+        // A sibling node process reading the state with the store's OWN share flags. On Windows a reader that shares
+        // only Read (what File.OpenRead gives) blocks File.Move(..., overwrite: true) and would fault the write below,
+        // turning a ready safe-retry spawn into a launch failure; ReadWrite | Delete is what prevents that. This
+        // assertion is platform-neutral — POSIX never blocked the replace — so it pins the flags, not the OS.
+        await using (var reader = new FileStream(root.StatePath,
+                         new FileStreamOptions
+                         {
+                             Mode = FileMode.Open,
+                             Access = FileAccess.Read,
+                             Share = FileShare.ReadWrite | FileShare.Delete
+                         }))
+        {
+            using var store = new LlamaServerLaunchFallbackStore(root.Path);
+            await store.DisableOptimizedConfigAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None);
+        }
+
+        // The replace swings the directory entry, so the held handle kept reading the OLD inode; the reader's NEXT
+        // open is what sees the merged document — both verdicts, neither lost.
+        var persisted = await ReadStateAsync(root);
+        AssertEx.Contains(persisted.DisabledOptimizedConfigs ?? [], "Cuda:q4_0");
+        AssertEx.Contains(persisted.DisabledOptimizedConfigs ?? [], "Cuda:q8_0");
+    }
+
     private static async Task<LlamaServerLaunchFallbackState> ReadStateAsync(TempCacheRoot root)
     {
         var persisted = JsonSerializer.Deserialize<LlamaServerLaunchFallbackState>(await File.ReadAllTextAsync(root.StatePath),

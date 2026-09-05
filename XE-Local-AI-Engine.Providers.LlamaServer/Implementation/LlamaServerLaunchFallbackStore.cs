@@ -14,9 +14,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     Mirrors <see cref="InstalledRuntimeStore" />: tolerant deserialize (absent/corrupt → empty), atomic temp-file
 ///     write then move-with-overwrite, owner-only (0600) permissions on non-Windows. An in-memory snapshot backs the
 ///     read so <see cref="IsOptimizedConfigDisabledAsync" /> never touches disk on the spawn hot path after the first
-///     load; the snapshot is refreshed under the same lock on every write. The read-merge-replace additionally holds an
-///     OS file lock on a sibling <c>.lock</c> file, so two node processes writing at once cannot lose each other's
-///     verdict.
+///     load; the snapshot is refreshed under the same lock on every write. The read-merge-replace additionally tries to
+///     hold an OS file lock on a sibling <c>.lock</c> file: WHILE THAT LOCK IS HELD two node processes writing at once
+///     cannot lose each other's verdict. Acquisition is bounded, and a write that could not take it proceeds unlocked
+///     (logged at Warning) with the old in-process-only ceiling, where a sibling write landing inside that window is
+///     still lost.
 ///     Legacy backend-only entries (written before the store was keyed by KV type) are ignored on load and dropped from
 ///     the file on the first read, so an old un-keyed verdict can no longer make the node's KV-cache-type setting inert.
 /// </remarks>
@@ -136,7 +138,17 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
 
         try
         {
-            await using var stream = File.OpenRead(_statePath);
+            // Shared with writers and deleters, not just other readers: File.OpenRead shares Read only, and on Windows
+            // a lock-free sibling read taken that way blocks the File.Move(..., overwrite: true) below — turning a
+            // ready safe-retry spawn into a launch failure. Readers still see whole documents either way, because the
+            // replace is atomic.
+            await using var stream = new FileStream(_statePath,
+                new FileStreamOptions
+                {
+                    Mode = FileMode.Open,
+                    Access = FileAccess.Read,
+                    Share = FileShare.ReadWrite | FileShare.Delete
+                });
             var state = await JsonSerializer.DeserializeAsync<LlamaServerLaunchFallbackState>(stream, SerializerOptions, ct).ConfigureAwait(false);
 
             // Legacy, backend-only entries carry no KV type, so they cannot say which config failed. They are ignored
@@ -201,7 +213,8 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
 
     /// <summary>
     ///     Takes the cross-process write lock, or null when it could not be had: a sibling still holding it after the
-    ///     retry budget, or a cache root this process cannot write to (which the read path's legacy drop tolerates).
+    ///     retry budget, or a cache root this process cannot write to. Either way the write proceeds unlocked, and both
+    ///     paths are logged at Warning — the degraded merge is the one thing a silent return would hide.
     /// </summary>
     private async Task<FileStream?> TryAcquireWriteLockAsync(CancellationToken ct)
     {
@@ -217,8 +230,11 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
             }
             catch (UnauthorizedAccessException)
             {
-                // Unwritable cache root. The write below fails the same way and is already tolerated by the caller;
-                // waiting here would only delay that.
+                // Unwritable cache root: retrying cannot make it writable. The READ path's legacy drop tolerates this
+                // (it swallows the failed rewrite), but the safe-retry caller of the WRITE does not — the state write
+                // below fails the same way and aborts the launch — so say so rather than degrading silently.
+                _logger.LogWarning("Could not create the llama-server launch-fallback write lock at {LockPath} (the cache root is not writable); merging under the in-process lock only, so a concurrent sibling write may be lost.",
+                    _lockPath);
                 return null;
             }
 
