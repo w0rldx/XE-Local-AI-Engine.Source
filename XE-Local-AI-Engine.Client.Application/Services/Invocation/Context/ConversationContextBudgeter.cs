@@ -683,7 +683,13 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         };
     }
 
-    private static string Excerpt(string value, int excerptChars, int omitted)
+    /// <summary>
+    ///     The excerpt marker every truncation in this repository shares. Internal rather than private because the
+    ///     replayed tool history is capped at PROJECTION time (<c>ConversationContextBuilder.Build</c>), before this
+    ///     budgeter ever sees the round, and a second marker shape would make two truncations of the same result read
+    ///     as two different results.
+    /// </summary>
+    internal static string Excerpt(string value, int excerptChars, int omitted)
     {
         var marker = $"[truncated: {omitted} chars omitted]";
         return excerptChars > 0 ? $"{value[..excerptChars]}\n{marker}" : marker;

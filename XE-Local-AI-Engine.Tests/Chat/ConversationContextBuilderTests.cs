@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -124,6 +125,249 @@ public sealed class ConversationContextBuilderTests
         AssertEx.Contains(context.Select(message => message.Content), "recent question");
         AssertEx.Equal("the new turn", context[^1].Content);
     }
+
+    [Test]
+    public void Build_WithToolHistoryOn_KeepsAFailedToolBearingTurnTheSynopsisCouldNotHaveCovered()
+    {
+        // The compaction cutoff drops every row at or below it, and the summarizer only ever saw COMPLETED, non-blank
+        // text — so a run that called save_artifact and then died had its one record of that action erased twice over:
+        // once by the summarizer skipping it, once by the cutoff. A sendable row below the cutoff keeps its exchanges the
+        // same way but loses its text, because that text IS the synopsis; the covered-sendable test below pins that half.
+        var conversationId = Guid.NewGuid();
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "user", "save it"),
+            Message(conversationId, sequence: 1, "assistant", "  ", status: NodeChatMessageStatusValues.Failed) with
+            {
+                Parts = [CompletedToolPart("call-1", "save_artifact")]
+            },
+            Message(conversationId, sequence: 2, "user", "recent question")
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history, "SYNOPSIS", coversToSequence: 1),
+            Message(conversationId, sequence: 3, "user", "the new turn"),
+            selectedPath: null,
+            attachmentContext: null,
+            imageContext: null,
+            knowledgeContext: null,
+            includeToolHistory: true);
+
+        var replayed = AssertEx.NotNull(context.Single(message => message.Role == MessageRole.Assistant).ToolExchanges).Single();
+        AssertEx.Equal("call-1", replayed.CallId, "The synopsis never saw the action, so the cutoff must not erase it.");
+        AssertEx.False(context.Any(message => message.Content.Contains("save it", StringComparison.Ordinal)),
+            "Everything else the synopsis covers stays folded.");
+    }
+
+    [Test]
+    public void Build_WithToolHistoryOn_KeepsACoveredSendableTurnsExchangesAndDropsItsText()
+    {
+        // The other half, and the one a status filter hides. A turn that COMPLETED, wrote prose AND called a tool has a
+        // structured record of that call which the prose-only synopsis cannot carry. Folding the turn whole loses that
+        // record, and replaying it whole says the prose twice. So it survives for its exchanges alone, text and
+        // reasoning blank.
+        var conversationId = Guid.NewGuid();
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "user", "save it"),
+            Message(conversationId, sequence: 1, "assistant", "I saved the artifact") with
+            {
+                Reasoning = "deciding to save",
+                Parts = [CompletedToolPart("call-1", "save_artifact")]
+            },
+            Message(conversationId, sequence: 2, "user", "recent question")
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history, "SYNOPSIS", coversToSequence: 1),
+            Message(conversationId, sequence: 3, "user", "the new turn"),
+            selectedPath: null,
+            attachmentContext: null,
+            imageContext: null,
+            knowledgeContext: null,
+            includeToolHistory: true);
+
+        var survivor = context.Single(static message => message.Role == MessageRole.Assistant);
+        AssertEx.Equal("call-1", AssertEx.NotNull(survivor.ToolExchanges, "A completed tool call is a record the synopsis cannot carry.").Single().CallId);
+        AssertEx.Equal(string.Empty, survivor.Content, "The synopsis already carries this turn's prose; re-sending it would say it twice.");
+        AssertEx.Null(survivor.Thinking);
+    }
+
+    [Test]
+    public void Build_WithToolHistoryOff_LeavesACoveredSendableToolBearingTurnFolded()
+    {
+        // The flag-off path stays byte-identical: no exchanges, and the covered turn is dropped whole rather than kept
+        // as a blank one.
+        var conversationId = Guid.NewGuid();
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "user", "save it"),
+            Message(conversationId, sequence: 1, "assistant", "I saved the artifact") with
+            {
+                Parts = [CompletedToolPart("call-1", "save_artifact")]
+            },
+            Message(conversationId, sequence: 2, "user", "recent question")
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history, "SYNOPSIS", coversToSequence: 1),
+            Message(conversationId, sequence: 3, "user", "the new turn"),
+            selectedPath: null,
+            attachmentContext: null);
+
+        AssertEx.False(context.Any(static message => message.Role == MessageRole.Assistant),
+            "With the flag off the covered span is dropped whole, parts or no parts.");
+    }
+
+    [Test]
+    public void Build_WithToolHistoryOff_LetsTheCompactionCutoffDropAToolBearingTurn()
+    {
+        // The gate again, on the cutoff itself: chat's fold is byte-identical, parts or no parts.
+        var conversationId = Guid.NewGuid();
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "user", "save it"),
+            Message(conversationId, sequence: 1, "assistant", "  ", status: NodeChatMessageStatusValues.Failed) with
+            {
+                Parts = [CompletedToolPart("call-1", "save_artifact")]
+            },
+            Message(conversationId, sequence: 2, "user", "recent question")
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history, "SYNOPSIS", coversToSequence: 1),
+            Message(conversationId, sequence: 3, "user", "the new turn"),
+            selectedPath: null,
+            attachmentContext: null);
+
+        AssertEx.False(context.Any(static message => message.Role == MessageRole.Assistant),
+            "With the flag off the covered span is dropped whole, exactly as before.");
+    }
+
+    [Test]
+    public void Build_WithToolHistoryOff_IsUnchangedByPersistedToolParts()
+    {
+        // The gate. Chat and every per-invocation run take the default, and for them a turn's persisted parts are a
+        // render record and nothing else — including the Completed/blank filter, which must still drop the turn a
+        // caller-managed continuation would keep.
+        var conversationId = Guid.NewGuid();
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "user", "list the files"),
+            Message(conversationId, sequence: 1, "assistant", "there are two files") with
+            {
+                Parts = [CompletedToolPart("call-1", "list_files")]
+            },
+            Message(conversationId, sequence: 2, "assistant", "  ", status: NodeChatMessageStatusValues.Failed) with
+            {
+                Parts = [CompletedToolPart("call-2", "save_artifact")]
+            }
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history),
+            Message(conversationId, sequence: 3, "user", "now"),
+            selectedPath: null,
+            attachmentContext: null);
+
+        AssertEx.Equal(expected: 3, context.Count, "A failed, blank turn stays dropped with the flag off, parts or no parts.");
+        AssertEx.True(context.All(static message => message.ToolExchanges is null));
+    }
+
+    [Test]
+    public void Build_WithToolHistoryOn_ProjectsCompletedPartsInSequenceOrderAndKeepsTheTurnThatOnlyHasThem()
+    {
+        var conversationId = Guid.NewGuid();
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "assistant", "there are two files") with
+            {
+                Parts =
+                [
+                    CompletedToolPart("call-2", "read_file", sequence: 2, result: "second"),
+                    CompletedToolPart("call-1", "list_files", sequence: 1, result: "first"),
+                    RequestedToolPart("call-3", "write_file")
+                ]
+            },
+            Message(conversationId, sequence: 1, "assistant", "   ", status: NodeChatMessageStatusValues.Cancelled) with
+            {
+                Parts = [CompletedToolPart("call-4", "save_artifact", result: "saved", isError: true)]
+            }
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history),
+            Message(conversationId, sequence: 2, "user", "now"),
+            selectedPath: null,
+            attachmentContext: null,
+            imageContext: null,
+            knowledgeContext: null,
+            includeToolHistory: true);
+
+        AssertEx.Equal(expected: 3, context.Count, "A cancelled, blank turn that completed a tool call is kept: the side effect is real.");
+
+        var exchanges = AssertEx.NotNull(context[0].ToolExchanges);
+        AssertEx.Equal(expected: 2, exchanges.Count, "A requested-only part has no result to pair with and is not replayed.");
+        AssertEx.Equal("call-1", exchanges[0].CallId, "Exchanges follow the part SEQUENCE, not the persisted list order.");
+        AssertEx.Equal("call-2", exchanges[1].CallId);
+
+        var failed = AssertEx.NotNull(context[1].ToolExchanges).Single();
+        AssertEx.Equal("call-4", failed.CallId);
+        AssertEx.True(failed.IsError, "A failed tool result is replayed as one; the model acted on that text either way.");
+    }
+
+    [Test]
+    public void Build_WithToolHistoryOn_ExcerptsAnOversizedResultToTheConfiguredCap()
+    {
+        var conversationId = Guid.NewGuid();
+        var result = new string('r', count: 120);
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "assistant", "read it") with
+            {
+                Parts = [CompletedToolPart("call-1", "read_file", result: result)]
+            }
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history),
+            Message(conversationId, sequence: 1, "user", "now"),
+            selectedPath: null,
+            attachmentContext: null,
+            imageContext: null,
+            knowledgeContext: null,
+            includeToolHistory: true,
+            toolResultExcerptChars: 20);
+
+        var replayed = AssertEx.NotNull(AssertEx.NotNull(context[0].ToolExchanges).Single().Result);
+        AssertEx.True(replayed.StartsWith(new string('r', count: 20), StringComparison.Ordinal));
+        AssertEx.Contains(replayed, "100 chars omitted");
+    }
+
+    [Test]
+    public void Build_ExcerptCapDefault_MatchesTheBudgetersOwn()
+    {
+        // The parameter default is a copy of the options default so a static builder needs no DI. This is the pin that
+        // the copy cannot drift: one truncation of a result must read the same wherever it happened.
+        AssertEx.Equal(new ConversationContextBudgetOptions().HistoricalToolResultExcerptChars,
+            ConversationContextBudgetOptions.DefaultHistoricalToolResultExcerptChars);
+    }
+
+    private static NodeChatMessagePart CompletedToolPart(string callId,
+        string name,
+        int sequence = 0,
+        string? result = "ok",
+        bool isError = false) =>
+        new(NodeChatMessagePartKinds.Tool,
+            sequence,
+            Text: null,
+            callId,
+            name,
+            isError ? NodeChatToolPartStates.Failed : NodeChatToolPartStates.Received,
+            Args: "{}",
+            result);
+
+    private static NodeChatMessagePart RequestedToolPart(string callId, string name, int sequence = 3) =>
+        new(NodeChatMessagePartKinds.Tool,
+            sequence,
+            Text: null,
+            callId,
+            name,
+            NodeChatToolPartStates.Waiting,
+            Args: "{}");
 
     private static NodeChatConversationDto Conversation(Guid conversationId,
         IReadOnlyList<NodeChatPersistedMessageDto> messages,

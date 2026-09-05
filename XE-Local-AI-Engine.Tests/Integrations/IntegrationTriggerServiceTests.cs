@@ -8,17 +8,15 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
-using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
-using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Trigger CRUD, and the two checks a FluentValidation rule cannot make: the target agent has to exist, and a
-///     caller-managed trigger's agent has to offer read-only tools only (ruling R4-9(a)). The caller-managed check is a
-///     PREFLIGHT — the accept path repeats it and is the authority — so its job here is to stop an operator saving a
-///     configuration that can never run.
+///     Trigger CRUD, and the two checks a FluentValidation rule cannot make: the target agent has to exist, and it has
+///     to be a single agent rather than an orchestrator (ruling D2). The session policy is no longer one of them —
+///     ADR 0008 R6-1 withdrew the caller-managed read-only-tools rule once the session began persisting and replaying
+///     its tool history.
 /// </summary>
 public sealed class IntegrationTriggerServiceTests
 {
@@ -115,76 +113,25 @@ public sealed class IntegrationTriggerServiceTests
     }
 
     [Test]
-    public async Task CreateAsync_CallerManagedAgainstAReadLocalAgent_IsAccepted()
-    {
-        var harness = new Harness();
-        var agentId = harness.SeedAgent(ToolCategory.ReadLocal);
-
-        var result = await harness.Service.CreateAsync(Input("sensor-feed", agentId, sessionPolicy: IntegrationSessionPolicy.CallerManaged)).ConfigureAwait(false);
-
-        AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
-    }
-
-    [Test]
-    public async Task CreateAsync_CallerManagedAgainstAReadLocalAgentThatNeedsApproval_IsStillAccepted()
-    {
-        // Ruling R4-5 keeps approval-gated tools in the offer, so the predicate copies BenchmarkEligibilityPolicy's
-        // category half and NOT its RequiresApproval half. An approval-gated read-only tool is a legal target.
-        var harness = new Harness();
-        var agentId = harness.SeedAgent(ToolCategory.ReadLocal, requiresApproval: true);
-
-        var result = await harness.Service.CreateAsync(Input("sensor-feed", agentId, sessionPolicy: IntegrationSessionPolicy.CallerManaged)).ConfigureAwait(false);
-
-        AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
-    }
-
-    [Test]
+    [Arguments(ToolCategory.ReadLocal)]
     [Arguments(ToolCategory.WriteExecute)]
     [Arguments(ToolCategory.Orchestration)]
     [Arguments(ToolCategory.Network)]
     [Arguments(ToolCategory.Unknown)]
-    public async Task CreateAsync_CallerManagedAgainstANonReadLocalAgent_IsRejected(ToolCategory category)
+    public async Task CreateAsync_CallerManagedAgainstAnyToolCategory_IsSaved(ToolCategory category)
     {
-        // Unknown is the fail-closed default for an uncategorised tool, so it must be rejected exactly like an
-        // actuator: "not ReadLocal" is the predicate, never "is WriteExecute".
+        // ADR 0008 R6-1. Every one of these categories used to be a 400 for a caller-managed trigger, because the
+        // session persisted no tool history and a continued run could not tell an action it had performed from prose
+        // describing one. It persists and replays the calls and their results now, so the offer is arranged here only
+        // to show that it decides nothing: the save reads the agent's existence and kind, never its tools.
         var harness = new Harness();
         var agentId = harness.SeedAgent(category);
 
         var result = await harness.Service.CreateAsync(Input("sensor-feed", agentId, sessionPolicy: IntegrationSessionPolicy.CallerManaged)).ConfigureAwait(false);
 
-        AssertEx.Equal(IntegrationTriggerOutcome.SessionPolicyRejected, result.Outcome);
-        AssertEx.Contains(result.Message, "read-only");
-        AssertEx.Empty(harness.Triggers.Rows);
-    }
-
-    [Test]
-    public async Task CreateAsync_PerInvocationAgainstAWriteAgent_IsAcceptedAndNeverResolvesTheOffer()
-    {
-        // A per-invocation trigger starts fresh every time, so there is no transcript for a missing tool call to be
-        // wrong about — and resolving the offer for it would be a read that decides nothing.
-        var harness = new Harness();
-        var agentId = harness.SeedAgent(ToolCategory.WriteExecute);
-
-        var result = await harness.Service.CreateAsync(Input("sensor-feed", agentId)).ConfigureAwait(false);
-
         AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
+        AssertEx.Equal(IntegrationSessionPolicy.CallerManaged, harness.Triggers.Rows.Single().SessionPolicy);
         _ = harness.AgentResolver.DidNotReceiveWithAnyArgs().ResolveAsync(default, default);
-    }
-
-    [Test]
-    public async Task CreateAsync_ResolvesTheOfferAgainstThePinnedModelThenTheLocalDefault()
-    {
-        // Resolving with a null active model would withhold every tool and pass a trigger the accept path then
-        // rejects, so the save-time check has to use the same effective model the coordinator would pick.
-        var harness = new Harness();
-        var pinned = harness.SeedAgent(ToolCategory.ReadLocal, modelProfile: "pinned-model");
-        var unpinned = harness.SeedAgent(ToolCategory.ReadLocal);
-
-        _ = await harness.Service.CreateAsync(Input("pinned", pinned, sessionPolicy: IntegrationSessionPolicy.CallerManaged)).ConfigureAwait(false);
-        _ = await harness.Service.CreateAsync(Input("unpinned", unpinned, sessionPolicy: IntegrationSessionPolicy.CallerManaged)).ConfigureAwait(false);
-
-        _ = harness.AgentResolver.Received().ResolveAsync(pinned, "pinned-model", cancellationToken: Arg.Any<CancellationToken>());
-        _ = harness.AgentResolver.Received().ResolveAsync(unpinned, Harness.LocalDefaultModel, cancellationToken: Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -252,8 +199,9 @@ public sealed class IntegrationTriggerServiceTests
     }
 
     [Test]
-    public async Task UpdateAsync_SwitchingToCallerManagedAgainstAWriteAgent_IsRejected()
+    public async Task UpdateAsync_SwitchingToCallerManagedAgainstAWriteAgent_IsSaved()
     {
+        // The update half of R6-1: switching a live trigger onto a caller-managed session is an ordinary edit now.
         var harness = new Harness();
         var agentId = harness.SeedAgent(ToolCategory.WriteExecute);
         var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", agentId)).ConfigureAwait(false)).Trigger);
@@ -268,7 +216,8 @@ public sealed class IntegrationTriggerServiceTests
                                             IntegrationInputKinds.Text))
                                    .ConfigureAwait(false);
 
-        AssertEx.Equal(IntegrationTriggerOutcome.SessionPolicyRejected, result.Outcome);
+        AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
+        AssertEx.Equal(IntegrationSessionPolicy.CallerManaged, harness.Triggers.Rows.Single().SessionPolicy);
     }
 
     [Test]
@@ -301,19 +250,18 @@ public sealed class IntegrationTriggerServiceTests
 
     private sealed class Harness
     {
-        public const string LocalDefaultModel = "local-default-model";
-
         public Harness()
         {
             Agents = Substitute.For<IAgentDefinitionStore>();
             AgentResolver = Substitute.For<IAgentDefinitionResolver>();
-            var nodeSettings = Substitute.For<INodeSettingsStore>();
-            _ = nodeSettings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
-            var localDefault = Substitute.For<ILocalDefaultChatModelResolver>();
-            _ = localDefault.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(LocalDefaultModel);
 
-            Service = new IntegrationTriggerService(Triggers, Agents, AgentResolver, nodeSettings, localDefault, new ManualTimeProvider());
+            Service = new IntegrationTriggerService(Triggers, Agents, new ManualTimeProvider());
         }
+
+        /// <summary>
+        ///     The resolver the service NO LONGER injects. It is kept so a suite can still arrange an offer and assert
+        ///     the save never reads it, which is what ADR 0008 R6-1 withdrew.
+        /// </summary>
 
         public IAgentDefinitionResolver AgentResolver { get; }
 

@@ -99,12 +99,12 @@ export function IntegrationTriggersPage() {
 		: isCatalogError
 			? t(
 					"pages.integrations.triggers.form.toolCatalog.failed",
-					"The tool catalog could not be loaded. Every tool counts as approval-requiring and side-effecting until it can be read.",
+					"The tool catalog could not be loaded. Every tool counts as approval-requiring until it can be read.",
 				)
 			: undefined;
 
-	// The local CallerManaged check is a preflight, not the authorization: a save the server rejects anyway (a stale
-	// catalog, a tool added to the agent between the read and the submit) surfaces the server's message here.
+	// Whatever the server refuses on save — a name that is taken, a body it will not accept — surfaces here rather
+	// than in the form's own validation.
 	const submitError =
 		createMutation.error || updateMutation.error
 			? apiErrorMessage(

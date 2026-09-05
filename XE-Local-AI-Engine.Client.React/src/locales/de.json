@@ -5212,6 +5212,7 @@
 				"BudgetExhausted": "Budget aufgebraucht",
 				"Cancelled": "Abgebrochen",
 				"GateRejected": "An einer Freigabe abgelehnt",
+				"ObjectiveNotMet": "Der Agent hat das Ziel nicht erreicht",
 				"unknown": "Der Knoten ist fehlgeschlagen"
 			},
 			"gate": {
@@ -5255,7 +5256,7 @@
 				"noReport": "Noch kein Bericht.",
 				"devTask": "Entwicklungsaufgabe",
 				"openDevelopment": "Development Mode öffnen",
-				"devTaskReviewRound": "Prüfrunde {{round}}",
+				"devTaskReviewRound": "Runde {{round}}",
 				"devTaskNoStage": "Diese Aufgabe hat noch keinen Stand gemeldet.",
 				"devTaskEvidence": "Development Mode zeigt Versuche, Patch und Prüfnachweise dieser Aufgabe. Die Freigabe, mit der ein Patch übernommen wird, ist ein Gate-Knoten in diesem Workflow.",
 				"objective": "Zielvorgabe",
@@ -5298,6 +5299,7 @@
 					"BudgetExhausted": "Budget erschöpft",
 					"ToolOrCommand": "Tool oder Befehl",
 					"Rejected": "Abgelehnt",
+					"ObjectiveNotMet": "Ziel nicht erreicht",
 					"Internal": "Intern"
 				}
 			},
@@ -5536,7 +5538,7 @@
 					},
 					"toolCatalog": {
 						"loading": "Der Werkzeugkatalog wird geladen. Bis dahin sind die Werkzeugangaben unbekannt.",
-						"failed": "Der Werkzeugkatalog konnte nicht geladen werden. Bis er gelesen werden kann, gilt jedes Werkzeug als freigabepflichtig und mit Nebenwirkungen."
+						"failed": "Der Werkzeugkatalog konnte nicht geladen werden. Bis er gelesen werden kann, gilt jedes Werkzeug als freigabepflichtig."
 					}
 				},
 				"validation": {
@@ -5545,8 +5547,7 @@
 					"displayNameTooLong": "Der Anzeigename überschreitet die Grenze von 128 Zeichen.",
 					"descriptionTooLong": "Die Beschreibung überschreitet die Grenze von 1024 Zeichen.",
 					"targetRequired": "Ein Ziel-Agent ist erforderlich.",
-					"inputKindRequired": "Wählen Sie mindestens eine akzeptierte Eingabeart aus.",
-					"sessionPolicyTools": "Eine vom Aufrufer verwaltete Sitzung ist für einen Agenten mit Werkzeugen mit Nebenwirkungen nicht zulässig: {{tools}}. Wählen Sie „Neue Sitzung pro Aufruf“ oder entfernen Sie diese Werkzeuge aus dem Agenten."
+					"inputKindRequired": "Wählen Sie mindestens eine akzeptierte Eingabeart aus."
 				},
 				"approvalWarning": {
 					"title": "Werkzeuge mit Freigabepflicht",
@@ -6076,6 +6077,7 @@
 			"passwordLabel": "Passwort",
 			"signInButton": "Anmelden",
 			"errorIncorrectPassword": "Falsches Passwort. Bitte erneut versuchen.",
+			"errorLockedOut": "Zu viele fehlgeschlagene Anmeldeversuche. Dieses Konto ist gesperrt. Versuche es in {{minutes}} Min. erneut.",
 			"errorNodeUnreachable": "Node nicht erreichbar. Prüfe, ob sie läuft, und versuche es erneut.",
 			"errorGeneric": "Anmeldung fehlgeschlagen. Bitte erneut versuchen."
 		},

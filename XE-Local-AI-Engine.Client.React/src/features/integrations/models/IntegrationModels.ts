@@ -144,7 +144,7 @@ export interface IntegrationAgentOption {
  */
 export const integrationToolContinuesUnanswered = "continuesUnanswered";
 
-/** The catalog facts the approval banner and the CallerManaged preflight both read, keyed by tool name. */
+/** The catalog facts the unattended-approval warning reads, keyed by tool name. */
 export interface IntegrationToolFacts {
 	readonly effectiveRequiresApproval: boolean;
 	readonly category: string;

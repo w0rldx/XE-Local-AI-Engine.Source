@@ -376,7 +376,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         // per-model, and a session repointed while paused (or an unpinned agent whose node default moved) would
         // otherwise be measured under the model the LAST step ran on. Null when the agent was deleted or the gate read
         // failed, which is exactly when the bound's transcript fallback is the best answer available.
-        await turnScope.ServiceProvider.GetRequiredService<WorkSessionStepContextBound>()
+        await turnScope.ServiceProvider.GetRequiredService<ConversationStepContextBound>()
                        .ApplyAsync(state.Session.ConversationId, _options.StepContextBudgetTokens, toolGate?.EffectiveModel, CancellationToken.None)
                        .ConfigureAwait(false);
 

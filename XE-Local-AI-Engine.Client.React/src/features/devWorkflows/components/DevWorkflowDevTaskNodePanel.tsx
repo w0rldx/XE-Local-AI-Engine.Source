@@ -45,7 +45,7 @@ export function DevWorkflowDevTaskNodePanel({ nodeRun }: DevWorkflowDevTaskNodeP
 					</Badge>
 					{stage.reviewRound > 0 ? (
 						<Text size="xs" c="dimmed" data-testid="dev-workflow-node-devtask-round">
-							{t("pages.devWorkflows.node.devTaskReviewRound", "review round {{round}}", { round: stage.reviewRound })}
+							{t("pages.devWorkflows.node.devTaskReviewRound", "round {{round}}", { round: stage.reviewRound })}
 						</Text>
 					) : null}
 				</Group>

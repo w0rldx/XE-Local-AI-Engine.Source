@@ -29,7 +29,18 @@ public interface INodeAuthService
 
 public sealed record NodeAuthStatus(bool SetupRequired, bool Authenticated);
 
-public sealed record NodeAuthTokenResult(bool Succeeded, string? AccessToken, DateTime? AccessTokenExpiresAtUtc, string? RefreshToken, DateTime? RefreshTokenExpiresAtUtc);
+/// <summary>
+///     A token-issuing outcome. <paramref name="LockedOutRetryAfterSeconds" /> is set only on a login that Identity
+///     refused because the account is locked out, and carries the whole seconds still left on that lockout (at least
+///     one). Every other failure leaves it <c>null</c>, so the transport cannot accidentally tell a wrong password
+///     apart from a locked account.
+/// </summary>
+public sealed record NodeAuthTokenResult(bool Succeeded,
+    string? AccessToken,
+    DateTime? AccessTokenExpiresAtUtc,
+    string? RefreshToken,
+    DateTime? RefreshTokenExpiresAtUtc,
+    int? LockedOutRetryAfterSeconds = null);
 
 public sealed record NodeSetupResult(bool Succeeded, bool AlreadyInitialized, IReadOnlyList<string> Errors);
 

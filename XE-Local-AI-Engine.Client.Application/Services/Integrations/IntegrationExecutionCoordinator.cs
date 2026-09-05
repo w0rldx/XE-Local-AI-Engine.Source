@@ -13,6 +13,8 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -490,10 +492,9 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         // Ruling D2 scopes V1 to a saved SINGLE agent. This package carries no OrchestrationSpec — the scheduler's
         // run-agent shape it is modelled on carries none either — so InvocationRunner would take RunSingleAgentAsync
         // and an orchestrator would report Completed having run none of its participants, none of its routing and none
-        // of its handoffs. Rejected rather than orchestrated: the offer emit_output is unioned into is the ROOT's, the
-        // caller-managed read-only rule judges the ROOT's tools, and both would have to be pushed across every
-        // participant before an orchestrated integration run could be honest. Checked here as well as at save because
-        // a definition's Kind can change after the trigger was written.
+        // of its handoffs. Rejected rather than orchestrated: the offer emit_output is unioned into is the ROOT's, and
+        // that would have to be pushed across every participant before an orchestrated integration run could be
+        // honest. Checked here as well as at save because a definition's Kind can change after the trigger was written.
         if (definition.Kind != AgentDefinitionKind.Single)
         {
             await TerminalizeBeforeRunAsync(context,
@@ -550,19 +551,33 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         //     integration session has no state block — its transcript IS the session state — so folding to two would
         //     delete the continuation a caller-managed session exists to deliver. It is read from the chat compaction
         //     options rather than written as a literal, so an operator who retunes chat retunes this too.
-        await services.GetRequiredService<WorkSessionStepContextBound>()
+        //
+        //     A caller-managed session additionally replays its completed tool exchanges, so the projection has to count
+        //     them or the bound would measure a transcript smaller than the one the turn sends — the exact failure it
+        //     exists to prevent. The excerpt cap is the same one the builder applies below, read from the same options.
+        var replaysToolHistory = trigger.SessionPolicy == IntegrationSessionPolicy.CallerManaged;
+        var toolResultExcerptChars = services.GetRequiredService<IOptions<ConversationContextBudgetOptions>>().Value.HistoricalToolResultExcerptChars;
+        await services.GetRequiredService<ConversationStepContextBound>()
                       .ApplyAsync(session.ConversationId,
                           _options.ContextBudgetTokens,
                           effectiveModel,
                           runToken,
-                          services.GetRequiredService<IOptions<ConversationCompactionOptions>>().Value.RecentMessagesToKeepVerbatim)
+                          services.GetRequiredService<IOptions<ConversationCompactionOptions>>().Value.RecentMessagesToKeepVerbatim,
+                          replaysToolHistory,
+                          toolResultExcerptChars)
                       .ConfigureAwait(false);
 
         // 3c. The turn read, and the ONE shape R4-1's forward-running failure leaves behind: the execution row commits
         //     before the conversation and the seed are written, so a row can be real and have nothing to run. Do not
         //     repair it — the seed text is not recoverable from the row, and a run against an empty seed is a worse
         //     outcome than a clean failure.
-        var conversation = await persistence.GetConversationForTurnAsync(session.ConversationId, runToken).ConfigureAwait(false);
+        //     A caller-managed continuation takes the FULL read, not the capped turn read: its persisted tool parts live
+        //     in the same metadata_json blob the turn read omits for every non-user row the synopsis already covers, so
+        //     under a compacted session the capped read would hand the builder survivor rows with no parts and the
+        //     replay would silently be empty. Every other policy keeps the cap — it has no tool history to replay.
+        var conversation = replaysToolHistory
+            ? await persistence.GetConversationAsync(session.ConversationId, runToken).ConfigureAwait(false)
+            : await persistence.GetConversationForTurnAsync(session.ConversationId, runToken).ConfigureAwait(false);
         var seed = conversation?.Messages.FirstOrDefault(message => message.MessageId == executionId);
         if (conversation is null || seed is null)
         {
@@ -599,21 +614,6 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
             return;
         }
 
-        // 4b. Ruling R4-9(a), judged against the offer this package will actually carry rather than a second resolve
-        //     that could disagree. The trigger was checked at save, but an agent definition's tools can change
-        //     afterwards, and this is the last point that sees them as they are now. A caller-managed session persists
-        //     the seed and the final assistant text and nothing else, so a continued run cannot tell an action it
-        //     already performed from prose describing one — safe only while the agent can perform none.
-        if (trigger.SessionPolicy == IntegrationSessionPolicy.CallerManaged
-            && !IIntegrationTriggerService.AllowsCallerManaged(resolved.AllowedTools))
-        {
-            await TerminalizeBeforeRunAsync(context,
-                    IntegrationFailureCategories.SessionPolicy,
-                    "The trigger's agent now offers a tool outside ToolCategory.ReadLocal, which a caller-managed session cannot host.")
-                .ConfigureAwait(false);
-            return;
-        }
-
         // 4c. The turn's context, assembled by the SAME builder the chat send path uses, so a continued session replays
         //     exactly as a conversation does. The seed is LIFTED OUT of the history it is already in: the accept path
         //     persisted it before this coordinator ran, unlike the chat path where the read precedes the write, so
@@ -629,14 +629,22 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         //     external.output payloads, in the builder's existing attachmentContext slot — so it lands at slot 0, ahead
         //     of the synopsis and the verbatim turns, which is the same placement and the same reason an uploaded
         //     attachment gets: it is reference material to read BEFORE the recent turns, not a turn of its own.
-        var priorOutputs = trigger.SessionPolicy == IntegrationSessionPolicy.CallerManaged
+        var priorOutputs = replaysToolHistory
             ? await BuildPriorOutputsAsync(services, session, executionId, runToken).ConfigureAwait(false)
             : null;
 
+        //     And the session's own tool history: a caller-managed continuation replays each completed call and its
+        //     result as real function content, so the model can tell an action it PERFORMED from prose describing one.
+        //     Only this policy asks for it — chat's behaviour is unchanged, and a per-invocation run has no history to
+        //     replay.
         var conversationContext = ConversationContextBuilder.Build(history,
             seed,
             selectedPath: null,
-            priorOutputs);
+            priorOutputs,
+            imageContext: null,
+            knowledgeContext: null,
+            replaysToolHistory,
+            toolResultExcerptChars);
 
         // 5. The headless package. Three things differ from the scheduler's: the conversation id is the OWNED one (a
         //    throwaway Guid would break every by-conversation resolution downstream), the context is the session's
@@ -718,9 +726,43 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
             // The coordinator's own logger: the mapper rides this run's subscription and has no lifetime of its own.
             _logger);
 
+        // 6b. The turn's persisted tool parts, accumulated through the SAME primitive chat feeds — the two paths observe
+        //     the same event on the same invocation filter, so a second accumulation would only be a place to diverge.
+        //     Only the tool half is fed: an integration run streams no reasoning deltas to a persistence pump.
+        //
+        //     Subscribed AFTER the mapper's handler on purpose. A multicast delegate stops at the first handler that
+        //     throws, and the mapper is the one that owns the caller's stream; accumulating parts must never be able to
+        //     cost the caller an event.
+        var parts = new NodeChatPartAccumulator();
+        var partSequence = 0L;
+
+        void OnToolCallLifecycleChanged(object? sender, ToolCallLifecycleChangedEventArgs args)
+        {
+            var payload = args.Payload;
+            if (payload.InvocationId != package.InvocationId)
+            {
+                return;
+            }
+
+            if (string.IsNullOrEmpty(payload.ToolCallId))
+            {
+                // The accumulator keys parts by call id and throws on an empty one, and InvocationRunner's card-id
+                // resolution can yield one. A payload that cannot be correlated into a call/result pair is dropped
+                // rather than allowed to fault the run.
+                _logger.LogDebug("Integration execution {ExecutionId} saw a {Phase} lifecycle event for tool {ToolName} with no tool-call id; it is not persisted as a part.",
+                    context.ExecutionId,
+                    payload.Phase,
+                    payload.ToolName);
+                return;
+            }
+
+            ChatStreamEventMapper.AccumulateToolPart(parts, payload, Interlocked.Increment(ref partSequence));
+        }
+
         dispatcher.InvocationStateChanged += OnInvocationStateChanged;
         dispatcher.InvocationStateChanged += mapper.OnInvocationStateChanged;
         dispatcher.ToolCallLifecycleChanged += mapper.OnToolCallLifecycleChanged;
+        dispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
         try
         {
             await RunLeasedAsync(services,
@@ -733,6 +775,7 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                     dispatcher,
                     mapper,
                     persistence,
+                    parts,
                     runToken,
                     cancelToken,
                     stoppingToken)
@@ -740,6 +783,7 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         }
         finally
         {
+            dispatcher.ToolCallLifecycleChanged -= OnToolCallLifecycleChanged;
             dispatcher.ToolCallLifecycleChanged -= mapper.OnToolCallLifecycleChanged;
             dispatcher.InvocationStateChanged -= mapper.OnInvocationStateChanged;
             dispatcher.InvocationStateChanged -= OnInvocationStateChanged;
@@ -756,6 +800,7 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         IWorkerEventDispatcher dispatcher,
         IntegrationStreamEventMapper mapper,
         INodeChatPersistenceService persistence,
+        NodeChatPartAccumulator parts,
         CancellationToken runToken,
         CancellationToken cancelToken,
         CancellationToken stoppingToken)
@@ -977,7 +1022,7 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                 failureSummary = approvalUnavailable.Message;
             }
 
-            await FinishAsync(services, context, correlation, terminalState.Value, effectiveModel, mapper, failureCategory, failureSummary).ConfigureAwait(false);
+            await FinishAsync(services, context, correlation, terminalState.Value, effectiveModel, mapper, parts, failureCategory, failureSummary).ConfigureAwait(false);
         }
         finally
         {
@@ -1001,20 +1046,26 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         InvocationState? state,
         string effectiveModel,
         IntegrationStreamEventMapper mapper,
+        NodeChatPartAccumulator parts,
         string? failureCategory,
         string? failureSummary)
     {
         var status = IntegrationExecutionStatus.Failed;
 
-        // 9. The assistant turn, from the terminal state. Parts stays null: nothing persists tool events for a plain
-        //    context, so leaving them untouched is the honest answer rather than an empty claim.
+        // 9. The assistant turn, from the terminal state, with whatever tool parts the run accumulated. A turn that
+        //    produced none passes null rather than an empty list, which is the persistence contract's "leave the
+        //    existing parts untouched" and not a claim that the turn ran no tools.
         if (state is null)
         {
             // The runner returned without reporting. Do not dereference; the row's reason names the case.
             failureCategory ??= IntegrationFailureCategories.InternalFailure;
             failureSummary ??= "The invocation returned without reporting a terminal state.";
+            // Tools can have run before the runner went silent, so this branch persists the parts too.
             _ = await services.GetRequiredService<INodeChatPersistenceService>()
-                              .TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Failed, NowUnixMilliseconds()),
+                              .TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                                      NodeChatMessageStatusValues.Failed,
+                                      NowUnixMilliseconds(),
+                                      Parts: parts.HasParts ? parts.Snapshot() : null),
                                   CancellationToken.None)
                               .ConfigureAwait(false);
         }
@@ -1102,7 +1153,7 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
                                       state.OutputTokens,
                                       state.TotalTokens,
                                       state.ReasoningTokens,
-                                      Parts: null,
+                                      Parts: parts.HasParts ? parts.Snapshot() : null,
                                       state.GenerationDurationMs,
                                       envelope),
                                   CancellationToken.None)

@@ -50,6 +50,22 @@ public sealed class WorkSessionToolSchemaTests
         }
     }
 
+    /// <summary>
+    ///     The honesty argument's shape: optional, so a completion recorded before it existed still reads as met, and a
+    ///     plain boolean, which is the smallest thing that can be added to an array that compiles into one GBNF grammar.
+    /// </summary>
+    [Test]
+    public void CompleteWorkSession_OffersObjectiveMetAsAnOptionalBoolean()
+    {
+        using var document = JsonDocument.Parse(WorkSessionToolDefinitions.CompleteWorkSession.ParameterSchema);
+
+        AssertEx.Equal("boolean", document.RootElement.GetProperty("properties").GetProperty("objectiveMet").GetProperty("type").GetString());
+        AssertEx.False(document.RootElement.GetProperty("required")
+                               .EnumerateArray()
+                               .Any(static member => string.Equals(member.GetString(), "objectiveMet", StringComparison.Ordinal)),
+            "Absent means met, so requiring it would break every completion the model already knows how to write.");
+    }
+
     [Test]
     public void EveryDescriptor_MatchesTheHandlerNameAndCarriesNoApprovalGate()
     {
