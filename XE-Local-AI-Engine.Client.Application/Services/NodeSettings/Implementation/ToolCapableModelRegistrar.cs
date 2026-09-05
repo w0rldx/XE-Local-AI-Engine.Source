@@ -83,9 +83,9 @@ internal sealed class ToolCapableModelRegistrar : IToolCapableModelRegistrar
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         The no-change early return matters: a write invalidates and re-primes the settings cache and is reached on
-    ///         every completed download and every startup, so writing an identical list would churn the cache (and the
-    ///         file) for nothing. That is what the pre-check load is for — <see cref="INodeSettingsStore.UpdateAsync" />
+    ///         The no-change early return matters: a write evicts the cached settings entry and leaves the next reader
+    ///         to repopulate it, and is reached on every completed download and every startup, so writing an identical
+    ///         list would churn the cache (and the file) for nothing. That is what the pre-check load is for — <see cref="INodeSettingsStore.UpdateAsync" />
     ///         persists even when the mutation returns the record unchanged.
     ///     </para>
     ///     <para>

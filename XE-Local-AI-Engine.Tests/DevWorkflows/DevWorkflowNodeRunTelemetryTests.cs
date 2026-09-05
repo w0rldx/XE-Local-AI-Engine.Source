@@ -560,6 +560,8 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     {
         const string servedName = "qwen3-1.7b-gguf:q8_0";
 
+        // Private host: the NodeMetricsLlamaServerLoadTelemetry singleton's per-key cache is host-level state, so the
+        // observations recorded below would otherwise be visible to a concurrent sibling reading the same key.
         await using var harness = new DevWorkflowHarness();
         var loads = harness.Services.GetRequiredService<ILlamaServerLoadTelemetry>();
         loads.RecordLoad(LoadObservation("Qwen3-1.7B-GGUF:Q8_0", globalFree: 7_340_032_000, admitted: 5_368_709_120));

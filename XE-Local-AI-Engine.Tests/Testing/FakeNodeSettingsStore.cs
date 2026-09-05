@@ -11,6 +11,11 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     default-model selection, a settings save from the UI — that lands between a caller's load and its write. It is
 ///     applied to the stored record inside <see cref="UpdateAsync" /> immediately before the caller's mutation, which is
 ///     the interleaving a load-modify-save built from a stale record silently discards.
+///     <para>
+///         What this fake models is the LOCKING alone — the mutation running against the record the store currently
+///         holds. It does not reproduce the real store's <c>Normalize</c> clamping or its null-mutation guard, so a
+///         test that depends on either must use the real <c>NodeSettingsStore</c>.
+///     </para>
 /// </remarks>
 internal sealed class FakeNodeSettingsStore(StoredNodeSettings initial,
     Func<StoredNodeSettings, StoredNodeSettings>? siblingWriteBeforeTheUpdate = null) : INodeSettingsStore

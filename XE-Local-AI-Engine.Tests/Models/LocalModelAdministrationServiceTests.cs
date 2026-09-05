@@ -17,7 +17,8 @@ public sealed class LocalModelAdministrationServiceTests
     [Test]
     public async Task SelectDefaultAsync_InstalledLocalOnly_RejectsMissingModelWithoutSaving()
     {
-        var harness = new Harness();
+        var settings = new FakeNodeSettingsStore(new StoredNodeSettings());
+        var harness = new Harness(settings);
         harness.GgufStore.ExistsAsync("missing", Arg.Any<CancellationToken>()).Returns(false);
 
         var result = await harness.Service
@@ -26,8 +27,7 @@ public sealed class LocalModelAdministrationServiceTests
 
         AssertEx.False(result.Succeeded);
         AssertEx.Equal(LocalModelAdministrationFailureCodes.ModelNotInstalled, result.FailureCode);
-        await harness.Settings.DidNotReceive()
-                     .UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        AssertEx.Equal(expected: 0, settings.WriteCount, "a rejected selection must reach the file by no route at all, not merely skip UpdateAsync.");
     }
 
     [Test]
