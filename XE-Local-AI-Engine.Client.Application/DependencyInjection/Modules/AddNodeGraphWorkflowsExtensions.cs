@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
