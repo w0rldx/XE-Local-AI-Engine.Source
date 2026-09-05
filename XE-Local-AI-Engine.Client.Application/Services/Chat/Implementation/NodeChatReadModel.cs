@@ -50,7 +50,10 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
     ///     </para>
     ///     <para>
     ///         Use <see cref="GetConversationAsync" /> for anything that renders or re-persists a conversation (the UI
-    ///         load, regeneration, branching, compaction itself) — those need every payload.
+    ///         load, regeneration, branching, compaction itself) — those need every payload. A caller-managed
+    ///         integration continuation uses it too, and for the same reason: with tool history on, the builder KEEPS a
+    ///         covered assistant row for the tool parts persisted in its <c>metadata_json</c>, so the equivalence
+    ///         argument above no longer holds for that caller.
     ///     </para>
     /// </remarks>
     public Task<NodeChatConversationDto?> GetConversationForTurnAsync(Guid conversationId, CancellationToken cancellationToken = default)

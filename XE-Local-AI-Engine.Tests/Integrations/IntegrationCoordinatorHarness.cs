@@ -112,7 +112,8 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
                 });
         Dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
                   .Returns(callInfo => _leaseRequest = AcquireLeaseAsync(callInfo.Arg<CancellationToken>()));
-        Persistence.GetConversationForTurnAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(_ => BuildConversation());
+        Persistence.GetConversationAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(_ => BuildConversation(capPayloads: false));
+        Persistence.GetConversationForTurnAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(_ => BuildConversation(capPayloads: true));
         Persistence.CreateAssistantPlaceholderAsync(Arg.Any<NodeChatCreateAssistantPlaceholderRequest>(), Arg.Any<CancellationToken>())
                    .Returns(callInfo =>
                    {
@@ -211,21 +212,22 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         {
             RecentMessagesToKeepVerbatim = ChatKeepVerbatim
         }));
-        services.AddSingleton(_ => new WorkSessionStepContextBound(Persistence,
+        // The historical tool-result excerpt cap a caller-managed continuation replays under, read from the SAME options
+        // the context budgeter measures with so one result truncated twice reads as one result.
+        services.AddSingleton<IOptions<ConversationContextBudgetOptions>>(_ => Options.Create(new ConversationContextBudgetOptions()));
+        services.AddSingleton(_ => new ConversationStepContextBound(Persistence,
             Compaction,
             new HeuristicTokenEstimator(new TokenEstimatorCalibrationStore()),
-            NullLogger<WorkSessionStepContextBound>.Instance));
+            NullLogger<ConversationStepContextBound>.Instance));
         // A REAL offer provider and a settable approval policy: WHICH tools the coordinator unions in, and what the
         // node policy then does to their approval flag, are the assertions.
         services.AddSingleton<ILocalToolOfferProvider>(IntegrationToolOfferFactory.Create());
         services.AddSingleton(FenceSeeds);
         services.AddSingleton<IToolApprovalPolicy>(_ => ToolApprovalPolicy);
         services.AddSingleton<IIntegrationApiKeyStore>(_keys);
-        services.AddSingleton(TriggerService);
         services.AddSingleton(_ => new IntegrationSessionService(_sessions,
             Executions,
             _triggers,
-            TriggerService,
             new IntegrationExternalAccess(Executions, _sessions, _keys),
             Persistence,
             SessionGate,
@@ -252,8 +254,6 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     public RecordingCompactionService Compaction { get; } = new();
 
     public IntegrationSessionGate SessionGate { get; } = new();
-
-    public IIntegrationTriggerService TriggerService { get; } = Substitute.For<IIntegrationTriggerService>();
 
     /// <summary>
     ///     The prior-outputs fence seed. Fixed rather than derived from a node key, so the fenced block is byte-stable
@@ -362,6 +362,45 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
             Sequence = History.Count
         });
 
+    /// <summary>
+    ///     One turn ahead of the seed carrying the persisted PARTS and status a real turn has. The continuation suite
+    ///     needs both: replayed tool history is read off an assistant row's parts, and a run that failed after a
+    ///     completed tool call still has to carry them.
+    /// </summary>
+    public void AddHistory(string role, string content, IReadOnlyList<NodeChatMessagePart>? parts, string? status = null) =>
+        History.Add(Message(Guid.NewGuid(), role, content) with
+        {
+            Sequence = History.Count,
+            Parts = parts,
+            Status = status ?? NodeChatMessageStatusValues.Completed
+        });
+
+    /// <summary>A tool part as the accumulator persists a COMPLETED one: the requested phase collapsed into its result.</summary>
+    public static NodeChatMessagePart CompletedToolPart(string callId,
+        string name,
+        string? args,
+        string? result,
+        int sequence = 0,
+        bool isError = false) =>
+        new(NodeChatMessagePartKinds.Tool,
+            sequence,
+            Text: null,
+            callId,
+            name,
+            isError ? NodeChatToolPartStates.Failed : NodeChatToolPartStates.Received,
+            args,
+            result);
+
+    /// <summary>A tool part that never left the requested phase — the shape a continuation must NOT replay.</summary>
+    public static NodeChatMessagePart RequestedToolPart(string callId, string name, string? args, int sequence = 0) =>
+        new(NodeChatMessagePartKinds.Tool,
+            sequence,
+            Text: null,
+            callId,
+            name,
+            NodeChatToolPartStates.Waiting,
+            args);
+
     public bool RaiseTerminalState { get; set; } = true;
 
     public InvocationStatus TerminalStatus { get; set; } = InvocationStatus.Completed;
@@ -449,7 +488,7 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     public IntegrationSessionSnapshot Session() =>
         _sessions.Rows.Single(row => row.Id == SessionId);
 
-    /// <summary>One offered tool in the resolved runtime, so a suite can put a non-ReadLocal tool in front of the rule.</summary>
+    /// <summary>One offered tool in the resolved runtime, so a suite can give the run a tool of a chosen category.</summary>
     public static AllowedToolDto Tool(string name, XE_Local_AI_Engine.AI.Agent.Tools.ToolCategory category) =>
         new()
         {
@@ -556,7 +595,13 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         return _lease;
     }
 
-    private NodeChatConversationDto? BuildConversation()
+    /// <param name="capPayloads">
+    ///     Whether to model the load-side cap the SQL turn read applies: with a synopsis in place it selects both
+    ///     <c>content</c> AND <c>metadata_json</c> as NULL for every NON-user row at or below the covered sequence, and
+    ///     the persisted tool PARTS live in <c>metadata_json</c>. A fake that returned parts on both reads would let a
+    ///     continuation test pass against a read production never performs.
+    /// </param>
+    private NodeChatConversationDto? BuildConversation(bool capPayloads)
     {
         if (HideConversation)
         {
@@ -570,13 +615,31 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
                                   Sequence = History.Count + index
                               })
                               .ToArray();
+        IReadOnlyList<NodeChatPersistedMessageDto> messages = [.. History, .. seeds];
+        if (capPayloads && !string.IsNullOrEmpty(CompactionSummary) && CompactionCoversToSequence is { } coveredSequence)
+        {
+            messages =
+            [
+                .. messages.Select(message => string.Equals(message.Role, "user", StringComparison.OrdinalIgnoreCase) || message.Sequence > coveredSequence
+                    ? message
+                    : message with
+                    {
+                        Content = string.Empty,
+                        Reasoning = null,
+                        Model = null,
+                        MetadataJson = null,
+                        Parts = null
+                    })
+            ];
+        }
+
         return new NodeChatConversationDto(ConversationId,
             "sensor-ingest",
             UserId: null,
             CreatedAtUtc: 0,
             LastSeenUtc: 0,
             Purged: false,
-            [.. History, .. seeds],
+            messages,
             CompactionSummary: CompactionSummary,
             CompactionSummaryCoversToSequence: CompactionCoversToSequence);
     }

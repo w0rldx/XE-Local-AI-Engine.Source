@@ -163,6 +163,12 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
         AssertEx.Equal(package.MessageId, context.Package.ConversationContext[1].Id);
         AssertEx.Equal("latest", context.Package.ConversationContext[1].Content);
         AssertEx.Equal(expected: 6, context.Package.ConversationContext[1].SortOrder);
+
+        // Replayed tool history is a LOOPBACK-only construction: it is attached by the local turn assembler and has no
+        // representation on the wire, because the encrypted history entry the cross-repo hash is computed over carries
+        // no field for it. An inbound package therefore always decrypts to none, whatever the caller sent.
+        AssertEx.True(context.Package.ConversationContext.All(static message => message.ToolExchanges is null),
+            "An API-side package can never carry tool history.");
     }
 
     [Test]

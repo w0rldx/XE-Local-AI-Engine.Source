@@ -276,7 +276,7 @@ describe("IntegrationTriggersPage", () => {
 		});
 	});
 
-	it("saves a caller-managed trigger when every resolved tool is read-local", async () => {
+	it("saves a caller-managed trigger for a read-local agent", async () => {
 		const createMutation = makeMutation();
 		triggerHooksMock.useCreateIntegrationTrigger.mockReturnValue(createMutation);
 		renderPage();
@@ -290,7 +290,10 @@ describe("IntegrationTriggersPage", () => {
 		expect(createMutation.mutate.mock.calls[0]?.[0]).toMatchObject({ body: { sessionPolicy: "CallerManaged" } });
 	});
 
-	it("blocks a caller-managed trigger whose agent resolves a side-effecting tool", async () => {
+	it("saves a caller-managed trigger whose agent resolves a side-effecting tool", async () => {
+		// ADR 0008 R6-1. This form used to refuse the combination on the client, mirroring a backend 400: a
+		// caller-managed session persisted no tool history. It persists and replays it now, so there is no preflight
+		// left and a write-capable agent submits like any other.
 		const createMutation = makeMutation();
 		triggerHooksMock.useCreateIntegrationTrigger.mockReturnValue(createMutation);
 		renderPage();
@@ -299,40 +302,14 @@ describe("IntegrationTriggersPage", () => {
 		await fillRequiredFields("Writer");
 		await selectCallerManaged();
 
-		expect(screen.getByText(/side-effecting tools: run_command/)).toBeTruthy();
+		expect(screen.queryByText(/side-effecting tools/)).toBeNull();
 
-		fireEvent.click(screen.getByTestId("integration-trigger-form-submit"));
-
-		expect(createMutation.mutate).not.toHaveBeenCalled();
-	});
-
-	it("still saves the same agent under the per-invocation policy", async () => {
-		const createMutation = makeMutation();
-		triggerHooksMock.useCreateIntegrationTrigger.mockReturnValue(createMutation);
-		renderPage();
-		await openCreateEditor();
-
-		await fillRequiredFields("Writer");
 		fireEvent.click(screen.getByTestId("integration-trigger-form-submit"));
 
 		expect(createMutation.mutate).toHaveBeenCalledTimes(1);
-	});
-
-	it("blocks caller-managed for a tool the catalog does not know (fail-closed)", async () => {
-		// The point of this case: a fail-open resolver would let exactly the trigger the backend forbids reach it.
-		const createMutation = makeMutation();
-		triggerHooksMock.useCreateIntegrationTrigger.mockReturnValue(createMutation);
-		renderPage();
-		await openCreateEditor();
-
-		await fillRequiredFields("Ghost");
-		await selectCallerManaged();
-
-		expect(screen.getByText(/side-effecting tools: ghost_tool/)).toBeTruthy();
-
-		fireEvent.click(screen.getByTestId("integration-trigger-form-submit"));
-
-		expect(createMutation.mutate).not.toHaveBeenCalled();
+		expect(createMutation.mutate.mock.calls[0]?.[0]).toMatchObject({
+			body: { sessionPolicy: "CallerManaged", targetAgentDefinitionId: "agent-write" },
+		});
 	});
 
 	it("confirms exactly once when a dirty editor is closed from the title bar", async () => {

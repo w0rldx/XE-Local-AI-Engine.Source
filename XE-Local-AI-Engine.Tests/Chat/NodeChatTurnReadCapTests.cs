@@ -166,6 +166,60 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
     }
 
     [Test]
+    public async Task TurnRead_BlanksTheToolPartsOfACoveredRow_WhichIsWhyToolHistoryTakesTheFullRead()
+    {
+        // The cap omits metadata_json, and PARTS live in metadata_json. So the moment a caller keeps a covered
+        // assistant row FOR its tool parts (ConversationContextBuilder with tool history on), the capped read hands it
+        // a row with none and the replay is silently empty. This pins both halves of that fact against real SQLite:
+        // the full read carries the parts, the turn read does not.
+        await using var provider = await BuildProviderAsync("turn-read-cap-parts.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Parts", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var conversationId = conversation.ConversationId;
+
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId, Guid.NewGuid(), "user-one", CreatedAtUtc: 11)).ConfigureAwait(false);
+        var messageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversationId, messageId, requestId);
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, requestId, CreatedAtUtc: 12, "llama")).ConfigureAwait(false);
+        await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 12).ConfigureAwait(false);
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                         NodeChatMessageStatusValues.Completed,
+                         UpdatedAtUtc: 13,
+                         "assistant-one",
+                         Reasoning: null,
+                         Error: null,
+                         "llama",
+                         Parts:
+                         [
+                             new NodeChatMessagePart(NodeChatMessagePartKinds.Tool,
+                                 Sequence: 0,
+                                 Text: null,
+                                 "call-1",
+                                 "save_artifact",
+                                 NodeChatToolPartStates.Received,
+                                 "{\"name\":\"s6.txt\"}",
+                                 "saved")
+                         ]))
+                     .ConfigureAwait(false);
+
+        // The synopsis covers the assistant row itself (sequence 1), which is exactly the shape the survivor rule exists for.
+        await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(conversationId, "SYNOPSIS", CoversToSequence: 1, UpdatedAtUtc: 60)).ConfigureAwait(false);
+
+        var full = AssertEx.NotNull(await service.GetConversationAsync(conversationId).ConfigureAwait(false));
+        var turn = AssertEx.NotNull(await service.GetConversationForTurnAsync(conversationId).ConfigureAwait(false));
+
+        var fromFull = full.Messages.Single(message => message.MessageId == messageId);
+        var part = AssertEx.NotNull(fromFull.Parts, "The full read must carry the persisted tool parts.").Single();
+        AssertEx.Equal("call-1", part.ToolCallId);
+        AssertEx.Equal("saved", part.Result);
+
+        var fromTurn = turn.Messages.Single(message => message.MessageId == messageId);
+        AssertEx.Null(fromTurn.Parts);
+        AssertEx.Equal(string.Empty, fromTurn.Content);
+    }
+
+    [Test]
     public async Task ReadMessageAsync_ReturnsTheSameMessageTheFullReadProjects()
     {
         // ReadMessageAsync used to materialize the WHOLE conversation and pick one entry out of it, on the ~10/s

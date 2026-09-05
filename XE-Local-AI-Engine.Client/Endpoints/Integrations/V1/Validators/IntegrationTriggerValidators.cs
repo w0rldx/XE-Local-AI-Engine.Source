@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Integrations.V1.Mappers;
 
 /// <summary>
 ///     Shape validation only: the name pattern, lengths, enum membership and the input-kind array. The two checks that
-///     need a database — the target agent exists, and a caller-managed trigger's agent is read-only — belong to
+///     need a database — the target agent exists, and it is a single agent rather than an orchestrator — belong to
 ///     <c>IIntegrationTriggerService</c>, because a probe does not belong in a validator.
 /// </summary>
 public static class IntegrationTriggerValidationRules

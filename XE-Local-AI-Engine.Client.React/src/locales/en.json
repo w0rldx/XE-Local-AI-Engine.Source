@@ -5539,7 +5539,7 @@
 					},
 					"toolCatalog": {
 						"loading": "Loading the tool catalog. Tool facts are unknown until it arrives.",
-						"failed": "The tool catalog could not be loaded. Every tool counts as approval-requiring and side-effecting until it can be read."
+						"failed": "The tool catalog could not be loaded. Every tool counts as approval-requiring until it can be read."
 					}
 				},
 				"validation": {
@@ -5548,8 +5548,7 @@
 					"displayNameTooLong": "The display name is longer than the 128-character limit.",
 					"descriptionTooLong": "The description is longer than the 1024-character limit.",
 					"targetRequired": "A target agent is required.",
-					"inputKindRequired": "Select at least one accepted input kind.",
-					"sessionPolicyTools": "A caller-managed session is not allowed for an agent that can call side-effecting tools: {{tools}}. Choose a new session per call, or remove those tools from the agent."
+					"inputKindRequired": "Select at least one accepted input kind."
 				},
 				"approvalWarning": {
 					"title": "Approval-requiring tools",
@@ -6079,6 +6078,7 @@
 			"passwordLabel": "Password",
 			"signInButton": "Sign in",
 			"errorIncorrectPassword": "Incorrect password. Please try again.",
+			"errorLockedOut": "Too many failed sign-in attempts. This account is locked. Try again in {{minutes}} min.",
 			"errorNodeUnreachable": "Can't reach the node. Check that it's running and try again.",
 			"errorGeneric": "Sign in failed. Please try again."
 		},

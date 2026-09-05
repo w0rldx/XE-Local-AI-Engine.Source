@@ -2,9 +2,12 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 public sealed class ConversationContextBudgeterTests
 {
@@ -90,6 +93,37 @@ public sealed class ConversationContextBudgeterTests
         AssertEx.Equal(expected: 4, result.Messages.Count);
         AssertEx.Empty(ResultCallIds(result.Messages));
         AssertEx.Empty(CallCallIds(result.Messages));
+        AssertNoOrphanedToolResults(result.Messages);
+    }
+
+    [Test]
+    public void Budget_WhenDroppingAReplayedToolExchange_DropsTheCallAndItsResultTogether()
+    {
+        // The same pair-integrity property, but on the messages the REPLAY actually emits rather than a hand-built
+        // imitation of them: a caller-managed continuation renders its history through InvocationRunner, and the
+        // budgeter's turn grouping has to treat that shape the way it treats a live tool round.
+        var replayed = InvocationRunner.BuildChatMessages(RuntimePackageBuilder.Valid()
+                                                                               .WithUserMessage("u0")
+                                                                               .WithToolExchangeMessage("a0",
+                                                                                   sortOrder: 1,
+                                                                                   new ConversationToolExchange("call-1", "search", "{}", "old result", IsError: false))
+                                                                               .Build());
+
+        var messages = new List<ChatMessage>(replayed)
+        {
+            User("u1"),
+            Assistant("a1"),
+            User("u2"),
+            Assistant("a2")
+        };
+        var sut = CreateSut(FixedEstimator(perMessage: 10), recentTurnKeepCount: 2);
+
+        // 80 tokens total; budget 45 forces turn 0 (the user message plus the replayed call, result and answer) out.
+        var result = sut.Budget(messages, contextTokenCapacity: 45, reservedOutputTokens: 0);
+
+        AssertEx.True(result.Trimmed);
+        AssertEx.Empty(CallCallIds(result.Messages));
+        AssertEx.Empty(ResultCallIds(result.Messages));
         AssertNoOrphanedToolResults(result.Messages);
     }
 

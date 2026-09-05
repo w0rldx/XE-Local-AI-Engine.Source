@@ -23,7 +23,8 @@ public interface INodeChatPersistenceService
     ///     the conversation's compaction synopsis has already replaced — work the turn always threw away. Output-equivalent
     ///     for the turn's two consumers only (context assembly and memory extraction); the implementation's remarks carry
     ///     the equivalence argument. Anything that RENDERS or RE-PERSISTS a conversation must use
-    ///     <see cref="GetConversationAsync" />.
+    ///     <see cref="GetConversationAsync" /> — and so must a turn that replays persisted tool history, which reads the
+    ///     omitted metadata blob of exactly the covered rows this read blanks.
     /// </summary>
     Task<NodeChatConversationDto?> GetConversationForTurnAsync(Guid conversationId, CancellationToken cancellationToken = default);
 

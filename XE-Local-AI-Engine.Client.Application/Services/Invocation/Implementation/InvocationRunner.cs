@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Agents.AI;
@@ -858,6 +859,23 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // re-emitted FunctionCallContent can be recognised as a repeat before it pays another serialize + dispatch.
         var pendingLocalToolCalls = new Dictionary<string, RequestedToolCall>(StringComparer.Ordinal);
 
+        // Surrogate ids for a provider that streams a FunctionCallContent with a BLANK CallId (Microsoft.Extensions.AI
+        // rejects a null one, so the empty string is the id-less shape). The FIRST call to a tool keys on the tool
+        // NAME — the id ToolApprovalCoordinator's approval card already resolves, so the two stay correlated — and
+        // every later id-less call to that tool gets "<name>#2", "<name>#3".
+        // ONCE CLOSED, NEVER REUSED: a surrogate whose result has arrived is retired, so a second SEQUENTIAL call to
+        // the same tool cannot land on the first call's key — where an identical payload would be swallowed as a
+        // streamed re-emission and a different one would merge the first call's arguments with the last result.
+        // usedSurrogateNames is therefore ever-used, not currently-open. openSurrogateCallIds maps a tool name to the
+        // surrogate still awaiting a result, which is what an OVERLAPPING call to the same tool is told apart by, and
+        // pendingSurrogateResults is the arrival-ordered queue the matching FunctionResultContent — carrying the
+        // call's own blank id — is paired back through. An approval-gated tool on an id-less provider therefore
+        // correlates only its FIRST card, a pre-existing limitation of having no id and not widened here.
+        var openSurrogateCallIds = new Dictionary<string, string>(StringComparer.Ordinal);
+        var usedSurrogateNames = new HashSet<string>(StringComparer.Ordinal);
+        var pendingSurrogateResults = new Queue<(string Name, string CallId)>();
+        var surrogateCallCount = 1;
+
         // Tracks which tools this turn has already surfaced a ToolDisabled notice for, so a model that keeps calling a
         // disabled tool (each further call short-circuits to the same "tool_disabled" result — see
         // ToolArgumentRepairAIFunction) is reported to the chat exactly once per tool, not once per call.
@@ -981,7 +999,22 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                 break;
 
                             case FunctionCallContent functionCall:
-                                var callId = ResolveToolCallCardId(functionCall.CallId, functionCall.Name);
+                                // A provider that streams a BLANK CallId gets an invocation-local surrogate (see
+                                // openSurrogateCallIds above), so a second same-name call is its own card and its
+                                // result is not reported under an id the Requested event never used.
+                                var callName = functionCall.Name ?? string.Empty;
+                                var openSurrogate = string.IsNullOrEmpty(functionCall.CallId) && openSurrogateCallIds.TryGetValue(callName, out var open)
+                                    ? open
+                                    : null;
+                                var callId = openSurrogate ?? ResolveToolCallCardId(functionCall.CallId, functionCall.Name);
+
+                                // A retired surrogate is never revived. This runs BEFORE the repeat checks below so
+                                // they compare against the fresh key and cannot mistake a genuine second call for a
+                                // re-emission of the finished one.
+                                if (string.IsNullOrEmpty(functionCall.CallId) && openSurrogate is null && usedSurrogateNames.Contains(callName))
+                                {
+                                    callId = string.Concat(callName, "#", (++surrogateCallCount).ToString(CultureInfo.InvariantCulture));
+                                }
 
                                 // A provider that re-emits the SAME call across streamed chunks would otherwise pay a
                                 // fresh Serialize + dispatch + SignalR frame per repeat — and, worse, each repeat is
@@ -989,7 +1022,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                 // event. Both guards below are conservative: a genuinely distinct call, or the same call
                                 // id whose arguments changed, still reports exactly as before.
                                 var isRepeatedCall = pendingLocalToolCalls.TryGetValue(callId, out var alreadyRequested)
-                                                     && string.Equals(alreadyRequested.Name, functionCall.Name, StringComparison.Ordinal);
+                                                     && string.Equals(alreadyRequested.Name, callName, StringComparison.Ordinal);
 
                                 // Same content instance re-emitted: identical by construction, so skip the serialize too.
                                 if (isRepeatedCall && ReferenceEquals(alreadyRequested.Arguments, functionCall.Arguments))
@@ -1010,13 +1043,33 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                     break;
                                 }
 
-                                pendingLocalToolCalls[callId] = new RequestedToolCall(functionCall.Name, functionCall.Arguments, serializedArguments);
+                                if (string.IsNullOrEmpty(functionCall.CallId))
+                                {
+                                    // Reaching here with a surrogate still OPEN means the payload DIFFERS from that
+                                    // call's. With no id the two readings — a second overlapping call, or the same
+                                    // card's arguments being revised — are indistinguishable on the wire, and
+                                    // collapsing them loses a whole call and its result, where separating them at
+                                    // worst renders one extra card.
+                                    if (openSurrogate is not null)
+                                    {
+                                        callId = string.Concat(callName, "#", (++surrogateCallCount).ToString(CultureInfo.InvariantCulture));
+                                    }
+
+                                    _ = usedSurrogateNames.Add(callName);
+                                    openSurrogateCallIds[callName] = callId;
+                                    pendingSurrogateResults.Enqueue((callName, callId));
+                                }
+
+                                // callName, not functionCall.Name: the local above null-coalesces the property, which
+                                // leaves the compiler treating it as maybe-null while the record's Name is not. They
+                                // are the same string whenever the provider gave a name at all.
+                                pendingLocalToolCalls[callId] = new RequestedToolCall(callName, functionCall.Arguments, serializedArguments);
 
                                 await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
                                 {
                                     InvocationId = package.InvocationId,
                                     ToolCallId = callId,
-                                    ToolName = functionCall.Name,
+                                    ToolName = callName,
                                     Phase = ToolCallLifecyclePhase.Requested,
                                     Arguments = serializedArguments,
                                     RequiresApproval = false
@@ -1024,7 +1077,27 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                 break;
 
                             case FunctionResultContent functionResult:
+                                // MEAI stamps the result with the CALL's id, so a call that carried a blank one yields
+                                // a result that carries a blank one. Pair it with the oldest surrogate still awaiting a
+                                // result — results arrive in call order for a provider that emits no ids — rather than
+                                // reporting Completed under the empty string, which every consumer correlating on the
+                                // id drops (the chat part accumulator refuses an empty id outright), leaving the call
+                                // recorded as requested-but-never-finished while its Requested half went out under the
+                                // tool name.
                                 var resultCallId = functionResult.CallId ?? string.Empty;
+                                if (string.IsNullOrEmpty(resultCallId) && pendingSurrogateResults.TryDequeue(out var surrogate))
+                                {
+                                    resultCallId = surrogate.CallId;
+
+                                    // That call is closed: the next same-name call with no id opens its own card
+                                    // instead of reviving this one.
+                                    if (openSurrogateCallIds.TryGetValue(surrogate.Name, out var stillOpen)
+                                        && string.Equals(stillOpen, resultCallId, StringComparison.Ordinal))
+                                    {
+                                        _ = openSurrogateCallIds.Remove(surrogate.Name);
+                                    }
+                                }
+
                                 var toolName = pendingLocalToolCalls.TryGetValue(resultCallId, out var requested)
                                     ? requested.Name
                                     : resultCallId;
@@ -1252,13 +1325,19 @@ public sealed partial class InvocationRunner : IInvocationRunner
     }
 
     // Derives the tool-call id that keys a tool-call card in the UI: the wire CallId when present, otherwise the tool
-    // name (so an absent CallId still maps to a stable, human-meaningful key). Shared by the streaming tool-call
-    // lifecycle and the approval lifecycle so both events resolve the SAME id for the same call — including a non-null
-    // EMPTY-STRING CallId, which the two paths previously handled differently — letting the browser attach the
-    // Approve/Deny controls to the matching card. Internal (not private) purely as a test seam via
-    // InternalsVisibleTo; not part of the public contract.
+    // name (so a call id the provider left BLANK still maps to a stable, human-meaningful key). Shared by the streaming
+    // tool-call lifecycle and the approval lifecycle so both events resolve the SAME id for the same call — the
+    // previously-divergent EMPTY-STRING case included — letting the browser attach the Approve/Deny controls to the
+    // matching card. Microsoft.Extensions.AI rejects a null CallId in the FunctionCallContent/FunctionResultContent
+    // constructors (verified against 10.9.0), so the empty string IS the id-less shape; resolving it to the tool name
+    // rather than propagating the blank is what lets an id-less call be recorded at all — every consumer that
+    // correlates a call with its result drops a blank id, and NodeChatPartAccumulator refuses one outright.
+    // The streaming loop layers ONE thing on top of this: while an id-less call to a tool is still awaiting its result,
+    // a further id-less call to the SAME tool takes a "<name>#N" surrogate rather than overwriting the first card. The
+    // first such call still resolves to exactly this value, so the approval card stays correlated. Internal (not
+    // private) purely as a test seam via InternalsVisibleTo; not part of the public contract.
     internal static string ResolveToolCallCardId(string? callId, string? toolName) =>
-        callId ?? toolName ?? string.Empty;
+        string.IsNullOrEmpty(callId) ? toolName ?? string.Empty : callId;
 
     private async Task TryReportCapabilitiesAfterInvocationAsync(Guid invocationId)
     {

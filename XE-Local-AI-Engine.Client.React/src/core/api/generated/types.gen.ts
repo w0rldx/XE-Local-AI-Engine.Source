@@ -5166,6 +5166,12 @@ export type XeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest = {
 	password: string;
 };
 
+export type XeLocalAiEngineClientEndpointsAuthV1NodeLoginLockedOutResponse = {
+	message: string;
+	code?: string;
+	retryAfterSeconds: number;
+};
+
 export type XeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = {
 	accessToken: string;
 	expiresAtUtc: string;
@@ -17474,6 +17480,10 @@ export type NodeLoginErrors = {
 	 * Bad Request
 	 */
 	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: XeLocalAiEngineClientEndpointsAuthV1NodeLoginLockedOutResponse;
 };
 
 export type NodeLoginError = NodeLoginErrors[keyof NodeLoginErrors];

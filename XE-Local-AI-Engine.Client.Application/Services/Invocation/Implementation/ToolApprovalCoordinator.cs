@@ -235,8 +235,8 @@ public sealed class ToolApprovalCoordinator
             await dispatcher.ReportApprovalRequestedAsync(approvalPayload).ConfigureAwait(false);
 
             // Surface the pending approval on the LOCAL chat stream. The CallId is derived through the SAME
-            // helper the streaming tool-call-requested lifecycle uses (CallId, falling back to the tool name) so both
-            // events resolve the identical id — including for a non-null EMPTY-STRING CallId — and the browser can
+            // helper the streaming tool-call-requested lifecycle uses (CallId, falling back to the tool name when it is
+            // absent OR blank) so both events resolve the identical id, and the browser can
             // attach the Approve/Deny controls to the matching tool-call card. In desktop/local mode there is no worker
             // hub to resolve the approval, so the loopback resolve endpoint feeds ResolveApprovalResult below. ToolCall
             // is the base ToolCallContent (CallId only); the concrete FunctionCallContent carries the tool name.
@@ -322,11 +322,12 @@ public sealed class ToolApprovalCoordinator
         // finds what is stashed here.
         var callId = InvocationRunner.ResolveToolCallCardId(approvalRequest.ToolCall.CallId, AskUserTool.ToolName);
 
-        // ResolveToolCallCardId deliberately preserves a non-null EMPTY-STRING CallId so the card key matches the
-        // streaming lifecycle's. The stash cannot key on blank, so it falls back to the tool name — the handler will
-        // then miss and return its fail-safe, which is the right degradation: a provider that emits no call id gives the
-        // framework nothing to correlate on either, and a wrong answer is worse than an honest "not collected".
-        var stashKey = string.IsNullOrEmpty(callId) ? AskUserTool.ToolName : callId;
+        // ResolveToolCallCardId already resolves a blank CallId to the tool name, so this key is never blank. When the
+        // provider gave no id the key IS the tool name while the handler looks up its own blank CurrentContext
+        // .CallContent.CallId — it therefore misses and returns its fail-safe, which is the right degradation: a
+        // provider that emits no call id gives the framework nothing to correlate on either, and a wrong answer is
+        // worse than an honest "not collected".
+        var stashKey = callId;
 
         if (!UserQuestionParser.TryParse((approvalRequest.ToolCall as FunctionCallContent)?.Arguments, out var questions, out var parseError))
         {

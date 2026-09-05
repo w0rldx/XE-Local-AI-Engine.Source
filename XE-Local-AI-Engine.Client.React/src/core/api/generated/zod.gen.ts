@@ -6478,6 +6478,15 @@ export const zXeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest = z.object({
 	password: z.string().min(12).max(256),
 });
 
+export const zXeLocalAiEngineClientEndpointsAuthV1NodeLoginLockedOutResponse = z.object({
+	message: z.string(),
+	code: z.string().optional(),
+	retryAfterSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = z.object({
 	accessToken: z.string(),
 	expiresAtUtc: z.iso.datetime({ offset: true }),

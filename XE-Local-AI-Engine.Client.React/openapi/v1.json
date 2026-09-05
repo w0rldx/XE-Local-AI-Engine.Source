@@ -19753,6 +19753,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAuthV1NodeLoginLockedOutResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -39198,6 +39208,26 @@
             "maxLength": 256,
             "minLength": 12,
             "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAuthV1NodeLoginLockedOutResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message",
+          "retryAfterSeconds"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "retryAfterSeconds": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
