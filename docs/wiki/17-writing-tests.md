@@ -37,6 +37,10 @@ A test must not depend on another test having run, on execution order, or on sta
 - Frontend: `restoreMocks`, `unstubEnvs` and `unstubGlobals` are on, and `src/test/Cleanup.ts` runs React Testing
   Library's `cleanup` after each test — a Zustand store, a `localStorage` key or a module-level `let` is still
   yours to reset in `beforeEach`.
+- A loopback port obtained by binding `:0` and releasing it is a **candidate**, not a reservation — another
+  process on the box can take it before your child process or server binds it. Hold the listener when the port
+  is the test's target, and go through `Testing/LoopbackPort.cs` (`Reserve` + `BindWithRetryAsync`) when
+  something else must bind it, retrying on the product's own in-use signal.
 
 A test that passes only in isolation is not independent; it is broken and coincidentally green.
 
