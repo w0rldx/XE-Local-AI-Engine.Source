@@ -429,12 +429,34 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ChangesRequestingReviewerModel()).ConfigureAwait(false);
         await using var scope = provider.CreateAsyncScope();
 
-        var (seed, _, review) = await RunThroughReviewAsync(scope.ServiceProvider, repository).ConfigureAwait(false);
+        var (seed, reviewerAttemptId, review) = await RunThroughReviewAsync(scope.ServiceProvider, repository).ConfigureAwait(false);
         AssertEx.Equal(DevelopmentReviewDisposition.ChangesRequested, review.Disposition);
         AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, review.TaskStatus);
         await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => scope.ServiceProvider.GetRequiredService<IDevelopmentApplyService>()
                                                                                      .PreviewAsync(seed.TaskId, Binding(seed, repository)))
                       .ConfigureAwait(false);
+
+        // FU4-1, and asserted on the ChangesRequested path on purpose: the reviewer's prompt is written before the
+        // model is called, so it is there whatever the model then decides. It is the only system record of what the
+        // reviewer was told; every earlier claim about it was quoted back by the model itself.
+        var prompts = (await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ListArtifactsAsync(seed.TaskId).ConfigureAwait(false))
+                      .Where(static artifact => artifact.Kind == Client.Persistence.Entities.DevelopmentArtifactKind.Prompt)
+                      .ToArray();
+        var reviewerPrompt = AssertEx.NotNull(prompts.SingleOrDefault(artifact => artifact.AttemptId == reviewerAttemptId));
+        AssertEx.Equal(review.SubjectHash, reviewerPrompt.SubjectHash);
+        var payload = await scope.ServiceProvider.GetRequiredService<IDevelopmentArtifactBlobStore>()
+                                 .ReadAsync(reviewerPrompt.ProjectId, reviewerPrompt.Id, reviewerPrompt.ContentHash, reviewerPrompt.ByteCount)
+                                 .ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentArtifactReadStatus.Found, payload.Status);
+        var promptText = Encoding.UTF8.GetString(payload.Content.Span);
+        AssertEx.Contains(promptText, "Validated subject: " + review.SubjectHash);
+        AssertEx.Contains(promptText, "Validation passed: True");
+        AssertEx.Contains(promptText, "Use only the read-only tools.");
+
+        // The coder's own round left one too, so the pair reads as the whole conversation the task was given. Asserted
+        // as "some other attempt also has one" rather than as a count, so this breaks on a prompt-persistence
+        // regression and not on a future change to the shared helper's round count.
+        AssertEx.Contains(prompts, artifact => artifact.AttemptId != reviewerAttemptId);
     }
 
     [Test]
@@ -1391,6 +1413,10 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             MaxOutputTokens = 2048
         });
         var services = new ServiceCollection();
+
+        // Both attempt runners take an ILogger now, to make a swallowed prompt-persistence failure audible. This
+        // container is hand-built rather than the host's, so nothing registered the logging services it resolves.
+        services.AddLogging();
         services.AddSingleton<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
         services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(dataRoot));
         services.AddSingleton(TimeProvider.System);

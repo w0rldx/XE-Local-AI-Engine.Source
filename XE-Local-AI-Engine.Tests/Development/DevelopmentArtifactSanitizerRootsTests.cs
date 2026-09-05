@@ -169,6 +169,34 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
         AssertEx.Contains(sanitized.StandardOutput, "[REDACTED:development-path]");
     }
 
+    /// <summary>
+    ///     FU4-1: a prompt is ENGINE-authored text, so it redacts rather than rejecting. Both inputs here are shapes a
+    ///     real coder prompt carries — the workspace's carried-file list names paths, and a rework brief quotes the
+    ///     gate's own complaint, which quotes a failing test name — and each on its own clears the secret scanner's
+    ///     keyword-free entropy fallback. Rejecting on a match would lose the prompt of exactly the attempts whose
+    ///     prompt is worth having.
+    /// </summary>
+    [Test]
+    public void SanitizePromptText_RedactsAProtectedRootAndAHighEntropyToken_InsteadOfRejecting()
+    {
+        const string Prompt = "Task: fix the build\nFiles in this shared workspace that already differ from the base commit: "
+                              + RepositoryRoot
+                              + "/src/Lib/Calculator.cs\nfailing test ApplyThinkingSwitch_MarkerAbsent_BodyHasNoChatTemplateKwargs\n";
+
+        var sanitized = DevelopmentArtifactSanitizer.SanitizePromptText(Prompt, RepositoryRoot);
+
+        AssertEx.False(sanitized.Contains(RepositoryRoot, StringComparison.Ordinal), sanitized);
+        AssertEx.Contains(sanitized, "[REDACTED:development-path]/src/Lib/Calculator.cs");
+        AssertEx.Contains(sanitized, "[REDACTED:high-entropy-token]");
+
+        // Still a usable prompt record: the instruction around the redactions survives.
+        AssertEx.Contains(sanitized, "Task: fix the build");
+        AssertEx.Contains(sanitized, "failing test ");
+
+        // The distinction being asserted: the model-authored path rejects the very same text outright.
+        Assert.Throws<DevelopmentWorkspaceSecurityException>(() => DevelopmentArtifactSanitizer.SanitizeText(Prompt, RepositoryRoot));
+    }
+
     [Test]
     public void ResolveProtectedRoots_CoversBothTheHostAndTheSandboxNamesForTheSameDirectories()
     {

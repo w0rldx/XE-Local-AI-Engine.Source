@@ -365,4 +365,29 @@ describe("DevelopmentLivePanel artifact viewer", () => {
 		const viewer = await screen.findByTestId("development-artifact-content-artifact-1");
 		expect(viewer.getAttribute("data-language")).toBe("json");
 	});
+
+	it("opens a recorded prompt from the details tab as plain text", async () => {
+		// FU4-1: what the model was TOLD is reachable without knowing an artifact id. It is neither a changed file nor
+		// evidence, so it lives in details rather than widening either curated tab's kind pair.
+		const promptArtifact: DevelopmentArtifact = { ...validationArtifact, id: "artifact-prompt", kind: "Prompt" };
+		queriesMock.useDevelopmentArtifactContent.mockImplementation((_project, _task, artifactId) => ({
+			data: artifactId === "artifact-prompt" ? { artifact: promptArtifact, content: "Task: implement the feature" } : undefined,
+			isPending: artifactId !== "artifact-prompt",
+			error: null,
+		}));
+
+		renderPanel([validationArtifact, promptArtifact]);
+		fireEvent.click(within(screen.getByTestId("development-prompt-artifacts")).getByTestId("development-artifact-view-artifact-prompt"));
+
+		const viewer = await screen.findByTestId("development-artifact-content-artifact-prompt");
+		expect(viewer.getAttribute("data-language")).toBe("plaintext");
+		expect(viewer.textContent).toBe("Task: implement the feature");
+	});
+
+	it("says so when no prompt was recorded, rather than showing an empty section", () => {
+		renderPanel([validationArtifact]);
+
+		const prompts = screen.getByTestId("development-prompt-artifacts");
+		expect(within(prompts).getByText("No prompt was recorded for this task yet.")).toBeTruthy();
+	});
 });

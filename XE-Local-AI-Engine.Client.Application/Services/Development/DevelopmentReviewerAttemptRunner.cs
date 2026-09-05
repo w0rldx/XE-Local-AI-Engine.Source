@@ -31,6 +31,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
     private readonly IDevelopmentEvidenceService _evidence;
     private readonly IDevelopmentCloudAttemptContextService _cloudContext;
     private readonly IDevelopmentAttemptLiveBroker? _liveBroker;
+    private readonly ILogger<DevelopmentReviewerAttemptRunner> _logger;
     private readonly DevelopmentOptions _options;
     private readonly IDevelopmentReviewerModel _reviewerModel;
     private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
@@ -46,8 +47,10 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
         IDevelopmentCloudAttemptContextService cloudContext,
         IOptions<DevelopmentOptions> options,
         TimeProvider timeProvider,
+        ILogger<DevelopmentReviewerAttemptRunner> logger,
         IDevelopmentAttemptLiveBroker? liveBroker = null)
     {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _workspaceProvider = workspaceProvider ?? throw new ArgumentNullException(nameof(workspaceProvider));
         _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
@@ -106,16 +109,23 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                 validationArtifact,
                 validationReport,
                 timeout.Token).ConfigureAwait(false);
+            var protectedRoots = DevelopmentArtifactSanitizer.ResolveProtectedRoots(repository.RepositoryRoot, session);
+            var prompt = BuildPrompt(snapshot, task, validationReport, profile);
+            await PersistPromptAsync(snapshot,
+                prompt,
+                evidence,
+                validationArtifact.Id,
+                profile,
+                protectedRoots).ConfigureAwait(false);
             var model = await _reviewerModel.RunAsync(snapshot.ModelId,
-                BuildPrompt(snapshot, task, validationReport, profile),
+                prompt,
                 tools,
                 maxOutputTokens,
                 _options.MaxToolCalls,
                 liveProgress,
                 cloudContext?.Route,
                 timeout.Token).ConfigureAwait(false);
-            var submission = DevelopmentArtifactSanitizer.Sanitize(model.Submission,
-                DevelopmentArtifactSanitizer.ResolveProtectedRoots(repository.RepositoryRoot, session));
+            var submission = DevelopmentArtifactSanitizer.Sanitize(model.Submission, protectedRoots);
 
             var afterReview = await _evidence.ResolveCurrentAsync(snapshot.TaskId, session, timeout.Token).ConfigureAwait(false);
             if (!string.Equals(evidence.Current.SubjectHash, afterReview.Current.SubjectHash, StringComparison.OrdinalIgnoreCase))
@@ -188,6 +198,43 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
             }
 
             throw;
+        }
+    }
+
+    /// <summary>
+    ///     Records what this round TOLD the reviewer, before the reviewer is called. Unlike the coder's, this prompt
+    ///     names a subject that already exists, so it carries the full patch evidence and cites the artifacts it was
+    ///     built from. Best-effort for the same reason as the coder's, and under <see cref="CancellationToken.None" />
+    ///     for the same reason too: a review that ends in a cancelled attempt or a rejected submission is exactly the
+    ///     one whose prompt is worth having, so the attempt's own deadline must not be able to cancel the record of
+    ///     it, and an observation must never be able to fail the attempt it observes. The swallow is logged.
+    /// </summary>
+    private async Task PersistPromptAsync(DevelopmentExecutionSnapshot snapshot,
+        string prompt,
+        DevelopmentEvidenceSet evidence,
+        Guid validationArtifactId,
+        DevelopmentCommandProfile profile,
+        string[] protectedRoots)
+    {
+        try
+        {
+            var sanitized = DevelopmentArtifactSanitizer.SanitizePromptText(prompt, protectedRoots);
+            var prepared = await _evidence.PrepareAsync(snapshot,
+                DevelopmentArtifactKind.Prompt,
+                Encoding.UTF8.GetBytes(sanitized),
+                evidence.Current,
+                [evidence.PatchArtifact.Id, evidence.ManifestArtifact.Id, validationArtifactId],
+                ProfileVersion,
+                profile.ComputeDigest(),
+                CancellationToken.None).ConfigureAwait(false);
+            _ = await _store.AttachArtifactAsync(prepared.Attachment, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception,
+                "Development reviewer prompt for attempt {AttemptId} on task {TaskId} was not recorded.",
+                snapshot.AttemptId,
+                snapshot.TaskId);
         }
     }
 

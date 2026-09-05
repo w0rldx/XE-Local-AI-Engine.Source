@@ -467,7 +467,9 @@
 					"predecessor": "Predecessor",
 					"activity": "Current activity",
 					"subject": "Subject",
-					"events": "Durable events"
+					"events": "Durable events",
+					"prompts": "Prompts",
+					"noPrompts": "No prompt was recorded for this task yet."
 				}
 			},
 			"artifacts": {

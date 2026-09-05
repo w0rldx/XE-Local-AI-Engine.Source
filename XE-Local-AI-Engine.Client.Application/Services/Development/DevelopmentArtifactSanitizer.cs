@@ -206,6 +206,17 @@ internal static partial class DevelopmentArtifactSanitizer
     }
 
     /// <summary>
+    ///     Sanitizes an ENGINE-authored prompt. Redacts rather than rejecting, for the same reason
+    ///     <see cref="Sanitize(DevelopmentCommandEvidence, string[])" /> does: a coder or reviewer prompt is assembled
+    ///     here out of the task title, its requirements, the base commit, the workspace's carried-file list and the
+    ///     operator's own instruction — text that legitimately carries absolute paths and long hashes, not model prose
+    ///     that has no business containing one. Rejecting on a match would mean the attempts whose prompts are most
+    ///     worth recording are exactly the ones that leave no record.
+    /// </summary>
+    internal static string SanitizePromptText(string text, params string[] protectedRoots) =>
+        SanitizeText(text, allowRedaction: true, protectedRoots);
+
+    /// <summary>
     ///     Sanitizes model-authored artifact text. Any credential-like match rejects the whole artifact — a reviewer
     ///     submission has no business containing one, so there is nothing to salvage by redacting it.
     /// </summary>
