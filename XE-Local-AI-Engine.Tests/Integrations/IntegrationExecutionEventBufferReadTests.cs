@@ -484,11 +484,12 @@ public sealed class IntegrationExecutionEventBufferReadTests
 
     /// <summary>
     ///     A negative assertion needs a settling window: the reader must be given the chance to yield and then be shown
-    ///     not to have. Kept short because every use pairs it with a positive assertion afterwards.
+    ///     not to have. Draining the scheduler is that chance, without a wall-clock guess that only fails when the
+    ///     reader gets slower.
     /// </summary>
     private static async Task AssertStaysAtAsync(Reader reader, int expected, string? message = null)
     {
-        await Task.Delay(TimeSpan.FromMilliseconds(80));
+        await AssertEx.SettleAsync();
         AssertEx.Equal(expected, reader.Snapshot().Count, message);
     }
 

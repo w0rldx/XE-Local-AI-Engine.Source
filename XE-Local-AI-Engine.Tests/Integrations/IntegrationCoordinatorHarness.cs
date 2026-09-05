@@ -586,7 +586,9 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         await _leaseSlot.WaitAsync(cancellationToken).ConfigureAwait(false);
         if (LeaseDelay > TimeSpan.Zero)
         {
-            // Deliberately NOT linked to the deadline token: the lease has to arrive LATE, not be cancelled.
+            // real-timer: arriving late is the input. Deliberately NOT linked to the deadline token — the lease has to
+            // arrive after the coordinator's own deadline elapses, not be cancelled by it, and that deadline is real
+            // wall clock inside the coordinator.
             await Task.Delay(LeaseDelay, CancellationToken.None).ConfigureAwait(false);
         }
 
