@@ -47,9 +47,11 @@ public enum LlamaServerLoadAttemptKind
 /// </summary>
 /// <remarks>
 ///     <para>
-///         Every member except <see cref="ModelName" /> is content-free and bounded-cardinality. The model name is
-///         carried so a host-side consumer can key a per-model record; it must NOT reach a metric tag, where it would
-///         be unbounded cardinality (the meter bridge deliberately tags role/variant/outcome only).
+///         Every member is content-free, but only the DIMENSIONS are bounded-cardinality: role, variant, outcome,
+///         placement, attempt kind and speculative class. <see cref="ModelName" />, <see cref="RuntimeVersion" /> and
+///         <see cref="RuntimeSha256" /> are identities and unbounded — a new build or a new model is a new value — so
+///         they are carried for a host-side consumer to key a record on and must NOT reach a metric tag (the meter
+///         bridge deliberately tags role/variant/outcome only).
 ///     </para>
 /// </remarks>
 /// <param name="ModelName">

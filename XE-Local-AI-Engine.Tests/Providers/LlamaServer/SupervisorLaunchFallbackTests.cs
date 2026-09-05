@@ -285,6 +285,55 @@ public sealed class SupervisorLaunchFallbackTests
     }
 
     /// <summary>Health probe whose readiness wait fails once (the optimized spawn) then succeeds (the safe retry).</summary>
+    /// <summary>
+    ///     Post-readiness bookkeeping still decides whether this spawn produced a serving process. When persisting the
+    ///     safe-retry verdict throws, the child is tree-killed and the spawn fails — so the Ready observation must
+    ///     never have been raised, or the host's last-load VRAM cache would hold a load for a process that never
+    ///     served. Exactly one observation per attempt, and both of them failures.
+    /// </summary>
+    [Test]
+    public async Task EnsureRunning_WhenRecordingTheSafeRetryVerdictThrows_RaisesNoReadyObservation()
+    {
+        var telemetry = new FakeLlamaServerLoadTelemetry();
+        await using var supervisor = SupervisorFactory.Create(new FakeProcessLauncher(),
+            // Every optimized candidate fails readiness and every safe retry reaches it, so each restart attempt gets
+            // all the way to the verdict write — which is the step that then throws.
+            healthProbe: new OnlySafeRetryReachesReadinessHealthProbe(),
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            launchFallbackStore: new ThrowingOnWriteFallbackStore(),
+            loadTelemetry: telemetry);
+
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None));
+
+        var observations = telemetry.Observations.ToArray();
+        AssertEx.True(observations.Any(observation => observation.AttemptKind == LlamaServerLoadAttemptKind.SafeRetry),
+            "The safe retry has to have run, or this test proves nothing about the step after readiness.");
+        AssertEx.False(observations.Any(observation => observation.Outcome == LlamaServerReadinessOutcome.Ready),
+            "Every safe retry reached readiness and was then killed by the failing verdict write. A Ready observation would tell the host — and its last-load VRAM cache — that a process which never served had loaded.");
+    }
+
+    /// <summary>Fails every odd readiness wait and passes every even one: the optimized candidate never gets ready, the safe retry always does.</summary>
+    private sealed class OnlySafeRetryReachesReadinessHealthProbe : ILlamaServerHealthProbe
+    {
+        private int _readinessCalls;
+
+        public Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct) =>
+            Task.FromResult(Interlocked.Increment(ref _readinessCalls) % 2 == 0);
+
+        public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct) => Task.FromResult(true);
+
+        public Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct) => Task.FromResult<int?>(null);
+    }
+
+    /// <summary>Reads normally; the WRITE the safe-retry verdict needs fails, which is what aborts the launch.</summary>
+    private sealed class ThrowingOnWriteFallbackStore : ILlamaServerLaunchFallbackStore
+    {
+        public Task<bool> IsOptimizedConfigDisabledAsync(GpuVariant variant, string kvCacheType, CancellationToken ct) => Task.FromResult(false);
+
+        public Task DisableOptimizedConfigAsync(GpuVariant variant, string kvCacheType, CancellationToken ct) =>
+            throw new IOException("The launch-fallback state file could not be replaced.");
+    }
+
     private sealed class FirstReadinessFailsHealthProbe : ILlamaServerHealthProbe
     {
         private int _readinessCalls;
