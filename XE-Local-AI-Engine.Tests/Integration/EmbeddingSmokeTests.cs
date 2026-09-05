@@ -13,6 +13,8 @@ public sealed class EmbeddingSmokeTests
     private const int ExpectedEmbeddingDimensions = 4096;
 
     [Test]
+    // Sets ConnectionStrings__chat / ConnectionStrings__embeddings, which are process-global; serialize on both.
+    [NotInParallel(["ConnectionStrings__chat", "ConnectionStrings__embeddings"])]
     public async Task IEmbeddingGenerator_GeneratesEmbedding_WhenLocalOllamaIsEnabled()
     {
         if (!string.Equals(Environment.GetEnvironmentVariable("RUN_LOCAL_INTEGRATION"), "true", StringComparison.OrdinalIgnoreCase))

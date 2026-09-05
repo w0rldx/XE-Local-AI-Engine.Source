@@ -71,11 +71,13 @@ public sealed class McpClientFactoryLoopbackTests
     }
 
     [Test]
+    [NotInParallel("XE_AUDIT5_MCP_PARENT_SECRET")]
     public void BuildStdioTransportOptions_DoesNotInheritParentEnvironment_SeedsDefaults_OverlaysPerServerVars()
     {
         // A secret in the parent process environment (env-provisioned XE_NODE_SQLITE_KEY is the audited leak) must never
         // reach a stdio MCP child. Seeding only the SDK default set with InheritEnvironmentVariables=false achieves that.
         const string secretName = "XE_AUDIT5_MCP_PARENT_SECRET";
+        var previousSecret = Environment.GetEnvironmentVariable(secretName);
         Environment.SetEnvironmentVariable(secretName, "super-secret-node-value");
         try
         {
@@ -94,7 +96,7 @@ public sealed class McpClientFactoryLoopbackTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable(secretName, null);
+            Environment.SetEnvironmentVariable(secretName, previousSecret);
         }
     }
 
