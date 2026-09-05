@@ -29,7 +29,9 @@ public sealed class SpawnSerializerTests
                 maxConcurrent = Math.Max(maxConcurrent, concurrent);
             }
 
-            await Task.Delay(50, ct);
+            // Suspends the body at an await, exactly where a sleep did, so a wrongly-admitted sibling would get to run
+            // and be counted — without spending 50 ms of wall clock to prove it.
+            await AssertEx.SettleAsync();
 
             lock (sync)
             {
