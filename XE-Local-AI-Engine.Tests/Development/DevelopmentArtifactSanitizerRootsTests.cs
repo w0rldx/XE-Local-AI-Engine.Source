@@ -197,6 +197,39 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
         Assert.Throws<DevelopmentWorkspaceSecurityException>(() => DevelopmentArtifactSanitizer.SanitizeText(Prompt, RepositoryRoot));
     }
 
+    /// <summary>
+    ///     The 2026-09-05 live round read every coder and reviewer prompt artifact and found exactly one redaction in
+    ///     each: the whole "Protected test patterns" line. The generic Unix pattern was firing on the '/' inside
+    ///     <c>**/*Tests.cs</c> — glob syntax, preceded by '*' rather than by a host name — so all nine of
+    ///     <see cref="DevelopmentCommandProfileCatalog.DefaultProtectedPaths" /> collapsed into markers, and the one
+    ///     line of the prompt that says which files the coder may not touch was the one line an operator could not read.
+    ///     <para>
+    ///         The line is taken from <see cref="DevelopmentTestWritePolicy.Prompt" /> rather than transcribed, so a
+    ///         future pattern added to the catalog is covered here the day it ships.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public void SanitizePromptText_KeepsTheProtectedTestPatternGlobs_AndStillRedactsARealAbsolutePath()
+    {
+        var profile = DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.DotnetSlnx, "Calc.slnx");
+        var prompt = DevelopmentTestWritePolicy.Prompt(profile)
+                     + "\nFiles in this shared workspace that already differ from the base commit: "
+                     + RepositoryRoot
+                     + "/src/Lib/Calculator.cs\ncould not open /etc/shadow, nor \"/etc/shadow\", nor XE_HOME=/etc/shadow, nor (/etc/shadow)\n";
+
+        var sanitized = DevelopmentArtifactSanitizer.SanitizePromptText(prompt, RepositoryRoot);
+
+        // The whole rendered line, separators and all — the actual text, not "nothing was redacted". Asserting the
+        // nine globs one at a time would pass against a line whose commas and spaces had been eaten around them.
+        AssertEx.Contains(sanitized, DevelopmentTestWritePolicy.Prompt(profile));
+
+        // The relaxation is not a hole. A path under a protected root still loses the root, and an unrelated absolute
+        // path is still redacted at every delimiter a prompt puts in front of one.
+        AssertEx.False(sanitized.Contains(RepositoryRoot, StringComparison.Ordinal), sanitized);
+        AssertEx.Contains(sanitized, "[REDACTED:development-path]/src/Lib/Calculator.cs");
+        AssertEx.False(sanitized.Contains("/etc/shadow", StringComparison.Ordinal), sanitized);
+    }
+
     [Test]
     public void ResolveProtectedRoots_CoversBothTheHostAndTheSandboxNamesForTheSameDirectories()
     {

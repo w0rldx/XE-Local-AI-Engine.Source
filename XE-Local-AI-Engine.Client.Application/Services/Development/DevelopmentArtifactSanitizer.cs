@@ -60,7 +60,14 @@ internal static partial class DevelopmentArtifactSanitizer
     // output, the whole compiler diagnostic collapsed to two adjacent markers, so the targeted pass bought nothing at
     // all and a reviewer could not tell which file failed. Excluding the marker keeps exactly the workspace-relative
     // remainder, which is the part a reviewer needs and the part that carries no host information.
-    [GeneratedRegex(@"(?<![A-Za-z0-9:/])(?<!\[REDACTED:development-path\])/(?!/)[^\s\x00-\x1F\""'<>|]+", RegexOptions.ExplicitCapture, 2000)]
+    //
+    // '*' is in the excluded class for the same reason ']' is: a leading '/' preceded by '*' is glob syntax, not the
+    // start of a host path. The 2026-09-05 live round found every coder and reviewer prompt carrying
+    // "Protected test patterns: **[REDACTED:development-path]/*.cs, **[REDACTED:development-path] ..." - all nine of
+    // DevelopmentCommandProfileCatalog.DefaultProtectedPaths swallowed, so the one line of the prompt naming the files
+    // the coder was forbidden to touch was the one line the operator could not read. A relative glob names no host, so
+    // there is nothing in it to redact.
+    [GeneratedRegex(@"(?<![A-Za-z0-9:/*])(?<!\[REDACTED:development-path\])/(?!/)[^\s\x00-\x1F\""'<>|]+", RegexOptions.ExplicitCapture, 2000)]
     private static partial Regex UnixAbsolutePathRegex();
 
     [GeneratedRegex(@"(?<![A-Za-z0-9])(?<!\[REDACTED:development-path\])[A-Za-z]:[\\/][^\s\x00-\x1F\""'<>|]+", RegexOptions.ExplicitCapture, 2000)]
