@@ -48,7 +48,20 @@ public sealed partial class DevelopmentStore(NodeChatDbContext dbContext, TimePr
             // owes the same check.
             [DevelopmentTaskStatus.InProgress] =
                 [DevelopmentTaskStatus.Validation, DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
-            [DevelopmentTaskStatus.Validation] = [DevelopmentTaskStatus.InProgress, DevelopmentTaskStatus.InReview, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
+            // ChangesRequested is the FAILED deterministic gate's target, and the edge exists because InProgress could
+            // not be one. A task the gate rejected sits at InProgress with a SUCCEEDED coder attempt behind it, which is
+            // byte-for-byte the state that means "this round is implemented, validate it" — so StartNextActionAsync read
+            // it back and scheduled the same validation again, forever. Measured live: 289 restore/build/test runs on
+            // one task in 25 minutes, zero coder rounds, ended only by cancelling the run. ChangesRequested is the one
+            // status that says "this implementation was judged wrong" without also saying "and nobody has looked yet",
+            // and it is already the reviewer's rejection target, so the next action off it is the coder round the
+            // failure is asking for. InProgress stays on the edge for the runner's own recovery hop, which puts a task
+            // back where it was when validation produced no usable evidence at all.
+            [DevelopmentTaskStatus.Validation] =
+            [
+                DevelopmentTaskStatus.InProgress, DevelopmentTaskStatus.InReview, DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.Blocked,
+                DevelopmentTaskStatus.Cancelled
+            ],
             [DevelopmentTaskStatus.InReview] = [DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.AwaitingApply, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
             [DevelopmentTaskStatus.ChangesRequested] = [DevelopmentTaskStatus.InProgress, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
 

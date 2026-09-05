@@ -330,11 +330,18 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         return result.StandardOutput;
     }
 
+    /// <summary>
+    ///     The worktree against the BASE COMMIT, which is the one comparison the submission contract, the patch
+    ///     evidence and this tool all have to agree on. It diffed against the index until 2026-09-04, and the index
+    ///     equals the worktree from the moment an attempt starts — so the tool answered "nothing changed" for every
+    ///     file an earlier attempt on the shared workspace had left behind, which is precisely what the prompt now
+    ///     points a later attempt at. Files this attempt CREATED are untracked and still absent; get_status has them.
+    /// </summary>
     public async Task<string> GetDiffAsync(CancellationToken cancellationToken = default)
     {
         var result = await ExecuteAsync("tool_git_diff",
             AgentHomeGit.Executable,
-            AgentHomeGit.Arguments("diff", "--binary", "--", "."),
+            AgentHomeGit.Arguments("diff", "--binary", "HEAD", "--", "."),
             "/",
             standardInput: null,
             cancellationToken).ConfigureAwait(false);

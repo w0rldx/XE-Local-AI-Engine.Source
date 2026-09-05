@@ -15,8 +15,19 @@ using PersistenceAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.
 
 public sealed class DevelopmentManagementServiceTests
 {
+    /// <summary>
+    ///     The budget is checked before the branch that would spend it, in BOTH states a task can be waiting in.
+    ///     <para>
+    ///         <c>ChangesRequested</c> is the one the deterministic gate's failure now leaves a task in, and the check
+    ///         used to live inside the <c>InProgress</c> branch alone — so a task at its cap ran one more full coder
+    ///         attempt, spending its tokens and its duration, and was stood down the tick after on work that could
+    ///         never have reached a review.
+    ///     </para>
+    /// </summary>
     [Test]
-    public async Task StartNextAction_WhenReviewRoundCapReached_BlocksWithoutSchedulingValidation()
+    [Arguments(DevelopmentTaskStatus.InProgress)]
+    [Arguments(DevelopmentTaskStatus.ChangesRequested)]
+    public async Task StartNextAction_WhenTheRoundBudgetIsGone_BlocksWithoutSpendingAnother(DevelopmentTaskStatus waitingIn)
     {
         var repositoryRoot = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(Directory.GetCurrentDirectory());
         var selectedFolderId = Guid.NewGuid();
@@ -26,7 +37,10 @@ public sealed class DevelopmentManagementServiceTests
         store.GetProjectAsync(projectId, Arg.Any<CancellationToken>())
              .Returns(ProjectSnapshot(projectId, selectedFolderId, DevelopmentWorkspaceSecurity.RepositoryIdentityHash(repositoryRoot)));
         store.GetTaskAsync(taskId, Arg.Any<CancellationToken>())
-             .Returns(TaskSnapshot(projectId, taskId));
+             .Returns(TaskSnapshot(projectId, taskId) with
+             {
+                 Status = waitingIn
+             });
         store.FindOperationAsync(projectId,
                  Arg.Any<Guid>(),
                  DevelopmentOperationPhases.Completed,
@@ -83,8 +97,10 @@ public sealed class DevelopmentManagementServiceTests
         AssertEx.Equal(DevelopmentTaskStatus.Blocked, result.TaskStatus);
         AssertEx.Equal(expected: 1, transitions.Count);
         AssertEx.Equal(DevelopmentTaskStatus.Blocked, transitions[0].TargetStatus);
-        AssertEx.Contains(AssertEx.NotNull(transitions[0].Reason), "maximum review rounds");
+        AssertEx.Contains(AssertEx.NotNull(transitions[0].Reason), "maximum number of rounds");
         _ = supervisor.DidNotReceive().StartValidation(Arg.Any<Guid>());
+        _ = supervisor.DidNotReceive().StartAttempt(Arg.Any<Guid>(), Arg.Any<DevelopmentAttemptRole>());
+        await coordinator.DidNotReceive().StartAttemptAsync(Arg.Any<DevelopmentStartAttemptCommand>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

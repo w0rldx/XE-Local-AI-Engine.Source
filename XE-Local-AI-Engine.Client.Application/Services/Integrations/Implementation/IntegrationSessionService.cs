@@ -29,9 +29,6 @@ public sealed class IntegrationSessionService
 
     private const string SessionBusyMessage = "An execution is still running on that session. Cancel it before starting another.";
 
-    private const string SessionPolicyMessage =
-        "Caller-managed sessions are limited to agents whose tools are read-only, because tool history is not yet persisted.";
-
     private const string BusyDeleteMessage = "Cancel the session's execution before deleting it; one is still running.";
 
     private readonly IntegrationExternalAccess _access;
@@ -41,7 +38,6 @@ public sealed class IntegrationSessionService
     private readonly INodeChatPersistenceService _persistence;
     private readonly IIntegrationSessionStore _sessions;
     private readonly TimeProvider _timeProvider;
-    private readonly IIntegrationTriggerService _triggerService;
     private readonly IIntegrationTriggerStore _triggers;
 
     /// <summary>
@@ -52,7 +48,6 @@ public sealed class IntegrationSessionService
     internal IntegrationSessionService(IIntegrationSessionStore sessions,
         IIntegrationExecutionStore executions,
         IIntegrationTriggerStore triggers,
-        IIntegrationTriggerService triggerService,
         IntegrationExternalAccess access,
         INodeChatPersistenceService persistence,
         IntegrationSessionGate gate,
@@ -62,7 +57,6 @@ public sealed class IntegrationSessionService
         _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
         _executions = executions ?? throw new ArgumentNullException(nameof(executions));
         _triggers = triggers ?? throw new ArgumentNullException(nameof(triggers));
-        _triggerService = triggerService ?? throw new ArgumentNullException(nameof(triggerService));
         _access = access ?? throw new ArgumentNullException(nameof(access));
         _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
         _gate = gate ?? throw new ArgumentNullException(nameof(gate));
@@ -80,9 +74,8 @@ public sealed class IntegrationSessionService
     ///         <item><c>PerInvocation</c> + no session id — a new session per invocation, unchanged.</item>
     ///         <item><c>PerInvocation</c> + a session id — 404: such a trigger has no addressable sessions, and
     ///         "unknown" is the same answer an unknown id gets.</item>
-    ///         <item><c>CallerManaged</c> + no session id — the tool-category check, then a new session that stays
-    ///         Active after the run.</item>
-    ///         <item><c>CallerManaged</c> + a session id — the tool-category check, then the gate below.</item>
+    ///         <item><c>CallerManaged</c> + no session id — a new session that stays Active after the run.</item>
+    ///         <item><c>CallerManaged</c> + a session id — the gate below.</item>
     ///     </list>
     /// </summary>
     internal async Task<IntegrationSessionGateResult> ResolveForInvocationAsync(Guid? sessionId,
@@ -100,15 +93,6 @@ public sealed class IntegrationSessionService
             return sessionId is null
                 ? Accepted(existing: null)
                 : await MaskAsync(sessionId.Value, cancellationToken).ConfigureAwait(false);
-        }
-
-        // R4-9(a), re-checked HERE and not only at trigger save: an agent definition's tools can change afterwards, and
-        // the accept path is the only place that sees the definition as it is now. A caller-managed session persists
-        // the seed and the final assistant text and nothing else, so a continued run cannot tell an action it already
-        // performed from prose describing one — which is safe only while the agent can perform none.
-        if (!await _triggerService.AllowsCallerManagedAsync(trigger.TargetAgentDefinitionId, cancellationToken).ConfigureAwait(false))
-        {
-            return new IntegrationSessionGateResult(IntegrationAcceptOutcome.SessionPolicyRejected, Existing: null, SessionPolicyMessage);
         }
 
         if (sessionId is not { } id)

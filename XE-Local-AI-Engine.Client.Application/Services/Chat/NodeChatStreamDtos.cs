@@ -136,6 +136,7 @@ public sealed record NodeChatStreamRequest(
     // A tool the model never sees is a tool it cannot park on. False everywhere else, so every ordinary send keeps the
     // offer it has today. Withdrawing the tool DOES move a workflow-owned session's runtime-package config hash once,
     // since ask_user leaves the hashed tool list: expect one resume invalidation for in-flight sessions on upgrade.
+    // Adding complete_work_session's optional objectiveMet argument costs the same thing once, for the same reason.
     // Scoped to the supervisor's step send. NodeChatRegenerationService and NodeChatVariantBranchService build their own
     // packages and keep the tool, deliberately — both are operator-initiated, so someone is there to answer.
     // Trailing optional so the SignalR hub forwards the record unchanged.

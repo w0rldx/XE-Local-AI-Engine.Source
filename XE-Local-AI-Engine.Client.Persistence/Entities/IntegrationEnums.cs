@@ -73,8 +73,9 @@ public enum IntegrationSessionStatus
 ///         <c>cloud-model-rejected</c>, <c>capacity-rejected</c>, <c>restart</c>, <c>queue-full</c>, <c>shutdown</c>,
 ///         <c>internal-failure</c>, plus <c>approval-required</c> (an unattended run invoked an approval-gated tool),
 ///         <c>queue-timeout</c> (a still-queued execution outlived <c>MaxQueueAgeSeconds</c>) and
-///         <c>session-policy</c> (a caller-managed trigger resolved to an agent offering a tool outside
-///         <c>ToolCategory.ReadLocal</c>). An eleventh value is a bug, not an extension point.
+///         <c>session-policy</c> (historical: rows written before ADR 0008 R6-1 withdrew the caller-managed
+///         <c>ToolCategory.ReadLocal</c> restriction; no longer produced). An eleventh value is a bug, not an
+///         extension point.
 ///     </para>
 /// </summary>
 public enum IntegrationExecutionStatus

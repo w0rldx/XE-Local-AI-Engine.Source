@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -47,6 +48,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     private int _holdsOwed;
     private int _validationStallsOwed;
     private bool _advanceOnStall;
+    private bool _gateFails;
 
     public FakeDevelopmentTaskChain(IServiceScopeFactory scopes) =>
         _scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
@@ -164,6 +166,27 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     }
 
     /// <summary>
+    ///     Makes the deterministic gate FAIL, through the store hops the real runner makes rather than a scripted
+    ///     status: <c>StartValidationAsync</c>, then <c>FinalizeValidationAsync</c> at the target
+    ///     <see cref="DevelopmentValidationRunner.TargetFor" /> chooses for a failed run. Nothing here decides where
+    ///     that leaves the task — the product does — which is what makes a node run's behaviour afterwards a fact
+    ///     about the product.
+    ///     <para>
+    ///         The gate re-uses the succeeded coder attempt already on the task, exactly as the real one does, so a
+    ///         second validation of the SAME attempt is visible as a second <c>ValidationStarted</c> row. The rework
+    ///         round it asks for is a real RUNNING coder attempt, which is what the management service starts from
+    ///         <c>ChangesRequested</c>.
+    ///     </para>
+    /// </summary>
+    public void FailTheDeterministicGate()
+    {
+        lock (_gate)
+        {
+            _gateFails = true;
+        }
+    }
+
+    /// <summary>
     ///     What the gate says when it declines a patch. Settable because it lands on the TASK as its blocked reason, and
     ///     the workflow's retried refusal reads it back — so its LENGTH is part of a contract worth testing.
     /// </summary>
@@ -243,6 +266,22 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
             return await StartAnAttemptAsync(store, projectId, task, fail ? DevelopmentAttemptStatus.Failed : null, cancellationToken).ConfigureAwait(false);
         }
 
+        bool gateFails;
+        lock (_gate)
+        {
+            gateFails = _gateFails;
+        }
+
+        if (gateFails && task.Status == DevelopmentTaskStatus.ChangesRequested)
+        {
+            return await StartAnAttemptAsync(store, projectId, task, terminal: null, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (gateFails && task.Status == DevelopmentTaskStatus.InProgress)
+        {
+            return await FailTheGateAsync(store, projectId, task, cancellationToken).ConfigureAwait(false);
+        }
+
         if (!NextStatus.TryGetValue(task.Status, out var next))
         {
             throw new DevelopmentInvalidTransitionException("The Development task has no executable next action in its current state.");
@@ -257,6 +296,75 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
                        .ConfigureAwait(false);
         return new DevelopmentNextActionResult("Attempt", projectId, taskId, AttemptId: null, next, DevelopmentAttemptRole.Coder);
     }
+
+    /// <summary>
+    ///     One real failing deterministic gate: the succeeded coder attempt it judges, its <c>ValidationStarted</c> and
+    ///     <c>ValidationFinalized</c> rows, and its report artifact. The attempt is only created when the task has none
+    ///     to judge, so a gate that runs twice runs twice against the SAME attempt — which is the shape the livelock had.
+    /// </summary>
+    private static async Task<DevelopmentNextActionResult> FailTheGateAsync(IDevelopmentStore store,
+        Guid projectId,
+        DevelopmentTaskSnapshot task,
+        CancellationToken cancellationToken)
+    {
+        if (task.CurrentReviewRound >= task.MaxReviewRounds)
+        {
+            // The real StartNextActionAsync stands a task at its budget down before it opens a gate, so the fake must
+            // too — otherwise the first multi-round workflow-lane test written against it would pass on a sequence the
+            // product cannot produce.
+            throw new DevelopmentInvalidTransitionException("The Development task has no executable next action in its current state.");
+        }
+
+        var judged = (await store.ListAttemptsAsync(task.Id, cancellationToken).ConfigureAwait(false))
+            .LastOrDefault(static attempt => attempt.Role == DevelopmentAttemptRole.Coder && attempt.Status == DevelopmentAttemptStatus.Succeeded);
+        if (judged is null)
+        {
+            var attemptId = Guid.NewGuid();
+            var started = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(task.Id,
+                                         attemptId,
+                                         Guid.NewGuid(),
+                                         DevelopmentAttemptRole.Coder,
+                                         "scripted-model",
+                                         "local",
+                                         (await store.GetTaskAsync(task.Id, cancellationToken).ConfigureAwait(false)).Version),
+                                     cancellationToken)
+                                     .ConfigureAwait(false);
+            _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attemptId,
+                                   Guid.NewGuid(),
+                                   DevelopmentAttemptStatus.Succeeded,
+                                   started.Version),
+                               cancellationToken)
+                           .ConfigureAwait(false);
+            judged = (await store.ListAttemptsAsync(task.Id, cancellationToken).ConfigureAwait(false)).Single(attempt => attempt.Id == attemptId);
+        }
+
+        var opened = await store.StartValidationAsync(new DevelopmentStartValidationCommand(task.Id,
+                                    Guid.NewGuid(),
+                                    (await store.GetTaskAsync(task.Id, cancellationToken).ConfigureAwait(false)).Version),
+                                cancellationToken)
+                                .ConfigureAwait(false);
+        _ = await store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand(new DevelopmentAttachArtifactCommand(Guid.NewGuid(),
+                                   projectId,
+                                   task.Id,
+                                   judged.Id,
+                                   Guid.NewGuid(),
+                                   DevelopmentArtifactKind.ValidationReport,
+                                   SchemaVersion: 1,
+                                   "content-hash",
+                                   ByteCount: 2,
+                                   ContentJson: Encoding.UTF8.GetBytes("{}")),
+                               Guid.NewGuid(),
+                               opened.Version,
+                               DevelopmentValidationRunner.TargetFor(passed: false),
+                               GateFailureReason),
+                           cancellationToken)
+                       .ConfigureAwait(false);
+        return new DevelopmentNextActionResult("Validation", projectId, task.Id, AttemptId: null, DevelopmentTaskStatus.Validation, Role: null);
+    }
+
+    /// <summary>What the scripted gate reports, in the shape <c>DevelopmentValidationRunner</c> composes.</summary>
+    private const string GateFailureReason =
+        "Deterministic validation failed (tests_failed): Command dotnet_test_release_no_build reported 1 failing of 3 executed tests.";
 
     /// <summary>
     ///     A real attempt row, landed on <paramref name="terminal" /> or left running, so the node run reads it off the

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.Development;
 
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -26,6 +27,12 @@ internal sealed class DevelopmentTestFixture : IDisposable
         services.AddSingleton<NodeEncryptionMaterializationInterceptor>();
         services.AddDbContext<NodeChatDbContext>((provider, options) => options.UseSqlite($"Data Source={databasePath}")
                                                                                .EnableServiceProviderCaching(false)
+
+                                                                               // Every test in this suite builds its own isolated database and its own interceptor
+                                                                               // pair, so each one keys a fresh EF internal provider and the twenty-provider cap is
+                                                                               // process-global — it is configured as an error solution-wide. Same suppression the
+                                                                               // knowledge, scheduler and encryption fixtures already carry, for the same reason.
+                                                                               .ConfigureWarnings(static warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
                                                                                .AddInterceptors(provider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
                                                                                    provider.GetRequiredService<NodeEncryptionMaterializationInterceptor>()));
         services.AddScoped<IDevelopmentStore, DevelopmentStore>();

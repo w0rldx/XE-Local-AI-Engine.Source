@@ -269,7 +269,6 @@ public sealed class IntegrationApiHandlerBodyLimitTests
                 new IntegrationSessionService(sessions,
                     executions,
                     triggers,
-                    Substitute.For<IIntegrationTriggerService>(),
                     new IntegrationExternalAccess(executions, sessions, keys),
                     Substitute.For<INodeChatPersistenceService>(),
                     new IntegrationSessionGate(),

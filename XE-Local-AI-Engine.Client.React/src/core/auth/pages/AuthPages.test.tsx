@@ -94,6 +94,39 @@ describe("node auth pages", () => {
 		expect(navigateMock).toHaveBeenCalledWith({ to: "/dashboard" });
 	});
 
+	// The lockout 401 is the only login failure that carries a body. Without the `code` branch the operator reads
+	// "Incorrect password" while holding the right one, with nothing saying that waiting is the fix.
+	it("tells the operator to wait when the account is locked out", async () => {
+		authApiMock.loginNodeAuth.mockRejectedValue({
+			isAxiosError: true,
+			response: {
+				status: 401,
+				data: { message: "Too many failed sign-in attempts.", code: "locked-out", retryAfterSeconds: 300 },
+			},
+		});
+		renderWithProviders(<Login />);
+
+		fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: "correct horse" } });
+		fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+		expect(await screen.findByText(resolveKey("auth.login.errorLockedOut", { minutes: 5 }))).toBeTruthy();
+		expect(screen.queryByText(resolveKey("auth.login.errorIncorrectPassword"))).toBeNull();
+	});
+
+	// A wrong password before the threshold has no body, so it must still read as a wrong password.
+	it("reports a plain wrong password when the 401 carries no code", async () => {
+		authApiMock.loginNodeAuth.mockRejectedValue({
+			isAxiosError: true,
+			response: { status: 401, data: "" },
+		});
+		renderWithProviders(<Login />);
+
+		fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: "wrong horse" } });
+		fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+		expect(await screen.findByText(resolveKey("auth.login.errorIncorrectPassword"))).toBeTruthy();
+	});
+
 	it("sets up the first admin and immediately logs in", async () => {
 		renderWithProviders(<Setup />);
 

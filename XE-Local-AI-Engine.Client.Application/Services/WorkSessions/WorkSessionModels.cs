@@ -83,8 +83,11 @@ public sealed record WorkSessionCheckpointDto(
 ///     The event's payload, opaque to this layer and shaped by whatever wrote the row — a caller parses it only after
 ///     matching on <paramref name="EventType" />, and must tolerate a shape it does not know.
 ///     <para>
-///         Two shapes are defined today. <c>CompletionRequested</c> carries <c>{ "summary": string }</c>.
-///         <c>StepEnded</c> and <c>StepFailed</c> carry the step's consumption record —
+///         Two shapes are defined today. <c>CompletionRequested</c> carries
+///         <c>{ "Summary": string, "ObjectiveMet": bool? }</c> — PascalCase, because the handler serializes it with
+///         bare defaults — where an absent or null <c>ObjectiveMet</c> means the objective WAS met, so a completion
+///         recorded before that member existed still reads as the success it was.
+///         <c>StepEnded</c> and <c>StepFailed</c> carry the step's content-free consumption record —
 ///         <see cref="WorkSessionStepConsumptionDetail" />, i.e.
 ///         <c>{ "providerCalls": int, "estimatedInputTokens": long, "toolCallsCompleted": int, "providerCallCap": int,
 ///         "attachedBudgets": int, "toolSchemaTokens": long, "toolNames": string[] }</c>. It is null on a step that

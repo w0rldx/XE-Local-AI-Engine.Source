@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 
 /// <summary>
 ///     Builds the ordered <see cref="ConversationMessageDto" /> context one turn SENDS, from the conversation as it is
@@ -21,7 +22,9 @@ internal static class ConversationContextBuilder
         IReadOnlyDictionary<Guid, Guid>? selectedPath,
         ConversationMessageDto? attachmentContext,
         ConversationMessageDto? imageContext = null,
-        ConversationMessageDto? knowledgeContext = null)
+        ConversationMessageDto? knowledgeContext = null,
+        bool includeToolHistory = false,
+        int toolResultExcerptChars = ConversationContextBudgetOptions.DefaultHistoricalToolResultExcerptChars)
     {
         // Collapse variant siblings to the selected path FIRST (one variant per group, newest by default), then
         // apply the existing content/status filters. Without this every regenerated sibling would be sent as
@@ -67,6 +70,11 @@ internal static class ConversationContextBuilder
             });
         }
 
+        // The ids of turns kept below the compaction cutoff ONLY for their tool exchanges. Such a turn contributes its
+        // actions and nothing else: the synopsis already carries whatever prose it had, so replaying the text as well
+        // would say the same thing twice. Null while nothing is compacted, which is the ordinary case.
+        HashSet<Guid>? exchangeOnlySurvivors = null;
+
         // Non-destructive compaction: when a synopsis covers messages up to a sequence, send it in their place and drop
         // those older messages from the verbatim history. The originals remain persisted — this only shapes what is sent,
         // and the newest turns beyond the covered sequence are always kept verbatim. The synopsis message itself is
@@ -74,24 +82,132 @@ internal static class ConversationContextBuilder
         if (CompactionContextResolver.Resolve(conversation, leadingContext.Count) is { } compaction)
         {
             leadingContext.Add(compaction.Summary);
-            selected = [.. selected.Where(message => anchorSequence(message) > compaction.CoveredSequence)];
+            var kept = new List<NodeChatPersistedMessageDto>(selected.Count);
+            foreach (var message in selected)
+            {
+                if (anchorSequence(message) > compaction.CoveredSequence)
+                {
+                    kept.Add(message);
+                }
+                else if (SurvivesCompactionForToolHistory(message, includeToolHistory))
+                {
+                    kept.Add(message);
+                    _ = (exchangeOnlySurvivors ??= []).Add(message.MessageId);
+                }
+            }
+
+            selected = kept;
         }
 
         var history = selected
-                      .Where(static message => !string.IsNullOrWhiteSpace(message.Content)
-                                               && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
+                      .Where(message => IsSendable(message) || (includeToolHistory && HasCompletedToolPart(message)))
                       .Concat([userMessage])
                       .OrderBy(anchorSequence)
-                      .Select((message, index) => new ConversationMessageDto
+                      .Select((message, index) =>
                       {
-                          Id = message.MessageId,
-                          Role = string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? MessageRole.Assistant : MessageRole.User,
-                          Content = message.Content,
-                          Thinking = message.Reasoning,
-                          ModelUsed = message.Model,
-                          SortOrder = index + leadingContext.Count
+                          var isAssistant = string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase);
+                          var exchangeOnly = exchangeOnlySurvivors?.Contains(message.MessageId) == true;
+                          return new ConversationMessageDto
+                          {
+                              Id = message.MessageId,
+                              Role = isAssistant ? MessageRole.Assistant : MessageRole.User,
+                              Content = exchangeOnly ? string.Empty : message.Content,
+                              Thinking = exchangeOnly ? null : message.Reasoning,
+                              ModelUsed = message.Model,
+                              SortOrder = index + leadingContext.Count,
+                              ToolExchanges = includeToolHistory && isAssistant ? ProjectToolExchanges(message, toolResultExcerptChars) : null
+                          };
                       });
 
         return leadingContext.Count == 0 ? history.ToList() : leadingContext.Concat(history).ToList();
+    }
+
+    /// <summary>
+    ///     The unchanged send filter: a completed, content-bearing turn. Kept as its own predicate so the tool-history
+    ///     branch reads as an ADDITION to it rather than a rewrite of it — with the flag off the two together are the
+    ///     original expression exactly.
+    /// </summary>
+    private static bool IsSendable(NodeChatPersistedMessageDto message) =>
+        !string.IsNullOrWhiteSpace(message.Content)
+        && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal);
+
+    /// <summary>
+    ///     Whether a turn at or below the compaction cutoff outlives it anyway. The synopsis is PROSE — it summarizes
+    ///     text and never records the actions a turn took — so ANY turn that completed a tool call survives the fold for
+    ///     its exchanges, whatever its status and whether or not the summarizer read its text. A survivor that WAS
+    ///     sendable survives for its exchanges alone: <see cref="Build" /> blanks its content and reasoning, because the
+    ///     synopsis already carries them and re-sending them verbatim would say the same thing twice.
+    /// </summary>
+    internal static bool SurvivesCompactionForToolHistory(NodeChatPersistedMessageDto message, bool includeToolHistory) =>
+        includeToolHistory && HasCompletedToolPart(message);
+
+    /// <summary>
+    ///     Whether an ASSISTANT turn carries at least one completed tool part. Such a turn is kept even when it is
+    ///     <c>Failed</c>/<c>Cancelled</c> or its text is blank: a run that called a tool and then died left a real side
+    ///     effect, and hiding it is exactly the hole replaying tool history exists to close.
+    /// </summary>
+    private static bool HasCompletedToolPart(NodeChatPersistedMessageDto message) =>
+        string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase)
+        && message.Parts is { Count: > 0 } parts
+        && parts.Any(IsCompletedToolPart);
+
+    /// <summary>
+    ///     The exchange list <see cref="Build" /> would attach to this persisted turn with tool history on, or null when
+    ///     it carries none. Internal so the step bound's projection measures exactly what the send path will carry
+    ///     rather than a second, quietly diverging idea of it.
+    /// </summary>
+    internal static IReadOnlyList<ConversationToolExchange>? ProjectSendableToolExchanges(NodeChatPersistedMessageDto message, int toolResultExcerptChars) =>
+        string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase)
+            ? ProjectToolExchanges(message, toolResultExcerptChars)
+            : null;
+
+    /// <summary>
+    ///     Projects an assistant turn's persisted tool parts into the replayable exchanges, ordered by the part sequence
+    ///     the accumulator stamped. A requested-but-never-completed part is skipped: an orphan call with no result is
+    ///     worse than no call at all. Each result is capped here, at projection time, so a single huge historical result
+    ///     cannot ride every later continuation unbounded — with the same marker the context budgeter uses, so one
+    ///     result truncated twice does not read as two different results.
+    /// </summary>
+    private static IReadOnlyList<ConversationToolExchange>? ProjectToolExchanges(NodeChatPersistedMessageDto message, int toolResultExcerptChars)
+    {
+        if (message.Parts is not { Count: > 0 } parts)
+        {
+            return null;
+        }
+
+        List<ConversationToolExchange>? exchanges = null;
+        foreach (var part in parts.OrderBy(static part => part.Sequence))
+        {
+            if (!IsCompletedToolPart(part))
+            {
+                continue;
+            }
+
+            (exchanges ??= []).Add(new ConversationToolExchange(part.ToolCallId!,
+                part.Name ?? string.Empty,
+                part.Args,
+                ExcerptResult(part.Result, toolResultExcerptChars),
+                string.Equals(part.State, NodeChatToolPartStates.Failed, StringComparison.Ordinal)));
+        }
+
+        return exchanges;
+    }
+
+    /// <summary>
+    ///     A tool part that reached a terminal state and carries the call id the replayed pair correlates on. The
+    ///     accumulator refuses an empty id, but a legacy part persisted before that guard existed can still carry one.
+    /// </summary>
+    private static bool IsCompletedToolPart(NodeChatMessagePart part) =>
+        string.Equals(part.Kind, NodeChatMessagePartKinds.Tool, StringComparison.Ordinal)
+        && !string.IsNullOrEmpty(part.ToolCallId)
+        && (string.Equals(part.State, NodeChatToolPartStates.Received, StringComparison.Ordinal)
+            || string.Equals(part.State, NodeChatToolPartStates.Failed, StringComparison.Ordinal));
+
+    private static string? ExcerptResult(string? result, int toolResultExcerptChars)
+    {
+        var excerptChars = Math.Max(val1: 0, toolResultExcerptChars);
+        return result is null || result.Length <= excerptChars
+            ? result
+            : ConversationContextBudgeter.Excerpt(result, excerptChars, result.Length - excerptChars);
     }
 }

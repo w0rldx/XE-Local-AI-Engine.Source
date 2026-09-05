@@ -35,6 +35,42 @@ internal static class DevelopmentTestWritePolicy
         + "Adding new test files is allowed.";
 
     /// <summary>
+    ///     The same rule stated BEFORE the fact, for the coder and reviewer prompts. <see cref="RefusalSentence" />
+    ///     only ever reaches a round that has already lost its attempt to the rule, and it reaches the reviewer never —
+    ///     which live on 2026-09-04 deadlocked a task whose requirements demanded an edit the policy forbids: the
+    ///     reviewer kept asking for it, and every coder round that obeyed was refused.
+    ///     <para>
+    ///         "renamed" is in the sentence because <see cref="Ensure" /> checks <c>PreviousPath</c> too. Stating a rule
+    ///         narrower than the one enforced is the exact shape of the deadlock this fixes, one file class over.
+    ///     </para>
+    /// </summary>
+    internal const string PromptSentence =
+        "Workspace test-write policy: a file that existed at the base commit and matches one of the protected test patterns "
+        + "may not be modified, deleted or renamed; adding new files is allowed.";
+
+    /// <summary>The patterns a prompt names before it counts the rest. The shipped profile has nine.</summary>
+    private const int MaxPromptedPatterns = 20;
+
+    /// <summary>
+    ///     The rule plus the profile's OWN globs, because the rule is a path-glob set and not a notion of "test file":
+    ///     <c>tests/**/*.cs</c> protects fixtures, harnesses and helpers as firmly as it protects a test class, and a
+    ///     round told only the prose paraphrase spends its whole attempt discovering that.
+    /// </summary>
+    internal static string Prompt(DevelopmentCommandProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        var shown = profile.ProtectedPaths.Order(StringComparer.Ordinal).Take(MaxPromptedPatterns).ToArray();
+        if (shown.Length == 0)
+        {
+            return PromptSentence;
+        }
+
+        var remainder = profile.ProtectedPaths.Count - shown.Length;
+        return $"{PromptSentence} Protected test patterns: {string.Join(", ", shown)}"
+               + (remainder > 0 ? $" (+{remainder} more)." : ".");
+    }
+
+    /// <summary>
     ///     Throws when the attempt's diff modifies, deletes or renames a path matching the profile's protected test
     ///     patterns.
     ///     <para>

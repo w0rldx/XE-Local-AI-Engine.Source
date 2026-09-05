@@ -66,12 +66,6 @@ public enum IntegrationAcceptOutcome
     /// <summary>An execution on the named session is still Accepted, Queued or Running. 409.</summary>
     SessionBusy,
 
-    /// <summary>
-    ///     A caller-managed trigger whose target agent offers a tool outside <c>ToolCategory.ReadLocal</c>. 422, and
-    ///     nothing is written — there is no execution row to terminalize.
-    /// </summary>
-    SessionPolicyRejected,
-
     /// <summary>The credential was revoked between authentication and admission. The same generic 401 the auth handler writes.</summary>
     Unauthorized
 }
@@ -121,7 +115,10 @@ public static class IntegrationFailureCategories
     /// <summary>The execution outlived <c>MaxQueueAgeSeconds</c> waiting for the invocation lease.</summary>
     public const string QueueTimeout = "queue-timeout";
 
-    /// <summary>A caller-managed trigger resolved to an agent offering a tool outside <c>ToolCategory.ReadLocal</c>.</summary>
+    /// <summary>
+    ///     Historical: rows written before ADR 0008 R6-1, when a caller-managed trigger was refused an agent offering a
+    ///     tool outside <c>ToolCategory.ReadLocal</c>. No longer produced; kept because those rows render it verbatim.
+    /// </summary>
     public const string SessionPolicy = "session-policy";
 
     /// <summary>The whole vocabulary, so a test can assert nothing else is ever written.</summary>

@@ -91,6 +91,28 @@ public sealed class IntegrationTriggerEndpointTests
     }
 
     [Test]
+    public async Task Create_CallerManagedWithAWriteToolAgent_Returns201()
+    {
+        // ADR 0008 R6-1: a caller-managed trigger used to be limited to agents whose every resolved tool is ReadLocal,
+        // because the session persisted no tool history. It persists and replays it now, so nothing about the target
+        // agent's tools is judged at save time and the policy is a plain round-trip through the route. The predicate's
+        // WITHDRAWAL is pinned by IntegrationTriggerServiceTests, which can put a real WriteExecute offer in front of
+        // it; this host resolves an agent with no allowed tool names to an empty offer, so it cannot.
+        using var client = Factory.CreateClient();
+        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "caller-managed-write-agent").ConfigureAwait(false);
+
+        using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
+            client,
+            HttpMethod.Post,
+            IntegrationEndpointPayloads.TriggersRoute,
+            IntegrationEndpointPayloads.TriggerBody("caller-managed-write", agentId, sessionPolicy: "CallerManaged")).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
+        var view = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<IntegrationTriggerBody>(IntegrationEndpointPayloads.Json).ConfigureAwait(false));
+        AssertEx.Equal("CallerManaged", view.SessionPolicy);
+    }
+
+    [Test]
     [Arguments("Sensor-Feed")]
     [Arguments("a")]
     [Arguments("-leading-hyphen")]
