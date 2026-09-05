@@ -47,6 +47,54 @@ public sealed class FirstRunModelProvisioningServiceTests
     }
 
     [Test]
+    public async Task CleanDesktopState_WhenTheMachineKeyIsMintedWhileTheModelDownloads_KeepsBothTheKeyAndTheSelection()
+    {
+        // This service loads the settings BEFORE the download and writes the default model AFTER it, so the window
+        // between the two is as long as the download — minutes on a first run. The settings record is whole-file, so
+        // saving the record loaded up front would roll the node back to its pre-download state, discarding the machine
+        // key the boot path mints in exactly that window and orphaning every frozen inference profile.
+        var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings(),
+            siblingWriteBeforeTheUpdate: latest => latest with
+            {
+                MachineKey = "minted-while-the-model-downloaded"
+            });
+        using var service = BuildService(isDesktop: true,
+            [],
+            new RecordingBinaryManager(),
+            new FakeDownloadCoordinator(GgufDownloadPhase.Completed),
+            settingsStore);
+
+        await RunAsync(service);
+
+        AssertEx.Equal(DefaultGguf, settingsStore.Current.DefaultModelName);
+        AssertEx.Equal("minted-while-the-model-downloaded", settingsStore.Current.MachineKey,
+            "the key minted during the download must survive the first-run selection.");
+    }
+
+    [Test]
+    public async Task CleanDesktopState_WhenTheOperatorSelectsAModelWhileTheDownloadRuns_KeepsTheOperatorsChoice()
+    {
+        // The skip precondition is checked BEFORE the download, and the download runs for minutes. An operator who
+        // installs and picks their own model in that window had it silently reverted to the auto-provisioned one,
+        // because the post-download write assigned DefaultModelName unconditionally.
+        var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings(),
+            siblingWriteBeforeTheUpdate: latest => latest with
+            {
+                DefaultModelName = "operator/picked:Q8_0"
+            });
+        using var service = BuildService(isDesktop: true,
+            [],
+            new RecordingBinaryManager(),
+            new FakeDownloadCoordinator(GgufDownloadPhase.Completed),
+            settingsStore);
+
+        await RunAsync(service);
+
+        AssertEx.Equal("operator/picked:Q8_0", settingsStore.Current.DefaultModelName,
+            "a selection made during the download must not be reverted to the first-run model.");
+    }
+
+    [Test]
     public async Task NotDesktopMode_NoOps_NoDownload_NoSelection()
     {
         var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Completed);
@@ -539,33 +587,4 @@ public sealed class FirstRunModelProvisioningServiceTests
         }
     }
 
-    private sealed class FakeNodeSettingsStore(StoredNodeSettings initial) : INodeSettingsStore
-    {
-        private StoredNodeSettings _current = initial;
-
-        public StoredNodeSettings? Saved { get; private set; }
-
-        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(_current);
-        }
-
-        public StoredNodeSettings Load(CancellationToken cancellationToken = default)
-        {
-            return _current;
-        }
-
-        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
-        {
-            _current = settings;
-            Saved = settings;
-            return Task.CompletedTask;
-        }
-
-        public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
-        {
-            await SaveAsync(mutate(_current), cancellationToken);
-            return _current;
-        }
-    }
 }

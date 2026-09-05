@@ -235,3 +235,13 @@ public sealed record SaveNodeSettingsRequest
     /// </summary>
     public IReadOnlyDictionary<string, ModelRate>? UsageRates { get; init; }
 }
+
+/// <summary>
+///     Body of the 409 <c>PUT api/local/v1/node-settings</c> answers with when the stored record changed under every
+///     validation attempt. Nothing was written and nothing the request carried was wrong; a reload and a retry is the
+///     whole remedy.
+/// </summary>
+public sealed record NodeSettingsConflictResponse
+{
+    public required string Message { get; init; }
+}

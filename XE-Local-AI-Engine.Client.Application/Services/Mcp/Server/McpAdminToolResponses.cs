@@ -21,6 +21,10 @@ public static class McpAdminToolFailureCodes
 
     public const string InvalidStatus = "invalid_status";
     public const string RunNotFound = "run_not_found";
+
+    /// <summary>A write refused because the stored record kept changing under it. Nothing sent was wrong; retry.</summary>
+    public const string SettingsConflict = "settings_conflict";
+
     public const string ValidationFailed = "validation_failed";
 }
 
@@ -339,6 +343,16 @@ internal static class McpAdminToolResponseMapper
         if (result.Updated)
         {
             return new McpNodeSettingsUpdateResponse(true, []);
+        }
+
+        // A conflict is not a rejection: it names no field, and the caller's own patch was valid. Told apart here so a
+        // tool-using agent retries instead of "correcting" a field that was never the problem.
+        if (result.Conflicted)
+        {
+            return new McpNodeSettingsUpdateResponse(false,
+                [],
+                McpAdminToolFailureCodes.SettingsConflict,
+                "Node settings changed while this update was being validated. Nothing was written; read the settings again and retry.");
         }
 
         var failureCode = fields.Length == 0 ? McpAdminToolFailureCodes.ValidationFailed : $"invalid_field:{fields[0]}";

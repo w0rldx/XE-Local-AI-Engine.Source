@@ -10,7 +10,13 @@ public interface INodeSettingsAdministrationService
 
     Task<NodeSettingsAgenticView> GetAgenticViewAsync(CancellationToken cancellationToken = default);
 
-    Task<NodeSettingsAdministrationResult> SaveTrustedMergedAsync(StoredNodeSettings settings,
+    /// <summary>
+    ///     Saves a trusted whole-record merge. <paramref name="merge" /> is the caller's merge, not its result: it is
+    ///     re-applied to the record the store holds AT WRITE TIME, because the HTTP save is a partial merge in
+    ///     disguise — every field the request omits is resolved from the record handed in here, so resolving them from
+    ///     a snapshot loaded before validation discards whatever a sibling writer stored in that window.
+    /// </summary>
+    Task<NodeSettingsAdministrationResult> SaveTrustedMergedAsync(Func<StoredNodeSettings, StoredNodeSettings> merge,
         CancellationToken cancellationToken = default);
 
     Task<NodeSettingsAdministrationResult> ApplyAgenticPatchAsync(NodeSettingsAgenticPatch patch,
@@ -64,12 +70,28 @@ public sealed record NodeSettingsAdministrationResult(
     StoredNodeSettings Settings,
     IReadOnlyList<NodeSettingsValidationError> ValidationErrors)
 {
+    /// <summary>
+    ///     Whether the save was refused because the stored record kept changing under it, as opposed to being
+    ///     rejected by validation. Both read as <see cref="Updated" /> <see langword="false" />, but a conflict carries
+    ///     no validation errors and nothing the caller sent was wrong: the same request retried usually succeeds.
+    /// </summary>
+    public bool Conflicted { get; init; }
+
     public static NodeSettingsAdministrationResult Saved(StoredNodeSettings settings) =>
         new(true, settings, []);
 
     public static NodeSettingsAdministrationResult Rejected(StoredNodeSettings settings,
         IReadOnlyList<NodeSettingsValidationError> errors) =>
         new(false, settings, errors);
+
+    /// <summary>The save was abandoned unwritten after every attempt found the record changed. Named
+    ///     <c>Conflict</c> rather than <c>Conflicted</c> only because a type cannot hold a method and a property of
+    ///     the same name.</summary>
+    public static NodeSettingsAdministrationResult Conflict(StoredNodeSettings latest) =>
+        new(false, latest, [])
+        {
+            Conflicted = true
+        };
 }
 
 /// <summary>Transport-neutral field validation for the restricted agentic settings patch.</summary>

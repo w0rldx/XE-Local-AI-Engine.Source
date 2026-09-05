@@ -150,8 +150,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
 
         var settings = await _nodeSettingsStore.LoadAsync(ct).ConfigureAwait(false);
         var configuredDefault = _configuration.GetValue<string>("Agent:LocalChat:DefaultModel");
-        if (!string.IsNullOrWhiteSpace(settings.DefaultModelName)
-            && !string.Equals(settings.DefaultModelName, configuredDefault, StringComparison.OrdinalIgnoreCase))
+        if (!MayAutoSelectDefaultModel(settings.DefaultModelName, configuredDefault))
         {
             _logger.LogInformation("First-run provisioning skipped: a non-default model '{Model}' is already selected.", settings.DefaultModelName);
             return;
@@ -240,14 +239,49 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             return;
         }
 
-        // Select the freshly-installed GGUF as the node default so the chat composer opens on a ready model.
-        var updated = settings with
+        // Select the freshly-installed GGUF as the node default so the chat composer opens on a ready model. The write
+        // is a read-modify-write under the store's lock rather than a save of the record loaded above: the download
+        // wait between the two can run for MINUTES, and the settings record is whole-file, so saving the stale copy
+        // would silently roll back everything written meanwhile (a machine key minted at boot, an operator's edit).
+        //
+        // The skip precondition is re-checked against that write-time record, not only against the pre-download load:
+        // the operator can pick a model from the picker DURING those minutes, and assigning unconditionally here
+        // reverted their choice to the auto-provisioned one. Returning `latest` still writes — the store has no
+        // no-change early return — which is one redundant write on a first run and not worth a second load to avoid.
+        string? operatorSelection = null;
+        await _nodeSettingsStore.UpdateAsync(latest =>
         {
-            DefaultModelName = ticket.ModelName
-        };
-        await _nodeSettingsStore.SaveAsync(updated, ct).ConfigureAwait(false);
+            if (!MayAutoSelectDefaultModel(latest.DefaultModelName, configuredDefault))
+            {
+                operatorSelection = latest.DefaultModelName;
+                return latest;
+            }
+
+            return latest with
+            {
+                DefaultModelName = ticket.ModelName
+            };
+        }, ct).ConfigureAwait(false);
+
+        if (operatorSelection is not null)
+        {
+            _logger.LogInformation(
+                "First-run provisioning installed '{Model}' but kept the model '{Selected}' the operator selected while it downloaded.", ticket.ModelName,
+                operatorSelection);
+            return;
+        }
+
         _logger.LogInformation("First-run provisioning installed and selected '{Model}'.", ticket.ModelName);
     }
+
+    /// <summary>
+    ///     Whether first-run provisioning owns <c>DefaultModelName</c>: nothing is selected yet, or what is selected is
+    ///     the configured fallback this service exists to replace. Anything else is an operator's own pick and must
+    ///     survive. Shared by the pre-download skip and the post-download write so the two cannot drift.
+    /// </summary>
+    private static bool MayAutoSelectDefaultModel(string? selected, string? configuredDefault) =>
+        string.IsNullOrWhiteSpace(selected)
+        || string.Equals(selected, configuredDefault, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     ///     Reduces a GPU-probe failure to operator-safe text for the acquisition banner.

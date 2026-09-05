@@ -82,31 +82,60 @@ internal sealed class ToolCapableModelRegistrar : IToolCapableModelRegistrar
     ///     Returns the number of names added.
     /// </summary>
     /// <remarks>
-    ///     The no-change early return matters: <c>SaveAsync</c> invalidates and re-primes the settings cache and is
-    ///     reached on every completed download and every startup, so writing an identical list would churn the cache (and
-    ///     the file) for nothing.
+    ///     <para>
+    ///         The no-change early return matters: a write evicts the cached settings entry and leaves the next reader
+    ///         to repopulate it, and is reached on every completed download and every startup, so writing an identical
+    ///         list would churn the cache (and the file) for nothing. That is what the pre-check load is for — <see cref="INodeSettingsStore.UpdateAsync" />
+    ///         persists even when the mutation returns the record unchanged.
+    ///     </para>
+    ///     <para>
+    ///         The merge is nevertheless recomputed from the record the store holds AT WRITE TIME, not from the
+    ///         pre-check snapshot: the settings file is whole-record, so a list built from a stale load would silently
+    ///         drop every field (a freshly minted machine key, a default-model selection) another writer changed in
+    ///         between. The returned count is what was actually added against that record.
+    ///     </para>
     /// </remarks>
     private async Task<int> AddAsync(IReadOnlyList<string> modelNames, CancellationToken cancellationToken)
     {
         var stored = await _settingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
-        var existing = stored.ToolCapableModels ?? [];
-
-        // HashSet.Add doubles as the "was it already there" test, so this both de-dupes against the stored list and
-        // de-dupes the incoming batch against itself in one pass.
-        var present = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
-        var fresh = modelNames.Where(present.Add).ToArray();
-        if (fresh.Length == 0)
+        if (Missing(stored.ToolCapableModels, modelNames).Count == 0)
         {
             return 0;
         }
 
-        var merged = new List<string>(existing);
-        merged.AddRange(fresh);
-
-        await _settingsStore.SaveAsync(stored with
+        var added = 0;
+        await _settingsStore.UpdateAsync(latest =>
         {
-            ToolCapableModels = merged
+            var existing = latest.ToolCapableModels ?? [];
+            var fresh = Missing(existing, modelNames);
+            added = fresh.Count;
+            if (fresh.Count == 0)
+            {
+                return latest;
+            }
+
+            var merged = new List<string>(existing);
+            merged.AddRange(fresh);
+            return latest with
+            {
+                ToolCapableModels = merged
+            };
         }, cancellationToken).ConfigureAwait(false);
-        return fresh.Length;
+
+        return added;
+    }
+
+    /// <summary>
+    ///     The subset of <paramref name="candidates" /> not already in <paramref name="existing" />, also de-duped
+    ///     against itself.
+    /// </summary>
+    /// <remarks>
+    ///     <c>HashSet.Add</c> doubles as the "was it already there" test, so one pass covers both. Presence is matched
+    ///     <see cref="StringComparison.OrdinalIgnoreCase" />; the values returned are the candidates' own casing.
+    /// </remarks>
+    private static List<string> Missing(IReadOnlyList<string>? existing, IReadOnlyList<string> candidates)
+    {
+        var present = new HashSet<string>(existing ?? [], StringComparer.OrdinalIgnoreCase);
+        return candidates.Where(present.Add).ToList();
     }
 }
