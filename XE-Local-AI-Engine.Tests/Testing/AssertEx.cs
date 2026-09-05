@@ -195,6 +195,62 @@ internal static class AssertEx
         throw new AssertionException(message ?? $"Expected exception of type {typeof(TException).Name} but no exception was thrown.");
     }
 
+    /// <summary>
+    ///     Lets the scheduler drain: every continuation the runtime can already run does run before the caller looks
+    ///     again. This is the deterministic stand-in for "sleep, then assert that nothing happened". A sleep can only
+    ///     fail when the code under test gets SLOWER, so on a contended runner it hides the very regression it was
+    ///     written to catch, while costing its full duration on every green run.
+    /// </summary>
+    /// <param name="rounds">
+    ///     How many yield + thread-pool round trips to make. Each round hands the caller's continuation back to the
+    ///     pool and then queues behind everything that yield made runnable, so a continuation chain of this depth has
+    ///     run by the time the caller resumes.
+    /// </param>
+    public static async Task SettleAsync(int rounds = 16)
+    {
+        for (var round = 0; round < rounds; round++)
+        {
+            await Task.Yield();
+            await Task.Run(static () => { }).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    ///     Asserts <paramref name="task" /> is still parked once <see cref="SettleAsync" /> has drained the scheduler:
+    ///     the negative half of a gate assertion, without a wall-clock guess.
+    /// </summary>
+    public static async Task StaysIncompleteAsync(Task task, string message)
+    {
+        ArgumentNullException.ThrowIfNull(task);
+
+        await SettleAsync().ConfigureAwait(false);
+
+        if (task.IsCompleted)
+        {
+            throw new AssertionException(message);
+        }
+    }
+
+    /// <summary>
+    ///     Awaits a task that must finish inside <paramref name="timeout" />, failing the run with
+    ///     <paramref name="message" /> instead of hanging it. The timeout is a failure deadline, not a sleep: a green
+    ///     run returns the moment the task completes, so pass a budget generous enough to survive a contended runner
+    ///     (<c>TestBudgets.Contended</c> in XE-Local-AI-Engine.Tests).
+    /// </summary>
+    public static async Task CompletesAsync(Task task, TimeSpan timeout, string message)
+    {
+        ArgumentNullException.ThrowIfNull(task);
+
+        try
+        {
+            await task.WaitAsync(timeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            throw new AssertionException(message);
+        }
+    }
+
     public static async Task EventuallyAsync(Func<bool> condition, TimeSpan timeout, string? message = null)
     {
         ArgumentNullException.ThrowIfNull(condition);
