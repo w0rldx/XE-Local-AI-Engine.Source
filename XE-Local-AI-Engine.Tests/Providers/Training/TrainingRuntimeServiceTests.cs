@@ -55,6 +55,7 @@ public sealed class TrainingRuntimeServiceTests
 
     [Test]
     [RunOn(OS.Linux)]
+    [NotInParallel("XE_TRAINING_TEST_SECRET")]
     public async Task Install_UsesTheLockfileStrictlyAndScrubsTheEnvironment()
     {
         Environment.SetEnvironmentVariable("XE_TRAINING_TEST_SECRET", "must-not-leak");

@@ -650,6 +650,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
 
     [Test]
     [RunOn(OS.Linux)]
+    [NotInParallel("XE_SANDBOX_CANARY")]
     public async Task ProcessSandboxProvider_Execute_DoesNotLeakWorkerEnvironment_ButAllowlistedAndRequestVarsAppear()
     {
         // Linux-only: uses `printenv` and /bin/sh. Windows env behavior is covered by the same allow-list logic.
@@ -719,6 +720,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     /// </summary>
     [Test]
     [RunOn(OS.Linux)]
+    [NotInParallel(["ProgramData", "ProgramFiles", "ProgramFiles(x86)", "ALLUSERSPROFILE"])]
     public async Task ProcessSandboxProvider_Execute_ForwardsTheWindowsMachineWideConfigurationRoots()
     {
         var printenv = new[]
@@ -734,6 +736,10 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
 
         string[] names = ["ProgramData", "ProgramFiles", "ProgramFiles(x86)", "ALLUSERSPROFILE"];
         var expected = names.ToDictionary(name => name, name => $"/probe/{Guid.NewGuid():N}", StringComparer.Ordinal);
+
+        // Captured, because these are real machine-wide values on a Windows host: restoring them to null instead of
+        // to what they were would poison every later test in the module.
+        var originals = names.ToDictionary(name => name, Environment.GetEnvironmentVariable, StringComparer.Ordinal);
 
         foreach (var pair in expected)
         {
@@ -767,7 +773,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         {
             foreach (var name in names)
             {
-                Environment.SetEnvironmentVariable(name, value: null);
+                Environment.SetEnvironmentVariable(name, originals[name]);
             }
         }
     }

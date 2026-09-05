@@ -43,6 +43,9 @@ public sealed class TrustedBinaryResolverTests
     }
 
     [Test]
+    // Bare, not keyed: a PATH stub has to be exclusive against ANY conflicting test, which is the shape every
+    // sibling PATH mutator in this suite already uses.
+    [NotInParallel]
     public async Task Resolve_IgnoresPathEntirely_SoAPlantedBinaryOnPathCannotBeChosen()
     {
         RequireLinux();
