@@ -199,6 +199,17 @@ On the React side `clampReasoningEffort` (`stores/NodeChatPreferencesStore.ts`) 
 
 An `auto` effort that grades a turn as the FAST tier (`DefaultReasoningEffortDispatcher`) swaps it onto the local GGUF model named by the node setting `AutoEffortFastModelName`, when one is set. Provisioning such a model in a dev run (GGUF import is desktop-only) is documented in `docs/agent-knowledge.md` §2, next to the `HuggingFace__ModelsDirectory` bullet.
 
+**Live-validated behaviour (round 3, 2026-09-04; `Plans/ai-trends-2026-09-02/progress/c2-report.md` §4).** Every
+non-Normal turn's `EffortDispatched` notice carries a `noticeDetail` code. Three codes were observed live: a swap
+that actually fires reports the grading reason, e.g. `short-turn`; a turn graded FAST but not swapped reports why
+not — `fast-model-unset` (no `AutoEffortFastModelName` configured) or `tools-no-swap` (tools were offered, so the
+tier can drop to Fast but the model never swaps). The save-time locality gate rejects a non-local id (e.g.
+`gpt-4o-mini`) or an uninstalled local id with **400** — *"The fast model for automatic reasoning effort must be an
+installed node-local model."* A fast model whose process crashed is relaunched and swaps again on the very next
+`auto` turn (previously the capacity snapshot kept listing the dead process). See also the runbook clause in
+[`docs/runbooks/agent-unit-cost-telemetry-runbook.md`](../runbooks/agent-unit-cost-telemetry-runbook.md) (rule 12)
+for the `fast-model-*` codes being refusal-only, never a swap reason.
+
 ### Thinking budget (llama.cpp) and where it is enforceable
 
 A graded effort also caps HOW LONG the model may think. `ReasoningOptionsResolver.ResolveReasoningBudgetTokens`

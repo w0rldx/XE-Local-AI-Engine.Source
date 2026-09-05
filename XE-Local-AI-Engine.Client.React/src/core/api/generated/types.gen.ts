@@ -146,9 +146,9 @@ export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionRequest = {
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1UpdateWorkSessionRequest = {
-	title: string;
-	objective: string;
-	agentDefinitionId: string;
+	title?: string | null;
+	objective?: string | null;
+	agentDefinitionId?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionTasksResponse = {
@@ -3365,8 +3365,8 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitio
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1UpdateGraphWorkflowDefinitionRequest = {
-	version?: number;
-	name: string;
+	version: number;
+	name?: string | null;
 	description?: string | null;
 	graph?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph | null;
 };
@@ -3577,8 +3577,8 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefin
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowDefinitionRequest = {
-	version?: number;
-	name: string;
+	version: number;
+	name?: string | null;
 	graph?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph | null;
 };
 
@@ -3632,6 +3632,9 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 	route?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRouteResponse | null;
 	workSessionSteps?: number | null;
 	failureClassGroup?: string | null;
+	modelReadinessMs?: number | null;
+	vramFreeAtLoadBytes?: number | null;
+	vramAdmittedBytes?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppliedRuleSetResponse = {
@@ -3739,7 +3742,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleS
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowRuleSetRequest = {
-	version?: number;
+	version: number;
 	name: string;
 	description?: string | null;
 	body: string;
@@ -3918,8 +3921,8 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkI
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowWorkItemRequest = {
-	title: string;
-	request: string;
+	title?: string | null;
+	request?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = {
@@ -5163,6 +5166,12 @@ export type XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = {
 export type XeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest = {
 	email: string;
 	password: string;
+};
+
+export type XeLocalAiEngineClientEndpointsAuthV1NodeLoginLockedOutResponse = {
+	message: string;
+	code?: string;
+	retryAfterSeconds: number;
 };
 
 export type XeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = {
@@ -13784,9 +13793,9 @@ export type CreateDevWorkflowDefinitionError = CreateDevWorkflowDefinitionErrors
 
 export type CreateDevWorkflowDefinitionResponses = {
 	/**
-	 * Success
+	 * Created
 	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse;
+	201: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse;
 };
 
 export type CreateDevWorkflowDefinitionResponse =
@@ -14066,9 +14075,9 @@ export type CreateDevWorkflowRuleSetError = CreateDevWorkflowRuleSetErrors[keyof
 
 export type CreateDevWorkflowRuleSetResponses = {
 	/**
-	 * Success
+	 * Created
 	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetResponse;
+	201: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRuleSetResponse;
 };
 
 export type CreateDevWorkflowRuleSetResponse = CreateDevWorkflowRuleSetResponses[keyof CreateDevWorkflowRuleSetResponses];
@@ -14512,9 +14521,9 @@ export type CreateDevWorkflowWorkItemError = CreateDevWorkflowWorkItemErrors[key
 
 export type CreateDevWorkflowWorkItemResponses = {
 	/**
-	 * Success
+	 * Created
 	 */
-	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse;
+	201: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse;
 };
 
 export type CreateDevWorkflowWorkItemResponse = CreateDevWorkflowWorkItemResponses[keyof CreateDevWorkflowWorkItemResponses];
@@ -17473,6 +17482,10 @@ export type NodeLoginErrors = {
 	 * Bad Request
 	 */
 	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: XeLocalAiEngineClientEndpointsAuthV1NodeLoginLockedOutResponse;
 };
 
 export type NodeLoginError = NodeLoginErrors[keyof NodeLoginErrors];

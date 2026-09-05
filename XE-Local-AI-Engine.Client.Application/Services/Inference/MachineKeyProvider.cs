@@ -4,9 +4,10 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Default <see cref="IMachineKeyProvider" />. Reads <see cref="StoredNodeSettings.MachineKey" />; when it is absent
-///     it generates a fresh <see cref="Guid" /> (<c>"N"</c> format), persists it back through
-///     <see cref="INodeSettingsStore" /> (preserving every other setting via a <c>with</c> copy), and caches it for the
-///     process lifetime. Generate-once is serialized so two concurrent first-callers cannot mint two different keys.
+///     it generates a fresh <see cref="Guid" /> (<c>"N"</c> format) through
+///     <see cref="INodeSettingsStore.UpdateAsync" /> (preserving every other setting, and adopting a key a racing
+///     writer minted first rather than overwriting it), and caches the key the store actually holds for the process
+///     lifetime. Generate-once is serialized so two concurrent first-callers cannot mint two different keys.
 ///     Registered as a singleton.
 /// </summary>
 /// <remarks>The key is LOCAL-ONLY and is never emitted in telemetry, aggregates, or logs.</remarks>
@@ -48,11 +49,27 @@ public sealed class MachineKeyProvider : IMachineKeyProvider, IDisposable
             var key = settings.MachineKey;
             if (string.IsNullOrWhiteSpace(key))
             {
-                key = Guid.NewGuid().ToString("N");
-                await _settingsStore.SaveAsync(settings with
+                // Mint through the store's read-modify-write, not a load here and a save there. This gate serializes
+                // the callers inside THIS provider only; a settings save (which writes the file whole) or a second
+                // provider instance can still land between the load above and the write. Under UpdateAsync the
+                // mutation re-reads the latest record under the store's lock, so whoever gets there first mints and
+                // everyone after adopts that key instead of overwriting it with a second one — which would orphan
+                // every frozen inference profile, since profiles are keyed by machine key.
+                var persisted = await _settingsStore.UpdateAsync(latest => string.IsNullOrWhiteSpace(latest.MachineKey)
+                                                             ? latest with
+                                                             {
+                                                                 MachineKey = Guid.NewGuid().ToString("N")
+                                                             }
+                                                             : latest,
+                                                         ct)
+                                                    .ConfigureAwait(false);
+                key = persisted.MachineKey;
+                if (string.IsNullOrWhiteSpace(key))
                 {
-                    MachineKey = key
-                }, ct).ConfigureAwait(false);
+                    // The store returns what it persisted, so this cannot happen against a real one — and caching a
+                    // null would hand every profile lookup an empty machine key instead of failing.
+                    throw new InvalidOperationException("The node settings store did not persist a machine key.");
+                }
             }
 
             _cachedKey = key;

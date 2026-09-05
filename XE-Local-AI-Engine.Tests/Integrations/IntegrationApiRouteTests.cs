@@ -206,52 +206,6 @@ public sealed class IntegrationApiRouteTests
         }
     }
 
-    [Test]
-    public async Task Invoke_WhenTheCallerManagedRuleRefusesTheTarget_Returns422WithTheSessionPolicyCode()
-    {
-        // The trigger goes in through the STORE so it can name an agent definition that does not exist: the admin
-        // endpoint would refuse the same shape with a 400 validation problem, which is the save-time convention and a
-        // different contract from this one. The accept path fails CLOSED on a target it cannot resolve.
-        using var client = Factory.CreateClient();
-        var key = await GenerateKeyAsync(client, "policy-code", allowedTriggerIds: null, principalId: null);
-        var triggerName = "policy-code-trigger";
-        using (var scope = Factory.Services.CreateScope())
-        {
-            _ = await scope.ServiceProvider.GetRequiredService<IIntegrationTriggerStore>()
-                           .CreateAsync(new IntegrationTriggerCreateCommand(Guid.NewGuid(),
-                               triggerName,
-                               "Policy feed",
-                               Description: null,
-                               Enabled: true,
-                               IntegrationTargetKind.Agent,
-                               Guid.NewGuid(),
-                               IntegrationSessionPolicy.CallerManaged,
-                               IntegrationInputKinds.Text | IntegrationInputKinds.Json));
-        }
-
-        // A well-formed body: the route validates inputs itself, and that 422 is a DIFFERENT refusal with no code.
-        using var request = new HttpRequestMessage(HttpMethod.Post, IntegrationApiRoutes.Invoke(triggerName));
-        request.Headers.Add("Authorization", $"Bearer {key.Key}");
-        request.Content = JsonContent.Create(new
-        {
-            requestId = Guid.NewGuid(),
-            inputs = new[]
-            {
-                new
-                {
-                    type = "text",
-                    text = "do the thing"
-                }
-            }
-        });
-        using var response = await client.SendAsync(request);
-
-        AssertEx.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<ErrorBody>(IntegrationEndpointPayloads.Json));
-        AssertEx.Equal("session-policy", body.Code, "A caller branches on the code; the sentence is for a human.");
-        AssertEx.NotNull(body.Message);
-    }
-
     private async Task<Seeded> SeedAsync(HttpClient client, string prefix)
     {
         var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, $"{prefix}-agent");
@@ -327,9 +281,6 @@ public sealed class IntegrationApiRouteTests
         request.Content = content;
         return await client.SendAsync(request);
     }
-
-    /// <summary>The external family's error envelope: prose always, and a machine-readable code on the refusals only.</summary>
-    private sealed record ErrorBody(string Message, string? Code);
 
     private sealed record Seeded(string TriggerBName,
         Guid ExecutionUnderB,

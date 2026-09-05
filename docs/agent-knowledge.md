@@ -178,6 +178,23 @@ The assembly guard deliberately snapshots after a runner's own build and before 
 
 Do not wrap the whole project validator in one outer lock: its internally locked trees would become pass-throughs and regain unsafe parallel build/test overlap. Prevention and detection must remain separate layers.
 
+### After ANY failed build, rebuild to green before trusting a `--no-build` gate
+
+A build that fails in project B leaves B's output directory untouched, including B's copies of dependencies that did compile, so a `--no-build` test run loads a pre-change copy of a product assembly that itself built fresh. Prevents grading old code as new (2026-09-04: three real passes read as failures in a shared worktree after another agent's compile error). Authority: reproduced from scratch with a two-project solution; `scripts/assembly-guard.sh` cannot see it (it compares output before/after a run, not output already stale at start).
+
+### A full test-suite run can poison its own worktree's generated NuGet props
+
+A fixture that restores under an isolated `HOME` rewrites `obj/*.nuget.g.props` with a since-deleted package root; the next Release build fails `CS0006` on every analyzer assembly. It looks exactly like the MSBuild node-reuse trap, but the cure is `dotnet restore` with `NUGET_PACKAGES` pinned to the real store, not a build-server shutdown. Authority: reproduced in the S5 worktree 2026-09-04.
+
+### A Dev-mode sandbox run leaves MSBuild worker nodes holding a dead `NUGET_PACKAGES`
+
+Development Mode gives each sandboxed task its own `NUGET_PACKAGES` under the task's runtime directory. On the process provider those `dotnet` children are host processes, and MSBuild's reusable worker nodes (`MSBuild.dll /nodemode:1`) outlive them with that per-task path still in their environment. A later `dotnet restore` anywhere on this box can attach to one and write the by-then-deleted path into `obj/*.dgspec.json`, after which the build fails naming a `/tmp/xe-…/nuget` directory nothing asked for: **NU5037** during the graph-workflows S0 merge, **CS0006** in the session after it.
+
+- Recover with `dotnet build-server shutdown`, then `MSBUILDDISABLENODEREUSE=1 NUGET_PACKAGES=$HOME/.nuget/packages dotnet restore --force`.
+- Prefix long-lived agent shells with the same two variables; the dead path is inherited, not typed.
+- Distinct from the props-poisoning entry above (same `CS0006` face, dead path in `obj/*.nuget.g.props` and no live worker): here the path is carried by a live `MSBuild.dll /nodemode:1` process, so a plain re-restore is re-poisoned until node reuse is off.
+- The writer was `DevelopmentWorkspaceTools.BuildEnvironment`, which now sets `MSBUILDDISABLENODEREUSE=1` alongside the per-task `NUGET_PACKAGES`. `DevelopmentMountBrokerTests` asserts it.
+
 ### Never classify a cancellation from a `CancellationToken.Register` callback
 
 Registration callbacks race disposal and execute synchronously. They may signal/kill, but must not own terminal classification or throw the final exception. Classify after the awaited operation observes authoritative cancellation state.
@@ -197,7 +214,7 @@ For an automated spike compile, read the existing `DefineConstants`, append `P0_
 ### The full Tests module balloons to ~3.5 GB — it is a framework leak, not a fixture bug
 
 - Use `TestServerWebAppFactory`, not `WebApplicationFactory<Program>`; entry-point resolution roots host graphs for process lifetime.
-- `AddRateLimiter` creates an undisposed replenishment timer per host. Test composition uses `NoOpRateLimiterOptionsProvider`; real rate-limit tests opt into one shared host.
+- `AddRateLimiter` creates an undisposed replenishment timer per host. `ConfigureServices` computes every permit limit *outside* the `AddRateLimiter` lambda so its closure captures ints rather than `builder`, and raises them under `builder.Environment.IsEnvironment("Testing")` (auth 10 → 10,000/min) so a test host neither roots the disposed host graph nor throttles the single loopback partition every integration test shares.
 - Avoid per-test providers that create long-lived MCP SDK registries/clients. Use the keyed/shared fixture pattern.
 - `scripts/run-tests-memory-safe.sh` is the whole-module runner. A low `DOTNET_GCHeapHardLimit` is not a valid leak verdict; size-cap tests allocate large payloads.
 
@@ -228,6 +245,32 @@ Do not use a huge shell glob; it can hit `ARG_MAX`.
 ### A test host whose content root is the real Client source dir must register a fake `INodeDataDirectory`
 
 Any fixture combining the real Client content root with redirected node data must remove `INodeDataDirectory` and register `FakeNodeDataDirectory`. Otherwise first-launch migration moves credential/settings files out of the checkout and teardown deletes them. `ServiceProviderValidationTests.HostCreation_LeavesTheContentRootNodeSettingsWhereItIs` is the guard.
+
+### A node-settings save path must carry the local-only members over from the stored record
+
+`StoredNodeSettings` holds members the wire DTO deliberately never carries: `MachineKey` (minted node-side by
+`IMachineKeyProvider`, never sent to the client) and `ToolApprovalPolicy` (no operator field yet). A save that maps a
+request onto a fresh record and persists it verbatim erases them. Dropping `MachineKey` is silent: the next start mints
+a fresh GUID, and because inference profiles are keyed by machine key, every frozen profile on the box is orphaned —
+the resolver never finds one, each model re-fits from scratch forever, the rows still read `Frozen` through the
+profiles endpoint, and nothing is logged.
+
+Carrying the value over at the *start* of the save is not enough, because the load and the write are far apart:
+`IMachineKeyProvider` mints on the same node and can land between them, and this file is written WHOLE, so a save that
+re-applies the key it LOADED overwrites one minted since. Both paths therefore persist through
+`INodeSettingsStore.UpdateAsync`, whose mutation runs under the store's own lock and reads the record as it is at write
+time — `NodeSettingsAdministrationService.ValidateAndSaveAsync` saves `settings with { MachineKey = latest.MachineKey }`
+(covering every caller, including `ApplyAgenticPatchAsync`, which was already safe against plain erasure because it
+starts from `current with {…}`), and `MachineKeyProvider` mints as
+`latest.MachineKey is empty ? latest with { MachineKey = fresh } : latest`, caching the key the store actually holds
+rather than the one it generated. `SaveTrustedMergedAsync` still carries the key over up front as well: that copy owns
+the record the call VALIDATES and returns, including on the rejection paths that never reach a write. Guards:
+`NodeSettingsAdministrationServiceTests.SaveTrustedMerged_WhenTheIncomingRecordHasNoMachineKey_PreservesTheStoredOne`
+and `…_WhenTheMachineKeyIsMintedBetweenTheLoadAndTheWrite_PersistsTheMintedOne`,
+`NodeSettingsEndpointTests.SaveNodeSettings_WhenValid_PreservesTheStoredMachineKey`, and
+`MachineKeyProviderTests.MachineKey_WhenTwoProvidersMintConcurrently_AgreeOnTheOneStoredKey`. Authority: live evidence,
+fu-b round 2a, 2026-09-05. Do not "fix" this by adding `MachineKey` to the request or response DTO, and do not write
+this file with a bare `SaveAsync` composed from an earlier `LoadAsync`.
 
 ### The one temp artifact that is meant to survive: the migrated SQLite template
 
@@ -351,6 +394,18 @@ Plain `aspire stop` cleaned the tested stacks in later measurements, but the ori
 
 A user-secret key and `.data/node.key` can disagree. `dev-start.sh` always supplies the file, so data written under the old user secret fails later protected reads without naming the cause. Prefer `XE_NODE_OPERATOR_SECRET_FILE` pointing to the correct historical key; deleting `.data/node-sqlite/`, `dp-keys/`, and encrypted credential files is destructive fallback. `dev_ensure_node_operator_secret` warns when it mints a key beside existing data.
 
+### The Dev-workflow and Graph-workflow surfaces answer 404 unless their flags are set at `dev-start` time
+
+- Start an isolated host that actually serves them by putting the flags in the shell environment of the start script:
+
+  ```bash
+  DevWorkflows__Enabled=true GraphWorkflows__Enabled=true WorkSessions__Enabled=true scripts/dev-start.sh
+  ```
+
+- `AppHost.cs` forwards no such variable to the `app` resource; the flags reach the Client process as inherited process environment through `aspire` and DCP. They must therefore be on the `dev-start.sh` invocation itself, and they are read once at startup (`Program.cs`, `areDevWorkflowsEnabled`/`areGraphWorkflowsEnabled`), so changing one needs a restart.
+- `DevWorkflowOptions.Section` and `GraphWorkflowOptions.Section` default to disabled; only `WorkSessions:Enabled` ships `true` in `appsettings.json`. One pair is enforced at startup: `DevWorkflowOptionsValidator` fails the host when DevWorkflows is on with WorkSessions off, because every workflow agent node runs as a work session. GraphWorkflows carries no such coupling — `GraphWorkflowOptionsValidator` checks only its own budgets — so it starts on its own.
+- Prevents burning a live round on a "wrong route": each gate is a request-path middleware registered ahead of `LocalApiSecurityMiddleware` in `Program.cs`, deliberately so the switch cannot be probed by status code — which also means a disabled feature and a mistyped path are indistinguishable from the response alone.
+
 ### Locked runtime decisions — do not "helpfully" reintroduce
 
 - **Docker is off inference.** ADR 0004 permits it only for Development Mode build/test/lint. No Docker in model hosting/acquisition, embedding, image generation, or chat; HostAgent and sandbox gRPC stay deleted. Current implementation status belongs in `docs/roadmaps/development-mode-container-status.md`.
@@ -389,6 +444,7 @@ A dependency-manifest change returns the retryable `dependency_manifest_changed`
 - GPU offload has one owner per mode: GPU explore emits `--fit on --metrics` and no explicit placement; replay emits frozen `-ngl/-ts/-ot` and no `--fit`; CPU emits neither. Validate actual GPU work with the smoke.
 - `LlamaCppSourceBuildRequestValidation.Normalize` must be idempotent: `Normalize(Normalize(x)) == Normalize(x)`.
 - Helper tools (`llama-quantize`, `llama-perplexity`) are resolved **by name beside the resolved `llama-server`** (`LlamaCppToolBinaries`, surfaced as `LlamaBinary.QuantizerExecutablePath`/`PerplexityExecutablePath`, evaluated on read). Presence is never a precondition for adoption — a runtime missing one still serves; the caller that needs it fails specifically. The prebuilt archives carry `llama-perplexity` but no `llama-quantize`. **Both source-build paths only gained `llama-perplexity` when their cmake `--target` lists were widened (`CudaBuildService`, `LlamaCppSourceBuildService`) — any tree built before that, including the box's own `~/cuda-llama/b10201`, has `llama-server` and nothing else, so benchmark fidelity there must rebuild the runtime or point at a prebuilt.** (`CudaBuildService` never built `llama-quantize` either.)
+- **`llama-fit-params` is resolved the same way (`LlamaFitParamsProcessRunner`: `Path.Combine(serverSpec.WorkingDirectory, "llama-fit-params")`), and a BYO build that only built the `llama-server` target — the box's `~/cuda-llama/b10201` included — has no inference profiles at all: a manual Explore returns 400 "llama-fit-params did not produce a concrete replayable context and GPU placement", so nothing can be benchmarked or frozen and D13 staleness cannot be proven live.** The app degrades correctly (a warning names the missing capability, the spawn stays auto-fit). Before an inference-profile live round, check `ls "$(dirname "$XE_LLAMACPP_SERVER_PATH")/llama-fit-params"`. To add it without changing the shared runtime's identity (the launch-policy fingerprint hashes the bin directory), build the target in place, MOVE `llama-fit-params` + `libllama-fit-params-impl.so` into a scratch copy of `bin/`, and point `XE_LLAMACPP_SERVER_PATH` at the copy for the round. Incident: `docs/agent-knowledge-evidence.md` §2.
 - Emit `reasoning_budget_tokens` only when the template provides a think-end marker. At the pinned build, higher `--log-verbosity` is more verbose; use `-lv 5` for reasoning-budget traces. Empty logs at `-lv 1` are a threshold symptom.
 
 
@@ -404,7 +460,7 @@ A dependency-manifest change returns the retryable `dependency_manifest_changed`
 
 A missing `-ngl` is correct in explore and a defect in replay. `BuildLaunchSpec` receives the central `LlamaServerLaunchPlan`; do not scatter defaults back into supervisors/call sites. `--fit` and explicit placement cannot coexist, while `-c/-fa/-ctk/-ctv` may coexist with fit.
 
-**Optimized launch fallback:** GPU normal launch tries `-fa on -ctk q8_0 -ctv q8_0`. On readiness failure it retries **once** without explicit KV types and with `-fa auto`. Persist `llama-launch-fallback.json` per (backend, KV type) only if the safe retry succeeds; a broken model must not poison later launches. Legacy un-keyed entries (bare backend names) are ignored and dropped from the file on the first read. Frozen profiles bypass fallback. Capacity/advisor estimates stay f16-conservative because the safe path may run.
+**Optimized launch fallback:** GPU normal launch tries `-fa on -ctk q8_0 -ctv q8_0`. On readiness failure it retries **once** without explicit KV types and with `-fa auto`. Persist `llama-launch-fallback.json` per (backend, KV type) only if the safe retry succeeds; a broken model must not poison later launches. Legacy un-keyed entries (bare backend names) are ignored and dropped from the file on the first read. The file is USER-level and shared by every node process, so a write re-reads and merges under an OS lock on the sibling `llama-launch-fallback.json.lock` (the lock never sits on the state file itself, or the atomic replace over it would fail on Windows); a lock this process cannot take degrades to the in-process lock, where a concurrent sibling write can still be lost. Frozen profiles bypass fallback. Capacity/advisor estimates stay f16-conservative because the safe path may run.
 
 Every normal spawn pins `--no-warmup --parallel 1`; default parallelism multiplies KV reservations and warmup can consume the readiness budget. Every role receives explicit context. CPU never replays a GPU profile. After readiness, read `/props.default_generation_settings.n_ctx`, store it on the running process, and feed it to both `TurnPolicy.ContextCapacityTokens` and inner `num_ctx`; a per-send override still wins, while unknown providers use 8192. Do not substitute train context or requested context for the launched/effective process window.
 
@@ -506,7 +562,7 @@ Schema bounds are advisory to the model but handler validation is authoritative.
 - Drive `INodeChatStreamService.SendMessageAsync`, not `IInvocationRunner`, so conversation persistence, approvals, resume, and terminalization remain intact.
 - Pause/cancel/deadline must call `INodeChatStreamCancellationRegistry.TryCancel`; merely stopping enumeration leaves the run and node-wide slot alive. Persist terminal writes with `CancellationToken.None`.
 - `MaxConcurrentSessions` is admission only; `WorkerEventDispatcher` still serializes invocation node-wide. Bound parks with `MaxParkedSeconds`.
-- Before each step, `WorkSessionStepContextBound` projects history and force-compacts over `StepContextBudgetTokens`; checkpoint compaction is too late and keeps too much.
+- Before each step, `ConversationStepContextBound` projects history and force-compacts over `StepContextBudgetTokens`; checkpoint compaction is too late and keeps too much.
 - A step's inner tool loop resends earlier results/reasoning. Cap with `MaxProviderCallsPerStep`; hitting it ends the **step** as outcome `ProviderCallBudget`, not the session.
 - `StepEnded`/`StepFailed` detail carries content-free totals from the caller-seeded `ProviderCallCapScope`. Do not read the run's inner `AsyncLocal` after enumeration or record the last-round `UsageSnapshot` as a turn total. Cancelled steps omit counts because unwind races them.
 - `ToolResultBudgetScope` is ambient, tighten-only, and must be seeded before enumeration. All ClientLocal/Custom/MCP tools wrap through `BudgetedToolResultAIFunction`.
@@ -1008,6 +1064,18 @@ The 60-second stream-idle watchdog covers time inside tool handlers. Human waits
 
 `StreamIdleWatchdog.WithIdleTimeout` wraps the whole streaming call, including function execution. The human wait must occur after a `ToolApprovalRequestContent` terminates that segment. Delegate-scope inbound MCP, schedulers, and children strip approval-required tools because they cannot answer. Agentic-scope root inbound execution is the only auto-approval exception and requires the audit record to succeed **before** invocation.
 
+### A tool handler that throws does NOT end the turn on Microsoft.Extensions.AI 10.9.0
+
+The loop runs a further provider round; what the throw destroys is the handler's sentence, replaced by the pipeline's fixed `Error: Function failed.` (`IncludeDetailedErrors` is left `false`), so the model retries blind. Prevents the wrong inference that returning instead of throwing is about turn lifetime. Authority: measured with a standalone probe against the pinned package; `EmitOutputToolHandler.ExecuteAsync` carried the wrong claim until 4d7ee3ea.
+
+### A blank tool-call id is the only id-less shape Microsoft.Extensions.AI 10.9.0 can hand you
+
+Both `FunctionCallContent` and `FunctionResultContent` reject a null `CallId` in their constructor with `ArgumentNullException`, and `CallId` is read-only, so a provider that omits the id can only stream the empty string — a null guard on a call id there is unreachable code. `InvocationRunner.RunSingleAgentAsync` therefore mints invocation-local surrogate ids for a blank id: the bare tool name for the first call, `<name>#N` for an overlapping or later call of the same name. Prevents reasoning about `callId ?? name` fallbacks that can never fire, and prevents adding null guards that cannot be reached. Authority: a standalone probe against the pinned package during the S6 Codex round-1 fixes (2026-09-04), pinned by `InvocationRunnerTests.RunAsync_WhenTheProviderStreamsTwoSameNameCallsWithABlankCallId_PairsEachResultWithItsOwnCall`.
+
+### Persisted chat parts are a render/reload record, not model context
+
+A persisted `NodeChatMessagePart` reaches the model only through `ConversationContextBuilder.Build(includeToolHistory: true)` → `ConversationMessageDto.ToolExchanges` → `InvocationRunner.BuildChatMessages`, and only the integration execution coordinator asks for it, for a `CallerManaged` session — and only off the FULL read (`GetConversationAsync`): `GetConversationForTurnAsync` blanks `metadata_json` for every non-user row the compaction synopsis covers, which is exactly where the parts live, so a replay fed by the capped turn read is silently empty once the session compacts (`NodeChatTurnReadCapTests`). Chat has written those parts since long before any of this and never replayed one. Prevents assuming a continued turn "sees" its own tool calls because the SPA renders them — the S6 kickoff assumed chat already replayed parts, and it never did, so half of D-7 was new code rather than plumbing. Authority: `IntegrationContinuationTests.ACallerManagedContinuationReplaysTheCallItsResultAndThenTheTurnsText`, this pass 2026-09-04.
+
 ### MAF traps
 
 - `ChatClientAgentOptions` has no `Instructions`; use `ChatOptions.Instructions`.
@@ -1206,6 +1274,10 @@ Monaco stays behind shared `CodeEditor`: import `editor.api` and chosen Monarch 
 
 
 A bounded Mantine `NumberInput`/`Slider` that distinguishes “unset” from override needs a post-mount `ready` guard before persistence. Mantine can emit min/default on mount and overwrite a deliberate null. Capability flags for file/image chat input remain static client constants; do not wait for a backend capabilities endpoint that is not part of this contract.
+
+### hey-api's generated `queryFn` builds its request from `queryKey[0]`, not from the options it closed over
+
+Re-using a generated `*Options()` adapter for a different page inside a hand-written `queryFn` must pass that page's own `queryKey` in the context (`page.queryFn({ ...context, queryKey: page.queryKey })`), or every call re-requests the first page and a watermark loop never advances. Authority: `useIntegrationExecutionEvents` rework, pinned by `useIntegrationExecutions.test.tsx` ("calls the generated adapter once per page…").
 
 ### Races and flashes
 

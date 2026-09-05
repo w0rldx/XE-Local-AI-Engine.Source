@@ -42,6 +42,23 @@ public sealed record NodeMeResponse
     public required IReadOnlyList<string> Roles { get; init; }
 }
 
+/// <summary>
+///     The <c>401</c> body <c>auth/login</c> answers when ASP.NET Identity has locked the account, paired with a
+///     <c>Retry-After</c> header carrying the same number of seconds. A wrong password before the lockout threshold
+///     still answers a body-less <c>401</c>, so <see cref="Code" /> is the only signal that waiting is the fix.
+/// </summary>
+public sealed record NodeLoginLockedOutResponse
+{
+    /// <summary>The machine-readable discriminator. Always <c>locked-out</c>.</summary>
+    public const string LockedOutCode = "locked-out";
+
+    public required string Message { get; init; }
+
+    public string Code { get; init; } = LockedOutCode;
+
+    public required int RetryAfterSeconds { get; init; }
+}
+
 public sealed record NodeAuthErrorResponse
 {
     public required string Message { get; init; }

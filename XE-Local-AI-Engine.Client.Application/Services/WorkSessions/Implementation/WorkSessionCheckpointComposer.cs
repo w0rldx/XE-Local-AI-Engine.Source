@@ -82,7 +82,7 @@ internal sealed class WorkSessionCheckpointComposer(
     {
         // A blank requested model means "the node default", which is right here: a work-session agent pins no model, and
         // compaction stays on-node regardless of what the session itself runs on.
-        // The keep window is the session one (WorkSessionStepContextBound.SessionKeepVerbatim), not the configured chat
+        // The keep window is the session one (ConversationStepContextBound.SessionKeepVerbatim), not the configured chat
         // default of eight: at eight, a session that checkpoints before its fourth step has nothing OUTSIDE the window
         // to fold, compaction answers NothingToCompact, and the checkpoint's prose half stays null — precisely on the
         // short sessions whose checkpoint is the only record of what happened. Two is safe for the same reason it is
@@ -91,12 +91,12 @@ internal sealed class WorkSessionCheckpointComposer(
         // a checkpoint resumes on the synopsis plus the last exchange — one on-node summarizer call per checkpoint.
         var result = await _compaction.CompactAsync(conversationId,
                                           requestedModel: null,
-                                          WorkSessionStepContextBound.SessionKeepVerbatim,
+                                          ConversationStepContextBound.SessionKeepVerbatim,
                                           cancellationToken)
                                       .ConfigureAwait(false);
 
         // Any non-blank synopsis wins, not only a freshly folded one. The step boundary
-        // (WorkSessionStepContextBound) folds this conversation with a keep window of 2 whenever it grows past the
+        // (ConversationStepContextBound) folds this conversation with a keep window of 2 whenever it grows past the
         // budget, so by the time a checkpoint runs there is often nothing left for the configured window to fold — and
         // the "already covered" no-op returns the SYNOPSIS THAT FOLD PRODUCED. Taking only the Compacted outcome would
         // pin the checkpoint to a stale summary, or to none at all, on exactly the sessions the bound is protecting.

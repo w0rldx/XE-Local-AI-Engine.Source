@@ -41,9 +41,34 @@ public enum LlamaServerLoadAttemptKind
 }
 
 /// <summary>
-///     Content-free, bounded-cardinality observation of one llama-server load attempt. It is report-only: consumers must
-///     not use it as a memory ledger or an admission decision.
+///     Observation of one llama-server load attempt. It is report-only: consumers must not use it as a memory ledger or
+///     an admission decision — the two VRAM figures below are a RECORD of what admission already decided, never an input
+///     to a later one.
 /// </summary>
+/// <remarks>
+///     <para>
+///         Every member is content-free, but only the DIMENSIONS are bounded-cardinality: role, variant, outcome,
+///         placement, attempt kind and speculative class. <see cref="ModelName" />, <see cref="RuntimeVersion" /> and
+///         <see cref="RuntimeSha256" /> are identities and unbounded — a new build or a new model is a new value — so
+///         they are carried for a host-side consumer to key a record on and must NOT reach a metric tag (the meter
+///         bridge deliberately tags role/variant/outcome only).
+///     </para>
+/// </remarks>
+/// <param name="ModelName">
+///     The model this load was for. Carried for keying only; never a metric tag.
+/// </param>
+/// <param name="GlobalFreeVramBytesAtLoad">
+///     Machine-global free VRAM as the capacity gate measured it immediately before admitting THIS load — its forced
+///     hardware re-probe under the decision gate, carried here rather than re-measured (see
+///     <c>ProcessLaunchAdmission.GlobalFreeVramBytesAtAdmission</c>). Null when the load carried no capacity admission
+///     (a direct, profiling or test spawn), when the box has no readable global-free figure (a non-NVIDIA or CPU-only
+///     host), or when the selected runtime variant moved off the one the admission was granted against.
+/// </param>
+/// <param name="AdmittedVramBytes">
+///     The GPU bytes the capacity gate RESERVED for this process — the admitted allocation's footprint, NOT llama.cpp's
+///     own <c>--list-devices</c> process budget (a different axis, and not read on this path). Zero is a real answer for
+///     a CPU-placed allocation; null means there was no admission to read.
+/// </param>
 public sealed record LlamaServerLoadObservation(
     ModelRole Role,
     GpuVariant Variant,
@@ -53,7 +78,12 @@ public sealed record LlamaServerLoadObservation(
     LlamaServerReadinessOutcome Outcome,
     LlamaServerPlacementOutcome Placement,
     LlamaServerLoadAttemptKind AttemptKind,
-    SpeculativeModeClass SpeculativeModeClass);
+    SpeculativeModeClass SpeculativeModeClass,
+    // Required: every construction site must supply the model name. Only the two long? members below are
+    // trailing-optional, so a caller that measured nothing keeps constructing as it always did.
+    string ModelName,
+    long? GlobalFreeVramBytesAtLoad = null,
+    long? AdmittedVramBytes = null);
 
 /// <summary>
 ///     Provider-to-host seam for report-only llama-server load telemetry. The provider supplies a null implementation;

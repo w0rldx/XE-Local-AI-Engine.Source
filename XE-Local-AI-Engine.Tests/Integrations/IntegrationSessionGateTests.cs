@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Integrations;
 
-using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -114,46 +113,6 @@ public sealed class IntegrationSessionGateTests
 
         AssertEx.Null(read);
         AssertEx.Equal(IntegrationAcceptOutcome.SessionNotFound, continued.Outcome);
-    }
-
-    [Test]
-    public async Task Resolve_WhenTheAgentOffersANonReadLocalTool_Returns422SessionPolicy()
-    {
-        // Ruling R4-9(a), re-checked at ACCEPT and not only at save: an agent's tools can change afterwards, and a
-        // caller-managed session persists no tool history, so a continued run could not tell an action it already
-        // performed from prose describing one.
-        var harness = new IntegrationInvokeHarness
-        {
-            AgentIsReadLocalOnly = false
-        };
-        var trigger = harness.SeedTrigger("caller-managed", sessionPolicy: IntegrationSessionPolicy.CallerManaged);
-        var session = harness.SeedSession(trigger.Id);
-
-        var fresh = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
-        var continued = await harness.AcceptAsync(trigger.Name, sessionId: session.Id).ConfigureAwait(false);
-
-        AssertEx.Equal(IntegrationAcceptOutcome.SessionPolicyRejected, fresh.Outcome);
-        AssertEx.Equal(IntegrationAcceptOutcome.SessionPolicyRejected, continued.Outcome);
-        AssertEx.Empty(harness.Executions.Rows);
-        AssertEx.Empty(harness.CapturedConversations());
-        AssertEx.Empty(harness.CapturedSeeds());
-    }
-
-    [Test]
-    public async Task Resolve_ForAPerInvocationTrigger_SkipsTheToolCategoryCheckEntirely()
-    {
-        // A per-invocation trigger starts fresh every time, so it carries no history a missing tool call could make
-        // wrong. Running the predicate for it would be a read that decides nothing.
-        var harness = new IntegrationInvokeHarness
-        {
-            AgentIsReadLocalOnly = false
-        };
-        var trigger = harness.SeedTrigger("per-invocation");
-
-        var result = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
-
-        AssertEx.Equal(IntegrationAcceptOutcome.Accepted, result.Outcome);
-        _ = harness.TriggerService.DidNotReceive().AllowsCallerManagedAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

@@ -13348,8 +13348,8 @@
           "x-position": 1
         },
         "responses": {
-          "200": {
-            "description": "Success",
+          "201": {
+            "description": "Created",
             "content": {
               "application/json": {
                 "schema": {
@@ -13793,8 +13793,8 @@
           "x-position": 1
         },
         "responses": {
-          "200": {
-            "description": "Success",
+          "201": {
+            "description": "Created",
             "content": {
               "application/json": {
                 "schema": {
@@ -14587,8 +14587,8 @@
           "x-position": 1
         },
         "responses": {
-          "200": {
-            "description": "Success",
+          "201": {
+            "description": "Created",
             "content": {
               "application/json": {
                 "schema": {
@@ -19753,6 +19753,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAuthV1NodeLoginLockedOutResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -21842,29 +21852,23 @@
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1UpdateWorkSessionRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "title",
-          "objective",
-          "agentDefinitionId"
-        ],
         "properties": {
           "title": {
             "type": "string",
             "maxLength": 200,
             "minLength": 0,
-            "nullable": false
+            "nullable": true
           },
           "objective": {
             "type": "string",
             "maxLength": 8000,
             "minLength": 0,
-            "nullable": false
+            "nullable": true
           },
           "agentDefinitionId": {
             "type": "string",
             "format": "guid",
-            "minLength": 1,
-            "nullable": false
+            "nullable": true
           }
         }
       },
@@ -33107,7 +33111,7 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "name"
+          "version"
         ],
         "properties": {
           "version": {
@@ -33120,7 +33124,7 @@
             "type": "string",
             "maxLength": 200,
             "minLength": 0,
-            "nullable": false
+            "nullable": true
           },
           "description": {
             "type": "string",
@@ -33808,7 +33812,7 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "name"
+          "version"
         ],
         "properties": {
           "version": {
@@ -33821,7 +33825,7 @@
             "type": "string",
             "maxLength": 200,
             "minLength": 0,
-            "nullable": false
+            "nullable": true
           },
           "graph": {
             "nullable": true,
@@ -34052,6 +34056,18 @@
           },
           "failureClassGroup": {
             "type": "string",
+            "nullable": true
+          },
+          "modelReadinessMs": {
+            "type": "integer",
+            "nullable": true
+          },
+          "vramFreeAtLoadBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "vramAdmittedBytes": {
+            "type": "integer",
             "nullable": true
           }
         }
@@ -34366,6 +34382,7 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
+          "version",
           "name",
           "body"
         ],
@@ -34977,22 +34994,18 @@
       "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowWorkItemRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "title",
-          "request"
-        ],
         "properties": {
           "title": {
             "type": "string",
             "maxLength": 200,
             "minLength": 0,
-            "nullable": false
+            "nullable": true
           },
           "request": {
             "type": "string",
             "maxLength": 8000,
             "minLength": 0,
-            "nullable": false
+            "nullable": true
           }
         }
       },
@@ -39194,6 +39207,26 @@
             "maxLength": 256,
             "minLength": 12,
             "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAuthV1NodeLoginLockedOutResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message",
+          "retryAfterSeconds"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "retryAfterSeconds": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

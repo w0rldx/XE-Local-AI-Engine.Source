@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -282,6 +283,58 @@ public sealed class SupervisorLaunchFallbackTests
                     Arg.Any<CancellationToken>())
                 .Returns(_ => Task.FromResult<ProcessContextAllocation?>(allocation));
         return resolver;
+    }
+
+    /// <summary>
+    ///     The safe-retry verdict is BOOKKEEPING and must never be fatal to a process that already reached readiness.
+    ///     By the time it is written the process is registered and a concurrent caller can already have been handed
+    ///     its endpoint, so a write that throws must leave the spawn exactly as a successful one: the process
+    ///     registered, the endpoint returned, and ONE Ready observation for it. The lost verdict is a Warning, and
+    ///     the next spawn pays for it by retrying the optimized config once.
+    /// </summary>
+    [Test]
+    public async Task EnsureRunning_WhenRecordingTheSafeRetryVerdictThrows_KeepsTheProcessAndRaisesOneReadyObservation()
+    {
+        var telemetry = new FakeLlamaServerLoadTelemetry();
+        var policyLogger = new RecordingLogger<LlamaServerLaunchPolicy>();
+        await using var supervisor = SupervisorFactory.Create(new FakeProcessLauncher(),
+            // The optimized candidate fails readiness and the safe retry reaches it, so the spawn gets all the way to
+            // the verdict write — which is the step that then throws.
+            healthProbe: new FirstReadinessFailsHealthProbe(),
+            options: new LlamaServerSupervisorOptions
+            {
+                IdleTimeToLive = TimeSpan.FromHours(1),
+                MaxLoadedProcesses = 3,
+                // One attempt, so the observation sequence below is the whole story rather than the first of several.
+                MaxRestartAttempts = 1
+            },
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            launchPolicy: new LlamaServerLaunchPolicy(new LlamaServerLaunchPolicyOptions(),
+                new ThrowingOnWriteFallbackStore(),
+                policyLogger),
+            loadTelemetry: telemetry);
+
+        var endpoint = await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.NotNull(endpoint);
+        AssertEx.Equal(expected: 1, supervisor.CountRunningProcesses());
+        var observations = telemetry.Observations.ToArray();
+        AssertEx.Equal(expected: 2, observations.Length);
+        AssertEx.Equal(LlamaServerLoadAttemptKind.Primary, observations[0].AttemptKind);
+        AssertEx.Equal(LlamaServerReadinessOutcome.Failed, observations[0].Outcome);
+        AssertEx.Equal(LlamaServerLoadAttemptKind.SafeRetry, observations[1].AttemptKind);
+        AssertEx.Equal(LlamaServerReadinessOutcome.Ready, observations[1].Outcome);
+        AssertEx.True(policyLogger.HasEntry(LogLevel.Warning, "Could not persist the optimized-config failure"),
+            "A verdict that was dropped has to be said out loud, or the next spawn's repeat of the optimized config has no explanation.");
+    }
+
+    /// <summary>Reads normally; the WRITE the safe-retry verdict needs fails, which is what the policy has to absorb.</summary>
+    private sealed class ThrowingOnWriteFallbackStore : ILlamaServerLaunchFallbackStore
+    {
+        public Task<bool> IsOptimizedConfigDisabledAsync(GpuVariant variant, string kvCacheType, CancellationToken ct) => Task.FromResult(false);
+
+        public Task DisableOptimizedConfigAsync(GpuVariant variant, string kvCacheType, CancellationToken ct) =>
+            throw new IOException("The launch-fallback state file could not be replaced.");
     }
 
     /// <summary>Health probe whose readiness wait fails once (the optimized spawn) then succeeds (the safe retry).</summary>

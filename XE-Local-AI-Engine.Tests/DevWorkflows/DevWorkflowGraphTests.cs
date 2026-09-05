@@ -875,6 +875,12 @@ public sealed class DevWorkflowGraphTests
     [Arguments("""{"nodes":[],"edges":[]}""", "at least one node")]
     [Arguments("""{"nodes":[{"nodeType":"Agent"}],"edges":[]}""", "needs a non-empty 'nodeKey'")]
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Sorcery"}],"edges":[]}""", "needs a 'nodeType'")]
+
+    // Enum.TryParse accepts a NUMERIC token, so without a by-name rule "3" would parse into a node type no member has
+    // and reach the per-type config table as a missing key — a 500 for a document an author wrote.
+    [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"3"}],"edges":[]}""", "needs a 'nodeType'")]
+    [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"-1"}],"edges":[]}""", "needs a 'nodeType'")]
+    [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","joinPolicy":"1"}],"edges":[]}""", "unknown 'joinPolicy'")]
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"a","nodeType":"Gate"}],"edges":[]}""", "twice")]
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent"}],"edges":[{"from":"a","to":"ghost"}]}""", "does not declare")]
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent","maxAttempts":0}],"edges":[]}""", "must be positive")]

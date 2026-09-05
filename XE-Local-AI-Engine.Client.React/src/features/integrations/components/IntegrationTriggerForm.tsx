@@ -3,7 +3,6 @@ import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useStat
 import { useTranslation } from "react-i18next";
 
 import { IntegrationApprovalWarning } from "@/features/integrations/components/IntegrationApprovalWarning";
-import { resolveSideEffectingTools } from "@/features/integrations/models/IntegrationApproval";
 import {
 	type IntegrationAgentOption,
 	type IntegrationSessionPolicy,
@@ -67,22 +66,6 @@ export function IntegrationTriggerForm({
 		[agents, values.targetAgentDefinitionId],
 	);
 
-	// Preflight for the backend's 422: a CallerManaged session carries no persisted tool history, so a continued run
-	// cannot tell which side effects already happened. Fail-closed — a tool the catalog does not know counts as
-	// side-effecting. This is NOT the authorization; a stale catalog still gets rejected by the server.
-	const sideEffectingTools = useMemo(
-		() => (selectedAgent ? resolveSideEffectingTools(selectedAgent.allowedToolNames, toolsByName) : []),
-		[selectedAgent, toolsByName],
-	);
-	const sessionPolicyBlocked = values.sessionPolicy === "CallerManaged" && sideEffectingTools.length > 0;
-	const sessionPolicyError = sessionPolicyBlocked
-		? t(
-				"pages.integrations.triggers.validation.sessionPolicyTools",
-				"A caller-managed session is not allowed for an agent that can call side-effecting tools: {{tools}}. Choose a new session per call, or remove those tools from the agent.",
-				{ tools: sideEffectingTools.join(", ") },
-			)
-		: undefined;
-
 	// Live slug validation: the message appears the moment the value stops matching, not on submit.
 	const liveNameError =
 		values.name.length > 0 && !integrationTriggerNamePattern.test(values.name)
@@ -111,13 +94,9 @@ export function IntegrationTriggerForm({
 			return;
 		}
 
-		if (sessionPolicyBlocked) {
-			return;
-		}
-
 		setErrors({});
 		onSubmit(values);
-	}, [onSubmit, sessionPolicyBlocked, values]);
+	}, [onSubmit, values]);
 
 	useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
 
@@ -226,7 +205,6 @@ export function IntegrationTriggerForm({
 				}))}
 				value={values.sessionPolicy}
 				allowDeselect={false}
-				error={sessionPolicyError}
 				onChange={(value) => {
 					if (value === null) {
 						return;

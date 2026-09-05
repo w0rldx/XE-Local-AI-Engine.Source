@@ -62,14 +62,18 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
 
     /// <summary>
     ///     The telemetry members that are NOT additive across attempts. A route belongs to one settle, a served model
-    ///     is a name rather than a quantity, and a set of tool names does not sum — so the retry snapshot carries
-    ///     everything else and only these three are dropped.
+    ///     is a name rather than a quantity, a set of tool names does not sum, and the two VRAM figures are a READING
+    ///     of the box at one load rather than a quantity this attempt spent — adding two attempts' free-VRAM bytes
+    ///     would produce a number that describes nothing. So the retry snapshot carries everything else and only these
+    ///     five are dropped.
     /// </summary>
     private static readonly HashSet<string> NonAdditiveTelemetryMembers = new(StringComparer.Ordinal)
     {
         "routeJson",
         "servedModelName",
-        "toolNamesJson"
+        "toolNamesJson",
+        "vramFreeAtLoadBytes",
+        "vramAdmittedBytes"
     };
 
     private readonly IDevWorkflowStore _inner = inner ?? throw new ArgumentNullException(nameof(inner));
@@ -545,9 +549,9 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
     ///     Merges the COMPLETE additive cost vector into an existing retry detail, or answers null when the payload is
     ///     not a JSON object and must be forwarded verbatim.
     ///     <para>
-    ///         The members come from the telemetry record itself minus the three that cannot be added up — the route,
-    ///         the served model and the tool names. A column added to that record later therefore rides here
-    ///         automatically, or it is not additive; nothing enumerates the ten by hand.
+    ///         The members come from the telemetry record itself minus the five that cannot be added up — the route,
+    ///         the served model, the tool names and the two VRAM readings. A column added to that record later
+    ///         therefore rides here automatically, or it is not additive; nothing enumerates the ten by hand.
     ///     </para>
     /// </summary>
     private static string? MergeAttemptCost(string detailJson, DevWorkflowNodeTelemetry telemetry)

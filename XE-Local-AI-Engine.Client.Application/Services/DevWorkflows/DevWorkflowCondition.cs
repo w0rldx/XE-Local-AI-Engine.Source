@@ -1,6 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
+using System.Globalization;
+using System.Numerics;
 using System.Text.Json;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>The closed comparison set. No boolean algebra: two conditions are two edges into an <c>All</c> join.</summary>
 internal enum DevWorkflowConditionOperator
@@ -57,7 +60,11 @@ internal sealed record DevWorkflowCondition(string Path, DevWorkflowConditionOpe
             DevWorkflowConditionOperator.Gt => Order(value, condition.Value) > 0,
             DevWorkflowConditionOperator.Gte => Order(value, condition.Value) >= 0,
             DevWorkflowConditionOperator.Lt => Order(value, condition.Value) < 0,
-            _ => Order(value, condition.Value) <= 0
+            DevWorkflowConditionOperator.Lte => Order(value, condition.Value) <= 0,
+
+            // Unreachable: Parse accepts named members only, so there is no ninth operator to fall through to. A
+            // catch-all arm behaving as one of the eight would answer an operator nobody wrote with routing.
+            _ => throw new InvalidOperationException($"Unknown dev workflow condition operator {condition.Operator}.")
         };
     }
 
@@ -105,7 +112,40 @@ internal sealed record DevWorkflowCondition(string Path, DevWorkflowConditionOpe
     {
         if (left.ValueKind == JsonValueKind.Number && right.ValueKind == JsonValueKind.Number)
         {
-            return left.GetDouble().CompareTo(right.GetDouble());
+            // Mirrors GraphWorkflowCondition.Order — there are two copies of this ladder, and a change to either is a
+            // change to both. It is private there, so reusing it would mean editing the graph module to share it.
+            //
+            // Widest exact type first. Through double, 9007199254740992 and 9007199254740993 are the SAME value, so a
+            // 'gt' over ids or byte counts past 2^53 answers on a rounding artefact rather than on the numbers. Double
+            // is kept as the last resort for the tokens no exact arm reads — fractional and exponent forms out of
+            // decimal range — and a token not even double reads is not an ordering at all.
+            if (left.TryGetInt64(out var leftLong) && right.TryGetInt64(out var rightLong))
+            {
+                return leftLong.CompareTo(rightLong);
+            }
+
+            if (left.TryGetDecimal(out var leftDecimal) && right.TryGetDecimal(out var rightDecimal))
+            {
+                return leftDecimal.CompareTo(rightDecimal);
+            }
+
+            // Past decimal's range an INTEGER token still has an exact value, and only a chain that ends at double
+            // loses it: 1e29 and 1e29+1 are the same double. NumberStyles.AllowLeadingSign is the '^-?[0-9]+$' shape
+            // itself — sign and digits, nothing else — so a fractional or exponent token simply does not parse here
+            // and falls through to the line below.
+            if (BigInteger.TryParse(left.GetRawText(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var leftInteger)
+                && BigInteger.TryParse(right.GetRawText(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var rightInteger))
+            {
+                return leftInteger.CompareTo(rightInteger);
+            }
+
+            // ponytail: fractional and exponent tokens beyond decimal range still round through double, so two that
+            // differ only past ~17 significant digits read as equal and an integer token compared against its own
+            // exponent form answers on the rounded pair. Upgrade path if that ever routes a real graph wrongly:
+            // normalise each token into a BigInteger significand plus a base-10 exponent and compare those.
+            return left.TryGetDouble(out var leftDouble) && right.TryGetDouble(out var rightDouble)
+                ? leftDouble.CompareTo(rightDouble)
+                : null;
         }
 
         if (left.ValueKind == JsonValueKind.String && right.ValueKind == JsonValueKind.String)
@@ -136,13 +176,16 @@ internal sealed record DevWorkflowCondition(string Path, DevWorkflowConditionOpe
             throw new DevWorkflowValidationException($"The condition on edge {edgeDescription} needs a non-empty 'path'.");
         }
 
-        if (path.Split('.').Any(string.IsNullOrWhiteSpace))
+        if (!GraphWorkflowTokens.IsDotPath(path))
         {
-            throw new DevWorkflowValidationException($"The condition path '{path}' on edge {edgeDescription} has an empty segment.");
+            throw new DevWorkflowValidationException($"The condition path '{path}' on edge {edgeDescription} is not a dot path. "
+                                                     + "A dot path is property names separated by '.', with no wildcards, indexes or functions.");
         }
 
+        // By NAME: Enum.TryParse would accept "3" or "-1" and hand back an operator no member has, which Evaluate
+        // would then route on.
         var op = element.TryGetProperty("op", out var opElement) && opElement.ValueKind == JsonValueKind.String
-                                                                 && Enum.TryParse<DevWorkflowConditionOperator>(opElement.GetString(), ignoreCase: true, out var parsed)
+                                                                 && GraphWorkflowTokens.TryParseName<DevWorkflowConditionOperator>(opElement.GetString(), out var parsed)
             ? parsed
             : throw new DevWorkflowValidationException($"The condition on edge {edgeDescription} needs an 'op' from "
                                                        + $"{string.Join(", ", Enum.GetNames<DevWorkflowConditionOperator>())}.");

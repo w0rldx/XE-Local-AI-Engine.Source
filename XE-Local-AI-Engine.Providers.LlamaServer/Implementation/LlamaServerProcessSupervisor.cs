@@ -1331,7 +1331,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     key.ModelName, key.Role, handle.ProcessId, readinessDuration.TotalMilliseconds, readinessTimeout.TotalSeconds);
 
                 var placement = RecordObservedLayerPlacement(key, variant, placementSniffer);
-                var loadObservation = RecordLoadTelemetry(key,
+
+                // Assembled here (the RunningProcess below carries it) but NOT published yet: post-readiness
+                // bookkeeping still runs, and anything that throws there tree-kills the child. A Ready observation
+                // raised before that point would tell the host — and its last-load VRAM cache — that a process which
+                // never served had loaded. It is published just before the successful return instead, so
+                // readinessRecorded stays false until then and the catch path records the failed outcome exactly once.
+                var loadObservation = BuildLoadObservation(key,
                     variant,
                     capabilityManifest.Version ?? binary.Version,
                     capabilityManifest.ExecutableSha256,
@@ -1339,8 +1345,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     LlamaServerReadinessOutcome.Ready,
                     placement.Outcome,
                     candidate.AttemptKind,
-                    speculative);
-                readinessRecorded = true;
+                    speculative,
+                    admitted);
 
                 // The load window is over and the banner has been read. From here the child's raised-verbosity output is
                 // per-request chatter nobody asked to persist: drop it to Debug AND detach the automatic startup
@@ -1425,6 +1431,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     }
                     else if (candidate.Plan is { } safeRetryPlan)
                     {
+                        // Deliberately after the _processes registration above, and safe there because the policy
+                        // absorbs a verdict it cannot persist (see ILlamaServerLaunchPolicy). The endpoint is already
+                        // reachable by a concurrent EnsureRunningAsync, so an exception out of this line would
+                        // tree-kill a process another caller holds — to save a cache entry the next spawn re-records.
                         await _launchPolicy.RecordOptimizedConfigFailedAsync(variant, safeRetryPlan.KvCacheType, ct).ConfigureAwait(false);
                     }
                     else
@@ -1437,6 +1447,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     }
                 }
 
+                // Every post-readiness step survived, so this spawn really did produce a serving process: raise the
+                // Ready observation now and latch it, which is what keeps the catch paths from recording a second one.
+                PublishLoadObservation(loadObservation);
+                readinessRecorded = true;
                 return running;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -1527,7 +1541,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     outcome,
                     variant == GpuVariant.Cpu ? LlamaServerPlacementOutcome.Cpu : LlamaServerPlacementOutcome.Unknown,
                     candidate.AttemptKind,
-                    speculative);
+                    speculative,
+                    admitted);
                 readinessRecorded = true;
             }
         }
@@ -1686,11 +1701,38 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         LlamaServerReadinessOutcome outcome,
         LlamaServerPlacementOutcome placement,
         LlamaServerLoadAttemptKind attemptKind,
-        SpeculativeDecodingSettings speculative)
+        SpeculativeDecodingSettings speculative,
+        ProcessLaunchAdmission? admitted)
+    {
+        var observation = BuildLoadObservation(key, variant, runtimeVersion, runtimeSha256, readinessDuration, outcome, placement, attemptKind, speculative, admitted);
+        PublishLoadObservation(observation);
+        return observation;
+    }
+
+    /// <summary>
+    ///     Assembles the observation without raising it. Split from <see cref="RecordLoadTelemetry" /> so the Ready
+    ///     path can fill <c>RunningProcess.LoadObservation</c> while the PUBLISH waits until the post-readiness
+    ///     bookkeeping has actually succeeded — a Ready load must never be announced for a process that gets killed.
+    /// </summary>
+    private static LlamaServerLoadObservation BuildLoadObservation(ProcessKey key,
+        GpuVariant variant,
+        string runtimeVersion,
+        string? runtimeSha256,
+        TimeSpan readinessDuration,
+        LlamaServerReadinessOutcome outcome,
+        LlamaServerPlacementOutcome placement,
+        LlamaServerLoadAttemptKind attemptKind,
+        SpeculativeDecodingSettings speculative,
+        ProcessLaunchAdmission? admitted)
     {
         var speculativeModeClass = key.Role == ModelRole.Chat
             ? speculative.ModeClass ?? SpeculativeModeClass.Disabled
             : SpeculativeModeClass.Disabled;
+
+        // Both byte figures are whatever the admission ALREADY knew — the free-VRAM reading the capacity gate took
+        // under its decision gate, and the GPU bytes it reserved. Nothing is probed here: a load must not pay for a
+        // second nvidia-smi call, and a figure measured after the weights landed would answer a different question.
+        // An unadmitted spawn (direct, profiling, test) or one whose variant moved off the admission reports neither.
         var observation = new LlamaServerLoadObservation(key.Role,
             variant,
             runtimeVersion,
@@ -1699,7 +1741,15 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             outcome,
             placement,
             attemptKind,
-            speculativeModeClass);
+            speculativeModeClass,
+            key.ModelName,
+            admitted?.GlobalFreeVramBytesAtAdmission,
+            admitted?.Allocation.Footprint.GpuBytes);
+        return observation;
+    }
+
+    private void PublishLoadObservation(LlamaServerLoadObservation observation)
+    {
         try
         {
             _loadTelemetry.RecordLoad(observation);
@@ -1709,8 +1759,6 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // Telemetry is report-only. A broken exporter must never change launch/fallback/admission behavior.
             _logger.LogDebug(exception, "llama-server load telemetry observer failed.");
         }
-
-        return observation;
     }
 
     /// <summary>Best-effort read of the running server's effective context window from /props; null when unavailable.</summary>

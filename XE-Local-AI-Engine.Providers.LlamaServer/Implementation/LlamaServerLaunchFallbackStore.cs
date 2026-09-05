@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -12,7 +14,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     Mirrors <see cref="InstalledRuntimeStore" />: tolerant deserialize (absent/corrupt → empty), atomic temp-file
 ///     write then move-with-overwrite, owner-only (0600) permissions on non-Windows. An in-memory snapshot backs the
 ///     read so <see cref="IsOptimizedConfigDisabledAsync" /> never touches disk on the spawn hot path after the first
-///     load; the snapshot is refreshed under the same lock on every write.
+///     load; the snapshot is refreshed under the same lock on every write. The read-merge-replace additionally tries to
+///     hold an OS file lock on a sibling <c>.lock</c> file: WHILE THAT LOCK IS HELD two node processes writing at once
+///     cannot lose each other's verdict. Acquisition is bounded, and a write that could not take it proceeds unlocked
+///     (logged at Warning) with the old in-process-only ceiling, where a sibling write landing inside that window is
+///     still lost.
 ///     Legacy backend-only entries (written before the store was keyed by KV type) are ignored on load and dropped from
 ///     the file on the first read, so an old un-keyed verdict can no longer make the node's KV-cache-type setting inert.
 /// </remarks>
@@ -20,12 +26,22 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
 {
     private const string StateFileName = "llama-launch-fallback.json";
 
+    // Cross-process write lock: a few short attempts, then give up and merge with the in-process lock alone. The whole
+    // budget stays well under a spawn's tolerance because this runs on the launch path.
+    private const int LockAttempts = 4;
+
+    private const string LockFileName = StateFileName + ".lock";
+
+    private static readonly TimeSpan LockRetryDelay = TimeSpan.FromMilliseconds(25);
+
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true
     };
 
     private readonly SemaphoreSlim _lock = new(initialCount: 1, maxCount: 1);
+    private readonly string _lockPath;
+    private readonly ILogger _logger;
     private readonly string _statePath;
 
     // Null until first load; then the authoritative in-memory snapshot of disabled "{Variant}:{kvType}" keys
@@ -33,10 +49,12 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
     private HashSet<string>? _disabled;
 
     /// <summary>Creates the store under <paramref name="cacheRoot" /> (defaulting to the shared app cache root).</summary>
-    public LlamaServerLaunchFallbackStore(string? cacheRoot = null)
+    public LlamaServerLaunchFallbackStore(string? cacheRoot = null, ILogger<LlamaServerLaunchFallbackStore>? logger = null)
     {
         var root = string.IsNullOrWhiteSpace(cacheRoot) ? DefaultCacheRoot() : cacheRoot;
         _statePath = Path.Combine(root, StateFileName);
+        _lockPath = Path.Combine(root, LockFileName);
+        _logger = logger ?? NullLogger<LlamaServerLaunchFallbackStore>.Instance;
     }
 
     public void Dispose()
@@ -120,7 +138,7 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
 
         try
         {
-            await using var stream = File.OpenRead(_statePath);
+            await using var stream = OpenStateForRead(_statePath);
             var state = await JsonSerializer.DeserializeAsync<LlamaServerLaunchFallbackState>(stream, SerializerOptions, ct).ConfigureAwait(false);
 
             // Legacy, backend-only entries carry no KV type, so they cannot say which config failed. They are ignored
@@ -148,6 +166,22 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
         return (set, hadLegacy);
     }
 
+    /// <summary>
+    ///     Opens the state file for reading the way every reader must. Shared with writers and deleters, not just with
+    ///     other readers: <see cref="File.OpenRead" /> shares Read only, and on Windows a lock-free sibling read taken
+    ///     that way blocks the <c>File.Move(…, overwrite: true)</c> that ends a write — turning a ready safe-retry
+    ///     spawn into a launch failure. Readers still see whole documents either way, because the replace is atomic.
+    /// </summary>
+    /// <remarks>Internal so the share flags can be pinned by a test holding a reader open across a replace.</remarks>
+    internal static FileStream OpenStateForRead(string path) =>
+        new(path,
+            new FileStreamOptions
+            {
+                Mode = FileMode.Open,
+                Access = FileAccess.Read,
+                Share = FileShare.ReadWrite | FileShare.Delete
+            });
+
     private async Task PersistAsync(HashSet<string> disabled, CancellationToken ct)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_statePath)!);
@@ -155,9 +189,13 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
         // The file is USER-level, so several node processes share it and each write replaces the whole document. Fold
         // whatever is on disk back in first, or a sibling process's verdict is silently dropped. Legacy names are
         // ignored by the load, so they stay dropped.
-        // ponytail: the re-read is guarded by the in-process lock only, so a sibling write landing between it and the
-        // File.Move below is still lost. Accepted — a lost verdict costs one failed spawn that re-records it. Upgrade
-        // path: hold an OS file lock (FileShare.None on the state file) across the read and the move.
+        // The re-read and the replace are one cross-process critical section, held on a sibling .lock file rather than
+        // on the state file itself: an exclusive handle on the state file would make the atomic File.Move over it fail
+        // on Windows, and readers take no lock at all, so they keep seeing whole documents throughout.
+        // ponytail: a lock this process could not acquire (a sibling holding it past the retry budget, or an unwritable
+        // cache root) degrades to the in-process lock alone, which is the old ceiling — a sibling write landing inside
+        // that window is lost. Accepted: it costs one failed spawn that re-records the verdict.
+        using var crossProcessLock = await TryAcquireWriteLockAsync(ct).ConfigureAwait(false);
         var (onDisk, _) = await LoadAsync(ct).ConfigureAwait(false);
         disabled.UnionWith(onDisk);
 
@@ -179,11 +217,50 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
         }
     }
 
-    private static FileStream CreateOwnerOnly(string path)
+    /// <summary>
+    ///     Takes the cross-process write lock, or null when it could not be had: a sibling still holding it after the
+    ///     retry budget, or a lock file this process cannot open for writing. Either way the write proceeds unlocked,
+    ///     and both paths are logged at Warning — the degraded merge is the one thing a silent return would hide.
+    /// </summary>
+    private async Task<FileStream?> TryAcquireWriteLockAsync(CancellationToken ct)
+    {
+        for (var attempt = 1; attempt <= LockAttempts; attempt++)
+        {
+            try
+            {
+                return CreateOwnerOnly(_lockPath, FileMode.OpenOrCreate);
+            }
+            catch (IOException)
+            {
+                // Held by a sibling node process: back off and retry.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // The lock file itself could not be opened for writing, and retrying cannot change that. It says
+                // nothing about whether the STATE write below will succeed — that write decides its own writability —
+                // so this only reports the degraded merge rather than predicting the outcome of the launch.
+                _logger.LogWarning("Could not open the llama-server launch-fallback write lock at {LockPath} for writing; merging under the in-process lock only, so a concurrent sibling write may be lost.",
+                    _lockPath);
+                return null;
+            }
+
+            if (attempt < LockAttempts)
+            {
+                await Task.Delay(LockRetryDelay, ct).ConfigureAwait(false);
+            }
+        }
+
+        _logger.LogWarning("Could not take the llama-server launch-fallback write lock at {LockPath} after {Attempts} attempts; merging under the in-process lock only, so a concurrent sibling write may be lost.",
+            _lockPath,
+            LockAttempts);
+        return null;
+    }
+
+    private static FileStream CreateOwnerOnly(string path, FileMode mode = FileMode.Create)
     {
         var options = new FileStreamOptions
         {
-            Mode = FileMode.Create,
+            Mode = mode,
             Access = FileAccess.Write,
             Share = FileShare.None
         };

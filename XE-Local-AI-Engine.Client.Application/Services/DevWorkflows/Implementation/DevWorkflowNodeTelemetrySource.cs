@@ -2,9 +2,11 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
 using System.Text.Json;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     Assembles a settling node run's cost from persisted rows. Three shapes, decided by the node run itself: a work
@@ -19,10 +21,16 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 ///     <c>IDevWorkflowStore</c> itself on a node with Development Mode switched off. The container fills a defaulted
 ///     parameter with null when the service is absent, which is the same answer the DevTask lane gives for the same
 ///     reason — and the node run simply reports no DevTask cost.
+///     <para>
+///         <paramref name="localModelLoads" /> is optional for the same reason: it is registered by the model-fit
+///         module, which a host composing only the workflow stack does not add. Absent, the VRAM columns stay null,
+///         which is what they say anyway for every model the node did not load itself.
+///     </para>
 /// </remarks>
 internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore workSessions,
     IAgentExecutionLogStore executionLogs,
-    IDevelopmentStore? development = null) : IDevWorkflowNodeTelemetrySource
+    IDevelopmentStore? development = null,
+    NodeMetricsLlamaServerLoadTelemetry? localModelLoads = null) : IDevWorkflowNodeTelemetrySource
 {
     /// <summary>camelCase, matching the supervisor that wrote these rows.</summary>
     private static readonly JsonSerializerOptions ConsumptionJsonOptions = new(JsonSerializerDefaults.Web);
@@ -63,6 +71,7 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
     private readonly IAgentWorkSessionStore _workSessions = workSessions ?? throw new ArgumentNullException(nameof(workSessions));
     private readonly IAgentExecutionLogStore _executionLogs = executionLogs ?? throw new ArgumentNullException(nameof(executionLogs));
     private readonly IDevelopmentStore? _development = development;
+    private readonly NodeMetricsLlamaServerLoadTelemetry? _localModelLoads = localModelLoads;
 
     public async Task<DevWorkflowNodeTelemetry?> CollectAsync(DevWorkflowNodeRunSnapshot nodeRun,
         DevWorkflowNodeRunStatus targetStatus,
@@ -100,6 +109,16 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
         var steps = await CollectStepConsumptionAsync(sessionId, cancellationToken).ConfigureAwait(false);
         var envelopes = await CollectEnvelopesAsync(session.ConversationId, cancellationToken).ConfigureAwait(false);
 
+        // As of the most recent SUCCESSFUL load of the model that served this run, which is not necessarily a load this
+        // run caused: a warm run reports the earlier load's figures, and model_readiness_ms is what tells the two apart
+        // (a small/near-zero readiness there ⇒ the warmer waited for nothing ⇒ the load predates the run; null ⇒
+        // unmeasured — an exact zero is not the signal, a resident model can read a few milliseconds). Chat role,
+        // because that is the only role a work session's turns ever ask for. Null for a remote or Ollama model, and
+        // null when the node never loaded this model itself.
+        var vram = envelopes.ServedModelName is { } servedModel
+            ? _localModelLoads?.TryGetLastReadyLoad(servedModel, ModelRole.Chat)
+            : null;
+
         return new DevWorkflowNodeTelemetry(envelopes.InputTokens,
             envelopes.OutputTokens,
             envelopes.ReasoningTokens,
@@ -112,7 +131,9 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
             envelopes.ServedModelName,
             RouteJson: null,
             session.StepCount,
-            envelopes.ModelReadinessMs);
+            envelopes.ModelReadinessMs,
+            vram?.GlobalFreeVramBytesAtLoad,
+            vram?.AdmittedVramBytes);
     }
 
     /// <summary>
@@ -213,7 +234,9 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
 
                 // Summed beside it rather than subtracted from it: agent_turn_ms stays the whole-turn wall clock it has
                 // always been, and a reader who wants the warm-equivalent time takes the difference. Null-preserving, so
-                // a conversation whose turns all ran warm records null rather than a zero that would claim otherwise.
+                // a conversation no turn of which went through the local-runtime warmer records null — unmeasured —
+                // rather than a zero. A turn that DID warm always contributes a measurement, near zero when the model
+                // was already resident, because the warmer times the reuse call too and the value truncates to ms.
                 modelReadinessMs = Add(modelReadinessMs, envelope.ModelReadinessMs);
 
                 // The store orders newest first, so the first envelope of the first page is the model that served the

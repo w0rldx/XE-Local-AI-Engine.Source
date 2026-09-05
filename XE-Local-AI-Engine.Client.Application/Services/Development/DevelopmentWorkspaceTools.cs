@@ -553,6 +553,13 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             ["TMP"] = temporary,
             ["TEMP"] = temporary,
             ["NUGET_PACKAGES"] = ResolveRuntimeDirectory("nuget"),
+            // The per-task NUGET_PACKAGES above must not outlive the task, and with node reuse on it did. MSBuild's
+            // reusable worker nodes (MSBuild.dll /nodemode:1) survive the dotnet process that started them, keeping
+            // that per-task path in their environment; on the process provider they are host processes, so a LATER
+            // restore anywhere on this box can attach to one and write the by-then-deleted packages path into
+            // obj/*.dgspec.json. Measured twice: NU5037 during the graph-workflows merge and CS0006 in the session
+            // after it, both naming a /tmp/xe-… directory no command had asked for. One task per node, no reuse.
+            ["MSBUILDDISABLENODEREUSE"] = "1",
             ["DOTNET_CLI_HOME"] = ResolveRuntimeDirectory("dotnet"),
             ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1",
             ["DOTNET_NOLOGO"] = "1",

@@ -287,6 +287,24 @@ public sealed class ToolRelevanceChatClientTests
     }
 
     [Test]
+    public async Task GetResponseAsync_WhenTheInstructionsOnlyHoldTheNameInsideALongerWord_DoesNotPinTheTool()
+    {
+        // "task" is not a mention of the tool named "ask". A substring test pinned it anyway and spent a slot on a
+        // tool the instructions never named.
+        var candidate = await PinningCandidateAsync("ask", "Finish the task before you stop.");
+
+        AssertEx.False(candidate.IsCore, "A name matched only inside a longer word is not an instruction naming the tool.");
+    }
+
+    [Test]
+    public async Task GetResponseAsync_WhenTheInstructionsHoldTheNameAsAWord_PinsTheTool()
+    {
+        var candidate = await PinningCandidateAsync("ask", "Finish the task, and you may ask when unsure.");
+
+        AssertEx.True(candidate.IsCore, "A tool the agent's own instructions name verbatim is never hidden.");
+    }
+
+    [Test]
     public async Task GetResponseAsync_PinsAToolNamedInOptionsInstructionsForASpawnedChild()
     {
         // A spawned child and an orchestration participant build their own ChatOptions and DO set Instructions.
@@ -634,6 +652,23 @@ public sealed class ToolRelevanceChatClientTests
             NullLogger<ToolRelevanceChatClient>.Instance);
     }
 
+    /// <summary>Runs one decision over an array containing <paramref name="name" /> and returns that tool's candidate.</summary>
+    private static async Task<ToolRelevanceCandidate> PinningCandidateAsync(string name, string instructions)
+    {
+        var (tools, _) = BuildArray([.. FillerNames(20), name]);
+        var selector = new CountingSelector();
+        using var inner = new CapturingChatClient();
+        using var sut = BuildSut(inner, selector);
+
+        using (ToolRelevanceScope.BeginScope(active: true, Core()))
+        {
+            _ = await sut.GetResponseAsync([new ChatMessage(ChatRole.System, instructions), new ChatMessage(ChatRole.User, "zzzz")],
+                OptionsFor(tools));
+        }
+
+        return AssertEx.NotNull(selector.Candidates).Single(entry => string.Equals(entry.Name, name, StringComparison.Ordinal));
+    }
+
     private static async Task<SentArray> SendAsync(IList<AITool> tools,
         bool active = true,
         string[]? coreNames = null,
@@ -749,12 +784,16 @@ public sealed class ToolRelevanceChatClientTests
 
         public int Invocations => Volatile.Read(ref _invocations);
 
+        /// <summary>The candidates of the last decision, so a test can assert the pinning flag the hop computed.</summary>
+        public IReadOnlyList<ToolRelevanceCandidate>? Candidates { get; private set; }
+
         public async Task<ToolRelevanceSelection> SelectAsync(string? query,
             IReadOnlyList<ToolRelevanceCandidate> candidates,
             int threshold,
             CancellationToken cancellationToken)
         {
             _ = Interlocked.Increment(ref _invocations);
+            Candidates = candidates;
             _ = Entered.TrySetResult();
             if (Gate is not null)
             {

@@ -366,6 +366,60 @@ public sealed class OpenApiDocumentTests
         AssertEx.Equal(HttpStatusCode.NotFound, probe.StatusCode, "A disabled node must refuse the route the document still describes.");
     }
 
+    /// <summary>
+    ///     The update contracts' requiredness, which is not a formality: the generated client types a request body off
+    ///     these arrays, so a member in the wrong bucket ships a caller that either omits a mandatory field or is made
+    ///     to invent one. Both were wrong here, and for opposite reasons — <c>version</c> is required by the endpoint
+    ///     but was emitted optional (the schema processor reads requiredness off a rule's condition and off
+    ///     <c>required</c> members, never off <c>GreaterThan(0)</c>), while the partial-update <c>name</c> is
+    ///     omit-means-unchanged and was emitted required (a block <c>When(...)</c> sets no per-component condition, so
+    ///     the processor saw a bare <c>NotEmpty</c>).
+    /// </summary>
+    [Test]
+    public async Task LocalOpenApiDocument_MarksUpdateRequestVersionRequiredAndPartialMembersOptional()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+
+        AssertRequired(schemas, "UpdateGraphWorkflowDefinitionRequest", required: ["version"], optional: ["name"]);
+        AssertRequired(schemas, "UpdateDevWorkflowDefinitionRequest", required: ["version"], optional: ["name"]);
+
+        // The rule set is the control: it is a WHOLE-document PUT, so its name and body are genuinely required and
+        // must stay that way — without this the test above would also pass on a spec that made everything optional.
+        AssertRequired(schemas, "UpdateDevWorkflowRuleSetRequest", required: ["version", "name", "body"], optional: []);
+
+        // The create routes answer 201, and the client narrows the created body off that response.
+        var paths = document.RootElement.GetProperty("paths");
+        AssertResponses(paths, "/api/local/v1/development-workflows/definitions", "post", ["201", "400"]);
+        AssertResponses(paths, "/api/local/v1/development-workflows/rule-sets", "post", ["201", "400"]);
+        AssertResponses(paths, "/api/local/v1/development-workflows/work-items", "post", ["201", "400"]);
+    }
+
+    private static void AssertRequired(JsonElement schemas, string schemaSuffix, IReadOnlyList<string> required, IReadOnlyList<string> optional)
+    {
+        var schema = FindSchema(schemas, schemaSuffix);
+        var declared = schema.TryGetProperty("required", out var requiredArray)
+            ? requiredArray.EnumerateArray().Select(static member => member.GetString() ?? string.Empty).ToArray()
+            : [];
+
+        foreach (var member in required)
+        {
+            AssertEx.Contains(declared, member, $"{schemaSuffix}.{member} must be required on the wire; required = [{string.Join(", ", declared)}].");
+        }
+
+        foreach (var member in optional)
+        {
+            AssertEx.False(declared.Contains(member, StringComparer.Ordinal),
+                $"{schemaSuffix}.{member} means \"leave it alone\" when omitted, so it must not be required; required = [{string.Join(", ", declared)}].");
+        }
+    }
+
     private static void AssertWorkSessionPaths(JsonElement paths)
     {
         foreach (var (path, verbs) in WorkSessionPaths)

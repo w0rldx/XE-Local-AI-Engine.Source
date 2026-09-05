@@ -35,19 +35,23 @@ public sealed class UpdateDevWorkflowWorkItemRequestValidator : Validator<Update
 
         // Omitted means unchanged, so only a PRESENT value is bounded. Blank-but-present is a caller mistake, not a
         // request to clear a title the work item cannot do without.
-        When(static request => request.Title is not null,
-            () => RuleFor(static request => request.Title)
-                  .NotEmpty()
-                  .WithMessage("A work item needs a title.")
-                  .MaximumLength(DevWorkflowRequestLimits.MaxTitleLength)
-                  .WithMessage($"The title is longer than the {DevWorkflowRequestLimits.MaxTitleLength}-character limit."));
+        // Chained `.When(...)`, never the block `When(pred, () => ...)` form: only the chained one sets the
+        // per-component condition FastEndpoints' schema processor reads, and with the block form it saw an
+        // unconditional NotEmpty and emitted this OPTIONAL member as required on the wire. The rules are unchanged —
+        // a condition at the end of a chain covers every validator before it (ApplyConditionTo.AllValidators default).
+        RuleFor(static request => request.Title)
+            .NotEmpty()
+            .WithMessage("A work item needs a title.")
+            .MaximumLength(DevWorkflowRequestLimits.MaxTitleLength)
+            .WithMessage($"The title is longer than the {DevWorkflowRequestLimits.MaxTitleLength}-character limit.")
+            .When(static request => request.Title is not null);
 
-        When(static request => request.Request is not null,
-            () => RuleFor(static request => request.Request)
-                  .NotEmpty()
-                  .WithMessage("A work item needs a request — what is being asked for.")
-                  .MaximumLength(DevWorkflowRequestLimits.MaxRequestLength)
-                  .WithMessage($"The request is longer than the {DevWorkflowRequestLimits.MaxRequestLength}-character limit."));
+        RuleFor(static request => request.Request)
+            .NotEmpty()
+            .WithMessage("A work item needs a request — what is being asked for.")
+            .MaximumLength(DevWorkflowRequestLimits.MaxRequestLength)
+            .WithMessage($"The request is longer than the {DevWorkflowRequestLimits.MaxRequestLength}-character limit.")
+            .When(static request => request.Request is not null);
     }
 }
 
@@ -56,7 +60,7 @@ public sealed class ListDevWorkflowWorkItemsRequestValidator : Validator<ListDev
     public ListDevWorkflowWorkItemsRequestValidator() =>
         When(static request => request.Status is not null,
             () => RuleFor(static request => request.Status)
-                  .Must(static status => Enum.TryParse<DevWorkflowWorkItemStatus>(status, ignoreCase: true, out _))
+                  .Must(static status => DevWorkflowTokenRules.IsNamed<DevWorkflowWorkItemStatus>(status))
                   .WithMessage($"status must be one of {string.Join(", ", Enum.GetNames<DevWorkflowWorkItemStatus>())}."));
 }
 
@@ -84,12 +88,16 @@ public sealed class UpdateDevWorkflowDefinitionRequestValidator : Validator<Upda
         // in between, which is the one thing optimistic concurrency exists to refuse.
         RuleFor(static request => request.Version).GreaterThan(0).WithMessage("A definition update must carry the version it was edited from.");
 
-        When(static request => request.Name is not null,
-            () => RuleFor(static request => request.Name)
-                  .NotEmpty()
-                  .WithMessage("A workflow definition needs a name.")
-                  .MaximumLength(DevWorkflowRequestLimits.MaxTitleLength)
-                  .WithMessage($"The name is longer than the {DevWorkflowRequestLimits.MaxTitleLength}-character limit."));
+        // Chained `.When(...)`, never the block `When(pred, () => ...)` form: only the chained one sets the
+        // per-component condition FastEndpoints' schema processor reads, and with the block form it saw an
+        // unconditional NotEmpty and emitted this OPTIONAL member as required on the wire. The rules are unchanged —
+        // a condition at the end of a chain covers every validator before it (ApplyConditionTo.AllValidators default).
+        RuleFor(static request => request.Name)
+            .NotEmpty()
+            .WithMessage("A workflow definition needs a name.")
+            .MaximumLength(DevWorkflowRequestLimits.MaxTitleLength)
+            .WithMessage($"The name is longer than the {DevWorkflowRequestLimits.MaxTitleLength}-character limit.")
+            .When(static request => request.Name is not null);
     }
 }
 
@@ -126,7 +134,7 @@ public sealed class CreateDevWorkflowRuleSetRequestValidator : Validator<CreateD
     ///     silent-no-op trap this check exists to close.
     /// </summary>
     internal static bool HasOnlyKnownNodeTypes(DevWorkflowRuleScope? scope) =>
-        scope?.NodeTypes is not { } nodeTypes || nodeTypes.All(static nodeType => Enum.GetNames<DevWorkflowNodeType>().Contains(nodeType, StringComparer.OrdinalIgnoreCase));
+        scope?.NodeTypes is not { } nodeTypes || nodeTypes.All(DevWorkflowTokenRules.IsNamed<DevWorkflowNodeType>);
 
     internal static string UnknownNodeTypeMessage { get; } = $"scope.nodeTypes must contain only {string.Join(", ", Enum.GetNames<DevWorkflowNodeType>())}.";
 }
@@ -169,7 +177,7 @@ public sealed class ListDevWorkflowRunsRequestValidator : Validator<ListDevWorkf
     {
         When(static request => request.Status is not null,
             () => RuleFor(static request => request.Status)
-                  .Must(static status => Enum.TryParse<DevWorkflowRunStatus>(status, ignoreCase: true, out _))
+                  .Must(static status => DevWorkflowTokenRules.IsNamed<DevWorkflowRunStatus>(status))
                   .WithMessage($"status must be one of {string.Join(", ", Enum.GetNames<DevWorkflowRunStatus>())}."));
 
         RuleFor(static request => request.Limit)
@@ -232,7 +240,7 @@ public sealed class DevWorkflowDecisionRequestValidator : Validator<DevWorkflowD
         // Parsed, not merely non-empty: the six kinds are one enum, and whether THIS node run can take the one named
         // is the runtime's answer, given later as a conflict.
         RuleFor(static request => request.Decision)
-            .Must(static decision => Enum.TryParse<DevWorkflowDecisionKind>(decision, ignoreCase: true, out _))
+            .Must(static decision => DevWorkflowTokenRules.IsNamed<DevWorkflowDecisionKind>(decision))
             .WithMessage($"decision must be one of {string.Join(", ", Enum.GetNames<DevWorkflowDecisionKind>())}.");
 
         When(static request => request.Comment is not null,
@@ -245,6 +253,19 @@ public sealed class DevWorkflowDecisionRequestValidator : Validator<DevWorkflowD
                   .MaximumLength(DevWorkflowRequestLimits.MaxPayloadLength)
                   .WithMessage($"payloadJson is longer than the {DevWorkflowRequestLimits.MaxPayloadLength}-character limit."));
     }
+}
+
+/// <summary>
+///     The one spelling of "is this a member of that enum". Matched against the NAMES, never through
+///     <c>Enum.TryParse</c>: that also accepts the underlying numbers, so <c>"3"</c> and <c>"-1"</c> would pass the
+///     door and then be read by the endpoint behind it as a member nobody named — a filter that matches nothing, or,
+///     on the decision axis, an intervention the operator never asked for.
+/// </summary>
+internal static class DevWorkflowTokenRules
+{
+    public static bool IsNamed<TEnum>(string? raw)
+        where TEnum : struct, Enum =>
+        raw is not null && Enum.GetNames<TEnum>().Contains(raw, StringComparer.OrdinalIgnoreCase);
 }
 
 internal static class DevWorkflowRequestLimits

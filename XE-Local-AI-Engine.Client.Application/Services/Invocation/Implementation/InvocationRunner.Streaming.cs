@@ -304,8 +304,13 @@ public sealed partial class InvocationRunner
             var inputTokens = ToNullableInt(usage.InputTokenCount);
             var outputTokens = ToNullableInt(usage.OutputTokenCount);
             var reasoningTokens = ToNullableInt(usage.ReasoningTokenCount);
+            // Reasoning is NOT a third bucket: Microsoft.Extensions.AI documents ReasoningTokenCount as counted
+            // inside OutputTokenCount, and both provider paths that reach here honour that (OpenAI reports
+            // completion_tokens_details.reasoning_tokens inside completion_tokens; llama-server the same). Adding it
+            // again over-counted every reasoning turn whose provider reported no total of its own. A provider-supplied
+            // total always wins; with neither input nor output reported the total stays null.
             var totalTokens = ToNullableInt(usage.TotalTokenCount)
-                              ?? SumIfAny(inputTokens, outputTokens, reasoningTokens);
+                              ?? SumIfAny(inputTokens, outputTokens);
 
             return new UsageSnapshot(inputTokens, outputTokens, reasoningTokens, totalTokens);
         }
@@ -346,12 +351,10 @@ public sealed partial class InvocationRunner
             }
         }
 
-        private static int? SumIfAny(params int?[] values)
-        {
-            return values.Any(static value => value is not null)
-                ? values.Sum(static value => value ?? 0)
-                : null;
-        }
+        // Folded onto the saturating Add so a DERIVED total clamps exactly like an accumulated one: Enumerable.Sum
+        // over int is checked, so two in-range counts whose sum passes int.MaxValue threw OverflowException mid-stream
+        // and failed the invocation. Null-preserving: with neither side reported the total stays null.
+        private static int? SumIfAny(int? left, int? right) => left is null && right is null ? null : Add(left, right);
 
         // Saturating member-wise add, mirroring ToNullableInt's clamp: two in-range rounds can still sum past
         // int.MaxValue, and a token total must not wrap negative because a provider reported an absurd count.

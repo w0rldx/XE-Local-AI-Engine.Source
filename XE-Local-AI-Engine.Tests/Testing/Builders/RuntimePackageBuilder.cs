@@ -114,8 +114,6 @@ public sealed class RuntimePackageBuilder
     public RuntimePackageBuilder WithConversationMessage(MessageRole role,
         string content,
         int sortOrder,
-        string? toolCalls = null,
-        string? toolResults = null,
         string? modelUsed = null)
     {
         ArgumentNullException.ThrowIfNull(content);
@@ -125,10 +123,30 @@ public sealed class RuntimePackageBuilder
             Id = Guid.NewGuid(),
             Role = role,
             Content = content,
-            ToolCalls = toolCalls,
-            ToolResults = toolResults,
             ModelUsed = modelUsed,
             SortOrder = sortOrder
+        });
+
+        return this;
+    }
+
+    /// <summary>
+    ///     An assistant turn carrying replayed tool history: the call/result pairs a caller-managed continuation sends
+    ///     ahead of the turn's own text. <paramref name="content" /> may be blank — that is the shape of a run that
+    ///     called a tool and then died.
+    /// </summary>
+    public RuntimePackageBuilder WithToolExchangeMessage(string content, int sortOrder, params ConversationToolExchange[] exchanges)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(exchanges);
+
+        _conversationContext.Add(new ConversationMessageDto
+        {
+            Id = Guid.NewGuid(),
+            Role = MessageRole.Assistant,
+            Content = content,
+            SortOrder = sortOrder,
+            ToolExchanges = exchanges
         });
 
         return this;

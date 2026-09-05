@@ -65,7 +65,13 @@ public sealed class UpdateDevWorkflowDefinitionRequest
 {
     public Guid DefinitionId { get; init; }
 
-    public int Version { get; init; }
+    /// <summary>
+    ///     <c>required</c> is what puts <c>version</c> in the schema's <c>required</c> array, and it is the only thing
+    ///     that does: the validator's <c>GreaterThan(0)</c> is the one rule shape FastEndpoints' schema processor does
+    ///     not read requiredness from, so a caller generated against the old spec could omit the member and get a 400
+    ///     from a contract that never said the field was mandatory.
+    /// </summary>
+    public required int Version { get; init; }
 
     public string? Name { get; init; }
 
@@ -100,7 +106,8 @@ public sealed class UpdateDevWorkflowRuleSetRequest
 {
     public Guid RuleSetId { get; init; }
 
-    public int Version { get; init; }
+    /// <summary>See <see cref="UpdateDevWorkflowDefinitionRequest.Version" /> for why this carries <c>required</c>.</summary>
+    public required int Version { get; init; }
 
     public string Name { get; init; } = string.Empty;
 
@@ -594,7 +601,44 @@ public sealed record DevWorkflowNodeRunDetailResponse(
     ///     (<c>AgentUnitFailureClass</c>), so a workflow node run, a chat run envelope and a Development attempt can be
     ///     grouped together in a report. Null exactly when the row records no failure. Nothing routes on it.
     /// </summary>
-    string? FailureClassGroup);
+    string? FailureClassGroup,
+
+    /// <summary>
+    ///     How much of <see cref="AgentTurnMs" /> the turns spent WAITING for a local runtime — llama-server launching
+    ///     and loading the model — rather than generating. Null means unmeasured: no turn went through the
+    ///     local-runtime warmer at all (a cloud-served node) or the row predates the column. Non-null is the warmer's
+    ///     measured wall time summed over the run's turns — the warmer times EVERY call, cache reuse included, and the
+    ///     sum truncates to whole milliseconds, so an already-resident model measures near zero (live: 0) and zero
+    ///     itself proves only "under 1 ms", never residency on its own.
+    /// </summary>
+    long? ModelReadinessMs,
+
+    /// <summary>
+    ///     Machine-global free VRAM in bytes as the capacity gate measured it just before the most recent SUCCESSFUL
+    ///     load of the model in <see cref="ServedModelName" /> THAT CARRIED A CAPACITY ADMISSION — not necessarily a
+    ///     load this run caused, and an unadmitted reload since (a direct, profiling or variant-moved spawn) clears
+    ///     the reading rather than letting it describe the process that reload replaced.
+    ///     <para>
+    ///         <b>A warm run reports the EARLIER load's figures.</b> <see cref="ModelReadinessMs" /> tells the two
+    ///         apart: a SMALL readiness means the warmer waited for nothing, so the load these bytes describe predates
+    ///         the run and the box may have looked different by the time it started. Null here means nobody measured — a
+    ///         remote or Ollama model, a model the node never loaded itself, a host with no readable global-free
+    ///         figure, or a row written before the column existed.
+    ///     </para>
+    ///     <para>
+    ///         This and <see cref="VramAdmittedBytes" /> are one pair, written once per attempt by the first settle
+    ///         that carries a reading and never rewritten after that — so the two can never describe different loads.
+    ///         A settle with no reading leaves the pair open for a later one, and a re-attempt clears it.
+    ///     </para>
+    /// </summary>
+    long? VramFreeAtLoadBytes,
+
+    /// <summary>
+    ///     The GPU bytes the capacity gate RESERVED for that same load's process. Zero is a real answer for a
+    ///     CPU-placed allocation; null carries the same "nobody measured" meaning as
+    ///     <see cref="VramFreeAtLoadBytes" />, and the same warm-run caveat applies.
+    /// </summary>
+    long? VramAdmittedBytes);
 
 /// <summary>
 ///     Which rule text actually applied, by content hash. Names the document without copying its body, so the audit

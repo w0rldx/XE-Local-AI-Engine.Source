@@ -143,7 +143,8 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<IProcessLaunchAdmissionRegistry, ProcessLaunchAdmissionRegistry>();
         services.TryAddSingleton<IProcessContextAllocationResolver>(static sp =>
             new DefaultProcessContextAllocationResolver(sp.GetRequiredService<LlamaServerLaunchPolicyOptions>()));
-        services.TryAddSingleton<ILlamaServerLaunchFallbackStore>(static _ => new LlamaServerLaunchFallbackStore());
+        services.TryAddSingleton<ILlamaServerLaunchFallbackStore>(static sp =>
+            new LlamaServerLaunchFallbackStore(cacheRoot: null, sp.GetRequiredService<ILogger<LlamaServerLaunchFallbackStore>>()));
         services.TryAddSingleton<ILlamaServerLaunchPolicy>(static sp =>
             new LlamaServerLaunchPolicy(sp.GetRequiredService<LlamaServerLaunchPolicyOptions>(),
                 sp.GetRequiredService<ILlamaServerLaunchFallbackStore>(),

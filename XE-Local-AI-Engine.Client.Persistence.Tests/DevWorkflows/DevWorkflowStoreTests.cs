@@ -421,6 +421,94 @@ public sealed class DevWorkflowStoreTests
     }
 
     /// <summary>
+    ///     The two VRAM columns are a reading of the BOX at the run's load, not a running total: the first settle of an
+    ///     attempt THAT CARRIES A READING owns them, so a re-settle that saw a later load cannot rewrite them — and a
+    ///     re-attempt, whose ClearTelemetry empties both, re-opens them for its own first reading.
+    /// </summary>
+    [Test]
+    public async Task ResettleWithinAnAttempt_KeepsTheFirstVramPair_AndAReattemptTakesTheNewOne()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var nodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "research", seed.RunVersion).ConfigureAwait(false);
+
+        var first = await SettleAsync(version, freeBytes: 7_340_032_000L, admittedBytes: 5_368_709_120L).ConfigureAwait(false);
+        var second = await SettleAsync(first, freeBytes: 1_073_741_824L, admittedBytes: 536_870_912L).ConfigureAwait(false);
+
+        var resettled = await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 7_340_032_000L, resettled.VramFreeAtLoadBytes, "The first settle's reading is the one that belongs to this attempt's load.");
+        AssertEx.Equal(expected: 5_368_709_120L, resettled.VramAdmittedBytes, "And its partner, or the row would pair two different loads' figures.");
+
+        var retried = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                     nodeRunId,
+                                     second,
+                                     DevWorkflowNodeRunStatus.Pending,
+                                     IncrementAttempt: true))
+                                 .ConfigureAwait(false);
+        _ = await SettleAsync(retried.Version, freeBytes: 1_073_741_824L, admittedBytes: 536_870_912L).ConfigureAwait(false);
+
+        var reattempted = await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1_073_741_824L, reattempted.VramFreeAtLoadBytes, "The re-attempt's clean slate is what re-opens the pair.");
+        AssertEx.Equal(expected: 536_870_912L, reattempted.VramAdmittedBytes);
+
+        async Task<long> SettleAsync(long expectedVersion, long freeBytes, long admittedBytes)
+        {
+            var result = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                        nodeRunId,
+                                        expectedVersion,
+                                        DevWorkflowNodeRunStatus.Failed,
+                                        Telemetry: new DevWorkflowNodeTelemetry(VramFreeAtLoadBytes: freeBytes, VramAdmittedBytes: admittedBytes)))
+                                    .ConfigureAwait(false);
+            return result.Version;
+        }
+    }
+
+    /// <summary>
+    ///     "First settle wins" is really "first settle that CARRIES a reading wins": a settle whose collector answered
+    ///     neither member — a remote model, a model this node never loaded — must leave the pair OPEN rather than
+    ///     latch a null pair that no later settle of the attempt could then fill.
+    /// </summary>
+    [Test]
+    public async Task SettleWithNoVramReading_LeavesThePairOpenForTheNextSettle()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var nodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "research", seed.RunVersion).ConfigureAwait(false);
+
+        // A settle that measured no VRAM at all, but did collect something else.
+        var afterBlank = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                        nodeRunId,
+                                        version,
+                                        DevWorkflowNodeRunStatus.Failed,
+                                        Telemetry: new DevWorkflowNodeTelemetry(AgentTurnMs: 1_200)))
+                                    .ConfigureAwait(false);
+
+        var blank = await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false);
+        AssertEx.Null(blank.VramFreeAtLoadBytes, "A settle with no reading writes no reading.");
+        AssertEx.Null(blank.VramAdmittedBytes, "Neither member, so neither column.");
+
+        var settled = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                      nodeRunId,
+                                      afterBlank.Version,
+                                      DevWorkflowNodeRunStatus.Failed,
+                                      Telemetry: new DevWorkflowNodeTelemetry(VramFreeAtLoadBytes: 7_340_032_000L, VramAdmittedBytes: 5_368_709_120L)))
+                                  .ConfigureAwait(false);
+        AssertEx.True(settled.Version > afterBlank.Version, "The second settle has to have landed for the assertion below to mean anything.");
+
+        var filled = await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 7_340_032_000L, filled.VramFreeAtLoadBytes, "The pair was still open, so the first reading of the attempt takes it.");
+        AssertEx.Equal(expected: 5_368_709_120L, filled.VramAdmittedBytes, "And its partner, written with it.");
+    }
+
+    /// <summary>
     ///     FU3-4 race A, at the level that decides it. A human <c>Retry</c> and an automatic re-attempt spend the same
     ///     run-wide budget, and the automatic path used to check it on a read taken before its own write — so a Retry
     ///     recorded in that window spent the last slot and the re-attempt committed anyway. The budget now rides on the

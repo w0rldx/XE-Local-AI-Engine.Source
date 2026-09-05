@@ -1,12 +1,19 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>The exact capacity-approved launch identity handed from admission to the detached supervisor spawn.</summary>
+/// <param name="GlobalFreeVramBytesAtAdmission">
+///     Report-only: machine-global free VRAM as the capacity gate read it under its decision gate while approving this
+///     launch, so the supervisor can put it on the load observation without a second probe. Null when the gate had no
+///     readable figure (a non-NVIDIA or CPU-only host), and null on every admission built outside that gate. NOTHING
+///     may branch on it — the registry ignores it, and admission arithmetic stays in the capacity service.
+/// </param>
 public sealed record ProcessLaunchAdmission(
     string ModelName,
     ModelRole Role,
     GpuVariant Variant,
     ResolvedLaunchArguments ResolvedArguments,
-    ProcessContextAllocation Allocation);
+    ProcessContextAllocation Allocation,
+    long? GlobalFreeVramBytesAtAdmission = null);
 
 /// <summary>A model/role identity tracked by the process-wide admission registry.</summary>
 public readonly record struct ProcessLaunchAdmissionKey(string ModelName, ModelRole Role)

@@ -174,6 +174,14 @@ The first native Windows run on 2026-08-03 found:
 - repeat publish could leave `appsettings.AppUpdate.json` missing until the source timestamp changed despite `CopyToPublishDirectory=Always`.
 - seven symlink tests skipped without privilege; junction-based tests exercised the directory reparse guards without elevation.
 
+### BYO CUDA runtime without `llama-fit-params` (2026-09-05)
+
+AI-trends follow-up pass B, B4 (D13 profile-authority live proof) round 1 against `~/cuda-llama/b10201/build/bin`: six host
+restarts and about sixteen minutes produced five NOT RUN observations before the missing sibling binary explained them —
+every Explore answered 400. Round 2 against a scratch copy of the same bin directory with the freshly built
+`llama-fit-params` passed 6/6 in about twelve minutes; the shared directory's 25-file md5 manifest was identical before and
+after. Evidence: `Plans/ai-trends-2026-09-02/progress/fu-b-evidence/` (`round1-blocked/`, `README.md`).
+
 ## 3. Model, inference, retrieval, and training evidence
 
 ### Large-model launch warmup timing

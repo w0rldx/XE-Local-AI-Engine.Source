@@ -710,7 +710,7 @@ never in `Content`), and the transcript grows for the life of the session. Meanw
 loop is the expensive half: one `read_document` result is capped at 50,000 characters — some 16k tokens —
 and `Agent:ToolPipeline:MaxToolResultCharacters` (65,536) is larger than that cap, so nothing clips it.
 
-`WorkSessionStepContextBound` therefore runs **before every send**: it projects what the next step will
+`ConversationStepContextBound` therefore runs **before every send**: it projects what the next step will
 replay using the same `ITokenEstimator` the context budgeters use, and over
 `WorkSessions:StepContextBudgetTokens` it forces a compaction of the owned conversation through
 `IConversationCompactionService` with a keep window of **2** — one step verbatim, the rest folded into

@@ -64,7 +64,7 @@ internal sealed class DevWorkflowNodeRun
     public string? FailureClass { get; set; }
     public string? TerminalReason { get; set; }
 
-    // Cost telemetry: thirteen nullable, plaintext, metadata-only columns saying what this node run SPENT and where it
+    // Cost telemetry: fifteen nullable, plaintext, metadata-only columns saying what this node run SPENT and where it
     // routed — counts, a served model name, structural node keys and tool NAMES, never a prompt, an argument, a result
     // or a transcript. Written once, at the terminal-or-blocked transition, through the one store decorator every call
     // site crosses; nothing reads them to decide anything. Attempt increments in place, so they describe the LAST
@@ -110,10 +110,42 @@ internal sealed class DevWorkflowNodeRun
     /// <summary>
     ///     How much of <see cref="AgentTurnMs" /> was a LOCAL runtime warming — <c>llama-server</c> launching and the
     ///     model loading — summed over the same envelopes, so <c>AgentTurnMs - ModelReadinessMs</c> is the
-    ///     warm-equivalent turn time. Null when no turn of this attempt warmed a local runtime, which is not the same
-    ///     as zero: zero would claim the attempt proved a warm start.
+    ///     warm-equivalent turn time. Null means unmeasured: no turn of this attempt went through the local-runtime
+    ///     warmer at all, or the row predates the column. Non-null is the warmer's measured wall time — it times EVERY
+    ///     call, cache reuse included, and the sum truncates to whole milliseconds — so an already-resident model
+    ///     measures near zero (live: 0) and zero itself proves only "under 1 ms", never residency on its own.
     /// </summary>
     public long? ModelReadinessMs { get; set; }
+
+    /// <summary>
+    ///     Machine-global free VRAM in bytes as the capacity gate measured it just before the most recent SUCCESSFUL
+    ///     load of the model that served this run THAT CARRIED A CAPACITY ADMISSION — not necessarily a load this run
+    ///     caused, and an unadmitted reload since (a direct, profiling or variant-moved spawn) clears the reading
+    ///     rather than letting it describe the process that reload replaced.
+    ///     <para>
+    ///         <b>A warm run reports the EARLIER load's figures.</b> <see cref="ModelReadinessMs" /> is what separates
+    ///         the two: a SMALL readiness there means the warmer waited for nothing, so the load these bytes describe
+    ///         predates the run and the box may have looked different by the time it started; null there is
+    ///         unmeasured, which settles nothing either way. Null here means
+    ///         nobody measured — a remote or Ollama model, a model the node never loaded itself, a host with no
+    ///         readable global-free figure (non-NVIDIA or CPU-only), or a row written before this column existed.
+    ///     </para>
+    ///     <para>
+    ///         Written ONCE per attempt, and with <see cref="VramAdmittedBytes" /> as one pair: the first settle of the
+    ///         attempt that carries a reading writes both, and no later settle rewrites them, so the two members can
+    ///         never come from different loads. A settle carrying neither member is not that settle — it leaves the
+    ///         pair open for a later one. A re-attempt clears both, which is what re-opens the pair.
+    ///     </para>
+    /// </summary>
+    public long? VramFreeAtLoadBytes { get; set; }
+
+    /// <summary>
+    ///     The GPU bytes the capacity gate RESERVED for that same load's process. NOT llama.cpp's own
+    ///     <c>--list-devices</c> process budget, which is a different axis and is not read on this path. Zero is a real
+    ///     answer for a CPU-placed allocation; null carries the same "nobody measured" meaning as
+    ///     <see cref="VramFreeAtLoadBytes" />, and the same warm-run caveat applies.
+    /// </summary>
+    public long? VramAdmittedBytes { get; set; }
 
     /// <summary>What the provider actually SERVED, off the envelope. Beside the authored pin, never instead of it: a pin is a request, not a receipt.</summary>
     public string? ServedModelName { get; set; }
