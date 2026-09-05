@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -69,23 +70,35 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
     /// <summary>What a <c>Queued</c> Agent row is waiting for. It is waiting, not failing, so it carries no event.</summary>
     private const string AwaitingAgentSlot = "awaiting-agent-slot";
 
-    /// <summary>The same bound the state machine puts on a terminal reason: a row's reason column is not a log.</summary>
-    private const int MaxSanitizedReason = 512;
+    /// <summary>What a row says when its turn was cancelled before it produced a reason of its own.</summary>
+    private const string CancelledInFlight = "The run was cancelled while this node run's agent turn was in flight.";
+
+    /// <summary>
+    ///     The finish reasons a row's terminal reason may repeat. Everything else reads <c>unknown</c>: the token is
+    ///     provider-supplied, and a row's reason column is not the place to find out what a provider can put in one.
+    /// </summary>
+    private static readonly string[] KnownFinishReasons = ["stop", "length", "tool_calls", "content_filter"];
 
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    private readonly IInvocationRunner _invocationRunner;
     private readonly GraphWorkflowInFlightLane<GraphWorkflowAgentTurn> _lane;
     private readonly ILogger<GraphWorkflowAgentExecutor> _logger;
     private readonly GraphWorkflowOptions _options;
     private readonly IServiceScopeFactory _scopeFactory;
 
     public GraphWorkflowAgentExecutor(IServiceScopeFactory scopeFactory,
+        IInvocationRunner invocationRunner,
         IOptions<GraphWorkflowOptions> options,
         ILogger<GraphWorkflowAgentExecutor> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+
+        // The runner is a SINGLETON and is injected as one: the stop and discard paths are documented as non-blocking,
+        // and opening a DI scope per cancel to reach a singleton is work a hot drain loop pays for nothing.
+        _invocationRunner = invocationRunner ?? throw new ArgumentNullException(nameof(invocationRunner));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
 
@@ -154,13 +167,13 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                 .ConfigureAwait(false);
         }
 
-        // Composed here rather than in the task body: it is the same set the admission that got us here judged, and
-        // reading the rows again a model call later could see a different world.
-        var inputJson = await InputDocumentAsync(store, graph, node, run, cancellationToken).ConfigureAwait(false);
-
+        string inputJson;
         var written = 0;
         if (nodeRun.Status == GraphWorkflowNodeRunStatus.Pending)
         {
+            // Composed here rather than in the task body: it is the same set the admission that got us here judged, and
+            // reading the rows again a model call later could see a different world.
+            inputJson = await InputDocumentAsync(store, graph, node, run, cancellationToken).ConfigureAwait(false);
             GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Queued, nodeRun.NodeKey);
             _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand(run.Id,
                                    nodeRun.Id,
@@ -171,6 +184,13 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                                cancellationToken)
                            .ConfigureAwait(false);
             written++;
+        }
+        else
+        {
+            // A re-offer of a row this lane already queued. Only that first write persists a document, so composing a
+            // second one here would hand the turn something the row does not carry — and something a later reader of
+            // the row could not reconcile with the answer it produced.
+            inputJson = nodeRun.InputJson ?? await InputDocumentAsync(store, graph, node, run, cancellationToken).ConfigureAwait(false);
         }
 
         // Minted HERE, before the task starts: it is the first argument of the runtime package request AND what the
@@ -244,7 +264,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             // Checked BEFORE the await, and that is the load-bearing half of this branch: a stop can cancel a turn
             // still parked on the invocation lease, which ends it Canceled with no state to map. Awaiting it would
             // rethrow, the dispatcher would swallow it, and the row would rethrow again on every tick forever.
-            written = await SettleCancelledAsync(store, run, nodeRun, cancellationToken).ConfigureAwait(false);
+            written = await SettleCancelledAsync(store, run, nodeRun, CancelledInFlight, cancellationToken).ConfigureAwait(false);
         }
         else
         {
@@ -257,7 +277,16 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             {
                 Status = GraphWorkflowNodeRunStatus.Running
             };
-            written += await SettleLandedAsync(store, graph, run, node, nodeRun, await flight.Work.ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+
+            var turn = await flight.Work.ConfigureAwait(false);
+
+            // A turn that ended Cancelled WITHOUT this node asking — the shutdown drain, a model eject, a CancelAll —
+            // returns normally with a cancelled terminal rather than a cancelled task, so it reaches here rather than
+            // the branch above. It is still a cancellation: settling it as a failure would classify it, fail the row
+            // and make the run recompute Failed for work nobody judged.
+            written += turn.FailureClass == GraphWorkflowFailureClass.Cancelled
+                ? await SettleCancelledAsync(store, run, nodeRun, turn.SanitizedReason ?? CancelledInFlight, cancellationToken).ConfigureAwait(false)
+                : await SettleLandedAsync(store, graph, run, node, nodeRun, turn, cancellationToken).ConfigureAwait(false);
         }
 
         // Consumed only once the settle has COMMITTED. Doing it first would spend the answer on a write that may throw
@@ -398,7 +427,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
 
             // 8–10. The lease, the terminal capture, and the run.
             var terminal = await RunInvocationAsync(services.GetRequiredService<IWorkerEventDispatcher>(),
-                    services.GetRequiredService<IInvocationRunner>(),
+                    _invocationRunner,
                     package,
                     leaseAcquired,
                     cancellationToken)
@@ -562,6 +591,12 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             case null:
                 return Failure(GraphWorkflowFailureClass.NodeFailed, "The agent turn reported no result.");
 
+            case InvocationStatus.Failed when terminal.FailureCategory == FailureCategory.Timeout:
+                // The runner's own watchdog reports a timeout as a FAILED terminal, so the category is the only place
+                // it survives. Still retryable, and classed Timeout rather than NodeFailed because the answer to a
+                // node that ran out of time is a different one from the answer to a node whose provider said no.
+                return Failure(GraphWorkflowFailureClass.Timeout, "The agent turn ran out of time before it answered. See the node logs for details.");
+
             case InvocationStatus.Failed:
                 // Never the raw provider error: the detail is in the node logs.
                 return Failure(GraphWorkflowFailureClass.NodeFailed, "The agent turn failed. See the node logs for details.");
@@ -600,15 +635,23 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         }
     }
 
+    /// <summary>
+    ///     The finish reason is ALLOW-LISTED rather than interpolated: it arrives verbatim from a provider, and a row's
+    ///     reason is an operator-facing column. An unrecognized token still says the turn ended, just not in words the
+    ///     provider chose.
+    /// </summary>
     private static GraphWorkflowAgentTurn SchemaFailure(string? finishReason) =>
         Failure(GraphWorkflowFailureClass.NodeFailed,
-            $"The agent did not answer with the JSON object its response schema requires (finish reason '{finishReason ?? "unknown"}').");
+            $"The agent did not answer with the JSON object its response schema requires (finish reason '{Known(finishReason)}').");
+
+    private static string Known(string? finishReason) =>
+        Array.Find(KnownFinishReasons, known => string.Equals(known, finishReason, StringComparison.Ordinal)) ?? "unknown";
 
     private static GraphWorkflowAgentTurn Invalid(string reason) =>
         Failure(GraphWorkflowFailureClass.ValidationFailed, reason);
 
     private static GraphWorkflowAgentTurn Failure(GraphWorkflowFailureClass failureClass, string reason) =>
-        new(Succeeded: false, failureClass, GraphWorkflowStateMachine.Bounded(reason, MaxSanitizedReason), Text: string.Empty, Json: null, Usage: null);
+        new(Succeeded: false, failureClass, GraphWorkflowStateMachine.Bounded(reason, GraphWorkflowStateMachine.MaxTerminalReason), Text: string.Empty, Json: null, Usage: null);
 
     /// <summary>
     ///     The seed user turn's content: the node's instructions, followed by the upstream documents when the node asks
@@ -752,6 +795,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
     private static async Task<int> SettleCancelledAsync(IGraphWorkflowStore store,
         GraphWorkflowRunSnapshot run,
         GraphWorkflowNodeRunSnapshot nodeRun,
+        string sanitizedReason,
         CancellationToken cancellationToken)
     {
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Cancelled, nodeRun.NodeKey);
@@ -760,7 +804,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                                GraphWorkflowVersions.Any,
                                GraphWorkflowNodeRunStatus.Cancelled,
                                FailureClass: GraphWorkflowFailureClass.Cancelled,
-                               TerminalReason: "The run was cancelled while this node run's agent turn was in flight."),
+                               TerminalReason: GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason)),
                            cancellationToken)
                        .ConfigureAwait(false);
         return 1;
@@ -819,7 +863,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                                GraphWorkflowNodeRunStatus.Failed,
                                OutputJson: document,
                                FailureClass: failureClass,
-                               TerminalReason: GraphWorkflowStateMachine.Bounded(sanitizedReason, MaxSanitizedReason),
+                               TerminalReason: GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason),
                                EventType: eventType),
                            cancellationToken)
                        .ConfigureAwait(false);
@@ -831,11 +875,8 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         JsonSerializer.SerializeToElement(new AgentOutputPayload(turn.Text, turn.Json, turn.Usage), JsonOptions);
 
     /// <summary>Tells the runner to unwind a turn. A cancel for an invocation it no longer knows about is a no-op.</summary>
-    private void CancelInvocation(Guid invocationId)
-    {
-        using var scope = _scopeFactory.CreateScope();
-        scope.ServiceProvider.GetRequiredService<IInvocationRunner>().Cancel(invocationId);
-    }
+    private void CancelInvocation(Guid invocationId) =>
+        _invocationRunner.Cancel(invocationId);
 
     private sealed record AgentOutputPayload(string Text, JsonElement? Json, GraphWorkflowAgentUsage? Usage);
 }

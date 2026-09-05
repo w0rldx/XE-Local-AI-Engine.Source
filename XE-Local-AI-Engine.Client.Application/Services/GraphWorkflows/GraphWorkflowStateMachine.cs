@@ -60,8 +60,8 @@ internal static class GraphWorkflowStateMachine
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    /// <summary>The bound on a run's terminal reason.</summary>
-    private const int MaxTerminalReason = 512;
+    /// <summary>The bound on a terminal reason, run row and node-run row alike. One constant, so the two cannot drift.</summary>
+    internal const int MaxTerminalReason = 512;
 
     /// <summary>How many terminal nodes a reason names one by one before it starts counting them instead.</summary>
     private const int MaxNamedNodes = 3;
