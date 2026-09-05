@@ -211,6 +211,11 @@ public sealed record GraphWorkflowReconciledNodeRun(
 ///     One judged node run: the row as the caller observed it, and what to do with it once the collapse has confirmed
 ///     it is still that row. A verdict is only true of the state it was decided from, so a row that moved under the
 ///     caller is left exactly as it is rather than repaired from stale evidence.
+///     <para>
+///         Every command in <see cref="Repairs" /> MUST carry <see cref="GraphWorkflowVersions.Any" />: the collapse
+///         bumps its run's version once per stranded row before any repair is applied, so a repair naming the version
+///         its caller read is stale by construction and fails the whole recovery transaction rather than its own row.
+///     </para>
 /// </summary>
 public sealed record GraphWorkflowNodeRunVerdict(
     Guid NodeRunId,
