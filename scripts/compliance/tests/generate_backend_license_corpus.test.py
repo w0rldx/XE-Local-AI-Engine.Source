@@ -15,7 +15,8 @@ SCRIPT = Path(__file__).parents[1] / "generate_backend_license_corpus.py"
 REPOSITORY_ROOT = Path(__file__).parents[3]
 sys.path.insert(0, str(SCRIPT.parent))
 SPEC = importlib.util.spec_from_file_location("generate_backend_license_corpus", SCRIPT)
-assert SPEC is not None and SPEC.loader is not None
+assert SPEC is not None
+assert SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 

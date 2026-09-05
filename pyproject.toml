@@ -47,11 +47,18 @@ select = [
     "SIM", # simplify
     "N",   # naming
     "S",   # security-ish rules
+    "PT",  # flake8-pytest-style: fixture/parametrize/raises shape, and no assertion-less pytest.raises
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**/*.py" = ["S101"]
-"tools/training/test_*.py" = ["S101"]
+# The tests under scripts/** are deliberately unittest.TestCase: every one of them also runs standalone
+# under a bare `python3 <file>` via its `unittest.main()` tail, with no pytest on the path. PT009/PT027
+# would rewrite exactly those self-assertions into bare `assert`/`pytest.raises`, which is why they are
+# ignored here rather than applied. The rest of the PT family stays on everywhere.
+"**/tests/**/*.py" = ["S101", "PT009", "PT027"]
+# tools/training ships to the user's training venv (ADR 0005) and must not import pytest, so an expected
+# error is asserted inside `except` (PT017) instead of through `pytest.raises`.
+"tools/training/test_*.py" = ["S101", "PT017"]
 # Repo automation under scripts/: subprocess with literal argv/executables and XML parsed from our
 # own build outputs (cobertura, csproj, nuspec). Blanket-flagging every call there is noise, not
 # a finding; the remaining S-rules (S310 urlopen, S105/S108, ...) stay on and are answered per call.

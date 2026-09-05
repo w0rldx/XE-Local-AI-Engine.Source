@@ -12,7 +12,8 @@ from pathlib import Path
 MODULE_PATH = Path(__file__).resolve().parents[1] / "read-release-version.py"
 PACKAGE_SCRIPT = Path(__file__).resolve().parents[2] / "publish" / "package-rc.sh"
 SPEC = importlib.util.spec_from_file_location("read_release_version", MODULE_PATH)
-assert SPEC and SPEC.loader
+assert SPEC is not None
+assert SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
