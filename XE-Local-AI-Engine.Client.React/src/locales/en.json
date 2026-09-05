@@ -469,7 +469,9 @@
 					"subject": "Subject",
 					"events": "Durable events",
 					"prompts": "Prompts",
-					"noPrompts": "No prompt was recorded for this task yet."
+					"promptRole": "{{role}} prompt",
+					"promptRoleOrdinal": "{{role}} prompt {{index}}",
+					"noPrompts": "No prompt was recorded for this attempt yet."
 				}
 			},
 			"artifacts": {

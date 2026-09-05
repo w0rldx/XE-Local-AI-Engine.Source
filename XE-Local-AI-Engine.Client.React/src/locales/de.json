@@ -469,7 +469,9 @@
 					"subject": "Subjekt",
 					"events": "Dauerhafte Ereignisse",
 					"prompts": "Prompts",
-					"noPrompts": "Für diese Aufgabe wurde noch kein Prompt aufgezeichnet."
+					"promptRole": "{{role}}-Prompt",
+					"promptRoleOrdinal": "{{role}}-Prompt {{index}}",
+					"noPrompts": "Für diesen Versuch wurde noch kein Prompt aufgezeichnet."
 				}
 			},
 			"artifacts": {

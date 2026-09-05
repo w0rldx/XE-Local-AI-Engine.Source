@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DevelopmentAttemptLiveState } from "@/features/development/hooks/useDevelopmentAttemptHub";
-import type { DevelopmentArtifact } from "@/features/development/models/DevelopmentModels";
+import type { DevelopmentArtifact, DevelopmentAttempt } from "@/features/development/models/DevelopmentModels";
 import type {
 	DevelopmentTestOutcome,
 	DevelopmentValidationCommand,
@@ -15,7 +15,12 @@ import type {
 const queriesMock = vi.hoisted(() => ({ useDevelopmentArtifactContent: vi.fn() }));
 
 vi.mock("react-i18next", () => ({
-	useTranslation: () => ({ t: (_key: string, fallback?: string) => fallback ?? _key }),
+	// Interpolates, unlike the previous fallback-only stub: the prompt rows name their attempt's role through
+	// `{{role}}`, and a stub that returned the raw template would have passed while the operator saw literal braces.
+	useTranslation: () => ({
+		t: (key: string, fallback?: string, options?: Record<string, unknown>) =>
+			(fallback ?? key).replace(/{{(\w+)}}/g, (token: string, name: string) => String(options?.[name] ?? token)),
+	}),
 }));
 vi.mock("@/features/development/queries/useDevelopment", () => queriesMock);
 // The real viewer lazily boots Monaco, which jsdom cannot host; what this file pins is that the panel hands the
@@ -48,6 +53,15 @@ const validationArtifact: DevelopmentArtifact = {
 	byteCount: 512,
 	createdAtUtc: 1700,
 	isValid: true,
+};
+
+const coderAttempt: DevelopmentAttempt = {
+	id: "attempt-1",
+	taskId: "task-1",
+	role: "Coder",
+	modelId: "model-1",
+	provider: "provider-1",
+	status: "Running",
 };
 
 function testOutcome(overrides: Partial<DevelopmentTestOutcome> = {}): DevelopmentTestOutcome {
@@ -123,10 +137,13 @@ function installDomMocks(): void {
 	});
 }
 
-function renderPanel(artifacts: readonly DevelopmentArtifact[] = [validationArtifact]): void {
+function renderPanel(
+	artifacts: readonly DevelopmentArtifact[] = [validationArtifact],
+	attempt: DevelopmentAttempt | null = null,
+): void {
 	render(
 		<MantineProvider>
-			<DevelopmentLivePanel attempt={null} live={live} artifacts={artifacts} events={[]} />
+			<DevelopmentLivePanel attempt={attempt} live={live} artifacts={artifacts} events={[]} />
 		</MantineProvider>,
 	);
 }
@@ -376,7 +393,7 @@ describe("DevelopmentLivePanel artifact viewer", () => {
 			error: null,
 		}));
 
-		renderPanel([validationArtifact, promptArtifact]);
+		renderPanel([validationArtifact, promptArtifact], coderAttempt);
 		fireEvent.click(within(screen.getByTestId("development-prompt-artifacts")).getByTestId("development-artifact-view-artifact-prompt"));
 
 		const viewer = await screen.findByTestId("development-artifact-content-artifact-prompt");
@@ -384,10 +401,45 @@ describe("DevelopmentLivePanel artifact viewer", () => {
 		expect(viewer.textContent).toBe("Task: implement the feature");
 	});
 
-	it("says so when no prompt was recorded, rather than showing an empty section", () => {
-		renderPanel([validationArtifact]);
+	it("lists only the displayed attempt's prompt, named by that attempt's role", () => {
+		// The live defect: `artifacts` is the whole task's history, so after a coder round and two reviewer rounds the
+		// details tab — which identifies ONE attempt — listed every round's prompt as an indistinguishable "Prompt" row
+		// beside that attempt's id. Only the displayed attempt's prompt belongs here, and it says whose it is.
+		renderPanel(
+			[
+				validationArtifact,
+				{ ...validationArtifact, id: "prompt-coder", kind: "Prompt", attemptId: "attempt-1" },
+				{ ...validationArtifact, id: "prompt-reviewer-failed", kind: "Prompt", attemptId: "attempt-2" },
+				{ ...validationArtifact, id: "prompt-reviewer-passed", kind: "Prompt", attemptId: "attempt-3" },
+			],
+			{ ...coderAttempt, id: "attempt-3", role: "Reviewer" },
+		);
 
 		const prompts = screen.getByTestId("development-prompt-artifacts");
-		expect(within(prompts).getByText("No prompt was recorded for this task yet.")).toBeTruthy();
+		expect(within(prompts).getByText("Reviewer prompt")).toBeTruthy();
+		expect(within(prompts).getByTestId("development-artifact-view-prompt-reviewer-passed")).toBeTruthy();
+		expect(within(prompts).queryByTestId("development-artifact-view-prompt-coder")).toBeNull();
+		expect(within(prompts).queryByTestId("development-artifact-view-prompt-reviewer-failed")).toBeNull();
+	});
+
+	it("numbers the rows when one attempt recorded more than one prompt", () => {
+		renderPanel(
+			[
+				{ ...validationArtifact, id: "prompt-first", kind: "Prompt", attemptId: "attempt-1" },
+				{ ...validationArtifact, id: "prompt-second", kind: "Prompt", attemptId: "attempt-1" },
+			],
+			coderAttempt,
+		);
+
+		const prompts = screen.getByTestId("development-prompt-artifacts");
+		expect(within(prompts).getByText("Coder prompt 1")).toBeTruthy();
+		expect(within(prompts).getByText("Coder prompt 2")).toBeTruthy();
+	});
+
+	it("says so when the displayed attempt recorded no prompt, rather than showing an empty section", () => {
+		renderPanel([validationArtifact, { ...validationArtifact, id: "prompt-other", kind: "Prompt", attemptId: "attempt-2" }], coderAttempt);
+
+		const prompts = screen.getByTestId("development-prompt-artifacts");
+		expect(within(prompts).getByText("No prompt was recorded for this attempt yet.")).toBeTruthy();
 	});
 });
