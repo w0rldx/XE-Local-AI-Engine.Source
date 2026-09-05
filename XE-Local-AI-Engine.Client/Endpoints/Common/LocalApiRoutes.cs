@@ -971,6 +971,9 @@ public static class LocalApiRoutes
         ///     the response reports rather than leaving a client to infer from a full page.
         /// </summary>
         public const string RunEvents = "graph-workflows/runs/{runId}/events";
+
+        /// <summary>SignalR notification hub. Full path (mapped via MapHub, not the FastEndpoints prefix).</summary>
+        public const string Hub = "/api/local/v1/graph-workflows/hub";
     }
 
     public static class Automation
