@@ -309,6 +309,34 @@ public sealed class GraphWorkflowDispatcherTests
     }
 
     /// <summary>
+    ///     A cancel that commits between the tick's read and its write WINS. The start is written against the version
+    ///     the run was read at, so the cancel's own bump makes it lose the store's version check — where a freshly read
+    ///     version would have carried the start across, and the run would be <c>Running</c> under a committed cancel.
+    /// </summary>
+    [Test]
+    public async Task AStartRacingACancelThatCommitsMidTick_LosesTheWrite()
+    {
+        // A private host: the seam below is set on the CONTAINER's dispatcher, and on a shared host a sibling's tick
+        // would run it too.
+        await using var harness = new GraphWorkflowHarness();
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
+        harness.Dispatcher.BeforeRunWrite = async () =>
+        {
+            // Once: the tick after this one drains, and a second cancel there would be asserting about the wrong write.
+            harness.Dispatcher.BeforeRunWrite = null;
+            await harness.CancelAsync(runId).ConfigureAwait(false);
+        };
+
+        // Through the production wrapper, because losing the version check is exactly what it is written to swallow.
+        await harness.AdvanceSafelyAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelling, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            "the cancel stands; the start it raced does not overwrite it.");
+        AssertEx.False((await harness.ReadEventTrailAsync(runId).ConfigureAwait(false)).Contains("run.started", StringComparison.Ordinal),
+            "and the run never reports a start it did not make.");
+    }
+
+    /// <summary>
     ///     The one thing the container wiring has to get right: the signal every command path calls after its commit is
     ///     the dispatcher itself, not a second object nothing is listening to.
     /// </summary>
