@@ -83,7 +83,19 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
             var unjudged = pass == RecoveryPasses
                 ? new DevWorkflowUnjudgedNodeRunBlock(DevWorkflowFailureClasses.Interrupted, UnjudgedReason)
                 : null;
-            recovered += (await store.ReconcileNonTerminalNodeRunsAsync(InterruptedReason, verdicts, unjudged, cancellationToken).ConfigureAwait(false)).Count;
+            try
+            {
+                recovered += (await store.ReconcileNonTerminalNodeRunsAsync(InterruptedReason, verdicts, unjudged, cancellationToken).ConfigureAwait(false)).Count;
+            }
+            catch (DevWorkflowRetryBudgetExceededException refused)
+            {
+                // A human Retry committed while these verdicts were being composed, so an attempt this pass admitted
+                // is one the run no longer has. The collapse rolls back whole, which is what makes another pass the
+                // whole of the recovery: it re-reads the decisions and composes the Block instead. The last pass
+                // settles whatever is still unjudged, so this cannot loop.
+                _logger.LogWarning(refused, "Startup recovery pass {Pass} was refused its re-attempt budget, so it is being re-judged against the decision it did not see.", pass);
+            }
+
             remaining = await store.ListInterruptedNodeRunsAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -173,20 +185,48 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
         foreach (var group in interrupted.GroupBy(static nodeRun => nodeRun.RunId))
         {
             var nodeRuns = await store.ListNodeRunsAsync(group.Key, cancellationToken).ConfigureAwait(false);
+
+            // TWO counts, deliberately. `spent` is what the run has actually made — the sum the trailing sweep below
+            // has always decided on. `promised` adds the reservations: a Retry recorded before the crash and never
+            // applied has spent no attempt for a sum over Attempt to see, but the dispatcher turns it into one on its
+            // first tick after this (FU3-4 race B).
+            //
+            // Only the ADMISSION decision uses `promised`. Widening the trailing sweep with it would block rows that
+            // cost nothing — an interrupted Agent row resumes from a checkpoint it wrote itself and is charged no
+            // attempt, so a single unapplied Retry sitting on the last slot would send every one of them to a human at
+            // boot for a slot none of them wanted.
             var spent = nodeRuns.Sum(static nodeRun => nodeRun.Attempt - 1);
+            var promised = DevWorkflowRetryPolicy.Promised(nodeRuns, await store.ListDecisionsAsync(group.Key, cancellationToken).ConfigureAwait(false));
 
             // The re-attempts this run can still afford, handed out in a fixed order so the same boot always admits the
             // same rows. Several interrupted sandbox node runs otherwise each take an attempt they were never all
             // entitled to, and the run ends up having spent more than it allows by however wide its fan-out is.
-            var affordable = Math.Max(0, _options.MaxTotalAttempts - spent);
-            var sandboxed = group.Where(static nodeRun => nodeRun.NodeType is DevWorkflowNodeType.Tool or DevWorkflowNodeType.DevTask
-                                                          && nodeRun.Status == DevWorkflowNodeRunStatus.Running)
-                                 .OrderBy(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal)
-                                 .ThenBy(static nodeRun => nodeRun.NodeRunId)
-                                 .ToList();
+            var affordable = Math.Max(0, _options.MaxTotalAttempts - promised);
+            var interruptedSandbox = group.Where(static nodeRun => nodeRun.NodeType is DevWorkflowNodeType.Tool or DevWorkflowNodeType.DevTask
+                                                                   && nodeRun.Status == DevWorkflowNodeRunStatus.Running)
+                                          .OrderBy(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal)
+                                          .ThenBy(static nodeRun => nodeRun.NodeRunId)
+                                          .ToList();
+
+            // A row already AT its own cap is not a candidate for the run's budget at all: recovery increments the
+            // attempt of every row it admits, and this one has no attempt left to be given. The live path refuses the
+            // same row before every automatic re-attempt; recovery bypassed that check entirely and reset a 3-of-3 row
+            // to Pending at 4 (FU3-4). Blocked with its OWN reason, so nobody reads it as the run-wide budget.
+            var atCap = interruptedSandbox.Where(static nodeRun => nodeRun.Attempt >= nodeRun.MaxAttempts).ToList();
+            var sandboxed = interruptedSandbox.Where(static nodeRun => nodeRun.Attempt < nodeRun.MaxAttempts).ToList();
             var admitted = Math.Min(affordable, sandboxed.Count);
             spent += admitted;
             var exhausted = $"This run has already spent {spent} re-attempts, which is as many re-attempts as this run allows.";
+
+            foreach (var nodeRun in atCap)
+            {
+                Repair(repairs,
+                    nodeRun,
+                    Block(nodeRun,
+                        DevWorkflowFailureClasses.BudgetExhausted,
+                        $"This node has already been attempted {nodeRun.Attempt} times, which is as many as it allows, so the host restart could not re-run it."));
+                _ = blocked.Add(nodeRun.NodeRunId);
+            }
 
             foreach (var nodeRun in sandboxed.Take(admitted))
             {
@@ -200,7 +240,13 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
                         DevWorkflowVersions.Any,
                         DevWorkflowNodeRunStatus.Pending,
                         IncrementAttempt: true,
-                        Outcome: DevWorkflowOutcomes.Interrupted));
+                        Outcome: DevWorkflowOutcomes.Interrupted,
+
+                        // `affordable` above is a check-then-write like every other one this pass replaced: the run
+                        // service can be recording a human Retry while these verdicts are being composed. The budget
+                        // rides on the command so the collapse admits it under the writer lock, and a refusal rolls
+                        // the whole pass back for StartAsync to re-judge from the decision it did not see.
+                        MaxTotalAttempts: _options.MaxTotalAttempts));
             }
 
             foreach (var nodeRun in sandboxed.Skip(admitted))

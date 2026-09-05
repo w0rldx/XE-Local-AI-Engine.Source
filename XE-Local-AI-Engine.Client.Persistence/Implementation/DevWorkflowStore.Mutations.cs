@@ -107,7 +107,19 @@ internal sealed partial class DevWorkflowStore
         return ExecuteMutationAsync(command.RunId,
             command.ExpectedVersion,
             command.OperationId,
-            run => ApplyNodeRunTransitionAsync(run, command, cancellationToken),
+            async run =>
+            {
+                // BEFORE the move, so the attempt this command is about to add is not counted as already spent. Only
+                // an automatic re-attempt sets a budget here; every other transition passes null and is unaffected.
+                // IncrementAttempt is part of the guard because the cost charged is one ATTEMPT: a budget-carrying
+                // command that spends none must not be refused for a slot it was never going to take.
+                if (command is { MaxTotalAttempts: { } budget, IncrementAttempt: true })
+                {
+                    await EnsureRetryBudgetAsync(run.Id, budget, cost: 1, cancellationToken).ConfigureAwait(false);
+                }
+
+                return await ApplyNodeRunTransitionAsync(run, command, cancellationToken).ConfigureAwait(false);
+            },
             cancellationToken);
     }
 
@@ -288,6 +300,13 @@ internal sealed partial class DevWorkflowStore
             command.Route.OperationId,
             async run =>
             {
+                // The WHOLE cascade has to fit, admitted here rather than on the caller's earlier read: a human Retry
+                // committing between that read and this transaction spends the same slots (FU3-4).
+                if (command.MaxTotalAttempts is { } budget)
+                {
+                    await EnsureRetryBudgetAsync(run.Id, budget, command.Resets.Count, cancellationToken).ConfigureAwait(false);
+                }
+
                 var outcomes = new List<MutationOutcome>(command.Resets.Count + 1)
                 {
                     // FIRST, so a reader of the log sees the decision before the rows it moved, and so the operation
@@ -554,7 +573,7 @@ internal sealed partial class DevWorkflowStore
 
                 if (command is { Decision: DevWorkflowDecisionKind.Retry, MaxTotalAttempts: { } budget })
                 {
-                    await EnsureRetryBudgetAsync(run.Id, budget, cancellationToken).ConfigureAwait(false);
+                    await EnsureRetryBudgetAsync(run.Id, budget, cost: 1, cancellationToken).ConfigureAwait(false);
                 }
 
                 _dbContext.DevWorkflowDecisions.Add(new DevWorkflowDecision

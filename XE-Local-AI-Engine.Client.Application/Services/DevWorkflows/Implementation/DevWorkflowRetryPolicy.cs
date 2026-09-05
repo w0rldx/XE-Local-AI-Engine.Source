@@ -233,15 +233,31 @@ internal sealed class DevWorkflowRetryPolicy
         // executor ask an ALREADY-APPROVED task to be implemented again, quoting a verdict nothing had reached, until
         // the task's review rounds ran out and its approved patch was discarded. An earlier genuine route's key is left
         // in place: a transient retry in the middle of a fix loop must not lose the rework the loop asked for.
-        return await ReAttemptAsync(store,
-                run,
-                nodeRun,
-                node.RetryDelaySeconds,
-                DetailFor(nodeRun, failure),
-                failure.Outcome ?? DevWorkflowOutcomes.Failed,
-                cancellationToken,
-                PriorFailure(nodeRun.InputJson, fromNodeKey: null, fromAttempt: null, failure.OutputJson))
-            .ConfigureAwait(false);
+        try
+        {
+            return await ReAttemptAsync(store,
+                    run,
+                    nodeRun,
+                    node.RetryDelaySeconds,
+                    DetailFor(nodeRun, failure),
+                    failure.Outcome ?? DevWorkflowOutcomes.Failed,
+                    cancellationToken,
+                    PriorFailure(nodeRun.InputJson, fromNodeKey: null, fromAttempt: null, failure.OutputJson))
+                .ConfigureAwait(false);
+        }
+        catch (DevWorkflowRetryBudgetExceededException refused)
+        {
+            // The budget check the store takes under its writer lock refused this attempt: a human Retry committed
+            // between the PromisedAsync pre-check above and this write, and it spent the slot this re-attempt was
+            // counting on. The pre-check stays as the cheap fast path; THIS is the authority, and its answer is the
+            // same block the pre-check would have written.
+            _logger.LogInformation(refused,
+                "Development workflow run {RunId} could not re-attempt '{NodeKey}': the run's re-attempt budget was spent under the write.",
+                run.Id,
+                nodeRun.NodeKey);
+            return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken)
+                .ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -379,6 +395,16 @@ internal sealed class DevWorkflowRetryPolicy
         // The target is almost always Succeeded by the time anything downstream of it can fail, so its pass is almost
         // always a no-op — but an Any join lets a descendant run on a sibling branch while the target is still working,
         // and that target is as live as any other row the reset moves.
+        // Asked AGAIN, immediately before anything is stopped. The first check ran before the moves were composed and
+        // the rows were read; a human Retry committing since then makes this route unaffordable, and the transactional
+        // refusal below arrives too late to give the quiesced lanes their work back. Narrowing the window to the
+        // transaction itself is the whole of the fix — the store stays the authority.
+        if (await PromisedAsync(store, run.Id, nodeRuns, cancellationToken).ConfigureAwait(false) + cost > _options.MaxTotalAttempts)
+        {
+            return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         foreach (var row in reset.Where(row => row.Id != nodeRun.Id))
         {
             await QuiesceAsync(row, cancellationToken).ConfigureAwait(false);
@@ -399,8 +425,28 @@ internal sealed class DevWorkflowRetryPolicy
                 DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "retry-routed"),
                 failure.Outcome ?? DevWorkflowOutcomes.Failed,
                 JsonSerializer.Serialize(new RoutedDetail(nodeRun.NodeKey, retryTarget, failure.FailureClass, failure.SanitizedReason), JsonOptions)),
-            [.. moves.Select(static move => move.Command)]);
-        await RouteOnceMoreOnAClashAsync(store, run, nodeRun, retryTarget, route, cancellationToken).ConfigureAwait(false);
+            [.. moves.Select(static move => move.Command)],
+            _options.MaxTotalAttempts);
+        try
+        {
+            await RouteOnceMoreOnAClashAsync(store, run, nodeRun, retryTarget, route, cancellationToken).ConfigureAwait(false);
+        }
+        catch (DevWorkflowRetryBudgetExceededException refused)
+        {
+            // A budget refusal that got past BOTH pre-checks: a human Retry committed inside the transaction's own
+            // window. Warning, not Information, because the lanes above are already stopped and this answer does not
+            // reset them — unlike a concurrency clash, a refusal has no next route to redo them, so the rows named
+            // here are the ones a human has to look at.
+            _logger.LogWarning(refused,
+                "Development workflow run {RunId} could not route '{NodeKey}' back to '{RetryTarget}': the run's re-attempt budget was spent inside the write, "
+                + "after node run(s) {QuiescedNodeKeys} had already been asked to stop for it. They are left as their own lanes settle them.",
+                run.Id,
+                nodeRun.NodeKey,
+                retryTarget,
+                string.Join(", ", reset.Where(row => row.Id != nodeRun.Id).Select(static row => row.NodeKey).Append(target.NodeKey)));
+            return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken)
+                .ConfigureAwait(false);
+        }
 
         // After the commit: a cushion for a re-attempt that did not commit would hold back a row nothing reset.
         foreach (var (_, nodeRunId, delayUntil) in moves)
@@ -570,7 +616,13 @@ internal sealed class DevWorkflowRetryPolicy
             }, JsonOptions),
             IncrementAttempt: true,
             ClearWorkSession: true,
-            Outcome: outcome), delayUntil);
+            Outcome: outcome,
+
+            // The run-wide budget travels WITH the write, so the store re-checks it under the writer lock instead of
+            // trusting the caller's earlier read (FU3-4). Inert on a reset inside a route — those go through the
+            // route's own transaction, which admits the whole cascade once against RouteDevWorkflowRetryCommand's
+            // budget rather than each reset against this one.
+            MaxTotalAttempts: _options.MaxTotalAttempts), delayUntil);
     }
 
     /// <summary>
@@ -651,13 +703,19 @@ internal sealed class DevWorkflowRetryPolicy
     private static async Task<int> PromisedAsync(IDevWorkflowStore store,
         Guid runId,
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
-        CancellationToken cancellationToken)
-    {
-        var decisions = await store.ListDecisionsAsync(runId, cancellationToken).ConfigureAwait(false);
-        return nodeRuns.Sum(static row => row.Attempt - 1)
-               + decisions.Count(decision => decision.Decision == DevWorkflowDecisionKind.Retry
-                                             && nodeRuns.Any(row => row.Id == decision.NodeRunId && row.Attempt == decision.Attempt));
-    }
+        CancellationToken cancellationToken) =>
+        Promised(nodeRuns, await store.ListDecisionsAsync(runId, cancellationToken).ConfigureAwait(false));
+
+    /// <summary>
+    ///     The formula itself, shared with <see cref="DevWorkflowStartupReconciler" /> rather than restated there.
+    ///     Restating it is how restart recovery came to count only <c>Σ(Attempt − 1)</c> and hand an interrupted row
+    ///     the slot a recorded-but-unapplied <c>Retry</c> had already reserved (FU3-4). One definition, three callers:
+    ///     this policy, the reconciler, and — in its own SQL — the store's transactional admission.
+    /// </summary>
+    internal static int Promised(IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns, IReadOnlyList<DevWorkflowDecisionSnapshot> decisions) =>
+        nodeRuns.Sum(static row => row.Attempt - 1)
+        + decisions.Count(decision => decision.Decision == DevWorkflowDecisionKind.Retry
+                                      && nodeRuns.Any(row => row.Id == decision.NodeRunId && row.Attempt == decision.Attempt));
 
     /// <summary>
     ///     The target's inputs with the failure that sent the run back to it, as flat members so the objective renders

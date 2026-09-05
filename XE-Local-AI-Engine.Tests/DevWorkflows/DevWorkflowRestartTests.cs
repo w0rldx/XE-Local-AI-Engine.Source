@@ -367,6 +367,72 @@ public sealed class DevWorkflowRestartTests
     }
 
     /// <summary>
+    ///     FU3-4 race B. A <c>Retry</c> recorded before the crash and never applied has spent no attempt for a sum over
+    ///     <c>Attempt</c> to see, but the dispatcher turns it into one on its first tick after this boot. Counting only
+    ///     that sum handed an interrupted sandbox row the very slot the pending decision had already promised, and the
+    ///     run made one more re-attempt than it allows. Recovery counts spent PLUS reserved, exactly as the live retry
+    ///     policy and the store's own admission do.
+    /// </summary>
+    [Test]
+    public async Task ARestartWithAPendingRetryAlreadyReservingTheLastSlot_DoesNotSpendItTwice()
+    {
+        await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxTotalAttempts", "1"));
+        var runId = await harness.StartRunAsync("""
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [{ "nodeKey": "validate-a", "nodeType": "Tool" },
+                                                            { "nodeKey": "validate-b", "nodeType": "Tool" }],
+                                                  "edges": [{ "from": "validate-a", "to": "validate-b" }]
+                                                }
+                                                """)
+                                 .ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+
+        // The answer is durable and the attempt it buys is not: the host died before the dispatcher could turn this
+        // decision into one. It reserves the run's only re-attempt all the same.
+        await harness.DecideAsync(runId, "validate-a", DevWorkflowDecisionKind.Retry).ConfigureAwait(false);
+        await harness.TransitionNodeRunAsync(runId, "validate-b", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+
+        await harness.RestartAsync().ConfigureAwait(false);
+
+        var unfunded = await harness.ReadNodeRunAsync(runId, "validate-b").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, unfunded.Status, "The pending Retry has promised the only slot, so nothing is left for the interrupted row.");
+        AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, unfunded.FailureClass);
+        AssertEx.Equal(expected: 1, unfunded.Attempt, "A row nothing could pay for must not read as having tried again.");
+    }
+
+    /// <summary>
+    ///     FU3-4 race C. The run-wide budget is not the only bound: a node run also carries its OWN cap, which the live
+    ///     path checks before every automatic re-attempt. Recovery bypassed that check entirely, so an interrupted row
+    ///     already at its cap was reset to <c>Pending</c> with one attempt more than it declares — the runtime reporting
+    ///     that it broke its own budget, on a run with plenty of room left.
+    /// </summary>
+    [Test]
+    public async Task ARestartOfAnInterruptedRowAlreadyAtItsOwnCap_BlocksItRatherThanIncrementingPastTheCap()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync("""
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [{ "nodeKey": "validate", "nodeType": "Tool", "maxAttempts": 1 }],
+                                                  "edges": []
+                                                }
+                                                """)
+                                 .ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+
+        await harness.RestartAsync().ConfigureAwait(false);
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status, "The run-wide budget is untouched; this row simply has no attempt of its own left.");
+        AssertEx.Equal(expected: 1, blocked.Attempt, "1 of 1 must not become 2 of 1.");
+        AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason),
+            "as many as it allows",
+            message: "And it says which cap ran out, so nobody reads it as the run-wide budget.");
+    }
+
+    /// <summary>
     ///     A node run that keeps moving under recovery is settled by its last pass rather than left in flight. Nothing
     ///     downstream would ever pick it up — the dispatcher admits <c>Pending</c> rows and follows <c>Running</c> agent
     ///     ones, and no boot is scheduled to try again — so a row recovery walked away from would wedge its run for

@@ -420,6 +420,88 @@ public sealed class DevWorkflowStoreTests
         AssertEx.Null(reset.WorkSessionSteps, Because);
     }
 
+    /// <summary>
+    ///     FU3-4 race A, at the level that decides it. A human <c>Retry</c> and an automatic re-attempt spend the same
+    ///     run-wide budget, and the automatic path used to check it on a read taken before its own write — so a Retry
+    ///     recorded in that window spent the last slot and the re-attempt committed anyway. The budget now rides on the
+    ///     transition command and is admitted inside its transaction, which is the only count that can refuse it.
+    /// </summary>
+    [Test]
+    public async Task TransitionNodeRun_WithABudgetTheRunHasAlreadyPromised_IsRefusedInsideItsOwnTransaction()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var decidedId = Guid.NewGuid();
+        var automaticId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, decidedId, "implement", seed.RunVersion).ConfigureAwait(false);
+        _ = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, automaticId, "validate", version).ConfigureAwait(false);
+
+        // The human answer commits first and reserves the run's only re-attempt. Nothing has incremented an Attempt
+        // yet, so a sum over Attempt still reads the budget as untouched — which is exactly the window the automatic
+        // path's own pre-check would pass through.
+        _ = await store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(seed.RunId,
+                           Guid.NewGuid(),
+                           decidedId,
+                           DevWorkflowVersions.Any,
+                           Guid.NewGuid(),
+                           DevWorkflowDecisionKind.Retry,
+                           MaxTotalAttempts: 1))
+                       .ConfigureAwait(false);
+
+        TransitionDevWorkflowNodeRunCommand ReAttempt(int? budget) =>
+            new(seed.RunId, automaticId, DevWorkflowVersions.Any, DevWorkflowNodeRunStatus.Pending, IncrementAttempt: true, MaxTotalAttempts: budget);
+
+        var refusal = await AssertEx.ThrowsAsync<DevWorkflowRetryBudgetExceededException>(() => store.TransitionNodeRunAsync(ReAttempt(budget: 1)),
+                                        "The recorded Retry has promised the run's only re-attempt, so the automatic one has nothing left to spend.")
+                                    .ConfigureAwait(false);
+        AssertEx.True(refusal.Message.Contains("as many re-attempts as this run allows", StringComparison.Ordinal),
+            "The refusal reads the same whichever path ran into it.");
+        AssertEx.Equal(expected: 1, (await store.GetNodeRunAsync(automaticId).ConfigureAwait(false)).Attempt, "A refused re-attempt writes nothing at all.");
+
+        // A null budget is every other transition in the system, and it must go on behaving exactly as it did.
+        _ = await store.TransitionNodeRunAsync(ReAttempt(budget: null)).ConfigureAwait(false);
+        AssertEx.Equal(expected: 2, (await store.GetNodeRunAsync(automaticId).ConfigureAwait(false)).Attempt, "No budget on the command means no budget check.");
+    }
+
+    /// <summary>
+    ///     A routed fix loop costs the WHOLE cascade it resets, not one attempt, so the store charges it
+    ///     <c>Resets.Count</c>. Admitting a fan-out one attempt at a time is how a run overspends its budget by the
+    ///     width of its graph — the same accounting restart recovery does for the same reason.
+    /// </summary>
+    [Test]
+    public async Task RouteRetry_WithABudgetTooSmallForTheWholeCascade_IsRefusedForItsCostRatherThanForOne()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var implementId = Guid.NewGuid();
+        var validateId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, implementId, "implement", seed.RunVersion).ConfigureAwait(false);
+        _ = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, validateId, "validate", version).ConfigureAwait(false);
+
+        RouteDevWorkflowRetryCommand Route(int? budget) =>
+            new(new AppendDevWorkflowEventCommand(seed.RunId, DevWorkflowVersions.Any, DevWorkflowEventTypes.NodeRetryRouted, implementId, Guid.NewGuid()),
+                [
+                    new TransitionDevWorkflowNodeRunCommand(seed.RunId, validateId, DevWorkflowVersions.Any, DevWorkflowNodeRunStatus.Pending, IncrementAttempt: true),
+                    new TransitionDevWorkflowNodeRunCommand(seed.RunId, implementId, DevWorkflowVersions.Any, DevWorkflowNodeRunStatus.Pending, IncrementAttempt: true)
+                ],
+                budget);
+
+        _ = await AssertEx.ThrowsAsync<DevWorkflowRetryBudgetExceededException>(() => store.RouteRetryAsync(Route(budget: 1)),
+                              "One free slot cannot pay for a two-row cascade, however affordable either row looks alone.")
+                          .ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, (await store.GetNodeRunAsync(validateId).ConfigureAwait(false)).Attempt, "A refused route writes none of its resets.");
+
+        _ = await store.RouteRetryAsync(Route(budget: 2)).ConfigureAwait(false);
+        AssertEx.Equal(expected: 2, (await store.GetNodeRunAsync(validateId).ConfigureAwait(false)).Attempt);
+        AssertEx.Equal(expected: 2, (await store.GetNodeRunAsync(implementId).ConfigureAwait(false)).Attempt, "A budget that covers the cascade admits all of it.");
+    }
+
     /// <summary>Performs one competing write, on its own connection, inside the first save it intercepts.</summary>
     private sealed class CompetingWriteInterceptor(Func<Task> write) : SaveChangesInterceptor
     {

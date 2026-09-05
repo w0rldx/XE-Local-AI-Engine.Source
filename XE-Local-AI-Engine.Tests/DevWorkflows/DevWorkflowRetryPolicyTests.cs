@@ -121,6 +121,136 @@ public sealed class DevWorkflowRetryPolicyTests
         AssertEx.False(input.Contains("operatorRetryAttempt", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    ///     FU3-4 race A. The automatic path checks the budget on the tick's own snapshot and then commits on a separate
+    ///     call, so a human <c>Retry</c> that commits in between spends the slot it was counting on. The budget now
+    ///     travels ON the command and the store re-admits it under its writer lock, which turns that lost race into a
+    ///     <c>DevWorkflowInvalidTransitionException</c> — and the policy has to answer it with the same block the
+    ///     pre-check would have written, not by throwing at the dispatcher.
+    /// </summary>
+    [Test]
+    public async Task ASameNodeReAttemptRefusedByTheTransactionalBudget_BlocksWithTheBudgetReason()
+    {
+        var store = Store();
+        _ = store.TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static command => command.IncrementAttempt), Arg.Any<CancellationToken>())
+                 .Returns<DevWorkflowMutationResult>(_ =>
+                     throw new DevWorkflowRetryBudgetExceededException("This run has already spent or promised 50 re-attempts, which is as many "
+                                                                    + "re-attempts as this run allows, so it cannot be retried again."));
+        _ = store.TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static command => !command.IncrementAttempt), Arg.Any<CancellationToken>())
+                 .Returns(new DevWorkflowMutationResult(RunId, Sequence: 7, Version: 3, DevWorkflowRunStatus.Running, GraphRevision: 0));
+
+        var written = await SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running))
+            .ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, written, "the block is the one write this settle makes; the refused re-attempt wrote nothing.");
+        var commands = Transitioned(store);
+        AssertEx.Equal(expected: 2, commands.Count);
+        AssertEx.True(commands[0].MaxTotalAttempts == 50, "the run-wide budget rides on the re-attempt, or the store has nothing to admit it against.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, commands[1].TargetStatus, "a refused re-attempt stands the node run down rather than throwing.");
+        AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, commands[1].FailureClass);
+        AssertEx.Null(commands[1].MaxTotalAttempts, "and the block itself spends nothing, so it carries no budget of its own.");
+    }
+
+    /// <summary>
+    ///     The same race on the routed path, whose cost is the whole cascade rather than one attempt. A budget refusal
+    ///     is NOT a lost race: asking again would only be refused again, so the route is not re-sent — unlike the
+    ///     concurrency clash <c>RouteOnceMoreOnAClashAsync</c> exists for.
+    /// </summary>
+    [Test]
+    public async Task ARouteRefusedByTheTransactionalBudget_BlocksWithoutAskingAgain()
+    {
+        var store = Store();
+        _ = store.RouteRetryAsync(Arg.Any<RouteDevWorkflowRetryCommand>(), Arg.Any<CancellationToken>())
+                 .Returns<DevWorkflowMutationResult>(_ =>
+                     throw new DevWorkflowRetryBudgetExceededException("This run has already spent or promised 50 re-attempts, which is as many "
+                                                                    + "re-attempts as this run allows, so it cannot be retried again."));
+        _ = store.TransitionNodeRunAsync(Arg.Any<TransitionDevWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>())
+                 .Returns(new DevWorkflowMutationResult(RunId, Sequence: 7, Version: 3, DevWorkflowRunStatus.Running, GraphRevision: 0));
+
+        var written = await RouteAsync(store).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, written);
+        await store.Received(1).RouteRetryAsync(Arg.Any<RouteDevWorkflowRetryCommand>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+
+        var routed = (RouteDevWorkflowRetryCommand)store.ReceivedCalls()
+                                                        .First(call => string.Equals(call.GetMethodInfo().Name,
+                                                            nameof(IDevWorkflowStore.RouteRetryAsync),
+                                                            StringComparison.Ordinal))
+                                                        .GetArguments()[0]!;
+        AssertEx.True(routed.MaxTotalAttempts == 50, "the cascade is admitted as one act, against the run-wide budget it costs Resets.Count of.");
+        AssertEx.Equal(expected: 2, routed.Resets.Count, "which is the cost the store charges: the target and the node that failed under it.");
+
+        var blocked = Transitioned(store).Single();
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.TargetStatus);
+        AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, blocked.FailureClass);
+    }
+
+    /// <summary>
+    ///     Two settles against a store with one slot left, sequentially — the policy's half of the race, not the race
+    ///     itself (the real interleaving is pinned in <c>DevWorkflowStoreTests</c>, against a real transaction). Both
+    ///     ASK, because each pre-check reads a snapshot taken before the other's write; the store admits the first and
+    ///     refuses the second, and the loser has to block rather than spend the slot twice.
+    /// </summary>
+    [Test]
+    public async Task ASecondReAttemptAfterTheLastSlotIsSpent_BlocksInsteadOfSpendingItTwice()
+    {
+        // The store's own admission, standing in for the count it takes under its writer lock: the first re-attempt to
+        // reach it spends the run's last slot, and every later one is refused however clean the caller's pre-check was.
+        var store = Store();
+        var slots = 1;
+        var admitted = new List<TransitionDevWorkflowNodeRunCommand>();
+        _ = store.TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static command => command.IncrementAttempt), Arg.Any<CancellationToken>())
+                 .Returns(call =>
+                 {
+                     if (slots == 0)
+                     {
+                         throw new DevWorkflowRetryBudgetExceededException("This run has already spent or promised 1 re-attempts, which is as many "
+                                                                        + "re-attempts as this run allows, so it cannot be retried again.");
+                     }
+
+                     slots--;
+                     admitted.Add((TransitionDevWorkflowNodeRunCommand)call[0]!);
+                     return new DevWorkflowMutationResult(RunId, Sequence: 7, Version: 3, DevWorkflowRunStatus.Running, GraphRevision: 0);
+                 });
+        _ = store.TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static command => !command.IncrementAttempt), Arg.Any<CancellationToken>())
+                 .Returns(new DevWorkflowMutationResult(RunId, Sequence: 8, Version: 4, DevWorkflowRunStatus.Running, GraphRevision: 0));
+
+        _ = await SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running)).ConfigureAwait(false);
+        _ = await SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running)).ConfigureAwait(false);
+
+        var commands = Transitioned(store);
+        AssertEx.Equal(expected: 2,
+            commands.Count(static command => command is { IncrementAttempt: true, TargetStatus: DevWorkflowNodeRunStatus.Pending }),
+            "both settles ASK for a re-attempt, because the pre-check reads a snapshot taken before either write.");
+        AssertEx.Equal(expected: 1, admitted.Count, "but only one is admitted, because one slot is all the run had.");
+        AssertEx.Equal(expected: 1,
+            commands.Count(static command => command is { TargetStatus: DevWorkflowNodeRunStatus.Blocked, FailureClass: DevWorkflowFailureClasses.BudgetExhausted }),
+            "and the loser stands its node run down with the budget reason rather than spending the same slot twice.");
+    }
+
+    /// <summary>
+    ///     The budget catch is narrow on purpose. <c>DevWorkflowInvalidTransitionException</c> is also what the state
+    ///     machine throws for an illegal move — a row settled terminal under the tick, say — and catching the base
+    ///     type would report that as budget exhaustion on a run with its whole budget intact, with nothing above it
+    ///     any the wiser. Only the accounting refusal is converted; everything else still reaches the dispatcher.
+    /// </summary>
+    [Test]
+    public async Task AReAttemptRefusedForAnIllegalMove_IsNotRelabelledAsBudgetExhaustion()
+    {
+        var store = Store();
+        _ = store.TransitionNodeRunAsync(Arg.Any<TransitionDevWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>())
+                 .Returns<DevWorkflowMutationResult>(_ =>
+                     throw new DevWorkflowInvalidTransitionException("Node run 'implement' is Succeeded and cannot move to Pending."));
+
+        var thrown = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(
+                                       () => SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running)))
+                                   .ConfigureAwait(false);
+
+        AssertEx.False(thrown is DevWorkflowRetryBudgetExceededException, "An illegal move is not an accounting refusal.");
+        AssertEx.Empty(Transitioned(store).Where(static command => command.TargetStatus == DevWorkflowNodeRunStatus.Blocked),
+            "and nothing is stood down for a budget this run never spent.");
+    }
+
     /// <summary>A retryable failure on <c>implement</c>, which declares no retry target and so re-attempts itself.</summary>
     private static Task<int> SettleSameNodeAsync(IDevWorkflowStore store, DevWorkflowNodeRunSnapshot implement)
     {
