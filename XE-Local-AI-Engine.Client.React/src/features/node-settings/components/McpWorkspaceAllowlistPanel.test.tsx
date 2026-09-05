@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { confirmMock, hooksMock, toastMock } = vi.hoisted(() => ({
@@ -80,8 +80,9 @@ describe("McpWorkspaceAllowlistPanel", () => {
 		confirmMock.mockResolvedValue(true);
 	});
 
+	// `restoreMocks` covers the `vi.spyOn` console spies below but NOT these `vi.fn()` doubles: in Vitest 4
+	// `vi.restoreAllMocks()` only touches spies, so a `vi.fn()` call history still has to be cleared by hand.
 	afterEach(() => {
-		cleanup();
 		vi.clearAllMocks();
 	});
 
@@ -118,6 +119,8 @@ describe("McpWorkspaceAllowlistPanel", () => {
 
 	it("erases the trusted path before mutation and never exposes it through rendered messages, logs, or toasts", () => {
 		const secretPath = "/TOP_SECRET_PATH_97/project";
+		// Left to the suite-wide `restoreMocks`, which undoes every `vi.spyOn` before the next test starts — a manual
+		// restore here would be undone by the first `expect` that fails and returns early.
 		const consoleSpies = [
 			vi.spyOn(console, "log"),
 			vi.spyOn(console, "info"),
