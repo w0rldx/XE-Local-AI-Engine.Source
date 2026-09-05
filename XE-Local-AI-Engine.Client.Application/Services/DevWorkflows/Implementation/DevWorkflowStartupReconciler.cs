@@ -39,6 +39,16 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
     /// </summary>
     private const int RecoveryPasses = 3;
 
+    /// <summary>
+    ///     How many times the loop may run in total, counting the passes a concurrent operator <c>Retry</c> refused. A
+    ///     refused pass writes nothing at all — the collapse rolls back whole — so counting it as one of the
+    ///     <see cref="RecoveryPasses" /> spends a pass on a judgement that was never applied, and a refusal landing on
+    ///     the LAST one throws the settling pass away with it: the stranded rows stay Queued/Running, which is precisely
+    ///     the pair of states nothing downstream recovers. It is a cap rather than an unbounded retry because a writer
+    ///     that refuses every pass is one this cannot outrace either.
+    /// </summary>
+    private const int RecoveryAttempts = RecoveryPasses + 2;
+
     private readonly ILogger<DevWorkflowStartupReconciler> _logger;
     private readonly DevWorkflowOptions _options;
     private readonly IServiceScopeFactory _scopeFactory;
@@ -70,9 +80,12 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
         // goes round again, because collapsing an unjudged row would strand it at Pending with nothing left to decide
         // what re-running it costs.
         var recovered = 0;
+        var pass = 1;
+        var attempts = 0;
         var remaining = await store.ListInterruptedNodeRunsAsync(cancellationToken).ConfigureAwait(false);
-        for (var pass = 1; pass <= RecoveryPasses && remaining.Count > 0; pass++)
+        while (pass <= RecoveryPasses && attempts < RecoveryAttempts && remaining.Count > 0)
         {
+            attempts++;
             var verdicts = await ComposeVerdictsAsync(store, sessions, remaining, cancellationToken).ConfigureAwait(false);
 
             // The last pass settles what it could not judge instead of walking away from it, because nothing downstream
@@ -86,20 +99,40 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
             try
             {
                 recovered += (await store.ReconcileNonTerminalNodeRunsAsync(InterruptedReason, verdicts, unjudged, cancellationToken).ConfigureAwait(false)).Count;
+                pass++;
             }
             catch (DevWorkflowRetryBudgetExceededException refused)
             {
                 // A human Retry committed while these verdicts were being composed, so an attempt this pass admitted
                 // is one the run no longer has. The collapse rolls back whole, which is what makes another pass the
-                // whole of the recovery: it re-reads the decisions and composes the Block instead. The last pass
-                // settles whatever is still unjudged, so this cannot loop.
+                // whole of the recovery: it re-reads the decisions and composes the Block instead.
+                //
+                // The pass counter deliberately does NOT advance here: nothing was written, and a refusal that
+                // consumed a pass would let one landing on the LAST one throw away the settling pass with it, leaving
+                // the rows Queued/Running for a human to find. `attempts` is what bounds this instead.
                 _logger.LogWarning(refused, "Startup recovery pass {Pass} was refused its re-attempt budget, so it is being re-judged against the decision it did not see.", pass);
             }
 
             remaining = await store.ListInterruptedNodeRunsAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        if (remaining.Count > 0)
+        if (remaining.Count > 0 && pass <= RecoveryPasses)
+        {
+            // The cap stopped us: every attempt, the settling one included, was refused its re-attempt budget by a
+            // writer that never stopped. These rows are still Queued or Running, which is the one outcome nothing
+            // downstream repairs — the dispatcher admits Pending rows and follows Running AGENT ones — so each run is
+            // named here rather than left to be found by whoever notices the run has stopped moving.
+            foreach (var stranded in remaining.GroupBy(static nodeRun => nodeRun.RunId))
+            {
+                _logger.LogWarning("Startup recovery gave up after {Attempts} refused attempts, so development workflow run {RunId} keeps {Count} unsettled node run(s) "
+                                   + "that need a human: {NodeRuns}.",
+                    attempts,
+                    stranded.Key,
+                    stranded.Count(),
+                    string.Join(", ", stranded.Select(static nodeRun => $"{nodeRun.NodeKey} ({nodeRun.Status})")));
+            }
+        }
+        else if (remaining.Count > 0)
         {
             // Only reachable when something stranded these AFTER the settling pass looked, which makes them its rows
             // rather than ours: whatever is writing them is running, and blocking another writer's live work would be

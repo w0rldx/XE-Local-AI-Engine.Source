@@ -1,8 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -639,5 +644,116 @@ public sealed class DevWorkflowRestartTests
                           .ConfigureAwait(false);
         _ = await harness.Agent.GetAsync(superseded).ConfigureAwait(false);
         _ = await harness.Agent.GetAsync(owned).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     A budget refusal landing on the pass that would have SETTLED must not end recovery. A refused collapse rolls
+    ///     back whole and writes nothing, so counting it as one of the three passes spends the settling pass on a
+    ///     judgement that never applied — and the stranded Tool row is left <c>Running</c>, one of the two states
+    ///     nothing downstream recovers. The run then waits for somebody to restart the host again.
+    /// </summary>
+    [Test]
+    public async Task ARecoveryRefusedItsBudgetOnEveryPassItHad_StillSettlesTheRowOnAnUncountedPass()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleTool).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+
+        // Three refusals is exactly the number of passes recovery has, so the last of them lands on the settling one.
+        var (logger, collapses) = await RecoverWithARefusingStoreAsync(harness, refusals: 3).ConfigureAwait(false);
+
+        AssertEx.Empty(await harness.ReadInterruptedNodeRunsAsync().ConfigureAwait(false),
+            "No node run may be left Queued or Running: the dispatcher admits Pending rows and follows Running AGENT ones, so nothing picks a stranded Tool row up.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status);
+        AssertEx.Equal(expected: 4, collapses, "A refused pass wrote nothing, so it must not consume one of the three.");
+        AssertEx.False(logger.HasEntry(LogLevel.Warning, "gave up"), "The cap was never reached, so nothing was left unsettled.");
+    }
+
+    /// <summary>
+    ///     The bound on the above. A writer that refuses EVERY pass is one recovery cannot outrace, so it stops after
+    ///     <c>RecoveryPasses + 2</c> attempts rather than spinning before the dispatcher. What it must not do is return
+    ///     silently: the rows it leaves behind are in the states nothing repairs, so the run and each of them are named.
+    /// </summary>
+    [Test]
+    public async Task ARecoveryRefusedItsBudgetForever_StopsAtTheCapAndNamesTheRowsItLeftUnsettled()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleTool).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+
+        var (logger, collapses) = await RecoverWithARefusingStoreAsync(harness, refusals: int.MaxValue).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 5, collapses, "RecoveryPasses + 2 attempts: an extra pass per refusal, and a persistent refusal still terminates.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
+            (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status,
+            "Every collapse rolled back, so the row stands exactly as the dead host left it. The log is what makes that findable.");
+        AssertEx.ContainsSingle(logger.Entries,
+            entry => entry.Level == LogLevel.Warning
+                     && entry.Message.Contains("gave up", StringComparison.Ordinal)
+                     && entry.Message.Contains(runId.ToString(), StringComparison.Ordinal)
+                     && entry.Message.Contains("validate (Running)", StringComparison.Ordinal),
+            "The cap names the run and the node runs it could not settle, so this does not have to be found by noticing the run stopped moving.");
+    }
+
+    /// <summary>
+    ///     One startup recovery over the harness's real database, with a store that refuses the first
+    ///     <paramref name="refusals" /> collapses the way the real one does when a human <c>Retry</c> commits between a
+    ///     pass composing its verdicts and writing them. Everything else is the real store, so a collapse that gets
+    ///     through settles the rows for real.
+    /// </summary>
+    private static async Task<(RecordingLogger<DevWorkflowStartupReconciler> Logger, int Collapses)> RecoverWithARefusingStoreAsync(DevWorkflowHarness harness,
+        int refusals)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        var real = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
+        var collapses = 0;
+
+        var store = Substitute.For<IDevWorkflowStore>();
+        _ = store.ListInterruptedNodeRunsAsync(Arg.Any<CancellationToken>()).Returns(call => real.ListInterruptedNodeRunsAsync(call.Arg<CancellationToken>()));
+        _ = store.ListNodeRunsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                 .Returns(call => real.ListNodeRunsAsync(call.ArgAt<Guid>(0), call.Arg<CancellationToken>()));
+        _ = store.ListDecisionsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                 .Returns(call => real.ListDecisionsAsync(call.ArgAt<Guid>(0), call.Arg<CancellationToken>()));
+        _ = store.ListOwnedWorkSessionIdsAsync(Arg.Any<CancellationToken>()).Returns(call => real.ListOwnedWorkSessionIdsAsync(call.Arg<CancellationToken>()));
+        _ = store.ReconcileNonTerminalNodeRunsAsync(Arg.Any<string>(),
+                     Arg.Any<IReadOnlyList<DevWorkflowNodeRunVerdict>>(),
+                     Arg.Any<DevWorkflowUnjudgedNodeRunBlock?>(),
+                     Arg.Any<CancellationToken>())
+                 .Returns(call => ++collapses <= refusals
+                     ? throw new DevWorkflowRetryBudgetExceededException("This run has already spent or promised 1 re-attempts, which is as many "
+                                                                        + "re-attempts as this run allows, so it cannot be retried again.")
+                     : real.ReconcileNonTerminalNodeRunsAsync(call.ArgAt<string>(0),
+                         call.ArgAt<IReadOnlyList<DevWorkflowNodeRunVerdict>>(1),
+                         call.ArgAt<DevWorkflowUnjudgedNodeRunBlock?>(2),
+                         call.Arg<CancellationToken>()));
+
+        var logger = new RecordingLogger<DevWorkflowStartupReconciler>();
+        await new DevWorkflowStartupReconciler(ScopesServing(scope.ServiceProvider, store),
+                  harness.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
+                  logger)
+              .StartAsync(CancellationToken.None)
+              .ConfigureAwait(false);
+
+        return (logger, collapses);
+    }
+
+    /// <summary>
+    ///     The container's own scopes with one service swapped, which is the smallest seam that lets a test refuse the
+    ///     reconciler's collapse: everything else it resolves — the session lifecycle, the work-session store — is the
+    ///     real registration, so the recovery under test is the wired one.
+    /// </summary>
+    private static IServiceScopeFactory ScopesServing(IServiceProvider scoped, IDevWorkflowStore store)
+    {
+        var serving = Substitute.For<IServiceProvider>();
+        _ = serving.GetService(Arg.Any<Type>()).Returns(call => call.Arg<Type>() == typeof(IDevWorkflowStore) ? store : scoped.GetService(call.Arg<Type>()));
+
+        var scope = Substitute.For<IServiceScope>();
+        _ = scope.ServiceProvider.Returns(serving);
+
+        var scopes = Substitute.For<IServiceScopeFactory>();
+        _ = scopes.CreateScope().Returns(scope);
+        return scopes;
     }
 }
