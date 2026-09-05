@@ -19,18 +19,24 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     A graph-workflow host whose agent lane can actually run: the invocation runner is
-///     <see cref="FakeGraphWorkflowInvocation" />, and the four seams a unit-test host cannot satisfy — there is no
-///     installed GGUF model, no GPU and no model catalog here — answer off the MODEL NAME instead.
+///     A graph-workflow host whose agent lane can actually run. FIVE seams are replaced, and each one for the same
+///     reason: a unit-test host has no installed GGUF model, no GPU and no model catalog, so nothing here could answer
+///     these truthfully.
+///     <list type="bullet">
+///         <item><see cref="IInvocationRunner" /> ⇒ <see cref="FakeGraphWorkflowInvocation" />: there is no model to run a turn on.</item>
+///         <item><see cref="ILocalDefaultChatModelResolver" /> ⇒ a fixed name: there is no installed GGUF to resolve one from.</item>
+///         <item><see cref="IModelCapabilityResolver" /> ⇒ capabilities off the NAME: there is no catalog to look one up in.</item>
+///         <item><see cref="ICapacityService" /> ⇒ admission off the NAME: there is no GPU whose free memory could decide.</item>
+///         <item><see cref="IAgentDefinitionResolver" /> ⇒ a fixed runtime: resolving one needs the model and tool state above.</item>
+///     </list>
+///     The hub publisher is recorded rather than faked — a real one needs a hub connection — and everything else is the
+///     real thing: the store, the dispatcher, the state machine, the package builder, and above all
+///     <c>WorkerEventDispatcher</c> with its genuine one-slot invocation semaphore.
 ///     <para>
 ///         Name-driven rather than per-test configuration on purpose. The host is shared across a class and TUnit runs
 ///         its tests in parallel, so a substitute a test reconfigures is state its siblings would read; a fake that
 ///         answers off the name a test's own graph pins is state nobody shares. See
 ///         <see cref="GraphWorkflowModels" /> for the names and what each one means.
-///     </para>
-///     <para>
-///         Everything else is the real thing: the store, the dispatcher, the state machine, the package builder, and
-///         above all <c>WorkerEventDispatcher</c> with its genuine one-slot invocation semaphore.
 ///     </para>
 /// </summary>
 public sealed class GraphWorkflowAgentHostFixture : IAsyncInitializer, IAsyncDisposable

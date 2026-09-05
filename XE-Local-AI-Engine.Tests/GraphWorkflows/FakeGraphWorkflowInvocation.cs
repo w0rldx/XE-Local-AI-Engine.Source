@@ -45,15 +45,24 @@ internal enum GraphWorkflowTurnOutcome
 /// <summary>
 ///     One scripted turn, keyed by a fragment of the seed user turn the node sends. Defaults are the happy path: text
 ///     out, a full usage block, and a <c>stop</c> finish reason.
+///     <para>
+///         <paramref name="FailureCategory" /> applies to <see cref="GraphWorkflowTurnOutcome.Fails" /> only, and it is
+///         scriptable because the runner's watchdog reports a TIMEOUT as an ordinary failed terminal — the category is
+///         the only place that difference survives, and mapping it is what keeps a timed-out node off the plain
+///         provider-failure class.
+///     </para>
 /// </summary>
 internal sealed record GraphWorkflowScriptedTurn(GraphWorkflowTurnOutcome Outcome = GraphWorkflowTurnOutcome.Completes,
     string Text = "the fake agent answered",
-    string FinishReason = "stop");
+    string FinishReason = "stop",
+    FailureCategory FailureCategory = FailureCategory.ProviderUnreachable);
 
 /// <summary>
-///     The ONE seam this module fakes: <see cref="IInvocationRunner" />.
+///     The invocation-runner seam: there is no installed model here for a turn to run on. It is one of the FIVE seams
+///     <see cref="GraphWorkflowAgentHostFixture" /> replaces, which lists the rest and why each one cannot answer
+///     truthfully on a unit-test host.
 ///     <para>
-///         Everything around it stays real, and that is the point rather than economy. The real
+///         Everything AROUND those five stays real, and that is the point rather than economy. The real
 ///         <c>WorkerEventDispatcher</c> holds a genuine one-slot semaphore, so <c>Running, Queued, Queued</c> across a
 ///         fan-out is OBSERVED here rather than simulated; the real package builder is what makes an assertion about
 ///         <c>IsUnattended</c> or the stripped offer mean anything.
@@ -159,7 +168,7 @@ internal sealed class FakeGraphWorkflowInvocation(IServiceProvider services) : I
                 return;
 
             case GraphWorkflowTurnOutcome.Fails:
-                await _eventDispatcher.Value.ReportInvocationFailedAsync(package.InvocationId, "provider said no: connection reset at 10.0.0.7", FailureCategory.ProviderUnreachable)
+                await _eventDispatcher.Value.ReportInvocationFailedAsync(package.InvocationId, "provider said no: connection reset at 10.0.0.7", turn.FailureCategory)
                                       .ConfigureAwait(false);
                 return;
 
