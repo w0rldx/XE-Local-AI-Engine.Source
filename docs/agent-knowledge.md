@@ -377,7 +377,7 @@ A user-secret key and `.data/node.key` can disagree. `dev-start.sh` always suppl
   ```
 
 - `AppHost.cs` forwards no such variable to the `app` resource; the flags reach the Client process as inherited process environment through `aspire` and DCP. They must therefore be on the `dev-start.sh` invocation itself, and they are read once at startup (`Program.cs`, `areDevWorkflowsEnabled`/`areGraphWorkflowsEnabled`), so changing one needs a restart.
-- `DevWorkflowOptions.Section` and `GraphWorkflowOptions.Section` default to disabled; only `WorkSessions:Enabled` ships `true` in `appsettings.json`. `DevWorkflowOptionsValidator` fails startup when DevWorkflows is on with WorkSessions off, so set all three or none.
+- `DevWorkflowOptions.Section` and `GraphWorkflowOptions.Section` default to disabled; only `WorkSessions:Enabled` ships `true` in `appsettings.json`. One pair is enforced at startup: `DevWorkflowOptionsValidator` fails the host when DevWorkflows is on with WorkSessions off, because every workflow agent node runs as a work session. GraphWorkflows carries no such coupling — `GraphWorkflowOptionsValidator` checks only its own budgets — so it starts on its own.
 - Prevents burning a live round on a "wrong route": each gate is a request-path middleware registered ahead of `LocalApiSecurityMiddleware` in `Program.cs`, deliberately so the switch cannot be probed by status code — which also means a disabled feature and a mistyped path are indistinguishable from the response alone.
 
 ### Locked runtime decisions — do not "helpfully" reintroduce
