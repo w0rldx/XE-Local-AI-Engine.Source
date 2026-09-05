@@ -50,13 +50,47 @@ public sealed class NodeSettingsAdministrationServiceTests
         AssertEx.Equal(42, result.Settings.MaxResponseSizeMb);
         AssertEx.Equal(true, result.Settings.VoiceFeatureEnabled);
         AssertEx.NotNull(result.Settings.ToolApprovalPolicy);
+        // The excluded fields are asserted against the WRITE-TIME record the mutation is handed, because that is where
+        // a partial patch takes every field it does not name from.
         await store.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
-                Persisted(mutate).CustomToolsEnabled == current.CustomToolsEnabled
-                && Persisted(mutate).OllamaEndpoint == current.OllamaEndpoint
-                && Persisted(mutate).MaxResponseSizeMb == current.MaxResponseSizeMb
-                && Persisted(mutate).VoiceFeatureEnabled == current.VoiceFeatureEnabled
-                && ReferenceEquals(Persisted(mutate).ToolApprovalPolicy, current.ToolApprovalPolicy)),
+                Persisted(mutate, current).CustomToolsEnabled == current.CustomToolsEnabled
+                && Persisted(mutate, current).OllamaEndpoint == current.OllamaEndpoint
+                && Persisted(mutate, current).MaxResponseSizeMb == current.MaxResponseSizeMb
+                && Persisted(mutate, current).VoiceFeatureEnabled == current.VoiceFeatureEnabled
+                && ReferenceEquals(Persisted(mutate, current).ToolApprovalPolicy, current.ToolApprovalPolicy)),
             Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task ApplyAgenticPatch_WhenASiblingWriterAppendsAToolCapableModelBetweenTheLoadAndTheWrite_KeepsItsEntry()
+    {
+        // The patch is PARTIAL, so every field it does not name must come from the record the write lands on. Building
+        // the whole saved record from the snapshot loaded before validation wrote that snapshot's ToolCapableModels
+        // back over the registrar's append, silently un-registering a model the operator had just made tool-capable.
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings
+            {
+                ToolCapableModels = ["already-approved"]
+            },
+            siblingWriteBeforeTheUpdate: latest => latest with
+            {
+                ToolCapableModels = [.. latest.ToolCapableModels ?? [], "registered-while-the-patch-validated"]
+            });
+        var service = CreateService(store);
+
+        var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            ChatCacheReuse = 512
+        }).ConfigureAwait(false);
+
+        AssertEx.True(result.Updated);
+        AssertEx.Equal(expected: 512, store.Current.ChatCacheReuse, "the patched field still lands.");
+        AssertEx.True(store.Current.ToolCapableModels?.Contains("registered-while-the-patch-validated") == true,
+            "a sibling writer's registration must survive a patch that never names ToolCapableModels.");
+        AssertEx.True(store.Current.ToolCapableModels?.Contains("already-approved") == true,
+            "and the entries that were already stored stay.");
+        AssertEx.Equal(expected: 512, result.Settings.ChatCacheReuse);
+        AssertEx.True(result.Settings.ToolCapableModels?.Contains("registered-while-the-patch-validated") == true,
+            "the caller is told what was actually written, not what it validated.");
     }
 
     [Test]

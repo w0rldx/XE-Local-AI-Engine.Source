@@ -57,7 +57,10 @@ internal sealed class NodeSettingsAdministrationService(
             MachineKey = current.MachineKey
         };
 
-        return await ValidateAndSaveAsync(merged, current, cancellationToken).ConfigureAwait(false);
+        // Whole-record by design, so the projection deliberately IGNORES the write-time record: the wire DTO carries
+        // every field, and the endpoint's contract is "this record replaces the stored one". Only MachineKey is
+        // refreshed from the latest record, by the shared write below.
+        return await ValidateAndSaveAsync(_ => merged, current, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<NodeSettingsAdministrationResult> ApplyAgenticPatchAsync(NodeSettingsAgenticPatch patch,
@@ -82,43 +85,61 @@ internal sealed class NodeSettingsAdministrationService(
             ]);
         }
 
-        var merged = current with
+        // The projection, not its result: a PARTIAL patch names only the fields it supplies, so every other field must
+        // come from the record the write actually lands on. Applying this to the snapshot loaded above and saving THAT
+        // whole record wrote back the snapshot's value for every unnamed field, silently reverting any sibling writer
+        // — a tool-capable-model registration, a default-model selection — that landed while this call validated.
+        StoredNodeSettings Apply(StoredNodeSettings record) => record with
         {
-            DefaultModelName = TrimWhenProvided(patch.DefaultModelName, current.DefaultModelName),
-            EnableTools = patch.EnableTools ?? current.EnableTools,
-            ToolCapableModels = patch.ToolCapableModels ?? current.ToolCapableModels,
-            HuggingFaceDefaultQuant = TrimWhenProvided(patch.HuggingFaceDefaultQuant, current.HuggingFaceDefaultQuant),
-            LlamaMaxLoadedProcesses = patch.LlamaMaxLoadedProcesses ?? current.LlamaMaxLoadedProcesses,
-            LlamaIdleTimeToLiveSeconds = patch.LlamaIdleTimeToLiveSeconds ?? current.LlamaIdleTimeToLiveSeconds,
-            KeepModelWarmEnabled = patch.KeepModelWarmEnabled ?? current.KeepModelWarmEnabled,
-            KeepModelWarmModelName = TrimWhenProvided(patch.KeepModelWarmModelName, current.KeepModelWarmModelName),
-            KeepModelWarmIntervalSeconds = patch.KeepModelWarmIntervalSeconds ?? current.KeepModelWarmIntervalSeconds,
-            MaxMessageRequestTimeoutSeconds = patch.MaxMessageRequestTimeoutSeconds ?? current.MaxMessageRequestTimeoutSeconds,
-            ChatCacheReuse = patch.ChatCacheReuse ?? current.ChatCacheReuse,
-            SpeculativeMode = TrimWhenProvided(patch.SpeculativeMode, current.SpeculativeMode),
-            SpeculativeDraftModelName = TrimWhenProvided(patch.SpeculativeDraftModelName, current.SpeculativeDraftModelName),
-            SpeculativeDraftMaxTokens = patch.SpeculativeDraftMaxTokens ?? current.SpeculativeDraftMaxTokens,
-            SpeculativeDraftGpuLayers = patch.SpeculativeDraftGpuLayers ?? current.SpeculativeDraftGpuLayers,
-            KvCacheType = TrimWhenProvided(patch.KvCacheType, current.KvCacheType),
-            RerankerModelName = TrimWhenProvided(patch.RerankerModelName, current.RerankerModelName),
-            AutoEffortFastModelName = TrimWhenProvided(patch.AutoEffortFastModelName, current.AutoEffortFastModelName)
+            DefaultModelName = TrimWhenProvided(patch.DefaultModelName, record.DefaultModelName),
+            EnableTools = patch.EnableTools ?? record.EnableTools,
+            ToolCapableModels = patch.ToolCapableModels ?? record.ToolCapableModels,
+            HuggingFaceDefaultQuant = TrimWhenProvided(patch.HuggingFaceDefaultQuant, record.HuggingFaceDefaultQuant),
+            LlamaMaxLoadedProcesses = patch.LlamaMaxLoadedProcesses ?? record.LlamaMaxLoadedProcesses,
+            LlamaIdleTimeToLiveSeconds = patch.LlamaIdleTimeToLiveSeconds ?? record.LlamaIdleTimeToLiveSeconds,
+            KeepModelWarmEnabled = patch.KeepModelWarmEnabled ?? record.KeepModelWarmEnabled,
+            KeepModelWarmModelName = TrimWhenProvided(patch.KeepModelWarmModelName, record.KeepModelWarmModelName),
+            KeepModelWarmIntervalSeconds = patch.KeepModelWarmIntervalSeconds ?? record.KeepModelWarmIntervalSeconds,
+            MaxMessageRequestTimeoutSeconds = patch.MaxMessageRequestTimeoutSeconds ?? record.MaxMessageRequestTimeoutSeconds,
+            ChatCacheReuse = patch.ChatCacheReuse ?? record.ChatCacheReuse,
+            SpeculativeMode = TrimWhenProvided(patch.SpeculativeMode, record.SpeculativeMode),
+            SpeculativeDraftModelName = TrimWhenProvided(patch.SpeculativeDraftModelName, record.SpeculativeDraftModelName),
+            SpeculativeDraftMaxTokens = patch.SpeculativeDraftMaxTokens ?? record.SpeculativeDraftMaxTokens,
+            SpeculativeDraftGpuLayers = patch.SpeculativeDraftGpuLayers ?? record.SpeculativeDraftGpuLayers,
+            KvCacheType = TrimWhenProvided(patch.KvCacheType, record.KvCacheType),
+            RerankerModelName = TrimWhenProvided(patch.RerankerModelName, record.RerankerModelName),
+            AutoEffortFastModelName = TrimWhenProvided(patch.AutoEffortFastModelName, record.AutoEffortFastModelName)
         };
 
-        var result = await ValidateAndSaveAsync(merged, current, cancellationToken).ConfigureAwait(false);
+        var result = await ValidateAndSaveAsync(Apply, current, cancellationToken).ConfigureAwait(false);
         if (result.Updated && patch.DefaultModelName is not null)
         {
             await _defaultModelSelectionPolicy
-                  .InvalidateCacheForTransitionAsync(current.DefaultModelName, merged.DefaultModelName, cancellationToken)
+                  .InvalidateCacheForTransitionAsync(current.DefaultModelName, result.Settings.DefaultModelName, cancellationToken)
                   .ConfigureAwait(false);
         }
 
         return result;
     }
 
-    private async Task<NodeSettingsAdministrationResult> ValidateAndSaveAsync(StoredNodeSettings settings,
+    /// <summary>
+    ///     Validates the record <paramref name="apply" /> produces from the loaded snapshot, then persists the SAME
+    ///     projection re-applied to the record the store holds at write time.
+    /// </summary>
+    /// <remarks>
+    ///     Validation necessarily runs against the snapshot: the policy checks are async (they resolve models) and the
+    ///     store's mutation must stay pure and synchronous under its lock. The write therefore re-applies
+    ///     <paramref name="apply" /> rather than saving the validated preview, so fields the caller never supplied come
+    ///     from the write-time record instead of a stale copy. There is deliberately no compare-and-retry: a sibling
+    ///     writer that changes a validated field between the two is the same window every other whole-file writer on
+    ///     this node has, and the dispatcher re-checks the one security-relevant value per turn.
+    /// </remarks>
+    private async Task<NodeSettingsAdministrationResult> ValidateAndSaveAsync(Func<StoredNodeSettings, StoredNodeSettings> apply,
         StoredNodeSettings current,
         CancellationToken cancellationToken)
     {
+        var settings = apply(current);
+
         // Enforcement point 1 of the node-locality gate, on BOTH save paths (the endpoint's merged save and the MCP
         // patch) rather than only the patch: the runner's dispatcher may move an `auto` turn onto this model, and the
         // turn's data was admitted upstream against a node-local one. A cloud id, an `ext:` id or an Ollama name would
@@ -146,14 +167,15 @@ internal sealed class NodeSettingsAdministrationService(
         }
 
         // Read-modify-write under the store's own lock, never a load here and a save there. The settings file is
-        // written WHOLE, and MachineKey is the one member a save carries no value for: a key minted between this
-        // request's load and this line — IMachineKeyProvider races every settings save, since both run on the same
-        // node — would otherwise be overwritten with the null the caller sent, orphaning every frozen profile.
-        // The mutation is pure and takes the LATEST stored key, so the window closes at the boundary that owns it.
+        // written WHOLE, so the projection is re-applied to the LATEST record: every field the caller did not supply
+        // then comes from what is actually stored rather than from this request's snapshot. MachineKey is the one
+        // member no save carries a value for — a key minted between this request's load and this line, since
+        // IMachineKeyProvider races every settings save on the same node — so it is taken from the latest record too,
+        // ahead of whatever the projection produced, orphaning no frozen profile.
         var persisted = settings;
         await _store.UpdateAsync(latest =>
                      {
-                         persisted = settings with
+                         persisted = apply(latest) with
                          {
                              MachineKey = latest.MachineKey
                          };
