@@ -144,6 +144,29 @@ public sealed class NodeAuthEndpointTests
         AssertRefreshCookieCleared(response);
     }
 
+    // Pins the deliberate shape behind the OpenAPI spec listing only `password` as required on the login request:
+    // `NodeLoginRequest.Email` is nullable on purpose, and `NodeAuthService.ResolveLoginUserAsync` resolves the single
+    // SetupCompleted user when no email is supplied.
+    [Test]
+    public async Task Login_WhenEmailIsOmitted_ResolvesTheSingleCompletedAdmin()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+
+        using var setupResponse = await SetupAsync(client).ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.NoContent, setupResponse.StatusCode);
+
+        using var response = await client.PostAsJsonAsync("/api/local/v1/auth/login",
+            new
+            {
+                password = Password
+            }).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var token = await ReadTokenAsync(response).ConfigureAwait(false);
+        AssertEx.NotEmpty(token.AccessToken);
+    }
+
     private static Task<HttpResponseMessage> SetupAsync(HttpClient client, string email = Email)
     {
         return client.PostAsJsonAsync("/api/local/v1/auth/setup",
