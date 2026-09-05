@@ -1,15 +1,18 @@
 namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 
+using System.Runtime.CompilerServices;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The cancel drain, and the in-flight registry contract that keeps it from spinning.
 ///     <para>
-///         This build ships no lane, so every live row a drain meets is one it settles directly. The half of the drain
-///         that ASKS is asserted against the lane class itself, which is where the hot-loop fix lives.
+///         An inline row a drain meets is one it settles directly; an Agent row it can only ASK, and the two tests at
+///         the end are about that half — including the repeat that must write nothing, which is the hot-loop fix seen
+///         from the dispatcher rather than from the lane it lives in.
 ///     </para>
 /// </summary>
 public sealed class GraphWorkflowCancelTests
@@ -115,7 +118,7 @@ public sealed class GraphWorkflowCancelTests
 
         _ = await lane.TryStartAsync(Guid.NewGuid(), attempt: 1, Guid.NewGuid(), Parked, CancellationToken.None).ConfigureAwait(false);
 
-        var refused = await lane.TryStartAsync(Guid.NewGuid(), attempt: 1, Guid.NewGuid(), _ => Task.FromResult(result: 2), CancellationToken.None).ConfigureAwait(false);
+        var refused = await lane.TryStartAsync(Guid.NewGuid(), attempt: 1, Guid.NewGuid(), (_, _) => Task.FromResult(result: 2), CancellationToken.None).ConfigureAwait(false);
 
         AssertEx.Null(refused, "the slot count is the bound, and a full lane simply answers no.");
     }
@@ -146,12 +149,125 @@ public sealed class GraphWorkflowCancelTests
         AssertEx.False(lane.IsInFlight(current), "removing the entry is the load-bearing half of a discard, not the cancel.");
     }
 
+
+    /// <summary>
+    ///     A cancel that meets a running agent turn ASKS, and does not settle: only the lane knows what stopping its
+    ///     turn costs, so the row's terminal is written on the tick after the turn actually lands.
+    /// </summary>
+    [Test]
+    public async Task CancellingMidAgentTurn_AsksTheLaneAndSettlesOnTheTickAfterTheTurnLands()
+    {
+        const string instructions = "cancel-mid-agent-turn";
+
+        // A private agent host: a wedged turn holds the node-wide invocation slot, and the signal channel this asserts
+        // on is the dispatcher's own.
+        await using var harness = GraphWorkflowHarness.PrivateAgentHost();
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn(GraphWorkflowTurnOutcome.Wedges));
+        var runId = await RunToARunningAgentAsync(harness, instructions).ConfigureAwait(false);
+        var invocationId = AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false)).InvocationId?.ToString(),
+            "a Running agent row carries the invocation its turn was minted with.");
+
+        await harness.CancelAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Running,
+            (await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false)).Status,
+            "ask, do not settle: the turn is still winding down.");
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelling, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(expected: 1, harness.Invocations.Cancelled.Count(cancelled => cancelled.ToString() == invocationId), "the runner is asked once, not once per tick.");
+
+        harness.Invocations.Release(Guid.Parse(invocationId));
+
+        var analyze = await AdvanceUntilCancelledAsync(harness, runId).ConfigureAwait(false);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Cancelled, analyze.Status);
+        AssertEx.Equal(GraphWorkflowFailureClass.Cancelled, analyze.FailureClass);
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
+    ///     The hot-loop fix, seen from the dispatcher. The entry lives until a poll SEES the turn land, so a cancelling
+    ///     drain reaches the stop on every tick until then — and a lane answering yes each time would be counted as a
+    ///     written transition, re-signalled, and would spin the run for the whole duration of the model turn.
+    /// </summary>
+    [Test]
+    public async Task TheDrain_DoesNotSpinWhileAnAgentTurnIsStillWindingDown()
+    {
+        const string instructions = "drain-does-not-spin";
+        await using var harness = GraphWorkflowHarness.PrivateAgentHost();
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn(GraphWorkflowTurnOutcome.Wedges));
+        var runId = await RunToARunningAgentAsync(harness, instructions).ConfigureAwait(false);
+
+        await harness.CancelAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        _ = harness.WasSignalled(runId);
+
+        AssertEx.Equal(expected: 0, await harness.AdvanceAsync(runId).ConfigureAwait(false), "the stop was already asked, so the repeat has nothing to write.");
+        await harness.AdvanceSafelyAsync(runId).ConfigureAwait(false);
+        AssertEx.False(harness.WasSignalled(runId), "and writing nothing is what stops it asking for another tick.");
+        AssertEx.Equal(expected: 1, harness.Invocations.Cancelled.Count, "three ticks of drain, one ask.");
+
+        foreach (var nodeRun in await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false))
+        {
+            if (nodeRun.InvocationId is { } invocationId)
+            {
+                harness.Invocations.Release(invocationId);
+            }
+        }
+
+        _ = await AdvanceUntilCancelledAsync(harness, runId).ConfigureAwait(false);
+    }
+
+    /// <summary>A run of a linear Start → Agent → End graph, ticked until its agent turn is Running.</summary>
+    private static async Task<Guid> RunToARunningAgentAsync(GraphWorkflowHarness harness, string instructions)
+    {
+        var runId = await harness.StartRunAsync($$"""
+                                                  {
+                                                    "schemaVersion": 1,
+                                                    "nodes": [
+                                                      { "key": "start", "kind": "Start" },
+                                                      { "key": "analyze", "kind": "Agent", "config": { "instructions": "{{instructions}}" } },
+                                                      { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                    ],
+                                                    "edges": [
+                                                      { "key": "e1", "from": "start", "to": "analyze" },
+                                                      { "key": "e2", "from": "analyze", "to": "done" }
+                                                    ]
+                                                  }
+                                                  """)
+                                 .ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await harness.Invocations.WhenRunningAsync(instructions).WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false)).Status);
+        return runId;
+    }
+
+    private static async Task<GraphWorkflowNodeRunSnapshot> AdvanceUntilCancelledAsync(GraphWorkflowHarness harness, Guid runId, int maxTicks = 40)
+    {
+        for (var tick = 0; tick < maxTicks; tick++)
+        {
+            var nodeRun = await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false);
+            if (GraphWorkflowStateMachine.IsTerminal(nodeRun.Status))
+            {
+                return nodeRun;
+            }
+
+            _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        }
+
+        throw new AssertionException($"Run {runId} left its agent node unsettled after {maxTicks} ticks.");
+    }
+
     /// <summary>
     ///     Work that never lands on its own, so the only thing that ends it is the lane's own token — which is exactly
-    ///     what the stop and discard paths are about.
+    ///     what the stop and discard paths are about. It flips the lease box the lane hands it, the way a real turn
+    ///     does once it holds the node-wide slot.
     /// </summary>
-    private static async Task<int> Parked(CancellationToken cancellationToken)
+    private static async Task<int> Parked(StrongBox<bool> leaseAcquired, CancellationToken cancellationToken)
     {
+        leaseAcquired.Value = true;
         await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
         return 1;
     }

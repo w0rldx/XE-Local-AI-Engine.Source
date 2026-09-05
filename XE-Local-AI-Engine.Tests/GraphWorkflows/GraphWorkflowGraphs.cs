@@ -391,8 +391,8 @@ internal static class GraphWorkflowGraphs
                                               """;
 
     /// <summary>
-    ///     An <c>Agent</c> node in an otherwise inline graph. This build has no lane for that kind, so the node run
-    ///     fails <c>ValidationFailed</c> at dispatch — the absent case, asserted rather than assumed.
+    ///     An <c>Agent</c> node in an otherwise inline graph: the smallest shape that puts one turn through the agent
+    ///     lane and nothing else through anything.
     /// </summary>
     public const string InlineWithAgent = """
                                           {
@@ -408,4 +408,71 @@ internal static class GraphWorkflowGraphs
                                             ]
                                           }
                                           """;
+
+    /// <summary>
+    ///     The live-validation shape: an <c>Agent</c> node under a response schema, a <c>Condition</c> routing on the
+    ///     answer it parsed, two mutually exclusive branches, a join and an <c>End</c>.
+    ///     <para>
+    ///         The join is <c>Any</c> and has to be. Its two inbound branches are the two arms of one Condition, so
+    ///         exactly one of them is always dead — and an <c>All</c> join over a dead edge is SKIPPED, which would
+    ///         skip the End behind it and leave the run <c>Cancelled</c> rather than <c>Completed</c>. The S1 plan's
+    ///         live script says "Join, All"; the shipped admission rule says that graph cannot complete.
+    ///     </para>
+    /// </summary>
+    public const string AgentBranchJoin = """
+                                          {
+                                            "schemaVersion": 1,
+                                            "nodes": [
+                                              { "key": "start", "kind": "Start" },
+                                              { "key": "analyze", "kind": "Agent",
+                                                "config": { "instructions": "Judge whether this needs review.",
+                                                            "responseJsonSchema": { "type": "object",
+                                                                                    "properties": { "requiresReview": { "type": "boolean" }, "summary": { "type": "string" } },
+                                                                                    "required": ["requiresReview", "summary"] } } },
+                                              { "key": "check", "kind": "Condition", "config": { "path": "output.json.requiresReview" } },
+                                              { "key": "review", "kind": "Parallel", "config": {} },
+                                              { "key": "quick", "kind": "Parallel", "config": {} },
+                                              { "key": "merge", "kind": "Join", "joinPolicy": "Any", "config": {} },
+                                              { "key": "done", "kind": "End", "config": { "outcome": "completed", "resultPath": "input.output" } }
+                                            ],
+                                            "edges": [
+                                              { "key": "e1", "from": "start", "to": "analyze" },
+                                              { "key": "e2", "from": "analyze", "to": "check" },
+                                              { "key": "e3", "from": "check", "to": "review", "label": "yes", "condition": { "op": "eq", "value": true } },
+                                              { "key": "e4", "from": "check", "to": "quick", "label": "no", "condition": { "op": "ne", "value": true } },
+                                              { "key": "e5", "from": "review", "to": "merge" },
+                                              { "key": "e6", "from": "quick", "to": "merge" },
+                                              { "key": "e7", "from": "merge", "to": "done" }
+                                            ]
+                                          }
+                                          """;
+
+    /// <summary>
+    ///     Three <c>Agent</c> nodes fanned out in parallel. The node has ONE invocation slot whatever the lane's own
+    ///     width, so this is the shape that makes the queue honest: one row runs and two say what they are waiting for.
+    /// </summary>
+    public const string AgentFanOut = """
+                                      {
+                                        "schemaVersion": 1,
+                                        "nodes": [
+                                          { "key": "start", "kind": "Start" },
+                                          { "key": "fanout", "kind": "Parallel", "config": {} },
+                                          { "key": "left", "kind": "Agent", "config": { "instructions": "Left." } },
+                                          { "key": "middle", "kind": "Agent", "config": { "instructions": "Middle." } },
+                                          { "key": "right", "kind": "Agent", "config": { "instructions": "Right." } },
+                                          { "key": "merge", "kind": "Join", "config": {} },
+                                          { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                        ],
+                                        "edges": [
+                                          { "key": "e1", "from": "start", "to": "fanout" },
+                                          { "key": "e2", "from": "fanout", "to": "left" },
+                                          { "key": "e3", "from": "fanout", "to": "middle" },
+                                          { "key": "e4", "from": "fanout", "to": "right" },
+                                          { "key": "e5", "from": "left", "to": "merge" },
+                                          { "key": "e6", "from": "middle", "to": "merge" },
+                                          { "key": "e7", "from": "right", "to": "merge" },
+                                          { "key": "e8", "from": "merge", "to": "done" }
+                                        ]
+                                      }
+                                      """;
 }

@@ -16,9 +16,9 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         outlive both a tick and a DI scope. The store they write through is the scoped one the tick hands them.
 ///     </para>
 ///     <para>
-///         No implementation ships in this slice. The dispatch switch therefore has no arm for <c>Agent</c>,
-///         <c>Tool</c> or <c>Pause</c>, and a node run of one of those kinds fails <c>ValidationFailed</c> — an absent
-///         case rather than a placeholder.
+///         <c>GraphWorkflowAgentExecutor</c> is the one implementation this build registers. The dispatch switch still
+///         has no arm for <c>Tool</c> or <c>Pause</c>, and a node run of one of those kinds fails
+///         <c>ValidationFailed</c> — an absent case rather than a placeholder.
 ///     </para>
 /// </summary>
 internal interface IGraphWorkflowNodeExecutor

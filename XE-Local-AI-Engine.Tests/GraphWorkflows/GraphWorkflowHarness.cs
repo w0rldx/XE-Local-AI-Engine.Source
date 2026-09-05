@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -45,7 +46,25 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
     public GraphWorkflowHarness(GraphWorkflowHostFixture host) =>
         _factory = (host ?? throw new ArgumentNullException(nameof(host))).Factory;
 
+    /// <summary>The agent-lane host, whose invocation runner is faked and whose model seams answer off the name.</summary>
+    public GraphWorkflowHarness(GraphWorkflowAgentHostFixture host) =>
+        _factory = (host ?? throw new ArgumentNullException(nameof(host))).Factory;
+
+    /// <summary>An agent host of this test's own, for host-level state a concurrent sibling must not see.</summary>
+    public static GraphWorkflowHarness PrivateAgentHost(params (string Key, string Value)[] configuration) =>
+        new(GraphWorkflowAgentHostFixture.NewFactory(configuration), ownsFactory: true);
+
+    private GraphWorkflowHarness(TestServerWebAppFactory factory, bool ownsFactory)
+    {
+        _factory = factory;
+        _ownsFactory = ownsFactory;
+    }
+
     public IServiceProvider Services => _factory.Services;
+
+    /// <summary>The faked invocation runner, on a host built by <see cref="GraphWorkflowAgentHostFixture" />.</summary>
+    public FakeGraphWorkflowInvocation Invocations =>
+        (FakeGraphWorkflowInvocation)Services.GetRequiredService<IInvocationRunner>();
 
     /// <summary>The container's dispatcher, so its wiring is under test too — or the replacement a restart installed.</summary>
     public GraphWorkflowDispatcher Dispatcher => _replacement ?? Services.GetRequiredService<GraphWorkflowDispatcher>();
@@ -93,6 +112,15 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
 
         if (_ownsFactory)
         {
+            // A wedged scripted turn ignores its token by design — that is what makes the drain's repeat observable —
+            // and the lane's own disposal waits for every entry it is still driving. Releasing first is what keeps a
+            // failed assertion from turning into a hung run. Only on a host this harness owns: on a shared one the
+            // parked turn might be a sibling's.
+            if (_factory.Services.GetService<IInvocationRunner>() is FakeGraphWorkflowInvocation fake)
+            {
+                fake.ReleaseAll();
+            }
+
             await _factory.DisposeAsync().ConfigureAwait(false);
         }
     }

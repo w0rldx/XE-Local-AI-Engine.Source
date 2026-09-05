@@ -149,8 +149,12 @@ internal sealed class GraphWorkflowInlineExecutor(IOptions<GraphWorkflowOptions>
     /// <summary>
     ///     The output documents of the predecessors this node run may read: the sources of its SATISFIED inbound edges,
     ///     each once even when two edges connect the same pair.
+    ///     <para>
+    ///         Shared with the lanes rather than copied into them: an executor that composed this set differently would
+    ///         hand its node a different world than the admission that let it run judged.
+    ///     </para>
     /// </summary>
-    private static IReadOnlyList<GraphWorkflowUpstreamDocument> Upstream(GraphWorkflowGraph graph,
+    public static IReadOnlyList<GraphWorkflowUpstreamDocument> Upstream(GraphWorkflowGraph graph,
         GraphWorkflowGraphNode node,
         IReadOnlyDictionary<string, GraphWorkflowNodeRunSnapshot> byKey) =>
     [
