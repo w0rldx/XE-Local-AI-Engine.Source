@@ -110,9 +110,10 @@ internal sealed class DevWorkflowNodeRun
     /// <summary>
     ///     How much of <see cref="AgentTurnMs" /> was a LOCAL runtime warming — <c>llama-server</c> launching and the
     ///     model loading — summed over the same envelopes, so <c>AgentTurnMs - ModelReadinessMs</c> is the
-    ///     warm-equivalent turn time. Zero when the warmer ran and waited for nothing — the model was already
-    ///     resident — and null when no turn of this attempt went through the local-runtime warmer at all, which is
-    ///     unmeasured rather than a proven warm start.
+    ///     warm-equivalent turn time. Null means unmeasured: no turn of this attempt went through the local-runtime
+    ///     warmer at all, or the row predates the column. Non-null is the warmer's measured wall time — it times EVERY
+    ///     call, cache reuse included, and the sum truncates to whole milliseconds — so an already-resident model
+    ///     measures near zero (live: 0) and zero itself proves only "under 1 ms", never residency on its own.
     /// </summary>
     public long? ModelReadinessMs { get; set; }
 
@@ -123,9 +124,9 @@ internal sealed class DevWorkflowNodeRun
     ///     rather than letting it describe the process that reload replaced.
     ///     <para>
     ///         <b>A warm run reports the EARLIER load's figures.</b> <see cref="ModelReadinessMs" /> is what separates
-    ///         the two: zero there means the warmer waited for nothing, so the load these bytes describe predates the
-    ///         run and the box may have looked different by the time it started; null there is unmeasured, which
-    ///         settles nothing either way. Null here means
+    ///         the two: a SMALL readiness there means the warmer waited for nothing, so the load these bytes describe
+    ///         predates the run and the box may have looked different by the time it started; null there is
+    ///         unmeasured, which settles nothing either way. Null here means
     ///         nobody measured — a remote or Ollama model, a model the node never loaded itself, a host with no
     ///         readable global-free figure (non-NVIDIA or CPU-only), or a row written before this column existed.
     ///     </para>

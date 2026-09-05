@@ -195,10 +195,12 @@ WHERE n.run_id IN (UPPER(:runIds)) AND n.failure_class IS NOT NULL GROUP BY fail
     The same node, same model and same 3 provider calls measured 206,273 ms cold against 27,697 ms warm — 7.4x,
     none of it the agent. `model_readiness_ms` now separates that launch/load time out: it is the same warm phase
     summed over the same envelopes, so **`agent_turn_ms - model_readiness_ms` is the warm-equivalent turn time** and
-    is what a cold arm and a warm arm compare on. **Zero is a measurement**: the warmer ran and waited for nothing,
-    which is an already-resident model. It is NULL when no turn went through the local-runtime warmer at all (a
-    remote provider, Ollama) and on every row written before the column existed — so treat a null as unmeasured
-    rather than as a proven warm start, and still record the runtime state (rule 9).
+    is what a cold arm and a warm arm compare on. **Null is unmeasured**, not a proven warm start: no turn went
+    through the local-runtime warmer at all (a remote provider, Ollama), or the row predates the column — so still
+    record the runtime state (rule 9). **Non-null is the warmer's measured wall time**, summed over the run's turns.
+    `LocalRuntimeWarmer` times every `WarmModelAsync` call including a cache reuse, and the sum is truncated to whole
+    milliseconds, so an already-resident model measures **near zero** (live: 0) and a resident model can still read a
+    few ms. Read a zero as "measured under 1 ms", never as proof of residency on its own.
 12. **An admitted FAST-model swap's `noticeDetail` names the grading reason, never a refusal.** The `auto`-effort
     dispatcher's `EffortDispatched` notice carries `noticeDetail: short-turn` (or another grading code) when a
     turn actually swapped onto the configured fast model. The `fast-model-*` codes (`fast-model-unset`,
@@ -215,9 +217,10 @@ WHERE n.run_id IN (UPPER(:runIds)) AND n.failure_class IS NOT NULL GROUP BY fail
     columns go null rather than report bytes for a process that is gone. Neither is re-measured at settle time and
     neither is llama.cpp's own `--list-devices` process budget, which is a different axis and is not read on this path.
     **A warm run reports an EARLIER load's figures** — possibly one from another node run, or from before this run
-    started — so read `model_readiness_ms` beside them: zero there means the warmer waited for nothing, which means
-    the load these bytes describe predates the run and the device may have looked different by the time it started;
-    null there is unmeasured and settles nothing either way. Both are NULL, never zero, when nobody measured: a remote provider or Ollama model, a model the node
+    started — so read `model_readiness_ms` beside them: a **small** readiness there means the warmer waited for
+    nothing, which means the load these bytes describe predates the run and the device may have looked different by
+    the time it started; null there is unmeasured and settles nothing either way. There is no exact-zero rule — a
+    resident model can read a few milliseconds (rule 11). Both are NULL, never zero, when nobody measured: a remote provider or Ollama model, a model the node
     never loaded itself, a non-NVIDIA or CPU-only host with no readable global-free figure, a DevTask node run (they
     are agent-path only, like `tool_names_json`), and every row written before the columns existed. Zero in
     `vram_admitted_bytes` is different — it is a real answer, meaning a CPU-placed allocation reserved no VRAM.

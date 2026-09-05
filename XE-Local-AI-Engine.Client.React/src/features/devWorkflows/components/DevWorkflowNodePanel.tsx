@@ -315,8 +315,10 @@ function DevWorkflowNodeCostSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDe
 	// The envelope measures a WHOLE agent turn, tool loop included, so the remainder is time outside the turns —
 	// queueing after the node started, the settle itself — and is deliberately not labelled as tool time.
 	const turnMs = nodeRun.agentTurnMs ?? null;
-	// How much of those turns was the local runtime launching and loading rather than generating. Zero means the
-	// model was already resident; null means no turn went through the warmer (cloud-served, or a pre-column row).
+	// How much of those turns was the local runtime launching and loading rather than generating. Null means no turn
+	// went through the warmer at all (cloud-served, or a pre-column row) — unmeasured. Non-null is measured warmer
+	// time; the warmer times a cache reuse too and the value truncates to whole ms, so a resident model reads near
+	// zero and a zero only says "under 1 ms". The row is drawn for zero, because a measurement is not an absence.
 	const readinessMs = nodeRun.modelReadinessMs ?? null;
 	// A reading of the BOX at one moment, not a cost of this attempt: what the capacity gate saw free, and what it
 	// reserved, at the most recent successful load of the serving model. A warm run inherits that earlier load's

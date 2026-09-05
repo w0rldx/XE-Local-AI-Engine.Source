@@ -598,9 +598,11 @@ public sealed record DevWorkflowNodeRunDetailResponse(
 
     /// <summary>
     ///     How much of <see cref="AgentTurnMs" /> the turns spent WAITING for a local runtime — llama-server launching
-    ///     and loading the model — rather than generating. Zero when the model was already resident (the warmer ran and
-    ///     waited for nothing); null when no turn went through the local-runtime warmer at all — a cloud-served node,
-    ///     or a row written before the column existed — which is unmeasured, not a proven warm start.
+    ///     and loading the model — rather than generating. Null means unmeasured: no turn went through the
+    ///     local-runtime warmer at all (a cloud-served node) or the row predates the column. Non-null is the warmer's
+    ///     measured wall time summed over the run's turns — the warmer times EVERY call, cache reuse included, and the
+    ///     sum truncates to whole milliseconds, so an already-resident model measures near zero (live: 0) and zero
+    ///     itself proves only "under 1 ms", never residency on its own.
     /// </summary>
     long? ModelReadinessMs,
 
@@ -611,8 +613,8 @@ public sealed record DevWorkflowNodeRunDetailResponse(
     ///     the reading rather than letting it describe the process that reload replaced.
     ///     <para>
     ///         <b>A warm run reports the EARLIER load's figures.</b> <see cref="ModelReadinessMs" /> tells the two
-    ///         apart: zero there means the warmer waited for nothing, so the load these bytes describe predates the
-    ///         run and the box may have looked different by the time it started. Null here means nobody measured — a
+    ///         apart: a SMALL readiness means the warmer waited for nothing, so the load these bytes describe predates
+    ///         the run and the box may have looked different by the time it started. Null here means nobody measured — a
     ///         remote or Ollama model, a model the node never loaded itself, a host with no readable global-free
     ///         figure, or a row written before the column existed.
     ///     </para>

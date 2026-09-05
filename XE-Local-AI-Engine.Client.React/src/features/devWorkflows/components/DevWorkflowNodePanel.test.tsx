@@ -856,8 +856,8 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.queryByTestId("dev-workflow-node-cost-route-waived")).toBeNull();
 	});
 
-	// A cloud-served node, and one that reused an already-loaded model, warmed nothing. A "0s" row would claim the
-	// launch was instant instead of saying it never happened.
+	// A cloud-served node warmed nothing at all, and nothing measured it. Absence is what says so; a "0s" row would
+	// claim a measurement that never happened.
 	it("draws no model-readiness row when no turn warmed a local runtime", () => {
 		renderPanel(devWorkflowNodeRunDetail({ status: "Succeeded", agentTurnMs: 40_000, modelReadinessMs: null }));
 
@@ -905,6 +905,23 @@ describe("DevWorkflowNodePanel", () => {
 		);
 
 		expect(screen.getByTestId("dev-workflow-node-cost-model-readiness").textContent).toBe("12s");
+		expect(screen.queryByTestId("dev-workflow-node-cost-none")).toBeNull();
+	});
+
+	// A turn that DID go through the warmer against an already-resident model measures near zero, and the sum
+	// truncates to whole ms. That zero is a measurement, so it must render rather than be hidden as an absence.
+	it("renders a zero model readiness as a measured duration rather than hiding the row", () => {
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				status: "Succeeded",
+				queuedAtUtc: null,
+				startedAtUtc: null,
+				completedAtUtc: null,
+				modelReadinessMs: 0,
+			}),
+		);
+
+		expect(screen.getByTestId("dev-workflow-node-cost-model-readiness").textContent).toBe("0s");
 		expect(screen.queryByTestId("dev-workflow-node-cost-none")).toBeNull();
 	});
 

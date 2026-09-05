@@ -233,7 +233,9 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
 
                 // Summed beside it rather than subtracted from it: agent_turn_ms stays the whole-turn wall clock it has
                 // always been, and a reader who wants the warm-equivalent time takes the difference. Null-preserving, so
-                // a conversation whose turns all ran warm records null rather than a zero that would claim otherwise.
+                // a conversation no turn of which went through the local-runtime warmer records null — unmeasured —
+                // rather than a zero. A turn that DID warm always contributes a measurement, near zero when the model
+                // was already resident, because the warmer times the reuse call too and the value truncates to ms.
                 modelReadinessMs = Add(modelReadinessMs, envelope.ModelReadinessMs);
 
                 // The store orders newest first, so the first envelope of the first page is the model that served the
