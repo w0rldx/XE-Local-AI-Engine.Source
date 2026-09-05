@@ -240,12 +240,14 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             return;
         }
 
-        // Select the freshly-installed GGUF as the node default so the chat composer opens on a ready model.
-        var updated = settings with
+        // Select the freshly-installed GGUF as the node default so the chat composer opens on a ready model. The write
+        // is a read-modify-write under the store's lock rather than a save of the record loaded above: the download
+        // wait between the two can run for MINUTES, and the settings record is whole-file, so saving the stale copy
+        // would silently roll back everything written meanwhile (a machine key minted at boot, an operator's edit).
+        await _nodeSettingsStore.UpdateAsync(latest => latest with
         {
             DefaultModelName = ticket.ModelName
-        };
-        await _nodeSettingsStore.SaveAsync(updated, ct).ConfigureAwait(false);
+        }, ct).ConfigureAwait(false);
         _logger.LogInformation("First-run provisioning installed and selected '{Model}'.", ticket.ModelName);
     }
 

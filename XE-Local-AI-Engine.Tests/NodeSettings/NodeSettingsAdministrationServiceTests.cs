@@ -292,8 +292,11 @@ public sealed class NodeSettingsAdministrationServiceTests
         // null the request carried back over the fresh key — orphaning every frozen inference profile silently. The
         // guard is that the write happens as a read-modify-write under the store's lock, so the mutation sees the
         // record as it is AT WRITE TIME.
-        var store = new InterleavingNodeSettingsStore(new StoredNodeSettings(),
-            mintedBeforeTheWrite: "minted-while-the-save-was-validating");
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings(),
+            siblingWriteBeforeTheUpdate: latest => latest with
+            {
+                MachineKey = "minted-while-the-save-was-validating"
+            });
         var service = CreateService(store);
 
         var result = await service.SaveTrustedMergedAsync(new StoredNodeSettings
@@ -468,39 +471,4 @@ public sealed class NodeSettingsAdministrationServiceTests
     /// </summary>
     private static StoredNodeSettings Persisted(Func<StoredNodeSettings, StoredNodeSettings> mutate, StoredNodeSettings? latest = null) =>
         mutate(latest ?? new StoredNodeSettings());
-
-    /// <summary>
-    ///     A store whose stored record gains a machine key AFTER the service has loaded it and before the write — the
-    ///     interleaving <c>IMachineKeyProvider</c> produces against a settings save on the same node.
-    /// </summary>
-    private sealed class InterleavingNodeSettingsStore(StoredNodeSettings initial, string mintedBeforeTheWrite) : INodeSettingsStore
-    {
-        public StoredNodeSettings Current { get; private set; } = initial;
-
-        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(Current);
-
-        public StoredNodeSettings Load(CancellationToken cancellationToken = default) =>
-            Current;
-
-        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
-        {
-            Current = settings;
-            return Task.CompletedTask;
-        }
-
-        public Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
-        {
-            ArgumentNullException.ThrowIfNull(mutate);
-
-            // The sibling writer got here first: the mutation must be applied to THIS record, not to the one the
-            // caller read before it existed.
-            Current = Current with
-            {
-                MachineKey = mintedBeforeTheWrite
-            };
-            Current = mutate(Current);
-            return Task.FromResult(Current);
-        }
-    }
 }

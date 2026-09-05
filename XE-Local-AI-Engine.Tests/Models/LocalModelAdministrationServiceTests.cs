@@ -26,18 +26,19 @@ public sealed class LocalModelAdministrationServiceTests
 
         AssertEx.False(result.Succeeded);
         AssertEx.Equal(LocalModelAdministrationFailureCodes.ModelNotInstalled, result.FailureCode);
-        await harness.Settings.DidNotReceive().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await harness.Settings.DidNotReceive()
+                     .UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
     public async Task SelectDefaultAsync_ConfiguredModel_PreservesExistingHttpPolicyAndInvalidatesCloudSelection()
     {
-        var harness = new Harness();
-        harness.Settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
+        var settings = new FakeNodeSettingsStore(new StoredNodeSettings
         {
             DefaultModelName = "old-cloud",
             CustomToolsEnabled = true
         });
+        var harness = new Harness(settings);
         harness.CloudResolver.IsCloudModelAsync("old-cloud", Arg.Any<CancellationToken>()).Returns(true);
 
         var result = await harness.Service
@@ -47,10 +48,40 @@ public sealed class LocalModelAdministrationServiceTests
         AssertEx.True(result.Succeeded);
         AssertEx.Equal("configured-only", result.SelectedModelName);
         await harness.GgufStore.DidNotReceive().ExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        await harness.Settings.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(settings =>
-                settings.DefaultModelName == "configured-only" && settings.CustomToolsEnabled == true),
-            Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, settings.WriteCount);
+        AssertEx.Equal("configured-only", settings.Current.DefaultModelName);
+        AssertEx.Equal<bool?>(expected: true, settings.Current.CustomToolsEnabled, "an unrelated field must survive the selection write.");
         harness.CloudFactory.Received(1).InvalidateSelectionCache();
+    }
+
+    [Test]
+    public async Task SelectDefaultAsync_WhenAnotherWriterLandsBetweenTheLoadAndTheWrite_KeepsItsFieldsAndReportsTheRealPrevious()
+    {
+        // Validation is async (it hits the GGUF store and the cloud resolver), so a whole-record save built from the
+        // settings loaded before it would roll back everything another writer changed in that window — here a machine
+        // key minted at boot. The previous name is read at write time for the same reason: the cache invalidation must
+        // describe the transition that actually happened on disk, not the one this call expected.
+        var settings = new FakeNodeSettingsStore(new StoredNodeSettings
+            {
+                DefaultModelName = "loaded-default"
+            },
+            siblingWriteBeforeTheUpdate: latest => latest with
+            {
+                MachineKey = "minted-while-validating",
+                DefaultModelName = "selected-by-the-sibling"
+            });
+        var harness = new Harness(settings);
+
+        var result = await harness.Service
+                                  .SelectDefaultAsync("configured-only", LocalModelSelectionPolicy.ConfiguredModel)
+                                  .ConfigureAwait(false);
+
+        AssertEx.True(result.Succeeded);
+        AssertEx.Equal("configured-only", settings.Current.DefaultModelName);
+        AssertEx.Equal("minted-while-validating", settings.Current.MachineKey,
+            "the key minted in the window must not be written back to null.");
+        AssertEx.Equal("selected-by-the-sibling", result.PreviousModelName,
+            "the previous name must come from the record at write time, not the one loaded before validation.");
     }
 
     [Test]
@@ -106,8 +137,9 @@ public sealed class LocalModelAdministrationServiceTests
 
     private sealed class Harness
     {
-        public Harness()
+        public Harness(INodeSettingsStore? settings = null)
         {
+            Settings = settings ?? Substitute.For<INodeSettingsStore>();
             var modelNameValidator = new ModelNameValidator(Options.Create(new SecurityOptions()));
             var selectionPolicy = new DefaultModelSelectionPolicy(GgufStore, CloudResolver, CloudFactory, modelNameValidator);
             Service = new LocalModelAdministrationService(DeletionCoordinator,
@@ -121,7 +153,7 @@ public sealed class LocalModelAdministrationServiceTests
         public ILocalModelDeletionCoordinator DeletionCoordinator { get; } = Substitute.For<ILocalModelDeletionCoordinator>();
         public ILocalModelProviderResolver ProviderResolver { get; } = Substitute.For<ILocalModelProviderResolver>();
         public IGgufModelStore GgufStore { get; } = Substitute.For<IGgufModelStore>();
-        public INodeSettingsStore Settings { get; } = Substitute.For<INodeSettingsStore>();
+        public INodeSettingsStore Settings { get; }
         public ICloudModelResolver CloudResolver { get; } = Substitute.For<ICloudModelResolver>();
         public IActiveCloudChatClientFactory CloudFactory { get; } = Substitute.For<IActiveCloudChatClientFactory>();
         public LocalModelAdministrationService Service { get; }
