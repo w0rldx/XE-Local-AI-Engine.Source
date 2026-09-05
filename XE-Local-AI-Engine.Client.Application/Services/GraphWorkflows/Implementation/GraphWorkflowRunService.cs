@@ -33,10 +33,7 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store, IGraphW
         {
             // A replay has to be a replay of THIS request. A reused request id naming a different definition is a
             // caller bug, and answering it with another run would hand out a run they never asked for.
-            if (replayed.DefinitionId != definitionId)
-            {
-                throw new GraphWorkflowInvalidTransitionException($"Request '{requestId}' already started a run of a different graph workflow definition.");
-            }
+            EnsureReplayIsOfTheSameDefinition(replayed, definitionId, requestId);
 
             // Signalled, not merely composed: a replay is what a caller sends when it never saw the first answer, and
             // the run may still be waiting for its first tick.
@@ -78,6 +75,11 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store, IGraphW
                                   [.. graph.Nodes.Values.Select(static node => new GraphWorkflowNodeRunSeed(Guid.NewGuid(), node.NodeKey, node.Kind))]),
                               cancellationToken)
                               .ConfigureAwait(false);
+
+        // The lookup above is a fast path both concurrent callers can pass, and the store answers a lost race on the
+        // request id with the run that WON — which may be a run of somebody else's definition. Re-checked here, or the
+        // loser of that race would receive a run it never asked for by the one route the fast path cannot cover.
+        EnsureReplayIsOfTheSameDefinition(run, definitionId, requestId);
 
         return await SignalAndComposeAsync(run.Id, cancellationToken).ConfigureAwait(false);
     }
@@ -133,6 +135,18 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store, IGraphW
         var events = await _store.ListEventsAsync(runId, afterSeq, _options.EventReplayLimit + 1, cancellationToken).ConfigureAwait(false);
         var page = events.Take(_options.EventReplayLimit).ToList();
         return new GraphWorkflowRunEventPage(page, page.Count == 0 ? afterSeq : page[^1].Seq, events.Count > _options.EventReplayLimit);
+    }
+
+    /// <summary>
+    ///     Refuses a run that a request id resolved to but the caller did not ask for. ONE spelling for both routes to
+    ///     it — the serial fast path and the loser of a concurrent insert — because they are the same caller bug.
+    /// </summary>
+    private static void EnsureReplayIsOfTheSameDefinition(GraphWorkflowRunSnapshot run, Guid definitionId, Guid requestId)
+    {
+        if (run.DefinitionId != definitionId)
+        {
+            throw new GraphWorkflowInvalidTransitionException($"Request '{requestId}' already started a run of a different graph workflow definition.");
+        }
     }
 
     /// <summary>

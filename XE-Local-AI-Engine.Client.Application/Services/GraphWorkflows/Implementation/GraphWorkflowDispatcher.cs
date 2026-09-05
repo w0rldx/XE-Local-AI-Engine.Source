@@ -99,6 +99,13 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     /// <summary>What the signal pump is about to read. The only way to assert that a productive tick re-signals.</summary>
     internal ChannelReader<Guid> PendingSignals => _signals.Reader;
 
+    /// <summary>
+    ///     A TEST-ONLY seam, and null in every other build: run just before a <c>Pending</c> run's start is written, so
+    ///     a test can commit a cancel in the one window the version check exists to lose. Production never sets it, and
+    ///     nothing in this class reads it for a decision.
+    /// </summary>
+    internal Func<Task>? BeforeRunWrite { get; set; }
+
     public void Signal(Guid runId) =>
         _ = _signals.Writer.TryWrite(runId);
 
@@ -610,11 +617,19 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
             return 0;
         }
 
+        if (BeforeRunWrite is { } hook)
+        {
+            await hook().ConfigureAwait(false);
+        }
+
         GraphWorkflowStateMachine.EnsureLegal(run.Status, GraphWorkflowRunStatus.Running);
-        _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(run.Id,
-                               await CurrentVersionAsync(store, run.Id, cancellationToken).ConfigureAwait(false),
-                               GraphWorkflowRunStatus.Running),
-                           cancellationToken)
+
+        // Against the version the run was READ at, not a fresh one. This tick has written no node run — a Pending run
+        // has none to write — so there is nothing of its own for it to lose a race against, and a cancel that committed
+        // in between has bumped the version. Taking a fresh version here would make that cancel's own bump the number
+        // this write passes with, and the run would go Running with a committed cancellation underneath it: the store
+        // checks the version, never the source status.
+        _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(run.Id, run.Version, GraphWorkflowRunStatus.Running), cancellationToken)
                        .ConfigureAwait(false);
         return 1;
     }
@@ -632,8 +647,12 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
             return 0;
         }
 
+        // The version the run was READ at, for the same reason the start above uses it: both callers reach here before
+        // this tick has written any node run, so the only writer the top-of-tick version can lose to is somebody else —
+        // and losing to them is the point. A fresh version would let a cancel that committed in between carry this
+        // failure past the store's check.
         _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(run.Id,
-                               await CurrentVersionAsync(store, run.Id, cancellationToken).ConfigureAwait(false),
+                               run.Version,
                                GraphWorkflowRunStatus.Failed,
                                FailureClass: GraphWorkflowFailureClass.ValidationFailed,
                                SanitizedReason: exception.Message),
@@ -731,8 +750,14 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     ///     The run's version as of right now, for a run-level write that follows this tick's own node-run writes.
     ///     <para>
     ///         Every node-run transition bumps the run version, so the top-of-tick version is stale by the time a drain
-    ///         or a start writes — using it would make the dispatcher lose a race against itself. Re-reading narrows the
-    ///         window to what the check is actually for.
+    ///         writes — using it would make the dispatcher lose a race against itself. Re-reading narrows the window to
+    ///         what the check is actually for.
+    ///     </para>
+    ///     <para>
+    ///         <b>Only for a write that node writes precede.</b> A run write with nothing of its own in front of it
+    ///         passes the version it READ, because a fresh version would carry somebody else's cancel across the check.
+    ///         The drain is the one caller left, and its own move is legal from <c>Cancelling</c> alone, which nothing
+    ///         but the drain itself can leave.
     ///     </para>
     /// </summary>
     private static async Task<long> CurrentVersionAsync(IGraphWorkflowStore store, Guid runId, CancellationToken cancellationToken) =>

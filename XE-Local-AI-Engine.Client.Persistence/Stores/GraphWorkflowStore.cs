@@ -42,6 +42,27 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
         GraphWorkflowRunStatus.Cancelling
     ];
 
+    /// <summary>
+    ///     The run statuses that occupy a concurrency slot — the ones a node is actually carrying.
+    ///     <para>
+    ///         <c>Running</c> has work in flight. <c>WaitingForApproval</c> holds a run's rows and its lane state open
+    ///         and resumes without asking to be admitted again, so a node that stopped counting it could carry
+    ///         arbitrarily many. <c>Cancelling</c> is still draining live work, and its slot is not free until it is.
+    ///     </para>
+    ///     <para>
+    ///         <b><c>Pending</c> is deliberately absent</b>, which is what separates this from
+    ///         <see cref="LiveRunStatuses" />: Pending is the queue admission draws FROM, so counting it would count
+    ///         the very run asking to start against its own admission. A cap of one would then admit nothing at all,
+    ///         and a backlog of Pending runs would block every start on the node for good.
+    ///     </para>
+    /// </summary>
+    private static readonly GraphWorkflowRunStatus[] ExecutingRunStatuses =
+    [
+        GraphWorkflowRunStatus.Running,
+        GraphWorkflowRunStatus.WaitingForApproval,
+        GraphWorkflowRunStatus.Cancelling
+    ];
+
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
@@ -376,7 +397,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
         }
 
         return await _dbContext.GraphWorkflowRuns.AsNoTracking()
-                               .Where(entity => LiveRunStatuses.Contains(entity.Status))
+                               .Where(entity => ExecutingRunStatuses.Contains(entity.Status))
                                .Take(probeLimit)
                                .CountAsync(cancellationToken)
                                .ConfigureAwait(false);

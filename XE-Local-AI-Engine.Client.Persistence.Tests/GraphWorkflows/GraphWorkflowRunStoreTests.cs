@@ -311,20 +311,84 @@ public sealed class GraphWorkflowRunStoreTests
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Running, (await store.GetNodeRunAsync(run.Id, "start").ConfigureAwait(false)).Status);
     }
 
+    /// <summary>
+    ///     The three statuses that occupy a slot, counted no further than the cap asks about.
+    /// </summary>
     [Test]
-    public async Task CountActiveRuns_CountsTheLiveRunsNoFurtherThanItsProbeLimit()
+    public async Task CountActiveRuns_CountsTheExecutingRunsNoFurtherThanItsProbeLimit()
     {
         using var fixture = new GraphWorkflowTestFixture();
         await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
         var store = GraphWorkflowTestFixture.StoreFor(context);
         var definition = await GraphWorkflowTestFixture.SeedDefinitionAsync(store).ConfigureAwait(false);
-        for (var index = 0; index < 3; index++)
+
+        foreach (var status in new[] { GraphWorkflowRunStatus.Running, GraphWorkflowRunStatus.WaitingForApproval, GraphWorkflowRunStatus.Cancelling })
         {
-            _ = await store.StartRunAsync(StartCommand(definition, Guid.NewGuid())).ConfigureAwait(false);
+            var run = await store.StartRunAsync(StartCommand(definition, Guid.NewGuid())).ConfigureAwait(false);
+            _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(run.Id, run.Version, status)).ConfigureAwait(false);
         }
 
         AssertEx.Equal(expected: 3, await store.CountActiveRunsAsync(probeLimit: 10).ConfigureAwait(false));
         AssertEx.Equal(expected: 2, await store.CountActiveRunsAsync(probeLimit: 2).ConfigureAwait(false), "counting past the cap is work nobody reads.");
+    }
+
+    /// <summary>
+    ///     <c>Pending</c> is the queue admission draws from, so counting it would count the run asking to start against
+    ///     its own admission: a cap of one would admit nothing, and a Pending backlog at the cap would block every
+    ///     start on the node. Terminals free their slot for the same reason they stop being ticked.
+    /// </summary>
+    [Test]
+    public async Task CountActiveRuns_IgnoresPendingAndTerminalRuns()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = GraphWorkflowTestFixture.StoreFor(context);
+        var definition = await GraphWorkflowTestFixture.SeedDefinitionAsync(store).ConfigureAwait(false);
+        _ = await store.StartRunAsync(StartCommand(definition, Guid.NewGuid())).ConfigureAwait(false);
+        var completed = await store.StartRunAsync(StartCommand(definition, Guid.NewGuid())).ConfigureAwait(false);
+        _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(completed.Id, completed.Version, GraphWorkflowRunStatus.Completed))
+                       .ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 0, await store.CountActiveRunsAsync(probeLimit: 10).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    ///     The definition guard asks a DIFFERENT question from the concurrency cap: a <c>Pending</c> run still pins the
+    ///     definition it is about to run, even though it occupies no slot yet.
+    /// </summary>
+    [Test]
+    public async Task DeleteDefinition_WithOnlyAPendingRunOnIt_IsStillRefused()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = GraphWorkflowTestFixture.StoreFor(context);
+        var definition = await GraphWorkflowTestFixture.SeedDefinitionAsync(store).ConfigureAwait(false);
+        _ = await store.StartRunAsync(StartCommand(definition, Guid.NewGuid())).ConfigureAwait(false);
+
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowDefinitionConflictException>(() => store.DeleteDefinitionAsync(definition.Id)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     The request id is the idempotency key and nothing else: the index does not know what definition a start
+    ///     named, so the second start comes back with the FIRST run whatever it was of. Documented here because it is
+    ///     what obliges the run service to re-check the definition on a lost race rather than trust the answer.
+    /// </summary>
+    [Test]
+    public async Task StartRun_WithARequestIdAlreadyHeldByAnotherDefinitionsRun_StillAnswersTheRunThatWon()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = GraphWorkflowTestFixture.StoreFor(context);
+        var first = await GraphWorkflowTestFixture.SeedDefinitionAsync(store, "First").ConfigureAwait(false);
+        var second = await GraphWorkflowTestFixture.SeedDefinitionAsync(store, "Second").ConfigureAwait(false);
+        var requestId = Guid.NewGuid();
+
+        var won = await store.StartRunAsync(StartCommand(first, requestId)).ConfigureAwait(false);
+        var lost = await store.StartRunAsync(StartCommand(second, requestId)).ConfigureAwait(false);
+
+        AssertEx.Equal(won.Id, lost.Id);
+        AssertEx.Equal(first.Id, lost.DefinitionId, "the store answers the winner as it stands; telling the two definitions apart is the service's job.");
+        AssertEx.Equal(expected: 1, await fixture.RawTableCountAsync("graph_workflow_runs").ConfigureAwait(false));
     }
 
     [Test]

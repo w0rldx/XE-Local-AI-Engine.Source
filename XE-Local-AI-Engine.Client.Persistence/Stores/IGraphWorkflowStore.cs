@@ -321,8 +321,15 @@ public interface IGraphWorkflowStore
     Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status = null, int limit = 50, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     How many runs are still live, counted no further than <paramref name="probeLimit" /> rows. The question the
-    ///     concurrency cap asks is "are there already N of them", so counting past N is work nobody reads.
+    ///     How many runs are EXECUTING — <c>Running</c>, <c>WaitingForApproval</c> or <c>Cancelling</c> — counted no
+    ///     further than <paramref name="probeLimit" /> rows. The question the concurrency cap asks is "are there
+    ///     already N of them", so counting past N is work nobody reads.
+    ///     <para>
+    ///         <c>Pending</c> is NOT counted, which is what makes this a different question from "does a live run pin
+    ///         this definition". Pending is the queue admission draws from: counting it would count the run asking to
+    ///         start against its own admission, so a cap of one would admit nothing and a Pending backlog at the cap
+    ///         would block every start on the node.
+    ///     </para>
     /// </summary>
     Task<int> CountActiveRunsAsync(int probeLimit, CancellationToken cancellationToken = default);
 

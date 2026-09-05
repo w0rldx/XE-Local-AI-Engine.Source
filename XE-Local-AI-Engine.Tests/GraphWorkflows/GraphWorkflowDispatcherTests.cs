@@ -256,18 +256,19 @@ public sealed class GraphWorkflowDispatcherTests
     ///     The concurrency cap holds a run <c>Pending</c> rather than refusing it: the run keeps its rows and its place,
     ///     and the next sweep offers it again.
     ///     <para>
-    ///         The cap is exercised at two rather than one because <c>CountActiveRunsAsync</c> counts every LIVE run,
-    ///         the <c>Pending</c> one asking included — so a cap of one admits nothing at all.
+    ///         Exercised at a cap of ONE, which is the number that catches the mistake: admission counts the runs that
+    ///         are executing, never the <c>Pending</c> queue it draws from — a count that included the run asking to
+    ///         start would make a cap of one admit nothing at all.
     ///     </para>
     /// </summary>
     [Test]
     public async Task TheConcurrencyCap_HoldsAFurtherRunPendingRatherThanRefusingIt()
     {
-        // A private host: the cap counts live runs across the whole database, so it cannot be asserted on a shared one.
-        await using var harness = new GraphWorkflowHarness(("GraphWorkflows:MaxConcurrentRuns", "2"));
+        // A private host: the cap counts executing runs across the whole database, so it cannot be asserted on a shared one.
+        await using var harness = new GraphWorkflowHarness(("GraphWorkflows:MaxConcurrentRuns", "1"));
         var definitionId = await harness.SeedDefinitionAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
         var first = await harness.StartRunOfAsync(definitionId).ConfigureAwait(false);
-        AssertEx.Equal(expected: 1, await harness.AdvanceAsync(first).ConfigureAwait(false));
+        AssertEx.Equal(expected: 1, await harness.AdvanceAsync(first).ConfigureAwait(false), "the only slot is free, so the first run takes it.");
 
         var second = await harness.StartRunOfAsync(definitionId).ConfigureAwait(false);
         AssertEx.Equal(expected: 0, await harness.AdvanceAsync(second).ConfigureAwait(false), "the cap is reached, so the tick writes nothing.");
@@ -276,6 +277,63 @@ public sealed class GraphWorkflowDispatcherTests
         _ = await harness.AdvanceUntilQuiescentAsync(first).ConfigureAwait(false);
         AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(first).ConfigureAwait(false)).Status);
         AssertEx.Equal(expected: 1, await harness.AdvanceAsync(second).ConfigureAwait(false), "with the first run finished the queue drains on the next offer.");
+    }
+
+    /// <summary>
+    ///     A backlog deeper than the cap still drains. The regression this pins is admission counting the queue: with
+    ///     three <c>Pending</c> runs against a cap of one, a count that included them would answer three every time and
+    ///     the node would never start anything again.
+    /// </summary>
+    [Test]
+    public async Task ABacklogDeeperThanTheConcurrencyCap_StillDrainsRunByRun()
+    {
+        // A private host, for the same reason: the cap is a property of the whole database.
+        await using var harness = new GraphWorkflowHarness(("GraphWorkflows:MaxConcurrentRuns", "1"));
+        var definitionId = await harness.SeedDefinitionAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
+        var runIds = new List<Guid>();
+        for (var index = 0; index < 3; index++)
+        {
+            runIds.Add(await harness.StartRunOfAsync(definitionId).ConfigureAwait(false));
+        }
+
+        // Every run is Pending before the first tick, which is the state the cap used to read as "three are running".
+        foreach (var runId in runIds)
+        {
+            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        }
+
+        foreach (var runId in runIds)
+        {
+            AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status, "every queued run reaches its End.");
+        }
+    }
+
+    /// <summary>
+    ///     A cancel that commits between the tick's read and its write WINS. The start is written against the version
+    ///     the run was read at, so the cancel's own bump makes it lose the store's version check — where a freshly read
+    ///     version would have carried the start across, and the run would be <c>Running</c> under a committed cancel.
+    /// </summary>
+    [Test]
+    public async Task AStartRacingACancelThatCommitsMidTick_LosesTheWrite()
+    {
+        // A private host: the seam below is set on the CONTAINER's dispatcher, and on a shared host a sibling's tick
+        // would run it too.
+        await using var harness = new GraphWorkflowHarness();
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
+        harness.Dispatcher.BeforeRunWrite = async () =>
+        {
+            // Once: the tick after this one drains, and a second cancel there would be asserting about the wrong write.
+            harness.Dispatcher.BeforeRunWrite = null;
+            await harness.CancelAsync(runId).ConfigureAwait(false);
+        };
+
+        // Through the production wrapper, because losing the version check is exactly what it is written to swallow.
+        await harness.AdvanceSafelyAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelling, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            "the cancel stands; the start it raced does not overwrite it.");
+        AssertEx.False((await harness.ReadEventTrailAsync(runId).ConfigureAwait(false)).Contains("run.started", StringComparison.Ordinal),
+            "and the run never reports a start it did not make.");
     }
 
     /// <summary>
