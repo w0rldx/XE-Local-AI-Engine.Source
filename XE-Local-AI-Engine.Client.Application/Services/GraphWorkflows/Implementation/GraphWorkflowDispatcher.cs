@@ -42,6 +42,13 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     /// </summary>
     private const int SweepPageSize = 500;
 
+    /// <summary>
+    ///     What a drained row and the run above it say for themselves. ONE spelling, because the two are read side by
+    ///     side and a run that explained its cancellation differently from its own node runs would read like two
+    ///     different events.
+    /// </summary>
+    private const string DrainedReason = "The run was cancelled.";
+
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -496,7 +503,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                                    GraphWorkflowVersions.Any,
                                    GraphWorkflowNodeRunStatus.Cancelled,
                                    FailureClass: GraphWorkflowFailureClass.Cancelled,
-                                   TerminalReason: "The run was cancelled."),
+                                   TerminalReason: DrainedReason),
                                cancellationToken)
                            .ConfigureAwait(false);
             written++;
@@ -512,10 +519,14 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
             return written;
         }
 
+        // Classified, unlike the recomputed cancellation below it: THIS one was asked for, and a drained run that
+        // reported class None would leave an operator reading a terminal run with no record of why it stopped.
         GraphWorkflowStateMachine.EnsureLegal(run.Status, GraphWorkflowRunStatus.Cancelled);
         _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(run.Id,
                                await CurrentVersionAsync(store, run.Id, cancellationToken).ConfigureAwait(false),
-                               GraphWorkflowRunStatus.Cancelled),
+                               GraphWorkflowRunStatus.Cancelled,
+                               FailureClass: GraphWorkflowFailureClass.Cancelled,
+                               SanitizedReason: DrainedReason),
                            cancellationToken)
                        .ConfigureAwait(false);
         Forget(run.Id);

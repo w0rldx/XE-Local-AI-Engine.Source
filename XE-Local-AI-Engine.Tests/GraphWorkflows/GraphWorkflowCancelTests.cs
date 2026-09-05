@@ -35,7 +35,11 @@ public sealed class GraphWorkflowCancelTests
 
         _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
 
-        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, run.Status);
+        AssertEx.Equal(GraphWorkflowFailureClass.Cancelled,
+            run.FailureClass,
+            "the drain classifies the terminal it writes: a cancelled run reading None records nothing at all about why it stopped.");
         foreach (var nodeRun in await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false))
         {
             AssertEx.Equal(GraphWorkflowNodeRunStatus.Cancelled, nodeRun.Status);
