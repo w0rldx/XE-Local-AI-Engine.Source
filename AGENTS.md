@@ -118,6 +118,12 @@ Opt-in live runners (nothing invokes them; ask before running, run before a test
 ## Conventions that bite
 
 - Backend tests are TUnit on Microsoft.Testing.Platform, not xUnit. Style: `docs/wiki/17-writing-tests.md`.
+- Every test is independent and self-validating: no assertion, or a silent `return` on an unsupported OS, has
+  verified nothing — skip visibly with a reason. Principles: `docs/wiki/17-writing-tests.md` §1a.
+- Never sleep to wait for, or to rule out, an event in a test; use a gate the test controls, `FakeTimeProvider`, or
+  `AssertEx.EventuallyAsync`. A real timer needs a `// real-timer:` comment saying why.
+- Mock in this order: the real thing, the repo's fake seam (`FakeOllama`, `RecordingHubMessageSender`, MSW), then
+  `Substitute.For<T>()`/`vi.fn()`, then a hand-written fake. Never mock the gate, cipher or migration under test.
 - FastEndpoints, one endpoint per file, calling `Client.Application` services directly; no MediatR/CQRS.
   DTOs, mappers and validators fold into `V1/{Dtos,Mappers,Validators}/`; `Dtos/` keeps a flat namespace.
 - `using` directives go inside the file-scoped namespace; subfolder namespaces must nest (IDE0130 is an error).

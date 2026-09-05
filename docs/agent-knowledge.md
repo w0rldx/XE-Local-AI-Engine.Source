@@ -160,6 +160,14 @@ If the operation can fault before publishing the awaited signal, inspect/await t
 
 **Adding a migration can red the module through a test that never mentions migrations.** `NodeChatMigrationRecoveryServiceTests` applies the WHOLE migration set against a real SQLite file under a wall-clock attempt budget, and starvation there does not read as a slow test: the attempt is cancelled MID-APPLY, leaving a half-rebuilt `ef_temp_*` table behind, and the retry dies on `table "ef_temp_<name>" already exists`. Two migrations plus five new migration tests (2026-08-25) were enough to tip it over on a 16-core box, with a different test of the class failing each run. The fix is `[NotInParallel]` on that class, not a bigger budget: its abandoned-lock test's first attempt is MEANT to exhaust the budget, so raising it buys the same increase in dead wall clock.
 
+### A silent `return` on the wrong OS reports a green pass, not a skip
+
+**Rule:** gate a platform-specific test with the platform skip attributes in `XE-Local-AI-Engine.Tests/Testing/`, or with `Skip.Test("<why>")` after a capability probe. Never `if (!OperatingSystem.IsWindows()) return;`. Prevents a suite reporting green on a platform where it verified nothing: 118 test methods across 30+ files did exactly that, concentrated in `ProcessSandboxRuntimeProviderTests`, `LlamaCppSourceBuildServiceTests`, `TrainingRuntimeServiceTests`, `SourceBuildRecoveryTests` and `CoderWorkspaceReaderTests`. Authority: test-principles audit 2026-09-05; the correct shape is `Testing/SymlinkSupport.cs` / `Testing/JunctionSupport.cs`.
+
+### Sleep-then-assert-the-negative can only fail when the code gets slower
+
+**Rule:** never `Task.Delay`/`Thread.Sleep`/`setTimeout` to rule an event out. Drive the code to an observable blocking point through a gate the test controls, assert the negative there, then release the gate and assert the positive. Prevents a regression that fires the event *late* from reading green — the audit counted 94 finite waits in `XE-Local-AI-Engine.Tests` plus 2 real-timer sleeps in the Vitest suite, and the negative-assertion ones (`Providers/GpuLoadAdmissionCrossSupervisorTests.cs`, `Providers/LlamaServer/SupervisorGateScopeTests.cs`) can only red on a slowdown. A real timer is legitimate when the subject is a real OS process or the delay is the subject's own input; mark it with a `// real-timer:` comment naming why. Authority: test-principles audit 2026-09-05; `docs/wiki/17-writing-tests.md` §4.
+
 ### Leftover build daemons starve the timing-sensitive tests — and the packaging gate is where you notice
 
 Before packaging or diagnosing a suddenly slow timing test, run `dotnet build-server shutdown` on a quiet machine. Compare failure duration with the intended timeout: a wall-clock failure under load differs from a fast semantic failure.
@@ -327,6 +335,10 @@ Distinct `[ParallelGroup]` Order values prove non-overlap but not execution dire
 ### Frontend tests: an `await import()` inside `it()` is charged to `testTimeout`
 
 Cold dynamic component imports inside a test count against timeout and become coverage-only flakes. Keep `testTimeout=20s`. Prefer static imports and store setters; use `vi.resetModules()` plus dynamic import only when module-init hydration is under test.
+
+### React Testing Library's `cleanup` is not automatic under Vitest
+
+**Rule:** rely on `src/test/Cleanup.ts` — wired as a `setupFiles` entry in `vite.config.ts` — to unmount after each test; never assume RTL registers it for you. Prevents components mounted by an earlier test surviving into the next one, where they break `getBy*` with duplicate matches or leave a stale hub subscription running. RTL self-registers `afterEach(cleanup)` only when it detects global test hooks, and this project deliberately does not set `globals` in `vite.config.ts`. Authority: `vite.config.ts` `setupFiles`, `src/test/Cleanup.ts`; test-principles audit 2026-09-05.
 
 ### Packaging (Velopack)
 
@@ -1374,6 +1386,7 @@ These are intentionally terse. Follow the linked/current section for the active 
 | `dotnet test` cannot discover MTP tests. | `global.json` pins MTP; `dotnet test` works (§1). |
 | Any build runs analyzers. | Analyzer wall is Release-only locally (§1). |
 | `RunAnalyzers=false` disables generators. | It skips diagnostic analyzers only (§1). |
+| `if (!OperatingSystem.IsX()) return;` is an acceptable platform guard. | It reports a green pass on every platform that cannot run the test; use the platform skip attributes in `XE-Local-AI-Engine.Tests/Testing/` or `Skip.Test` (§1). |
 | Green E2E proves frontend typecheck. | E2E uses Vite-only `build:e2e`; run `pnpm run lint` (§1). |
 | Browser E2E is entirely sequential. | It uses disjoint serial and pooled phases (§1). |
 | TUnit alternation silently matches zero. | `(A|B)` returns the union; verify with `--list-tests` (§1). |
