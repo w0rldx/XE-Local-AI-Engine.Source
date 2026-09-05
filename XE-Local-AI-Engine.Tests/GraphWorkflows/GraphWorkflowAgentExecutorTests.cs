@@ -3,7 +3,9 @@ namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -14,8 +16,10 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The agent lane, over the real store, the real package builder and the real one-slot invocation dispatcher, with
-///     <see cref="FakeGraphWorkflowInvocation" /> standing in for the runner and nothing else.
+///     The agent lane, over the real store, the real package builder and the real one-slot invocation dispatcher. The
+///     five seams a unit-test host cannot answer truthfully — the invocation runner, the local-default model resolver,
+///     the capability resolver, the capacity service and the agent-definition resolver — are the fakes
+///     <see cref="GraphWorkflowAgentHostFixture" /> installs, and it says why each one.
 ///     <para>
 ///         Every test pins its own instructions text, which is what the fake scripts on and what keeps a shared host's
 ///         tests out of each other's way. A test whose turn PARKS takes a host of its own instead: a parked turn holds
@@ -74,7 +78,16 @@ public sealed class GraphWorkflowAgentExecutorTests
     {
         const string instructions = "unattended-and-stripped";
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await StartToTheAgentAsync(harness, Graph(instructions)).ConfigureAwait(false);
+
+        // A BOUND agent, because the offer under test is a bound definition's: an unbound node takes the default
+        // persona's own catalog offer, which is the node's tool state rather than anything a test scripts.
+        var agentDefinitionId = await SeedAgentAsync(harness, "graph-local-unattended").ConfigureAwait(false);
+        var runId = await StartToTheAgentAsync(harness,
+                Graph(instructions,
+                    $$"""
+                      , "agentDefinitionId": "{{agentDefinitionId}}"
+                      """))
+            .ConfigureAwait(false);
 
         _ = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
 
@@ -200,14 +213,26 @@ public sealed class GraphWorkflowAgentExecutorTests
         AssertEx.Equal(expected, package.ReasoningBudgetEnforceable);
     }
 
-    /// <summary>A completed turn's answer and what it cost, as the node run's own output document reports them.</summary>
+    /// <summary>
+    ///     A completed turn's answer and what it cost, as the node run's own output document reports them — and its
+    ///     footprint released, which the failure and cancellation paths each assert for themselves. A leaked reservation
+    ///     wrongly rejects later spawns node-wide, so SUCCESS is the path that has to hold it too.
+    /// </summary>
     [Test]
-    public async Task ACompletedTurn_YieldsItsTextAndItsUsage()
+    public async Task ACompletedTurn_YieldsItsTextAndItsUsageAndReleasesItsFootprint()
     {
         const string instructions = "completed-with-usage";
+
+        // A model name of this test's own: the reservation assertion counts rows for one name, and the shared local
+        // default is every sibling's name too.
+        const string model = "graph-local-completed";
         await using var harness = new GraphWorkflowHarness(Host);
         harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn(Text: "the analysis"));
-        var runId = await StartToTheAgentAsync(harness, Graph(instructions)).ConfigureAwait(false);
+        var runId = await StartToTheAgentAsync(harness,
+                Graph(instructions, $$"""
+                                      , "model": "{{model}}"
+                                      """))
+            .ConfigureAwait(false);
 
         var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
 
@@ -216,8 +241,9 @@ public sealed class GraphWorkflowAgentExecutorTests
         AssertEx.Equal("the analysis", output.GetProperty("text").GetString());
         AssertEx.Equal(expected: 33, output.GetProperty("usage").GetProperty("totalTokens").GetInt32());
         AssertEx.Equal("stop", output.GetProperty("usage").GetProperty("finishReason").GetString());
-        AssertEx.Equal(GraphWorkflowModels.LocalDefault, output.GetProperty("usage").GetProperty("model").GetString());
+        AssertEx.Equal(model, output.GetProperty("usage").GetProperty("model").GetString());
         AssertEx.True(output.GetProperty("json").ValueKind == JsonValueKind.Null, "a node with no response schema parses nothing.");
+        AssertEx.ContainsSingle(Capacity(harness).ReservationsFor(model), static reservation => reservation.Disposed, "a completed turn releases its footprint.");
     }
 
     /// <summary>A node declaring a response schema gets the parsed object beside the text it parsed.</summary>
@@ -285,6 +311,182 @@ public sealed class GraphWorkflowAgentExecutorTests
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
         AssertEx.False(analyze.Error?.Contains("10.0.0.7", StringComparison.Ordinal) == true, "a row's reason is read by an operator, not by a diagnostician.");
         AssertEx.ContainsSingle(Capacity(harness).ReservationsFor(model), static reservation => reservation.Disposed, "a failing turn still releases its footprint.");
+    }
+
+    /// <summary>
+    ///     The runner's own watchdog reports a timed-out turn as a FAILED terminal carrying the timeout category, so
+    ///     the category is the only place that difference survives. A node that ran out of time is classed
+    ///     <c>Timeout</c> rather than as a plain provider failure — both retry, but only one of them tells an operator
+    ///     to raise the node's budget.
+    /// </summary>
+    [Test]
+    public async Task ATurnThatRanOutOfTime_IsClassedTimeoutRatherThanAPlainNodeFailure()
+    {
+        const string instructions = "watchdog-timed-the-turn-out";
+        await using var harness = new GraphWorkflowHarness(Host);
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn(GraphWorkflowTurnOutcome.Fails, FailureCategory: FailureCategory.Timeout));
+
+        // Two attempts, because the class is the assertion. The failing write's own class never stands still long
+        // enough to read — the retry stage runs in the SAME tick that settles it — so the node.retried event, which
+        // carries the failure it is re-attempting, is where that class survives.
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions, agentConfig: null, """, "maxAttempts": 2""")).ConfigureAwait(false);
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
+        AssertEx.Contains(analyze.Error, "out of time");
+        var retried = AssertEx.NotNull((await harness.ReadEventsAsync(runId).ConfigureAwait(false))
+                                       .FirstOrDefault(static entry => entry.EventType == GraphWorkflowEventTypes.NodeRetried),
+            "a timeout is retryable, so the run tried again.");
+        AssertEx.Contains(retried.DetailJson, nameof(GraphWorkflowFailureClass.Timeout), message: "the watchdog's category is what the class is read from.");
+        AssertEx.False(retried.DetailJson?.Contains(nameof(GraphWorkflowFailureClass.NodeFailed), StringComparison.Ordinal) == true,
+            "and it is not the catch-all every other failed terminal maps to.");
+    }
+
+    /// <summary>
+    ///     A turn can end <c>Cancelled</c> without this node ever asking — the shutdown drain, an operator ejecting the
+    ///     model, a node-wide cancel-all. The runner reports that terminal and RETURNS, so it lands as an ordinary
+    ///     result rather than a cancelled task, and settling it as a failure would fail a row nobody judged and take
+    ///     the run down with it.
+    /// </summary>
+    [Test]
+    public async Task ATurnCancelledBySomethingOtherThanThisNode_SettlesTheRowCancelledRatherThanFailed()
+    {
+        const string instructions = "cancelled-by-a-force-eject";
+        const string model = "graph-local-force-ejected";
+        await using var harness = new GraphWorkflowHarness(Host);
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn(GraphWorkflowTurnOutcome.Cancels));
+        var runId = await StartToTheAgentAsync(harness,
+                Graph(instructions, $$"""
+                                      , "model": "{{model}}"
+                                      """))
+            .ConfigureAwait(false);
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Cancelled, analyze.Status, "the turn was cancelled, so the row is — and nothing classifies a cancellation.");
+        AssertEx.Equal(GraphWorkflowFailureClass.Cancelled, analyze.FailureClass);
+        AssertEx.Contains(await harness.ReadEventTrailAsync(runId).ConfigureAwait(false), GraphWorkflowEventTypes.NodeCancelled);
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled,
+            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            "and the run recomputes a cancellation rather than the failure a mapped-to-Failed row would have forced.");
+        AssertEx.ContainsSingle(Capacity(harness).ReservationsFor(model), static reservation => reservation.Disposed, "a cancelled turn releases its footprint.");
+    }
+
+    /// <summary>
+    ///     A node the capacity service refuses fails with the refusal's own words and never reaches the runner. The
+    ///     refusal carries no reservation, which is the whole reason it is safe to return before the outermost finally
+    ///     has anything to release.
+    /// </summary>
+    [Test]
+    public async Task ANodeTheCapacityServiceRefuses_FailsWithItsReasonAndNeverReachesTheRunner()
+    {
+        const string instructions = "capacity-refuses-the-node";
+
+        // The marker is what makes this node's model more than the fake node can admit. See GraphWorkflowModels.
+        const string model = $"graph-local-{GraphWorkflowModels.OvercommittedMarker}";
+        await using var harness = new GraphWorkflowHarness(Host);
+
+        // Two attempts, for the same reason the timeout test takes two: a refusal is NodeFailed, and the retryable
+        // class only stands still on the node.retried event.
+        var runId = await StartToTheAgentAsync(harness,
+                Graph(instructions,
+                    $$"""
+                      , "model": "{{model}}"
+                      """,
+                    """, "maxAttempts": 2"""))
+            .ConfigureAwait(false);
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
+        AssertEx.Equal(FakeGraphWorkflowCapacity.RejectionReason, analyze.Error, "a capacity refusal is already operator-facing, so the row repeats it verbatim.");
+        var retried = AssertEx.NotNull((await harness.ReadEventsAsync(runId).ConfigureAwait(false))
+                                       .FirstOrDefault(static entry => entry.EventType == GraphWorkflowEventTypes.NodeRetried),
+            "a node that was merely refused for room is retryable, so the run tried again.");
+        AssertEx.Contains(retried.DetailJson, nameof(GraphWorkflowFailureClass.NodeFailed));
+        AssertEx.Empty(harness.Invocations.Packages.Where(package => Prompt(package).Contains(instructions, StringComparison.Ordinal)),
+            "the refusal happens before any invocation exists.");
+        AssertEx.Empty(Capacity(harness).ReservationsFor(model), "a refusal hands out no reservation, so there is nothing for the finally to leak.");
+    }
+
+    /// <summary>
+    ///     A node naming an agent that has since been deleted is a CONFIGURATION error, not a run to re-attempt: a
+    ///     re-ask produces the byte-identical refusal. It is refused before the model is resolved and before any
+    ///     invocation exists.
+    /// </summary>
+    [Test]
+    public async Task ANodeNamingAnAgentThatIsGone_IsRefusedAsAConfigurationError()
+    {
+        const string instructions = "agent-was-deleted";
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await StartToTheAgentAsync(harness,
+                Graph(instructions,
+                    $$"""
+                      , "agentDefinitionId": "{{Guid.NewGuid()}}"
+                      """,
+                    SingleAttempt))
+            .ConfigureAwait(false);
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
+        AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass, "a deleted agent answers the same on every attempt, so nothing retries it.");
+        AssertEx.Contains(analyze.Error, "deleted");
+        AssertEx.Empty(harness.Invocations.Packages.Where(package => Prompt(package).Contains(instructions, StringComparison.Ordinal)),
+            "the refusal happens before any invocation exists.");
+    }
+
+    /// <summary>
+    ///     A node that binds NO agent is not a node whose agent is gone. The resolver answers <see langword="null" />
+    ///     for a null binding BY DESIGN — it is the "keep today's defaults" signal — so such a node runs the default
+    ///     persona on the node's local default model instead of being refused as a deleted one.
+    /// </summary>
+    [Test]
+    public async Task ANodeThatBindsNoAgent_RunsTheDefaultPersonaOnTheLocalDefaultModel()
+    {
+        const string instructions = "no-agent-bound-at-all";
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions, agentConfig: null, SingleAttempt)).ConfigureAwait(false);
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, analyze.Status, "a node naming no agent has nothing missing, so nothing refuses it.");
+        var package = harness.Invocations.PackageFor(instructions);
+        AssertEx.Equal(GraphWorkflowModels.LocalDefault, package.ModelProfile, "no node model and no agent pin leaves the node's local default.");
+        AssertEx.False(string.IsNullOrWhiteSpace(package.ResolvedSystemPrompt), "an unbound turn still carries a persona, and the builder refuses a blank one.");
+        AssertEx.Equal(harness.Services.GetRequiredService<IAgentInstructionProvider>().GetDefaultChatSystemPrompt(),
+            package.ResolvedSystemPrompt,
+            "and it is the scaffolded embedded default the chat path composes for an unbound conversation.");
+        AssertEx.Equal(expected: 1, package.AgentDefinitionVersion, "the chat path's own default version, so the same persona hashes the same way from either caller.");
+    }
+
+    /// <summary>
+    ///     The effective model is the node's own, then the AGENT's pin, then the node's local default. This is the
+    ///     middle rung: a node naming an agent and no model of its own runs on what the agent pins, and the pin stays
+    ///     in charge of the offer because the node named nothing to outrank it.
+    /// </summary>
+    [Test]
+    public async Task AnAgentsOwnPin_IsTheEffectiveModelWhenTheNodeNamesNone()
+    {
+        const string instructions = "inherit-the-agents-pin";
+        const string pin = "graph-local-agent-pin";
+        await using var harness = new GraphWorkflowHarness(Host);
+        var agentDefinitionId = await SeedAgentAsync(harness, pin).ConfigureAwait(false);
+        var runId = await StartToTheAgentAsync(harness,
+                Graph(instructions, $$"""
+                                      , "agentDefinitionId": "{{agentDefinitionId}}"
+                                      """))
+            .ConfigureAwait(false);
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, analyze.Status);
+        AssertEx.Equal(pin, harness.Invocations.PackageFor(instructions).ModelProfile, "the agent's pin outranks the node's local default.");
+        var resolve = Runtimes(harness).CallFor(pin);
+        AssertEx.True(resolve.HonorModelProfile, "a node that names no model of its own leaves the agent's pin in charge of the offer too.");
+        AssertEx.Equal(agentDefinitionId, resolve.AgentDefinitionId, "and the node's own agent is the one that was resolved.");
     }
 
     /// <summary>A turn that reported no terminal state at all is a failure rather than a row nothing settles.</summary>

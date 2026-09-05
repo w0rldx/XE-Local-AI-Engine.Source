@@ -18,6 +18,11 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         leaves the rows as it found them, and the next boot judges them again from the same evidence.
 ///     </para>
 ///     <para>
+///         <see cref="StartAsync" /> catches nothing, deliberately: a store that cannot be read at boot is a node whose
+///         graph workflow rows would be admitted unjudged, and failing host start is the honest answer to that. It
+///         matches the development-workflow reconciler this is modelled on.
+///     </para>
+///     <para>
 ///         The interrupted set is exactly <c>Queued ∪ Running</c>, which the store scopes and this never widens.
 ///         <c>WaitingForApproval</c> is a durable human wait rather than in-flight work, and a reconciler that took it
 ///         would destroy every pause on the node on every boot.
@@ -136,6 +141,11 @@ internal sealed class GraphWorkflowStartupReconciler : IHostedService
     ///         never re-attempts it. The dispatcher's retry stage does, on its first tick, if and only if the node and
     ///         run budgets allow — which is why the class written here is the plain <c>Interrupted</c> rather than
     ///         anything <c>GraphWorkflowFailures.Classify</c> would decide from a graph this deliberately never parses.
+    ///     </para>
+    ///     <para>
+    ///         The <c>Tool</c> half of that arm is S2's: S1 registers no Tool lane, so nothing can leave such a row
+    ///         behind and no S1 test can reach it. It is written now because the verdict and the reason for it are the
+    ///         Agent arm's exactly, and a kind added to this table later than its lane is a kind nobody adds at all.
     ///     </para>
     /// </summary>
     private IReadOnlyList<GraphWorkflowNodeRunVerdict> ComposeVerdicts(IReadOnlyList<GraphWorkflowReconciledNodeRun> interrupted)

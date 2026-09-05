@@ -391,6 +391,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
             run =>
             {
                 var now = Now();
+                var previousStatus = run.Status;
                 var isFirstStart = run.StartedAtUtc is null;
                 if (command.TargetStatus == GraphWorkflowRunStatus.Running && isFirstStart)
                 {
@@ -408,9 +409,12 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
                     run.OutputJson = Utf8(output);
                 }
 
-                if (command.CancelRequestedAtUtc is { } cancelRequested)
+                // Stamped HERE, off this store's clock, like every other instant on these rows: the caller that asked
+                // for the cancel has no column of its own to be right about, and two clocks on one row is how a drain
+                // comes to read an intent that is older or newer than the row it sits on.
+                if (command.TargetStatus == GraphWorkflowRunStatus.Cancelling)
                 {
-                    run.CancelRequestedAtUtc = cancelRequested;
+                    run.CancelRequestedAtUtc = now;
                 }
 
                 if (command.TargetStatus is GraphWorkflowRunStatus.Completed or GraphWorkflowRunStatus.Failed or GraphWorkflowRunStatus.Cancelled)
@@ -418,7 +422,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
                     run.CompletedAtUtc = now;
                 }
 
-                return new MutationOutcome(EventTypeFor(command.TargetStatus), NodeKey: null, ReasonDetail(command.SanitizedReason));
+                return new MutationOutcome(EventTypeFor(previousStatus, command.TargetStatus), NodeKey: null, ReasonDetail(command.SanitizedReason));
             },
             cancellationToken);
     }
@@ -519,6 +523,14 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
         ArgumentException.ThrowIfNullOrWhiteSpace(sanitizedReason);
         ArgumentNullException.ThrowIfNull(verdicts);
 
+        // Checked by hand rather than left to ToDictionary, which would throw naming neither the node run nor what a
+        // caller did wrong: two verdicts about one row are two answers to the same question, and picking one is not
+        // this store's call.
+        if (verdicts.GroupBy(static verdict => verdict.NodeRunId).FirstOrDefault(static group => group.Count() > 1) is { } duplicate)
+        {
+            throw new ArgumentException($"Node run '{duplicate.Key}' was judged more than once in one reconcile pass.", nameof(verdicts));
+        }
+
         // Every pass reads the world afresh. A caller that reconciles more than once holds one scope, and the identity
         // map from its earlier pass would hand back run rows as they stood BEFORE whatever moved these node runs — so
         // this would allocate watermarks that are already taken.
@@ -578,7 +590,13 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
             {
                 EnsureVersion(run, command.ExpectedVersion);
                 var outcome = await ApplyNodeRunTransitionAsync(run, command, cancellationToken).ConfigureAwait(false);
-                _ = AddEvent(run, outcome.EventType, outcome.NodeKey, outcome.DetailJson);
+                if (outcome.EventType is { } eventType)
+                {
+                    // Always, for a node-run move: only the run-level cancel settle records no event, and nothing
+                    // reconciles one.
+                    _ = AddEvent(run, eventType, outcome.NodeKey, outcome.DetailJson);
+                }
+
                 run.Version++;
             }
 
@@ -613,7 +631,10 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
             EnsureVersion(run, expectedVersion);
 
             var outcome = await mutate(run).ConfigureAwait(false);
-            var sequence = AddEvent(run, outcome.EventType, outcome.NodeKey, outcome.DetailJson);
+
+            // A mutation that records no event keeps the watermark it found: nothing was appended, so there is no new
+            // sequence to hand back, and answering with one would tell a subscriber to page for a row that is not there.
+            var sequence = outcome.EventType is { } eventType ? AddEvent(run, eventType, outcome.NodeKey, outcome.DetailJson) : run.Seq;
             run.Version++;
             _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -786,10 +807,20 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
         };
 
     /// <summary>
-    ///     The event a run status move records. <c>Cancelling</c> gets the event of the thing it has BEGUN, because a
-    ///     reader following the log has to see the cancel at the moment it was asked for; the settled status that
-    ///     follows is the run row's business rather than a second event.
+    ///     The event a run status move records, or <see langword="null" /> for the one move that records none.
+    ///     <para>
+    ///         <c>Cancelling</c> gets the event of the thing it has BEGUN, because a reader following the log has to
+    ///         see the cancel at the moment it was asked for. The settle that follows it is the run row's business
+    ///         rather than a second event, so <c>Cancelling → Cancelled</c> writes nothing and the log carries exactly
+    ///         one <c>run.cancelled</c> per cancel. A run that reaches <c>Cancelled</c> from anywhere else never
+    ///         announced one, so that move still writes its own.
+    ///     </para>
     /// </summary>
+    private static string? EventTypeFor(GraphWorkflowRunStatus previousStatus, GraphWorkflowRunStatus status) =>
+        previousStatus == GraphWorkflowRunStatus.Cancelling && status == GraphWorkflowRunStatus.Cancelled
+            ? null
+            : EventTypeFor(status);
+
     private static string EventTypeFor(GraphWorkflowRunStatus status) =>
         status switch
         {
@@ -866,7 +897,11 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
     private static string? TextOrNull(byte[]? value) =>
         value is null ? null : Encoding.UTF8.GetString(value);
 
-    private sealed record MutationOutcome(string EventType, string? NodeKey, byte[]? DetailJson);
+    /// <summary>
+    ///     What one mutation decided. A null <see cref="EventType" /> is the deliberate "no event row": the move
+    ///     happened, the run version bumps, and the watermark stays where the last event left it.
+    /// </summary>
+    private sealed record MutationOutcome(string? EventType, string? NodeKey, byte[]? DetailJson);
 
     private sealed record ReasonDetailPayload(string Reason);
 

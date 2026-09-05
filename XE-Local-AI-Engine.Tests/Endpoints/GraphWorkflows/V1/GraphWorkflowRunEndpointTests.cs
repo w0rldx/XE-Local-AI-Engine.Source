@@ -194,6 +194,25 @@ public sealed class GraphWorkflowRunEndpointTests
         AssertEx.Equal("Cancelling", document.RootElement.GetProperty("run").GetProperty("status").GetString());
     }
 
+    /// <summary>
+    ///     A repeat cancel is idempotent on the wire too: the intent is already committed, so the second POST is
+    ///     accepted and reports the same <c>Cancelling</c> run rather than answering 409.
+    /// </summary>
+    [Test]
+    public async Task CancelRun_Repeated_Answers202Again()
+    {
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
+        var runId = await StartRunAsync(definitionId).ConfigureAwait(false);
+
+        using var first = await SendAsync("POST", $"{Runs}/{runId}/cancel", "{}").ConfigureAwait(false);
+        using var repeat = await SendAsync("POST", $"{Runs}/{runId}/cancel", "{}").ConfigureAwait(false);
+        using var document = JsonDocument.Parse(await repeat.Content.ReadAsStringAsync().ConfigureAwait(false));
+
+        AssertEx.Equal(HttpStatusCode.Accepted, first.StatusCode);
+        AssertEx.Equal(HttpStatusCode.Accepted, repeat.StatusCode, "the same ask answered again is not a conflict.");
+        AssertEx.Equal("Cancelling", document.RootElement.GetProperty("run").GetProperty("status").GetString());
+    }
+
     /// <summary>The run view's read: node-run summaries, and deliberately no documents on any of them.</summary>
     [Test]
     public async Task GetRun_CarriesTheNodeRunSummariesWithoutTheirDocuments()

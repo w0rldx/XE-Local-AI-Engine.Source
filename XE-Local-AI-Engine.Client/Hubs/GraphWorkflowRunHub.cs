@@ -86,13 +86,19 @@ public sealed class GraphWorkflowRunHub(IGraphWorkflowStore store, IGraphWorkflo
         // The window is the OPTION the event endpoint pages by, not a second constant that could drift from it.
         var replayLimit = _options.EventReplayLimit;
         var events = await _store.ListEventsAsync(runId, afterSeq, replayLimit + 1, cancellationToken).ConfigureAwait(false);
+        var replayed = events.Take(replayLimit).ToList();
+
+        // The watermark the subscriber may resume from is the highest row it has actually SEEN. The run's own sequence
+        // was read before the group join and before this page, so a change committed in between would leave a client
+        // resuming past events this snapshot never carried.
+        var lastSeq = Math.Max(detail.Run.Seq, replayed.Count == 0 ? 0 : replayed[^1].Seq);
         return new GraphWorkflowRunSubscriptionSnapshot(runId,
             detail.Run.Status.ToString(),
             detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Queued),
             detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Running),
             detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.WaitingForApproval),
-            detail.Run.Seq,
-            [.. events.Take(replayLimit).Select(static @event => @event.ToResponse())],
+            lastSeq,
+            [.. replayed.Select(static @event => @event.ToResponse())],
             events.Count > replayLimit);
     }
 

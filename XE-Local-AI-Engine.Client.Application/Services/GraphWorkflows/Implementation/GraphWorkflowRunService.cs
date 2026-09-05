@@ -58,7 +58,7 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store, IGraphW
         // Validated again HERE, not trusted from save time: an agent definition can be deleted between the two, and the
         // parse is the same one the dispatcher routes with.
         var graph = GraphWorkflowGraph.Parse(definition.GraphJson);
-        EnsureToolNodesAreRunnable();
+        EnsureToolNodesAreRunnable(graph);
 
         if (graph.Nodes.Count > _options.MaxNodeRunsPerRun)
         {
@@ -90,6 +90,14 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store, IGraphW
             throw new GraphWorkflowRunConflictException($"This run is already {run.Status}, so there is nothing to cancel.");
         }
 
+        // A repeat cancel is the SAME ask answered again, not a conflict: the intent is already committed and the drain
+        // is already running, so this mirrors the start replay — accepted, idempotent, and signalled, because a caller
+        // that never saw the first answer is exactly the caller that sends this one.
+        if (run.Status == GraphWorkflowRunStatus.Cancelling)
+        {
+            return await SignalAndComposeAsync(runId, cancellationToken).ConfigureAwait(false);
+        }
+
         GraphWorkflowStateMachine.EnsureLegal(run.Status, GraphWorkflowRunStatus.Cancelling);
 
         // Against the version it was READ at, so a recomputation that landed in between loses rather than silently
@@ -97,10 +105,7 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store, IGraphW
         //
         // Node runs are deliberately NOT settled here: the dispatcher drains them, asking each live lane to stop rather
         // than writing a terminal status over work that is still in flight.
-        _ = await _store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(runId,
-                                run.Version,
-                                GraphWorkflowRunStatus.Cancelling,
-                                CancelRequestedAtUtc: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()),
+        _ = await _store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(runId, run.Version, GraphWorkflowRunStatus.Cancelling),
                             cancellationToken)
                         .ConfigureAwait(false);
         return await SignalAndComposeAsync(runId, cancellationToken).ConfigureAwait(false);
@@ -140,12 +145,12 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store, IGraphW
     ///         that kind. That is an absent case, and it is stated here so the consequence is not a surprise.
     ///     </para>
     /// </summary>
-    private static void EnsureToolNodesAreRunnable()
-    {
-        // Intentionally empty: there is no tool catalog on this node yet, so there is nothing to check the graph's tool
-        // names against. The pause-and-tool slice fills this in; leaving the call site here is what keeps that a
-        // one-line change in one place rather than a new gate somebody has to remember to add.
-    }
+    private static void EnsureToolNodesAreRunnable(GraphWorkflowGraph graph) =>
+
+        // No body beyond the guard: there is no tool catalog on this node yet, so there is nothing to check the
+        // graph's tool names against. The graph is taken NOW rather than added later, so the pause-and-tool slice
+        // fills this in without touching the call site.
+        ArgumentNullException.ThrowIfNull(graph);
 
     /// <summary>
     ///     Signals AFTER the commit, which is the whole of this service's obligation to the dispatcher: without it a

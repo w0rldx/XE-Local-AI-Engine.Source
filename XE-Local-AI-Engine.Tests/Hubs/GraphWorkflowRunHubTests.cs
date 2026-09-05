@@ -55,6 +55,21 @@ public sealed class GraphWorkflowRunHubTests
         AssertEx.False(snapshot.ReplayTruncated);
     }
 
+    /// <summary>
+    ///     The watermark is the highest row the subscriber was actually handed. The run's own sequence is read before
+    ///     the group join and before the replay page, so a change committed in between leaves it behind the events this
+    ///     snapshot carries — and a client resuming from it would skip them.
+    /// </summary>
+    [Test]
+    public async Task SubscribeRun_WhenTheReplayOutrunsTheRunItWasReadFrom_ReportsTheHigherWatermark()
+    {
+        using var fixture = CreateHub(Store([Event(10), Event(12)]), Runs());
+
+        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 12L, snapshot.LastSeq, "the run row read 9; the page delivered 12, and that is what the client has seen.");
+    }
+
     [Test]
     public async Task SubscribeRun_AtTheReplayCap_IsNotTruncated()
     {

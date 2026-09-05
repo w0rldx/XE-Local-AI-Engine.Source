@@ -195,6 +195,27 @@ public sealed class GraphWorkflowRunServiceTests
             "the node runs are left for the dispatcher's drain.");
     }
 
+    /// <summary>
+    ///     A repeat cancel is the same ask answered again, not a conflict. It mirrors the start replay: the intent is
+    ///     already committed, so the second call reports where the run stands rather than refusing a caller who never
+    ///     saw the first answer.
+    /// </summary>
+    [Test]
+    public async Task CancelAsync_OnARunAlreadyCancelling_IsANoOpThatReportsTheCurrentDetail()
+    {
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
+        var started = await StartAsync(definitionId, Guid.NewGuid()).ConfigureAwait(false);
+
+        await using var scope = Host.Factory.Services.CreateAsyncScope();
+        var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
+        var first = await runs.CancelAsync(started.Run.Id).ConfigureAwait(false);
+        var repeat = await runs.CancelAsync(started.Run.Id).ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelling, repeat.Run.Status);
+        AssertEx.Equal(first.Run.Version, repeat.Run.Version, "a no-op writes nothing, so the row is the one the first cancel left.");
+        AssertEx.Equal(first.Run.CancelRequestedAtUtc, repeat.Run.CancelRequestedAtUtc, "and the intent keeps the instant it was first asked at.");
+    }
+
     [Test]
     public async Task CancelAsync_OnATerminalRun_Conflicts()
     {

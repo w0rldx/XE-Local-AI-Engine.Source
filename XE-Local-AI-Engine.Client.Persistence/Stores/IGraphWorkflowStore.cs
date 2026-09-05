@@ -144,6 +144,11 @@ public sealed record StartGraphWorkflowRunCommand(
 ///         <see cref="SanitizedReason" /> has no column on the run row and is not meant to: it travels into the event's
 ///         detail, where a reader following the log finds it beside the move it explains.
 ///     </para>
+///     <para>
+///         The cancel-requested instant is deliberately NOT a member: the store stamps it from its own
+///         <see cref="TimeProvider" /> on the move to <c>Cancelling</c>, like every other timestamp on these rows, so a
+///         caller's clock cannot disagree with the row's.
+///     </para>
 /// </summary>
 public sealed record TransitionGraphWorkflowRunCommand(
     Guid RunId,
@@ -151,8 +156,7 @@ public sealed record TransitionGraphWorkflowRunCommand(
     GraphWorkflowRunStatus TargetStatus,
     GraphWorkflowFailureClass? FailureClass = null,
     string? SanitizedReason = null,
-    string? OutputJson = null,
-    long? CancelRequestedAtUtc = null);
+    string? OutputJson = null);
 
 /// <summary>
 ///     A node-run status move. <see cref="IncrementAttempt" /> is the retry-in-place path; the row is never duplicated,

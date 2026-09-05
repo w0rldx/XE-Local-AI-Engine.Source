@@ -123,7 +123,7 @@ internal sealed class PublishingGraphWorkflowStore(IGraphWorkflowStore inner,
         {
             await _publisher.PublishAsync(result.RunId, result.Sequence, kind, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             _logger.LogWarning(exception,
                 "Graph workflow run {RunId} committed a {Kind} change at sequence {Sequence} that could not be announced; subscribers re-read on their next ping.",
