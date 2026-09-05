@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Behavior coverage for <see cref="ProcessSandboxRuntimeProvider" />, the supervised-child sandbox provider. It
@@ -192,13 +193,9 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_Execute_WhenWorkingDirectoryTraversesIntermediateSymlink_Rejects()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var provider = CreateProvider();
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
         using var escapeTarget = new TempDir();
@@ -217,13 +214,9 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_Execute_WhenWorkingDirectoryIsLeafSymlink_Rejects()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var provider = CreateProvider();
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
         using var escapeTarget = new TempDir();
@@ -280,15 +273,11 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    // The O_NOFOLLOW atomic refusal is the Linux guarantee under test; on other hosts the fallback open does
+    // not refuse a symlink, so the assertion is Linux-only (the primary runtime).
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_CopyInto_WhenFinalComponentIsSymlink_Rejects()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            // The O_NOFOLLOW atomic refusal is the Linux guarantee under test; on other hosts the fallback open does
-            // not refuse a symlink, so the assertion is Linux-only (the primary runtime).
-            return;
-        }
-
         using var provider = CreateProvider();
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
@@ -307,14 +296,10 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    // Real symlink semantics + the no-follow open are the Linux guarantee under test.
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_ReadFile_WhenPathTraversesJailSymlink_Rejects()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            // Real symlink semantics + the no-follow open are the Linux guarantee under test.
-            return;
-        }
-
         using var provider = CreateProvider();
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
         using var escapeTarget = new TempDir();
@@ -336,13 +321,9 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_CopyOut_WhenJailSourceIsEscapingSymlink_Rejects()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var provider = CreateProvider();
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
         using var escapeTarget = new TempDir();
@@ -365,13 +346,9 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_CopyInto_WhenDestinationComponentIsEscapingSymlink_Rejects()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var provider = CreateProvider();
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
         using var escapeTarget = new TempDir();
@@ -392,13 +369,9 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_CopyInto_WhenDestinationComponentIsSymlink_DoesNotCreateOutsideDirectories()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var provider = CreateProvider();
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
         using var escapeTarget = new TempDir();
@@ -676,14 +649,11 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
+    [NotInParallel("XE_SANDBOX_CANARY")]
     public async Task ProcessSandboxProvider_Execute_DoesNotLeakWorkerEnvironment_ButAllowlistedAndRequestVarsAppear()
     {
         // Linux-only: uses `printenv` and /bin/sh. Windows env behavior is covered by the same allow-list logic.
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         // A canary secret placed in the WORKER (parent) environment must never reach the sandbox child.
         var canaryName = "XE_SANDBOX_CANARY_" + Guid.NewGuid().ToString("N");
         const string canaryValue = "worker-secret-must-not-leak";
@@ -749,13 +719,10 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     ///     </para>
     /// </summary>
     [Test]
+    [RunOn(OS.Linux)]
+    [NotInParallel(["ProgramData", "ProgramFiles", "ProgramFiles(x86)", "ALLUSERSPROFILE"])]
     public async Task ProcessSandboxProvider_Execute_ForwardsTheWindowsMachineWideConfigurationRoots()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var printenv = new[]
         {
             "/usr/bin/printenv",
@@ -769,6 +736,10 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
 
         string[] names = ["ProgramData", "ProgramFiles", "ProgramFiles(x86)", "ALLUSERSPROFILE"];
         var expected = names.ToDictionary(name => name, name => $"/probe/{Guid.NewGuid():N}", StringComparer.Ordinal);
+
+        // Captured, because these are real machine-wide values on a Windows host: restoring them to null instead of
+        // to what they were would poison every later test in the module.
+        var originals = names.ToDictionary(name => name, Environment.GetEnvironmentVariable, StringComparer.Ordinal);
 
         foreach (var pair in expected)
         {
@@ -802,7 +773,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         {
             foreach (var name in names)
             {
-                Environment.SetEnvironmentVariable(name, value: null);
+                Environment.SetEnvironmentVariable(name, originals[name]);
             }
         }
     }
@@ -903,16 +874,12 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    // The jail disk watchdog probe drives /bin/sh and dd.
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_Execute_WhenChildExceedsJailDiskCap_TreeKillsAndReturnsIncomplete()
     {
         // Jail-dir disk watchdog: MaxCopyFileBytes bounds only the host→jail copy-in re-read. Without this watchdog a
         // command could fill the host disk from INSIDE the jail and nothing would stop it.
-        if (!OperatingSystem.IsLinux())
-        {
-            Skip("the jail disk watchdog test uses /bin/sh and dd");
-            return;
-        }
-
         // A 4 MiB ceiling against a command that writes far more, so the watchdog fires well inside the timeout.
         using var provider = CreateProvider(maxJailDiskBytes: 4L * 1024 * 1024);
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
@@ -925,16 +892,12 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    // The jail disk watchdog probe drives /bin/sh and dd.
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_Execute_WhenTheSandboxAsksForATighterDiskCap_EnforcesTheSandboxCeiling()
     {
         // A caller whose workload writes almost nothing (the compute tool) should not have to inherit the node-wide
         // allowance sized for a workspace build. The per-sandbox ceiling is what lets it bound its own blast radius.
-        if (!OperatingSystem.IsLinux())
-        {
-            Skip("the jail disk watchdog test uses /bin/sh and dd");
-            return;
-        }
-
         using var provider = CreateProvider(maxJailDiskBytes: 512L * 1024 * 1024);
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()) with
         {
@@ -951,16 +914,12 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    // The jail disk watchdog probe drives /bin/sh and dd.
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_Execute_WhenTheSandboxAsksForALooserDiskCap_KeepsTheNodeCeiling()
     {
         // Tighten-only. The node-wide value is the OPERATOR's ceiling, so a create request that names a bigger number
         // must not widen it — otherwise the control is advisory and the caller sets its own limit.
-        if (!OperatingSystem.IsLinux())
-        {
-            Skip("the jail disk watchdog test uses /bin/sh and dd");
-            return;
-        }
-
         using var provider = CreateProvider(maxJailDiskBytes: 4L * 1024 * 1024);
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()) with
         {
@@ -975,18 +934,14 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    // The jail disk watchdog probe drives /bin/sh and dd.
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_Execute_WhenAnEarlierCommandAlreadyFilledTheJail_StopsTheNextOne()
     {
         // The ceiling bounds OCCUPANCY, not one command's growth. Re-baselining per command gave every command a fresh
         // allowance, so a caller could leave any amount of data in a jail by writing just under the line repeatedly and
         // no single command ever exceeded it. The second command here writes far LESS than the ceiling and must still
         // be stopped, because the jail it is writing into is already full.
-        if (!OperatingSystem.IsLinux())
-        {
-            Skip("the jail disk watchdog test uses /bin/sh and dd");
-            return;
-        }
-
         using var provider = CreateProvider(maxJailDiskBytes: 8L * 1024 * 1024);
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
@@ -1003,6 +958,8 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    // The jail disk watchdog probe drives /bin/sh and dd.
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_Execute_WhenTheFirstCommandWritesImmediately_DoesNotBankItsBytesInTheBaseline()
     {
         // The occupancy baseline is captured ONCE per sandbox and is permanent, so WHEN it is walked decides what the
@@ -1015,12 +972,6 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         // child's 8 MiB is on disk before any walk could happen. With the baseline anchored before the launch the
         // ceiling still fires; with it anchored after, this command runs to completion. The marker is only written for
         // a group-leader launch, so the real host containment is required for the seam to exist at all.
-        if (!OperatingSystem.IsLinux())
-        {
-            Skip("the jail disk watchdog test uses /bin/sh and dd");
-            return;
-        }
-
         var containment = HostContainment();
         if (!containment.SupportsProcessGroup)
         {
@@ -1043,17 +994,13 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    // The jail disk watchdog probe drives /bin/sh and dd.
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_Execute_WhenTheNodeDisabledTheWatchdog_APerSandboxCeilingDoesNotReEnableIt()
     {
         // The node-wide value is the operator's, in both directions: a non-positive one turns the watchdog off, and a
         // per-sandbox request must not be able to switch it back on. min(node, request) gives that for free — the
         // asymmetry is worth a test of its own because the alternative reading (treat 0 as "no opinion") is tempting.
-        if (!OperatingSystem.IsLinux())
-        {
-            Skip("the jail disk watchdog test uses /bin/sh and dd");
-            return;
-        }
-
         using var provider = CreateProvider(maxJailDiskBytes: 0);
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()) with
         {
@@ -1069,18 +1016,14 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    // The jail disk watchdog probe drives /bin/sh and dd.
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_Execute_WhenAnAttachTightensTheCeilingMidCommand_TheRunningCommandKeepsItsSnapshot()
     {
         // Future-command tightening. The running command was launched against a budget and is judged by it to the end —
         // moving the line under a process that is mid-write would kill it for bytes that were within the rules when it
         // wrote them. The command that starts AFTER the attach gets the new, stricter ceiling, and is stopped at once
         // because the jail is already over it.
-        if (!OperatingSystem.IsLinux())
-        {
-            Skip("the jail disk watchdog test uses /bin/sh and dd");
-            return;
-        }
-
         using var provider = CreateProvider(maxJailDiskBytes: 512L * 1024 * 1024);
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()) with
         {
@@ -1170,16 +1113,16 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_AgentHomeShapedRun_ComposesCapabilityGatedDenialEndToEnd()
     {
         // The flip and the mechanism are two separate facts; this asserts they COMPOSE. It mirrors what
         // AgentHomeService.ResolveNetworkPolicy() does — pick None iff the provider advertises the capability — and
         // then proves a child of that sandbox really cannot reach loopback, the LAN, or the metadata endpoint.
         const string bashPath = "/usr/bin/bash";
-        if (!OperatingSystem.IsLinux() || !File.Exists(bashPath))
+        if (!File.Exists(bashPath))
         {
-            Skip("bash on Linux is required for the /dev/tcp egress probe");
-            return;
+            Skip("bash is required for the /dev/tcp egress probe");
         }
 
         using var provider = CreateHostProvider();
@@ -1246,15 +1189,15 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_Execute_WhenEgressAllowed_TheSameProbeCanStillReachLoopback()
     {
         // The control for the test above. Without it, "nothing was reachable" could equally mean the probe itself is
         // broken — the exact failure mode dash's missing /dev/tcp would have produced.
         const string bashPath = "/usr/bin/bash";
-        if (!OperatingSystem.IsLinux() || !File.Exists(bashPath))
+        if (!File.Exists(bashPath))
         {
-            Skip("bash on Linux is required for the /dev/tcp egress probe");
-            return;
+            Skip("bash is required for the /dev/tcp egress probe");
         }
 
         using var provider = CreateHostProvider();
@@ -1285,6 +1228,8 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    // The OOM probe drives /bin/sh and head.
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_Execute_WhenMemoryCeilingSet_KernelOomKillsARunawayChild()
     {
         // LIVE cgroup resource ceiling. The ceiling must be enforced by the KERNEL, not by the app noticing afterwards.
@@ -1292,12 +1237,6 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         if (!containment.SupportsResourceLimits)
         {
             Skip($"this host cannot impose cgroup ceilings: {containment.ResourceLimitsUnavailableReason}");
-            return;
-        }
-
-        if (!OperatingSystem.IsLinux())
-        {
-            Skip("the OOM test uses /bin/sh and head");
             return;
         }
 
@@ -1663,13 +1602,9 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     ///     command, not the assertion.
     /// </summary>
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ProcessSandboxProvider_ListFiles_WhenPathTraversesJailSymlink_Rejects()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var provider = CreateProvider();
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
         using var outside = new TempDir();

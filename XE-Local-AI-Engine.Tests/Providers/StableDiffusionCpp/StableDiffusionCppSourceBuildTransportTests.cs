@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 public sealed class StableDiffusionCppSourceBuildTransportTests
 {
@@ -89,13 +90,9 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task StartEndpoint_RuntimeBusy_ReturnsStableConflictShape()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var activity = new ImageRuntimeActivitySnapshot(2, 1, 1, false, false);
         var service = Substitute.For<IStableDiffusionCppSourceBuildService>();
         service.RecoverAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
@@ -129,13 +126,9 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task StartEndpoint_SourceBuildExceptionDoesNotMisreportPrerequisites()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var activity = new ImageRuntimeActivitySnapshot(0, 0, 0, false, false);
         var service = Substitute.For<IStableDiffusionCppSourceBuildService>();
         service.RecoverAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);

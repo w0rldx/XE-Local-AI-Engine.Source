@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Behavior coverage for <see cref="CoderWorkspaceReader" /> against the REAL
@@ -135,13 +136,9 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ReadFile_WhenSymlinkEscapesRoot_ReturnsRejection()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var provider = CreateProvider();
         var handle = await CreateOrAttachAsync(provider);
         using var escapeTarget = new TempDir(_tempPaths);
@@ -209,13 +206,9 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ListFiles_ExcludesSecretsAndHeavyDirs()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var provider = CreateProvider();
         var handle = await CreateOrAttachAsync(provider);
         await RunShellInJailAsync(provider, handle,
@@ -237,13 +230,9 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ListFiles_WhenExcludedBaselineExceedsSurveyBudget_StillReturnsProjectFile()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var provider = CreateProvider();
         var handle = await CreateOrAttachAsync(provider);
         await RunShellInJailAsync(provider, handle,
@@ -260,13 +249,9 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task SearchText_ReturnsRelativeLineMatches_CappedAtMax()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var provider = CreateProvider();
         var handle = await CreateOrAttachAsync(provider);
         await RunShellInJailAsync(provider, handle,
@@ -286,13 +271,9 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task SearchText_SecretFileContent_NeverInOutput()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var provider = CreateProvider();
         var handle = await CreateOrAttachAsync(provider);
         await RunShellInJailAsync(provider, handle,
@@ -313,13 +294,9 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task SearchText_WhenExcludedBaselineExceedsMatchBudget_StillReturnsProjectMatch()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var provider = CreateProvider();
         var handle = await CreateOrAttachAsync(provider);
         await RunShellInJailAsync(provider, handle,
@@ -339,13 +316,9 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ListFiles_WhenPathTraversesIntermediateSymlink_ReturnsRejection()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var provider = CreateProvider();
         var handle = await CreateOrAttachAsync(provider);
         using var escapeTarget = new TempDir(_tempPaths);
@@ -368,13 +341,9 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task SearchText_WhenPathIsLeafSymlink_ReturnsRejection()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var provider = CreateProvider();
         var handle = await CreateOrAttachAsync(provider);
         using var escapeTarget = new TempDir(_tempPaths);
@@ -397,13 +366,9 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ListFiles_WrapsInjectionShapedFileNameInsideUntrustedFence()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         // A staged attachment's file NAME is attacker-influenced. list_files must fence its output as untrusted DATA, so
         // an injection-shaped file name reaches the model INSIDE the trust boundary, not as a bare directive.
         using var provider = CreateProvider();
@@ -425,13 +390,9 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task SearchText_WrapsInjectionShapedMatchInsideUntrustedFence()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         // A search match carries an attacker-influenced PATH and the MATCHED FILE CONTENT. search_text must fence its
         // output as untrusted DATA so a prompt-injection line in a matched file cannot read as a system directive.
         using var provider = CreateProvider();
@@ -456,13 +417,9 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ExecuteArg_AbsoluteOrDotDot_CannotEscapeJail_RealProvider()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         // MANDATORY GATE: a list/search whose path arg is absolute (/etc) or '..' is rejected by the guard
         // before the process launches, so a host file outside the jail is never read.
         using var provider = CreateProvider();

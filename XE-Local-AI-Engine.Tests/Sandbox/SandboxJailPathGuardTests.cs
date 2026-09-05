@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Sandbox;
 using System.Text;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Unit coverage for <see cref="SandboxJailPathGuard" /> — the sandbox path-safety guards on their own, without a
@@ -132,6 +133,7 @@ public sealed class SandboxJailPathGuardTests : IDisposable
 
         if (!OperatingSystem.IsLinux())
         {
+            // A real branch, not a vacuous skip: the cap above is asserted everywhere, only the symlink leg is Linux.
             return;
         }
 
@@ -141,15 +143,11 @@ public sealed class SandboxJailPathGuardTests : IDisposable
     }
 
     [Test]
+    // The reads go through the libc no-follow open on Linux only, and a second writable handle on the file
+    // being read is a Linux-shareable open — the Windows fallback denies it.
+    [RunOn(OS.Linux)]
     public async Task BothReadLegs_RefuseAFileThatGrewAfterItWasSized_RatherThanReturningAStaleCopy()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            // The reads go through the libc no-follow open on Linux only, and a second writable handle on the file
-            // being read is a Linux-shareable open — the Windows fallback denies it.
-            return;
-        }
-
         await AssertGrowthAfterSizingIsRefusedAsync("jail-growing.bin",
             path => SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(path, int.MaxValue, CancellationToken.None));
 
@@ -162,6 +160,7 @@ public sealed class SandboxJailPathGuardTests : IDisposable
     {
         SandboxJailPathGuard.EnsureNoSymbolicLinkComponents(_jailRoot);
 
+        // A real branch, not a vacuous skip: the clean-path leg above is asserted everywhere, only the link leg is Linux.
         if (!OperatingSystem.IsLinux())
         {
             return;

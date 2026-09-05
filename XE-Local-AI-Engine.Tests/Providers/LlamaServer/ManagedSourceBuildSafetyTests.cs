@@ -6,17 +6,14 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 public sealed class ManagedSourceBuildSafetyTests
 {
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Adopt_InvalidOfficialProvenance_RejectsBeforePersistence()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new SecureTempDirectory();
         var bin = SeedActiveBin(temp.Path, "#!/bin/sh\nexit 0\n");
         using var store = new InstalledRuntimeStore(temp.Path);
@@ -59,13 +56,9 @@ public sealed class ManagedSourceBuildSafetyTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Adopt_CustomSelectionUsingOfficialRepository_PersistsExplicitSelection()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new SecureTempDirectory();
         var bin = SeedActiveBin(temp.Path, "#!/bin/sh\nexit 0\n");
         using var store = new InstalledRuntimeStore(temp.Path);
@@ -85,13 +78,9 @@ public sealed class ManagedSourceBuildSafetyTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Adopt_VulkanRequiresAnchoredBackendDeviceLine()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new SecureTempDirectory();
         var bin = SeedActiveBin(temp.Path, "#!/bin/sh\ncase \"$1\" in --version) exit 0;; --list-devices) echo 'GPU0: generic'; exit 0;; esac\n");
         using var store = new InstalledRuntimeStore(temp.Path);
@@ -103,13 +92,9 @@ public sealed class ManagedSourceBuildSafetyTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Adopt_VulkanAcceptsIndexedAnchoredDeviceLine()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new SecureTempDirectory();
         var bin = SeedActiveBin(temp.Path, "#!/bin/sh\ncase \"$1\" in --version) exit 0;; --list-devices) echo '  Vulkan0: test'; exit 0;; esac\n");
         using var store = new InstalledRuntimeStore(temp.Path);
@@ -123,13 +108,9 @@ public sealed class ManagedSourceBuildSafetyTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Adopt_VulkanDeviceValidationRunsFromBinaryDirectory()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new SecureTempDirectory();
         var bin = SeedActiveBin(temp.Path, "#!/bin/sh\ncase \"$1\" in --version) exit 0;; --list-devices) [ -f \"$PWD/runtime.sentinel\" ] || exit 42; echo 'Vulkan0: test'; exit 0;; esac\n");
         await File.WriteAllTextAsync(Path.Combine(bin, "runtime.sentinel"), "present");
@@ -143,13 +124,9 @@ public sealed class ManagedSourceBuildSafetyTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Adopt_InternalRelativeLibrarySymlink_Accepts()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new SecureTempDirectory();
         var bin = SeedActiveBin(temp.Path, "#!/bin/sh\nexit 0\n");
         await File.WriteAllTextAsync(Path.Combine(bin, "libreal.so"), "library");
@@ -164,13 +141,9 @@ public sealed class ManagedSourceBuildSafetyTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Adopt_EscapingOrCyclicLibrarySymlink_Rejects()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new SecureTempDirectory();
         var bin = SeedActiveBin(temp.Path, "#!/bin/sh\nexit 0\n");
         await File.WriteAllTextAsync(Path.Combine(temp.Path, "outside.so"), "outside");

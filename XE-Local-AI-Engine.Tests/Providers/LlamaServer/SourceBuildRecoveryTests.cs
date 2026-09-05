@@ -8,17 +8,14 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 public sealed class SourceBuildRecoveryTests
 {
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Recover_ActiveManifestVariantMismatch_DiscardsOrphanAndVersionsSignal()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
         var active = Path.Combine(temp.Path, "llama.cpp", "source-build", "active");
@@ -38,13 +35,9 @@ public sealed class SourceBuildRecoveryTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Recover_BackupOnlyMatchingManifest_RestoresActive()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
         var sourceRoot = Path.Combine(temp.Path, "llama.cpp", "source-build");
@@ -63,13 +56,9 @@ public sealed class SourceBuildRecoveryTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Recover_CustomSelectionUsingOfficialRepository_PreservesExplicitSelection()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
         var active = Path.Combine(temp.Path, "llama.cpp", "source-build", "active");
@@ -90,13 +79,9 @@ public sealed class SourceBuildRecoveryTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Recover_InvalidOfficialProvenance_DiscardsTreeAndRecord()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var cases = new[]
         {
             (Repository: LlamaCppSourceBuildRequestValidation.OfficialRepository,
@@ -143,13 +128,9 @@ public sealed class SourceBuildRecoveryTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Recover_ActiveTreeValidationRunsFromBinaryDirectory()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
         var active = Path.Combine(temp.Path, "llama.cpp", "source-build", "active");
@@ -165,13 +146,9 @@ public sealed class SourceBuildRecoveryTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Recover_ActiveAndBackup_RestoresOnlyTreeMatchingFullDescriptor()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
         var sourceRoot = Path.Combine(temp.Path, "llama.cpp", "source-build");
@@ -190,13 +167,9 @@ public sealed class SourceBuildRecoveryTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Recover_PreProvenanceLegacyCuda_PreservesValidatedRecord()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
         var bin = Path.Combine(temp.Path, "llama.cpp", "source-cuda", LlamaCppReleasePins.PinnedTag, "build", "bin");
@@ -220,13 +193,9 @@ public sealed class SourceBuildRecoveryTests
     ///     garbage".
     /// </summary>
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Recover_ActiveTreeWithUnboundRecordedPath_LeavesTreeAndRecordIntact()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
         var active = Path.Combine(temp.Path, "llama.cpp", "source-build", "active");
@@ -254,13 +223,9 @@ public sealed class SourceBuildRecoveryTests
     ///     source build. A record that names no source build is not authority over one.
     /// </summary>
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Recover_ActiveTreeWithPrebuiltRecord_LeavesTreeAndRecordIntact()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
         var sourceRoot = Path.Combine(temp.Path, "llama.cpp", "source-build");
@@ -291,13 +256,9 @@ public sealed class SourceBuildRecoveryTests
     ///     directory describes a tree this reconcile never looked at, so erasing it loses a working source build.
     /// </summary>
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Recover_NoTreesWithRecordNamingAnotherPath_KeepsRecord()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
         var elsewhere = Path.Combine(temp.Path, "relocated", "source-build", "active", "build", "bin");
@@ -316,13 +277,9 @@ public sealed class SourceBuildRecoveryTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Recover_BackupOnlyWithPrebuiltRecord_LeavesBackupInPlace()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         using var store = new InstalledRuntimeStore(temp.Path);
         var backup = Path.Combine(temp.Path, "llama.cpp", "source-build", ".backup");

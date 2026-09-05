@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Managed source-built CUDA runtime: the <see cref="LlamaCppBinaryManager" /> serve-time short-circuit
@@ -20,13 +21,10 @@ public sealed class CudaManagedRuntimeTests
         "#!/bin/sh\ncase \"$1\" in\n  --version) echo 'version: test'; exit 0 ;;\n  --list-devices) echo 'Available devices:'; echo '  CUDA0: Test GPU (24000 MiB, 23000 MiB free)'; exit 0 ;;\n  *) exit 0 ;;\nesac\n";
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_ManagedCuda_ServesBuiltBinaryNoDownload()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var (binDir, serverPath, sha) = SeedSourceBuild(dir.Path, GpuStub);
         using var store = new InstalledRuntimeStore(dir.Path);
@@ -48,13 +46,10 @@ public sealed class CudaManagedRuntimeTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_ManagedCuda_ShaMismatch_DiscardsAndFailsLoud()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var (binDir, serverPath, _) = SeedSourceBuild(dir.Path, GpuStub);
         using var store = new InstalledRuntimeStore(dir.Path);
@@ -77,13 +72,10 @@ public sealed class CudaManagedRuntimeTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_ManagedRecordMissingOnDisk_GracefulFallbackNoSilentCpu()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var missingBin = Path.Combine(dir.Path, "llama.cpp", "source-cuda", LlamaCppReleasePins.PinnedTag, "build", "bin");
         using var store = new InstalledRuntimeStore(dir.Path);
@@ -103,13 +95,10 @@ public sealed class CudaManagedRuntimeTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_ManagedCuda_WorldWritableAncestor_Discarded()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var (binDir, _, sha) = SeedSourceBuild(dir.Path, GpuStub);
         using var store = new InstalledRuntimeStore(dir.Path);
@@ -140,13 +129,10 @@ public sealed class CudaManagedRuntimeTests
     ///     operator's source build, after which the next start's reconcile deleted the tree.
     /// </summary>
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_SourceRecordVariantMismatch_ServesRecordedBuildAndSeedsSignal()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var (binDir, serverPath, sha) = SeedSourceBuild(dir.Path, GpuStub);
         using var store = new InstalledRuntimeStore(dir.Path);
@@ -193,11 +179,15 @@ public sealed class CudaManagedRuntimeTests
         var held = await first.AcquireAsync(CancellationToken.None);
         var contender = second.AcquireAsync(CancellationToken.None);
 
-        await Task.Delay(200, CancellationToken.None);
-        AssertEx.False(contender.IsCompleted, "A second node must wait for the record lock rather than interleave.");
+        // real-timer: the blocking point is a real OS file lock (FileShare.None) that AcquireAsync polls every 25ms.
+        // It takes no TimeProvider and exposes no seam, so "the contender is still waiting" can only be observed by
+        // giving it a bounded real chance to finish and requiring that it does not.
+        var raced = await Task.WhenAny(contender, Task.Delay(TimeSpan.FromMilliseconds(200), CancellationToken.None));
+        AssertEx.False(ReferenceEquals(raced, contender), "A second node must wait for the record lock rather than interleave.");
 
+        // The positive leg is deterministic: releasing the holder must let the contender through, and promptly.
         held.Dispose();
-        (await contender).Dispose();
+        (await contender.WaitAsync(TimeSpan.FromSeconds(10), CancellationToken.None)).Dispose();
     }
 
     /// <summary>
@@ -205,13 +195,10 @@ public sealed class CudaManagedRuntimeTests
     ///     tree it names, so refusing automatic destruction never wedges the operator.
     /// </summary>
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task RemoveSourceBuild_ExplicitOperatorAction_ClearsRecordAndDeletesTree()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var activeTree = Path.Combine(dir.Path, "llama.cpp", "source-build", "active");
         var binDir = Path.Combine(activeTree, "build", "bin");
@@ -236,13 +223,10 @@ public sealed class CudaManagedRuntimeTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_InvalidCpuSourceRecord_NeverServesCachedCpuPrebuilt()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var missingBin = Path.Combine(dir.Path, "llama.cpp", "source-build", "active", "build", "bin");
         using var store = new InstalledRuntimeStore(dir.Path);
@@ -289,13 +273,10 @@ public sealed class CudaManagedRuntimeTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task RemoveCudaSourceBuild_RefusesPathOutsideSourceCuda()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         using var store = new InstalledRuntimeStore(dir.Path);
 
