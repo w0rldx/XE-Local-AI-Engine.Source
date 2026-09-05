@@ -90,6 +90,77 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
+    public async Task SaveNodeSettings_WhenASiblingRegistersAToolCapableModelBeforeTheWrite_KeepsItsEntry()
+    {
+        // The request's optional fields are a partial merge: everything it omits is resolved from the record the
+        // endpoint hands the service. Resolved from a snapshot loaded here, a save of the chat timeout wrote that
+        // snapshot's ToolCapableModels back over a registration that landed while the save was validating.
+        var siblingHasWritten = false;
+        var nodeSettingsStore = new FakeNodeSettingsStore(new StoredNodeSettings
+            {
+                ToolCapableModels = ["already-approved"]
+            },
+            siblingWriteBeforeTheUpdate: latest =>
+            {
+                if (siblingHasWritten)
+                {
+                    return latest;
+                }
+
+                siblingHasWritten = true;
+                return latest with
+                {
+                    ToolCapableModels = [.. latest.ToolCapableModels ?? [], "registered-while-the-save-validated"]
+                };
+            });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            MaxMessageRequestTimeoutSeconds = 900
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var settings = await ReadJsonAsync<NodeSettingsResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(expected: 900, settings.MaxMessageRequestTimeoutSeconds, "the field the request changed still lands.");
+        AssertEx.True(settings.ToolCapableModels?.Contains("registered-while-the-save-validated") == true,
+            "a registration that landed while this save validated must survive a request that never named the field.");
+        AssertEx.True(nodeSettingsStore.Current.ToolCapableModels?.Contains("already-approved") == true);
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenTheRecordKeepsChangingUnderTheSave_ReturnsConflict()
+    {
+        // Refused rather than written unvalidated: a writer that never stops means no attempt ever validated the
+        // record its write would land on, and the operator is told to reload instead of being told it worked.
+        var siblingWrites = 0;
+        var nodeSettingsStore = new FakeNodeSettingsStore(new StoredNodeSettings(),
+            siblingWriteBeforeTheUpdate: latest => latest with
+            {
+                ToolCapableModels = [.. latest.ToolCapableModels ?? [], $"sibling-{++siblingWrites}"]
+            });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            MaxMessageRequestTimeoutSeconds = 900
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var conflict = await ReadJsonAsync<NodeSettingsConflictResponse>(response).ConfigureAwait(false);
+        AssertEx.Equal("Node settings changed while this save was being validated. Reload and retry.", conflict.Message);
+        AssertEx.Equal(StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds,
+            nodeSettingsStore.Current.MaxMessageRequestTimeoutSeconds,
+            "nothing the save proposed may reach disk.");
+    }
+
+    [Test]
     public async Task SaveNodeSettings_WhenOutOfRange_ReturnsValidationProblem()
     {
         var nodeSettingsStore = NewSettingsStore();

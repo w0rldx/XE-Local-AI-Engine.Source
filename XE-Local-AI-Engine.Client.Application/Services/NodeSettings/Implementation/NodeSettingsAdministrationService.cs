@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
-using System.Diagnostics;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -22,9 +21,9 @@ internal sealed class NodeSettingsAdministrationService(
         "The fast model for automatic reasoning effort must be an installed node-local model.";
 
     /// <summary>
-    ///     How many times a save re-validates against a record that changed under it before it stops rebasing and
-    ///     writes anyway. A ceiling is needed at all because the alternative is a save that spins for as long as any
-    ///     other writer keeps touching this file.
+    ///     How many times a save re-validates against a record that changed under it before it gives up and refuses.
+    ///     A ceiling is needed at all because the alternative is a save that spins for as long as any other writer
+    ///     keeps touching this file.
     /// </summary>
     private const int MaxSaveAttempts = 3;
 
@@ -50,30 +49,31 @@ internal sealed class NodeSettingsAdministrationService(
         return ToAgenticView(settings);
     }
 
-    public async Task<NodeSettingsAdministrationResult> SaveTrustedMergedAsync(StoredNodeSettings settings,
+    public async Task<NodeSettingsAdministrationResult> SaveTrustedMergedAsync(Func<StoredNodeSettings, StoredNodeSettings> merge,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(merge);
         var current = await GetTrustedSettingsAsync(cancellationToken).ConfigureAwait(false);
 
-        // LOCAL-ONLY members ride along from the stored record instead of from the caller. MachineKey is minted
-        // node-side by IMachineKeyProvider and is deliberately absent from the wire DTO, so a caller that builds a
+        // The MERGE, not a merged record: the wire DTO looks whole but is optional field by optional field, so the
+        // caller resolves every omitted one from the record it is handed. Handing it a pre-validation snapshot made a
+        // request that changes one knob write that snapshot's value back over every field a sibling writer had
+        // changed in the window — a tool-capable-model registration, a default-model selection. Re-applied to the
+        // write-time record below, an omitted field keeps what is actually stored.
+        //
+        // LOCAL-ONLY members ride along from that record instead of from the caller. MachineKey is minted node-side by
+        // IMachineKeyProvider and is deliberately absent from the wire DTO, so a caller that builds a
         // StoredNodeSettings out of a request has no value to supply and saving its record verbatim would erase the
         // key. That is silent data loss: the next start mints a fresh key, and every frozen inference profile — keyed
-        // by machine key — is orphaned while still reading as frozen.
-        //
-        // Kept beside the persistence-boundary guard in ValidateAndSaveAsync rather than replaced by it: that one
-        // owns the key that is finally WRITTEN, this one owns the record this call VALIDATES and returns, including
-        // on the rejection paths that never reach a write.
-        var merged = settings with
-        {
-            MachineKey = current.MachineKey
-        };
-
-        // Whole-record by design, so the projection deliberately IGNORES the write-time record: the wire DTO carries
-        // every field, and the endpoint's contract is "this record replaces the stored one". Only MachineKey is
-        // refreshed from the latest record, by the shared write below.
-        return await ValidateAndSaveAsync(_ => merged, current, cancellationToken).ConfigureAwait(false);
+        // by machine key — is orphaned while still reading as frozen. Applied here rather than only at the
+        // persistence boundary in ValidateAndSaveAsync so the record this call VALIDATES and RETURNS carries the key
+        // too, including on the rejection paths that never reach a write.
+        return await ValidateAndSaveAsync(record => merge(record) with
+            {
+                MachineKey = record.MachineKey
+            },
+            current,
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<NodeSettingsAdministrationResult> ApplyAgenticPatchAsync(NodeSettingsAgenticPatch patch,
@@ -163,7 +163,9 @@ internal sealed class NodeSettingsAdministrationService(
     ///         patch that validated "keep model warm on" against a stored warm model, rebased onto a sibling write
     ///         that cleared that model, persists keep-warm enabled with nothing selected. So the mutation compares the
     ///         write-time record with the one that was validated and declines to project on a difference; this method
-    ///         then reloads, re-validates and tries again, up to <see cref="MaxSaveAttempts" /> times.
+    ///         then reloads, re-validates and tries again, up to <see cref="MaxSaveAttempts" /> times. After that many
+    ///         conflicts in a row the save is REFUSED and the caller gets a conflict result: nothing is ever written
+    ///         that was not validated against the record it landed on.
     ///     </para>
     ///     <para>
     ///         <paramref name="apply" /> is therefore invoked several times per save, and a caller that captures a
@@ -178,7 +180,6 @@ internal sealed class NodeSettingsAdministrationService(
         var validatedAgainst = current;
         for (var attempt = 1; attempt <= MaxSaveAttempts; attempt++)
         {
-            var isFinalAttempt = attempt >= MaxSaveAttempts;
             var settings = apply(validatedAgainst);
 
             // Enforcement point 1 of the node-locality gate, on BOTH save paths (the endpoint's merged save and the
@@ -218,13 +219,14 @@ internal sealed class NodeSettingsAdministrationService(
             var persisted = await _store.UpdateAsync(latest =>
                                         {
                                             changedUnderTheValidation = !SameExceptMachineKey(latest, validatedAgainst);
-                                            if (changedUnderTheValidation && !isFinalAttempt)
+                                            if (changedUnderTheValidation)
                                             {
                                                 // Nothing may be projected onto a record this attempt never
-                                                // validated. Returning `latest` unchanged still costs one redundant
-                                                // write, because UpdateAsync always persists — that is the price of
-                                                // reading the write-time record under the store's own lock, and the
-                                                // file it rewrites is byte-identical.
+                                                // validated — on the last attempt as much as on the first. Returning
+                                                // `latest` unchanged still costs one redundant write, because
+                                                // UpdateAsync always persists — that is the price of reading the
+                                                // write-time record under the store's own lock, and the file it
+                                                // rewrites is byte-identical.
                                                 return latest;
                                             }
 
@@ -236,28 +238,22 @@ internal sealed class NodeSettingsAdministrationService(
                                         cancellationToken)
                                        .ConfigureAwait(false);
 
-            if (changedUnderTheValidation && !isFinalAttempt)
+            if (changedUnderTheValidation)
             {
                 validatedAgainst = await GetTrustedSettingsAsync(cancellationToken).ConfigureAwait(false);
                 continue;
-            }
-
-            if (changedUnderTheValidation)
-            {
-                // ponytail: the ceiling is a fixed attempt count, and reaching it writes the rebased record without
-                // re-validating it — best-effort, exactly the behaviour every attempt had before the retry existed.
-                // A version/etag on INodeSettingsStore.UpdateAsync would be the upgrade if this ever loses a real race.
-                _logger.LogWarning(
-                    "Node settings changed under this save on all {AttemptLimit} attempts. The update was written against the write-time record without being re-validated against it.",
-                    MaxSaveAttempts);
             }
 
             await TryReportCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
             return NodeSettingsAdministrationResult.Saved(persisted);
         }
 
-        // Not reachable: the final attempt never re-validates, so it always falls through to the write and returns.
-        throw new UnreachableException("The final node settings save attempt always writes and returns.");
+        // ponytail: the ceiling is a fixed attempt count, and reaching it refuses the save rather than serializing
+        // the writers. A version/etag on INodeSettingsStore.UpdateAsync would be the upgrade if a real workload ever
+        // hits this.
+        _logger.LogWarning("Node settings changed under this save on all {AttemptLimit} attempts. Nothing was written.",
+            MaxSaveAttempts);
+        return NodeSettingsAdministrationResult.Conflict(validatedAgainst);
     }
 
     // Whether the write-time record still is the one that was validated. MachineKey is excluded because the projection
