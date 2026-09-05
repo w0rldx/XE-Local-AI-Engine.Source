@@ -602,7 +602,27 @@ public sealed record DevWorkflowNodeRunDetailResponse(
     ///     waited for nothing); null when no turn went through the local-runtime warmer at all — a cloud-served node,
     ///     or a row written before the column existed — which is unmeasured, not a proven warm start.
     /// </summary>
-    long? ModelReadinessMs);
+    long? ModelReadinessMs,
+
+    /// <summary>
+    ///     Machine-global free VRAM in bytes as the capacity gate measured it just before the most recent SUCCESSFUL
+    ///     load of the model in <see cref="ServedModelName" /> — not necessarily a load this run caused.
+    ///     <para>
+    ///         <b>A warm run reports the EARLIER load's figures.</b> <see cref="ModelReadinessMs" /> tells the two
+    ///         apart: zero there means the warmer waited for nothing, so the load these bytes describe predates the
+    ///         run and the box may have looked different by the time it started. Null here means nobody measured — a
+    ///         remote or Ollama model, a model the node never loaded itself, a host with no readable global-free
+    ///         figure, or a row written before the column existed.
+    ///     </para>
+    /// </summary>
+    long? VramFreeAtLoadBytes,
+
+    /// <summary>
+    ///     The GPU bytes the capacity gate RESERVED for that same load's process. Zero is a real answer for a
+    ///     CPU-placed allocation; null carries the same "nobody measured" meaning as
+    ///     <see cref="VramFreeAtLoadBytes" />, and the same warm-run caveat applies.
+    /// </summary>
+    long? VramAdmittedBytes);
 
 /// <summary>
 ///     Which rule text actually applied, by content hash. Names the document without copying its body, so the audit

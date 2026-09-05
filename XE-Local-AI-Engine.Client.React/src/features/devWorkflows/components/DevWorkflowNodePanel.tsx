@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { DevWorkflowAgentNodePanel } from "@/features/devWorkflows/components/DevWorkflowAgentNodePanel";
 import { DevWorkflowDevTaskNodePanel } from "@/features/devWorkflows/components/DevWorkflowDevTaskNodePanel";
@@ -317,6 +318,11 @@ function DevWorkflowNodeCostSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDe
 	// How much of those turns was the local runtime launching and loading rather than generating. Zero means the
 	// model was already resident; null means no turn went through the warmer (cloud-served, or a pre-column row).
 	const readinessMs = nodeRun.modelReadinessMs ?? null;
+	// A reading of the BOX at one moment, not a cost of this attempt: what the capacity gate saw free, and what it
+	// reserved, at the most recent successful load of the serving model. A warm run inherits that earlier load's
+	// figures — readiness above says which. Zero admitted is a real answer, a CPU placement, not an absence.
+	const vramFreeAtLoad = nodeRun.vramFreeAtLoadBytes ?? null;
+	const vramAdmitted = nodeRun.vramAdmittedBytes ?? null;
 	const outsideTurnMs = ranFor != null && turnMs != null ? Math.max(0, ranFor - turnMs) : null;
 	const queuedFor = nodeRun.queuedAtUtc != null && nodeRun.startedAtUtc != null ? nodeRun.startedAtUtc - nodeRun.queuedAtUtc : null;
 
@@ -331,6 +337,8 @@ function DevWorkflowNodeCostSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDe
 		nodeRun.workSessionSteps != null ||
 		turnMs != null ||
 		readinessMs != null ||
+		vramFreeAtLoad != null ||
+		vramAdmitted != null ||
 		nodeRun.servedModelName != null ||
 		toolNames.length > 0;
 	if (!measured && !route && queuedFor === null && ranFor === null) {
@@ -339,6 +347,8 @@ function DevWorkflowNodeCostSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDe
 
 	const count = (value?: number | null) => (value == null ? undefined : value.toLocaleString());
 	const duration = (value: number | null) => (value == null ? undefined : formatDevWorkflowDuration(value));
+	// Zero bytes must still render — a CPU-placed load reserved none — so the absent case is the null one only.
+	const bytes = (value: number | null) => (value == null ? undefined : formatBytesAsGb(value));
 
 	return (
 		<SectionCard title={t("pages.devWorkflows.node.cost.title", "Cost")} gap={4} data-testid="dev-workflow-node-cost">
@@ -408,6 +418,16 @@ function DevWorkflowNodeCostSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDe
 				label={t("pages.devWorkflows.node.cost.modelReadiness", "Model readiness")}
 				value={duration(readinessMs)}
 				testId="dev-workflow-node-cost-model-readiness"
+			/>
+			<CostRow
+				label={t("pages.devWorkflows.node.cost.vramFreeAtLoad", "Free VRAM at load")}
+				value={bytes(vramFreeAtLoad)}
+				testId="dev-workflow-node-cost-vram-free"
+			/>
+			<CostRow
+				label={t("pages.devWorkflows.node.cost.vramAdmitted", "VRAM admitted")}
+				value={bytes(vramAdmitted)}
+				testId="dev-workflow-node-cost-vram-admitted"
 			/>
 			<CostRow
 				label={t("pages.devWorkflows.node.cost.outsideTurnTime", "Outside the turns")}

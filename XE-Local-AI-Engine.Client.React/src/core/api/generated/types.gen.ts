@@ -3633,6 +3633,8 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeR
 	workSessionSteps?: number | null;
 	failureClassGroup?: string | null;
 	modelReadinessMs?: number | null;
+	vramFreeAtLoadBytes?: number | null;
+	vramAdmittedBytes?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppliedRuleSetResponse = {

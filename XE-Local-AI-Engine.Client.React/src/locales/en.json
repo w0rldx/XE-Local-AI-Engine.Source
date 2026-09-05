@@ -5277,6 +5277,8 @@
 					"ranFor": "Ran for",
 					"turnTime": "Agent turns",
 					"modelReadiness": "Model readiness",
+					"vramFreeAtLoad": "Free VRAM at load",
+					"vramAdmitted": "VRAM admitted",
 					"outsideTurnTime": "Outside the turns",
 					"toolNames": "Tools called",
 					"toolNamesTruncated": "…and more",

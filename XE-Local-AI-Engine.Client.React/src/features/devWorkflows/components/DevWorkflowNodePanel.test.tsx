@@ -780,7 +780,7 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.queryByTestId("dev-workflow-node-rule-sets")).toBeNull();
 	});
 
-	it("renders the cost section with the thirteen columns, the tool chips and the route", () => {
+	it("renders the cost section with the fifteen columns, the tool chips and the route", () => {
 		renderPanel(
 			devWorkflowNodeRunDetail({
 				status: "Succeeded",
@@ -797,6 +797,8 @@ describe("DevWorkflowNodePanel", () => {
 				toolNames: ["read_document", "search_web", "…"],
 				agentTurnMs: 40_000,
 				modelReadinessMs: 12_000,
+				vramFreeAtLoadBytes: 7_340_032_000,
+				vramAdmittedBytes: 5_368_709_120,
 				servedModelName: "qwen3-27b-instruct-q4",
 				workSessionSteps: 3,
 				route: { satisfied: ["approval"], dead: ["fallback"], waived: ["excused-leaf"], gateAnswer: "Approve", truncated: true },
@@ -818,6 +820,9 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.getByTestId("dev-workflow-node-cost-turn-time").textContent).toBe("40s");
 		// Part OF the agent turns, not beside them: the wait for llama-server to launch and load the model.
 		expect(screen.getByTestId("dev-workflow-node-cost-model-readiness").textContent).toBe("12s");
+		// A reading of the box at the serving model's last load, not a cost of this attempt.
+		expect(screen.getByTestId("dev-workflow-node-cost-vram-free").textContent).toBe("6.8 GB");
+		expect(screen.getByTestId("dev-workflow-node-cost-vram-admitted").textContent).toBe("5.0 GB");
 		expect(screen.getByTestId("dev-workflow-node-cost-outside-turn-time").textContent).toBe("20s");
 
 		// The estimate is suppressed while the real count is present: two numbers for one quantity invite addition.
@@ -858,6 +863,33 @@ describe("DevWorkflowNodePanel", () => {
 
 		expect(screen.getByTestId("dev-workflow-node-cost-turn-time").textContent).toBe("40s");
 		expect(screen.queryByTestId("dev-workflow-node-cost-model-readiness")).toBeNull();
+	});
+
+	// Nothing measured the box: a remote or Ollama model, or a model this node never loaded itself. Rows that are
+	// absent say that; a "0.0 GB" row would claim the gate saw an empty device.
+	it("draws no VRAM rows when nothing measured the box at load", () => {
+		renderPanel(devWorkflowNodeRunDetail({ status: "Succeeded", agentTurnMs: 40_000, vramFreeAtLoadBytes: null, vramAdmittedBytes: null }));
+
+		expect(screen.queryByTestId("dev-workflow-node-cost-vram-free")).toBeNull();
+		expect(screen.queryByTestId("dev-workflow-node-cost-vram-admitted")).toBeNull();
+	});
+
+	// Zero admitted bytes is a CPU placement, which is a real answer and must not read as "nobody measured".
+	it("renders zero admitted VRAM as a value rather than hiding the row", () => {
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				status: "Succeeded",
+				queuedAtUtc: null,
+				startedAtUtc: null,
+				completedAtUtc: null,
+				vramFreeAtLoadBytes: 7_340_032_000,
+				vramAdmittedBytes: 0,
+			}),
+		);
+
+		expect(screen.getByTestId("dev-workflow-node-cost-vram-admitted").textContent).toBe("0.0 GB");
+		// The pair alone is still a measurement, so the section must not fall back to "nothing was recorded".
+		expect(screen.queryByTestId("dev-workflow-node-cost-none")).toBeNull();
 	});
 
 	// Readiness alone is still a measurement, so the section must show the row rather than "nothing was recorded".

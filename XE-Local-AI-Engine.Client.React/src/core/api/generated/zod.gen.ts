@@ -4398,6 +4398,8 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNod
 		.nullish(),
 	failureClassGroup: z.string().nullish(),
 	modelReadinessMs: z.int().nullish(),
+	vramFreeAtLoadBytes: z.int().nullish(),
+	vramAdmittedBytes: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunRequest = z.record(z.string(), z.never());
