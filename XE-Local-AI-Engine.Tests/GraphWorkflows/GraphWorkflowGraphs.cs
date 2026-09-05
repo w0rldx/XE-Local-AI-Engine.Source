@@ -254,4 +254,158 @@ internal static class GraphWorkflowGraphs
                                     ]
                                   }
                                   """;
+
+    /// <summary>
+    ///     A linear run of nothing but inline kinds, so a whole run walks to <c>Completed</c> in a build with no lane.
+    ///     One layer per tick is the property it exists to make visible.
+    /// </summary>
+    public const string InlineLinear = """
+                                       {
+                                         "schemaVersion": 1,
+                                         "nodes": [
+                                           { "key": "start", "kind": "Start" },
+                                           { "key": "middle", "kind": "Parallel", "config": {} },
+                                           { "key": "done", "kind": "End", "config": { "outcome": "completed", "resultPath": "input.output" } }
+                                         ],
+                                         "edges": [
+                                           { "key": "e1", "from": "start", "to": "middle" },
+                                           { "key": "e2", "from": "middle", "to": "done" }
+                                         ]
+                                       }
+                                       """;
+
+    /// <summary>
+    ///     A <c>Condition</c> routing on the RUN INPUT carried through <c>Start</c>'s output document, with the branch
+    ///     not taken cascading a skip one node further. Inline throughout, so the routing is observable in a build whose
+    ///     only executor is the inline one.
+    /// </summary>
+    public const string InlineBranch = """
+                                       {
+                                         "schemaVersion": 1,
+                                         "nodes": [
+                                           { "key": "start", "kind": "Start" },
+                                           { "key": "check", "kind": "Condition", "config": { "path": "output.input.requiresReview" } },
+                                           { "key": "yes", "kind": "Parallel", "config": {} },
+                                           { "key": "no", "kind": "Parallel", "config": {} },
+                                           { "key": "after", "kind": "Parallel", "config": {} },
+                                           { "key": "done", "kind": "End", "joinPolicy": "Any", "config": { "outcome": "completed" } }
+                                         ],
+                                         "edges": [
+                                           { "key": "e1", "from": "start", "to": "check" },
+                                           { "key": "e2", "from": "check", "to": "yes", "label": "yes", "condition": { "op": "eq", "value": true } },
+                                           { "key": "e3", "from": "check", "to": "no", "label": "no", "condition": { "op": "ne", "value": true } },
+                                           { "key": "e4", "from": "yes", "to": "done" },
+                                           { "key": "e5", "from": "no", "to": "after" },
+                                           { "key": "e6", "from": "after", "to": "done" }
+                                         ]
+                                       }
+                                       """;
+
+    /// <summary>
+    ///     An inline fan-out whose two branches are of DIFFERENT lengths, which is what makes an <c>All</c> join's wait
+    ///     observable: the short branch lands a tick before the long one, and the join must not proceed on it.
+    /// </summary>
+    public const string InlineJoinAll = """
+                                        {
+                                          "schemaVersion": 1,
+                                          "nodes": [
+                                            { "key": "start", "kind": "Start" },
+                                            { "key": "fanout", "kind": "Parallel", "config": {} },
+                                            { "key": "fast", "kind": "Parallel", "config": {} },
+                                            { "key": "slow", "kind": "Parallel", "config": {} },
+                                            { "key": "slower", "kind": "Parallel", "config": {} },
+                                            { "key": "merge", "kind": "Join", "config": {} },
+                                            { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                          ],
+                                          "edges": [
+                                            { "key": "e1", "from": "start", "to": "fanout" },
+                                            { "key": "e2", "from": "fanout", "to": "fast" },
+                                            { "key": "e3", "from": "fanout", "to": "slow" },
+                                            { "key": "e4", "from": "slow", "to": "slower" },
+                                            { "key": "e5", "from": "fast", "to": "merge" },
+                                            { "key": "e6", "from": "slower", "to": "merge" },
+                                            { "key": "e7", "from": "merge", "to": "done" }
+                                          ]
+                                        }
+                                        """;
+
+    /// <summary>
+    ///     The same shape merged under <c>Any</c>, where one branch arriving is the whole contract — and where a run
+    ///     input that kills BOTH branches leaves the join with nothing that can ever arrive.
+    /// </summary>
+    public const string InlineJoinAny = """
+                                        {
+                                          "schemaVersion": 1,
+                                          "nodes": [
+                                            { "key": "start", "kind": "Start" },
+                                            { "key": "check", "kind": "Condition", "config": { "path": "output.input.route" } },
+                                            { "key": "left", "kind": "Parallel", "config": {} },
+                                            { "key": "right", "kind": "Parallel", "config": {} },
+                                            { "key": "merge", "kind": "Join", "joinPolicy": "Any", "config": {} },
+                                            { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                          ],
+                                          "edges": [
+                                            { "key": "e1", "from": "start", "to": "check" },
+                                            { "key": "e2", "from": "check", "to": "left", "label": "left", "condition": { "op": "eq", "value": "left" } },
+                                            { "key": "e3", "from": "check", "to": "right", "label": "right", "condition": { "op": "eq", "value": "right" } },
+                                            { "key": "e4", "from": "left", "to": "merge" },
+                                            { "key": "e5", "from": "right", "to": "merge" },
+                                            { "key": "e6", "from": "merge", "to": "done" }
+                                          ]
+                                        }
+                                        """;
+
+    /// <summary>
+    ///     A single inline work node declaring three attempts, so a retry has budget to spend and the run-wide cap has
+    ///     something to refuse.
+    /// </summary>
+    public const string InlineRetryable = """
+                                          {
+                                            "schemaVersion": 1,
+                                            "nodes": [
+                                              { "key": "start", "kind": "Start" },
+                                              { "key": "work", "kind": "Parallel", "maxAttempts": 3, "config": {} },
+                                              { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                            ],
+                                            "edges": [
+                                              { "key": "e1", "from": "start", "to": "work" },
+                                              { "key": "e2", "from": "work", "to": "done" }
+                                            ]
+                                          }
+                                          """;
+
+    /// <summary>The same shape with the shipped single-attempt default, so a failure has nowhere to go.</summary>
+    public const string InlineSingleAttempt = """
+                                              {
+                                                "schemaVersion": 1,
+                                                "nodes": [
+                                                  { "key": "start", "kind": "Start" },
+                                                  { "key": "work", "kind": "Parallel", "config": {} },
+                                                  { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                ],
+                                                "edges": [
+                                                  { "key": "e1", "from": "start", "to": "work" },
+                                                  { "key": "e2", "from": "work", "to": "done" }
+                                                ]
+                                              }
+                                              """;
+
+    /// <summary>
+    ///     An <c>Agent</c> node in an otherwise inline graph. This build has no lane for that kind, so the node run
+    ///     fails <c>ValidationFailed</c> at dispatch — the absent case, asserted rather than assumed.
+    /// </summary>
+    public const string InlineWithAgent = """
+                                          {
+                                            "schemaVersion": 1,
+                                            "nodes": [
+                                              { "key": "start", "kind": "Start" },
+                                              { "key": "analyze", "kind": "Agent", "config": { "instructions": "Judge it." } },
+                                              { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                            ],
+                                            "edges": [
+                                              { "key": "e1", "from": "start", "to": "analyze" },
+                                              { "key": "e2", "from": "analyze", "to": "done" }
+                                            ]
+                                          }
+                                          """;
 }
