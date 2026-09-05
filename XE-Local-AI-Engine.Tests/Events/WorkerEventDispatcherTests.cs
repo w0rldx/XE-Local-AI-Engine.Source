@@ -369,6 +369,8 @@ public sealed class WorkerEventDispatcherTests
         await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // The second assignment passes the accept-guard, then blocks on the slot the running first assignment holds.
+        // The guard is SYNCHRONOUS and runs before the returned task exists, and the slot wait is the first and only
+        // await on the plain path — so a task that exists and is still parked is parked there and nowhere else.
         var secondDispatch = dispatcher.DispatchInvocationAssignedV2Async(new InvocationAssignedEnvelope
         {
             StorageMode = "PlainSync",
@@ -376,6 +378,13 @@ public sealed class WorkerEventDispatcherTests
             Encrypted = null
         });
         await AssertEx.StaysIncompleteAsync(secondDispatch, "The second assignment must be parked on the slot the first holds.");
+
+        // The dispatcher has no signal for "a dispatch entered the slot wait" — the semaphore is private and the only
+        // marker in between is a log line — so the live invocation is the observable that separates BEFORE the slot
+        // from AFTER it: taking the slot is what publishes an invocation, and the first one is still the published one.
+        AssertEx.Equal(first.InvocationId,
+            AssertEx.NotNull(dispatcher.CurrentInvocation, "The first assignment holds the slot and publishes its invocation.").InvocationId,
+            "The second assignment must still be waiting for the slot, not past it.");
 
         dispatcher.StopAcceptingRemoteInvocations();
 

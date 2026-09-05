@@ -235,10 +235,10 @@ public sealed class TrainingExclusivityTests
         using var held = AssertEx.NotNull(gate.TryBeginExclusive(GpuWorkKind.Export), "Something else already holds the gate.");
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
-        _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.TrainingRun);
+        var peeked = PeekSignal(runs, TrainingWorkKind.TrainingRun);
 
         using var queue = BuildRunQueue(runs, gate);
-        await RunBrieflyAsync(queue);
+        await RunUntilAsync(peeked.Task, queue);
 
         _ = await runs.DidNotReceiveWithAnyArgs().ClaimNextAsync(default(TrainingWorkKind), default);
     }
@@ -248,13 +248,13 @@ public sealed class TrainingExclusivityTests
     {
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
-        _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.TrainingRun);
+        var peeked = PeekSignal(runs, TrainingWorkKind.TrainingRun);
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         // The lease refuses while ANY llama-server process is running or spawning — the eject-first gate.
         _ = supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>()).Returns((ILlamaServerRuntimeMutationLease?)null);
 
         using var queue = BuildRunQueue(runs, new GpuWorkGate(), supervisor: supervisor);
-        await RunBrieflyAsync(queue);
+        await RunUntilAsync(peeked.Task, queue);
 
         _ = await runs.DidNotReceiveWithAnyArgs().ClaimNextAsync(default(TrainingWorkKind), default);
     }
@@ -313,10 +313,10 @@ public sealed class TrainingExclusivityTests
         using var held = AssertEx.NotNull(gate.TryBeginExclusive(GpuWorkKind.TrainingRun), "A training run already holds the gate.");
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
-        _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.EvaluationRun);
+        var peeked = PeekSignal(runs, TrainingWorkKind.EvaluationRun);
 
         using var queue = BuildRunQueue(runs, gate);
-        await RunBrieflyAsync(queue);
+        await RunUntilAsync(peeked.Task, queue);
 
         // Both kinds take the same exclusive hold, so an evaluation cannot start beside a run either.
         _ = await runs.DidNotReceiveWithAnyArgs().ClaimNextAsync(default(TrainingWorkKind), default);
@@ -328,10 +328,10 @@ public sealed class TrainingExclusivityTests
         var gate = new GpuWorkGate();
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
-        _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns((TrainingWorkKind?)null);
+        var peeked = PeekSignal(runs, kind: null);
 
         using var queue = BuildRunQueue(runs, gate);
-        await RunBrieflyAsync(queue);
+        await RunUntilAsync(peeked.Task, queue);
 
         // Holding the gate across the idle poll would starve generation, benchmarks and image jobs on a quiet node.
         AssertEx.Null(gate.ExclusiveKind, "An empty queue must not leave the gate held.");
@@ -417,18 +417,36 @@ public sealed class TrainingExclusivityTests
     }
 
     /// <summary>
-    ///     Starts each queue, lets its loop run as far as it can, and stops it again. Only for the callers asserting a
-    ///     REFUSAL: StopAsync cancels and awaits the loop, so the refusal is decided by the gate rather than by how long
-    ///     a sleep happened to last. A caller asserting that a claim DID happen must use
-    ///     <see cref="RunUntilAsync" /> and name the signal it is waiting for.
+    ///     Starts each queue, lets its loop run as far as it can, and stops it again. Kept only for the two
+    ///     shared-queue refusals, whose loops have no peek: they go recovery to gate to claim, so a settle is all there
+    ///     is between "the loop started" and "the claim did not happen". Every caller whose loop DOES announce where it
+    ///     got — a peek, or the claim itself — uses <see cref="RunUntilAsync" /> and names that signal instead.
     /// </summary>
     private static Task RunBrieflyAsync(params BackgroundService[] queues) =>
         RunUntilAsync(reached: null, queues);
 
     /// <summary>
+    ///     Answers <paramref name="kind" /> from the run store's peek, and completes when the loop asks for it. The
+    ///     peek is the FIRST thing the run loop does and every exclusivity decision is made on the way back from it, so
+    ///     this is the signal a refusal assertion needs: without it, "no claim happened" is also what a loop that never
+    ///     ran looks like.
+    /// </summary>
+    private static TaskCompletionSource PeekSignal(ITrainingRunStore runs, TrainingWorkKind? kind)
+    {
+        var peeked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            peeked.TrySetResult();
+            return kind;
+        });
+
+        return peeked;
+    }
+
+    /// <summary>
     ///     Starts each queue, waits for <paramref name="reached" /> — a completion the queue's own collaborator sets
     ///     when the loop gets where the test is asserting it gets — and stops them again. With no signal it settles the
-    ///     scheduler instead, which is all a refusal assertion needs.
+    ///     scheduler instead, which proves only that the loop had the chance to run.
     /// </summary>
     private static async Task RunUntilAsync(Task? reached, params BackgroundService[] queues)
     {
