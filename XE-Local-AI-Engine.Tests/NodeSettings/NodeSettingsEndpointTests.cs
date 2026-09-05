@@ -21,12 +21,10 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public async Task GetNodeSettings_ReturnsStoredSettings()
     {
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
-        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
-                         .Returns(new StoredNodeSettings
-                         {
-                             MaxMessageRequestTimeoutSeconds = 120
-                         });
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            MaxMessageRequestTimeoutSeconds = 120
+        });
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -44,7 +42,7 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public async Task SaveNodeSettings_WhenValid_SavesAndReportsCapabilities()
     {
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        var nodeSettingsStore = NewSettingsStore();
         var capabilityReporter = Substitute.For<ICapabilityReporter>();
         capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
         await using var factory = CreateFactory(nodeSettingsStore, capabilityReporter);
@@ -69,12 +67,10 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public async Task SaveNodeSettings_WhenValid_PreservesTheStoredMachineKey()
     {
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
-        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
-                         .Returns(new StoredNodeSettings
-                         {
-                             MachineKey = "abc"
-                         });
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            MachineKey = "abc"
+        });
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -96,7 +92,7 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public async Task SaveNodeSettings_WhenOutOfRange_ReturnsValidationProblem()
     {
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        var nodeSettingsStore = NewSettingsStore();
         var capabilityReporter = Substitute.For<ICapabilityReporter>();
         await using var factory = CreateFactory(nodeSettingsStore, capabilityReporter);
         using var client = factory.CreateClient();
@@ -180,17 +176,16 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public async Task SaveNodeSettings_WhenOmittingOptionalFields_KeepsCurrentStoredValues()
     {
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
-        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
-                         .Returns(new StoredNodeSettings
-                         {
-                             MaxMessageRequestTimeoutSeconds = 300,
-                             RecommendedLlamaCppTag = "b9692",
-                             OllamaEndpoint = "http://127.0.0.1:11434",
-                             KeepModelWarmEnabled = true,
-                             KeepModelWarmModelName = "keep-me-warm",
-                             KeepModelWarmIntervalSeconds = 180
-                         });
+        var stored = new StoredNodeSettings
+        {
+            MaxMessageRequestTimeoutSeconds = 300,
+            RecommendedLlamaCppTag = "b9692",
+            OllamaEndpoint = "http://127.0.0.1:11434",
+            KeepModelWarmEnabled = true,
+            KeepModelWarmModelName = "keep-me-warm",
+            KeepModelWarmIntervalSeconds = 180
+        };
+        var nodeSettingsStore = NewSettingsStore(stored);
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -200,20 +195,22 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        // Against the record the store HOLDS: the save re-applies its projection to the write-time record, and
+        // declines to project at all onto a record that is not the one it validated.
         await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
-                Persisted(mutate).MaxMessageRequestTimeoutSeconds == 300
-                && Persisted(mutate).RecommendedLlamaCppTag == "b9692"
-                && Persisted(mutate).OllamaEndpoint == "http://127.0.0.1:11434"
-                && Persisted(mutate).KeepModelWarmEnabled == true
-                && Persisted(mutate).KeepModelWarmModelName == "keep-me-warm"
-                && Persisted(mutate).KeepModelWarmIntervalSeconds == 180),
+                Persisted(mutate, stored).MaxMessageRequestTimeoutSeconds == 300
+                && Persisted(mutate, stored).RecommendedLlamaCppTag == "b9692"
+                && Persisted(mutate, stored).OllamaEndpoint == "http://127.0.0.1:11434"
+                && Persisted(mutate, stored).KeepModelWarmEnabled == true
+                && Persisted(mutate, stored).KeepModelWarmModelName == "keep-me-warm"
+                && Persisted(mutate, stored).KeepModelWarmIntervalSeconds == 180),
             Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task SaveNodeSettings_WhenRecommendedTagMalformed_ReturnsValidationProblem()
     {
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        var nodeSettingsStore = NewSettingsStore();
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -232,7 +229,7 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public async Task SaveNodeSettings_WhenOllamaEndpointNotAUrl_ReturnsValidationProblem()
     {
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        var nodeSettingsStore = NewSettingsStore();
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -251,7 +248,7 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public async Task SaveNodeSettings_WhenLlamaMaxLoadedProcessesOutOfRange_ReturnsValidationProblem()
     {
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        var nodeSettingsStore = NewSettingsStore();
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -270,7 +267,7 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public async Task SaveNodeSettings_WhenKeepModelWarmIntervalOutOfRange_ReturnsValidationProblem()
     {
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        var nodeSettingsStore = NewSettingsStore();
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -288,8 +285,7 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public async Task SaveNodeSettings_WhenKeepModelWarmEnabledWithoutModel_ReturnsValidationProblem()
     {
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
-        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings());
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -307,14 +303,12 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public async Task SaveNodeSettings_WhenKeepModelWarmEnabledWithOneProcessSlot_ReturnsValidationProblem()
     {
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
-        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
-                         .Returns(new StoredNodeSettings
-                         {
-                             KeepModelWarmEnabled = true,
-                             KeepModelWarmModelName = "model-a",
-                             LlamaMaxLoadedProcesses = 3
-                         });
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            KeepModelWarmEnabled = true,
+            KeepModelWarmModelName = "model-a",
+            LlamaMaxLoadedProcesses = 3
+        });
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -332,15 +326,13 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public async Task SaveNodeSettings_WhenKeepModelWarmIntervalIsNotBelowMergedIdleTtl_ReturnsValidationProblem()
     {
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
-        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
-                         .Returns(new StoredNodeSettings
-                         {
-                             KeepModelWarmEnabled = true,
-                             KeepModelWarmModelName = "model-a",
-                             KeepModelWarmIntervalSeconds = 300,
-                             LlamaIdleTimeToLiveSeconds = 900
-                         });
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            KeepModelWarmEnabled = true,
+            KeepModelWarmModelName = "model-a",
+            KeepModelWarmIntervalSeconds = 300,
+            LlamaIdleTimeToLiveSeconds = 900
+        });
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -358,15 +350,13 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public async Task SaveNodeSettings_WhenEffectiveRuntimeProcessCapIsOne_ReturnsValidationProblem()
     {
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
-        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
-                         .Returns(new StoredNodeSettings
-                         {
-                             KeepModelWarmEnabled = true,
-                             KeepModelWarmModelName = "model-a",
-                             KeepModelWarmIntervalSeconds = 60,
-                             LlamaIdleTimeToLiveSeconds = 900
-                         });
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            KeepModelWarmEnabled = true,
+            KeepModelWarmModelName = "model-a",
+            KeepModelWarmIntervalSeconds = 60,
+            LlamaIdleTimeToLiveSeconds = 900
+        });
         var runtimeSettings = StubNodeRuntimeSettings.Create()
                                                      .WithLlamaMaxLoadedProcesses(1)
                                                      .Build();
@@ -384,15 +374,13 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public async Task SaveNodeSettings_WhenEffectiveRuntimeIdleTtlMatchesInterval_ReturnsValidationProblem()
     {
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
-        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
-                         .Returns(new StoredNodeSettings
-                         {
-                             KeepModelWarmEnabled = true,
-                             KeepModelWarmModelName = "model-a",
-                             KeepModelWarmIntervalSeconds = 300,
-                             LlamaMaxLoadedProcesses = 3
-                         });
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            KeepModelWarmEnabled = true,
+            KeepModelWarmModelName = "model-a",
+            KeepModelWarmIntervalSeconds = 300,
+            LlamaMaxLoadedProcesses = 3
+        });
         var runtimeSettings = StubNodeRuntimeSettings.Create()
                                                      .WithLlamaIdleTimeToLive(TimeSpan.FromSeconds(300))
                                                      .Build();
@@ -413,8 +401,7 @@ public sealed class NodeSettingsEndpointTests
         // The locality rejection must name the request property, the way the capacity rejection names
         // llamaMaxLoadedProcesses. Unbound, it falls to the generic bucket and neither the React select's per-field
         // error nor an API consumer can attribute it.
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
-        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings());
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -460,7 +447,7 @@ public sealed class NodeSettingsEndpointTests
     {
         // A junk KV type must never persist: the launch policy validates it in its constructor, so a stored bad value
         // would fail host build on the next restart instead of degrading.
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        var nodeSettingsStore = NewSettingsStore();
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -478,7 +465,7 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public async Task SaveNodeSettings_WhenKvCacheTypeKnown_Saves()
     {
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        var nodeSettingsStore = NewSettingsStore();
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -499,7 +486,7 @@ public sealed class NodeSettingsEndpointTests
     public async Task SaveNodeSettings_WhenDraftModeWithoutDraftModel_ReturnsValidationProblem()
     {
         // A draft-* speculative mode with no draft model must be rejected at the boundary (would fail chat-server start).
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        var nodeSettingsStore = NewSettingsStore();
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -518,7 +505,7 @@ public sealed class NodeSettingsEndpointTests
     public async Task SaveNodeSettings_WhenNgramModeWithoutDraftModel_Saves()
     {
         // ngram-* modes self-speculate; they need no draft model, so an empty draft-model name is valid.
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        var nodeSettingsStore = NewSettingsStore();
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -538,7 +525,7 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public async Task SaveNodeSettings_WhenDraftModeWithDraftModel_Saves()
     {
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        var nodeSettingsStore = NewSettingsStore();
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -561,13 +548,11 @@ public sealed class NodeSettingsEndpointTests
     {
         // The partial-update edge the boundary validator can't see: a draft-* mode is already stored, and this request
         // (which omits SpeculativeMode) clears the draft model name. The post-merge guard must still reject it.
-        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
-        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
-                         .Returns(new StoredNodeSettings
-                         {
-                             SpeculativeMode = "draft-simple",
-                             SpeculativeDraftModelName = "my-draft"
-                         });
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            SpeculativeMode = "draft-simple",
+            SpeculativeDraftModelName = "my-draft"
+        });
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -789,4 +774,20 @@ public sealed class NodeSettingsEndpointTests
     /// </summary>
     private static StoredNodeSettings Persisted(Func<StoredNodeSettings, StoredNodeSettings> mutate, StoredNodeSettings? latest = null) =>
         mutate(latest ?? new StoredNodeSettings());
+
+    /// <summary>
+    ///     A substitute store holding <paramref name="current" />, wired to honour
+    ///     <see cref="INodeSettingsStore.UpdateAsync" />'s contract: it runs the mutation against the record it holds
+    ///     and RETURNS what it persisted, which is the record the save endpoint renders its response from.
+    ///     NSubstitute's own auto-value for that call is a null record, which no real store may return.
+    /// </summary>
+    private static INodeSettingsStore NewSettingsStore(StoredNodeSettings? current = null)
+    {
+        var settings = current ?? new StoredNodeSettings();
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(settings);
+        store.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+             .Returns(call => Task.FromResult(call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(settings)));
+        return store;
+    }
 }
