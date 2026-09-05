@@ -245,8 +245,8 @@ public sealed class KeepModelWarmBackgroundServiceTests
             NullLogger<KeepModelWarmBackgroundService>.Instance);
 
         await service.StartAsync(CancellationToken.None);
-        await firstSettingsRead.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        using var stopTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await firstSettingsRead.Task.WaitAsync(TestBudgets.Contended);
+        using var stopTimeout = new CancellationTokenSource(TestBudgets.Contended);
 
         await service.StopAsync(stopTimeout.Token);
 

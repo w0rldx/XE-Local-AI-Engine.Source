@@ -32,7 +32,10 @@ public sealed class CreateDevWorkflowRuleSetEndpoint(IDevWorkflowStore store) : 
     {
         Post(LocalApiRoutes.DevelopmentWorkflows.RuleSets);
         Policies(NodeAuthorizationPolicies.Operator);
-        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest));
+        // 201 is what the success path actually sends, so it is declared: the generated client narrows the create
+        // response off this, and a route documented as 400-only would type no success body at all.
+        Description(static builder => builder.Produces<DevWorkflowRuleSetResponse>(StatusCodes.Status201Created)
+                                             .ProducesProblemDetails(StatusCodes.Status400BadRequest));
     }
 
     public override async Task HandleAsync(CreateDevWorkflowRuleSetRequest req, CancellationToken ct)

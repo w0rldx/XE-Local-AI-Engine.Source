@@ -580,6 +580,27 @@ public sealed class DevWorkflowEndpointTests
                        Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    ///     <c>Version</c> is a <c>required</c> member, so an omitted one is refused by the JSON binder rather than by a
+    ///     validator. That is the arm worth pinning: a required-member miss that escapes the binder is a 500, and this
+    ///     endpoint answers the same 400 a bad value gets.
+    /// </summary>
+    [Test]
+    [Arguments("""{"name":"renamed"}""")]
+    [Arguments("""{"version":0,"name":"renamed"}""")]
+    public async Task UpdateDefinition_WithoutAUsableVersion_ReturnsBadRequestAndNeverReachesTheStore(string body)
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "PUT", Definition, body).ConfigureAwait(false);
+        var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, responseBody);
+        AssertEx.Contains(responseBody, "version", StringComparison.OrdinalIgnoreCase, responseBody);
+        await store.DidNotReceive().UpdateDefinitionAsync(Arg.Any<UpdateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>());
+    }
+
     [Test]
     public async Task UpdateDefinition_WhenTheVersionIsStale_ReturnsTheVersionConflict()
     {

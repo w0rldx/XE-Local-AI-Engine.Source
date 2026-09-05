@@ -35,19 +35,23 @@ public sealed class UpdateDevWorkflowWorkItemRequestValidator : Validator<Update
 
         // Omitted means unchanged, so only a PRESENT value is bounded. Blank-but-present is a caller mistake, not a
         // request to clear a title the work item cannot do without.
-        When(static request => request.Title is not null,
-            () => RuleFor(static request => request.Title)
-                  .NotEmpty()
-                  .WithMessage("A work item needs a title.")
-                  .MaximumLength(DevWorkflowRequestLimits.MaxTitleLength)
-                  .WithMessage($"The title is longer than the {DevWorkflowRequestLimits.MaxTitleLength}-character limit."));
+        // Chained `.When(...)`, never the block `When(pred, () => ...)` form: only the chained one sets the
+        // per-component condition FastEndpoints' schema processor reads, and with the block form it saw an
+        // unconditional NotEmpty and emitted this OPTIONAL member as required on the wire. The rules are unchanged —
+        // a condition at the end of a chain covers every validator before it (ApplyConditionTo.AllValidators default).
+        RuleFor(static request => request.Title)
+            .NotEmpty()
+            .WithMessage("A work item needs a title.")
+            .MaximumLength(DevWorkflowRequestLimits.MaxTitleLength)
+            .WithMessage($"The title is longer than the {DevWorkflowRequestLimits.MaxTitleLength}-character limit.")
+            .When(static request => request.Title is not null);
 
-        When(static request => request.Request is not null,
-            () => RuleFor(static request => request.Request)
-                  .NotEmpty()
-                  .WithMessage("A work item needs a request — what is being asked for.")
-                  .MaximumLength(DevWorkflowRequestLimits.MaxRequestLength)
-                  .WithMessage($"The request is longer than the {DevWorkflowRequestLimits.MaxRequestLength}-character limit."));
+        RuleFor(static request => request.Request)
+            .NotEmpty()
+            .WithMessage("A work item needs a request — what is being asked for.")
+            .MaximumLength(DevWorkflowRequestLimits.MaxRequestLength)
+            .WithMessage($"The request is longer than the {DevWorkflowRequestLimits.MaxRequestLength}-character limit.")
+            .When(static request => request.Request is not null);
     }
 }
 
@@ -84,12 +88,16 @@ public sealed class UpdateDevWorkflowDefinitionRequestValidator : Validator<Upda
         // in between, which is the one thing optimistic concurrency exists to refuse.
         RuleFor(static request => request.Version).GreaterThan(0).WithMessage("A definition update must carry the version it was edited from.");
 
-        When(static request => request.Name is not null,
-            () => RuleFor(static request => request.Name)
-                  .NotEmpty()
-                  .WithMessage("A workflow definition needs a name.")
-                  .MaximumLength(DevWorkflowRequestLimits.MaxTitleLength)
-                  .WithMessage($"The name is longer than the {DevWorkflowRequestLimits.MaxTitleLength}-character limit."));
+        // Chained `.When(...)`, never the block `When(pred, () => ...)` form: only the chained one sets the
+        // per-component condition FastEndpoints' schema processor reads, and with the block form it saw an
+        // unconditional NotEmpty and emitted this OPTIONAL member as required on the wire. The rules are unchanged —
+        // a condition at the end of a chain covers every validator before it (ApplyConditionTo.AllValidators default).
+        RuleFor(static request => request.Name)
+            .NotEmpty()
+            .WithMessage("A workflow definition needs a name.")
+            .MaximumLength(DevWorkflowRequestLimits.MaxTitleLength)
+            .WithMessage($"The name is longer than the {DevWorkflowRequestLimits.MaxTitleLength}-character limit.")
+            .When(static request => request.Name is not null);
     }
 }
 

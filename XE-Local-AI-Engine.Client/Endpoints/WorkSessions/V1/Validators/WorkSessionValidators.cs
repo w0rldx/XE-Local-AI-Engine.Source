@@ -49,22 +49,28 @@ public sealed class UpdateWorkSessionRequestValidator : Validator<UpdateWorkSess
 
         // Omitted means unchanged, so only a PRESENT value is bounded. Blank-but-present is a caller mistake, not a
         // request to clear a title the session cannot do without.
-        When(static request => request.Title is not null,
-            () => RuleFor(static request => request.Title)
-                  .NotEmpty()
-                  .WithMessage("A work session needs a title.")
-                  .MaximumLength(WorkSessionRequestLimits.MaxTitleLength)
-                  .WithMessage($"The title is longer than the {WorkSessionRequestLimits.MaxTitleLength}-character limit."));
+        // Chained `.When(...)`, never the block `When(pred, () => ...)` form: only the chained one sets the
+        // per-component condition FastEndpoints' schema processor reads, and with the block form it saw an
+        // unconditional NotEmpty and emitted this OPTIONAL member as required on the wire. The rules are unchanged —
+        // a condition at the end of a chain covers every validator before it (ApplyConditionTo.AllValidators default).
+        RuleFor(static request => request.Title)
+            .NotEmpty()
+            .WithMessage("A work session needs a title.")
+            .MaximumLength(WorkSessionRequestLimits.MaxTitleLength)
+            .WithMessage($"The title is longer than the {WorkSessionRequestLimits.MaxTitleLength}-character limit.")
+            .When(static request => request.Title is not null);
 
-        When(static request => request.Objective is not null,
-            () => RuleFor(static request => request.Objective)
-                  .NotEmpty()
-                  .WithMessage("A work session needs an objective.")
-                  .MaximumLength(WorkSessionRequestLimits.MaxObjectiveLength)
-                  .WithMessage($"The objective is longer than the {WorkSessionRequestLimits.MaxObjectiveLength}-character limit."));
+        RuleFor(static request => request.Objective)
+            .NotEmpty()
+            .WithMessage("A work session needs an objective.")
+            .MaximumLength(WorkSessionRequestLimits.MaxObjectiveLength)
+            .WithMessage($"The objective is longer than the {WorkSessionRequestLimits.MaxObjectiveLength}-character limit.")
+            .When(static request => request.Objective is not null);
 
-        When(static request => request.AgentDefinitionId is not null,
-            () => RuleFor(static request => request.AgentDefinitionId).NotEmpty().WithMessage("A work session needs an agent."));
+        RuleFor(static request => request.AgentDefinitionId)
+            .NotEmpty()
+            .WithMessage("A work session needs an agent.")
+            .When(static request => request.AgentDefinitionId is not null);
     }
 }
 
