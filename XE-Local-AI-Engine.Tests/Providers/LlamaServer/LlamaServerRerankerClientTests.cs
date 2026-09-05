@@ -257,7 +257,8 @@ public sealed class LlamaServerRerankerClientTests
             LastRequestUri = request.RequestUri;
             if (delay is { } pause)
             {
-                // Honors the token so the client's bounded timeout cancels the wait (simulating a hang).
+                // real-timer: a hang is the input. Honors the token so the client's own bounded timeout — real wall
+                // clock inside the client, with no injected TimeProvider — is what cancels the wait.
                 await Task.Delay(pause, cancellationToken).ConfigureAwait(false);
             }
 

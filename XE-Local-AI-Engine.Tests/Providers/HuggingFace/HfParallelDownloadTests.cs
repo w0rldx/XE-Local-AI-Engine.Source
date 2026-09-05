@@ -828,8 +828,14 @@ public sealed class HfParallelDownloadTests
 
     // Yields its payload, then pauses before signalling EOF so a sibling chunk is guaranteed to have finished first,
     // making the "one range interrupted, the others complete" scenario deterministic.
+    //
+    // real-timer: releasing this on a gate would need the test to observe "the sibling ranges finished", and the
+    // downloader publishes no per-range completion a fake could wait on. Ordering by elapsed time is the only seam
+    // available; no assertion is made on the duration itself.
     private sealed class TruncatingStream(byte[] payload) : Stream
     {
+        private static readonly TimeSpan EofPause = TimeSpan.FromMilliseconds(500);
+
         private int _position;
 
         public override bool CanRead => true;
@@ -842,7 +848,7 @@ public sealed class HfParallelDownloadTests
         {
             if (_position >= payload.Length)
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken).ConfigureAwait(false);
+                await Task.Delay(EofPause, cancellationToken).ConfigureAwait(false);
                 return 0;
             }
 
