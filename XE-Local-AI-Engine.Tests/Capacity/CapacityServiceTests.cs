@@ -953,7 +953,7 @@ public sealed class CapacityServiceTests
             FootprintProvider.TryCommitAdmissionFootprint(Arg.Any<ModelFootprint>(), out Arg.Any<ModelFootprint>())
                              .Returns(call =>
                              {
-                                 call[1] = call[0];
+                                 call[1] = call.ArgAt<ModelFootprint>(0);
                                  return true;
                              });
 

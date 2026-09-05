@@ -30,6 +30,7 @@
     <PackageReference Include="Microsoft.Testing.Extensions.TrxReport"/>
     <PackageReference Include="Microsoft.Testing.Platform"/>
     <PackageReference Include="NSubstitute"/>
+    <PackageReference Include="NSubstitute.Analyzers.CSharp" PrivateAssets="all"/>
     <PackageReference Include="OllamaSharp"/>
     <PackageReference Include="TUnit"/>
     <PackageReference Include="TUnit.Playwright"/>
