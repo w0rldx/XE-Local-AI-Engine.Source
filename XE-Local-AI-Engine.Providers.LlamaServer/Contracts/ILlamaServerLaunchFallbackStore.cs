@@ -16,7 +16,9 @@ public interface ILlamaServerLaunchFallbackStore
     /// <summary>
     ///     Whether the optimized KV-quant + flash-attention config has been recorded as failed for
     ///     <paramref name="variant" /> at <paramref name="kvCacheType" /> (so the launch policy emits the safe config
-    ///     instead). A legacy backend-wide entry written before this store was keyed by type disables every type.
+    ///     instead). A legacy backend-wide entry written before this store was keyed by type disables NOTHING: such
+    ///     entries are ignored and dropped from the file on the first read, because reading one as "every KV type on
+    ///     this backend" made the node's KV-cache-type setting inert on any host that had recorded one.
     /// </summary>
     Task<bool> IsOptimizedConfigDisabledAsync(GpuVariant variant, string kvCacheType, CancellationToken ct);
 

@@ -10,7 +10,7 @@ per-attempt history lives on the run's `node.retry.scheduled` events.
 
 A workflow node run is the unit a cost question is actually about: one attempt, one agent or one development task,
 one settle. Before this slice the numbers existed only inside a live budget object that was disposed when the step
-ended, so the only honest answer to "did that change make it cheaper" was to watch a terminal. The twelve columns
+ended, so the only honest answer to "did that change make it cheaper" was to watch a terminal. The fifteen columns
 below are that answer written down, and this page is how to read them without over-claiming.
 
 **Nothing here routes anything.** Every column is written at the transition that settles an attempt and read by
@@ -195,9 +195,41 @@ WHERE n.run_id IN (UPPER(:runIds)) AND n.failure_class IS NOT NULL GROUP BY fail
     The same node, same model and same 3 provider calls measured 206,273 ms cold against 27,697 ms warm — 7.4x,
     none of it the agent. `model_readiness_ms` now separates that launch/load time out: it is the same warm phase
     summed over the same envelopes, so **`agent_turn_ms - model_readiness_ms` is the warm-equivalent turn time** and
-    is what a cold arm and a warm arm compare on. It is NULL, never zero, when no turn warmed a local runtime (a
-    remote provider, Ollama, an already-resident model) and on every row written before the column existed — so
-    treat a null as unmeasured rather than as a proven warm start, and still record the runtime state (rule 9).
+    is what a cold arm and a warm arm compare on. **Null is unmeasured**, not a proven warm start: no turn went
+    through the local-runtime warmer at all (a remote provider, Ollama), or the row predates the column — so still
+    record the runtime state (rule 9). **Non-null is the warmer's measured wall time**, summed over the run's turns.
+    `LocalRuntimeWarmer` times every `WarmModelAsync` call including a cache reuse, and the sum is truncated to whole
+    milliseconds, so an already-resident model measures **near zero** (live: 0) and a resident model can still read a
+    few ms. Read a zero as "measured under 1 ms", never as proof of residency on its own.
+12. **An admitted FAST-model swap's `noticeDetail` names the grading reason, never a refusal.** The `auto`-effort
+    dispatcher's `EffortDispatched` notice carries `noticeDetail: short-turn` (or another grading code) when a
+    turn actually swapped onto the configured fast model. The `fast-model-*` codes (`fast-model-unset`,
+    `fast-model-is-active-model`, `fast-model-not-local`, `fast-model-no-capacity`, `fast-model-unavailable`) are
+    refusal codes only — they explain why a graded-Fast turn did **not** swap, and never co-occur with a served
+    swap. Do not read a `fast-model-*` code as the reason a swap fired.
+    (`IReasoningEffortDispatcher.cs`; live-validated `Plans/ai-trends-2026-09-02/progress/c2-report.md` §4.)
+13. **`vram_free_at_load_bytes` and `vram_admitted_bytes` describe a LOAD, not this attempt.** Every other column
+    counts what the attempt spent; these two read the box at one moment. `vram_free_at_load_bytes` is the
+    machine-global free VRAM the capacity gate measured immediately before it admitted the most recent SUCCESSFUL
+    load of the model in `served_model_name` **that carried a capacity admission**; `vram_admitted_bytes` is the GPU
+    bytes that same admission reserved for the process. An **unadmitted reload clears the reading**: a direct,
+    profiling or variant-moved spawn measures nothing but replaces the process the earlier figures described, so both
+    columns go null rather than report bytes for a process that is gone. Neither is re-measured at settle time and
+    neither is llama.cpp's own `--list-devices` process budget, which is a different axis and is not read on this path.
+    The two are written as one **pair, once per attempt**: the first settle of the attempt that actually carries a
+    reading writes both columns, and no later settle of that attempt rewrites them, so the pair can never mix one
+    load's free-VRAM figure with another load's admitted bytes. A settle that carries neither leaves the pair open for
+    a later settle of the same attempt; a re-attempt clears both, which is what re-opens them.
+    **A warm run reports an EARLIER load's figures** — possibly one from another node run, or from before this run
+    started — so read `model_readiness_ms` beside them: a **small** readiness there means the warmer waited for
+    nothing, which means the load these bytes describe predates the run and the device may have looked different by
+    the time it started; null there is unmeasured and settles nothing either way. There is no exact-zero rule — a
+    resident model can read a few milliseconds (rule 11). Both are NULL, never zero, when nobody measured: a remote provider or Ollama model, a model the node
+    never loaded itself, a non-NVIDIA or CPU-only host with no readable global-free figure, a DevTask node run (they
+    are agent-path only, like `tool_names_json`), and every row written before the columns existed. Zero in
+    `vram_admitted_bytes` is different — it is a real answer, meaning a CPU-placed allocation reserved no VRAM.
+    **Do not sum them across attempts.** They are excluded from the retry snapshot's additive vector for that reason,
+    so a re-attempt's row carries only its own reading and the earlier attempts' readings are not recoverable.
 
 **Defaults by question.** *Did model routing change what it cost?* — tokens and `run_ms` grouped by
 `served_model_name`. *Did tool-schema filtering pay for itself?* — `tool_schema_tokens` per node run, with

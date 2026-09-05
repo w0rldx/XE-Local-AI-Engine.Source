@@ -188,7 +188,10 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             ServedModelName: nodeRun.ServedModelName,
             Route: Route(nodeRun.RouteJson),
             WorkSessionSteps: nodeRun.WorkSessionSteps,
-            FailureClassGroup: AgentUnitFailureClass.FromDevWorkflowFailureClass(nodeRun.FailureClass));
+            FailureClassGroup: AgentUnitFailureClass.FromDevWorkflowFailureClass(nodeRun.FailureClass),
+            ModelReadinessMs: nodeRun.ModelReadinessMs,
+            VramFreeAtLoadBytes: nodeRun.VramFreeAtLoadBytes,
+            VramAdmittedBytes: nodeRun.VramAdmittedBytes);
     }
 
     private static DevWorkflowNodeRunSummaryResponse ToSummary(DevWorkflowNodeRunSnapshot nodeRun,

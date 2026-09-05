@@ -34057,6 +34057,18 @@
           "failureClassGroup": {
             "type": "string",
             "nullable": true
+          },
+          "modelReadinessMs": {
+            "type": "integer",
+            "nullable": true
+          },
+          "vramFreeAtLoadBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "vramAdmittedBytes": {
+            "type": "integer",
+            "nullable": true
           }
         }
       },

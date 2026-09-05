@@ -1,16 +1,61 @@
 namespace XE_Local_AI_Engine.Client.Common.Telemetry;
 
+using System.Collections.Concurrent;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
-///     Bridges provider load observations to the application meter. Runtime identity deliberately stays off metric tags;
-///     it can change frequently for custom builds and would create unbounded cardinality.
+///     Bridges provider load observations to the application meter, and remembers the VRAM figures of the most recent
+///     SUCCESSFUL load per <c>(model, role)</c> so a later reader — the dev-workflow cost collector — can say what the
+///     box looked like when the model that served it was loaded. Runtime identity and the model name deliberately stay
+///     off metric tags; both change freely and would create unbounded cardinality.
 /// </summary>
+/// <remarks>
+///     Process-lifetime singleton. The remembered figures are report-only and deliberately not persisted: they describe
+///     one load of one process, and a value carried across a restart would describe a process that no longer exists.
+///     Only a <see cref="LlamaServerReadinessOutcome.Ready" /> load touches an entry — a failed or cancelled attempt
+///     never became the model that served anything, and overwriting a good reading with its numbers would misattribute
+///     them. A Ready load that carried NO capacity admission (a direct, profiling or variant-moved spawn, so both
+///     figures are null) writes nothing but CLEARS the key: it replaced the process the earlier reading described, and
+///     a reading kept past that would report bytes for a process that no longer exists.
+///     Entries are keyed like the layer-placement report and bounded the same way: by the set of installed models.
+/// </remarks>
 internal sealed class NodeMetricsLlamaServerLoadTelemetry : ILlamaServerLoadTelemetry
 {
+    private readonly ConcurrentDictionary<LoadKey, LlamaServerVramAtLoad> _lastReadyLoads = new();
+
+    /// <summary>
+    ///     The VRAM figures of the most recent successful load of this <c>(model, role)</c> THAT CARRIED A CAPACITY
+    ///     ADMISSION, or <see langword="null" /> when there is no such load to report — a remote or Ollama model, a
+    ///     model already resident before the node started, a node that has not loaded it at all, or an unadmitted
+    ///     reload since, which clears the reading rather than letting it describe a replaced process.
+    /// </summary>
+    public LlamaServerVramAtLoad? TryGetLastReadyLoad(string modelName, ModelRole role)
+    {
+        return string.IsNullOrWhiteSpace(modelName)
+            ? null
+            : _lastReadyLoads.GetValueOrDefault(new LoadKey(modelName, role));
+    }
+
     public void RecordLoad(LlamaServerLoadObservation observation)
     {
+        if (observation.Outcome == LlamaServerReadinessOutcome.Ready && !string.IsNullOrWhiteSpace(observation.ModelName))
+        {
+            var key = new LoadKey(observation.ModelName, observation.Role);
+            if (observation.GlobalFreeVramBytesAtLoad is null && observation.AdmittedVramBytes is null)
+            {
+                // This load measured nothing (a direct, profiling or variant-moved spawn carries no admission), but it
+                // still REPLACED whatever process the key described. Leaving the earlier entry would report an
+                // admitted process that no longer exists, so the stale reading is dropped rather than kept.
+                _ = _lastReadyLoads.TryRemove(key, out _);
+            }
+            else
+            {
+                _lastReadyLoads[key] =
+                    new LlamaServerVramAtLoad(observation.GlobalFreeVramBytesAtLoad, observation.AdmittedVramBytes);
+            }
+        }
+
         var role = Role(observation.Role);
         var variant = Variant(observation.Variant);
         var outcome = Outcome(observation.Outcome);
@@ -85,4 +130,22 @@ internal sealed class NodeMetricsLlamaServerLoadTelemetry : ILlamaServerLoadTele
             _ => "none"
         };
     }
+
+    // Model names are compared the way every other (model, role) key in the runtime compares them. The role member is
+    // NOT called Role: that would shadow this class's own Role(ModelRole) tag helper (S3218).
+    private readonly record struct LoadKey(string ModelName, ModelRole LoadRole)
+    {
+        public bool Equals(LoadKey other) =>
+            LoadRole == other.LoadRole && string.Equals(ModelName, other.ModelName, StringComparison.OrdinalIgnoreCase);
+
+        public override int GetHashCode() =>
+            HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(ModelName), LoadRole);
+    }
 }
+
+/// <summary>
+///     What the box looked like when a model was last loaded successfully: the machine-global free VRAM the capacity
+///     gate measured just before admitting the load, and the GPU bytes it reserved for that process. Either half can be
+///     <see langword="null" /> on its own — a CPU-only or non-NVIDIA host has no global-free figure to read.
+/// </summary>
+internal sealed record LlamaServerVramAtLoad(long? GlobalFreeVramBytesAtLoad, long? AdmittedVramBytes);

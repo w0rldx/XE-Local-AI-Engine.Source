@@ -45,8 +45,12 @@ public sealed class DevWorkflowAttemptCostTests
         "modelReadinessMs"
     ];
 
-    /// <summary>The three that do not: a route belongs to one settle, a model name is not a quantity, names do not sum.</summary>
-    private static readonly string[] NonAdditiveMembers = ["routeJson", "servedModelName", "toolNamesJson"];
+    /// <summary>
+    ///     The five that do not: a route belongs to one settle, a model name is not a quantity, names do not sum, and
+    ///     the two VRAM figures read the box at one load rather than counting what an attempt spent.
+    /// </summary>
+    private static readonly string[] NonAdditiveMembers =
+        ["routeJson", "servedModelName", "toolNamesJson", "vramFreeAtLoadBytes", "vramAdmittedBytes"];
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -225,7 +229,7 @@ public sealed class DevWorkflowAttemptCostTests
     }
 
     /// <summary>
-    ///     The merged member list is the telemetry record minus its three non-additive members — asserted by
+    ///     The merged member list is the telemetry record minus its five non-additive members — asserted by
     ///     reflection, so a column added to §4.1 later is carried here too or it is not additive.
     /// </summary>
     private static void AssertMergedMembersMatchTheTelemetryRecord(JsonObject detail)
@@ -237,7 +241,7 @@ public sealed class DevWorkflowAttemptCostTests
 
         AssertEx.Equal(string.Join(", ", AdditiveMembers.Order(StringComparer.Ordinal)),
             string.Join(", ", expected),
-            "The additive vector IS the telemetry record minus its three non-additive members — nothing enumerates it by hand.");
+            "The additive vector IS the telemetry record minus its five non-additive members — nothing enumerates it by hand.");
 
         foreach (var member in AdditiveMembers)
         {

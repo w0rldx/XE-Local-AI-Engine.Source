@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { DevWorkflowAgentNodePanel } from "@/features/devWorkflows/components/DevWorkflowAgentNodePanel";
 import { DevWorkflowDevTaskNodePanel } from "@/features/devWorkflows/components/DevWorkflowDevTaskNodePanel";
@@ -314,6 +315,16 @@ function DevWorkflowNodeCostSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDe
 	// The envelope measures a WHOLE agent turn, tool loop included, so the remainder is time outside the turns —
 	// queueing after the node started, the settle itself — and is deliberately not labelled as tool time.
 	const turnMs = nodeRun.agentTurnMs ?? null;
+	// How much of those turns was the local runtime launching and loading rather than generating. Null means no turn
+	// went through the warmer at all (cloud-served, or a pre-column row) — unmeasured. Non-null is measured warmer
+	// time; the warmer times a cache reuse too and the value truncates to whole ms, so a resident model reads near
+	// zero and a zero only says "under 1 ms". The row is drawn for zero, because a measurement is not an absence.
+	const readinessMs = nodeRun.modelReadinessMs ?? null;
+	// A reading of the BOX at one moment, not a cost of this attempt: what the capacity gate saw free, and what it
+	// reserved, at the most recent successful load of the serving model. A warm run inherits that earlier load's
+	// figures — readiness above says which. Zero admitted is a real answer, a CPU placement, not an absence.
+	const vramFreeAtLoad = nodeRun.vramFreeAtLoadBytes ?? null;
+	const vramAdmitted = nodeRun.vramAdmittedBytes ?? null;
 	const outsideTurnMs = ranFor != null && turnMs != null ? Math.max(0, ranFor - turnMs) : null;
 	const queuedFor = nodeRun.queuedAtUtc != null && nodeRun.startedAtUtc != null ? nodeRun.startedAtUtc - nodeRun.queuedAtUtc : null;
 
@@ -327,6 +338,9 @@ function DevWorkflowNodeCostSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDe
 		nodeRun.toolSchemaTokens != null ||
 		nodeRun.workSessionSteps != null ||
 		turnMs != null ||
+		readinessMs != null ||
+		vramFreeAtLoad != null ||
+		vramAdmitted != null ||
 		nodeRun.servedModelName != null ||
 		toolNames.length > 0;
 	if (!measured && !route && queuedFor === null && ranFor === null) {
@@ -335,6 +349,8 @@ function DevWorkflowNodeCostSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDe
 
 	const count = (value?: number | null) => (value == null ? undefined : value.toLocaleString());
 	const duration = (value: number | null) => (value == null ? undefined : formatDevWorkflowDuration(value));
+	// Zero bytes must still render — a CPU-placed load reserved none — so the absent case is the null one only.
+	const bytes = (value: number | null) => (value == null ? undefined : formatBytesAsGb(value));
 
 	return (
 		<SectionCard title={t("pages.devWorkflows.node.cost.title", "Cost")} gap={4} data-testid="dev-workflow-node-cost">
@@ -399,6 +415,21 @@ function DevWorkflowNodeCostSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDe
 				label={t("pages.devWorkflows.node.cost.turnTime", "Agent turns")}
 				value={duration(turnMs)}
 				testId="dev-workflow-node-cost-turn-time"
+			/>
+			<CostRow
+				label={t("pages.devWorkflows.node.cost.modelReadiness", "Model readiness")}
+				value={duration(readinessMs)}
+				testId="dev-workflow-node-cost-model-readiness"
+			/>
+			<CostRow
+				label={t("pages.devWorkflows.node.cost.vramFreeAtLoad", "Free VRAM at load")}
+				value={bytes(vramFreeAtLoad)}
+				testId="dev-workflow-node-cost-vram-free"
+			/>
+			<CostRow
+				label={t("pages.devWorkflows.node.cost.vramAdmitted", "VRAM admitted")}
+				value={bytes(vramAdmitted)}
+				testId="dev-workflow-node-cost-vram-admitted"
 			/>
 			<CostRow
 				label={t("pages.devWorkflows.node.cost.outsideTurnTime", "Outside the turns")}

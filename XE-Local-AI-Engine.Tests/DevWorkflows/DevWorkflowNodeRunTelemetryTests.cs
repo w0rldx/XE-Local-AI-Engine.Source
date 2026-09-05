@@ -7,11 +7,14 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -427,6 +430,130 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         AssertEx.Equal(expected: 2_000L, collected.AgentTurnMs, "The turns still happened and still took time.");
         AssertEx.Null(collected.ModelReadinessMs, "None of them warmed a local runtime, which is not the same as warming one in no time.");
     }
+
+    /// <summary>
+    ///     The VRAM columns come off the SERVING model's last successful load, which a warm run did not necessarily
+    ///     cause — that is exactly why <c>model_readiness_ms</c> has to be read beside them.
+    /// </summary>
+    [Test]
+    public async Task VramAtLoad_ReportsTheLastSuccessfulLoadOfTheModelThatServed()
+    {
+        var conversationId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var sessions = Substitute.For<IAgentWorkSessionStore>();
+        sessions.GetAsync(sessionId, Arg.Any<CancellationToken>()).Returns(Session(sessionId, conversationId));
+        sessions.ListEventsAsync(sessionId, Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns([]);
+
+        var logs = Substitute.For<IAgentExecutionLogStore>();
+        logs.ListRunEnvelopesAsync(conversationId, Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns([Envelope(conversationId, "llama-3.1", durationMs: 4_030, modelReadinessMs: 1_200)]);
+
+        var loads = new NodeMetricsLlamaServerLoadTelemetry();
+        loads.RecordLoad(LoadObservation("llama-3.1", globalFree: 7_340_032_000, admitted: 5_368_709_120));
+        loads.RecordLoad(LoadObservation("some-other-model", globalFree: 11, admitted: 22));
+
+        var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs, development: null, localModelLoads: loads)
+                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None)
+                                               .ConfigureAwait(false));
+
+        AssertEx.Equal(expected: 7_340_032_000L, collected.VramFreeAtLoadBytes, "The reading belongs to the model the envelopes say actually served.");
+        AssertEx.Equal(expected: 5_368_709_120L, collected.VramAdmittedBytes);
+    }
+
+    /// <summary>
+    ///     A model this node never loaded itself — a remote provider, Ollama, or one already resident before the node
+    ///     started — has no reading, and a null says so rather than a zero claiming an empty device.
+    /// </summary>
+    [Test]
+    public async Task VramAtLoad_IsNullWhenNoLocalLoadOfTheServingModelWasObserved()
+    {
+        var conversationId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var sessions = Substitute.For<IAgentWorkSessionStore>();
+        sessions.GetAsync(sessionId, Arg.Any<CancellationToken>()).Returns(Session(sessionId, conversationId));
+        sessions.ListEventsAsync(sessionId, Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns([]);
+
+        var logs = Substitute.For<IAgentExecutionLogStore>();
+        logs.ListRunEnvelopesAsync(conversationId, Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns([Envelope(conversationId, "gpt-4o-mini", durationMs: 900)]);
+
+        var loads = new NodeMetricsLlamaServerLoadTelemetry();
+        loads.RecordLoad(LoadObservation("llama-3.1", globalFree: 7_340_032_000, admitted: 5_368_709_120));
+
+        var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs, development: null, localModelLoads: loads)
+                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None)
+                                               .ConfigureAwait(false));
+
+        AssertEx.Null(collected.VramFreeAtLoadBytes, "Another model's load says nothing about the one that served this run.");
+        AssertEx.Null(collected.VramAdmittedBytes);
+    }
+
+    /// <summary>A host that never registered the load record — the model-fit module is absent — simply reports nulls.</summary>
+    [Test]
+    public async Task VramAtLoad_IsNullWhenTheNodeKeepsNoLoadRecord()
+    {
+        var conversationId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var sessions = Substitute.For<IAgentWorkSessionStore>();
+        sessions.GetAsync(sessionId, Arg.Any<CancellationToken>()).Returns(Session(sessionId, conversationId));
+        sessions.ListEventsAsync(sessionId, Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns([]);
+
+        var logs = Substitute.For<IAgentExecutionLogStore>();
+        logs.ListRunEnvelopesAsync(conversationId, Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns([Envelope(conversationId, "llama-3.1", durationMs: 900)]);
+
+        var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs)
+                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None)
+                                               .ConfigureAwait(false));
+
+        AssertEx.Null(collected.VramFreeAtLoadBytes);
+        AssertEx.Null(collected.VramAdmittedBytes);
+    }
+
+    /// <summary>
+    ///     The two sides have to agree on ONE identifier: the supervisor keys its load record by the process's
+    ///     <c>ProcessKey.ModelName</c>, and the run envelope carries the runner's resolved model name (unprefixed) as
+    ///     `served_model_name`. A real repo id with a quant suffix, joined across a case difference, is the shape that
+    ///     would break first if either side ever prefixed or normalised its half.
+    /// </summary>
+    [Test]
+    public async Task VramAtLoad_JoinsTheServedModelNameToTheLoadKeyForARealRepoId()
+    {
+        var conversationId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var sessions = Substitute.For<IAgentWorkSessionStore>();
+        sessions.GetAsync(sessionId, Arg.Any<CancellationToken>()).Returns(Session(sessionId, conversationId));
+        sessions.ListEventsAsync(sessionId, Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns([]);
+
+        var logs = Substitute.For<IAgentExecutionLogStore>();
+        logs.ListRunEnvelopesAsync(conversationId, Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns([Envelope(conversationId, "qwen3-1.7b-gguf:q8_0", durationMs: 2_100)]);
+
+        var loads = new NodeMetricsLlamaServerLoadTelemetry();
+        loads.RecordLoad(LoadObservation("Qwen3-1.7B-GGUF:Q8_0", globalFree: 7_340_032_000, admitted: 5_368_709_120));
+
+        var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs, development: null, localModelLoads: loads)
+                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None)
+                                               .ConfigureAwait(false));
+
+        AssertEx.Equal("qwen3-1.7b-gguf:q8_0", collected.ServedModelName);
+        AssertEx.Equal(expected: 7_340_032_000L, collected.VramFreeAtLoadBytes, "The served name is the load key, compared the way every other (model, role) key is.");
+        AssertEx.Equal(expected: 5_368_709_120L, collected.VramAdmittedBytes);
+    }
+
+    private static LlamaServerLoadObservation LoadObservation(string modelName, long? globalFree, long? admitted) =>
+        new(ModelRole.Chat,
+            GpuVariant.Cuda,
+            RuntimeVersion: "b10375",
+            RuntimeSha256: null,
+            ReadinessDurationMs: 1_200,
+            LlamaServerReadinessOutcome.Ready,
+            LlamaServerPlacementOutcome.Full,
+            LlamaServerLoadAttemptKind.Primary,
+            SpeculativeModeClass.Disabled,
+            modelName,
+            globalFree,
+            admitted);
 
     private static AgentWorkSessionSnapshot Session(Guid sessionId, Guid conversationId) =>
         new(sessionId,

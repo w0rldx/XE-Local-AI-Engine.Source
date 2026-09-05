@@ -42,7 +42,22 @@ internal sealed class NodeSettingsAdministrationService(
     {
         ArgumentNullException.ThrowIfNull(settings);
         var current = await GetTrustedSettingsAsync(cancellationToken).ConfigureAwait(false);
-        return await ValidateAndSaveAsync(settings, current, cancellationToken).ConfigureAwait(false);
+
+        // LOCAL-ONLY members ride along from the stored record instead of from the caller. MachineKey is minted
+        // node-side by IMachineKeyProvider and is deliberately absent from the wire DTO, so a caller that builds a
+        // StoredNodeSettings out of a request has no value to supply and saving its record verbatim would erase the
+        // key. That is silent data loss: the next start mints a fresh key, and every frozen inference profile — keyed
+        // by machine key — is orphaned while still reading as frozen.
+        //
+        // Kept beside the persistence-boundary guard in ValidateAndSaveAsync rather than replaced by it: that one
+        // owns the key that is finally WRITTEN, this one owns the record this call VALIDATES and returns, including
+        // on the rejection paths that never reach a write.
+        var merged = settings with
+        {
+            MachineKey = current.MachineKey
+        };
+
+        return await ValidateAndSaveAsync(merged, current, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<NodeSettingsAdministrationResult> ApplyAgenticPatchAsync(NodeSettingsAgenticPatch patch,
@@ -130,9 +145,25 @@ internal sealed class NodeSettingsAdministrationService(
             return NodeSettingsAdministrationResult.Rejected(settings, errors);
         }
 
-        await _store.SaveAsync(settings, cancellationToken).ConfigureAwait(false);
+        // Read-modify-write under the store's own lock, never a load here and a save there. The settings file is
+        // written WHOLE, and MachineKey is the one member a save carries no value for: a key minted between this
+        // request's load and this line — IMachineKeyProvider races every settings save, since both run on the same
+        // node — would otherwise be overwritten with the null the caller sent, orphaning every frozen profile.
+        // The mutation is pure and takes the LATEST stored key, so the window closes at the boundary that owns it.
+        var persisted = settings;
+        await _store.UpdateAsync(latest =>
+                     {
+                         persisted = settings with
+                         {
+                             MachineKey = latest.MachineKey
+                         };
+
+                         return persisted;
+                     },
+                     cancellationToken)
+                    .ConfigureAwait(false);
         await TryReportCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
-        return NodeSettingsAdministrationResult.Saved(settings);
+        return NodeSettingsAdministrationResult.Saved(persisted);
     }
 
     private async Task TryReportCapabilitiesAsync(CancellationToken cancellationToken)

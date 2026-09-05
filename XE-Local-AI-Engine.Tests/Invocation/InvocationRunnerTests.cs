@@ -420,6 +420,27 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenTheDerivedTotalExceedsInt32_SaturatesInsteadOfFaulting()
+    {
+        // The provider reported no total of its own, so the total is DERIVED from input + output. Summing them as
+        // checked ints threw OverflowException mid-stream and failed the invocation; the derivation has to clamp
+        // exactly as the single-round and accumulated paths already do.
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: new UsageDetails
+        {
+            InputTokenCount = int.MaxValue,
+            OutputTokenCount = 1
+        })));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunPlainAsync(runner, package);
+
+        AssertEx.Empty(sender.SentFailures);
+        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
+        AssertEx.Equal(expected: int.MaxValue, sender.SentCompletions[0].TokensUsed);
+    }
+
+    [Test]
     public async Task RunAsync_WhenSeveralProviderRoundsReportUsage_SendsTheLastRoundAndReportsTheSummedTurnTotals()
     {
         // A tool-calling turn is several llama-server requests inside ONE RunStreamingAsync (FunctionInvokingChatClient
@@ -516,6 +537,44 @@ public sealed class InvocationRunnerTests
                                                                     && usage.InputTokens == int.MaxValue
                                                                     && usage.OutputTokens == 10
                                                                     && usage.TotalTokens == int.MaxValue));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenProviderReportsNoTotal_DerivesTheTotalWithoutDoubleCountingReasoning()
+    {
+        // Microsoft.Extensions.AI documents ReasoningTokenCount as counted INSIDE OutputTokenCount, so a derived total
+        // of input + output + reasoning charged every reasoning token twice whenever the provider omitted its own
+        // total. 100 + 40 is the turn, not 100 + 40 + 30.
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: new UsageDetails
+        {
+            InputTokenCount = 100,
+            OutputTokenCount = 40,
+            ReasoningTokenCount = 30
+        })));
+
+        await RunPlainAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
+        AssertEx.Equal(expected: 140, sender.SentCompletions[0].TokensUsed);
+        AssertEx.Equal(expected: 30, sender.SentCompletions[0].ReasoningTokens);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenProviderReportsOnlyReasoningTokens_LeavesTheTotalUnreported()
+    {
+        // Null-preserving: with neither input nor output reported there is nothing to derive a total from, and a
+        // reasoning-only count is not a turn total.
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: new UsageDetails
+        {
+            ReasoningTokenCount = 30
+        })));
+
+        await RunPlainAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
+        AssertEx.Null(sender.SentCompletions[0].TokensUsed, "a turn with no input or output count has no derivable total");
     }
 
     [Test]

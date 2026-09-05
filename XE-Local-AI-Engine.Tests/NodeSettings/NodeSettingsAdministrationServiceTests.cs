@@ -50,12 +50,12 @@ public sealed class NodeSettingsAdministrationServiceTests
         AssertEx.Equal(42, result.Settings.MaxResponseSizeMb);
         AssertEx.Equal(true, result.Settings.VoiceFeatureEnabled);
         AssertEx.NotNull(result.Settings.ToolApprovalPolicy);
-        await store.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(saved =>
-                saved.CustomToolsEnabled == current.CustomToolsEnabled
-                && saved.OllamaEndpoint == current.OllamaEndpoint
-                && saved.MaxResponseSizeMb == current.MaxResponseSizeMb
-                && saved.VoiceFeatureEnabled == current.VoiceFeatureEnabled
-                && ReferenceEquals(saved.ToolApprovalPolicy, current.ToolApprovalPolicy)),
+        await store.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
+                Persisted(mutate).CustomToolsEnabled == current.CustomToolsEnabled
+                && Persisted(mutate).OllamaEndpoint == current.OllamaEndpoint
+                && Persisted(mutate).MaxResponseSizeMb == current.MaxResponseSizeMb
+                && Persisted(mutate).VoiceFeatureEnabled == current.VoiceFeatureEnabled
+                && ReferenceEquals(Persisted(mutate).ToolApprovalPolicy, current.ToolApprovalPolicy)),
             Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
@@ -100,7 +100,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         AssertEx.False(result.Updated);
         AssertEx.Equal(1, result.ValidationErrors.Count);
         AssertEx.Equal(NodeSettingsField.AutoEffortFastModelName, result.ValidationErrors[0].Field);
-        await store.DidNotReceive().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -140,7 +140,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         AssertEx.False(result.Updated);
         AssertEx.Equal(1, result.ValidationErrors.Count);
         AssertEx.Equal(NodeSettingsField.AutoEffortFastModelName, result.ValidationErrors[0].Field);
-        await store.DidNotReceive().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -163,7 +163,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         AssertEx.False(result.Updated);
         AssertEx.Equal(1, result.ValidationErrors.Count);
         AssertEx.Equal(NodeSettingsField.AutoEffortFastModelName, result.ValidationErrors[0].Field);
-        await store.DidNotReceive().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -184,7 +184,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         AssertEx.False(result.Updated);
         AssertEx.Equal(1, result.ValidationErrors.Count);
         AssertEx.Equal(NodeSettingsField.LlamaMaxLoadedProcesses, result.ValidationErrors[0].Field);
-        await store.DidNotReceive().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -234,7 +234,7 @@ public sealed class NodeSettingsAdministrationServiceTests
 
         AssertEx.True(result.Updated, "an unrelated patch must not be rejected over a stored fast model.");
         AssertEx.Equal("qwen3-1.7b", result.Settings.AutoEffortFastModelName);
-        await store.Received(1).SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -257,7 +257,55 @@ public sealed class NodeSettingsAdministrationServiceTests
 
         AssertEx.True(result.Updated);
         AssertEx.Equal("qwen3-1.7b", result.Settings.AutoEffortFastModelName);
-        await store.Received(1).SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task SaveTrustedMerged_WhenTheIncomingRecordHasNoMachineKey_PreservesTheStoredOne()
+    {
+        // The wire DTO cannot carry MachineKey, so the endpoint's merged record always arrives without one. Saving it
+        // verbatim orphaned every frozen inference profile after the next restart minted a fresh key.
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
+        {
+            MachineKey = "abc"
+        });
+        var service = CreateService(store);
+
+        var result = await service.SaveTrustedMergedAsync(new StoredNodeSettings
+        {
+            ChatCacheReuse = 512
+        }).ConfigureAwait(false);
+
+        AssertEx.True(result.Updated);
+        AssertEx.Equal("abc", result.Settings.MachineKey);
+        await store.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
+                Persisted(mutate, new StoredNodeSettings { MachineKey = "abc" }).MachineKey == "abc"),
+            Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task SaveTrustedMerged_WhenTheMachineKeyIsMintedBetweenTheLoadAndTheWrite_PersistsTheMintedOne()
+    {
+        // The save reads the settings, validates, and only then writes; IMachineKeyProvider mints on the same node and
+        // can land inside that window. A whole-file save built from the record this service LOADED would write the
+        // null the request carried back over the fresh key — orphaning every frozen inference profile silently. The
+        // guard is that the write happens as a read-modify-write under the store's lock, so the mutation sees the
+        // record as it is AT WRITE TIME.
+        var store = new InterleavingNodeSettingsStore(new StoredNodeSettings(),
+            mintedBeforeTheWrite: "minted-while-the-save-was-validating");
+        var service = CreateService(store);
+
+        var result = await service.SaveTrustedMergedAsync(new StoredNodeSettings
+        {
+            ChatCacheReuse = 512
+        }).ConfigureAwait(false);
+
+        AssertEx.True(result.Updated);
+        AssertEx.Equal("minted-while-the-save-was-validating", store.Current.MachineKey);
+        AssertEx.Equal(expected: 512, store.Current.ChatCacheReuse, "the operator's change still lands.");
+        AssertEx.Equal("minted-while-the-save-was-validating", result.Settings.MachineKey,
+            "and the caller is told the key that is actually stored, not the one it loaded.");
     }
 
     [Test]
@@ -279,7 +327,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         AssertEx.False(result.Updated);
         AssertEx.Equal(1, result.ValidationErrors.Count);
         AssertEx.Equal(NodeSettingsField.AutoEffortFastModelName, result.ValidationErrors[0].Field);
-        await store.DidNotReceive().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -298,7 +346,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         AssertEx.False(result.Updated);
         AssertEx.Equal(1, result.ValidationErrors.Count);
         AssertEx.Equal(NodeSettingsField.KeepModelWarmModelName, result.ValidationErrors[0].Field);
-        await store.DidNotReceive().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -316,7 +364,7 @@ public sealed class NodeSettingsAdministrationServiceTests
 
         AssertEx.False(result.Updated);
         AssertEx.Equal(NodeSettingsField.ChatCacheReuse, result.ValidationErrors[0].Field);
-        await store.DidNotReceive().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
         await reporter.DidNotReceive().ReportToApiAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
@@ -334,7 +382,7 @@ public sealed class NodeSettingsAdministrationServiceTests
 
         AssertEx.False(result.Updated);
         AssertEx.Equal(NodeSettingsField.ToolCapableModels, result.ValidationErrors[0].Field);
-        await store.DidNotReceive().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -411,5 +459,48 @@ public sealed class NodeSettingsAdministrationServiceTests
             modelTrustResolver,
             localModelProviderResolver,
             NullLogger<NodeSettingsAdministrationService>.Instance);
+    }
+
+    /// <summary>
+    ///     The record a save actually persists. The service writes through <see cref="INodeSettingsStore.UpdateAsync" />,
+    ///     so what lands is its mutation applied to the settings the store holds AT WRITE TIME — which is not
+    ///     necessarily what the service loaded.
+    /// </summary>
+    private static StoredNodeSettings Persisted(Func<StoredNodeSettings, StoredNodeSettings> mutate, StoredNodeSettings? latest = null) =>
+        mutate(latest ?? new StoredNodeSettings());
+
+    /// <summary>
+    ///     A store whose stored record gains a machine key AFTER the service has loaded it and before the write — the
+    ///     interleaving <c>IMachineKeyProvider</c> produces against a settings save on the same node.
+    /// </summary>
+    private sealed class InterleavingNodeSettingsStore(StoredNodeSettings initial, string mintedBeforeTheWrite) : INodeSettingsStore
+    {
+        public StoredNodeSettings Current { get; private set; } = initial;
+
+        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(Current);
+
+        public StoredNodeSettings Load(CancellationToken cancellationToken = default) =>
+            Current;
+
+        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
+        {
+            Current = settings;
+            return Task.CompletedTask;
+        }
+
+        public Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(mutate);
+
+            // The sibling writer got here first: the mutation must be applied to THIS record, not to the one the
+            // caller read before it existed.
+            Current = Current with
+            {
+                MachineKey = mintedBeforeTheWrite
+            };
+            Current = mutate(Current);
+            return Task.FromResult(Current);
+        }
     }
 }

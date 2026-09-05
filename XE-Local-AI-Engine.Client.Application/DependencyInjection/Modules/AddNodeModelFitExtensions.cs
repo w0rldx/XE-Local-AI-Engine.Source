@@ -129,8 +129,12 @@ internal static class AddNodeModelFitExtensions
         builder.Services.AddSingleton<IHfDownloadMetrics, NodeMetricsHfDownloadMetrics>();
 
         // Report-only llama-server spawn/readiness/placement observations. Registered before the provider module; its
-        // TryAdd null default therefore leaves this shared NodeMetrics bridge in place.
-        builder.Services.AddSingleton<ILlamaServerLoadTelemetry, NodeMetricsLlamaServerLoadTelemetry>();
+        // TryAdd null default therefore leaves this shared NodeMetrics bridge in place. The concrete type is registered
+        // too, and the interface forwards to it, because the same instance also holds the last-successful-load VRAM
+        // record the dev-workflow cost collector reads — two registrations of the class would be two caches, one of
+        // them never written.
+        builder.Services.AddSingleton<NodeMetricsLlamaServerLoadTelemetry>();
+        builder.Services.AddSingleton<ILlamaServerLoadTelemetry>(services => services.GetRequiredService<NodeMetricsLlamaServerLoadTelemetry>());
 
         // Runtime device audit: composes the hardware profiler + the GPU-variant selector + the device-inventory
         // probe to detect a silent CPU fallback (a GPU box whose selected runtime runs on the CPU), and exposes the

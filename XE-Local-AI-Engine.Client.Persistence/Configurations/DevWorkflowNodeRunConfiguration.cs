@@ -52,6 +52,8 @@ internal sealed class DevWorkflowNodeRunConfiguration : IEntityTypeConfiguration
         builder.Property(entity => entity.ToolNamesJson).HasColumnName("tool_names_json").HasMaxLength(1024);
         builder.Property(entity => entity.AgentTurnMs).HasColumnName("agent_turn_ms");
         builder.Property(entity => entity.ModelReadinessMs).HasColumnName("model_readiness_ms");
+        builder.Property(entity => entity.VramFreeAtLoadBytes).HasColumnName("vram_free_at_load_bytes");
+        builder.Property(entity => entity.VramAdmittedBytes).HasColumnName("vram_admitted_bytes");
         builder.Property(entity => entity.ServedModelName).HasColumnName("served_model_name").HasMaxLength(256);
         builder.Property(entity => entity.RouteJson).HasColumnName("route_json").HasMaxLength(1024);
         builder.Property(entity => entity.WorkSessionSteps).HasColumnName("work_session_steps");

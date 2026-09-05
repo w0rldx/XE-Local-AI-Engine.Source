@@ -246,6 +246,32 @@ Do not use a huge shell glob; it can hit `ARG_MAX`.
 
 Any fixture combining the real Client content root with redirected node data must remove `INodeDataDirectory` and register `FakeNodeDataDirectory`. Otherwise first-launch migration moves credential/settings files out of the checkout and teardown deletes them. `ServiceProviderValidationTests.HostCreation_LeavesTheContentRootNodeSettingsWhereItIs` is the guard.
 
+### A node-settings save path must carry the local-only members over from the stored record
+
+`StoredNodeSettings` holds members the wire DTO deliberately never carries: `MachineKey` (minted node-side by
+`IMachineKeyProvider`, never sent to the client) and `ToolApprovalPolicy` (no operator field yet). A save that maps a
+request onto a fresh record and persists it verbatim erases them. Dropping `MachineKey` is silent: the next start mints
+a fresh GUID, and because inference profiles are keyed by machine key, every frozen profile on the box is orphaned —
+the resolver never finds one, each model re-fits from scratch forever, the rows still read `Frozen` through the
+profiles endpoint, and nothing is logged.
+
+Carrying the value over at the *start* of the save is not enough, because the load and the write are far apart:
+`IMachineKeyProvider` mints on the same node and can land between them, and this file is written WHOLE, so a save that
+re-applies the key it LOADED overwrites one minted since. Both paths therefore persist through
+`INodeSettingsStore.UpdateAsync`, whose mutation runs under the store's own lock and reads the record as it is at write
+time — `NodeSettingsAdministrationService.ValidateAndSaveAsync` saves `settings with { MachineKey = latest.MachineKey }`
+(covering every caller, including `ApplyAgenticPatchAsync`, which was already safe against plain erasure because it
+starts from `current with {…}`), and `MachineKeyProvider` mints as
+`latest.MachineKey is empty ? latest with { MachineKey = fresh } : latest`, caching the key the store actually holds
+rather than the one it generated. `SaveTrustedMergedAsync` still carries the key over up front as well: that copy owns
+the record the call VALIDATES and returns, including on the rejection paths that never reach a write. Guards:
+`NodeSettingsAdministrationServiceTests.SaveTrustedMerged_WhenTheIncomingRecordHasNoMachineKey_PreservesTheStoredOne`
+and `…_WhenTheMachineKeyIsMintedBetweenTheLoadAndTheWrite_PersistsTheMintedOne`,
+`NodeSettingsEndpointTests.SaveNodeSettings_WhenValid_PreservesTheStoredMachineKey`, and
+`MachineKeyProviderTests.MachineKey_WhenTwoProvidersMintConcurrently_AgreeOnTheOneStoredKey`. Authority: live evidence,
+fu-b round 2a, 2026-09-05. Do not "fix" this by adding `MachineKey` to the request or response DTO, and do not write
+this file with a bare `SaveAsync` composed from an earlier `LoadAsync`.
+
 ### The one temp artifact that is meant to survive: the migrated SQLite template
 
 The MVID-keyed `/tmp/xe-local-ai-engine-tests-template-*.sqlite` cache intentionally survives teardown. It is atomically published and invalidates on migration/seed assembly rebuild. Delete it to force recreation. Set `UsePreMigratedDatabase=false` only when testing migrations themselves.
@@ -406,6 +432,7 @@ A dependency-manifest change returns the retryable `dependency_manifest_changed`
 - GPU offload has one owner per mode: GPU explore emits `--fit on --metrics` and no explicit placement; replay emits frozen `-ngl/-ts/-ot` and no `--fit`; CPU emits neither. Validate actual GPU work with the smoke.
 - `LlamaCppSourceBuildRequestValidation.Normalize` must be idempotent: `Normalize(Normalize(x)) == Normalize(x)`.
 - Helper tools (`llama-quantize`, `llama-perplexity`) are resolved **by name beside the resolved `llama-server`** (`LlamaCppToolBinaries`, surfaced as `LlamaBinary.QuantizerExecutablePath`/`PerplexityExecutablePath`, evaluated on read). Presence is never a precondition for adoption — a runtime missing one still serves; the caller that needs it fails specifically. The prebuilt archives carry `llama-perplexity` but no `llama-quantize`. **Both source-build paths only gained `llama-perplexity` when their cmake `--target` lists were widened (`CudaBuildService`, `LlamaCppSourceBuildService`) — any tree built before that, including the box's own `~/cuda-llama/b10201`, has `llama-server` and nothing else, so benchmark fidelity there must rebuild the runtime or point at a prebuilt.** (`CudaBuildService` never built `llama-quantize` either.)
+- **`llama-fit-params` is resolved the same way (`LlamaFitParamsProcessRunner`: `Path.Combine(serverSpec.WorkingDirectory, "llama-fit-params")`), and a BYO build that only built the `llama-server` target — the box's `~/cuda-llama/b10201` included — has no inference profiles at all: a manual Explore returns 400 "llama-fit-params did not produce a concrete replayable context and GPU placement", so nothing can be benchmarked or frozen and D13 staleness cannot be proven live.** The app degrades correctly (a warning names the missing capability, the spawn stays auto-fit). Before an inference-profile live round, check `ls "$(dirname "$XE_LLAMACPP_SERVER_PATH")/llama-fit-params"`. To add it without changing the shared runtime's identity (the launch-policy fingerprint hashes the bin directory), build the target in place, MOVE `llama-fit-params` + `libllama-fit-params-impl.so` into a scratch copy of `bin/`, and point `XE_LLAMACPP_SERVER_PATH` at the copy for the round. Incident: `docs/agent-knowledge-evidence.md` §2.
 - Emit `reasoning_budget_tokens` only when the template provides a think-end marker. At the pinned build, higher `--log-verbosity` is more verbose; use `-lv 5` for reasoning-budget traces. Empty logs at `-lv 1` are a threshold symptom.
 
 
@@ -421,7 +448,7 @@ A dependency-manifest change returns the retryable `dependency_manifest_changed`
 
 A missing `-ngl` is correct in explore and a defect in replay. `BuildLaunchSpec` receives the central `LlamaServerLaunchPlan`; do not scatter defaults back into supervisors/call sites. `--fit` and explicit placement cannot coexist, while `-c/-fa/-ctk/-ctv` may coexist with fit.
 
-**Optimized launch fallback:** GPU normal launch tries `-fa on -ctk q8_0 -ctv q8_0`. On readiness failure it retries **once** without explicit KV types and with `-fa auto`. Persist `llama-launch-fallback.json` per (backend, KV type) only if the safe retry succeeds; a broken model must not poison later launches. Legacy un-keyed entries (bare backend names) are ignored and dropped from the file on the first read. Frozen profiles bypass fallback. Capacity/advisor estimates stay f16-conservative because the safe path may run.
+**Optimized launch fallback:** GPU normal launch tries `-fa on -ctk q8_0 -ctv q8_0`. On readiness failure it retries **once** without explicit KV types and with `-fa auto`. Persist `llama-launch-fallback.json` per (backend, KV type) only if the safe retry succeeds; a broken model must not poison later launches. Legacy un-keyed entries (bare backend names) are ignored and dropped from the file on the first read. The file is USER-level and shared by every node process, so a write re-reads and merges under an OS lock on the sibling `llama-launch-fallback.json.lock` (the lock never sits on the state file itself, or the atomic replace over it would fail on Windows); a lock this process cannot take degrades to the in-process lock, where a concurrent sibling write can still be lost. Frozen profiles bypass fallback. Capacity/advisor estimates stay f16-conservative because the safe path may run.
 
 Every normal spawn pins `--no-warmup --parallel 1`; default parallelism multiplies KV reservations and warmup can consume the readiness budget. Every role receives explicit context. CPU never replays a GPU profile. After readiness, read `/props.default_generation_settings.n_ctx`, store it on the running process, and feed it to both `TurnPolicy.ContextCapacityTokens` and inner `num_ctx`; a per-send override still wins, while unknown providers use 8192. Do not substitute train context or requested context for the launched/effective process window.
 

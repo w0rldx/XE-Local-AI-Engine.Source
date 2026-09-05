@@ -160,8 +160,8 @@ public sealed record DevWorkflowNodeRunSnapshot(
     long? EndedAtUtc,
     long CreatedAtUtc,
 
-    // The twelve cost-telemetry columns, trailing and optional so a caller composing a node run by hand — a test, a
-    // fake store — keeps compiling and reads back exactly what a row written before this slice reads back: nulls.
+    // The cost-telemetry columns, trailing and optional so a caller composing a node run by hand — a test, a fake
+    // store — keeps compiling and reads back exactly what a row written before this slice reads back: nulls.
     long? InputTokens = null,
     long? OutputTokens = null,
     long? ReasoningTokens = null,
@@ -175,13 +175,17 @@ public sealed record DevWorkflowNodeRunSnapshot(
     string? RouteJson = null,
     int? WorkSessionSteps = null,
     // Trailing: the thirteenth cost column, how much of AgentTurnMs was a local runtime warming (see the entity).
-    long? ModelReadinessMs = null);
+    long? ModelReadinessMs = null,
+    // Trailing: the fourteenth and fifteenth, what the box looked like when the serving model was last loaded. A warm
+    // run reports the EARLIER load's figures; ModelReadinessMs tells the reader which it is (see the entity).
+    long? VramFreeAtLoadBytes = null,
+    long? VramAdmittedBytes = null);
 
 /// <summary>
 ///     What one node-run attempt spent and where it routed, collected at the terminal-or-blocked transition and applied
 ///     to the row by <see cref="IDevWorkflowStore.TransitionNodeRunAsync" />. Every member is optional: a member left
 ///     null leaves its column untouched, which is how a node run with no work session and no development task still
-///     records a route beside thirteen nulls.
+///     records a route beside fifteen nulls.
 ///     <para>
 ///         Metadata only — counts, a served model name, structural node keys and tool NAMES. No prompt, no tool
 ///         argument, no tool result and no transcript may ever be added here.
@@ -204,7 +208,11 @@ public sealed record DevWorkflowNodeTelemetry(
     int? WorkSessionSteps = null,
     // How much of AgentTurnMs was a local runtime warming rather than generating; null when none of the attempt's
     // turns warmed one. Trailing for the same positional-record reason as the twelve above it.
-    long? ModelReadinessMs = null);
+    long? ModelReadinessMs = null,
+    // The VRAM the box had free, and the VRAM admission reserved, at the most recent successful load of the model that
+    // served this run. Observational only, and possibly an EARLIER load than this run (see the entity).
+    long? VramFreeAtLoadBytes = null,
+    long? VramAdmittedBytes = null);
 
 public sealed record DevWorkflowRunEventSnapshot(
     Guid Id,

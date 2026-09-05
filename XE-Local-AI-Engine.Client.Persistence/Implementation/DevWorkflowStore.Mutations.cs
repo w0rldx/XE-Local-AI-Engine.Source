@@ -230,7 +230,9 @@ internal sealed partial class DevWorkflowStore
     /// <summary>
     ///     Writes the cost columns a settle collected. Member-wise and null-skipping, so a collector that could answer
     ///     only half the question — an agent node whose envelopes are gone, a structural node that has a route and
-    ///     nothing else — leaves the rest of the row alone instead of blanking it.
+    ///     nothing else — leaves the rest of the row alone instead of blanking it. The two VRAM columns are the one
+    ///     exception: they are a PAIR from a single observation, written together by the first settle of the attempt
+    ///     that CARRIES one, and not rewritten after that.
     /// </summary>
     private static void ApplyTelemetry(DevWorkflowNodeRun nodeRun, DevWorkflowNodeTelemetry? telemetry)
     {
@@ -249,12 +251,28 @@ internal sealed partial class DevWorkflowStore
         nodeRun.ToolNamesJson = telemetry.ToolNamesJson ?? nodeRun.ToolNamesJson;
         nodeRun.AgentTurnMs = telemetry.AgentTurnMs ?? nodeRun.AgentTurnMs;
         nodeRun.ModelReadinessMs = telemetry.ModelReadinessMs ?? nodeRun.ModelReadinessMs;
+
+        // NOT the null-coalescing merge the columns above use. These two are one reading of the BOX at the run's load,
+        // so they must come from a single observation and the first settle of an attempt that CARRIES a reading has to
+        // win: a later settle would otherwise splice in a reload that happened after the attempt's work, and a
+        // member-wise merge could pair one load's free-VRAM figure with another load's admitted figure. A settle that
+        // carries NEITHER member is not that settle — it leaves the pair open for a later one, exactly as it leaves
+        // every other column alone. A re-attempt's ClearTelemetry resets both to null, which is what re-opens the pair
+        // for the new attempt.
+        if (nodeRun.VramFreeAtLoadBytes is null
+            && nodeRun.VramAdmittedBytes is null
+            && (telemetry.VramFreeAtLoadBytes is not null || telemetry.VramAdmittedBytes is not null))
+        {
+            nodeRun.VramFreeAtLoadBytes = telemetry.VramFreeAtLoadBytes;
+            nodeRun.VramAdmittedBytes = telemetry.VramAdmittedBytes;
+        }
+
         nodeRun.ServedModelName = telemetry.ServedModelName ?? nodeRun.ServedModelName;
         nodeRun.RouteJson = telemetry.RouteJson ?? nodeRun.RouteJson;
         nodeRun.WorkSessionSteps = telemetry.WorkSessionSteps ?? nodeRun.WorkSessionSteps;
     }
 
-    /// <summary>Empties all thirteen cost columns, which is what a re-attempt's clean slate means for them.</summary>
+    /// <summary>Empties all fifteen cost columns, which is what a re-attempt's clean slate means for them.</summary>
     private static void ClearTelemetry(DevWorkflowNodeRun nodeRun)
     {
         nodeRun.InputTokens = null;
@@ -267,6 +285,8 @@ internal sealed partial class DevWorkflowStore
         nodeRun.ToolNamesJson = null;
         nodeRun.AgentTurnMs = null;
         nodeRun.ModelReadinessMs = null;
+        nodeRun.VramFreeAtLoadBytes = null;
+        nodeRun.VramAdmittedBytes = null;
         nodeRun.ServedModelName = null;
         nodeRun.RouteJson = null;
         nodeRun.WorkSessionSteps = null;
