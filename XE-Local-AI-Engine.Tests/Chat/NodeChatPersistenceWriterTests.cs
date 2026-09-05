@@ -40,8 +40,8 @@ public sealed class NodeChatPersistenceWriterTests
             return Task.FromResult(true);
         });
 
-        var secondStartedEarly = await Task.WhenAny(secondEntered.Task, Task.Delay(TimeSpan.FromMilliseconds(100))).ConfigureAwait(false) == secondEntered.Task;
-        AssertEx.False(secondStartedEarly, "A second exclusive write on the same conversation must wait for the first.");
+        await AssertEx.StaysIncompleteAsync(secondEntered.Task, "A second exclusive write on the same conversation must wait for the first.")
+                      .ConfigureAwait(false);
 
         releaseFirst.SetResult();
         await Task.WhenAll(first, second).ConfigureAwait(false);
@@ -73,8 +73,8 @@ public sealed class NodeChatPersistenceWriterTests
             return Task.FromResult(true);
         });
 
-        var secondStarted = await Task.WhenAny(secondEntered.Task, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(false) == secondEntered.Task;
-        AssertEx.True(secondStarted, "Exclusive writes on different conversations must run independently.");
+        await AssertEx.CompletesAsync(secondEntered.Task, TestBudgets.Contended, "Exclusive writes on different conversations must run independently.")
+                      .ConfigureAwait(false);
 
         releaseFirst.SetResult();
         await Task.WhenAll(first, second).ConfigureAwait(false);
@@ -105,8 +105,8 @@ public sealed class NodeChatPersistenceWriterTests
             return Task.FromResult(true);
         });
 
-        var secondStarted = await Task.WhenAny(secondEntered.Task, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(false) == secondEntered.Task;
-        AssertEx.True(secondStarted, "Payload updates to different messages must run in parallel (shared conversation lock).");
+        await AssertEx.CompletesAsync(secondEntered.Task, TestBudgets.Contended, "Payload updates to different messages must run in parallel (shared conversation lock).")
+                      .ConfigureAwait(false);
 
         releaseFirst.SetResult();
         await Task.WhenAll(first, second).ConfigureAwait(false);
@@ -144,8 +144,8 @@ public sealed class NodeChatPersistenceWriterTests
             return Task.FromResult(true);
         });
 
-        var secondStartedEarly = await Task.WhenAny(secondEntered.Task, Task.Delay(TimeSpan.FromMilliseconds(100))).ConfigureAwait(false) == secondEntered.Task;
-        AssertEx.False(secondStartedEarly, "Two updates to the same message must serialize on the per-message lock.");
+        await AssertEx.StaysIncompleteAsync(secondEntered.Task, "Two updates to the same message must serialize on the per-message lock.")
+                      .ConfigureAwait(false);
 
         releaseFirst.SetResult();
         await Task.WhenAll(first, second).ConfigureAwait(false);
@@ -179,8 +179,8 @@ public sealed class NodeChatPersistenceWriterTests
             return Task.FromResult(true);
         });
 
-        var exclusiveStartedEarly = await Task.WhenAny(exclusiveEntered.Task, Task.Delay(TimeSpan.FromMilliseconds(100))).ConfigureAwait(false) == exclusiveEntered.Task;
-        AssertEx.False(exclusiveStartedEarly, "A conversation-exclusive op must not run while a message update holds the shared lock.");
+        await AssertEx.StaysIncompleteAsync(exclusiveEntered.Task, "A conversation-exclusive op must not run while a message update holds the shared lock.")
+                      .ConfigureAwait(false);
 
         releaseUpdate.SetResult();
         await Task.WhenAll(update, exclusive).ConfigureAwait(false);

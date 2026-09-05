@@ -33,8 +33,7 @@ public sealed class SupervisorRaceTests
         AssertEx.True(supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat).ProcessEvicting,
             "The eject must synchronously mark the process evicting before entering its drain wait.");
         var disposal = supervisor.DisposeAsync().AsTask();
-        await Task.Delay(50);
-        AssertEx.False(disposal.IsCompleted, "Disposal must wait for the already-admitted eject operation.");
+        await AssertEx.StaysIncompleteAsync(disposal, "Disposal must wait for the already-admitted eject operation.");
 
         inferenceLease!.Dispose();
         AssertEx.Equal(LlamaServerEjectOutcome.Ejected, await eject.WaitAsync(TimeSpan.FromSeconds(3)));
@@ -65,8 +64,7 @@ public sealed class SupervisorRaceTests
         AssertEx.NotNull(lease);
 
         var ensure = supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
-        await Task.Delay(50);
-        AssertEx.False(ensure.IsCompleted);
+        await AssertEx.StaysIncompleteAsync(ensure, "An ensure must not be admitted while a runtime mutation lease is held.");
         AssertEx.Equal(0, launcher.LaunchCount);
 
         await (lease ?? throw new InvalidOperationException("lease must not be null.")).DisposeAsync();
@@ -83,11 +81,10 @@ public sealed class SupervisorRaceTests
         var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
         AssertEx.NotNull(lease);
         var ensure = supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
-        await Task.Delay(50);
-        AssertEx.False(ensure.IsCompleted);
+        await AssertEx.StaysIncompleteAsync(ensure, "An ensure must not be admitted while a runtime mutation lease is held.");
 
         var disposal = supervisor.DisposeAsync().AsTask();
-        await Task.Delay(50);
+        await AssertEx.StaysIncompleteAsync(disposal, "Disposal must wait behind the mutation lease the ensure is parked on.");
         await (lease ?? throw new InvalidOperationException("lease must not be null.")).DisposeAsync();
 
         await AssertEx.ThrowsAsync<ObjectDisposedException>(() => ensure);
@@ -104,12 +101,11 @@ public sealed class SupervisorRaceTests
         var blocker = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
         AssertEx.NotNull(blocker);
         var pending = supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
-        await Task.Delay(50);
-        AssertEx.False(pending.IsCompleted);
+        await AssertEx.StaysIncompleteAsync(pending, "A second mutation lease must not be granted while the first is held.");
         AssertEx.True(supervisor.IsKeepWarmSuppressed());
 
         var disposal = supervisor.DisposeAsync().AsTask();
-        await Task.Delay(50);
+        await AssertEx.StaysIncompleteAsync(disposal, "Disposal must wait behind the mutation lease the pending acquire is parked on.");
         await (blocker ?? throw new InvalidOperationException("blocker must not be null.")).DisposeAsync();
 
         await AssertEx.ThrowsAsync<ObjectDisposedException>(() => pending);
@@ -153,7 +149,7 @@ public sealed class SupervisorRaceTests
         using var pendingCancellation = new CancellationTokenSource();
         var pendingAttempt = supervisor.TryAcquireRuntimeMutationLeaseAsync(pendingCancellation.Token);
 
-        await Task.Delay(50);
+        await AssertEx.StaysIncompleteAsync(pendingAttempt, "The pending acquire must still be queued behind the owned lease.");
         AssertEx.True(supervisor.IsKeepWarmSuppressed());
 
         await pendingCancellation.CancelAsync();
@@ -301,19 +297,8 @@ public sealed class SupervisorRaceTests
         AssertEx.False(registry.Snapshot("model-a", ModelRole.Chat).HasRequestedKey);
     }
 
-    private static async Task WaitUntilAsync(Func<bool> predicate)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(3);
-        while (!predicate())
-        {
-            if (DateTime.UtcNow >= deadline)
-            {
-                throw new AssertionException("Timed out waiting for the expected detached-spawn state.");
-            }
-
-            await Task.Delay(10);
-        }
-    }
+    private static Task WaitUntilAsync(Func<bool> predicate) =>
+        AssertEx.EventuallyAsync(predicate, TestBudgets.Contended, "Timed out waiting for the expected detached-spawn state.");
 
     [Test]
     public async Task EnsureRunning_SourceBuildReserved_FailsWithoutSpawn()

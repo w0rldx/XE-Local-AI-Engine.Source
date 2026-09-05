@@ -1051,19 +1051,8 @@ public sealed class IntegrationExecutionCoordinatorTests
         || string.Equals(eventType, IntegrationStreamEventTypes.ExecutionCancelled, StringComparison.Ordinal);
 
     /// <summary>Polls a coordinator state a background await produces, so a test never sleeps for a fixed guess.</summary>
-    private static async Task WaitUntilAsync(Func<bool> condition)
-    {
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(20);
-        while (!condition())
-        {
-            if (DateTimeOffset.UtcNow > deadline)
-            {
-                throw new AssertionException("The awaited coordinator state never arrived.");
-            }
-
-            await Task.Delay(TimeSpan.FromMilliseconds(10)).ConfigureAwait(false);
-        }
-    }
+    private static Task WaitUntilAsync(Func<bool> condition) =>
+        AssertEx.EventuallyAsync(condition, TestBudgets.Contended, "The awaited coordinator state never arrived.");
 
     private static AllowedToolDto Tool(string name, bool requiresApproval, ToolCategory category) =>
         new()

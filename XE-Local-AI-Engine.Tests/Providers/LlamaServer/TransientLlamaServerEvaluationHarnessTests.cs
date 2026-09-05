@@ -442,14 +442,8 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
             TimeSpan.FromMinutes(1),
             LlamaServerBenchmarkLaunchPolicy.DeterministicV1);
 
-    private static async Task WaitUntilAsync(Func<bool> predicate)
-    {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-        while (!predicate())
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(10), timeout.Token);
-        }
-    }
+    private static Task WaitUntilAsync(Func<bool> predicate) =>
+        AssertEx.EventuallyAsync(predicate, TestBudgets.Contended, "The awaited harness state never arrived.");
 
     private static async Task<string> CreateModelFileAsync(string contents)
     {

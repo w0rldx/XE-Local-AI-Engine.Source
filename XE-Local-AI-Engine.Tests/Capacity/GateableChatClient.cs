@@ -116,6 +116,9 @@ internal sealed class GateableChatClient : IChatClient
 
             if (_delay > TimeSpan.Zero)
             {
+                // real-timer: this latency IS the subject's input — callers use it to keep a send in flight while a
+                // cancellation or timeout races it. The hold TaskCompletionSource above is the deterministic seam for
+                // every other case; a caller that only needs "still running" should use that instead.
                 await Task.Delay(_delay, cancellationToken).ConfigureAwait(false);
             }
         }

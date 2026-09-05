@@ -165,14 +165,13 @@ public sealed class ChatStreamEventSinkTests
             }
         });
 
-        var settled = await Task.WhenAny(drain, Task.Delay(TimeSpan.FromMilliseconds(250))).ConfigureAwait(false);
-        AssertEx.True(settled != drain, "Detach must leave the queue open; completing it would surface as a persistence fault in the pump.");
+        await AssertEx.StaysIncompleteAsync(drain,
+            "Detach must leave the queue open; completing it would surface as a persistence fault in the pump.")
+                      .ConfigureAwait(false);
 
         // Complete is the only thing that ends the stream, and it still does after a detach.
         sink.Complete();
-        settled = await Task.WhenAny(drain, Task.Delay(TimeSpan.FromSeconds(5))).ConfigureAwait(false);
-        AssertEx.True(settled == drain, "Complete must end the stream even after a detach.");
-        await drain.ConfigureAwait(false);
+        await AssertEx.CompletesAsync(drain, TestBudgets.Contended, "Complete must end the stream even after a detach.").ConfigureAwait(false);
     }
 
     [Test]

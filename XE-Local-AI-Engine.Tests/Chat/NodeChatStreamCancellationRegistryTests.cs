@@ -23,9 +23,9 @@ public sealed class NodeChatStreamCancellationRegistryTests
         await callbackEntered.Task.ConfigureAwait(false);
         var disposeTask = Task.Run(registration.Dispose);
 
-        await Task.Delay(TimeSpan.FromMilliseconds(50)).ConfigureAwait(false);
-        AssertEx.False(disposeTask.IsCompleted,
-            "Once cancellation claims a live registration, disposal must not report completion while its callback can still execute.");
+        await AssertEx.StaysIncompleteAsync(disposeTask,
+            "Once cancellation claims a live registration, disposal must not report completion while its callback can still execute.")
+                      .ConfigureAwait(false);
 
         releaseCallback.SetResult();
         AssertEx.True(await cancelTask.ConfigureAwait(false));

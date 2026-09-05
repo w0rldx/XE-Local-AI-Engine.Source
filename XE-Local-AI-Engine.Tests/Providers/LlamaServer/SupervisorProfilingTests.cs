@@ -64,8 +64,7 @@ public sealed class SupervisorProfilingTests
 
         var profiling = supervisor.RunExclusiveProfilingAsync("llama3", ModelRole.Chat, ResolvedLaunchArguments.Explore(), false,
             (_, _) => Task.FromResult(true), CancellationToken.None);
-        await Task.Delay(50);
-        AssertEx.False(profiling.IsCompleted);
+        await AssertEx.StaysIncompleteAsync(profiling, "Profiling must not start while a runtime mutation lease is held.");
         AssertEx.Equal(0, launcher.LaunchCount);
 
         await (lease ?? throw new InvalidOperationException("lease must not be null.")).DisposeAsync();
@@ -110,11 +109,10 @@ public sealed class SupervisorProfilingTests
             enableMetrics: false,
             (_, _) => Task.FromResult(result: true),
             CancellationToken.None);
-        await Task.Delay(50);
-        AssertEx.False(profiling.IsCompleted);
+        await AssertEx.StaysIncompleteAsync(profiling, "Profiling must not start while a runtime mutation lease is held.");
 
         var disposal = supervisor.DisposeAsync().AsTask();
-        await Task.Delay(50);
+        await AssertEx.StaysIncompleteAsync(disposal, "Disposal must wait behind the mutation lease the profiling run is parked on.");
         await (blocker ?? throw new InvalidOperationException("blocker must not be null.")).DisposeAsync();
 
         await AssertEx.ThrowsAsync<ObjectDisposedException>(() => profiling);
@@ -342,7 +340,7 @@ public sealed class SupervisorProfilingTests
                 return Task.FromResult(new LlamaServerProfilingVramSnapshot(6, 8));
             });
 
-        await Task.Delay(50);
+        await AssertEx.SettleAsync();
         AssertEx.False(captureEntered, "VRAM capture must wait for an already-started sibling-role spawn to settle.");
 
         healthProbe.Release();

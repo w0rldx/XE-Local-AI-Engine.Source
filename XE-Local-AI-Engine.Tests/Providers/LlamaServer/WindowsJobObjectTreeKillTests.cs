@@ -38,6 +38,9 @@ public sealed class WindowsJobObjectTreeKillTests
     /// </summary>
     internal const string HardKillMarkerVariable = "XE_JOBOBJECT_HARDKILL_MARKER";
 
+    /// <summary>Upper bound on how long the spawned child host parks waiting to be terminated by its parent.</summary>
+    private static readonly TimeSpan OrphanParkLimit = TimeSpan.FromMinutes(5);
+
     [Test]
     public async Task Launch_ThenTreeKill_ReapsDescendants_NoOrphan()
     {
@@ -160,9 +163,10 @@ public sealed class WindowsJobObjectTreeKillTests
         var launcher = new LlamaServerProcessLauncher(NullLogger<LlamaServerProcessLauncher>.Instance);
         _ = launcher.Launch(BuildDescendantSpawningSpec(markerFile));
 
-        // Park until the parent terminates this process. Bounded so a parent that died before killing us cannot leave
-        // a host running forever on a developer's machine.
-        await Task.Delay(TimeSpan.FromMinutes(5));
+        // real-timer: this branch runs in a REAL child host that the parent test kills with a Job Object. There is
+        // nothing to signal — the point is that no managed cleanup runs — so it parks. Bounded so a parent that died
+        // before killing us cannot leave a host running forever on a developer's machine.
+        await Task.Delay(OrphanParkLimit);
     }
 
     /// <summary>

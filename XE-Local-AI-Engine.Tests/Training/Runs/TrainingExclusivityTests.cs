@@ -31,7 +31,6 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </remarks>
 public sealed class TrainingExclusivityTests
 {
-    private static readonly TimeSpan ObservationWindow = TimeSpan.FromMilliseconds(300);
     private static readonly TimeSpan BoundedWait = TimeSpan.FromSeconds(5);
 
     [Test]
@@ -59,12 +58,24 @@ public sealed class TrainingExclusivityTests
         var gate = new GpuWorkGate();
         var benchmarks = Substitute.For<IBenchmarkStore>();
         var datasets = Substitute.For<ITrainingDatasetStore>();
+        var benchmarkClaimed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var generationClaimed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = benchmarks.ClaimNextAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            benchmarkClaimed.TrySetResult();
+            return Task.FromResult<BenchmarkClaimedWork?>(null);
+        });
+        _ = datasets.ClaimNextAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            generationClaimed.TrySetResult();
+            return Task.FromResult<DatasetGenerationClaimedWork?>(null);
+        });
         using var benchmarkSignal = new BenchmarkQueueSignal();
         using var generationSignal = new DatasetGenerationQueueSignal();
         using var benchmarkQueue = BuildBenchmarkQueue(benchmarks, benchmarkSignal, gate);
         using var generationQueue = BuildGenerationQueue(datasets, generationSignal, gate);
 
-        await RunBrieflyAsync(benchmarkQueue, generationQueue);
+        await RunUntilAsync(Task.WhenAll(benchmarkClaimed.Task, generationClaimed.Task), benchmarkQueue, generationQueue);
 
         // The guard is a refusal while an exclusive holder owns the node, not a permanent stop. Both are SHARED, so
         // they also have to be able to run beside each other.
@@ -120,7 +131,7 @@ public sealed class TrainingExclusivityTests
             using (var refused = BuildRunQueue(runs, gate))
             {
                 await refused.StartAsync(CancellationToken.None);
-                await Task.Delay(ObservationWindow);
+                await AssertEx.SettleAsync();
                 await refused.StopAsync(CancellationToken.None);
             }
 
@@ -254,10 +265,15 @@ public sealed class TrainingExclusivityTests
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
         _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.TrainingRun);
-        _ = runs.ClaimNextAsync(TrainingWorkKind.TrainingRun, Arg.Any<CancellationToken>()).Returns((TrainingWorkClaim?)null);
+        var claimed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = runs.ClaimNextAsync(TrainingWorkKind.TrainingRun, Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            claimed.TrySetResult();
+            return Task.FromResult<TrainingWorkClaim?>(null);
+        });
 
         using var queue = BuildRunQueue(runs, new GpuWorkGate());
-        await RunBrieflyAsync(queue);
+        await RunUntilAsync(claimed.Task, queue);
 
         _ = await runs.Received().ClaimNextAsync(TrainingWorkKind.TrainingRun, Arg.Any<CancellationToken>());
     }
@@ -273,13 +289,18 @@ public sealed class TrainingExclusivityTests
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
         _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.EvaluationRun);
-        _ = runs.ClaimNextAsync(TrainingWorkKind.EvaluationRun, Arg.Any<CancellationToken>()).Returns((TrainingWorkClaim?)null);
+        var claimed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = runs.ClaimNextAsync(TrainingWorkKind.EvaluationRun, Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            claimed.TrySetResult();
+            return Task.FromResult<TrainingWorkClaim?>(null);
+        });
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         _ = supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
                       .Returns(Substitute.For<ILlamaServerRuntimeMutationLease>());
 
         using var queue = BuildRunQueue(runs, new GpuWorkGate(), supervisor: supervisor);
-        await RunBrieflyAsync(queue);
+        await RunUntilAsync(claimed.Task, queue);
 
         _ = await runs.Received().ClaimNextAsync(TrainingWorkKind.EvaluationRun, Arg.Any<CancellationToken>());
         _ = await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
@@ -395,15 +416,35 @@ public sealed class TrainingExclusivityTests
         return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
     }
 
-    /// <summary>Starts each queue, lets it take a few passes at its loop, and stops it again.</summary>
-    private static async Task RunBrieflyAsync(params BackgroundService[] queues)
+    /// <summary>
+    ///     Starts each queue, lets its loop run as far as it can, and stops it again. Only for the callers asserting a
+    ///     REFUSAL: StopAsync cancels and awaits the loop, so the refusal is decided by the gate rather than by how long
+    ///     a sleep happened to last. A caller asserting that a claim DID happen must use
+    ///     <see cref="RunUntilAsync" /> and name the signal it is waiting for.
+    /// </summary>
+    private static Task RunBrieflyAsync(params BackgroundService[] queues) =>
+        RunUntilAsync(reached: null, queues);
+
+    /// <summary>
+    ///     Starts each queue, waits for <paramref name="reached" /> — a completion the queue's own collaborator sets
+    ///     when the loop gets where the test is asserting it gets — and stops them again. With no signal it settles the
+    ///     scheduler instead, which is all a refusal assertion needs.
+    /// </summary>
+    private static async Task RunUntilAsync(Task? reached, params BackgroundService[] queues)
     {
         foreach (var queue in queues)
         {
             await queue.StartAsync(CancellationToken.None);
         }
 
-        await Task.Delay(ObservationWindow);
+        if (reached is null)
+        {
+            await AssertEx.SettleAsync();
+        }
+        else
+        {
+            await AssertEx.CompletesAsync(reached, BoundedWait, "The queue loop never reached the claim under test.");
+        }
 
         foreach (var queue in queues)
         {

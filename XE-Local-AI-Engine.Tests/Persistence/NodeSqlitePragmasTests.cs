@@ -19,6 +19,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 [NotInParallel]
 public sealed class NodeSqlitePragmasTests : IDisposable
 {
+    /// <summary>Past the waiter's 1 s command timeout, well under the 5 s busy_timeout under test.</summary>
+    private static readonly TimeSpan LockHoldPastCommandTimeout = TimeSpan.FromMilliseconds(1300);
+
     private readonly string _dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
     public NodeSqlitePragmasTests()
@@ -139,8 +142,10 @@ public sealed class NodeSqlitePragmasTests : IDisposable
             await command.ExecuteNonQueryAsync(CancellationToken.None);
         });
 
-        // Hold the lock past the writer's 1s command timeout but well under busy_timeout, then release.
-        await Task.Delay(TimeSpan.FromMilliseconds(1300));
+        // real-timer: the subject IS native SQLite's busy_timeout, measured by SQLite's own clock. Holding the lock
+        // past the writer's 1 s command timeout but well under the 5 s busy_timeout is what distinguishes the native
+        // wait from Microsoft.Data.Sqlite's command-level retry; no injected TimeProvider reaches either.
+        await Task.Delay(LockHoldPastCommandTimeout);
         await holderTransaction.CommitAsync(CancellationToken.None);
 
         await writerInsert; // must not throw

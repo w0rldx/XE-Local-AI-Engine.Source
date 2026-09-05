@@ -375,7 +375,7 @@ public sealed class WorkerEventDispatcherTests
             Plain = second,
             Encrypted = null
         });
-        await Task.Delay(TimeSpan.FromMilliseconds(150));
+        await AssertEx.StaysIncompleteAsync(secondDispatch, "The second assignment must be parked on the slot the first holds.");
 
         dispatcher.StopAcceptingRemoteInvocations();
 
