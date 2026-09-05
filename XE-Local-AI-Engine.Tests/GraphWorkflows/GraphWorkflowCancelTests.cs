@@ -44,6 +44,62 @@ public sealed class GraphWorkflowCancelTests
     }
 
     /// <summary>
+    ///     One cancel, one <c>run.cancelled</c>. The command writes the event at the moment the cancel was ASKED for,
+    ///     and the drain's settle records none — a second row would make the log read as two cancels of one run.
+    /// </summary>
+    [Test]
+    public async Task AFullCancel_WritesExactlyOneRunCancelledEvent()
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
+
+        await harness.CancelAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        var events = await harness.ReadEventsAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1,
+            events.Count(static entry => string.Equals(entry.EventType, GraphWorkflowEventTypes.RunCancelled, StringComparison.Ordinal)),
+            "the request writes the event; the settle that follows it is the run row's business.");
+    }
+
+    /// <summary>
+    ///     A run cancelled from <c>Pending</c>, with nothing live to drain, still gets exactly one <c>run.cancelled</c>:
+    ///     the settle happens on the same tick as the drain and must not add a second.
+    /// </summary>
+    [Test]
+    public async Task ACancelFromPending_WritesExactlyOneRunCancelledEvent()
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
+
+        await harness.CancelAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+
+        var events = await harness.ReadEventsAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, events.Count(static entry => string.Equals(entry.EventType, GraphWorkflowEventTypes.RunCancelled, StringComparison.Ordinal)));
+    }
+
+    /// <summary>
+    ///     A cancelling run whose pinned graph no longer parses still settles. The drain needs no graph, and the state
+    ///     machine has no <c>Cancelling → Failed</c> edge — so a run that reached the unroutable branch instead of the
+    ///     drain would sit <c>Cancelling</c> with nothing able to move it.
+    /// </summary>
+    [Test]
+    public async Task ACancellingRunWhosePinnedGraphNoLongerParses_StillSettlesCancelled()
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        var definitionId = await harness.SeedDefinitionAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
+        var runId = await harness.StartRunThroughTheStoreAsync(definitionId, "{ not json at all", [("start", GraphWorkflowNodeKind.Start)]).ConfigureAwait(false);
+
+        await harness.CancelAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Cancelled, (await harness.ReadNodeRunAsync(runId, "start").ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
     ///     A cancel mid-run settles the siblings a lane does not own directly — there is nothing to ask them — and
     ///     leaves what already finished alone.
     /// </summary>

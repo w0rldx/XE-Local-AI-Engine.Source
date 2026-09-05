@@ -186,7 +186,15 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         {
             // A running run's graph parsed once already, so reaching here means the pinned blob changed underneath it.
             // Throwing would re-throw on every sweep forever; the run is unroutable and says so instead.
-            return await FailUnroutableAsync(store, run, exception, cancellationToken).ConfigureAwait(false);
+            //
+            // Except while it is CANCELLING, where there is no such thing as a failure to write: the state machine has
+            // no Cancelling → Failed edge, so FailUnroutableAsync can only log — and the drain below, which needs no
+            // graph, would never be reached. The run would then sit Cancelling forever. A drain is also all such a run
+            // has left to do, and the poll it skips here has nothing to settle: an unparseable graph means this
+            // dispatcher never dispatched the run, so no lane is driving any of its rows.
+            return run.Status == GraphWorkflowRunStatus.Cancelling
+                ? await DrainAsync(store, run, cancellationToken).ConfigureAwait(false)
+                : await FailUnroutableAsync(store, run, exception, cancellationToken).ConfigureAwait(false);
         }
 
         // Settle what the lanes have landed FIRST, before anything reads the node runs for a decision: work that
