@@ -138,17 +138,7 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
 
         try
         {
-            // Shared with writers and deleters, not just other readers: File.OpenRead shares Read only, and on Windows
-            // a lock-free sibling read taken that way blocks the File.Move(..., overwrite: true) below — turning a
-            // ready safe-retry spawn into a launch failure. Readers still see whole documents either way, because the
-            // replace is atomic.
-            await using var stream = new FileStream(_statePath,
-                new FileStreamOptions
-                {
-                    Mode = FileMode.Open,
-                    Access = FileAccess.Read,
-                    Share = FileShare.ReadWrite | FileShare.Delete
-                });
+            await using var stream = OpenStateForRead(_statePath);
             var state = await JsonSerializer.DeserializeAsync<LlamaServerLaunchFallbackState>(stream, SerializerOptions, ct).ConfigureAwait(false);
 
             // Legacy, backend-only entries carry no KV type, so they cannot say which config failed. They are ignored
@@ -175,6 +165,22 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
 
         return (set, hadLegacy);
     }
+
+    /// <summary>
+    ///     Opens the state file for reading the way every reader must. Shared with writers and deleters, not just with
+    ///     other readers: <see cref="File.OpenRead" /> shares Read only, and on Windows a lock-free sibling read taken
+    ///     that way blocks the <c>File.Move(…, overwrite: true)</c> that ends a write — turning a ready safe-retry
+    ///     spawn into a launch failure. Readers still see whole documents either way, because the replace is atomic.
+    /// </summary>
+    /// <remarks>Internal so the share flags can be pinned by a test holding a reader open across a replace.</remarks>
+    internal static FileStream OpenStateForRead(string path) =>
+        new(path,
+            new FileStreamOptions
+            {
+                Mode = FileMode.Open,
+                Access = FileAccess.Read,
+                Share = FileShare.ReadWrite | FileShare.Delete
+            });
 
     private async Task PersistAsync(HashSet<string> disabled, CancellationToken ct)
     {
@@ -213,8 +219,8 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
 
     /// <summary>
     ///     Takes the cross-process write lock, or null when it could not be had: a sibling still holding it after the
-    ///     retry budget, or a cache root this process cannot write to. Either way the write proceeds unlocked, and both
-    ///     paths are logged at Warning — the degraded merge is the one thing a silent return would hide.
+    ///     retry budget, or a lock file this process cannot open for writing. Either way the write proceeds unlocked,
+    ///     and both paths are logged at Warning — the degraded merge is the one thing a silent return would hide.
     /// </summary>
     private async Task<FileStream?> TryAcquireWriteLockAsync(CancellationToken ct)
     {
@@ -230,10 +236,10 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
             }
             catch (UnauthorizedAccessException)
             {
-                // Unwritable cache root: retrying cannot make it writable. The READ path's legacy drop tolerates this
-                // (it swallows the failed rewrite), but the safe-retry caller of the WRITE does not — the state write
-                // below fails the same way and aborts the launch — so say so rather than degrading silently.
-                _logger.LogWarning("Could not create the llama-server launch-fallback write lock at {LockPath} (the cache root is not writable); merging under the in-process lock only, so a concurrent sibling write may be lost.",
+                // The lock file itself could not be opened for writing, and retrying cannot change that. It says
+                // nothing about whether the STATE write below will succeed — that write decides its own writability —
+                // so this only reports the degraded merge rather than predicting the outcome of the launch.
+                _logger.LogWarning("Could not open the llama-server launch-fallback write lock at {LockPath} for writing; merging under the in-process lock only, so a concurrent sibling write may be lost.",
                     _lockPath);
                 return null;
             }

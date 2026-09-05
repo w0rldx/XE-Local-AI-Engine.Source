@@ -182,17 +182,12 @@ public sealed class LlamaServerLaunchFallbackStoreTests
         using var root = new TempCacheRoot();
         await File.WriteAllTextAsync(root.StatePath, """{"disabledOptimizedConfigs":["Cuda:q4_0"]}""");
 
-        // A sibling node process reading the state with the store's OWN share flags. On Windows a reader that shares
-        // only Read (what File.OpenRead gives) blocks File.Move(..., overwrite: true) and would fault the write below,
-        // turning a ready safe-retry spawn into a launch failure; ReadWrite | Delete is what prevents that. This
+        // A sibling node process reading the state through the PRODUCTION open, not a copy of its flags: this fails if
+        // LlamaServerLaunchFallbackStore.OpenStateForRead ever reverts to File.OpenRead. On Windows a reader that
+        // shares only Read (what File.OpenRead gives) blocks File.Move(..., overwrite: true) and would fault the write
+        // below, turning a ready safe-retry spawn into a launch failure; ReadWrite | Delete is what prevents that. The
         // assertion is platform-neutral — POSIX never blocked the replace — so it pins the flags, not the OS.
-        await using (var reader = new FileStream(root.StatePath,
-                         new FileStreamOptions
-                         {
-                             Mode = FileMode.Open,
-                             Access = FileAccess.Read,
-                             Share = FileShare.ReadWrite | FileShare.Delete
-                         }))
+        await using (var reader = LlamaServerLaunchFallbackStore.OpenStateForRead(root.StatePath))
         {
             using var store = new LlamaServerLaunchFallbackStore(root.Path);
             await store.DisableOptimizedConfigAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None);
