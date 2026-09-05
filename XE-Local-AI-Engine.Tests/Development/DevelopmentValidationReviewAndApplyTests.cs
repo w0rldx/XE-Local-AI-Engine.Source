@@ -1184,7 +1184,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             {
                 Enabled = true
             }),
-            TimeProvider.System);
+            TimeProvider.System,
+            NullLogger<DevelopmentManagementService>.Instance);
     }
 
     private static DevelopmentCommandProfile SlnxProfile() =>

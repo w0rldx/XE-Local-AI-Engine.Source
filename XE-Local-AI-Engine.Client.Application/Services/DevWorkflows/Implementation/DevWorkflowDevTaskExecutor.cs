@@ -702,6 +702,14 @@ internal sealed class DevWorkflowDevTaskExecutor
     ///             <c>Cancelled</c> are settled above. None of the three is a round anything can brief.</item>
     ///     </list>
     ///     <para>
+    ///         Nothing here has to withdraw an instruction, and that is why no branch tries. Every writer of
+    ///         <c>IncrementAttempt: true</c> targets <c>Pending</c>, and the <c>Pending → Running</c> dispatch records
+    ///         a fresh <c>WorkflowPolicyApplied</c> row BEFORE this method runs — so by the first tick of a new
+    ///         attempt the store's boundary already sits above every instruction an earlier attempt wrote, and an
+    ///         empty Retry has retracted the last one without anybody writing a retraction. Within one attempt the
+    ///         reason cannot change, because it is keyed to the attempt on the way in.
+    ///     </para>
+    ///     <para>
     ///         One ask per (node run, ATTEMPT), and the ledger is what enforces it: the reason stays on the inputs for
     ///         the life of the attempt, and the round asked for walks the task back through <c>InProgress</c> without
     ///         starting an attempt this node run is answerable for — so without the operation id that tick would ask a

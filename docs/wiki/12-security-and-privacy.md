@@ -535,6 +535,20 @@ two sandboxes, not one sandbox with two postures.
    The set is code-owned and versioned with `DevelopmentCommandProfileCatalog.CurrentVersion`; a packaging system
    missing from it is a hole, not a gap in coverage.
 
+   That `ChangesRequested` hop is written by `DevelopmentStore.FinalizeValidationAsync` as a
+   **`ValidationFinalized`** event, not a `TaskTransitioned` one — it is a status-changing event all the same, and
+   an audit built from `TaskTransitioned` rows alone will not show it (wiki [08](08-data-and-persistence.md)).
+   The hop also **spends a round**: `MaxReviewRounds` is the budget of attempts to get *through* the gates, so a
+   failed deterministic gate costs one exactly as a reviewer rejection does, and a task that exhausts it is stood
+   down at `Blocked` rather than reworked again.
+
+   **Known ceilings of the rework surface**, recorded so they are not re-discovered as bugs:
+   an operator instruction on a task **no workflow ever drove** has no `WorkflowPolicyApplied` row to bound it and
+   therefore governs every later round of that task; a **reviewer's** request for changes never reaches the task's
+   `blocked_reason` column (only a gate failure or a workflow/operator transition writes it), so the overview card
+   can be empty on a reviewer-driven rework; and `blocked_reason` is one last-write-wins column, so it shows the
+   most recent request only — the durable event timeline is the full history, by design.
+
 3. **The agent-facing sandbox asks for `SandboxNetworkPolicy.None`.** Capability-gated exactly as AgentHome's
    request is (`DevelopmentWorkspaceProvider.ResolveAgentFacingNetworkPolicy`): `None` where the backend
    advertises `SupportsNetworkPolicy`, `Unrestricted` where it does not.

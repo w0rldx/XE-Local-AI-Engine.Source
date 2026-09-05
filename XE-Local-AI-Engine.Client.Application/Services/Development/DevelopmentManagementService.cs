@@ -82,7 +82,8 @@ internal sealed class DevelopmentManagementService(
     IDevelopmentTemplateStore templateStore,
     IDevWorkflowStore workflows,
     IOptions<DevWorkflowOptions> workflowOptions,
-    TimeProvider timeProvider) : IDevelopmentManagementService
+    TimeProvider timeProvider,
+    ILogger<DevelopmentManagementService> logger) : IDevelopmentManagementService
 {
     /// <summary>
     ///     Why a task with no rounds left was stood down — and, because it is PERSISTED as the task's reason and read
@@ -94,6 +95,15 @@ internal sealed class DevelopmentManagementService(
     private readonly IDevelopmentApplyService _applyService = applyService ?? throw new ArgumentNullException(nameof(applyService));
     private readonly IDevelopmentArtifactBlobStore _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
     private readonly IDevelopmentCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
+
+    /// <summary>
+    ///     Dev Mode moved tasks between statuses without a single line in the process log — the pass-4 evidence scan
+    ///     found zero hits for the gate verdict, for <c>ChangesRequested</c> and for the stand-down sentence, so every
+    ///     claim about what the chain did was model-quoted rather than a system record. All three messages carry the
+    ///     literal phrase "task status", so one grep finds every hop <see cref="StartNextActionAsync" /> decides:
+    ///     <c>Planned → Ready</c>, the round start, and the stand-down at the round cap.
+    /// </summary>
+    private readonly ILogger<DevelopmentManagementService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly IActiveCloudChatClientFactory _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
     private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
     private readonly IDevelopmentProfileBackfillService _profileBackfill = profileBackfill ?? throw new ArgumentNullException(nameof(profileBackfill));
@@ -310,6 +320,7 @@ internal sealed class DevelopmentManagementService(
             {
                 Version = ready.Version
             };
+            _logger.LogInformation("Development task status moved Planned to Ready for task {TaskId} in project {ProjectId}.", taskId, projectId);
         }
 
         var attempts = await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false);
@@ -338,6 +349,13 @@ internal sealed class DevelopmentManagementService(
                                           ReviewRoundLimitReason),
                                       cancellationToken)
                                   .ConfigureAwait(false);
+            _logger.LogInformation("Development task status moved {From} to Blocked for task {TaskId} in project {ProjectId} after {Round} of {Max} rounds: {Reason}",
+                task.Status,
+                taskId,
+                projectId,
+                task.CurrentReviewRound,
+                task.MaxReviewRounds,
+                ReviewRoundLimitReason);
             return new DevelopmentNextActionResult("Blocked", projectId, taskId, null, DevelopmentTaskStatus.Blocked, null);
         }
 
@@ -399,6 +417,12 @@ internal sealed class DevelopmentManagementService(
         }
 
         var startedTask = await _store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("Development task status moved {From} to {To} for task {TaskId} in project {ProjectId}, starting a {Role} round.",
+            task.Status,
+            startedTask.Status,
+            taskId,
+            projectId,
+            role);
         return new DevelopmentNextActionResult("Attempt", projectId, taskId, attemptId, startedTask.Status, role);
     }
 

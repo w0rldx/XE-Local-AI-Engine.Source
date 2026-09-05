@@ -194,6 +194,94 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     }
 
     /// <summary>
+    ///     The withdrawal. An operator-directed row carrying NO reason retracts the instruction the operator wrote
+    ///     earlier in the same dispatch, rather than being skipped as "not an operator row" — which is what the
+    ///     <c>DetailJson != null</c> filter used to make it, leaving an amendment that outranks the requirements and
+    ///     disarms the reviewer with no route back out inside the node run that wrote it.
+    /// </summary>
+    [Test]
+    public async Task ABlankReasonOperatorRowWithdrawsTheInstructionBeforeIt()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+
+        var attemptId = await ReworkThenStartCoderAttemptAsync(store, seed.TaskId, version, OperatorReason, operatorDirected: true).ConfigureAwait(false);
+        AssertEx.Equal(OperatorReason, (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).OperatorInstruction);
+
+        // What an empty Retry box writes: the same operator-directed transition, with nothing said in it.
+        var asked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                   Guid.NewGuid(),
+                                   DevelopmentTaskStatus.ChangesRequested,
+                                   (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Version,
+                                   Reason: null,
+                                   OperatorDirected: true))
+                               .ConfigureAwait(false);
+
+        AssertEx.Null((await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).OperatorInstruction,
+            "a person who takes their amendment back must stop outranking the requirements from that moment on.");
+        AssertEx.Null((await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).PreviousRoundFeedback,
+            "and the withdrawal is not itself feedback for the round to answer.");
+
+        // A LATER instruction still governs: the withdrawal is not a permanent kill, exactly as a blank policy is not.
+        _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                           Guid.NewGuid(),
+                           DevelopmentTaskStatus.InProgress,
+                           asked.Version))
+                       .ConfigureAwait(false);
+        _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                           Guid.NewGuid(),
+                           DevelopmentTaskStatus.ChangesRequested,
+                           (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Version,
+                           OperatorReason,
+                           OperatorDirected: true))
+                       .ConfigureAwait(false);
+        AssertEx.Equal(OperatorReason, (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).OperatorInstruction);
+    }
+
+    /// <summary>
+    ///     The rework sentence stops being the CURRENT one when the round it asked for starts. Only
+    ///     <c>TransitionTaskAsync</c> cleared it; the coder round reaches <c>InProgress</c> through
+    ///     <c>StartAttemptAsync</c> instead, which never touched the column — so the Development overview, which
+    ///     renders it with no status gate, showed the gate failure or the operator's change request against a task
+    ///     that was already being reworked because of it.
+    /// </summary>
+    [Test]
+    public async Task TheCoderRoundStartingClearsTheReasonThatAskedForIt()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+
+        var asked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                   Guid.NewGuid(),
+                                   DevelopmentTaskStatus.ChangesRequested,
+                                   version,
+                                   GateReason))
+                               .ConfigureAwait(false);
+        AssertEx.Equal(GateReason,
+            (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).BlockedReason,
+            "the reason is the operator's answer to 'why is this being reworked' right up to the round that answers it.");
+
+        // The coder round the change request asked for, started the way the chain starts one: straight off
+        // ChangesRequested, with no TransitionTaskAsync hop in between.
+        _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
+                           Guid.NewGuid(),
+                           Guid.NewGuid(),
+                           DevelopmentAttemptRole.Coder,
+                           "local-model",
+                           "local",
+                           asked.Version))
+                       .ConfigureAwait(false);
+
+        var reworking = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, reworking.Status);
+        AssertEx.Null(reworking.BlockedReason, "the round that acts on the complaint is where it stops being the current one.");
+    }
+
+    /// <summary>
     ///     The fall-through the exclusion opens, and the whole point of ranking the two fields: with a reviewer's
     ///     complaint behind the operator's amendment, the round is told BOTH — the operator first and above, the
     ///     reviewer below — rather than the operator's sentence shadowing a complaint nobody has answered yet.

@@ -223,9 +223,12 @@ public sealed partial class DevelopmentStore
     ///         rounds. A task no workflow ever drove has no such row, no boundary, and keeps the unbounded reading.
     ///     </para>
     ///     <para>
-    ///         ponytail: the ceiling is one instruction per dispatch — a later comment-carrying Retry writes a new
-    ///         boundary and a new instruction after it, but nothing retracts one WITHIN the dispatch that wrote it. If
-    ///         that ever bites, read a blank-reason operator row as the retraction.
+    ///         A BLANK-reason operator row is the retraction, which is why there is no <c>DetailJson</c> filter here:
+    ///         "a person asked for something and said nothing" is an operator row that says nothing, not a row that is
+    ///         not an operator's. It shadows the older instruction the same way a newer sentence replaces one, and
+    ///         <see cref="ReasonOf" /> answers null for it, so the round it governs is told nothing rather than told
+    ///         the withdrawn sentence. Filtering the row out instead made the instruction unwithdrawable WITHIN the
+    ///         dispatch that wrote it.
     ///     </para>
     /// </summary>
     private async Task<string?> OperatorInstructionAsync(Guid taskId, CancellationToken cancellationToken)
@@ -240,8 +243,7 @@ public sealed partial class DevelopmentStore
                                      .Where(entity => entity.TaskId == taskId
                                                       && entity.Sequence > boundary
                                                       && entity.EventType == "TaskTransitioned"
-                                                      && entity.Outcome == OperatorTransitionOutcome
-                                                      && entity.DetailJson != null)
+                                                      && entity.Outcome == OperatorTransitionOutcome)
                                      .OrderByDescending(entity => entity.Sequence)
                                      .FirstOrDefaultAsync(cancellationToken)
                                      .ConfigureAwait(false);
