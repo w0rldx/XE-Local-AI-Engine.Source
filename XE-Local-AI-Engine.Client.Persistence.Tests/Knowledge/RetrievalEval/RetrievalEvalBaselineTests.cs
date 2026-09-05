@@ -103,7 +103,11 @@ public sealed class RetrievalEvalBaselineTests : IDisposable
                     return (IReadOnlyList<double>?)documents.Select(document => TokenOverlap(query, document)).ToList();
                 });
 
-        var search = fixture.CreateRerankedSearchService(reranker);
+        // A generous budget on purpose: this test proves the reranker is WIRED, not that it survives a deadline,
+        // and the fixture default of 500 ms is spent on real SQLite I/O before rerank is reached — under box load
+        // one query overruns it, RerankWithinBudgetAsync skips the call, and the per-query invocation count fails.
+        // Reranker_WhenRemainingRetrievalBudgetExpires_DegradesToFusionOrder owns the tight-budget path.
+        var search = fixture.CreateRerankedSearchService(reranker, retrievalLatencyBudgetMilliseconds: 30_000);
         var metrics = await RetrievalEvalHarness.EvaluateAsync(search, RetrievalEvalFixture.Queries, fixture.DocumentIdsByKey, K, CancellationToken.None).ConfigureAwait(false);
         Report("reranked", metrics);
 
