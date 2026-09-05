@@ -12,16 +12,3 @@ internal interface IGraphWorkflowDispatcherSignal
 {
     void Signal(Guid runId);
 }
-
-/// <summary>
-///     The signal a host without a dispatcher resolves. Registered <c>TryAddSingleton</c>, so the dispatcher's own
-///     registration replaces it the moment that slice lands — and until then a run start commits and sits
-///     <c>Pending</c>, which is exactly what a node with no tick loop should look like.
-/// </summary>
-internal sealed class NoOpGraphWorkflowDispatcherSignal : IGraphWorkflowDispatcherSignal
-{
-    public void Signal(Guid runId)
-    {
-        // Nothing is listening yet. The absent body is the whole implementation, not a placeholder for one.
-    }
-}

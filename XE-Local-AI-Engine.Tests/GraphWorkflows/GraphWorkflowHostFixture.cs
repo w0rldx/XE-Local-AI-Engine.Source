@@ -16,7 +16,12 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 /// </summary>
 public sealed class GraphWorkflowHostFixture : IAsyncInitializer, IAsyncDisposable
 {
-    public TestServerWebAppFactory Factory { get; } = NewFactory();
+    /// <summary>
+    ///     The concurrency cap is raised because it counts LIVE runs across the whole database, and a shared host is a
+    ///     shared database: at the shipped default of four, a class's fifth concurrent run would sit <c>Pending</c>
+    ///     behind its siblings rather than because of anything the test did. The cap itself is pinned on a private host.
+    /// </summary>
+    public TestServerWebAppFactory Factory { get; } = NewFactory(("GraphWorkflows:MaxConcurrentRuns", "64"));
 
     /// <summary>
     ///     The graph-workflow host shape: the feature on, and the dispatcher signal replaced by a recorder.

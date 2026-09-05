@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -53,9 +52,15 @@ internal static class AddNodeGraphWorkflowsExtensions
         // The run command surface, scoped for the same reason.
         builder.Services.AddScoped<IGraphWorkflowRunService, GraphWorkflowRunService>();
 
-        // TryAdd, so the dispatcher's own registration wins the moment that slice lands. Until then a started run
-        // commits and sits Pending, which is what a node with no tick loop honestly looks like.
-        builder.Services.TryAddSingleton<IGraphWorkflowDispatcherSignal, NoOpGraphWorkflowDispatcherSignal>();
+        // The five kinds that run inside the tick. A singleton because it holds nothing per run — only the output cap.
+        builder.Services.AddSingleton<GraphWorkflowInlineExecutor>();
+
+        // One instance under three service types: the loop, the signal every command path calls after its commit, and
+        // the hosted service that starts the two pumps. Its own DisposeAsync is idempotent, because the container
+        // tracks each factory registration's result for disposal separately.
+        builder.Services.AddSingleton<GraphWorkflowDispatcher>();
+        builder.Services.AddSingleton<IGraphWorkflowDispatcherSignal>(services => services.GetRequiredService<GraphWorkflowDispatcher>());
+        builder.Services.AddSingleton<IHostedService>(services => services.GetRequiredService<GraphWorkflowDispatcher>());
 
         return builder;
     }
