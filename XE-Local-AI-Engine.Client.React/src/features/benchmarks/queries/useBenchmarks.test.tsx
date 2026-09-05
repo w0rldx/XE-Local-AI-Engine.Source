@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import type { BenchmarkProjectDraft } from "@/features/benchmarks/models/BenchmarkModels";
@@ -103,10 +103,6 @@ const draft: BenchmarkProjectDraft = {
 };
 
 describe("benchmark queries over the real client", () => {
-	// Without this the hooks of a finished test stay mounted, and any of them left polling keeps hitting the NEXT test's
-	// handlers — which is a silent read count from nowhere in every assertion that counts requests.
-	afterEach(cleanup);
-
 	it("maps the project list through the boundary mapper", async () => {
 		server.use(jsonRoute("get", "benchmarks/projects", { items: [projectRow()] }));
 		const { wrapper } = createProvidersWrapper();
@@ -666,28 +662,50 @@ describe("benchmark queries over the real client", () => {
 		);
 		const { wrapper } = createProvidersWrapper();
 
-		const { result } = renderHook(
-			() => ({ comparisons: useBenchmarkComparisons(projectId), runs: useBenchmarkRuns(projectId) }),
-			{ wrapper },
-		);
-		await waitFor(() => expect(result.current.runs.isSuccess).toBe(true));
-		await waitFor(() => expect(result.current.comparisons.isSuccess).toBe(true));
-		// The first read has nothing to compare against, and the list it would refresh came from the same node state.
-		expect(listReads).toBe(1);
+		// Fake timers own the poll cadence for this test alone. The stages have to arrive one per poll, and the last
+		// assertion is a NEGATIVE one — that a disarmed poll fires nothing more — which a real wait can only ever answer
+		// for the 2.5 s the box happened to give it. `vi.advanceTimersByTimeAsync` makes both exact and instant.
+		// The timers must be installed before the hooks mount, or TanStack arms its interval on the real clock and the
+		// negative check passes for the wrong reason. `vi.waitFor` (not RTL's) is used throughout because it is the one
+		// that advances fake timers; RTL's only detects Jest's.
+		vi.useFakeTimers();
+		try {
+			const { result } = renderHook(
+				() => ({ comparisons: useBenchmarkComparisons(projectId), runs: useBenchmarkRuns(projectId) }),
+				{ wrapper },
+			);
+			await vi.waitFor(
+				() => {
+					expect(result.current.runs.isSuccess).toBe(true);
+					expect(result.current.comparisons.isSuccess).toBe(true);
+				},
+				{ interval: 1 },
+			);
+			// The first read has nothing to compare against, and the list it would refresh came from the same node state.
+			expect(comparisonReads).toBe(1);
+			expect(listReads).toBe(1);
 
-		await waitFor(() => expect(comparisonReads).toBeGreaterThanOrEqual(2), { timeout: 8_000 });
-		expect(listReads).toBe(1);
+			// One poll on: a verdict landed, but the cohort and the comparison set are the same reading, so nothing is
+			// invalidated and the ranked table is not refetched.
+			await vi.advanceTimersByTimeAsync(activeComparisonPollMs);
+			await vi.waitFor(() => expect(comparisonReads).toBe(2), { interval: 1 });
+			expect(listReads).toBe(1);
 
-		await waitFor(() => expect(listReads).toBe(2), { timeout: 8_000 });
-		expect(result.current.comparisons.data?.fit?.fitKey).toBe("fit-1");
+			// The next poll carries the fit, and the ranked table is refreshed with it exactly once.
+			await vi.advanceTimersByTimeAsync(activeComparisonPollMs);
+			await vi.waitFor(() => expect(listReads).toBe(2), { interval: 1 });
+			expect(result.current.comparisons.data?.fit?.fitKey).toBe("fit-1");
 
-		// Every comparison is terminal now, so the verdicts stop being re-read and the table stops being refreshed with
-		// them: one fit, one refresh. A predicate that fired on any change instead would keep the table on the wire.
-		const readsAtFit = comparisonReads;
-		await new Promise((resolve) => setTimeout(resolve, activeComparisonPollMs + 500));
-		expect(comparisonReads).toBe(readsAtFit);
-		expect(listReads).toBe(2);
-	}, 30_000);
+			// Every comparison is terminal now, so the verdicts stop being re-read and the table stops being refreshed with
+			// them: one fit, one refresh. A predicate that fired on any change instead would keep the table on the wire.
+			const readsAtFit = comparisonReads;
+			await vi.advanceTimersByTimeAsync(activeComparisonPollMs + 500);
+			expect(comparisonReads).toBe(readsAtFit);
+			expect(listReads).toBe(2);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
 
 	it("re-judges a whole project and reports how many runs were enqueued", async () => {
 		let observedBody: unknown;

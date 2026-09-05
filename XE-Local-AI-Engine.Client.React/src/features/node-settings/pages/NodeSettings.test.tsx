@@ -2,7 +2,7 @@
 
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -256,7 +256,9 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 	});
 
 	afterEach(() => {
-		cleanup();
+		// The developer-mode test writes `xe-developer-mode`, and localStorage is one jsdom object shared by the whole
+		// file: left behind, it decides for every later test whether the developer-only cards mount.
+		localStorage.clear();
 		vi.clearAllMocks();
 	});
 
