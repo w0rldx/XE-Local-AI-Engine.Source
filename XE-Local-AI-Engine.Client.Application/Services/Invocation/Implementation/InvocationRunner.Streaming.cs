@@ -304,8 +304,13 @@ public sealed partial class InvocationRunner
             var inputTokens = ToNullableInt(usage.InputTokenCount);
             var outputTokens = ToNullableInt(usage.OutputTokenCount);
             var reasoningTokens = ToNullableInt(usage.ReasoningTokenCount);
+            // Reasoning is NOT a third bucket: Microsoft.Extensions.AI documents ReasoningTokenCount as counted
+            // inside OutputTokenCount, and both provider paths that reach here honour that (OpenAI reports
+            // completion_tokens_details.reasoning_tokens inside completion_tokens; llama-server the same). Adding it
+            // again over-counted every reasoning turn whose provider reported no total of its own. A provider-supplied
+            // total always wins; with neither input nor output reported the total stays null.
             var totalTokens = ToNullableInt(usage.TotalTokenCount)
-                              ?? SumIfAny(inputTokens, outputTokens, reasoningTokens);
+                              ?? SumIfAny(inputTokens, outputTokens);
 
             return new UsageSnapshot(inputTokens, outputTokens, reasoningTokens, totalTokens);
         }

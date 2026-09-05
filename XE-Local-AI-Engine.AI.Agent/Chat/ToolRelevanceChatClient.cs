@@ -238,12 +238,39 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
             return true;
         }
 
-        // Deliberately an UNANCHORED substring test (plan §3.5), not a word-boundary match: a short built-in name
-        // would over-pin on any instruction that merely contains that word. Acceptable today because every name in
-        // the space is multi-word snake_case or prefix-qualified, and over-pinning only costs the saving - it can
-        // never hide a tool that should have been shown, because core is never trimmed.
-        return instructionText is not null && instructionText.Contains(name, StringComparison.Ordinal);
+        // A WORD-boundary match, not a bare substring test: a short built-in name over-pinned on any instruction that
+        // merely contained it inside a longer word ("ask" inside "task"), which spent the saving on a tool the
+        // instructions never named. Boundary is the \w class - letters, digits, and the underscore snake_case names
+        // use - so "ask" matches "you may ask first" and neither "task" nor "ask_user".
+        return instructionText is not null && ContainsWord(instructionText, name);
     }
+
+    /// <summary>
+    ///     Ordinal word-boundary containment. A hand-rolled scan rather than a regex because the pattern is the TOOL
+    ///     NAME: every candidate on every array decision would build and discard its own compiled <c>Regex</c>.
+    /// </summary>
+    private static bool ContainsWord(string text, string word)
+    {
+        if (string.IsNullOrEmpty(word))
+        {
+            return false;
+        }
+
+        for (var index = text.IndexOf(word, StringComparison.Ordinal);
+             index >= 0;
+             index = text.IndexOf(word, index + 1, StringComparison.Ordinal))
+        {
+            if (!IsWordCharacter(text, index - 1) && !IsWordCharacter(text, index + word.Length))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsWordCharacter(string text, int index) =>
+        index >= 0 && index < text.Length && (char.IsLetterOrDigit(text[index]) || text[index] == '_');
 
     // The relevance query. Instructions are null on both ROOT agent-build paths by design (the system prompt rides the
     // seed message), so the query is derived from the round's messages the hop already receives. A text-LESS user

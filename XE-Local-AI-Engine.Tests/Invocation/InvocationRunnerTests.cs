@@ -519,6 +519,44 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenProviderReportsNoTotal_DerivesTheTotalWithoutDoubleCountingReasoning()
+    {
+        // Microsoft.Extensions.AI documents ReasoningTokenCount as counted INSIDE OutputTokenCount, so a derived total
+        // of input + output + reasoning charged every reasoning token twice whenever the provider omitted its own
+        // total. 100 + 40 is the turn, not 100 + 40 + 30.
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: new UsageDetails
+        {
+            InputTokenCount = 100,
+            OutputTokenCount = 40,
+            ReasoningTokenCount = 30
+        })));
+
+        await RunPlainAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
+        AssertEx.Equal(expected: 140, sender.SentCompletions[0].TokensUsed);
+        AssertEx.Equal(expected: 30, sender.SentCompletions[0].ReasoningTokens);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenProviderReportsOnlyReasoningTokens_LeavesTheTotalUnreported()
+    {
+        // Null-preserving: with neither input nor output reported there is nothing to derive a total from, and a
+        // reasoning-only count is not a turn total.
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: new UsageDetails
+        {
+            ReasoningTokenCount = 30
+        })));
+
+        await RunPlainAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
+        AssertEx.Null(sender.SentCompletions[0].TokensUsed, "a turn with no input or output count has no derivable total");
+    }
+
+    [Test]
     public async Task RunAsync_WhenPlainContextAndAgentRuntimeThrows_SendsPlainInvocationFailed()
     {
         var sender = new MockHubMessageSender();
