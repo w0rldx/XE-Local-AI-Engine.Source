@@ -305,7 +305,8 @@ public sealed class InferenceBenchmarkHarnessTests
                 LlamaServerReadinessOutcome.Ready,
                 LlamaServerPlacementOutcome.Partial,
                 LlamaServerLoadAttemptKind.Primary,
-                SpeculativeModeClass.MainModelHeads)
+                SpeculativeModeClass.MainModelHeads,
+                ModelName: "model")
         };
         var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 256) with
         {

@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 public sealed class DevWorkflowEncryptionTests
 {
-    /// <summary>The thirteen cost-telemetry properties (P-C1 §4.1 plus the model-readiness split), by entity property name.</summary>
+    /// <summary>The fifteen cost-telemetry properties (P-C1 §4.1, the model-readiness split and the VRAM-at-load pair), by entity property name.</summary>
     private static readonly string[] TelemetryPropertyNames =
     [
         nameof(DevWorkflowNodeRun.InputTokens),
@@ -21,6 +21,8 @@ public sealed class DevWorkflowEncryptionTests
         nameof(DevWorkflowNodeRun.ToolNamesJson),
         nameof(DevWorkflowNodeRun.AgentTurnMs),
         nameof(DevWorkflowNodeRun.ModelReadinessMs),
+        nameof(DevWorkflowNodeRun.VramFreeAtLoadBytes),
+        nameof(DevWorkflowNodeRun.VramAdmittedBytes),
         nameof(DevWorkflowNodeRun.ServedModelName),
         nameof(DevWorkflowNodeRun.RouteJson),
         nameof(DevWorkflowNodeRun.WorkSessionSteps)

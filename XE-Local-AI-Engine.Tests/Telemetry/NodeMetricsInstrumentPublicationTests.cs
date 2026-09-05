@@ -67,7 +67,8 @@ public sealed class NodeMetricsInstrumentPublicationTests
             LlamaServerReadinessOutcome.Ready,
             LlamaServerPlacementOutcome.Partial,
             LlamaServerLoadAttemptKind.SafeRetry,
-            SpeculativeModeClass.MainModelHeads));
+            SpeculativeModeClass.MainModelHeads,
+            ModelName: "llama3"));
 
         var durations = capture.Doubles("llama_server_load_readiness_duration_ms");
         AssertEx.Equal(expected: 1, durations.Count);

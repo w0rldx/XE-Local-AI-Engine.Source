@@ -64,7 +64,7 @@ internal sealed class DevWorkflowNodeRun
     public string? FailureClass { get; set; }
     public string? TerminalReason { get; set; }
 
-    // Cost telemetry: thirteen nullable, plaintext, metadata-only columns saying what this node run SPENT and where it
+    // Cost telemetry: fifteen nullable, plaintext, metadata-only columns saying what this node run SPENT and where it
     // routed — counts, a served model name, structural node keys and tool NAMES, never a prompt, an argument, a result
     // or a transcript. Written once, at the terminal-or-blocked transition, through the one store decorator every call
     // site crosses; nothing reads them to decide anything. Attempt increments in place, so they describe the LAST
@@ -114,6 +114,27 @@ internal sealed class DevWorkflowNodeRun
     ///     as zero: zero would claim the attempt proved a warm start.
     /// </summary>
     public long? ModelReadinessMs { get; set; }
+
+    /// <summary>
+    ///     Machine-global free VRAM in bytes as the capacity gate measured it just before the most recent SUCCESSFUL
+    ///     load of the model that served this run — not necessarily a load this run caused.
+    ///     <para>
+    ///         <b>A warm run reports the EARLIER load's figures.</b> <see cref="ModelReadinessMs" /> is what separates
+    ///         the two: null there means no turn of this attempt warmed a local runtime, so the load these bytes
+    ///         describe predates the run and the box may have looked different by the time it started. Null here means
+    ///         nobody measured — a remote or Ollama model, a model the node never loaded itself, a host with no
+    ///         readable global-free figure (non-NVIDIA or CPU-only), or a row written before this column existed.
+    ///     </para>
+    /// </summary>
+    public long? VramFreeAtLoadBytes { get; set; }
+
+    /// <summary>
+    ///     The GPU bytes the capacity gate RESERVED for that same load's process. NOT llama.cpp's own
+    ///     <c>--list-devices</c> process budget, which is a different axis and is not read on this path. Zero is a real
+    ///     answer for a CPU-placed allocation; null carries the same "nobody measured" meaning as
+    ///     <see cref="VramFreeAtLoadBytes" />, and the same warm-run caveat applies.
+    /// </summary>
+    public long? VramAdmittedBytes { get; set; }
 
     /// <summary>What the provider actually SERVED, off the envelope. Beside the authored pin, never instead of it: a pin is a request, not a receipt.</summary>
     public string? ServedModelName { get; set; }
