@@ -35,9 +35,17 @@ internal static class AddNodeGraphWorkflowsExtensions
         // can express. Failing them at startup beats meeting them once per node run.
         builder.Services.AddSingleton<IValidateOptions<GraphWorkflowOptions>, GraphWorkflowOptionsValidator>();
 
-        // Scoped, like every store that reaches the DbContext. No publishing decorator in this slice: S0 has nothing to
-        // announce — the definition half writes no run anybody is watching. S1 wraps this registration when it does.
-        builder.Services.AddScoped<IGraphWorkflowStore, GraphWorkflowStore>();
+        // Scoped, like every store that reaches the DbContext. The store is resolved through the publishing decorator,
+        // so no caller can commit a run change without announcing it; registering the concrete type separately is what
+        // lets the decorator take it as its inner store.
+        builder.Services.AddScoped<GraphWorkflowStore>();
+        builder.Services.AddScoped<IGraphWorkflowStore>(services => new PublishingGraphWorkflowStore(services.GetRequiredService<GraphWorkflowStore>(),
+            services.GetRequiredService<IGraphWorkflowEventPublisher>(),
+            services.GetRequiredService<ILogger<PublishingGraphWorkflowStore>>()));
+
+        // TryAdd, so the hub-backed publisher in the Client host wins wherever the hub is present. Without it a host
+        // that maps no hub still resolves the store.
+        builder.Services.TryAddSingleton<IGraphWorkflowEventPublisher, NoOpGraphWorkflowEventPublisher>();
 
         // The one write seam. Scoped because the store it drives is, and because a validation answer is per-request.
         builder.Services.AddScoped<IGraphWorkflowDefinitionService, GraphWorkflowDefinitionService>();
