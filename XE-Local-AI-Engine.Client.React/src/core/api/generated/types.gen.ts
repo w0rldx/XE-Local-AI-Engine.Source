@@ -1544,6 +1544,10 @@ export type XeLocalAiEngineClientServicesNodeSettingsModelRate = {
 	outputPer1M?: number;
 };
 
+export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsConflictResponse = {
+	message: string;
+};
+
 export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest = {
 	maxMessageRequestTimeoutSeconds?: number | null;
 	defaultModelName?: string | null;
@@ -9284,6 +9288,7 @@ export type SaveNodeSettingsErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsConflictResponse;
 };
 
 export type SaveNodeSettingsError = SaveNodeSettingsErrors[keyof SaveNodeSettingsErrors];
