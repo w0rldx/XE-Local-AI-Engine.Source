@@ -241,7 +241,9 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
         // A WORD-boundary match, not a bare substring test: a short built-in name over-pinned on any instruction that
         // merely contained it inside a longer word ("ask" inside "task"), which spent the saving on a tool the
         // instructions never named. Boundary is the \w class - letters, digits, and the underscore snake_case names
-        // use - so "ask" matches "you may ask first" and neither "task" nor "ask_user".
+        // use - so "ask" matches "you may ask first" and neither "task" nor "ask_user". The trade is deliberate and
+        // it does cut both ways: an instruction that names a tool only INSIDE a longer token no longer pins it, so
+        // that tool drops back to being a trimmable candidate ranked like any other.
         return instructionText is not null && ContainsWord(instructionText, name);
     }
 
