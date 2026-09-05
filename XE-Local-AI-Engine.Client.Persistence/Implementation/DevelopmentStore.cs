@@ -71,7 +71,14 @@ public sealed partial class DevelopmentStore(NodeChatDbContext dbContext, TimePr
             // without ever asking for a different patch. Completed is deliberately still absent — apply completion is
             // the explicit apply port's, not a generic transition's.
             [DevelopmentTaskStatus.AwaitingApply] =
-                [DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled]
+                [DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
+
+            // The one edge out of Blocked, and TransitionTaskAsync refuses it to any command that does not also widen
+            // the round cap — so this is not "Blocked is recoverable", it is "an operator's Retry can buy the round the
+            // cap stopped". Measured live: a Retry on a workflow node whose task sat at N of N rounds re-dispatched the
+            // node, which re-read a task still at its cap and stood itself down about two seconds later, twice over,
+            // without ever starting a coder round — so the sentence typed into the retry box could not reach a model.
+            [DevelopmentTaskStatus.Blocked] = [DevelopmentTaskStatus.ChangesRequested]
         };
 
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));

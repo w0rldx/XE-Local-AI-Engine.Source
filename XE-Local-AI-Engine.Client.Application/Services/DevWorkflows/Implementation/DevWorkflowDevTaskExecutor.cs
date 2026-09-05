@@ -597,6 +597,16 @@ internal sealed class DevWorkflowDevTaskExecutor
 
             case DevelopmentTaskStatus.Blocked:
 
+                // Unless a person has just retried this node run, which is the ONE thing that changes what "not going
+                // anywhere" means: a Retry buys the task the round its cap stopped, exactly as it already buys the node
+                // one more attempt, and the round starts from ChangesRequested with whatever they said carried into it.
+                // Without this the re-dispatch re-read a task still at N of N and stood the node down again about two
+                // seconds later, twice over, spending a node attempt each time and never starting a coder round.
+                if (await CarryOperatorRetryAsync(development, run, nodeRun, projectId, task, attempts, cancellationToken).ConfigureAwait(false))
+                {
+                    return 1;
+                }
+
                 // The chain gave up on its own terms — its review rounds ran out, or an operator stood it down. Another
                 // node-run attempt would re-drive a task that is not going anywhere, so this is the class that goes
                 // straight to a human.
@@ -680,9 +690,20 @@ internal sealed class DevWorkflowDevTaskExecutor
     ///     it wrote one. Marked <c>OperatorDirected</c>, which is what lets the coder and reviewer prompts rank a
     ///     person's sentence above the task's own immutable requirements and above a reviewer's feedback.
     ///     <para>
-    ///         Only from <c>InProgress</c> with a coder attempt that did NOT succeed, which is where a blocked-then-
-    ///         retried implementation lands: the next action there is a coder round either way, so the change request
-    ///         adds the sentence without changing what the retry does. Every other case is a KNOWN HOLE — the retry
+    ///         Two shapes of the same act. From <c>InProgress</c> with a coder attempt that did NOT succeed, the next
+    ///         action is a coder round either way, so the change request adds the sentence without changing what the
+    ///         retry does. From <c>Blocked</c> AT THE ROUND CAP it does more: it widens the cap by one, which is what
+    ///         turns the retry from a no-op into a round. That widening is the single documented exception to a Dev
+    ///         Mode task being immutable, and it is bought one round at a time by a person clicking Retry — the same
+    ///         click that already widens the node's own attempt cap. Measured live before it existed: two Retries on a
+    ///         node blocked at "all 3 rounds used" re-dispatched it, re-blocked it in about two seconds each, spent two
+    ///         of the node's own attempts, and never built a coder prompt, so the operator's sentence was stored, shown
+    ///         in the panel, and unreachable by any model.
+    ///     </para>
+    ///     <para>
+    ///         The cap case fires on the ACT rather than on the sentence — <c>IsOperatorRetry</c>, not a reason — so a
+    ///         silent Retry buys the round exactly as a spoken one does, and the operator row it writes carries no
+    ///         reason, which is already how an instruction is withdrawn. Every other case is a KNOWN HOLE — the retry
     ///         still happens, the operator's sentence simply does not reach a coder — and each is deliberate:
     ///     </para>
     ///     <list type="bullet">
@@ -696,11 +717,20 @@ internal sealed class DevWorkflowDevTaskExecutor
     ///             right answer to a reviewer that failed into a coder round nobody asked for.</item>
     ///         <item><c>AwaitingApply</c> never reaches here: the caller settles the node run <c>Succeeded</c> above,
     ///             because an approved implementation waiting to be applied is still a true claim.</item>
-    ///         <item><c>Blocked</c> never reaches here either — the caller stands the node run down first — and the
-    ///             task's transition table has no outbound edge from it, so nothing could be written anyway.</item>
+    ///         <item><c>Blocked</c> for any reason OTHER than the round cap — an operator stood the task down, the
+    ///             repository is gone — is left alone: the widening buys a round, and a task blocked on something a
+    ///             round cannot fix would spend it re-earning the same block.</item>
     ///         <item><c>Validation</c> is Dev Mode's own supervisor window and holds no attempt; <c>Completed</c> and
     ///             <c>Cancelled</c> are settled above. None of the three is a round anything can brief.</item>
     ///     </list>
+    ///     <para>
+    ///         Nothing here has to withdraw an instruction, and that is why no branch tries. Every writer of
+    ///         <c>IncrementAttempt: true</c> targets <c>Pending</c>, and the <c>Pending → Running</c> dispatch records
+    ///         a fresh <c>WorkflowPolicyApplied</c> row BEFORE this method runs — so by the first tick of a new
+    ///         attempt the store's boundary already sits above every instruction an earlier attempt wrote, and an
+    ///         empty Retry has retracted the last one without anybody writing a retraction. Within one attempt the
+    ///         reason cannot change, because it is keyed to the attempt on the way in.
+    ///     </para>
     ///     <para>
     ///         One ask per (node run, ATTEMPT), and the ledger is what enforces it: the reason stays on the inputs for
     ///         the life of the attempt, and the round asked for walks the task back through <c>InProgress</c> without
@@ -709,7 +739,7 @@ internal sealed class DevWorkflowDevTaskExecutor
     ///         reason itself is scoped by attempt on the way in, so a later automatic re-attempt quotes nobody.
     ///     </para>
     /// </summary>
-    private static async Task<bool> CarryOperatorRetryAsync(IDevelopmentStore development,
+    private async Task<bool> CarryOperatorRetryAsync(IDevelopmentStore development,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         Guid projectId,
@@ -717,9 +747,17 @@ internal sealed class DevWorkflowDevTaskExecutor
         IReadOnlyList<DevelopmentAttemptSnapshot> attempts,
         CancellationToken cancellationToken)
     {
-        if (DevWorkflowNodeInputs.OperatorRetryReasonFor(nodeRun.InputJson, nodeRun.Attempt) is not { } said
-            || task.Status != DevelopmentTaskStatus.InProgress
-            || attempts.LastOrDefault(static attempt => attempt.Role == DevelopmentAttemptRole.Coder) is { Status: DevelopmentAttemptStatus.Succeeded })
+        var said = DevWorkflowNodeInputs.OperatorRetryReasonFor(nodeRun.InputJson, nodeRun.Attempt);
+
+        // The cap case reads the ACT, the InProgress case reads the SENTENCE, because that is what each of them is
+        // for: one buys a round whether or not anything was typed, the other only adds a sentence to a round that was
+        // going to run regardless.
+        var atTheRoundCap = task.Status == DevelopmentTaskStatus.Blocked && task.CurrentReviewRound >= task.MaxReviewRounds;
+        if (atTheRoundCap
+                ? !DevWorkflowNodeInputs.IsOperatorRetry(nodeRun.InputJson, nodeRun.Attempt)
+                : said is null
+                  || task.Status != DevelopmentTaskStatus.InProgress
+                  || attempts.LastOrDefault(static attempt => attempt.Role == DevelopmentAttemptRole.Coder) is { Status: DevelopmentAttemptStatus.Succeeded })
         {
             return false;
         }
@@ -736,10 +774,32 @@ internal sealed class DevWorkflowDevTaskExecutor
                                      operationId,
                                      DevelopmentTaskStatus.ChangesRequested,
                                      task.Version,
-                                     $"An operator retried the '{nodeRun.NodeKey}' step of the workflow driving this task, and said: {said}",
-                                     OperatorDirected: true),
+
+                                     // A silent Retry writes an operator row with NO reason, which is already the
+                                     // retraction: the round it buys is told nothing rather than told the last
+                                     // person's sentence.
+                                     said is null
+                                         ? null
+                                         : $"An operator retried the '{nodeRun.NodeKey}' step of the workflow driving this task, and said: {said}",
+                                     OperatorDirected: true,
+                                     WidenReviewRounds: atTheRoundCap),
                                  cancellationToken)
                              .ConfigureAwait(false);
+
+            // The one task status hop nothing else records. DevelopmentManagementService logs the hops IT decides,
+            // and this edge is bought by an operator's Retry in the workflow lane instead — so a live round could see
+            // the cap widen and the task move with no line saying either happened. Same literal "task status" phrase,
+            // so the one grep that finds every hop still finds this one.
+            if (atTheRoundCap)
+            {
+                _logger.LogInformation(
+                    "Development task status moved Blocked to ChangesRequested for task {TaskId} in project {ProjectId}, widening the review-round cap to {MaxReviewRounds}; operator reason carried: {CarriedReason}.",
+                    task.Id,
+                    projectId,
+                    task.MaxReviewRounds + 1,
+                    said is not null);
+            }
+
             return true;
         }
         catch (DevelopmentConcurrencyException)

@@ -1003,10 +1003,17 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var options = Options.Create(OptionsValue());
         var canonical = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository);
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonical));
+        var attached = new List<DevelopmentAttachArtifactCommand>();
+        var contents = new Dictionary<Guid, string>();
         var store = Substitute.For<IDevelopmentStore>();
         store.GetExecutionSnapshotAsync(snapshot.AttemptId, Arg.Any<CancellationToken>()).Returns(snapshot);
         store.AttachArtifactAsync(Arg.Any<DevelopmentAttachArtifactCommand>(), Arg.Any<CancellationToken>())
-             .Returns(call => Operation(snapshot, call.Arg<DevelopmentAttachArtifactCommand>().ArtifactId));
+             .Returns(call =>
+             {
+                 var command = call.Arg<DevelopmentAttachArtifactCommand>();
+                 attached.Add(command);
+                 return Operation(snapshot, command.ArtifactId);
+             });
         store.TerminalizeAttemptAsync(Arg.Any<DevelopmentTerminalizeAttemptCommand>(), Arg.Any<CancellationToken>())
              .Returns(call => Operation(snapshot, artifactId: null));
 
@@ -1016,6 +1023,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             {
                 var artifactId = call.ArgAt<Guid>(1);
                 var content = call.ArgAt<ReadOnlyMemory<byte>>(2);
+                contents[artifactId] = Encoding.UTF8.GetString(content.Span);
                 return new DevelopmentArtifactBlobWriteResult($"{snapshot.ProjectId:N}/{artifactId:N}", "HASH-" + artifactId.ToString("N"), content.Length);
             });
 
@@ -1028,17 +1036,147 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             blob,
             new WritingCoderModel(),
             new UnexpectedCloudContextService(),
-            options);
+            options,
+            NullLogger<DevelopmentCoderAttemptRunner>.Instance);
 
         var result = await runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository)).ConfigureAwait(false);
         AssertEx.NotNullOrEmpty(result.SubjectHash);
         AssertEx.Contains(result.ChangedFiles, "feature.txt");
-        _ = store.Received(5).AttachArtifactAsync(Arg.Any<DevelopmentAttachArtifactCommand>(), Arg.Any<CancellationToken>());
+        _ = store.Received(6).AttachArtifactAsync(Arg.Any<DevelopmentAttachArtifactCommand>(), Arg.Any<CancellationToken>());
         _ = store.Received(1).AttachArtifactAsync(Arg.Is<DevelopmentAttachArtifactCommand>(command => command.Kind == Client.Persistence.Entities.DevelopmentArtifactKind.CoderSubmission),
             Arg.Any<CancellationToken>());
+
+        // FU4-1: what the model was TOLD is a record of its own. It is stamped with the base commit but with no
+        // subject hash, because the subject this attempt is about to produce does not exist when the prompt is built.
+        var prompt = attached.Single(command => command.Kind == Client.Persistence.Entities.DevelopmentArtifactKind.Prompt);
+        AssertEx.Equal(result.BaseCommit, prompt.BaseCommit);
+        AssertEx.Null(prompt.SubjectHash);
+        AssertEx.Contains(contents[prompt.ArtifactId], "Task: Implement feature");
+        AssertEx.Contains(contents[prompt.ArtifactId], "Base commit: " + result.BaseCommit);
+        AssertEx.Contains(contents[prompt.ArtifactId], "Submission contract, enforced exactly:");
         _ = store.Received(1).TerminalizeAttemptAsync(Arg.Is<DevelopmentTerminalizeAttemptCommand>(command => command.Status == PersistenceDevelopmentAttemptStatus.Succeeded
                                                                                                               && command.InputTokens == 10
                                                                                                               && command.OutputTokens == 20),
+            Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     FU4-1: the prompt survives an attempt that fails. This is the case the whole item exists for — a run that
+    ///     times out, exhausts its tool loop or loses its evidence check reaches none of the five success-path
+    ///     artifact writes, so before this the attempts an operator most needed to explain were the ones that left
+    ///     nothing at all behind. The submission mismatch here is only the cheapest way to make an attempt fail
+    ///     downstream of the model call.
+    /// </summary>
+    [Test]
+    public async Task CoderRunner_WhenTheSubmissionCheckRejectsTheAttempt_StillLeavesThePromptArtifact()
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var data = Path.Combine(_root, "failed-prompt-data");
+        Directory.CreateDirectory(data);
+        var options = Options.Create(OptionsValue());
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+        var attached = new List<DevelopmentAttachArtifactCommand>();
+        var store = Substitute.For<IDevelopmentStore>();
+        store.GetExecutionSnapshotAsync(snapshot.AttemptId, Arg.Any<CancellationToken>()).Returns(snapshot);
+        store.AttachArtifactAsync(Arg.Any<DevelopmentAttachArtifactCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call =>
+             {
+                 var command = call.Arg<DevelopmentAttachArtifactCommand>();
+                 attached.Add(command);
+                 return Operation(snapshot, command.ArtifactId);
+             });
+        store.TerminalizeAttemptAsync(Arg.Any<DevelopmentTerminalizeAttemptCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call => Operation(snapshot, artifactId: null));
+
+        var blob = Substitute.For<IDevelopmentArtifactBlobStore>();
+        blob.WriteAsync(snapshot.ProjectId, Arg.Any<Guid>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>())
+            .Returns(call => new DevelopmentArtifactBlobWriteResult($"{snapshot.ProjectId:N}/{call.ArgAt<Guid>(1):N}",
+                "HASH-" + call.ArgAt<Guid>(1).ToString("N"),
+                call.ArgAt<ReadOnlyMemory<byte>>(2).Length));
+
+        using var sandbox = CreateSandbox();
+        var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var runner = new DevelopmentCoderAttemptRunner(store,
+            workspace,
+            sandbox,
+            new DevelopmentPatchEvidenceService(options),
+            blob,
+            new ScriptedCoderModel([("feature.txt", "implemented\n")], ["feature.txt", "README.md"]),
+            new UnexpectedCloudContextService(),
+            options,
+            NullLogger<DevelopmentCoderAttemptRunner>.Instance);
+
+        var exception = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() => runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository)))
+                                      .ConfigureAwait(false);
+
+        AssertEx.Equal(DevelopmentAttemptFailureCodes.ChangedFileManifestMismatch, exception.FailureCode);
+        var prompt = attached.Single();
+        AssertEx.Equal(Client.Persistence.Entities.DevelopmentArtifactKind.Prompt, prompt.Kind);
+        AssertEx.NotNullOrEmpty(prompt.BaseCommit);
+        _ = store.Received(1).TerminalizeAttemptAsync(Arg.Is<DevelopmentTerminalizeAttemptCommand>(command => command.Status == PersistenceDevelopmentAttemptStatus.Failed),
+            Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     FU4-1 review MED-2: the timed-out attempt is the one whose prompt an operator most needs, so the write must
+    ///     not run on the deadline that cancelled it. It did at first — the prompt was persisted under the attempt's
+    ///     own linked token, so a cancellation around the write threw, the best-effort catch swallowed it, and the
+    ///     case the feature was built for left nothing. <c>TerminalizeAttemptAsync</c> already used
+    ///     <see cref="CancellationToken.None" /> on the failure path for exactly this reason.
+    /// </summary>
+    [Test]
+    public async Task CoderRunner_WhenTheAttemptIsCancelledBeforeTheModelRuns_StillLeavesThePromptArtifact()
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var data = Path.Combine(_root, "cancelled-prompt-data");
+        Directory.CreateDirectory(data);
+        var options = Options.Create(OptionsValue());
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+        var attached = new List<DevelopmentAttachArtifactCommand>();
+        var store = Substitute.For<IDevelopmentStore>();
+        store.GetExecutionSnapshotAsync(snapshot.AttemptId, Arg.Any<CancellationToken>()).Returns(snapshot);
+        store.AttachArtifactAsync(Arg.Any<DevelopmentAttachArtifactCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call =>
+             {
+                 var command = call.Arg<DevelopmentAttachArtifactCommand>();
+                 attached.Add(command);
+                 return Operation(snapshot, command.ArtifactId);
+             });
+        store.TerminalizeAttemptAsync(Arg.Any<DevelopmentTerminalizeAttemptCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call => Operation(snapshot, artifactId: null));
+
+        var blob = Substitute.For<IDevelopmentArtifactBlobStore>();
+        blob.WriteAsync(snapshot.ProjectId, Arg.Any<Guid>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                // The real blob store honours its token. Substituting that here is what makes the test fail when the
+                // prompt write is handed the attempt's deadline instead of CancellationToken.None.
+                call.ArgAt<CancellationToken>(3).ThrowIfCancellationRequested();
+                return new DevelopmentArtifactBlobWriteResult($"{snapshot.ProjectId:N}/{call.ArgAt<Guid>(1):N}",
+                    "HASH-" + call.ArgAt<Guid>(1).ToString("N"),
+                    call.ArgAt<ReadOnlyMemory<byte>>(2).Length);
+            });
+
+        using var sandbox = CreateSandbox();
+        using var cancellation = new CancellationTokenSource();
+        var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var runner = new DevelopmentCoderAttemptRunner(store,
+            workspace,
+            sandbox,
+            new CancellingPatchEvidenceService(new DevelopmentPatchEvidenceService(options), cancellation),
+            blob,
+            new WritingCoderModel(),
+            new UnexpectedCloudContextService(),
+            options,
+            NullLogger<DevelopmentCoderAttemptRunner>.Instance);
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository), cancellation.Token))
+                      .ConfigureAwait(false);
+
+        var prompt = attached.Single();
+        AssertEx.Equal(Client.Persistence.Entities.DevelopmentArtifactKind.Prompt, prompt.Kind);
+        AssertEx.NotNullOrEmpty(prompt.BaseCommit);
+        _ = store.Received(1).TerminalizeAttemptAsync(Arg.Is<DevelopmentTerminalizeAttemptCommand>(command => command.Status == PersistenceDevelopmentAttemptStatus.Cancelled),
             Arg.Any<CancellationToken>());
     }
 
@@ -1075,7 +1213,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             Substitute.For<IDevelopmentArtifactBlobStore>(),
             new TestDeletingCoderModel(),
             new UnexpectedCloudContextService(),
-            options);
+            options,
+            NullLogger<DevelopmentCoderAttemptRunner>.Instance);
 
         _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository)))
                           .ConfigureAwait(false);
@@ -1199,7 +1338,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
         var binding = Binding(firstAttempt, repository);
         DevelopmentCoderAttemptRunner Runner(IDevelopmentCoderModel model) =>
-            new(store, workspace, sandbox, new DevelopmentPatchEvidenceService(options), blob, model, new UnexpectedCloudContextService(), options);
+            new(store, workspace, sandbox, new DevelopmentPatchEvidenceService(options), blob, model, new UnexpectedCloudContextService(), options, NullLogger<DevelopmentCoderAttemptRunner>.Instance);
 
         _ = await Runner(first).RunAsync(firstAttempt.AttemptId, binding).ConfigureAwait(false);
         _ = await Runner(second).RunAsync(secondAttempt.AttemptId, binding).ConfigureAwait(false);
@@ -1511,6 +1650,23 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
                     Notes: null),
                 InputTokens: 10,
                 OutputTokens: 20);
+        }
+    }
+
+    /// <summary>
+    ///     Cancels the attempt the instant the prompt's own inputs are read — the tick before <c>BuildPrompt</c> runs,
+    ///     which is the narrow window the prompt write has to survive.
+    /// </summary>
+    private sealed class CancellingPatchEvidenceService(IDevelopmentPatchEvidenceService inner, CancellationTokenSource cancellation) : IDevelopmentPatchEvidenceService
+    {
+        public Task<DevelopmentPatchEvidence> ExportAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken = default) =>
+            inner.ExportAsync(session, cancellationToken);
+
+        public async Task<IReadOnlySet<string>> ListChangedPathsAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken = default)
+        {
+            var paths = await inner.ListChangedPathsAsync(session, cancellationToken).ConfigureAwait(false);
+            await cancellation.CancelAsync().ConfigureAwait(false);
+            return paths;
         }
     }
 

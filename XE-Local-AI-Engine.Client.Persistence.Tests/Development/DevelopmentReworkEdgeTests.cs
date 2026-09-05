@@ -31,6 +31,8 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     private const string OperatorReason =
         "An operator retried the 'implement' step of the workflow driving this task, and said: keep the Square test in its own new file.";
 
+    private const string RoundLimitReason = "The configured maximum number of rounds has been reached.";
+
     private readonly DevelopmentTestFixture _fixture = new();
 
     public void Dispose() =>
@@ -194,6 +196,94 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     }
 
     /// <summary>
+    ///     The withdrawal. An operator-directed row carrying NO reason retracts the instruction the operator wrote
+    ///     earlier in the same dispatch, rather than being skipped as "not an operator row" — which is what the
+    ///     <c>DetailJson != null</c> filter used to make it, leaving an amendment that outranks the requirements and
+    ///     disarms the reviewer with no route back out inside the node run that wrote it.
+    /// </summary>
+    [Test]
+    public async Task ABlankReasonOperatorRowWithdrawsTheInstructionBeforeIt()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+
+        var attemptId = await ReworkThenStartCoderAttemptAsync(store, seed.TaskId, version, OperatorReason, operatorDirected: true).ConfigureAwait(false);
+        AssertEx.Equal(OperatorReason, (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).OperatorInstruction);
+
+        // What an empty Retry box writes: the same operator-directed transition, with nothing said in it.
+        var asked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                   Guid.NewGuid(),
+                                   DevelopmentTaskStatus.ChangesRequested,
+                                   (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Version,
+                                   Reason: null,
+                                   OperatorDirected: true))
+                               .ConfigureAwait(false);
+
+        AssertEx.Null((await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).OperatorInstruction,
+            "a person who takes their amendment back must stop outranking the requirements from that moment on.");
+        AssertEx.Null((await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).PreviousRoundFeedback,
+            "and the withdrawal is not itself feedback for the round to answer.");
+
+        // A LATER instruction still governs: the withdrawal is not a permanent kill, exactly as a blank policy is not.
+        _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                           Guid.NewGuid(),
+                           DevelopmentTaskStatus.InProgress,
+                           asked.Version))
+                       .ConfigureAwait(false);
+        _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                           Guid.NewGuid(),
+                           DevelopmentTaskStatus.ChangesRequested,
+                           (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Version,
+                           OperatorReason,
+                           OperatorDirected: true))
+                       .ConfigureAwait(false);
+        AssertEx.Equal(OperatorReason, (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).OperatorInstruction);
+    }
+
+    /// <summary>
+    ///     The rework sentence stops being the CURRENT one when the round it asked for starts. Only
+    ///     <c>TransitionTaskAsync</c> cleared it; the coder round reaches <c>InProgress</c> through
+    ///     <c>StartAttemptAsync</c> instead, which never touched the column — so the Development overview, which
+    ///     renders it with no status gate, showed the gate failure or the operator's change request against a task
+    ///     that was already being reworked because of it.
+    /// </summary>
+    [Test]
+    public async Task TheCoderRoundStartingClearsTheReasonThatAskedForIt()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+
+        var asked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                   Guid.NewGuid(),
+                                   DevelopmentTaskStatus.ChangesRequested,
+                                   version,
+                                   GateReason))
+                               .ConfigureAwait(false);
+        AssertEx.Equal(GateReason,
+            (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).BlockedReason,
+            "the reason is the operator's answer to 'why is this being reworked' right up to the round that answers it.");
+
+        // The coder round the change request asked for, started the way the chain starts one: straight off
+        // ChangesRequested, with no TransitionTaskAsync hop in between.
+        _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
+                           Guid.NewGuid(),
+                           Guid.NewGuid(),
+                           DevelopmentAttemptRole.Coder,
+                           "local-model",
+                           "local",
+                           asked.Version))
+                       .ConfigureAwait(false);
+
+        var reworking = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, reworking.Status);
+        AssertEx.Null(reworking.BlockedReason, "the round that acts on the complaint is where it stops being the current one.");
+    }
+
+    /// <summary>
     ///     The fall-through the exclusion opens, and the whole point of ranking the two fields: with a reviewer's
     ///     complaint behind the operator's amendment, the round is told BOTH — the operator first and above, the
     ///     reviewer below — rather than the operator's sentence shadowing a complaint nobody has answered yet.
@@ -226,6 +316,97 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
         AssertEx.Equal(Reason,
             snapshot.PreviousRoundFeedback,
             "the complaint the operator is overriding is still what the round has to answer, so the round must be able to read it.");
+    }
+
+    /// <summary>
+    ///     P1, live 2026-09-05. The round cap is the ONE thing about a Dev Mode task an operator can change, and a
+    ///     Retry buys exactly one round of it. The widening is also what pays for the single edge out of
+    ///     <c>Blocked</c>: without it the task would be handed a round it has no budget to finish, which is the
+    ///     two-second re-block the live round measured twice over.
+    /// </summary>
+    [Test]
+    public async Task AnOperatorRetryWidensTheRoundCapByOne_AndIsTheOnlyEdgeOutOfBlocked()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var blocked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                     Guid.NewGuid(),
+                                     DevelopmentTaskStatus.Blocked,
+                                     version,
+                                     RoundLimitReason))
+                                 .ConfigureAwait(false);
+        AssertEx.Equal(expected: 3, (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).MaxReviewRounds);
+
+        _ = await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() =>
+                              store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                  Guid.NewGuid(),
+                                  DevelopmentTaskStatus.ChangesRequested,
+                                  blocked.Version,
+                                  OperatorReason,
+                                  OperatorDirected: true)))
+                          .ConfigureAwait(false);
+
+        var widened = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                     Guid.NewGuid(),
+                                     DevelopmentTaskStatus.ChangesRequested,
+                                     blocked.Version,
+                                     OperatorReason,
+                                     OperatorDirected: true,
+                                     WidenReviewRounds: true))
+                                 .ConfigureAwait(false);
+
+        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, task.Status);
+        AssertEx.Equal(expected: 4, task.MaxReviewRounds, "the Retry bought one round, not an exemption from the budget.");
+        AssertEx.Equal(OperatorReason, task.BlockedReason, "the sentence the round has to act on is the operator's, and it replaces the cap's.");
+        AssertEx.Null(task.BlockedAtUtc, "the task is no longer stood down, so nothing is timing a stand-down.");
+
+        var written = await dbContext.DevelopmentEvents.AsNoTracking()
+                                     .Where(entity => entity.TaskId == seed.TaskId && entity.EventType == "TaskTransitioned")
+                                     .OrderByDescending(entity => entity.Sequence)
+                                     .FirstAsync()
+                                     .ConfigureAwait(false);
+        AssertEx.Equal(nameof(DevelopmentTaskStatus.ChangesRequested), widened.Status);
+        AssertEx.Equal("TransitionedByOperator", written.Outcome, "a widening is a person's decision, and the audit row says whose.");
+        var detail = Encoding.UTF8.GetString(written.DetailJson!);
+        AssertEx.True(detail.StartsWith("{\"reason\":\"", StringComparison.Ordinal) && detail.Contains("keep the Square test in its own new file.", StringComparison.Ordinal),
+            $"the operator's sentence is what the next round reads, in the one detail shape every reader of this store expects: {detail}");
+    }
+
+    /// <summary>
+    ///     The widening is a write like any other and is refused on a stale read: two ticks racing the same blocked
+    ///     task must buy ONE round between them, not one each.
+    /// </summary>
+    [Test]
+    public async Task AWideningOnAStaleVersion_IsRefusedAndLeavesTheCapWhereItWas()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var blocked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                     Guid.NewGuid(),
+                                     DevelopmentTaskStatus.Blocked,
+                                     version,
+                                     RoundLimitReason))
+                                 .ConfigureAwait(false);
+
+        _ = await AssertEx.ThrowsAsync<DevelopmentConcurrencyException>(() =>
+                              store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                  Guid.NewGuid(),
+                                  DevelopmentTaskStatus.ChangesRequested,
+                                  blocked.Version - 1,
+                                  OperatorReason,
+                                  OperatorDirected: true,
+                                  WidenReviewRounds: true)))
+                          .ConfigureAwait(false);
+
+        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentTaskStatus.Blocked, task.Status);
+        AssertEx.Equal(expected: 3, task.MaxReviewRounds, "a refused write buys nothing.");
     }
 
     /// <summary>

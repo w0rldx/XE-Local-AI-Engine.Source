@@ -209,6 +209,86 @@ public sealed class WorkSessionToolHandlerTests
     }
 
     [Test]
+    public async Task UpdateWorkPlan_Add_RetriedByteIdenticallyInTheSameStep_AddsTheTaskOnceAndNamesTheSameId()
+    {
+        // The id used to be a fresh Guid, and DescribeBatch folds it into the batch's idempotency key — so a retry
+        // after a lost response computed a DIFFERENT key, the store's dedupe saw a new operation, and the same add
+        // landed as a second task row.
+        var factory = Host.Factory;
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
+        const string Arguments = """{"operations":[{"op":"add","title":"Read the runtime docs","detail":"Start at the pin","status":"Active"}]}""";
+
+        string first;
+        string retry;
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        {
+            first = await handler.ExecuteAsync(Arguments).ConfigureAwait(false);
+            retry = await handler.ExecuteAsync(Arguments).ConfigureAwait(false);
+        }
+
+        var tasks = await ReadTasksAsync(factory, sessionId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, tasks.Count, "A byte-identical retry of the same batch commits once.");
+        var task = tasks[0];
+        AssertEx.Equal(IdFromAddResult(first, "Read the runtime docs"),
+            IdFromAddResult(retry, "Read the runtime docs"),
+            "The retry names the id the first call minted, so an id the model already holds stays the one that exists.");
+        AssertEx.Contains(first, $"\"Read the runtime docs\" = {task.Id}");
+    }
+
+    [Test]
+    public async Task UpdateWorkPlan_ASecondBatchRepeatingAnEarlierAdd_StillRecordsTheNewOne()
+    {
+        // A model restating its whole plan is ordinary. When an add's id was derived from its own content alone, the
+        // repeat re-minted an id the table already held, the store refused the batch as a duplicate row, and the
+        // genuinely new add beside it was rolled back with a "try the same call once more" sentence that could never
+        // succeed for the rest of the step.
+        var factory = Host.Factory;
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
+
+        string second;
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        {
+            _ = await handler.ExecuteAsync("""{"operations":[{"op":"add","title":"Investigate the pin"}]}""").ConfigureAwait(false);
+            second = await handler.ExecuteAsync("""{"operations":[{"op":"add","title":"Investigate the pin"},{"op":"add","title":"Write the report"}]}""")
+                                  .ConfigureAwait(false);
+        }
+
+        AssertEx.Contains(second, "Added 2 task(s):");
+        var titles = (await ReadTasksAsync(factory, sessionId).ConfigureAwait(false)).Select(static task => task.Title).ToList();
+        AssertEx.Contains(titles, "Write the report", "The new add commits rather than being rolled back with the repeat.");
+    }
+
+    [Test]
+    public async Task UpdateWorkPlan_TwoIdenticalAddsInOneBatch_StayTwoTasks()
+    {
+        // The id is derived from the batch position as well as the content, so a plan that deliberately repeats a step
+        // is not silently collapsed into one task by the same determinism that makes the retry safe.
+        var factory = Host.Factory;
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
+
+        string added;
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        {
+            added = await handler.ExecuteAsync("""{"operations":[{"op":"add","title":"Run the gate"},{"op":"add","title":"Run the gate"}]}""")
+                                 .ConfigureAwait(false);
+        }
+
+        var tasks = await ReadTasksAsync(factory, sessionId).ConfigureAwait(false);
+        AssertEx.Equal(2, tasks.Count, "Two adds are two tasks even when they carry the same content.");
+        AssertEx.Equal(2, tasks.Select(static task => task.Id).Distinct().Count(), "Their ids differ by batch position.");
+        foreach (var task in tasks)
+        {
+            AssertEx.Contains(added, $"\"Run the gate\" = {task.Id}");
+        }
+    }
+
+    [Test]
     public async Task UpdateWorkPlan_Add_BeyondTheListedBound_CountsTheRestRatherThanNamingThem()
     {
         var factory = Host.Factory;

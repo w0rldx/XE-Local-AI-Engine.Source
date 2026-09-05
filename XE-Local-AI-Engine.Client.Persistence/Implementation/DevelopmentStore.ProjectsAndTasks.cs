@@ -171,6 +171,16 @@ public sealed partial class DevelopmentStore
                 {
                     task.Status = DevelopmentTaskStatus.InProgress;
                     task.ApprovedSubjectHash = null;
+
+                    // The sentence that asked for this round stops being the CURRENT one the moment the round starts.
+                    // This is the choke point every coder round goes through to reach InProgress without passing
+                    // through TransitionTaskAsync — which already clears the column for every target status of its own
+                    // — so it is the one place the rework reason could survive the round it asked for. It did: the
+                    // Development overview renders blocked_reason with no status gate, so a task actively being
+                    // reworked showed the gate failure or the operator's change request that started it. The cost is
+                    // named and accepted: the reason leaves the overview when the round starts rather than lingering
+                    // until the next verdict, and the event timeline keeps it either way.
+                    task.BlockedReason = null;
                     await _dbContext.DevelopmentArtifacts
                                     .Where(entity => entity.TaskId == task.Id
                                                      && entity.IsValid
@@ -304,6 +314,20 @@ public sealed partial class DevelopmentStore
                 EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
                 EnsureLegalTransition(task.Status, command.TargetStatus);
 
+                // The widening is what PAYS for the edge out of Blocked, so the two are checked together. A rework
+                // asked of a task at its round cap without one runs a whole coder attempt — its tokens and its
+                // duration — and is stood down again by StartNextActionAsync before it can reach a review, which is
+                // exactly the two-second no-op loop this edge exists to end.
+                if (task.Status == DevelopmentTaskStatus.Blocked && !command.WidenReviewRounds)
+                {
+                    throw new DevelopmentInvalidTransitionException("A blocked development task can only be reworked by a retry that widens its review-round cap.");
+                }
+
+                if (command.WidenReviewRounds)
+                {
+                    task.MaxReviewRounds++;
+                }
+
                 var now = Now();
                 task.Status = command.TargetStatus;
                 task.UpdatedAtUtc = now;
@@ -345,7 +369,7 @@ public sealed partial class DevelopmentStore
                 {
                     if (task.CurrentReviewRound >= task.MaxReviewRounds)
                     {
-                        throw new DevelopmentInvalidTransitionException("The configured maximum review rounds has been reached.");
+                        throw new DevelopmentInvalidTransitionException("The configured maximum number of rounds has been reached.");
                     }
 
                     task.CurrentReviewRound++;

@@ -1228,8 +1228,105 @@ public sealed class DevWorkflowDevTaskTests
             $"the change request is one-shot per attempt: {string.Join(", ", harness.Chain.Actions)}");
     }
 
+    /// <summary>
+    ///     P1, live 2026-09-05. A Retry on a node whose task is Blocked at its ROUND cap buys the task a round, not
+    ///     just the node an attempt. Observed as the opposite: two Retries on a node blocked at "all 3 rounds used"
+    ///     re-dispatched it, re-read a task still at 3 of 3, and stood the node down again about two seconds later
+    ///     each time — spending one of the node's own attempts per Retry and never building a coder prompt, so the
+    ///     operator's sentence was stored, rendered in the panel, and unreachable by any model.
+    ///     <para>
+    ///         And bought ONCE. The retry's marker stays on the node run's inputs for the life of the attempt, so
+    ///         without the ledger operation id behind it every poll tick would widen the cap again.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AnOperatorRetryOfADevTaskBlockedAtItsRoundCap_BuysTheTaskOneMoreRound()
+    {
+        await using var harness = NewHarness();
+        var (projectId, _) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var lastRound = await AddTaskAsync(harness, projectId, "One review round only", maxReviewRounds: 1).ConfigureAwait(false);
+        await BlockAtTheRoundCapAsync(harness, lastRound).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        await PinTaskAsync(harness, runId, "implement", lastRound).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status, AssertEx.NotNull(blocked.TerminalReason ?? blocked.OutputJson));
+        AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, blocked.FailureClass);
+        AssertEx.Equal(expected: 1,
+            (await ReadTaskAsync(harness, lastRound).ConfigureAwait(false)).MaxReviewRounds,
+            "nothing widens a cap on its own: the node run that found the task blocked stands down.");
+
+        await harness.DecideAsync(runId, "implement", DevWorkflowDecisionKind.Retry, comment: "Skip the failing test for now.").ConfigureAwait(false);
+
+        // Read WHILE the node run is still live: the instruction is bounded by the node run that made it, so the settle
+        // correctly revokes it and a read after quiescence would say it never arrived.
+        var snapshot = await AdvanceUntilTheOperatorIsQuotedAsync(harness, runId, lastRound).ConfigureAwait(false);
+        AssertEx.Contains(AssertEx.NotNull(snapshot.OperatorInstruction), "Skip the failing test for now.");
+        var reworking = await ReadTaskAsync(harness, lastRound).ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, reworking.Status, "the task left Blocked for the status a coder round starts from.");
+        AssertEx.Equal(expected: 2, reworking.MaxReviewRounds, "the Retry bought exactly the round the cap stopped.");
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Contains(harness.Chain.Actions,
+            static action => action == nameof(DevelopmentTaskStatus.ChangesRequested),
+            $"the round the Retry paid for was actually asked for: {string.Join(", ", harness.Chain.Actions)}");
+        var task = await ReadTaskAsync(harness, lastRound).ConfigureAwait(false);
+        AssertEx.Equal(expected: 2, task.MaxReviewRounds, "a tick that finds the widening already written must not buy a second round.");
+        AssertEx.Equal(expected: 1,
+            (await ListDevelopmentEventsAsync(harness, projectId).ConfigureAwait(false))
+            .Count(entry => entry.TaskId == lastRound && entry.EventType == "TaskTransitioned" && entry.Outcome == "TransitionedByOperator"),
+            "one Retry, one operator-directed transition: the ledger operation id is what stops the poll asking again.");
+    }
+
     private static DevWorkflowHarness NewHarness(TimeProvider? clock = null) =>
         DevWorkflowHarness.WithAScriptedChain(clock);
+
+    /// <summary>
+    ///     Walks a one-round task to the state the real <c>StartNextActionAsync</c> leaves at the cap: a spent round, a
+    ///     succeeded coder attempt behind it, and <c>Blocked</c> carrying the round-limit sentence. Driven through the
+    ///     store because the scripted chain refuses at the cap rather than standing the task down, which is the one
+    ///     place it does not model what the service does.
+    /// </summary>
+    private static async Task BlockAtTheRoundCapAsync(DevWorkflowHarness harness, Guid taskId)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+
+        async Task MoveAsync(DevelopmentTaskStatus target, string? reason = null) =>
+            _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
+                               Guid.NewGuid(),
+                               target,
+                               (await store.GetTaskAsync(taskId).ConfigureAwait(false)).Version,
+                               reason))
+                           .ConfigureAwait(false);
+
+        await MoveAsync(DevelopmentTaskStatus.Ready).ConfigureAwait(false);
+        await MoveAsync(DevelopmentTaskStatus.InProgress).ConfigureAwait(false);
+
+        // A real attempt row, because the brief the retry's round is composed from is read through one.
+        var attemptId = Guid.NewGuid();
+        var attempt = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(taskId,
+                                     attemptId,
+                                     Guid.NewGuid(),
+                                     DevelopmentAttemptRole.Coder,
+                                     "scripted-model",
+                                     "local",
+                                     (await store.GetTaskAsync(taskId).ConfigureAwait(false)).Version))
+                                 .ConfigureAwait(false);
+        _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attemptId,
+                           Guid.NewGuid(),
+                           DevelopmentAttemptStatus.Succeeded,
+                           attempt.Version))
+                       .ConfigureAwait(false);
+
+        await MoveAsync(DevelopmentTaskStatus.Validation).ConfigureAwait(false);
+        await MoveAsync(DevelopmentTaskStatus.InReview).ConfigureAwait(false);
+        await MoveAsync(DevelopmentTaskStatus.ChangesRequested, "The reviewer rejected the round.").ConfigureAwait(false);
+        await MoveAsync(DevelopmentTaskStatus.Blocked, "The configured maximum number of rounds has been reached.").ConfigureAwait(false);
+    }
 
     private static Task<(Guid ProjectId, Guid TaskId)> SeedDevelopmentTaskAsync(DevWorkflowHarness harness) =>
         harness.SeedDevelopmentProjectAsync();

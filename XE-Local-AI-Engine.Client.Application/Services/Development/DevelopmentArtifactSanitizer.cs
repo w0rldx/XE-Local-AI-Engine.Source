@@ -60,6 +60,19 @@ internal static partial class DevelopmentArtifactSanitizer
     // output, the whole compiler diagnostic collapsed to two adjacent markers, so the targeted pass bought nothing at
     // all and a reviewer could not tell which file failed. Excluding the marker keeps exactly the workspace-relative
     // remainder, which is the part a reviewer needs and the part that carries no host information.
+    //
+    // There is deliberately no glob exemption here, and there was one for a day. The 2026-09-05 live round found every
+    // coder and reviewer prompt carrying "Protected test patterns: **[REDACTED:development-path]/*.cs,
+    // **[REDACTED:development-path] ..." - all nine of DevelopmentCommandProfileCatalog.DefaultProtectedPaths
+    // swallowed, so the one line of the prompt naming the files the coder was forbidden to touch was the one line the
+    // operator could not read. The first fix exempted a '/' after '*', the second one after '**'; both were the same
+    // mistake, because a lookbehind exempts a SHAPE, and any absolute path an attacker or a confused model writes in
+    // that shape - "**/home/alice/private" - then crosses this boundary intact, which is the boundary
+    // DevelopmentCloudContextBuilder crosses to a cloud provider.
+    //
+    // The rule the sanitizer now holds: it never exempts a shape. Legibility is bought where the safe strings are
+    // actually KNOWN instead - SanitizePromptText protects the profile's own protected-path literals by placeholder
+    // around these passes - so nothing here has to guess which stars were syntax.
     [GeneratedRegex(@"(?<![A-Za-z0-9:/])(?<!\[REDACTED:development-path\])/(?!/)[^\s\x00-\x1F\""'<>|]+", RegexOptions.ExplicitCapture, 2000)]
     private static partial Regex UnixAbsolutePathRegex();
 
@@ -204,6 +217,58 @@ internal static partial class DevelopmentArtifactSanitizer
                                  .ToArray()
         };
     }
+
+    /// <summary>
+    ///     Sanitizes an ENGINE-authored prompt. Redacts rather than rejecting, for the same reason
+    ///     <see cref="Sanitize(DevelopmentCommandEvidence, string[])" /> does: a coder or reviewer prompt is assembled
+    ///     here out of the task title, its requirements, the base commit, the workspace's carried-file list and the
+    ///     operator's own instruction — text that legitimately carries absolute paths and long hashes, not model prose
+    ///     that has no business containing one. Rejecting on a match would mean the attempts whose prompts are most
+    ///     worth recording are exactly the ones that leave no record.
+    ///     <para>
+    ///         <paramref name="preservedGlobs" /> is the profile's own protected-path pattern list, and each literal in
+    ///         it survives verbatim wherever it occurs. The prompt renders those patterns (see
+    ///         <see cref="DevelopmentTestWritePolicy.Prompt" />) and the generic Unix pass fired on the '/' inside
+    ///         <c>**/*Tests.cs</c>, so on 2026-09-05 the one line telling the coder which files it may not touch was
+    ///         the one line the operator could not read. The fix belongs HERE and not in the pattern: this layer knows
+    ///         the exact strings that are glob syntax, whereas a lookbehind can only recognise a shape, and every
+    ///         absolute path written in that shape would ride the exemption out to a cloud provider.
+    ///     </para>
+    /// </summary>
+    internal static string SanitizePromptText(string text, IReadOnlyCollection<string> preservedGlobs, params string[] protectedRoots)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(preservedGlobs);
+
+        // Longest first: '**/*.Tests/**/*.cs' must claim its own text before '**/*.cs' can eat the tail of it.
+        var literals = preservedGlobs.Where(static glob => !string.IsNullOrWhiteSpace(glob))
+                                     .Distinct(StringComparer.Ordinal)
+                                     .OrderByDescending(static glob => glob.Length)
+                                     .ThenBy(static glob => glob, StringComparer.Ordinal)
+                                     .ToArray();
+
+        var masked = text;
+        for (var index = 0; index < literals.Length; index++)
+        {
+            masked = masked.Replace(literals[index], Placeholder(index), StringComparison.Ordinal);
+        }
+
+        var sanitized = SanitizeText(masked, allowRedaction: true, protectedRoots);
+        for (var index = 0; index < literals.Length; index++)
+        {
+            sanitized = sanitized.Replace(Placeholder(index), literals[index], StringComparison.Ordinal);
+        }
+
+        return sanitized;
+    }
+
+    /// <summary>
+    ///     A stand-in no pass in <see cref="SanitizeText(string, bool, string[])" /> can match: the delimiters are
+    ///     Unicode private-use characters, so the run carries no '/', no drive letter and none of the
+    ///     <c>[A-Za-z0-9+/=_-]</c> alphabet the secret scanner's entropy fallback measures. Only the digits between
+    ///     them vary, and they cannot merge with neighbouring text because the delimiters bound them.
+    /// </summary>
+    private static string Placeholder(int index) => $"\uE000{index}\uE001";
 
     /// <summary>
     ///     Sanitizes model-authored artifact text. Any credential-like match rejects the whole artifact — a reviewer

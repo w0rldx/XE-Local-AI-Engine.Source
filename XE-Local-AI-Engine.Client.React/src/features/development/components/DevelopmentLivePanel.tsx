@@ -41,6 +41,15 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events }: Devel
 	const validationArtifacts = artifacts.filter(
 		(artifact) => artifact.kind === "ValidationReport" || artifact.kind === "ReviewReport",
 	);
+	// A prompt is neither a changed file nor evidence, so it belongs in neither curated tab. It sits in details, next
+	// to the other facts about the attempt, because what the model was TOLD is that kind of fact.
+	//
+	// Scoped to the displayed attempt, because `artifacts` is the whole task's history while this tab identifies ONE
+	// attempt: after three coder/reviewer rounds the list showed three indistinguishable "Prompt" rows beside a single
+	// attempt id, and an operator looking for what the coder was told had to open all three.
+	const promptArtifacts = artifacts.filter(
+		(artifact) => artifact.kind === "Prompt" && attempt?.id != null && artifact.attemptId === attempt.id,
+	);
 	// The newest validation report, WHATEVER its validity. Selecting on `isValid` was the defect: a failed gate
 	// invalidates the approval evidence, so every failed report was dropped here and the panel fell through to "no
 	// deterministic validation has run for this task yet" — the report that existed, was fetchable, and named the
@@ -256,6 +265,31 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events }: Devel
 						<Text size="sm">
 							{t("pages.development.live.details.events", "Durable events")}: {events.length}
 						</Text>
+						<Divider />
+						<Stack gap="xs" data-testid="development-prompt-artifacts">
+							<Text size="sm" fw={600}>
+								{t("pages.development.live.details.prompts", "Prompts")}
+							</Text>
+							{promptArtifacts.length === 0 ? (
+								<Text c="dimmed">
+									{t("pages.development.live.details.noPrompts", "No prompt was recorded for this attempt yet.")}
+								</Text>
+							) : null}
+							{promptArtifacts.map((artifact, index) => (
+								<Group key={artifact.id} justify="space-between">
+									<Text>
+										{promptArtifacts.length > 1
+											? t("pages.development.live.details.promptRoleOrdinal", "{{role}} prompt {{index}}", {
+													role: attempt?.role ?? "—",
+													index: index + 1,
+												})
+											: t("pages.development.live.details.promptRole", "{{role}} prompt", { role: attempt?.role ?? "—" })}
+									</Text>
+									<ArtifactViewButton artifact={artifact} open={openArtifactId === artifact.id} onToggle={toggleArtifact} />
+								</Group>
+							))}
+							{openArtifact && promptArtifacts.includes(openArtifact) ? <ArtifactContentView artifact={openArtifact} /> : null}
+						</Stack>
 					</Stack>
 				</Tabs.Panel>
 			</Tabs>

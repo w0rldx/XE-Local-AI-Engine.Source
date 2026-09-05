@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.WorkSessions.Tools.Implementation;
 
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -86,10 +87,14 @@ internal sealed class UpdateWorkPlanToolHandler(
         IAgentWorkSessionStore store,
         CancellationToken cancellationToken)
     {
-        var changes = new List<WorkPlanTaskChange>(request.Operations!.Count);
-        foreach (var operation in request.Operations)
+        var operations = request.Operations!;
+        var batchDigest = BatchDigest(operations);
+        var changes = new List<WorkPlanTaskChange>(operations.Count);
+        // Indexed, not foreach: an add's id is derived from its position in the batch, so two identical adds in one
+        // call stay two tasks.
+        for (var index = 0; index < operations.Count; index++)
         {
-            if (TryMap(operation, out var change, out var error))
+            if (TryMap(operations[index], index, batchDigest, session, out var change, out var error))
             {
                 changes.Add(change);
                 continue;
@@ -184,7 +189,12 @@ internal sealed class UpdateWorkPlanToolHandler(
             : null;
     }
 
-    private bool TryMap(WorkPlanOperationRequest operation, out WorkPlanTaskChange change, out string error)
+    private bool TryMap(WorkPlanOperationRequest operation,
+        int index,
+        string batchDigest,
+        AgentWorkSessionSnapshot session,
+        out WorkPlanTaskChange change,
+        out string error)
     {
         change = null!;
         _ = TryParseOperation(operation.Op, out var parsed);
@@ -194,7 +204,16 @@ internal sealed class UpdateWorkPlanToolHandler(
         {
             // The node mints the id: a model-supplied one is either a collision or a forgery attempt, and the state
             // block hands the real one back on the very next step anyway.
-            taskId = Guid.NewGuid();
+            //
+            // Derived rather than random, because the id lands inside DescribeBatch's idempotency key: a Guid.NewGuid()
+            // made the key of a retried batch differ from the original's, the store's query-first dedupe saw a new
+            // operation, and the retry added the task a SECOND time.
+            //
+            // The WHOLE batch's digest, not this operation's own content: a second call in the same step that repeats
+            // an earlier add — an ordinary small-model habit — would otherwise re-mint that add's id, and the store
+            // refuses an id it already holds, rolling back the genuinely new operations beside it. Position separates
+            // two identical adds inside one batch; the digest separates one batch from every other batch in the step.
+            taskId = WorkSessionOperationId.For(session.Id, session.StepCount, string.Create(CultureInfo.InvariantCulture, $"add:{index}:{batchDigest}"));
         }
         else if (!TryParseId(operation.TaskId, out taskId))
         {
@@ -234,6 +253,25 @@ internal sealed class UpdateWorkPlanToolHandler(
         parsed = default;
         return !string.IsNullOrWhiteSpace(op) && Enum.TryParse(op, ignoreCase: true, out parsed);
     }
+
+    // What the batch asked for, in order, as the material every add's id is derived from. JSON rather than a
+    // colon-joined string because both the title and the detail are free model text: separated by a bare colon,
+    // "Step 2" + "verify the pin" and "Step 2:verify the pin" render alike, and two genuinely different adds would
+    // mint one id. Fields are normalized the way TryMap maps them — the title alias resolved, blank read as absent —
+    // so a retry that differs only in how it spelt an empty field still lands on the same ids.
+    private static string BatchDigest(IReadOnlyList<WorkPlanOperationRequest> operations) =>
+        JsonSerializer.Serialize(operations.Select(static operation => new[]
+        {
+            operation.Op,
+            Normalized(operation.TaskId),
+            operation.EffectiveTitle,
+            Normalized(operation.Detail),
+            operation.Status,
+            Normalized(operation.BlockedReason),
+            Normalized(operation.ParentTaskId)
+        }));
+
+    private static string? Normalized(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     // The batch's identity for idempotency: the operations it carries, in order. Two genuinely different batches in one
     // step therefore get different ids, while a replay of the same one collapses.

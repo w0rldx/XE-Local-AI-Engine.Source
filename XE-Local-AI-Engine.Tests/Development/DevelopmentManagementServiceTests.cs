@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
 using System.Text;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -347,7 +348,8 @@ public sealed class DevelopmentManagementServiceTests
             {
                 Enabled = true
             }),
-            TimeProvider.System);
+            TimeProvider.System,
+            NullLogger<DevelopmentManagementService>.Instance);
 
     /// <summary>Backfill is a no-op here: every project these tests build already carries a profile.</summary>
     private static IDevelopmentProfileBackfillService ProfileBackfill()

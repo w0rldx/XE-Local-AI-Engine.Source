@@ -58,10 +58,18 @@ function EventRow({ event }: { readonly event: DevelopmentEvent }) {
 		<Stack gap={2} data-testid="development-event-row">
 			<Group justify="space-between" wrap="nowrap">
 				<Text size="sm">
-					<Code>#{event.sequence}</Code> {event.eventType}
+					<Code>#{event.sequence}</Code> {t(`pages.development.timeline.eventType.${event.eventType}`, event.eventType ?? "")}
 				</Text>
+				{/* Both columns are backend tokens — 16 event types and 17 outcomes — and both used to render raw in a
+				    user-facing row. Looked up the way every dev-workflow badge looks its enum up, with the raw value as
+				    the fallback so a token a newer server invents degrades to what it always showed rather than to a
+				    key. `DevelopmentEventTimelineOutcomes.test.ts` is what keeps both maps whole. The event type stays
+				    beside the outcome because one outcome label serves several types — `Started` is the attempt's, the
+				    validation's and the apply's — so the type is what disambiguates it. */}
 				<Text c="dimmed" size="xs">
-					{event.outcome ?? event.operationPhase ?? ""}
+					{event.outcome
+						? t(`pages.development.timeline.outcome.${event.outcome}`, event.outcome)
+						: (event.operationPhase ?? "")}
 				</Text>
 			</Group>
 			{/* Why a task was sent back, in the words of whatever sent it — a workflow's validation report or a

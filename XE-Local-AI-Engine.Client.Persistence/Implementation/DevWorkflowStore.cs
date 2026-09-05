@@ -212,10 +212,17 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
     ///     <para>
     ///         The decision endpoint checks the same budget first, for the message an operator reads. This is the
     ///         authority: two people answering two blocked node runs in the same tick window both pass a check taken
-    ///         before either decision exists, and only a count taken under the writer lock refuses the second.
+    ///         before either decision exists, and only a count taken under the writer lock refuses the second. The
+    ///         automatic retry path checks it here for the same reason, on the same count, since a human's Retry and a
+    ///         policy's re-attempt spend the same budget (FU3-4).
+    ///     </para>
+    ///     <para>
+    ///         <paramref name="cost" /> is how many re-attempts the act being admitted makes. One for a decision or a
+    ///         single re-attempt; a routed fix loop costs the whole cascade it resets, because admitting a fan-out one
+    ///         attempt at a time is how a run overspends its budget by the width of its graph.
     ///     </para>
     /// </summary>
-    private async Task EnsureRetryBudgetAsync(Guid runId, int maxTotalAttempts, CancellationToken cancellationToken)
+    private async Task EnsureRetryBudgetAsync(Guid runId, int maxTotalAttempts, int cost, CancellationToken cancellationToken)
     {
         var attempts = await _dbContext.DevWorkflowNodeRuns.AsNoTracking()
                                        .Where(entity => entity.RunId == runId)
@@ -230,10 +237,12 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
 
         var spent = attempts.Sum(static row => row.Attempt - 1);
         var reserved = recorded.Count(decision => attempts.Any(row => row.NodeRunId == decision.NodeRunId && row.Attempt == decision.Attempt));
-        if (spent + reserved >= maxTotalAttempts)
+        // Strictly greater, with the cost of THIS act included: at cost 1 that is algebraically the `spent + reserved
+        // >= maxTotalAttempts` this always was, so admitting a decision is unchanged.
+        if (spent + reserved + cost > maxTotalAttempts)
         {
-            throw new DevWorkflowInvalidTransitionException($"This run has already spent or promised {spent + reserved} re-attempts, which is as many "
-                                                            + "re-attempts as this run allows, so it cannot be retried again.");
+            throw new DevWorkflowRetryBudgetExceededException($"This run has already spent or promised {spent + reserved} re-attempts, which is as many "
+                                                              + "re-attempts as this run allows, so it cannot be retried again.");
         }
     }
 
