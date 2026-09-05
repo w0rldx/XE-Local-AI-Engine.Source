@@ -4,6 +4,8 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Instructions;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -69,6 +71,12 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
 {
     /// <summary>What a <c>Queued</c> Agent row is waiting for. It is waiting, not failing, so it carries no event.</summary>
     private const string AwaitingAgentSlot = "awaiting-agent-slot";
+
+    /// <summary>
+    ///     The agent version an UNBOUND turn carries, matching the chat path's own constant of the same name: there is
+    ///     no definition whose version could be stamped, and the two must agree or the same persona would hash twice.
+    /// </summary>
+    private const int DefaultAgentDefinitionVersion = 1;
 
     /// <summary>What a row says when its turn was cancelled before it produced a reason of its own.</summary>
     private const string CancelledInFlight = "The run was cancelled while this node run's agent turn was in flight.";
@@ -344,7 +352,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             var services = scope.ServiceProvider;
 
             // 1. The node's agent. A node naming one that has since been deleted is a configuration error, not a run
-            //    that should be re-attempted; a node naming none takes the resolver's default persona.
+            //    that should be re-attempted; a node naming none takes the DEFAULT persona (step 5).
             string? pinnedModel = null;
             if (config.AgentDefinitionId is { } agentDefinitionId)
             {
@@ -411,8 +419,15 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                                          .ConfigureAwait(false);
             if (resolved is null)
             {
-                // The definition existed at step 1 and was deleted before the resolve finished (rare race).
-                return Invalid("The agent this node runs could not be found. It may have been deleted.");
+                if (config.AgentDefinitionId is not null)
+                {
+                    // The definition existed at step 1 and was deleted before the resolve finished (rare race). ONLY
+                    // this case is a deletion: a null id resolves to null BY DESIGN, and reading that as one is what
+                    // made every agent node that names no agent unrunnable.
+                    return Invalid("The agent this node runs could not be found. It may have been deleted.");
+                }
+
+                resolved = await DefaultPersonaAsync(services, effectiveModel, capabilities, cancellationToken).ConfigureAwait(false);
             }
 
             // 6. The headless package.
@@ -453,6 +468,50 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             // The outermost finally, on success, failure, refusal and cancellation alike.
             reservation?.Dispose();
         }
+    }
+
+    /// <summary>
+    ///     What an Agent node that binds NO agent runs as: the default persona, composed exactly as the default chat
+    ///     path composes it for an unbound conversation.
+    ///     <para>
+    ///         Every field mirrors <c>NodeChatRegenerationService</c>'s null-resolution fallback — the scaffolded
+    ///         embedded prompt through <see cref="IAgentInstructionProvider.GetDefaultChatSystemPrompt" />, the
+    ///         capability-gated catalog offer recomposed through the node's tighten-only
+    ///         <see cref="IToolApprovalPolicy" /> so an agentless node cannot bypass it, and agent version 1. No pinned
+    ///         model (the node's effective model is what the package binds), no reasoning effort (the node's own
+    ///         override is applied by the package builder), no skills and no custom tools: an unbound turn has no
+    ///         definition to carry any of them.
+    ///     </para>
+    ///     <para>
+    ///         The approval-required tools this leaves in the offer are stripped where every other offer's are, in
+    ///         <see cref="BuildPackage" /> — an unattended run has no approval round-trip.
+    ///     </para>
+    /// </summary>
+    private static async Task<ResolvedAgentRuntime> DefaultPersonaAsync(IServiceProvider services,
+        string effectiveModel,
+        ModelCapabilitySnapshot capabilities,
+        CancellationToken cancellationToken)
+    {
+        // Withheld wholesale for a model that cannot drive tool calls, which is what the resolver does for a bound
+        // definition on the same model.
+        var offered = new List<AllowedToolDto>();
+        if (capabilities.SupportsTools)
+        {
+            var approvalPolicy = services.GetRequiredService<IToolApprovalPolicy>();
+            var offer = await services.GetRequiredService<ILocalToolOfferProvider>()
+                                      .GetOfferedToolsAsync(effectiveModel, isCloudModel: false, cancellationToken)
+                                      .ConfigureAwait(false);
+            offered.AddRange(offer.Select(tool => tool with
+            {
+                RequiresApproval = approvalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
+            }));
+        }
+
+        return new ResolvedAgentRuntime(services.GetRequiredService<IAgentInstructionProvider>().GetDefaultChatSystemPrompt(),
+            offered,
+            ModelProfile: null,
+            ReasoningEffort: null,
+            DefaultAgentDefinitionVersion);
     }
 
     /// <summary>

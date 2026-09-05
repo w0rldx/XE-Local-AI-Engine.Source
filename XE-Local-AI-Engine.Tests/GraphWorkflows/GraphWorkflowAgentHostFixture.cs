@@ -182,6 +182,10 @@ internal sealed class GraphWorkflowReservation : IDisposable
 /// <summary>
 ///     The agent's resolved runtime, with the arguments it was resolved WITH kept per active model — the only place a
 ///     test can see the <c>honorModelProfile</c> decision, which leaves no trace on the package.
+///     <para>
+///         A BOUND id only. A null id resolves to <see langword="null" /> here for the same reason it does in the real
+///         resolver, so a test about a node that binds no agent sees the default-persona path rather than this fixture.
+///     </para>
 /// </summary>
 internal sealed class FakeGraphWorkflowAgentRuntime : IAgentDefinitionResolver
 {
@@ -208,6 +212,14 @@ internal sealed class FakeGraphWorkflowAgentRuntime : IAgentDefinitionResolver
         CancellationToken cancellationToken = default)
     {
         _calls.Enqueue(new GraphWorkflowResolveCall(agentDefinitionId, activeModelId, retrievalQuery, supportsTools, honorModelProfile, activeModelIsCloud));
+
+        // Null for a null binding, exactly as the real resolver answers it: that null is the "keep today's defaults"
+        // signal, not a deleted agent. A fake that fabricated a runtime here made every agent node in this suite look
+        // like a BOUND one, which is how a node binding no agent at all reached a live run unrunnable.
+        if (agentDefinitionId is null)
+        {
+            return Task.FromResult<ResolvedAgentRuntime?>(null);
+        }
 
         return Task.FromResult<ResolvedAgentRuntime?>(new ResolvedAgentRuntime("SCAFFOLD+PERSONA",
             [Tool(OfferedTool, requiresApproval: false), Tool(ApprovalRequiredTool, requiresApproval: true)],

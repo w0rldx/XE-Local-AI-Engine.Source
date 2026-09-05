@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -77,7 +78,16 @@ public sealed class GraphWorkflowAgentExecutorTests
     {
         const string instructions = "unattended-and-stripped";
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await StartToTheAgentAsync(harness, Graph(instructions)).ConfigureAwait(false);
+
+        // A BOUND agent, because the offer under test is a bound definition's: an unbound node takes the default
+        // persona's own catalog offer, which is the node's tool state rather than anything a test scripts.
+        var agentDefinitionId = await SeedAgentAsync(harness, "graph-local-unattended").ConfigureAwait(false);
+        var runId = await StartToTheAgentAsync(harness,
+                Graph(instructions,
+                    $$"""
+                      , "agentDefinitionId": "{{agentDefinitionId}}"
+                      """))
+            .ConfigureAwait(false);
 
         _ = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
 
@@ -426,6 +436,30 @@ public sealed class GraphWorkflowAgentExecutorTests
         AssertEx.Contains(analyze.Error, "deleted");
         AssertEx.Empty(harness.Invocations.Packages.Where(package => Prompt(package).Contains(instructions, StringComparison.Ordinal)),
             "the refusal happens before any invocation exists.");
+    }
+
+    /// <summary>
+    ///     A node that binds NO agent is not a node whose agent is gone. The resolver answers <see langword="null" />
+    ///     for a null binding BY DESIGN — it is the "keep today's defaults" signal — so such a node runs the default
+    ///     persona on the node's local default model instead of being refused as a deleted one.
+    /// </summary>
+    [Test]
+    public async Task ANodeThatBindsNoAgent_RunsTheDefaultPersonaOnTheLocalDefaultModel()
+    {
+        const string instructions = "no-agent-bound-at-all";
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions, agentConfig: null, SingleAttempt)).ConfigureAwait(false);
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, analyze.Status, "a node naming no agent has nothing missing, so nothing refuses it.");
+        var package = harness.Invocations.PackageFor(instructions);
+        AssertEx.Equal(GraphWorkflowModels.LocalDefault, package.ModelProfile, "no node model and no agent pin leaves the node's local default.");
+        AssertEx.False(string.IsNullOrWhiteSpace(package.ResolvedSystemPrompt), "an unbound turn still carries a persona, and the builder refuses a blank one.");
+        AssertEx.Equal(harness.Services.GetRequiredService<IAgentInstructionProvider>().GetDefaultChatSystemPrompt(),
+            package.ResolvedSystemPrompt,
+            "and it is the scaffolded embedded default the chat path composes for an unbound conversation.");
+        AssertEx.Equal(expected: 1, package.AgentDefinitionVersion, "the chat path's own default version, so the same persona hashes the same way from either caller.");
     }
 
     /// <summary>
