@@ -38,6 +38,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
@@ -216,6 +217,9 @@ public static class ConfigureServices
         // Same posture for development workflows: the hub-backed publisher supersedes the no-op the module registers
         // with TryAddSingleton, so every committed run change reaches an open run view live.
         builder.Services.AddSingleton<IDevWorkflowEventPublisher, DevWorkflowEventPublisher>();
+
+        // And for graph workflows, whose publishing store decorator announces every committed run mutation.
+        builder.Services.AddSingleton<IGraphWorkflowEventPublisher, GraphWorkflowEventPublisher>();
 
         // Composes the run-detail and node-detail read shapes, which need the pinned graph and the agent names beside
         // the rows. Scoped, because the stores it reads are.

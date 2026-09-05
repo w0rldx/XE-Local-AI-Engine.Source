@@ -475,17 +475,75 @@ public sealed class GraphWorkflowStateMachineTests
 
     /// <summary>
     ///     <c>Failed</c> outranks the cancelled answer deliberately: a run with a failed node has a cause worth
-    ///     reporting, and calling that "cancelled" would bury it.
+    ///     reporting, and calling that "cancelled" would bury it. The cause travels with it — a run reading class
+    ///     <c>None</c> above a node reading <c>Interrupted</c> tells an operator nothing about why it stopped.
     /// </summary>
     [Test]
-    public void Recompute_WithAFailedNodeAndNoTerminalSuccess_IsStillFailed()
+    public void Recompute_WithAFailedNodeAndNoTerminalSuccess_IsFailedAndCarriesThatNodesClassAndReason()
     {
         var outcome = GraphWorkflowStateMachine.Recompute(GraphWorkflowRunStatus.Running,
             Chain(2),
-            [NodeRun("node-0", GraphWorkflowNodeRunStatus.Failed), NodeRun("node-1", GraphWorkflowNodeRunStatus.Skipped)]);
+            [
+                NodeRun("node-0",
+                    GraphWorkflowNodeRunStatus.Failed,
+                    failureClass: GraphWorkflowFailureClass.Interrupted,
+                    error: "The host stopped while this node run's agent turn was in flight."),
+                NodeRun("node-1", GraphWorkflowNodeRunStatus.Skipped)
+            ]);
 
         AssertEx.Equal(GraphWorkflowRunStatus.Failed, outcome.Status);
-        AssertEx.Equal(GraphWorkflowFailureClass.None, outcome.FailureClass, "the failing node run already carries the class that explains it.");
+        AssertEx.Equal(GraphWorkflowFailureClass.Interrupted, outcome.FailureClass, "the run reads the class of the node that failed, never None.");
+        AssertEx.Contains(outcome.TerminalReason, "node-0", message: "and the reason names which node it was.");
+        AssertEx.Contains(outcome.TerminalReason, "in flight", message: "with that node's own already-sanitized words.");
+    }
+
+    /// <summary>
+    ///     Which failed node a run blames when several did is the LOWEST node key ordinally, not whichever row the
+    ///     store handed over first: two readers of one run must not disagree about why it failed.
+    /// </summary>
+    [Test]
+    public void Recompute_WithSeveralFailedNodes_BlamesTheLowestNodeKeyWhateverOrderTheRowsArriveIn()
+    {
+        GraphWorkflowNodeRunSnapshot[] nodeRuns =
+        [
+            NodeRun("node-2", GraphWorkflowNodeRunStatus.Failed, failureClass: GraphWorkflowFailureClass.Timeout, error: "later"),
+            NodeRun("node-1", GraphWorkflowNodeRunStatus.Failed, failureClass: GraphWorkflowFailureClass.ValidationFailed, error: "earlier"),
+            NodeRun("node-0", GraphWorkflowNodeRunStatus.Succeeded),
+            NodeRun("node-3", GraphWorkflowNodeRunStatus.Skipped)
+        ];
+
+        GraphWorkflowNodeRunSnapshot[] reversed = [.. nodeRuns.Reverse()];
+        foreach (var ordering in new[] { nodeRuns, reversed })
+        {
+            var outcome = GraphWorkflowStateMachine.Recompute(GraphWorkflowRunStatus.Running, Chain(4), ordering);
+
+            AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, outcome.FailureClass);
+            AssertEx.Contains(outcome.TerminalReason, "node-1");
+        }
+    }
+
+    /// <summary>
+    ///     The failed arm is the only one that changed: a run that reached an end still explains nothing, and one that
+    ///     reached none is still an unclassified cancellation.
+    /// </summary>
+    [Test]
+    public void Recompute_WithNoFailedNode_LeavesTheCompletedAndCancelledOutcomesUnchanged()
+    {
+        var completed = GraphWorkflowStateMachine.Recompute(GraphWorkflowRunStatus.Running,
+            Chain(2),
+            [NodeRun("node-0", GraphWorkflowNodeRunStatus.Succeeded), NodeRun("node-1", GraphWorkflowNodeRunStatus.Succeeded)]);
+
+        AssertEx.Equal(GraphWorkflowRunStatus.Completed, completed.Status);
+        AssertEx.Equal(GraphWorkflowFailureClass.None, completed.FailureClass);
+        AssertEx.Null(completed.TerminalReason, "a run that reached its end has nothing to explain.");
+
+        var cancelled = GraphWorkflowStateMachine.Recompute(GraphWorkflowRunStatus.Running,
+            Chain(2),
+            [NodeRun("node-0", GraphWorkflowNodeRunStatus.Skipped), NodeRun("node-1", GraphWorkflowNodeRunStatus.Skipped)]);
+
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, cancelled.Status);
+        AssertEx.Equal(GraphWorkflowFailureClass.None, cancelled.FailureClass, "nothing refused a pause, so nothing is blamed.");
+        AssertEx.Contains(cancelled.TerminalReason, "No terminal node succeeded");
     }
 
     [Test]
@@ -790,7 +848,9 @@ public sealed class GraphWorkflowStateMachineTests
     private static GraphWorkflowNodeRunSnapshot NodeRun(string nodeKey,
         GraphWorkflowNodeRunStatus status,
         string? outputJson = null,
-        GraphWorkflowNodeKind kind = GraphWorkflowNodeKind.Agent) =>
+        GraphWorkflowNodeKind kind = GraphWorkflowNodeKind.Agent,
+        GraphWorkflowFailureClass failureClass = GraphWorkflowFailureClass.None,
+        string? error = null) =>
         new(Id: Guid.NewGuid(),
             RunId: Guid.NewGuid(),
             NodeKey: nodeKey,
@@ -800,8 +860,8 @@ public sealed class GraphWorkflowStateMachineTests
             PendingDecisionKind: null,
             DecisionOperationId: null,
             DecidedBySubject: null,
-            FailureClass: GraphWorkflowFailureClass.None,
-            Error: null,
+            FailureClass: failureClass,
+            Error: error,
             InputJson: null,
             OutputJson: outputJson,
             InvocationId: null,

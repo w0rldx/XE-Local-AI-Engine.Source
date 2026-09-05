@@ -72,6 +72,9 @@ import type {
 	CancelGgufImportData,
 	CancelGgufImportErrors,
 	CancelGgufImportResponses,
+	CancelGraphWorkflowRunData,
+	CancelGraphWorkflowRunErrors,
+	CancelGraphWorkflowRunResponses,
 	CancelImageJobData,
 	CancelImageJobErrors,
 	CancelImageJobResponses,
@@ -540,6 +543,12 @@ import type {
 	GetGraphWorkflowDefinitionData,
 	GetGraphWorkflowDefinitionErrors,
 	GetGraphWorkflowDefinitionResponses,
+	GetGraphWorkflowNodeRunData,
+	GetGraphWorkflowNodeRunErrors,
+	GetGraphWorkflowNodeRunResponses,
+	GetGraphWorkflowRunData,
+	GetGraphWorkflowRunErrors,
+	GetGraphWorkflowRunResponses,
 	GetHardwareProfileData,
 	GetHardwareProfileErrors,
 	GetHardwareProfileResponses,
@@ -798,6 +807,12 @@ import type {
 	ListGraphWorkflowDefinitionsData,
 	ListGraphWorkflowDefinitionsErrors,
 	ListGraphWorkflowDefinitionsResponses,
+	ListGraphWorkflowRunEventsData,
+	ListGraphWorkflowRunEventsErrors,
+	ListGraphWorkflowRunEventsResponses,
+	ListGraphWorkflowRunsData,
+	ListGraphWorkflowRunsErrors,
+	ListGraphWorkflowRunsResponses,
 	ListImageJobsData,
 	ListImageJobsErrors,
 	ListImageJobsResponses,
@@ -1114,6 +1129,9 @@ import type {
 	StartGgufImportData,
 	StartGgufImportErrors,
 	StartGgufImportResponses,
+	StartGraphWorkflowRunData,
+	StartGraphWorkflowRunErrors,
+	StartGraphWorkflowRunResponses,
 	StartImageModelDownloadData,
 	StartImageModelDownloadErrors,
 	StartImageModelDownloadResponses,
@@ -1276,6 +1294,8 @@ import {
 	zCancelGgufDownloadResponse,
 	zCancelGgufImportPath,
 	zCancelGgufImportResponse,
+	zCancelGraphWorkflowRunPath,
+	zCancelGraphWorkflowRunResponse,
 	zCancelImageJobPath,
 	zCancelImageJobResponse,
 	zCancelImageModelDownloadBody,
@@ -1585,6 +1605,10 @@ import {
 	zGetGgufImportStatusResponse,
 	zGetGraphWorkflowDefinitionPath,
 	zGetGraphWorkflowDefinitionResponse,
+	zGetGraphWorkflowNodeRunPath,
+	zGetGraphWorkflowNodeRunResponse,
+	zGetGraphWorkflowRunPath,
+	zGetGraphWorkflowRunResponse,
 	zGetHardwareProfileQuery,
 	zGetHardwareProfileResponse,
 	zGetHfTokenStatusResponse,
@@ -1734,6 +1758,11 @@ import {
 	zListGoldenConversationsPath,
 	zListGoldenConversationsResponse,
 	zListGraphWorkflowDefinitionsResponse,
+	zListGraphWorkflowRunEventsPath,
+	zListGraphWorkflowRunEventsQuery,
+	zListGraphWorkflowRunEventsResponse,
+	zListGraphWorkflowRunsQuery,
+	zListGraphWorkflowRunsResponse,
 	zListImageJobsResponse,
 	zListImageModelDownloadsResponse,
 	zListImageModelsResponse,
@@ -1946,6 +1975,9 @@ import {
 	zStartGgufDownloadResponse,
 	zStartGgufImportBody,
 	zStartGgufImportResponse,
+	zStartGraphWorkflowRunBody,
+	zStartGraphWorkflowRunPath,
+	zStartGraphWorkflowRunResponse,
 	zStartImageModelDownloadBody,
 	zStartImageModelDownloadResponse,
 	zStartLlamaCppSourceBuildBody,
@@ -9867,6 +9899,36 @@ export const startStableDiffusionCppSourceBuild = <ThrowOnError extends boolean 
 		},
 	});
 
+export const cancelGraphWorkflowRun = <ThrowOnError extends boolean = false>(
+	options: Options<CancelGraphWorkflowRunData, ThrowOnError>,
+): RequestResult<CancelGraphWorkflowRunResponses, CancelGraphWorkflowRunErrors, ThrowOnError> =>
+	(options.client ?? client).post<CancelGraphWorkflowRunResponses, CancelGraphWorkflowRunErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zCancelGraphWorkflowRunPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCancelGraphWorkflowRunResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/runs/{runId}/cancel",
+		...options,
+	});
+
 export const listGraphWorkflowDefinitions = <ThrowOnError extends boolean = false>(
 	options?: Options<ListGraphWorkflowDefinitionsData, ThrowOnError>,
 ): RequestResult<ListGraphWorkflowDefinitionsResponses, ListGraphWorkflowDefinitionsErrors, ThrowOnError> =>
@@ -10017,6 +10079,160 @@ export const updateGraphWorkflowDefinition = <ThrowOnError extends boolean = fal
 			},
 		],
 		url: "/api/local/v1/graph-workflows/definitions/{definitionId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const getGraphWorkflowNodeRun = <ThrowOnError extends boolean = false>(
+	options: Options<GetGraphWorkflowNodeRunData, ThrowOnError>,
+): RequestResult<GetGraphWorkflowNodeRunResponses, GetGraphWorkflowNodeRunErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetGraphWorkflowNodeRunResponses, GetGraphWorkflowNodeRunErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetGraphWorkflowNodeRunPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetGraphWorkflowNodeRunResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/runs/{runId}/nodes/{nodeKey}",
+		...options,
+	});
+
+export const getGraphWorkflowRun = <ThrowOnError extends boolean = false>(
+	options: Options<GetGraphWorkflowRunData, ThrowOnError>,
+): RequestResult<GetGraphWorkflowRunResponses, GetGraphWorkflowRunErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetGraphWorkflowRunResponses, GetGraphWorkflowRunErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetGraphWorkflowRunPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetGraphWorkflowRunResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/runs/{runId}",
+		...options,
+	});
+
+export const listGraphWorkflowRunEvents = <ThrowOnError extends boolean = false>(
+	options: Options<ListGraphWorkflowRunEventsData, ThrowOnError>,
+): RequestResult<ListGraphWorkflowRunEventsResponses, ListGraphWorkflowRunEventsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListGraphWorkflowRunEventsResponses, ListGraphWorkflowRunEventsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zListGraphWorkflowRunEventsPath,
+					query: zListGraphWorkflowRunEventsQuery,
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListGraphWorkflowRunEventsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/runs/{runId}/events",
+		...options,
+	});
+
+export const listGraphWorkflowRuns = <ThrowOnError extends boolean = false>(
+	options: Options<ListGraphWorkflowRunsData, ThrowOnError>,
+): RequestResult<ListGraphWorkflowRunsResponses, ListGraphWorkflowRunsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListGraphWorkflowRunsResponses, ListGraphWorkflowRunsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zListGraphWorkflowRunsQuery,
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListGraphWorkflowRunsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/runs",
+		...options,
+	});
+
+export const startGraphWorkflowRun = <ThrowOnError extends boolean = false>(
+	options: Options<StartGraphWorkflowRunData, ThrowOnError>,
+): RequestResult<StartGraphWorkflowRunResponses, StartGraphWorkflowRunErrors, ThrowOnError> =>
+	(options.client ?? client).post<StartGraphWorkflowRunResponses, StartGraphWorkflowRunErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zStartGraphWorkflowRunBody,
+					path: zStartGraphWorkflowRunPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartGraphWorkflowRunResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/definitions/{definitionId}/runs",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

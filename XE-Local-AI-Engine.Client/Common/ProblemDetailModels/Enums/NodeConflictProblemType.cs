@@ -118,5 +118,18 @@ public enum NodeConflictProblemType
     ///         above this one would shift both.
     ///     </para>
     /// </summary>
-    GraphWorkflowDefinitionConflict
+    GraphWorkflowDefinitionConflict,
+
+    /// <summary>
+    ///     Every way a graph-workflow RUN write can lose, under one member for the same reason the definition member
+    ///     above holds two stories: from the client's side they are one — you are acting on a version of this run that
+    ///     no longer exists. A stale <c>definitionVersion</c> at start, a cancel of a run that has already finished, a
+    ///     request id reused on a different definition, and a status move a concurrent writer got to first. Re-read the
+    ///     run and decide again.
+    ///     <para>
+    ///         APPENDED, like the member above and for the same reason: this enum crosses the wire as the member's NAME
+    ///         and clients may have persisted its ordinal, so inserting above either one would shift both.
+    ///     </para>
+    /// </summary>
+    GraphWorkflowRunConflict
 }

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Common.ProblemDetailModels.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Connection;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using XE_Local_AI_Engine.Client.Services.Workspace;
@@ -50,6 +51,12 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
             DevWorkflowInvalidTransitionException => NodeConflictProblemType.DevWorkflowInvalidTransition,
             DevWorkflowConcurrencyException => NodeConflictProblemType.DevWorkflowVersionConflict,
             GraphWorkflowDefinitionConflictException => NodeConflictProblemType.GraphWorkflowDefinitionConflict,
+            GraphWorkflowRunConflictException => NodeConflictProblemType.GraphWorkflowRunConflict,
+
+            // The store's own rejection channel, under the same member: a stale ExpectedVersion, a lost concurrency
+            // race and a request id reused on another definition all reach a client as "re-read the run", and giving
+            // them a member each would be three names for one instruction.
+            GraphWorkflowInvalidTransitionException => NodeConflictProblemType.GraphWorkflowRunConflict,
             _ => (NodeConflictProblemType?)null
         };
 

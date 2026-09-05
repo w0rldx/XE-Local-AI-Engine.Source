@@ -171,3 +171,134 @@ public sealed record ValidateGraphWorkflowDefinitionResponse(bool Valid, IReadOn
 // and a generic would land in the generated client as an unreadable ListGraphWorkflowFeedResponseOfT.
 
 public sealed record ListGraphWorkflowDefinitionsResponse(IReadOnlyList<GraphWorkflowDefinitionSummaryResponse> Definitions);
+
+// Runs. The definition half above is the authoring surface; everything below is one execution of it.
+
+/// <summary>
+///     A run start. The definition comes from the route; <see cref="RequestId" /> is the caller's own idempotency key,
+///     so a retry that never saw the first answer resolves to the run it already created rather than a second one.
+/// </summary>
+public sealed class StartGraphWorkflowRunRequest
+{
+    public Guid DefinitionId { get; init; }
+
+    public Guid RequestId { get; init; }
+
+    /// <summary>The operator's start payload, carried verbatim into the <c>Start</c> node's output document. Any JSON value; absent means none.</summary>
+    public JsonElement? Input { get; init; }
+
+    /// <summary>
+    ///     The definition version the caller believed it was starting. A stale one answers 409 rather than running a
+    ///     graph the caller never saw; omitted skips the check.
+    /// </summary>
+    public int? DefinitionVersion { get; init; }
+}
+
+public sealed class ListGraphWorkflowRunsRequest
+{
+    /// <summary>A <c>GraphWorkflowRunStatus</c> name. Omitted lists every status.</summary>
+    public string? Status { get; init; }
+
+    public int Limit { get; init; } = 50;
+}
+
+public sealed class GraphWorkflowRunRequest
+{
+    public Guid RunId { get; init; }
+}
+
+public sealed class GraphWorkflowNodeRunRequest
+{
+    public Guid RunId { get; init; }
+
+    public string NodeKey { get; init; } = string.Empty;
+}
+
+/// <summary>
+///     The event feed. <see cref="AfterSeq" /> is an EXCLUSIVE lower bound, so a client that stores the sequence it
+///     last rendered replays nothing it already has; 0 asks for everything.
+/// </summary>
+public sealed class GraphWorkflowRunEventFeedRequest
+{
+    public Guid RunId { get; init; }
+
+    public long AfterSeq { get; init; }
+}
+
+/// <summary>
+///     What a start answers: the run id and nothing else. The run has no state worth reading yet — the dispatcher has
+///     not ticked — and a full body here would invite a client to believe the statuses in it.
+/// </summary>
+public sealed record StartGraphWorkflowRunResponse(Guid RunId);
+
+/// <summary>One row of the run list. Enums cross the wire as their NAMES and are typed string here; the client re-narrows them.</summary>
+public sealed record GraphWorkflowRunSummaryResponse(
+    Guid Id,
+    Guid RequestId,
+    Guid DefinitionId,
+    int DefinitionVersion,
+    string GraphHash,
+    string Status,
+    string FailureClass,
+    long? CancelRequestedAtUtc,
+    long? StartedAtUtc,
+    long? CompletedAtUtc,
+    long CreatedAtUtc);
+
+/// <summary>
+///     One node run without its documents — what a run overview draws. The input and output documents are a per-node
+///     read, because they are the largest thing a run stores and a graph of two hundred nodes would carry all of them.
+/// </summary>
+public sealed record GraphWorkflowNodeRunSummaryResponse(
+    Guid Id,
+    string NodeKey,
+    string Kind,
+    string Status,
+    int Attempt,
+    string FailureClass,
+    string? PendingDecisionKind,
+    Guid? InvocationId,
+    long? StartedAtUtc,
+    long? CompletedAtUtc,
+    long UpdatedAtUtc);
+
+/// <summary>
+///     One run in full. <see cref="Output" /> is the result the succeeded <c>End</c> node resolved, written once at
+///     terminalization and null until then.
+/// </summary>
+public sealed record GraphWorkflowRunResponse(
+    GraphWorkflowRunSummaryResponse Run,
+    IReadOnlyList<GraphWorkflowNodeRunSummaryResponse> NodeRuns,
+    JsonElement? Output);
+
+/// <summary>
+///     One node run with its documents. Both ride as raw JSON: they are author- and model-shaped, and a typed mirror of
+///     eight kinds' payloads would be a schema the runtime does not itself hold.
+/// </summary>
+public sealed record GraphWorkflowNodeRunResponse(
+    Guid Id,
+    Guid RunId,
+    string NodeKey,
+    string Kind,
+    string Status,
+    int Attempt,
+    string FailureClass,
+    string? PendingDecisionKind,
+    string? Error,
+    JsonElement? Input,
+    JsonElement? Output,
+    Guid? InvocationId,
+    long? StartedAtUtc,
+    long? CompletedAtUtc,
+    long UpdatedAtUtc);
+
+public sealed record GraphWorkflowRunEventResponse(Guid Id, long Seq, string EventType, string? NodeKey, JsonElement? Detail, long CreatedAtUtc);
+
+public sealed record ListGraphWorkflowRunsResponse(IReadOnlyList<GraphWorkflowRunSummaryResponse> Runs);
+
+/// <summary>
+///     One page of the event log. <see cref="ReplayTruncated" /> is observed, not inferred: the page is read one row
+///     over its cap, so a client that fell behind is told it was cut off rather than handed a partial log it would
+///     mistake for the whole one.
+/// </summary>
+public sealed record ListGraphWorkflowRunEventsResponse(IReadOnlyList<GraphWorkflowRunEventResponse> Events, long LastSeq, bool ReplayTruncated);

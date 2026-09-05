@@ -676,6 +676,11 @@ namespace XE_Local_AI_Engine.Client
             // middleware above, which answers 404 for the whole prefix — including this path.
             app.MapHub<DevWorkflowRunHub>(LocalApiRoutes.DevelopmentWorkflows.Hub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
+
+            // Same posture for graph workflows: GraphWorkflows:Enabled is enforced by the request-path middleware
+            // above, which answers 404 for the whole prefix — this path included.
+            app.MapHub<GraphWorkflowRunHub>(LocalApiRoutes.GraphWorkflows.Hub)
+               .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             if (isDevelopmentModeEnabled)
             {
                 app.MapHub<DevelopmentAttemptHub>(LocalApiRoutes.Development.Hub)

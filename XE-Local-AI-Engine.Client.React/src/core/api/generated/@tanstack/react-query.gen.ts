@@ -31,6 +31,7 @@ import {
 	cancelEvaluation,
 	cancelGgufDownload,
 	cancelGgufImport,
+	cancelGraphWorkflowRun,
 	cancelImageJob,
 	cancelImageModelDownload,
 	cancelIntegrationExecution,
@@ -187,6 +188,8 @@ import {
 	getGgufImports,
 	getGgufImportStatus,
 	getGraphWorkflowDefinition,
+	getGraphWorkflowNodeRun,
+	getGraphWorkflowRun,
 	getHardwareProfile,
 	getHfTokenStatus,
 	getImageJob,
@@ -273,6 +276,8 @@ import {
 	listExternalProviderConnections,
 	listGoldenConversations,
 	listGraphWorkflowDefinitions,
+	listGraphWorkflowRunEvents,
+	listGraphWorkflowRuns,
 	listImageJobs,
 	listImageModelDownloads,
 	listImageModels,
@@ -380,6 +385,7 @@ import {
 	startDevWorkflowRun,
 	startGgufDownload,
 	startGgufImport,
+	startGraphWorkflowRun,
 	startImageModelDownload,
 	startLlamaCppSourceBuild,
 	startNodeBinding,
@@ -468,6 +474,9 @@ import type {
 	CancelGgufDownloadResponse,
 	CancelGgufImportData,
 	CancelGgufImportResponse,
+	CancelGraphWorkflowRunData,
+	CancelGraphWorkflowRunError,
+	CancelGraphWorkflowRunResponse,
 	CancelImageJobData,
 	CancelImageJobResponse,
 	CancelImageModelDownloadData,
@@ -846,6 +855,11 @@ import type {
 	GetGgufImportStatusResponse,
 	GetGraphWorkflowDefinitionData,
 	GetGraphWorkflowDefinitionResponse,
+	GetGraphWorkflowNodeRunData,
+	GetGraphWorkflowNodeRunError,
+	GetGraphWorkflowNodeRunResponse,
+	GetGraphWorkflowRunData,
+	GetGraphWorkflowRunResponse,
 	GetHardwareProfileData,
 	GetHardwareProfileResponse,
 	GetHfTokenStatusData,
@@ -1037,6 +1051,12 @@ import type {
 	ListGoldenConversationsResponse,
 	ListGraphWorkflowDefinitionsData,
 	ListGraphWorkflowDefinitionsResponse,
+	ListGraphWorkflowRunEventsData,
+	ListGraphWorkflowRunEventsError,
+	ListGraphWorkflowRunEventsResponse,
+	ListGraphWorkflowRunsData,
+	ListGraphWorkflowRunsError,
+	ListGraphWorkflowRunsResponse,
 	ListImageJobsData,
 	ListImageJobsResponse,
 	ListImageModelDownloadsData,
@@ -1298,6 +1318,9 @@ import type {
 	StartGgufDownloadResponse,
 	StartGgufImportData,
 	StartGgufImportResponse,
+	StartGraphWorkflowRunData,
+	StartGraphWorkflowRunError,
+	StartGraphWorkflowRunResponse,
 	StartImageModelDownloadData,
 	StartImageModelDownloadResponse,
 	StartLlamaCppSourceBuildData,
@@ -6768,6 +6791,30 @@ export const startStableDiffusionCppSourceBuildMutation = (
 	return mutationOptions;
 };
 
+export const cancelGraphWorkflowRunMutation = (
+	options?: Partial<Options<CancelGraphWorkflowRunData>>,
+): UseMutationOptions<
+	CancelGraphWorkflowRunResponse,
+	AxiosError<CancelGraphWorkflowRunError>,
+	Options<CancelGraphWorkflowRunData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		CancelGraphWorkflowRunResponse,
+		AxiosError<CancelGraphWorkflowRunError>,
+		Options<CancelGraphWorkflowRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelGraphWorkflowRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const listGraphWorkflowDefinitionsQueryKey = (options?: Options<ListGraphWorkflowDefinitionsData>) =>
 	createQueryKey("listGraphWorkflowDefinitions", options);
 
@@ -6874,6 +6921,118 @@ export const updateGraphWorkflowDefinitionMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await updateGraphWorkflowDefinition({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getGraphWorkflowNodeRunQueryKey = (options: Options<GetGraphWorkflowNodeRunData>) =>
+	createQueryKey("getGraphWorkflowNodeRun", options);
+
+export const getGraphWorkflowNodeRunOptions = (options: Options<GetGraphWorkflowNodeRunData>) =>
+	queryOptions<
+		GetGraphWorkflowNodeRunResponse,
+		AxiosError<GetGraphWorkflowNodeRunError>,
+		GetGraphWorkflowNodeRunResponse,
+		ReturnType<typeof getGraphWorkflowNodeRunQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getGraphWorkflowNodeRun({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getGraphWorkflowNodeRunQueryKey(options),
+	});
+
+export const getGraphWorkflowRunQueryKey = (options: Options<GetGraphWorkflowRunData>) =>
+	createQueryKey("getGraphWorkflowRun", options);
+
+export const getGraphWorkflowRunOptions = (options: Options<GetGraphWorkflowRunData>) =>
+	queryOptions<
+		GetGraphWorkflowRunResponse,
+		AxiosError<DefaultError>,
+		GetGraphWorkflowRunResponse,
+		ReturnType<typeof getGraphWorkflowRunQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getGraphWorkflowRun({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getGraphWorkflowRunQueryKey(options),
+	});
+
+export const listGraphWorkflowRunEventsQueryKey = (options: Options<ListGraphWorkflowRunEventsData>) =>
+	createQueryKey("listGraphWorkflowRunEvents", options);
+
+export const listGraphWorkflowRunEventsOptions = (options: Options<ListGraphWorkflowRunEventsData>) =>
+	queryOptions<
+		ListGraphWorkflowRunEventsResponse,
+		AxiosError<ListGraphWorkflowRunEventsError>,
+		ListGraphWorkflowRunEventsResponse,
+		ReturnType<typeof listGraphWorkflowRunEventsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listGraphWorkflowRunEvents({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listGraphWorkflowRunEventsQueryKey(options),
+	});
+
+export const listGraphWorkflowRunsQueryKey = (options: Options<ListGraphWorkflowRunsData>) =>
+	createQueryKey("listGraphWorkflowRuns", options);
+
+export const listGraphWorkflowRunsOptions = (options: Options<ListGraphWorkflowRunsData>) =>
+	queryOptions<
+		ListGraphWorkflowRunsResponse,
+		AxiosError<ListGraphWorkflowRunsError>,
+		ListGraphWorkflowRunsResponse,
+		ReturnType<typeof listGraphWorkflowRunsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listGraphWorkflowRuns({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listGraphWorkflowRunsQueryKey(options),
+	});
+
+export const startGraphWorkflowRunMutation = (
+	options?: Partial<Options<StartGraphWorkflowRunData>>,
+): UseMutationOptions<
+	StartGraphWorkflowRunResponse,
+	AxiosError<StartGraphWorkflowRunError>,
+	Options<StartGraphWorkflowRunData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		StartGraphWorkflowRunResponse,
+		AxiosError<StartGraphWorkflowRunError>,
+		Options<StartGraphWorkflowRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startGraphWorkflowRun({
 				...options,
 				...fnOptions,
 				throwOnError: true,

@@ -15,5 +15,6 @@
 	"/api/local/v1/training/runtime/hub",
 	"/api/local/v1/training/runs/hub",
 	"/api/local/v1/work-sessions/hub",
-	"/api/local/v1/development-workflows/hub"
+	"/api/local/v1/development-workflows/hub",
+	"/api/local/v1/graph-workflows/hub"
 ]
