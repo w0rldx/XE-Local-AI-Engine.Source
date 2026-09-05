@@ -111,9 +111,9 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
 
         // As of the most recent SUCCESSFUL load of the model that served this run, which is not necessarily a load this
         // run caused: a warm run reports the earlier load's figures, and model_readiness_ms is what tells the two apart
-        // (null there ⇒ no turn of this attempt warmed a runtime ⇒ the load predates the run). Chat role, because that
-        // is the only role a work session's turns ever ask for. Null for a remote or Ollama model, and null when the
-        // node never loaded this model itself.
+        // (zero there ⇒ the warmer waited for nothing ⇒ the load predates the run; null ⇒ unmeasured). Chat role,
+        // because that is the only role a work session's turns ever ask for. Null for a remote or Ollama model, and
+        // null when the node never loaded this model itself.
         var vram = envelopes.ServedModelName is { } servedModel
             ? _localModelLoads?.TryGetLastReadyLoad(servedModel, ModelRole.Chat)
             : null;
