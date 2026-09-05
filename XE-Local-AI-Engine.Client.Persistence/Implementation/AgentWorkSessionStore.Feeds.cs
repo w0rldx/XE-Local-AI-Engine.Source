@@ -107,6 +107,30 @@ internal sealed partial class AgentWorkSessionStore
         ];
     }
 
+    public async Task<WorkSessionEventSnapshot?> FindLatestEventAsync(Guid sessionId, string eventType, CancellationToken cancellationToken = default)
+    {
+        await EnsureSessionExistsAsync(sessionId, cancellationToken).ConfigureAwait(false);
+
+        // The event type is a plain column — only the detail is encrypted — so the filter and the order both run in
+        // SQL, and exactly one row comes back to decrypt.
+        var latest = await _dbContext.AgentWorkSessionEvents.AsNoTracking()
+                                     .Where(entity => entity.SessionId == sessionId && entity.EventType == eventType)
+                                     .OrderByDescending(entity => entity.Sequence)
+                                     .FirstOrDefaultAsync(cancellationToken)
+                                     .ConfigureAwait(false);
+        return latest is null
+            ? null
+            : new WorkSessionEventSnapshot(latest.Id,
+                latest.SessionId,
+                latest.Sequence,
+                latest.Step,
+                latest.EventType,
+                TextOrNull(latest.DetailJson),
+                latest.OperationId,
+                latest.Outcome,
+                latest.OccurredAtUtc);
+    }
+
     public async Task<WorkSessionArtifactSnapshot> GetArtifactAsync(Guid artifactId, CancellationToken cancellationToken = default)
     {
         var artifact = await _dbContext.AgentWorkSessionArtifacts.AsNoTracking()

@@ -744,6 +744,38 @@ public sealed class DevWorkflowAgentExecutorTests
     }
 
     /// <summary>
+    ///     A session that declared, kept working and declared again is judged on what it said LAST — and the events
+    ///     between and after the declarations do not hide either one. The read is one ordered query for the newest row
+    ///     of that type, not a scan of the whole log, so this pins that it still returns the RIGHT row and not just a row.
+    /// </summary>
+    [Test]
+    public async Task ACompletedAgent_ThatDeclaredTwice_IsJudgedOnItsLatestDeclaration()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        await harness.RequestAgentCompletionAsync(runId,
+                         "research",
+                         JsonSerializer.Serialize(new WorkSessionCompletionDetail("Everything asked for is recorded.", ObjectiveMet: true)))
+                     .ConfigureAwait(false);
+        _ = await harness.ApplyAgentTaskAsync(runId, "research", "Verify the runtime pin", AgentWorkSessionTaskStatus.Done).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "findings.md", ResearchMarkdown).ConfigureAwait(false);
+        await harness.RequestAgentCompletionAsync(runId,
+                         "research",
+                         JsonSerializer.Serialize(new WorkSessionCompletionDetail("NOT signed off — the runtime pin is unverifiable from here.", ObjectiveMet: false)))
+                     .ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "notes.md", "Nothing further.").ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.ObjectiveNotMet, blocked.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason), "NOT signed off — the runtime pin is unverifiable from here.");
+    }
+
+    /// <summary>
     ///     A gate's evidence list, and the objective the next agent is handed, both come from the same record: what the
     ///     steps before it produced, captured when it was handed them.
     /// </summary>

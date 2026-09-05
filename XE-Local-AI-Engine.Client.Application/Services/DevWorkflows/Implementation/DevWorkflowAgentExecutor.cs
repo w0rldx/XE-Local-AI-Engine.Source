@@ -845,11 +845,19 @@ internal sealed class DevWorkflowAgentExecutor
     ///         the session at all. A completion recorded before the argument existed carries no member, which reads as
     ///         met: an upgrade cannot retroactively block a node run that already finished.
     ///     </para>
+    ///     <para>
+    ///         The LAST completion request answers, which pairs with the FIRST one winning inside a single step:
+    ///         <c>complete_work_session</c>'s operation id is derived from the step, so a second call in the same step
+    ///         replays the first through the store's dedupe and writes nothing, while each later step declares its own
+    ///         row. Together that means a session cannot double-append a declaration after a lost response, and a
+    ///         session that kept working after declaring is judged on what it said LAST.
+    ///     </para>
     /// </summary>
     private async Task<string?> DeclaredUnmetAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        var events = await _sessionStore.ListEventsAsync(sessionId, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
-        if (events.LastOrDefault(static candidate => candidate.EventType == WorkSessionEventTypes.CompletionRequested)?.DetailJson is not { Length: > 0 } detail)
+        // Targeted, not the whole log: this used to read and decrypt every event the session ever wrote to keep one row.
+        var completion = await _sessionStore.FindLatestEventAsync(sessionId, WorkSessionEventTypes.CompletionRequested, cancellationToken).ConfigureAwait(false);
+        if (completion?.DetailJson is not { Length: > 0 } detail)
         {
             return null;
         }
