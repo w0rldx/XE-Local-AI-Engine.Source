@@ -475,6 +475,11 @@ public sealed class DevWorkflowRunEndpointTests
 
     [Test]
     [Arguments("status=Nonsense")]
+
+    // Numeric tokens too: Enum.TryParse reads "3" as a member by VALUE, so the filter would run on a status no name
+    // has and quietly answer with nothing.
+    [Arguments("status=3")]
+    [Arguments("status=-1")]
     [Arguments("limit=0")]
     [Arguments("limit=201")]
     public async Task ListRuns_WithAnOutOfRangeQuery_ReturnsBadRequest(string query)
@@ -934,6 +939,11 @@ public sealed class DevWorkflowRunEndpointTests
     [Test]
     [Arguments("""{"decision":"Approve"}""")]
     [Arguments("""{"operationId":"99999999-9999-9999-9999-999999999999","decision":"Nonsense"}""")]
+
+    // A NUMERIC token is the one an Enum.TryParse door lets through: "3" is DevWorkflowDecisionKind.Retry by value, so
+    // the endpoint behind it would take an intervention nobody named.
+    [Arguments("""{"operationId":"99999999-9999-9999-9999-999999999999","decision":"3"}""")]
+    [Arguments("""{"operationId":"99999999-9999-9999-9999-999999999999","decision":"-1"}""")]
     [Arguments("""{"operationId":"99999999-9999-9999-9999-999999999999"}""")]
     public async Task Decision_WhenTheShapeIsWrong_ReturnsBadRequestAndNeverReachesTheRuntime(string body)
     {

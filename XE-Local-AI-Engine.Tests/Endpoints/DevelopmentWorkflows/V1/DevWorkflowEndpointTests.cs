@@ -124,12 +124,18 @@ public sealed class DevWorkflowEndpointTests
     }
 
     [Test]
-    public async Task ListWorkItems_WithAStatusThatIsNotAMember_ReturnsBadRequestAndNeverReachesTheStore()
+
+    // "3" and "-1" are the numeric tokens Enum.TryParse takes by VALUE — a status no name has, which the store would
+    // filter on and answer with nothing.
+    [Arguments("Nonsense")]
+    [Arguments("3")]
+    [Arguments("-1")]
+    public async Task ListWorkItems_WithAStatusThatIsNotAMember_ReturnsBadRequestAndNeverReachesTheStore(string status)
     {
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "GET", $"{WorkItems}?status=Nonsense").ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", $"{WorkItems}?status={status}").ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await store.DidNotReceive().ListWorkItemsAsync(Arg.Any<DevWorkflowWorkItemStatus?>(), Arg.Any<CancellationToken>());

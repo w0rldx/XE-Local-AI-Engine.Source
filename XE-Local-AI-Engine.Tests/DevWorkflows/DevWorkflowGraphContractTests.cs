@@ -58,6 +58,22 @@ public sealed class DevWorkflowGraphContractTests
             $"a {status} node run must advertise exactly the decisions the runtime can take from it.");
 
     /// <summary>
+    ///     Casing is normalised on the way in; anything the parser would refuse travels untouched so that the refusal
+    ///     is the parser's to give. A NUMERIC token is the case that made this by-name: <c>Enum.TryParse</c> reads
+    ///     <c>"1"</c> as <c>Apply</c>, and the node would be stored running in the mode nobody wrote.
+    /// </summary>
+    [Test]
+    [Arguments("apply", "Apply")]
+    [Arguments("APPLY", "Apply")]
+    [Arguments("Validate", "Validate")]
+    [Arguments("1", "1")]
+    [Arguments("-1", "-1")]
+    [Arguments("sorcery", "sorcery")]
+    [Arguments(null, null)]
+    public void CanonicalToolMode_NormalisesCasingAndRewritesNothingElse(string? raw, string? expected) =>
+        AssertEx.Equal<string?>(expected, DevWorkflowGraphContract.CanonicalToolMode(raw));
+
+    /// <summary>
     ///     X10 made honest at the moment of the click: a rejection with nowhere to go ends the run, and the confirm
     ///     dialog can only say so because the server evaluated the gate's real out-edges first.
     /// </summary>

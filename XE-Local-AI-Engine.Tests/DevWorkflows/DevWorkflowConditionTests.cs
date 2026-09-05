@@ -127,6 +127,60 @@ public sealed class DevWorkflowConditionTests
         AssertEx.False(Evaluate("passed", "gt", "0", Output), "a boolean has no ordering against a number either.");
     }
 
+    /// <summary>
+    ///     Through a double, 9007199254740992 and 9007199254740993 are the same value: an ordering over ids, byte
+    ///     counts or timestamps past 2^53 would answer on a rounding artefact rather than on the numbers an author
+    ///     wrote.
+    /// </summary>
+    [Test]
+    public void Evaluate_OrdersAdjacentIntegersAbove2Pow53Exactly()
+    {
+        const string Big = """{"n":9007199254740993}""";
+        const string Neighbour = "9007199254740992";
+
+        AssertEx.True(Evaluate("n", "gt", Neighbour, Big), "9007199254740993 is greater than its neighbour, and only an exact comparison can say so.");
+        AssertEx.False(Evaluate("n", "lt", Neighbour, Big));
+        AssertEx.False(Evaluate("n", "eq", Neighbour, Big), "the two are distinct integers, however they round as doubles.");
+        AssertEx.True(Evaluate("n", "ne", Neighbour, Big));
+        AssertEx.True(Evaluate("n", "eq", "9007199254740993", Big), "and a number still equals itself.");
+    }
+
+    /// <summary>
+    ///     The same argument one range further out. 30-digit ids are past <c>decimal</c> too, and a chain that ends at
+    ///     double reads two of them differing in the last digit as one value — every relational operator would then
+    ///     answer on the rounding rather than on the numbers.
+    /// </summary>
+    [Test]
+    public void Evaluate_OrdersIntegerTokensBeyondDecimalRangeExactly()
+    {
+        const string Big = """{"n":100000000000000000000000000002}""";
+        const string Neighbour = "100000000000000000000000000001";
+
+        AssertEx.True(Evaluate("n", "gt", Neighbour, Big), "…002 is greater than …001, and only an exact comparison over the tokens can say so.");
+        AssertEx.False(Evaluate("n", "lt", Neighbour, Big));
+        AssertEx.False(Evaluate("n", "eq", Neighbour, Big), "the two are distinct integers, however they round as doubles.");
+        AssertEx.True(Evaluate("n", "ne", Neighbour, Big));
+
+        // The documented ceiling, not an accident: an exponent form is not an integer token, so this pair falls to the
+        // double arm, where 1e29 and 1e29 + 2 are the same value. Recording the answer the double path gives is the
+        // point — the day the significand/exponent upgrade in Order lands, this row is what has to change.
+        AssertEx.True(Evaluate("n", "eq", "1e29", Big), "an integer token against its exponent form is answered by the double fallback.");
+    }
+
+    /// <summary>
+    ///     Exponent forms are numbers like any other, and neither side has to be spelled the same way as the other for
+    ///     the comparison to be exact.
+    /// </summary>
+    [Test]
+    public void Evaluate_ComparesExponentFormNumbers()
+    {
+        const string Exponent = """{"n":1.5e3}""";
+
+        AssertEx.True(Evaluate("n", "eq", "1500", Exponent));
+        AssertEx.True(Evaluate("n", "gt", "1499.5", Exponent));
+        AssertEx.False(Evaluate("n", "lt", "1500", Exponent));
+    }
+
     [Test]
     public void Evaluate_WithNoCondition_IsUnconditional() =>
         AssertEx.True(DevWorkflowCondition.Evaluate(condition: null, output: null));
@@ -134,7 +188,19 @@ public sealed class DevWorkflowConditionTests
     [Test]
     [Arguments("""{"op":"eq","value":1}""", "non-empty 'path'")]
     [Arguments("""{"path":"","op":"eq","value":1}""", "non-empty 'path'")]
-    [Arguments("""{"path":"a..b","op":"eq","value":1}""", "empty segment")]
+    [Arguments("""{"path":"a..b","op":"eq","value":1}""", "not a dot path")]
+
+    // Dot paths only, per the brief: no wildcards, no indexes, no functions. Any of them saved is a property name
+    // literally spelled that way, which no output document carries — a dead edge instead of a refusal.
+    [Arguments("""{"path":"items[0].name","op":"eq","value":1}""", "not a dot path")]
+    [Arguments("""{"path":"*.value","op":"eq","value":1}""", "not a dot path")]
+    [Arguments("""{"path":"foo()","op":"eq","value":1}""", "not a dot path")]
+    [Arguments("""{"path":"a. b","op":"eq","value":1}""", "not a dot path")]
+
+    // Enum.TryParse takes a numeric token, so "3" would parse into an operator no member has and Evaluate would route
+    // on it.
+    [Arguments("""{"path":"a","op":"3","value":1}""", "needs an 'op'")]
+    [Arguments("""{"path":"a","op":"-1","value":1}""", "needs an 'op'")]
     [Arguments("""{"path":"a","op":"between","value":1}""", "needs an 'op'")]
     [Arguments("""{"path":"a"}""", "needs an 'op'")]
     [Arguments("""{"path":"a","op":"eq"}""", "needs a 'value'")]
