@@ -3913,6 +3913,50 @@ export const zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourc
 	acknowledgeCustomSourceRisk: z.boolean(),
 });
 
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse = z.object({
+	id: z.guid().optional(),
+	requestId: z.guid().optional(),
+	definitionId: z.guid().optional(),
+	definitionVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	graphHash: z.string().optional(),
+	status: z.string().optional(),
+	failureClass: z.string().optional(),
+	cancelRequestedAtUtc: z.int().nullish(),
+	startedAtUtc: z.int().nullish(),
+	completedAtUtc: z.int().nullish(),
+	createdAtUtc: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunSummaryResponse = z.object({
+	id: z.guid().optional(),
+	nodeKey: z.string().optional(),
+	kind: z.string().optional(),
+	status: z.string().optional(),
+	attempt: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	failureClass: z.string().optional(),
+	pendingDecisionKind: z.string().nullish(),
+	invocationId: z.guid().nullish(),
+	startedAtUtc: z.int().nullish(),
+	completedAtUtc: z.int().nullish(),
+	updatedAtUtc: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResponse = z.object({
+	run: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse.optional(),
+	nodeRuns: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunSummaryResponse).optional(),
+	output: z.unknown().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodePosition = z.object({
 	x: z.number().optional(),
 	y: z.number().optional(),
@@ -3995,6 +4039,30 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1CreateGraphWorkflowD
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunResponse = z.object({
+	id: z.guid().optional(),
+	runId: z.guid().optional(),
+	nodeKey: z.string().optional(),
+	kind: z.string().optional(),
+	status: z.string().optional(),
+	attempt: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	failureClass: z.string().optional(),
+	pendingDecisionKind: z.string().nullish(),
+	error: z.string().nullish(),
+	input: z.unknown().optional(),
+	output: z.unknown().optional(),
+	invocationId: z.guid().nullish(),
+	startedAtUtc: z.int().nullish(),
+	completedAtUtc: z.int().nullish(),
+	updatedAtUtc: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionSummaryResponse = z.object({
 	id: z.guid().optional(),
 	name: z.string().optional(),
@@ -4021,6 +4089,39 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinit
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowDefinitionsResponse = z.object({
 	definitions: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionSummaryResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunEventResponse = z.object({
+	id: z.guid().optional(),
+	seq: z.int().optional(),
+	eventType: z.string().optional(),
+	nodeKey: z.string().nullish(),
+	detail: z.unknown().optional(),
+	createdAtUtc: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunEventsResponse = z.object({
+	events: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunEventResponse).optional(),
+	lastSeq: z.int().optional(),
+	replayTruncated: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunEventFeedRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunsResponse = z.object({
+	runs: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunResponse = z.object({
+	runId: z.guid().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunRequest = z.object({
+	requestId: z.guid().min(1),
+	input: z.unknown().optional(),
+	definitionVersion: z.int().gt(0).max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1UpdateGraphWorkflowDefinitionRequest = z.object({
@@ -9207,6 +9308,15 @@ export const zStartStableDiffusionCppSourceBuildBody =
 export const zStartStableDiffusionCppSourceBuildResponse =
 	zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse;
 
+export const zCancelGraphWorkflowRunPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zCancelGraphWorkflowRunResponse = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResponse;
+
 /**
  * Success
  */
@@ -9252,6 +9362,63 @@ export const zUpdateGraphWorkflowDefinitionPath = z.object({
  */
 export const zUpdateGraphWorkflowDefinitionResponse =
 	zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse;
+
+export const zGetGraphWorkflowNodeRunPath = z.object({
+	runId: z.guid(),
+	nodeKey: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetGraphWorkflowNodeRunResponse = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunResponse;
+
+export const zGetGraphWorkflowRunPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetGraphWorkflowRunResponse = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResponse;
+
+export const zListGraphWorkflowRunEventsPath = z.object({
+	runId: z.guid(),
+});
+
+export const zListGraphWorkflowRunEventsQuery = z.object({
+	afterSeq: z.int(),
+});
+
+/**
+ * Success
+ */
+export const zListGraphWorkflowRunEventsResponse =
+	zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunEventsResponse;
+
+export const zListGraphWorkflowRunsQuery = z.object({
+	status: z.string().nullish(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+/**
+ * Success
+ */
+export const zListGraphWorkflowRunsResponse = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunsResponse;
+
+export const zStartGraphWorkflowRunBody = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunRequest;
+
+export const zStartGraphWorkflowRunPath = z.object({
+	definitionId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zStartGraphWorkflowRunResponse = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunResponse;
 
 export const zValidateGraphWorkflowDefinitionBody =
 	zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionRequest;
