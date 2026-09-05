@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.WorkSessions;
 
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -9,10 +10,12 @@ using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -23,6 +26,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class WorkSessionStepLoopTests
 {
+    /// <summary>An approval-required tool that is NOT <c>ask_user</c>: FU3-3 outlives ask_user's removal from workflow sessions.</summary>
+    private const string RunCommandToolName = "run_command";
+
     /// <summary>Web defaults, matching the camelCase convention the supervisor writes the consumption record in.</summary>
     private static readonly JsonSerializerOptions ConsumptionJsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -221,6 +227,96 @@ public sealed class WorkSessionStepLoopTests
         AssertEx.Empty(await WorkSessionTestSupport.ReadFindingsAsync(factory.Services, sessionId).ConfigureAwait(false),
             "An answered park records no open question — that finding exists only because a timeout loses the prompt.");
         AssertEx.False(events.Any(entry => entry.EventType == WorkSessionEventTypes.ParkTimedOut), "The park clock was disarmed, not fired.");
+    }
+
+    /// <summary>
+    ///     FU3-3, the reported failure itself: the sink drops the ARMING event under backpressure and substitutes one
+    ///     <c>assistant-reconcile</c>, so the supervisor never sees the approval request. Before the reconcile case the
+    ///     park was never armed and the step sat until the node-wide pending tool-call age; now the reconcile arms it,
+    ///     and the step is bounded by <c>MaxParkedSeconds</c> again.
+    ///     <para>
+    ///         Delete <c>case ChatStreamEventTypes.AssistantReconcile</c> and this test fails: the reconcile falls to
+    ///         <c>default: break;</c>, nothing is armed, and the session never reaches <c>Paused</c> inside the wait.
+    ///         There is no tool-name assertion because the dropped event carried the name — the finding correctly falls
+    ///         back to <c>ParkedQuestionText</c>'s no-name branch.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task Loop_WhenTheArmingEventIsDroppedForAReconcile_StillBoundsTheStepAtMaxParkedSeconds()
+    {
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            // No StepTimeoutSeconds: the park clock has to be the only thing that can end this step, or the assertion
+            // would pass off the deadline instead.
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxParkedSeconds", "1")),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services =>
+                {
+                    var fake = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId);
+                    stream = fake;
+                    return new ApprovalDroppingStreamService(fake, services.GetRequiredService<PendingToolCallRegistry>());
+                },
+                publisher)
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+        fake.Enqueue(new StepScript([], Park: true, ParkToolName: RunCommandToolName));
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
+        AssertEx.Contains(events, entry => entry.EventType == WorkSessionEventTypes.ParkTimedOut, "The park armed off the reconcile, so it expired and stopped the step.");
+        AssertEx.Contains(events,
+            entry => entry.EventType == "SessionStatusChanged" && entry.Outcome == nameof(AgentWorkSessionStatus.WaitingForApproval),
+            "The registry says a tool call really is parked, so the session shows the wait the dropped event would have announced.");
+        AssertEx.ContainsSingle(await WorkSessionTestSupport.ReadFindingsAsync(factory.Services, sessionId).ConfigureAwait(false),
+            static finding => finding.Kind == AgentWorkSessionFindingKind.OpenQuestion,
+            "The next step still re-asks, off the no-name branch, because the name went with the dropped event.");
+    }
+
+    /// <summary>
+    ///     The negative control: the same reconcile, with NOTHING parked in the registry under this turn. That is an
+    ///     ordinary stream drop, and arming there would stop a healthy turn on backpressure that had nothing to do
+    ///     with an approval — so the step has to end on its own deadline instead, with no park-shaped evidence at all.
+    /// </summary>
+    [Test]
+    public async Task Loop_WhenAReconcileArrivesWithNothingParked_ArmsNothingAndTheStepEndsOnItsDeadline()
+    {
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            // The park budget is the SHORTER of the two clocks on purpose: if the reconcile armed it, it would fire
+            // first and this test would see the evidence it forbids. The step deadline is what ends a turn nothing
+            // armed.
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxParkedSeconds", "1"), ("WorkSessions:StepTimeoutSeconds", "4")),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher)
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+
+        // The registry is untouched, and the turn then hangs exactly as a parked one would — so only an armed clock
+        // could end it early.
+        fake.Enqueue(new StepScript([], Park: true, ParkEventType: ChatStreamEventTypes.AssistantReconcile));
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
+        AssertEx.False(events.Any(entry => entry.EventType == WorkSessionEventTypes.ParkTimedOut), "Nothing was parked, so nothing may have timed out parked.");
+        AssertEx.False(events.Any(entry => entry.EventType == "SessionStatusChanged" && entry.Outcome == nameof(AgentWorkSessionStatus.WaitingForApproval)),
+            "And the session must not be shown waiting on an approval nobody asked for.");
+        AssertEx.Empty(await WorkSessionTestSupport.ReadFindingsAsync(factory.Services, sessionId).ConfigureAwait(false),
+            "It leaves no open question, because there was no question.");
     }
 
     [Test]
@@ -852,6 +948,49 @@ public sealed class WorkSessionStepLoopTests
         foreach (var request in fake.Requests)
         {
             AssertEx.True(request.SuppressAskUser, "Every step of a workflow-owned session is sent without ask_user, not just the first.");
+        }
+    }
+
+    /// <summary>
+    ///     Exactly what the real chain does when the sink is over its budget: the tool call is registered as parked,
+    ///     and the <c>ApprovalRequested</c> that would have announced it is DROPPED, with one
+    ///     <c>assistant-reconcile</c> in its place. The registration comes FIRST because that is the order
+    ///     <c>ToolApprovalCoordinator.RequestToolApprovalAsync</c> uses — it adds the pending call before it
+    ///     broadcasts — and the whole fix rests on the entry being there when the substitute arrives.
+    ///     <para>
+    ///         Staged here rather than by driving the real bounded channel over <c>QueueCapacity</c>, because the
+    ///         consumer is what is under test.
+    ///     </para>
+    /// </summary>
+    private sealed class ApprovalDroppingStreamService(INodeChatStreamService inner, PendingToolCallRegistry pendingToolCalls) : INodeChatStreamService
+    {
+        public async IAsyncEnumerable<ChatStreamEvent> SendMessageAsync(NodeChatStreamRequest request,
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
+        {
+            var dropped = false;
+            await foreach (var streamEvent in inner.SendMessageAsync(request, cancellationToken).ConfigureAwait(false))
+            {
+                if (!dropped && streamEvent.Type == ChatStreamEventTypes.ApprovalRequested)
+                {
+                    dropped = true;
+                    _ = pendingToolCalls.Calls.TryAdd(Guid.NewGuid().ToString("N"),
+                        new PendingToolCall(request.RequestId.GetValueOrDefault(),
+                            DateTimeOffset.UtcNow,
+                            new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously),
+                            new TaskCompletionSource<ToolCallResultEvent>(TaskCreationOptions.RunContinuationsAsynchronously)));
+                    yield return streamEvent with
+                    {
+                        Type = ChatStreamEventTypes.AssistantReconcile,
+                        ToolName = null,
+                        ToolCallId = null,
+                        ApprovalRequestId = null
+                    };
+                    continue;
+                }
+
+                yield return streamEvent;
+            }
         }
     }
 

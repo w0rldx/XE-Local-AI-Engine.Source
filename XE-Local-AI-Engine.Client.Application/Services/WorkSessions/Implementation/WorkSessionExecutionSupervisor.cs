@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools.Implementation;
 
 /// <summary>
@@ -77,6 +78,12 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     private readonly ILogger<WorkSessionExecutionSupervisor> _logger;
     private readonly IWorkSessionEventPublisher _publisher;
     private readonly WorkSessionOptions _options;
+
+    /// <summary>
+    ///     The node's one set of tool calls parked on an out-of-stream answer. Read only to tell a dropped approval
+    ///     request from an ordinary stream drop — see the <c>AssistantReconcile</c> case in <see cref="DrainStepAsync" />.
+    /// </summary>
+    private readonly PendingToolCallRegistry _pendingToolCalls;
     private readonly ConcurrentDictionary<Guid, SessionRun> _runs = new();
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly CancellationTokenSource _shutdown = new();
@@ -88,9 +95,11 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         IWorkSessionEventPublisher publisher,
         IOptions<WorkSessionOptions> options,
         TimeProvider timeProvider,
+        PendingToolCallRegistry pendingToolCalls,
         ILogger<WorkSessionExecutionSupervisor> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
+        _pendingToolCalls = pendingToolCalls ?? throw new ArgumentNullException(nameof(pendingToolCalls));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _cancellationRegistry = cancellationRegistry ?? throw new ArgumentNullException(nameof(cancellationRegistry));
@@ -446,7 +455,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         ChatStreamEvent terminal;
         try
         {
-            terminal = await DrainStepAsync(turnScope.ServiceProvider.GetRequiredService<INodeChatStreamService>(), guard, request, sessionId).ConfigureAwait(false);
+            terminal = await DrainStepAsync(turnScope.ServiceProvider.GetRequiredService<INodeChatStreamService>(), guard, request, sessionId, step).ConfigureAwait(false);
         }
         catch (WorkSessionUndeclaredWriteException refusal)
         {
@@ -469,7 +478,11 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     }
 
     /// <summary>Drains one step's stream to its terminal, mapping parks onto the session status as they happen.</summary>
-    private async Task<ChatStreamEvent> DrainStepAsync(INodeChatStreamService stream, StepCancellationGuard guard, NodeChatStreamRequest request, Guid sessionId)
+    private async Task<ChatStreamEvent> DrainStepAsync(INodeChatStreamService stream,
+        StepCancellationGuard guard,
+        NodeChatStreamRequest request,
+        Guid sessionId,
+        int step)
     {
         var parked = false;
         await foreach (var streamEvent in stream.SendMessageAsync(request, CancellationToken.None).ConfigureAwait(false))
@@ -496,6 +509,52 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                         await MoveAsync(sessionId, AgentWorkSessionStatus.Running).ConfigureAwait(false);
                     }
 
+                    break;
+
+                case ChatStreamEventTypes.AssistantReconcile:
+                    // The stream sink is a bounded channel with FullMode = DropWrite, and it substitutes exactly ONE
+                    // reconcile for whatever it drops (ChatStreamEventSink.TryWrite). A browser repairs that by
+                    // re-subscribing for a snapshot; this supervisor has no snapshot to re-fetch, so a dropped
+                    // ApprovalRequested/QuestionRequested left the park unarmed and the step sat until the node-wide
+                    // pending tool-call age (10 minutes) instead of MaxParkedSeconds (FU3-3).
+                    //
+                    // Already parked: the clock is running and nothing here disarms it, so there is nothing to fix.
+                    // Re-arming would only push the deadline later — and reconciles come from sustained backpressure,
+                    // which produces more of them — so the bound stays the ORIGINAL park deadline, never extended.
+                    if (parked)
+                    {
+                        _logger.LogWarning("Work session {SessionId} step {Step} took a stream reconcile while already parked on '{ToolName}'; the original park deadline stands.",
+                            sessionId,
+                            step,
+                            guard.ParkedToolName);
+                        break;
+                    }
+
+                    // Whether the dropped event was the arming one is not a guess: the turn's parked tool calls are
+                    // durable state. ToolApprovalCoordinator.RequestToolApprovalAsync registers the call BEFORE it
+                    // broadcasts the lifecycle event the forwarder turns into ApprovalRequested, so the entry is
+                    // already there when the substitute reconcile arrives. Its InvocationId is the package's, which
+                    // NodeChatStreamService seeds from the same RequestId this step supplied.
+                    //
+                    // No entry means the drop had nothing to do with an approval, and arming would stop a healthy
+                    // turn on ordinary backpressure.
+                    if (!_pendingToolCalls.Calls.Values.Any(call => call.InvocationId == request.RequestId.GetValueOrDefault()))
+                    {
+                        _logger.LogInformation("Work session {SessionId} step {Step} took a stream reconcile with no tool call parked under it, so nothing was armed.", sessionId, step);
+                        break;
+                    }
+
+                    // The turn IS waiting on a human and the event that said so was lost, so the clock is armed on
+                    // the signal that survived. The tool name is not on the registry entry, hence null —
+                    // ParkedQuestionText already has a no-name branch. parked = true also hands the existing
+                    // AssistantDelta/ToolCallCompleted case the disarm, so a turn that turns out to be moving pays
+                    // nothing.
+                    parked = true;
+                    guard.ArmPark(TimeSpan.FromSeconds(_options.MaxParkedSeconds), toolName: null);
+                    await MoveAsync(sessionId, AgentWorkSessionStatus.WaitingForApproval).ConfigureAwait(false);
+                    _logger.LogWarning("Work session {SessionId} step {Step} lost the event for a parked tool call to a stream drop; the park clock was armed off the reconcile.",
+                        sessionId,
+                        step);
                     break;
 
                 case ChatStreamEventTypes.AssistantCompleted:
