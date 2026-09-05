@@ -217,6 +217,26 @@ internal static class GraphWorkflowGraphs
                                                   }
                                                   """;
 
+    /// <summary>
+    ///     An <c>End</c> that projects the run's result out of its input document instead of carrying the whole thing.
+    ///     The path reaches through <c>input</c> — the single satisfied predecessor's output document — which is the
+    ///     shape every End node with one inbound edge sees.
+    /// </summary>
+    public const string EndWithResultPath = """
+                                            {
+                                              "schemaVersion": 1,
+                                              "nodes": [
+                                                { "key": "start", "kind": "Start" },
+                                                { "key": "analyze", "kind": "Agent", "config": { "instructions": "Judge it." } },
+                                                { "key": "done", "kind": "End", "config": { "outcome": "completed", "resultPath": "input.output.json" } }
+                                              ],
+                                              "edges": [
+                                                { "key": "e1", "from": "start", "to": "analyze" },
+                                                { "key": "e2", "from": "analyze", "to": "done" }
+                                              ]
+                                            }
+                                            """;
+
     /// <summary>Two End nodes, so "the run reached an end" is not the same question as "the last node succeeded".</summary>
     public const string TwoEnds = """
                                   {

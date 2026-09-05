@@ -3,9 +3,14 @@ namespace XE_Local_AI_Engine.Tests.ApiFoundation;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.ExceptionHandling;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -59,6 +64,69 @@ public sealed class ConflictExceptionHandlerTests
         AssertEx.Equal(expected: 5, body.DistinctModelCount);
         AssertEx.Equal(expected: 2, body.MaxLoadedProcesses);
         AssertEx.Null(body.MaxConcurrentRuns);
+    }
+
+    /// <summary>
+    ///     The graph-workflow run family's arm, asserted against the handler itself rather than over a route. The three
+    ///     exception types it maps come from three different layers, and one of them — the store's own rejection
+    ///     channel — is not reachable from any endpoint without first winning a race; asking the switch directly is the
+    ///     only way to pin all three without staging one.
+    /// </summary>
+    [Test]
+    [Arguments("run conflict")]
+    [Arguments("invalid transition")]
+    public async Task TryHandleAsync_ForAGraphWorkflowRunFailure_WritesTheRunConflictDiscriminator(string kind)
+    {
+        Exception exception = kind == "run conflict"
+            ? new GraphWorkflowRunConflictException("This run is already Failed, so there is nothing to cancel.")
+            : new GraphWorkflowInvalidTransitionException("The graph workflow run version is stale (expected 3, current 4).");
+
+        var body = await HandleAsync(exception).ConfigureAwait(false);
+
+        AssertEx.Equal("GraphWorkflowRunConflict", body.ConflictType, "both reach a client as one instruction: re-read the run.");
+        AssertEx.Equal(expected: 409, body.Status);
+        AssertEx.Equal(exception.Message, body.Detail);
+        AssertEx.NotEmpty(body.TraceId);
+    }
+
+    /// <summary>
+    ///     An exception the switch does not name must be left alone, or every unmapped failure in the node would answer
+    ///     409 instead of the 500 that says something is actually broken.
+    /// </summary>
+    [Test]
+    public async Task TryHandleAsync_ForAnExceptionTheSwitchDoesNotName_DeclinesToHandleIt()
+    {
+        var context = new DefaultHttpContext
+        {
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        var handler = new ConflictExceptionHandler(NullLogger<ConflictExceptionHandler>.Instance);
+
+        AssertEx.False(await handler.TryHandleAsync(context, new InvalidOperationException("something else"), CancellationToken.None).ConfigureAwait(false));
+    }
+
+    /// <summary>The handler over a bare context, so the assertion is about the switch and the envelope rather than a route.</summary>
+    private static async Task<ConflictProblemBody> HandleAsync(Exception exception)
+    {
+        var context = new DefaultHttpContext
+        {
+            TraceIdentifier = "trace-" + Guid.NewGuid().ToString("N"),
+            Response =
+            {
+                Body = new MemoryStream()
+            }
+        };
+        var handler = new ConflictExceptionHandler(NullLogger<ConflictExceptionHandler>.Instance);
+
+        AssertEx.True(await handler.TryHandleAsync(context, exception, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.Equal(expected: 409, context.Response.StatusCode);
+        AssertEx.Contains(context.Response.ContentType, "problem+json", StringComparison.OrdinalIgnoreCase);
+
+        context.Response.Body.Position = 0;
+        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<ConflictProblemBody>(context.Response.Body, JsonOptions).ConfigureAwait(false));
     }
 
     private static async Task<ConflictProblemBody> ExecuteAsync(TestServerWebAppFactory factory, string startText)

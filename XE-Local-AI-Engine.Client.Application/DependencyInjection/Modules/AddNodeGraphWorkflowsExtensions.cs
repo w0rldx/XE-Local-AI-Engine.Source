@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -40,6 +41,13 @@ internal static class AddNodeGraphWorkflowsExtensions
 
         // The one write seam. Scoped because the store it drives is, and because a validation answer is per-request.
         builder.Services.AddScoped<IGraphWorkflowDefinitionService, GraphWorkflowDefinitionService>();
+
+        // The run command surface, scoped for the same reason.
+        builder.Services.AddScoped<IGraphWorkflowRunService, GraphWorkflowRunService>();
+
+        // TryAdd, so the dispatcher's own registration wins the moment that slice lands. Until then a started run
+        // commits and sits Pending, which is what a node with no tick loop honestly looks like.
+        builder.Services.TryAddSingleton<IGraphWorkflowDispatcherSignal, NoOpGraphWorkflowDispatcherSignal>();
 
         return builder;
     }

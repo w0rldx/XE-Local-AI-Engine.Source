@@ -26,6 +26,13 @@ internal sealed class GraphWorkflowTestFixture : IDisposable
     public const string SampleGraph =
         """{"schemaVersion":1,"nodes":[{"key":"start","kind":"Start"},{"key":"done","kind":"End","config":{"outcome":"completed"}}],"edges":[{"key":"e1","from":"start","to":"done"}]}""";
 
+    /// <summary>
+    ///     Four nodes, so a recovery test can hold one row in each of the states the interrupted set has an opinion
+    ///     about: queued, running, waiting on a human, and never dispatched.
+    /// </summary>
+    public const string FourNodeGraph =
+        """{"schemaVersion":1,"nodes":[{"key":"queued","kind":"Agent","config":{"instructions":"Q"}},{"key":"running","kind":"Agent","config":{"instructions":"R"}},{"key":"waiting","kind":"Agent","config":{"instructions":"W"}},{"key":"pending","kind":"Agent","config":{"instructions":"P"}}],"edges":[]}""";
+
     private readonly NullNodeSqliteKeyHolder _keyHolder = new();
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-graph-workflows-" + Guid.NewGuid().ToString("N"));
 

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1.Mappers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>
 ///     Projects the store's snapshots onto the wire contracts. Entities never reach an endpoint: their text columns are
@@ -96,5 +97,97 @@ internal static class GraphWorkflowContractMapper
             value.Version,
             value.CreatedAtUtc,
             value.UpdatedAtUtc);
+    }
+
+    public static GraphWorkflowRunSummaryResponse ToResponse(this GraphWorkflowRunSnapshot value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return new GraphWorkflowRunSummaryResponse(value.Id,
+            value.RequestId,
+            value.DefinitionId,
+            value.DefinitionVersion,
+            value.GraphHash,
+            value.Status.ToString(),
+            value.FailureClass.ToString(),
+            value.CancelRequestedAtUtc,
+            value.StartedAtUtc,
+            value.CompletedAtUtc,
+            value.CreatedAtUtc);
+    }
+
+    public static GraphWorkflowRunResponse ToResponse(this GraphWorkflowRunDetail value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return new GraphWorkflowRunResponse(value.Run.ToResponse(),
+            [.. value.NodeRuns.Select(ToSummaryResponse)],
+            ToDocument(value.Run.OutputJson));
+    }
+
+    public static GraphWorkflowNodeRunSummaryResponse ToSummaryResponse(this GraphWorkflowNodeRunSnapshot value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return new GraphWorkflowNodeRunSummaryResponse(value.Id,
+            value.NodeKey,
+            value.Kind.ToString(),
+            value.Status.ToString(),
+            value.Attempt,
+            value.FailureClass.ToString(),
+            value.PendingDecisionKind?.ToString(),
+            value.InvocationId,
+            value.StartedAtUtc,
+            value.CompletedAtUtc,
+            value.UpdatedAtUtc);
+    }
+
+    public static GraphWorkflowNodeRunResponse ToResponse(this GraphWorkflowNodeRunSnapshot value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return new GraphWorkflowNodeRunResponse(value.Id,
+            value.RunId,
+            value.NodeKey,
+            value.Kind.ToString(),
+            value.Status.ToString(),
+            value.Attempt,
+            value.FailureClass.ToString(),
+            value.PendingDecisionKind?.ToString(),
+            value.Error,
+            ToDocument(value.InputJson),
+            ToDocument(value.OutputJson),
+            value.InvocationId,
+            value.StartedAtUtc,
+            value.CompletedAtUtc,
+            value.UpdatedAtUtc);
+    }
+
+    public static GraphWorkflowRunEventResponse ToResponse(this GraphWorkflowRunEventSnapshot value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return new GraphWorkflowRunEventResponse(value.Id, value.Seq, value.EventType, value.NodeKey, ToDocument(value.DetailJson), value.CreatedAtUtc);
+    }
+
+    /// <summary>
+    ///     A stored document as raw JSON on the wire, or null when there is none.
+    ///     <para>
+    ///         Unreadable text answers null rather than throwing. These blobs are written by the runtime, so a document
+    ///         that will not parse is a bug somewhere upstream — and answering 500 to a node-run read would take the one
+    ///         page an operator would diagnose it from away with it.
+    ///     </para>
+    /// </summary>
+    private static JsonElement? ToDocument(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }

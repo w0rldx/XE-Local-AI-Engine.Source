@@ -946,6 +946,31 @@ public static class LocalApiRoutes
         ///     answer it draws is the answer a run would get rather than a second implementation of the same rules.
         /// </summary>
         public const string DefinitionsValidate = "graph-workflows/definitions/validate";
+
+        /// <summary>
+        ///     Starts a run of one definition. 202 with the run id: the endpoint commits a durable intent and the
+        ///     dispatcher advances it out of band, so the run legitimately reads <c>Pending</c> when the answer lands.
+        ///     The caller's <c>requestId</c> is the idempotency key — the same one always answers with the same run.
+        /// </summary>
+        public const string DefinitionRuns = "graph-workflows/definitions/{definitionId}/runs";
+
+        /// <summary>The run list, newest first.</summary>
+        public const string Runs = "graph-workflows/runs";
+
+        /// <summary>One run with its node-run summaries. No documents: those are a per-node read.</summary>
+        public const string RunById = "graph-workflows/runs/{runId}";
+
+        /// <summary>Requests a cancel. 202 like the start — live node runs drain first, so the run reads <c>Cancelling</c>.</summary>
+        public const string RunCancel = "graph-workflows/runs/{runId}/cancel";
+
+        /// <summary>One node run in full, input and output documents included. Keyed by node key, which is its identity within the run.</summary>
+        public const string RunNodeByKey = "graph-workflows/runs/{runId}/nodes/{nodeKey}";
+
+        /// <summary>
+        ///     The run's event log, paged from an EXCLUSIVE watermark and capped at the configured replay limit, which
+        ///     the response reports rather than leaving a client to infer from a full page.
+        /// </summary>
+        public const string RunEvents = "graph-workflows/runs/{runId}/events";
     }
 
     public static class Automation
