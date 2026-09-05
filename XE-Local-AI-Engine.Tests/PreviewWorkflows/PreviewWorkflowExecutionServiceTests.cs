@@ -48,21 +48,8 @@ public sealed class PreviewWorkflowExecutionServiceTests
             NullLoggerFactory.Instance);
     }
 
-    private static async Task WaitForAsync(Func<bool> condition, TimeSpan timeout)
-    {
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
-        {
-            if (condition())
-            {
-                return;
-            }
-
-            await Task.Delay(20).ConfigureAwait(false);
-        }
-
-        throw new TimeoutException("Condition not met within the timeout.");
-    }
+    private static Task WaitForAsync(Func<bool> condition, TimeSpan timeout) =>
+        AssertEx.EventuallyAsync(condition, timeout, "Condition not met within the timeout.");
 
     [Test]
     public async Task PreviewExec_ConcurrentStarts_NeverExceedConcurrencyCap()

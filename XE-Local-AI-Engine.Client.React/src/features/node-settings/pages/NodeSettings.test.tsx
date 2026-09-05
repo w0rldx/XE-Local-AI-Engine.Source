@@ -2,7 +2,7 @@
 
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -178,7 +178,10 @@ function renderPage(): void {
 }
 
 describe("NodeSettings (generated hey-api data layer)", () => {
+	// Cleared BEFORE each test, not after: the global `afterEach(cleanup)` in `src/test/Cleanup.ts` runs after this
+	// file's own hooks (Vitest stacks them), so clearing there would drop the unmount's calls into the next test.
 	beforeEach(() => {
+		vi.clearAllMocks();
 		installJsdomEnvironmentMocks();
 		generatedMock.getNodeSettingsOptions.mockReturnValue({
 			queryKey: ["getNodeSettings"],
@@ -256,8 +259,9 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 	});
 
 	afterEach(() => {
-		cleanup();
-		vi.clearAllMocks();
+		// The developer-mode test writes `xe-developer-mode`, and localStorage is one jsdom object shared by the whole
+		// file: left behind, it decides for every later test whether the developer-only cards mount.
+		localStorage.clear();
 	});
 
 	it("loads settings through the generated query options", async () => {

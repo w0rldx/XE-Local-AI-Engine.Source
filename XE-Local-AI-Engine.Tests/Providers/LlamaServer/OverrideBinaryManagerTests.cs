@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Configuration;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Bring-your-own override branch of <see cref="LlamaCppBinaryManager.EnsureBinaryAsync" />: an active, valid override
@@ -17,13 +18,10 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class OverrideBinaryManagerTests
 {
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_WhenOverrideValid_ReturnsItWithoutDownload()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var serverPath = WriteExecutableStub(dir.Path, GpuStub);
         var options = ActiveOverride(serverPath, GpuVariant.Cpu);
@@ -42,15 +40,12 @@ public sealed class OverrideBinaryManagerTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_WhenOverrideReturnsOptionsVariant_NotCallerVariant()
     {
         // The caller passes Cpu, but the override is configured as Cuda → the returned variant is Cuda.
         // The GPU stub enumerates a device so the Cuda backend check passes.
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var serverPath = WriteExecutableStub(dir.Path, GpuStub);
         var options = ActiveOverride(serverPath, GpuVariant.Cuda);
@@ -103,15 +98,12 @@ public sealed class OverrideBinaryManagerTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_WhenOverrideWorldWritableOrForeignOwned_Throws()
     {
         // A world-writable binary is rejected (TOCTOU swap hardening). (Foreign-uid ownership cannot be
         // arranged in CI without root, so the world-writable arm is the testable compensating control.)
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var serverPath = WriteExecutableStub(dir.Path, GpuStub);
         // Make the binary world-writable (o+w) — anyone could swap it.
@@ -130,13 +122,10 @@ public sealed class OverrideBinaryManagerTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_WhenOverrideSmokeFails_Throws()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var serverPath = WriteExecutableStub(dir.Path, SmokeFailStub);
         var options = ActiveOverride(serverPath, GpuVariant.Cpu);
@@ -150,14 +139,11 @@ public sealed class OverrideBinaryManagerTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_WhenOverrideVariantCudaButNoGpuDevice_Throws()
     {
         // A binary that passes --version but enumerates no GPU device cannot be served as Cuda.
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var serverPath = WriteExecutableStub(dir.Path, NoGpuStub);
         var options = ActiveOverride(serverPath, GpuVariant.Cuda);
@@ -171,14 +157,11 @@ public sealed class OverrideBinaryManagerTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_WhenOverrideVariantCpu_SkipsGpuDeviceCheck()
     {
         // variant=cpu skips the GPU-device requirement: the stub FAILS --list-devices, but a Cpu override never runs it.
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var dir = new TempDir();
         var serverPath = WriteExecutableStub(dir.Path, DeviceCheckWouldFailStub);
         var options = ActiveOverride(serverPath, GpuVariant.Cpu);

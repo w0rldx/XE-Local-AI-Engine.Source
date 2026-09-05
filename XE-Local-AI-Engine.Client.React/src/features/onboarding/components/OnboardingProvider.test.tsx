@@ -70,7 +70,7 @@ import { tutorialProgressStorageKey } from "@/features/onboarding/hooks/useTourS
 
 const contextRef = { current: null as OnboardingContextValue | null };
 
-export function ContextCapture() {
+function ContextCapture() {
 	contextRef.current = useOnboarding();
 	return null;
 }

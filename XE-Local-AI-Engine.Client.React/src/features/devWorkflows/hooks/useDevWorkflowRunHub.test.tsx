@@ -19,7 +19,11 @@ const hubMock = vi.hoisted(() => {
 		state: "Connected",
 		on: vi.fn((event: string, handler: (change: unknown) => void) => handlers.set(event, handler)),
 		off: vi.fn((event: string) => handlers.delete(event)),
-		invoke: vi.fn(),
+		// The real SignalR `invoke` ALWAYS returns a promise, so the seam must too: the unsubscribe on unmount does
+		// `.catch(...)` on the result, and a bare `vi.fn()` hands it `undefined`. `restoreMocks` cannot take this
+		// implementation away — it calls `mockRestore` on `vi.spyOn` spies and never touches a plain `vi.fn()` — and
+		// passing the implementation to `vi.fn` (rather than `mockResolvedValue`) survives `mockReset` too.
+		invoke: vi.fn(async (): Promise<unknown> => undefined),
 	};
 	const handle = {
 		connection,

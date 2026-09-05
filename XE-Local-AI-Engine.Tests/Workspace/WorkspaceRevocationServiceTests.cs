@@ -29,7 +29,9 @@ public sealed class WorkspaceRevocationServiceTests
         {
             _ = preparation.PrepareAsync(Arg.Is<ResolvedSelectedFolder>(folder => folder.Id == id), Arg.Any<CancellationToken>());
             _ = store.RevokeAsync(id, Arg.Any<CancellationToken>());
-            session.DisposeAsync().AsTask().GetAwaiter().GetResult();
+#pragma warning disable CA2012 // Inside a Received.InOrder query the returned ValueTask is a recording artefact, not a real async operation.
+            _ = session.DisposeAsync();
+#pragma warning restore CA2012
         });
         await session.Received(1).DisposeAsync();
     }

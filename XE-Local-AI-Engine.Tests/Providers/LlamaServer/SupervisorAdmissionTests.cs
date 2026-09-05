@@ -53,7 +53,7 @@ public sealed class SupervisorAdmissionTests
         // Exactly one GPU load reaches readiness (holding the gate); the other is blocked on admission and has NOT launched.
         await AssertEx.EventuallyAsync(() => gatedProbe.Waiting == 1, TimeSpan.FromSeconds(5),
             "one GPU load should be parked in readiness holding the admission gate").ConfigureAwait(false);
-        await Task.Delay(150).ConfigureAwait(false);
+        await AssertEx.SettleAsync().ConfigureAwait(false);
         AssertEx.Equal(1, launcher.LaunchCount);
 
         // Release the first's readiness → it registers and releases the gate → the second is admitted and launches.

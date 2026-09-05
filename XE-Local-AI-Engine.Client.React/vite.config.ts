@@ -204,7 +204,16 @@ export default defineConfig(({ command, mode }) => {
 			// XMLHttpRequest, WebSocket and node:http/https to fail, so a request no test stubbed still fails loudly
 			// instead of hitting the network. The 14 files that stub HTTP routes install MSW themselves with
 			// `setupMswServer()` (src/test/UseMswServer.ts), so the other 325 no longer pay for it.
-			setupFiles: ["src/test/PinLocale.ts", "src/test/NoNetwork.ts"],
+			// Cleanup.ts unmounts every React tree a test mounted; without globals RTL never registers its own
+			// afterEach(cleanup), so mounted components used to survive into the next test — see src/test/Cleanup.ts.
+			setupFiles: ["src/test/PinLocale.ts", "src/test/Cleanup.ts", "src/test/NoNetwork.ts"],
+			// Undoes `vi.spyOn` before each test, so a spy a test forgot to restore (console, Date, a module export)
+			// cannot silently stay installed for the rest of the file.
+			restoreMocks: true,
+			// Undoes `vi.stubEnv`, so an env override leaks no further than the test that set it.
+			unstubEnvs: true,
+			// Undoes `vi.stubGlobal`, so a replaced global (matchMedia, ResizeObserver, crypto) is not inherited.
+			unstubGlobals: true,
 			coverage: {
 				provider: "v8",
 				reportsDirectory: "coverage/vitest",

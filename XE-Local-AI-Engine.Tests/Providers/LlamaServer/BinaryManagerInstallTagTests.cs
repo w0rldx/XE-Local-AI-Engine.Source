@@ -83,8 +83,7 @@ public sealed class BinaryManagerInstallTagTests
             requestedCommit: null,
             CancellationToken.None);
 
-        await Task.Delay(100);
-        AssertEx.False(adopt.IsCompleted);
+        await AssertEx.StaysIncompleteAsync(adopt, "The adopt must wait for the in-flight install to release the record lock.");
         handler.Release();
         await install;
         await adopt;

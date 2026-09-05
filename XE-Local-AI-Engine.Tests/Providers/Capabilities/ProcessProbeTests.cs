@@ -4,6 +4,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Capabilities.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     <see cref="ProcessProbe" /> tests exercising the REAL process-spawn seam: a normal exit returns its code
@@ -20,13 +21,9 @@ public sealed class ProcessProbeTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ProcessProbe_NormalExit_ReturnsExitCodeAndStdout()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var probe = CreateProbe();
 
         var result = await probe.RunAsync("sh", ["-c", "printf 'hello-probe'"], TimeSpan.FromSeconds(10), CancellationToken.None);
@@ -38,13 +35,9 @@ public sealed class ProcessProbeTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ProcessProbe_Timeout_ReturnsTimedOut_PromptlyWithoutWaitingForTheProcess()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var probe = CreateProbe();
         var stopwatch = Stopwatch.StartNew();
 
@@ -60,13 +53,9 @@ public sealed class ProcessProbeTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ProcessProbe_Timeout_KillsTheProcessTree_DescendantNeverCompletes()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var probe = CreateProbe();
         var marker = Path.Combine(Path.GetTempPath(), $"xe-probe-tree-{Guid.NewGuid():N}.marker");
 
@@ -79,7 +68,8 @@ public sealed class ProcessProbeTests
             var value = AssertEx.NotNull(result);
             AssertEx.True(value.TimedOut);
 
-            // Wait well past the descendant's 2s sleep; the marker must remain absent because the tree was killed.
+            // real-timer: the subject is a REAL orphaned OS process. Nothing in-process can signal "the sleep we
+            // reaped did not go on to touch the marker", so outliving its 2s sleep is the only way to observe it.
             await Task.Delay(TimeSpan.FromSeconds(3.5), CancellationToken.None);
             AssertEx.False(File.Exists(marker), "the process tree must be killed on timeout so the descendant never runs.");
         }
@@ -93,13 +83,9 @@ public sealed class ProcessProbeTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ProcessProbe_CallerCancellation_ThrowsOperationCanceled()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var probe = CreateProbe();
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
 

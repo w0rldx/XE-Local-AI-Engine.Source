@@ -100,8 +100,16 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
 
         var seeder = ActivatorUtilities.CreateInstance<ModelRecommendationScheduleSeeder>(provider);
 
-        // Must not throw.
-        await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        // Pin the precondition: the dependency really is unresolvable, so this exercises the swallow path rather
+        // than passing because the seeder silently found nothing to do.
+        _ = AssertEx.Throws<InvalidOperationException>(() => provider.GetRequiredService<IScheduledJobManagementService>(),
+            "The provider must not be able to resolve IScheduledJobManagementService, or the guard is never reached.");
+
+        var start = seeder.StartAsync(CancellationToken.None);
+        await start.ConfigureAwait(false);
+
+        AssertEx.True(start.IsCompletedSuccessfully,
+            "StartAsync must swallow the resolution failure so the node still starts.");
     }
 
 

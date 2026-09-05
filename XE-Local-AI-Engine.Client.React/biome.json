@@ -1078,6 +1078,36 @@
 					}
 				}
 			}
+		},
+		{
+			"includes": ["**/*.test.ts", "**/*.test.tsx", "src/test/**"],
+			"linter": {
+				"rules": {
+					"complexity": {
+						"noExcessiveNestedTestSuites": "error"
+					},
+					"style": {
+						"noDoneCallback": "error",
+						"useComponentExportOnlyModules": "off"
+					},
+					"suspicious": {
+						"noDuplicateTestHooks": "error",
+						"noFocusedTests": "error",
+						"noMisplacedAssertion": "error",
+						"noSkippedTests": "error"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["**/*.test.ts", "**/*.test.tsx", "!src/test/**"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noExportsInTest": "error"
+					}
+				}
+			}
 		}
 	],
 	"assist": {

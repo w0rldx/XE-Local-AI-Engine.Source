@@ -13,7 +13,8 @@ from typing import Any
 def load(name: str):
     path = Path(__file__).parents[1] / f"{name}.py"
     spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

@@ -19,6 +19,12 @@ public sealed class KnowledgeIngestionWorkerTests
 {
     private static readonly TimeSpan PollTimeout = TimeSpan.FromSeconds(5);
 
+    /// <summary>An ingestion that ignores cancellation and outruns any drain window the worker is configured with.</summary>
+    private static readonly TimeSpan HungDocumentRuntime = TimeSpan.FromSeconds(10);
+
+    /// <summary>Long enough to land after the 1 s drain window and the disposal that follows it, short enough to observe.</summary>
+    private static readonly TimeSpan PostDisposalDocumentRuntime = TimeSpan.FromMilliseconds(1500);
+
     [Test]
     public async Task ExecuteAsync_OnStart_ReDispatchesNonTerminalDocumentsFromAPreviousRun()
     {
@@ -65,8 +71,7 @@ public sealed class KnowledgeIngestionWorkerTests
 
         // Begin shutdown while the document is still mid-run (blocked on the gate). StopAsync must not complete yet.
         var stop = worker.StopAsync(CancellationToken.None);
-        await Task.Delay(100).ConfigureAwait(false);
-        AssertEx.False(stop.IsCompleted, "StopAsync must wait for the in-flight document to finish draining.");
+        await AssertEx.StaysIncompleteAsync(stop, "StopAsync must wait for the in-flight document to finish draining.").ConfigureAwait(false);
         AssertEx.True(ingestion.Completed.IsEmpty, "The document must not have completed while still gated.");
 
         // Release the document; StopAsync completes only after its terminal write lands.
@@ -78,7 +83,10 @@ public sealed class KnowledgeIngestionWorkerTests
     [Test]
     public async Task StopAsync_WhenADocumentHangsPastTheDrainWindow_AbandonsItWithoutThrowingOrBlocking()
     {
-        var ingestion = new FakeIngestionService((_, _) => Task.Delay(TimeSpan.FromSeconds(10), CancellationToken.None));
+        // real-timer: the hung document IS the subject's input — an ingestion that ignores cancellation and outlives
+        // the drain window. Nothing in IKnowledgeIngestionService exposes a "still running" seam the worker could be
+        // driven against, and the assertion below is on the worker's elapsed drain, not on this duration.
+        var ingestion = new FakeIngestionService((_, _) => Task.Delay(HungDocumentRuntime, CancellationToken.None));
         var catalog = NoRecovery();
         var dispatcher = new KnowledgeIngestionDispatcher();
         await using var provider = BuildProvider(ingestion, catalog);
@@ -122,7 +130,9 @@ public sealed class KnowledgeIngestionWorkerTests
             // The document ignores cancellation and finishes ~500ms after the 1s drain window elapses — i.e. after the
             // worker is disposed — so its finally releases an already-disposed semaphore. The guarded Release must swallow
             // the ObjectDisposedException so the background task completes cleanly instead of faulting.
-            var ingestion = new FakeIngestionService((_, _) => Task.Delay(TimeSpan.FromMilliseconds(1500), CancellationToken.None));
+            // real-timer: as above, the document's runtime is the input — it has to outlast the 1 s drain window so its
+            // finally runs after disposal. A gate the test releases would not reproduce "completes after we stopped looking".
+            var ingestion = new FakeIngestionService((_, _) => Task.Delay(PostDisposalDocumentRuntime, CancellationToken.None));
             var catalog = NoRecovery();
             var dispatcher = new KnowledgeIngestionDispatcher();
             await using (var provider = BuildProvider(ingestion, catalog))
@@ -147,7 +157,9 @@ public sealed class KnowledgeIngestionWorkerTests
                 await AssertEx.EventuallyAsync(() => !ingestion.Completed.IsEmpty,
                     PollTimeout,
                     "The abandoned document should have finished after disposal.").ConfigureAwait(false);
-                await Task.Delay(200).ConfigureAwait(false);
+
+                // The guarded Release runs in the abandoned task's finally, one continuation after the completion above.
+                await AssertEx.SettleAsync().ConfigureAwait(false);
             }
 
 #pragma warning disable S1215 // Deterministic finalizer flush is the only way to surface UnobservedTaskException in-test.

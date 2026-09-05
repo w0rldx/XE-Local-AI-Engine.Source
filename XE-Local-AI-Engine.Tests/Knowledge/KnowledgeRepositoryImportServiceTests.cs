@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
 {
@@ -287,13 +288,9 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task ImportAsync_SymbolicLinkSource_IsSkippedWithoutReadingTarget()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         await InitializeRepositoryAsync().ConfigureAwait(false);
         await File.WriteAllTextAsync(Path.Combine(_root, "target.bin"), "outside the admitted extension set").ConfigureAwait(false);
         File.CreateSymbolicLink(Path.Combine(_root, "linked.md"), Path.Combine(_root, "target.bin"));

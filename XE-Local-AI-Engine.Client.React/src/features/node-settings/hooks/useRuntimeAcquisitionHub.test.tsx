@@ -72,10 +72,14 @@ function renderHub(enabled = true) {
 }
 
 /**
- * Pushes a hub payload and lets the resulting render settle. The trailing macrotask is not incidental: TanStack
- * delivers observer notifications through `setTimeout(…, 0)`, so a read taken right after the push would still see the
- * previous value even when the cache write landed — and a "nothing changed" assertion would then pass for the wrong
- * reason. Real timers throughout; fake timers deadlock `waitFor`.
+ * Pushes a hub payload and lets the resulting render settle.
+ *
+ * real-timer: the trailing `setTimeout(…, 0)` is a macrotask YIELD, not a wait — it has no duration to get wrong and
+ * no race to lose. TanStack delivers observer notifications through its own `setTimeout(…, 0)`, so the only way to
+ * read the value the push produced is to queue behind that task; a read taken any earlier still sees the previous
+ * value even though the cache write landed, and the "nothing changed" assertions would then pass for the wrong
+ * reason. Fake timers cannot replace it here: `waitFor` deadlocks under them, and several callers assert a NEGATIVE
+ * (no re-render, no refetch) which no `waitFor` can express.
  */
 async function push(payload: unknown): Promise<void> {
 	act(() => hubMock.handler?.(payload));

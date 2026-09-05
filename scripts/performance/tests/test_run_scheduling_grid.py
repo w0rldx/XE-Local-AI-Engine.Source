@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 MODULE_PATH = Path(__file__).parents[1] / "run_scheduling_grid.py"
 SPEC = importlib.util.spec_from_file_location("run_scheduling_grid", MODULE_PATH)
-assert SPEC is not None and SPEC.loader is not None
+assert SPEC is not None
+assert SPEC.loader is not None
 grid = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(grid)
 

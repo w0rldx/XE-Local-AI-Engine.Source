@@ -20,8 +20,8 @@ public sealed class GpuModelLoadAdmissionTests
         var first = await gate.AcquireAsync(CancellationToken.None);
 
         var secondTask = gate.AcquireAsync(CancellationToken.None);
-        var admittedEarly = await Task.WhenAny(secondTask, Task.Delay(200)).ConfigureAwait(false) == secondTask;
-        AssertEx.False(admittedEarly, "the second acquire must not be admitted while the first ticket is held");
+        await AssertEx.StaysIncompleteAsync(secondTask, "the second acquire must not be admitted while the first ticket is held")
+                      .ConfigureAwait(false);
 
         first.Dispose();
         var second = await secondTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
@@ -42,8 +42,8 @@ public sealed class GpuModelLoadAdmissionTests
         // The gate is still held by `first`; a fresh acquire must still queue behind it, then proceed once released — the
         // cancelled waiter neither stole the gate nor corrupted the semaphore count.
         var third = gate.AcquireAsync(CancellationToken.None);
-        var admittedEarly = await Task.WhenAny(third, Task.Delay(150)).ConfigureAwait(false) == third;
-        AssertEx.False(admittedEarly);
+        await AssertEx.StaysIncompleteAsync(third, "the cancelled waiter must not have handed the gate to the next acquire")
+                      .ConfigureAwait(false);
 
         first.Dispose();
         (await third.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false)).Dispose();
@@ -78,7 +78,8 @@ public sealed class GpuModelLoadAdmissionTests
         using var listener = StartHistogramListener("gpu_admission_wait_ms", () => Interlocked.Increment(ref waitSamples));
 
         var secondTask = gate.AcquireAsync(CancellationToken.None);
-        await Task.Delay(40).ConfigureAwait(false);
+        await AssertEx.StaysIncompleteAsync(secondTask, "the second acquire has to be queued before the first releases, or there is no wait to record")
+                      .ConfigureAwait(false);
         first.Dispose();
         (await secondTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false)).Dispose();
 

@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using static TrainingRuntimeTestInfrastructure;
+using OS = TUnit.Core.Enums.OS;
 
 public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
 {
@@ -19,13 +20,9 @@ public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Probe_WhenEverythingIsPresent_ReportsEveryItemSatisfied()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var report = await ProbeAsync(WithScripts(), DriverPresent());
 
         AssertEx.Contains(report.Items, static item => item.Key == TrainingRuntimePrerequisiteKeys.Platform && item.Satisfied);
@@ -36,13 +33,9 @@ public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Probe_WhenTheLockfileIsMissing_RefusesAndSaysSo()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var report = await ProbeAsync(Path.Combine(_root, "no-scripts"), DriverPresent());
 
         AssertEx.False(report.CanInstall);
@@ -53,13 +46,9 @@ public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Probe_WhenNvidiaSmiIsAbsent_ReportsNoDriverRatherThanThrowing()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         // The runner throwing is what an absent nvidia-smi looks like: setsid cannot exec it.
         var runner = new FakeProcessRunner((_, _, _) => throw new TrainingRuntimeException("The process did not start."));
 
@@ -71,13 +60,9 @@ public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Probe_WhenNvidiaSmiExitsNonZero_ReportsNoDriver()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var report = await ProbeAsync(WithScripts(), new FakeProcessRunner((_, _, _) => 9));
 
         AssertEx.Contains(report.Items,
@@ -85,13 +70,9 @@ public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Probe_DoesNotCreateTheCacheRoot()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var cacheRoot = Path.Combine(_root, "never-created");
         _ = await new TrainingRuntimePrerequisiteProbe(DriverPresent(), cacheRoot, WithScripts()).ProbeAsync(CancellationToken.None);
 

@@ -1,6 +1,6 @@
 # Writing Tests
 
-> Reviewed: 2026-08-15 · Code-grounded.
+> Reviewed: 2026-09-05 · Code-grounded.
 
 [Testing & Validation](13-testing-and-validation.md) is the map of what exists and what counts as validated.
 This page is the **authoring guide**: where a new test goes, which harness seam to use, and the traps that
@@ -19,6 +19,63 @@ make a test flaky, slow, or silently vacuous. Read it before adding a suite.
 
 Prefer the cheapest project that can still fail for the right reason. An endpoint's validation rules belong in
 `.Tests`; the browser adds nothing and costs a frontend build.
+
+## 1a. Test principles
+
+Three rules hold for every test in this repo, in any language. The harness sections below exist to make them
+cheap to follow, not to stand in for them.
+
+### Independence
+
+A test must not depend on another test having run, on execution order, or on state a previous run left behind.
+
+- Name every row you write with a fresh `Guid`/unique id, or take exclusive access (§2 shared-host rules, §3
+  `[NotInParallel]`).
+- Restore every process-global mutation — env vars, static caches, ambient culture — in a `finally`/`Dispose`,
+  including on failure.
+- Never assert a whole-collection count or an empty state unless the class genuinely owns that state.
+- Frontend: `restoreMocks`, `unstubEnvs` and `unstubGlobals` are on, and `src/test/Cleanup.ts` runs React Testing
+  Library's `cleanup` after each test — a Zustand store, a `localStorage` key or a module-level `let` is still
+  yours to reset in `beforeEach`.
+
+A test that passes only in isolation is not independent; it is broken and coincidentally green.
+
+### Self-validating
+
+A test ends in an explicit assertion and is binary green/red with no human step in between.
+
+- Assert with `AssertEx.*` (C#), `expect(…)` (Vitest), `assert`/`pytest.raises` (Python), `Should` (Pester). A test
+  that only exercises code has verified nothing. `pnpm run validate` runs `CheckTestsHaveAssertions.mjs` over the
+  frontend suite; no analyzer in this stack detects an assertion-less TUnit test at all, so on the backend the
+  rule is enforced in review only.
+- Never read a log line, console output or a report to decide pass/fail. The assertion is the result.
+- Never `return` early because the OS, GPU or tool is missing — that reports a green pass. Skip visibly: TUnit's
+  own `[RunOn(OS.Linux)]` / `[ExcludeOn(OS.Windows)]` (`using OS = TUnit.Core.Enums.OS;` — that namespace's
+  `LogLevel` collides with the logging one) for an OS gate, `Skip.Test("<why>")` after a probe for a capability
+  you cannot name up front (`Testing/SymlinkSupport.cs`, `Testing/JunctionSupport.cs`). A guard that depends on
+  more than the OS keeps `Skip.Unless(...)` in the body on top of the attribute. `[RunOn]` is invisible to the
+  CA1416 platform analyzer, so a method that calls a Linux-only API also carries
+  `[UnsupportedOSPlatform("windows")]`. Proof: `XE-Local-AI-Engine.Tests/Testing/PlatformSkipTests.cs`.
+- A test that logs a problem and stays green has the same defect as one with no assertion at all.
+
+### Mocking policy
+
+Substitute only at a real collaboration boundary, and take the first of these that works:
+
+1. **The real thing**, when it is fast and deterministic — an in-memory store, a pure function, a real SQLite file.
+2. **The repo's fake seam** for that boundary: `FakeOllama` for anything model-dependent,
+   `RecordingHubMessageSender` for WorkerHub outbound, `Fixtures/FakeWorkerNodeFixture.cs` only when the transport
+   itself is the subject, MSW handlers for frontend network calls.
+3. **`Substitute.For<T>()`** — NSubstitute, never Moq or FakeItEasy, both banned — or `vi.fn()`/`vi.mock()` on the
+   frontend, or stdlib `unittest.mock` in Python (not `pytest-mock`).
+4. **A hand-written fake**, only when `Returns`/`Received` genuinely cannot express the behaviour. Reaching this
+   rung is a signal to re-check rung 2.
+
+`NSubstitute.Analyzers.CSharp` runs on all four test projects, so a substitute against a non-virtual member is a
+build error instead of a silently passing test.
+
+Never mock the thing the test exists to verify — a security or approval gate, the AEAD cipher, a migration's schema
+change. Substituting those proves only that the test calls the mock.
 
 ## 2. `TestServerWebAppFactory` — the backend host fixture
 
@@ -96,6 +153,21 @@ A sleep is either flaky (too short on a loaded box) or slow (too long everywhere
 - an unbounded `Channel` plus a bounded read, which is how `Fixtures/FakeWorkerNodeFixture.cs` turns "did the node
   send X?" into a wait with a real timeout and a legible `TimeoutException`.
 
+The same holds on the frontend: `setTimeout`, or `await new Promise(r => setTimeout(r, n))`, is the identical
+defect. Use `vi.useFakeTimers()` or `waitFor`.
+
+**"X did not happen" needs the same discipline.** Sleeping N ms and then asserting nothing happened can only fail
+when the code gets *slower* — a real regression that fires the event late still reads green. Instead drive the code
+to an observable blocking point through a gate the test controls, assert the negative there, then release the gate
+and assert the positive. `AssertEx.StaysIncompleteAsync(task, message)` is the negative, called once the code has
+observably reached its gate; `AssertEx.CompletesAsync(task, TestBudgets.Contended, message)` is the positive, with
+a failure deadline. Both build on `AssertEx.SettleAsync()`, the primitive that drains the scheduler — it is
+deterministic only when everything in flight is a thread-pool continuation, so a real timer or real I/O between the
+call and the gate still needs a "reached" signal from a fake.
+
+A real timer is allowed only when the subject is a real OS process, or when the delay is the subject's own input.
+Mark it with a `// real-timer:` comment naming why, so a later reader does not "fix" it into a fake clock.
+
 ## 5. Recipes
 
 ### Model-dependent behaviour → FakeOllama
@@ -163,7 +235,23 @@ did. `EncryptConversationTitleMigrationTests.cs` (titles cleared) and
 Render through the shared provider wrapper `src/test/RenderWithProviders.tsx` (Mantine theme, i18n, TanStack
 Query, router) instead of bare `@testing-library/react` — a bare render loses the providers most components
 need. Network goes through the MSW handlers in `src/test/msw/`; assert against handlers, not against a mocked
-`fetch`. `src/test/PinLocale.ts` is already wired as the Vitest `setupFiles` entry, so locale is deterministic.
+`fetch`. `src/test/PinLocale.ts` is already wired as a Vitest `setupFiles` entry, so locale is deterministic; so is
+`src/test/Cleanup.ts`, which runs React Testing Library's `cleanup` after every test (Vitest does not register it
+for you without `globals`). `restoreMocks`, `unstubEnvs` and `unstubGlobals` are on in `vite.config.ts`, so spies
+and env stubs reset themselves — store and `localStorage` state does not. Every test needs a visible `expect(…)`:
+`pnpm run validate` runs `CheckTestsHaveAssertions.mjs` and fails on a test without one.
+
+### A test that only runs on one OS
+
+Gate it with TUnit's `[RunOn(OS.Linux)]` / `[ExcludeOn(OS.Windows)]` (`OS` is `TUnit.Core.Enums.OS`, imported as
+`using OS = TUnit.Core.Enums.OS;` because that namespace's `LogLevel` collides with the logging one), never with
+`if (!OperatingSystem.IsWindows()) return;` — an early return reports a green pass on every platform that cannot
+run the test. Both are `SkipAttribute` subclasses whose reason names the platform; the proof test is
+`XE-Local-AI-Engine.Tests/Testing/PlatformSkipTests.cs`. A guard that depends on more than the OS keeps
+`Skip.Unless(...)` in the body on top of the attribute. `[RunOn]` is invisible to the CA1416 platform analyzer, so
+a method that calls a Linux-only API also carries `[UnsupportedOSPlatform("windows")]`. When the gate is a
+capability you have to probe rather than name (symlinks, NTFS junctions), probe once and call `Skip.Test("<why>")`,
+the shape of `Testing/SymlinkSupport.cs` and `Testing/JunctionSupport.cs`.
 
 ### Browser E2E
 

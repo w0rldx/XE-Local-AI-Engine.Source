@@ -170,8 +170,8 @@ function requestedOffsets(): number[] {
 	);
 }
 
-/** Clicks one status chip and waits for the status SET the query is then asked for (undefined for the All chip). */
-async function clickStatusChip(label: string, expected: readonly string[] | undefined): Promise<void> {
+/** Clicks a status chip and asserts the statuses the executions query was re-read with. */
+async function expectChipSendsStatuses(label: string, expected: readonly string[] | undefined): Promise<void> {
 	fireEvent.click(within(screen.getByTestId("integration-executions-status-chips")).getByText(label));
 	await waitFor(() => {
 		expect(lastExecutionFilters().status).toEqual(expected);
@@ -210,13 +210,13 @@ describe("IntegrationExecutionsPage", () => {
 
 		expect(lastExecutionFilters().status).toBeUndefined();
 
-		await clickStatusChip("Accepted", ["Accepted"]);
-		await clickStatusChip("Queued", ["Queued"]);
-		await clickStatusChip("Running", ["Running"]);
-		await clickStatusChip("Completed", ["Completed"]);
-		await clickStatusChip("Failed", ["Failed"]);
-		await clickStatusChip("Cancelled", ["Cancelled"]);
-		await clickStatusChip("All", undefined);
+		await expectChipSendsStatuses("Accepted", ["Accepted"]);
+		await expectChipSendsStatuses("Queued", ["Queued"]);
+		await expectChipSendsStatuses("Running", ["Running"]);
+		await expectChipSendsStatuses("Completed", ["Completed"]);
+		await expectChipSendsStatuses("Failed", ["Failed"]);
+		await expectChipSendsStatuses("Cancelled", ["Cancelled"]);
+		await expectChipSendsStatuses("All", undefined);
 	});
 
 	// D-3: everything in flight in one click. The endpoint takes a repeated `status`, so this is one server-side
@@ -224,8 +224,8 @@ describe("IntegrationExecutionsPage", () => {
 	it("sends the three in-flight states together for the Active chip", async () => {
 		renderPage();
 
-		await clickStatusChip("Active", ["Accepted", "Queued", "Running"]);
-		await clickStatusChip("All", undefined);
+		await expectChipSendsStatuses("Active", ["Accepted", "Queued", "Running"]);
+		await expectChipSendsStatuses("All", undefined);
 	});
 
 	it("offers cancel only on the three active statuses", () => {
@@ -371,7 +371,7 @@ describe("IntegrationExecutionsPage", () => {
 			expect(lastExecutionWindow().offset).toBe(100);
 		});
 
-		await clickStatusChip("Failed", ["Failed"]);
+		await expectChipSendsStatuses("Failed", ["Failed"]);
 
 		expect(lastExecutionWindow().offset).toBe(0);
 	});

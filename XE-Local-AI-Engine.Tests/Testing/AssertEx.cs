@@ -177,6 +177,25 @@ internal static class AssertEx
         throw new AssertionException(message ?? $"Expected exception of type {typeof(TException).Name} but no exception was thrown.");
     }
 
+    /// <summary>
+    ///     Asserts that <paramref name="action" /> completes. For a guard whose whole answer is "no exception", this is
+    ///     what turns a pass from the ABSENCE of a statement — indistinguishable from a test that asserts nothing —
+    ///     into a claim, and it names the guard in the failure instead of letting the raw exception speak for it.
+    /// </summary>
+    public static void DoesNotThrow(Action action, string message)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        try
+        {
+            action();
+        }
+        catch (Exception exception)
+        {
+            throw new AssertionException($"{message}{Environment.NewLine}Threw {exception.GetType().Name}: {exception.Message}");
+        }
+    }
+
     public static async Task<TException> ThrowsAsync<TException>(Func<Task> action, string? message = null) where TException : Exception
     {
         try
@@ -193,6 +212,70 @@ internal static class AssertEx
         }
 
         throw new AssertionException(message ?? $"Expected exception of type {typeof(TException).Name} but no exception was thrown.");
+    }
+
+    /// <summary>
+    ///     Gives every continuation the runtime can already run a strong chance to run before the caller looks again.
+    ///     This is the stand-in for "sleep, then assert that nothing happened": a sleep can only fail when the code
+    ///     under test gets SLOWER, so on a contended runner it hides the very regression it was written to catch, while
+    ///     costing its full duration on every green run.
+    /// </summary>
+    /// <remarks>
+    ///     Deterministic only when everything in flight is a thread-pool continuation. <c>Task.Run</c> from a pool
+    ///     thread queues to that thread's LOCAL queue and the pool is concurrent, so the round count is a strong
+    ///     heuristic and not a guarantee. A real timer or real I/O between this call and the gate being asserted still
+    ///     needs a "reached" signal from a fake — this settles the scheduler, it does not wait for the world.
+    /// </remarks>
+    /// <param name="rounds">
+    ///     How many yield + thread-pool round trips to make. Each round hands the caller's continuation back to the
+    ///     pool and then queues behind everything that yield made runnable, so a continuation chain of this depth has
+    ///     very probably run by the time the caller resumes.
+    /// </param>
+    public static async Task SettleAsync(int rounds = 16)
+    {
+        // Task.Yield() has no ConfigureAwait overload, so neither call carries one: the test host installs no
+        // synchronization context, and a mixed pair would only read as though one of them mattered.
+        for (var round = 0; round < rounds; round++)
+        {
+            await Task.Yield();
+            await Task.Run(static () => { });
+        }
+    }
+
+    /// <summary>
+    ///     Asserts <paramref name="task" /> is still parked once <see cref="SettleAsync" /> has drained the scheduler:
+    ///     the negative half of a gate assertion, without a wall-clock guess.
+    /// </summary>
+    public static async Task StaysIncompleteAsync(Task task, string message)
+    {
+        ArgumentNullException.ThrowIfNull(task);
+
+        await SettleAsync().ConfigureAwait(false);
+
+        if (task.IsCompleted)
+        {
+            throw new AssertionException(message);
+        }
+    }
+
+    /// <summary>
+    ///     Awaits a task that must finish inside <paramref name="timeout" />, failing the run with
+    ///     <paramref name="message" /> instead of hanging it. The timeout is a failure deadline, not a sleep: a green
+    ///     run returns the moment the task completes, so pass a budget generous enough to survive a contended runner
+    ///     (<c>TestBudgets.Contended</c> in XE-Local-AI-Engine.Tests).
+    /// </summary>
+    public static async Task CompletesAsync(Task task, TimeSpan timeout, string message)
+    {
+        ArgumentNullException.ThrowIfNull(task);
+
+        try
+        {
+            await task.WaitAsync(timeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            throw new AssertionException(message);
+        }
     }
 
     public static async Task EventuallyAsync(Func<bool> condition, TimeSpan timeout, string? message = null)

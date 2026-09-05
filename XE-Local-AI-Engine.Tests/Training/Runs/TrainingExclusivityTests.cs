@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Training.Runs;
 
+using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -31,24 +32,27 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </remarks>
 public sealed class TrainingExclusivityTests
 {
-    private static readonly TimeSpan ObservationWindow = TimeSpan.FromMilliseconds(300);
     private static readonly TimeSpan BoundedWait = TimeSpan.FromSeconds(5);
 
     [Test]
     public async Task Exclusivity_RunActive_BenchmarkAndGenerationRefused()
     {
-        var gate = new GpuWorkGate();
+        var gate = new ObservedGpuWorkGate(new GpuWorkGate());
         using var held = AssertEx.NotNull(gate.TryBeginExclusive(GpuWorkKind.TrainingRun), "The run acquires the gate exclusively.");
 
         var benchmarks = Substitute.For<IBenchmarkStore>();
         var datasets = Substitute.For<ITrainingDatasetStore>();
+        var benchmarkAsked = gate.Asked(GpuWorkKind.Benchmark);
+        var generationAsked = gate.Asked(GpuWorkKind.DatasetGeneration);
         using var benchmarkSignal = new BenchmarkQueueSignal();
         using var generationSignal = new DatasetGenerationQueueSignal();
         using var benchmarkQueue = BuildBenchmarkQueue(benchmarks, benchmarkSignal, gate);
         using var generationQueue = BuildGenerationQueue(datasets, generationSignal, gate);
 
-        await RunBrieflyAsync(benchmarkQueue, generationQueue);
+        await RunUntilAsync(Task.WhenAll(benchmarkAsked, generationAsked), benchmarkQueue, generationQueue);
 
+        AssertEx.False(await benchmarkAsked, "The benchmark queue must have been refused at the gate.");
+        AssertEx.False(await generationAsked, "Dataset generation must have been refused at the gate.");
         _ = await benchmarks.DidNotReceiveWithAnyArgs().ClaimNextAsync(default);
         _ = await datasets.DidNotReceiveWithAnyArgs().ClaimNextAsync(default);
     }
@@ -59,12 +63,24 @@ public sealed class TrainingExclusivityTests
         var gate = new GpuWorkGate();
         var benchmarks = Substitute.For<IBenchmarkStore>();
         var datasets = Substitute.For<ITrainingDatasetStore>();
+        var benchmarkClaimed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var generationClaimed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = benchmarks.ClaimNextAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            benchmarkClaimed.TrySetResult();
+            return Task.FromResult<BenchmarkClaimedWork?>(null);
+        });
+        _ = datasets.ClaimNextAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            generationClaimed.TrySetResult();
+            return Task.FromResult<DatasetGenerationClaimedWork?>(null);
+        });
         using var benchmarkSignal = new BenchmarkQueueSignal();
         using var generationSignal = new DatasetGenerationQueueSignal();
         using var benchmarkQueue = BuildBenchmarkQueue(benchmarks, benchmarkSignal, gate);
         using var generationQueue = BuildGenerationQueue(datasets, generationSignal, gate);
 
-        await RunBrieflyAsync(benchmarkQueue, generationQueue);
+        await RunUntilAsync(Task.WhenAll(benchmarkClaimed.Task, generationClaimed.Task), benchmarkQueue, generationQueue);
 
         // The guard is a refusal while an exclusive holder owns the node, not a permanent stop. Both are SHARED, so
         // they also have to be able to run beside each other.
@@ -81,7 +97,7 @@ public sealed class TrainingExclusivityTests
     [Test]
     public async Task Exclusivity_RunStartRefusedWhileGenerationIsMidExecution_AndAdmitsOnceItReleases()
     {
-        var gate = new GpuWorkGate();
+        var gate = new ObservedGpuWorkGate(new GpuWorkGate());
         var parked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var executing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -117,13 +133,13 @@ public sealed class TrainingExclusivityTests
         {
             await executing.Task.WaitAsync(BoundedWait);
 
+            var runAsked = gate.Asked(GpuWorkKind.TrainingRun);
             using (var refused = BuildRunQueue(runs, gate))
             {
-                await refused.StartAsync(CancellationToken.None);
-                await Task.Delay(ObservationWindow);
-                await refused.StopAsync(CancellationToken.None);
+                await RunUntilAsync(runAsked, refused);
             }
 
+            AssertEx.False(await runAsked, "The run queue must have been refused at the gate generation was holding.");
             _ = await runs.DidNotReceiveWithAnyArgs().ClaimNextAsync(default(TrainingWorkKind), default);
             AssertEx.Null(gate.ExclusiveKind, "A refused run must not have left an exclusive hold behind.");
         }
@@ -151,7 +167,7 @@ public sealed class TrainingExclusivityTests
     [Test]
     public async Task Exclusivity_BenchmarkAndGenerationRefusedWhileARunIsMidExecution_AndClaimOnceItReleases()
     {
-        var gate = new GpuWorkGate();
+        var gate = new ObservedGpuWorkGate(new GpuWorkGate());
         var parked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var executing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -187,14 +203,18 @@ public sealed class TrainingExclusivityTests
         {
             await executing.Task.WaitAsync(BoundedWait);
 
+            var benchmarkAsked = gate.Asked(GpuWorkKind.Benchmark);
+            var generationAsked = gate.Asked(GpuWorkKind.DatasetGeneration);
             using var benchmarkSignal = new BenchmarkQueueSignal();
             using var generationSignal = new DatasetGenerationQueueSignal();
             using (var benchmarkQueue = BuildBenchmarkQueue(benchmarks, benchmarkSignal, gate))
                 using (var generationQueue = BuildGenerationQueue(datasets, generationSignal, gate))
                 {
-                    await RunBrieflyAsync(benchmarkQueue, generationQueue);
+                    await RunUntilAsync(Task.WhenAll(benchmarkAsked, generationAsked), benchmarkQueue, generationQueue);
                 }
 
+            AssertEx.False(await benchmarkAsked, "The benchmark queue must have been refused at the gate the run was holding.");
+            AssertEx.False(await generationAsked, "Dataset generation must have been refused at the gate the run was holding.");
             _ = await benchmarks.DidNotReceiveWithAnyArgs().ClaimNextAsync(default);
             _ = await datasets.DidNotReceiveWithAnyArgs().ClaimNextAsync(default);
         }
@@ -224,10 +244,10 @@ public sealed class TrainingExclusivityTests
         using var held = AssertEx.NotNull(gate.TryBeginExclusive(GpuWorkKind.Export), "Something else already holds the gate.");
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
-        _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.TrainingRun);
+        var peeked = PeekSignal(runs, TrainingWorkKind.TrainingRun);
 
         using var queue = BuildRunQueue(runs, gate);
-        await RunBrieflyAsync(queue);
+        await RunUntilAsync(peeked.Task, queue);
 
         _ = await runs.DidNotReceiveWithAnyArgs().ClaimNextAsync(default(TrainingWorkKind), default);
     }
@@ -237,13 +257,13 @@ public sealed class TrainingExclusivityTests
     {
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
-        _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.TrainingRun);
+        var peeked = PeekSignal(runs, TrainingWorkKind.TrainingRun);
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         // The lease refuses while ANY llama-server process is running or spawning — the eject-first gate.
         _ = supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>()).Returns((ILlamaServerRuntimeMutationLease?)null);
 
         using var queue = BuildRunQueue(runs, new GpuWorkGate(), supervisor: supervisor);
-        await RunBrieflyAsync(queue);
+        await RunUntilAsync(peeked.Task, queue);
 
         _ = await runs.DidNotReceiveWithAnyArgs().ClaimNextAsync(default(TrainingWorkKind), default);
     }
@@ -254,10 +274,15 @@ public sealed class TrainingExclusivityTests
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
         _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.TrainingRun);
-        _ = runs.ClaimNextAsync(TrainingWorkKind.TrainingRun, Arg.Any<CancellationToken>()).Returns((TrainingWorkClaim?)null);
+        var claimed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = runs.ClaimNextAsync(TrainingWorkKind.TrainingRun, Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            claimed.TrySetResult();
+            return Task.FromResult<TrainingWorkClaim?>(null);
+        });
 
         using var queue = BuildRunQueue(runs, new GpuWorkGate());
-        await RunBrieflyAsync(queue);
+        await RunUntilAsync(claimed.Task, queue);
 
         _ = await runs.Received().ClaimNextAsync(TrainingWorkKind.TrainingRun, Arg.Any<CancellationToken>());
     }
@@ -273,13 +298,18 @@ public sealed class TrainingExclusivityTests
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
         _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.EvaluationRun);
-        _ = runs.ClaimNextAsync(TrainingWorkKind.EvaluationRun, Arg.Any<CancellationToken>()).Returns((TrainingWorkClaim?)null);
+        var claimed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = runs.ClaimNextAsync(TrainingWorkKind.EvaluationRun, Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            claimed.TrySetResult();
+            return Task.FromResult<TrainingWorkClaim?>(null);
+        });
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         _ = supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
                       .Returns(Substitute.For<ILlamaServerRuntimeMutationLease>());
 
         using var queue = BuildRunQueue(runs, new GpuWorkGate(), supervisor: supervisor);
-        await RunBrieflyAsync(queue);
+        await RunUntilAsync(claimed.Task, queue);
 
         _ = await runs.Received().ClaimNextAsync(TrainingWorkKind.EvaluationRun, Arg.Any<CancellationToken>());
         _ = await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
@@ -292,10 +322,10 @@ public sealed class TrainingExclusivityTests
         using var held = AssertEx.NotNull(gate.TryBeginExclusive(GpuWorkKind.TrainingRun), "A training run already holds the gate.");
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
-        _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(TrainingWorkKind.EvaluationRun);
+        var peeked = PeekSignal(runs, TrainingWorkKind.EvaluationRun);
 
         using var queue = BuildRunQueue(runs, gate);
-        await RunBrieflyAsync(queue);
+        await RunUntilAsync(peeked.Task, queue);
 
         // Both kinds take the same exclusive hold, so an evaluation cannot start beside a run either.
         _ = await runs.DidNotReceiveWithAnyArgs().ClaimNextAsync(default(TrainingWorkKind), default);
@@ -307,10 +337,10 @@ public sealed class TrainingExclusivityTests
         var gate = new GpuWorkGate();
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
-        _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns((TrainingWorkKind?)null);
+        var peeked = PeekSignal(runs, kind: null);
 
         using var queue = BuildRunQueue(runs, gate);
-        await RunBrieflyAsync(queue);
+        await RunUntilAsync(peeked.Task, queue);
 
         // Holding the gate across the idle poll would starve generation, benchmarks and image jobs on a quiet node.
         AssertEx.Null(gate.ExclusiveKind, "An empty queue must not leave the gate held.");
@@ -395,19 +425,71 @@ public sealed class TrainingExclusivityTests
         return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
     }
 
-    /// <summary>Starts each queue, lets it take a few passes at its loop, and stops it again.</summary>
-    private static async Task RunBrieflyAsync(params BackgroundService[] queues)
+    /// <summary>
+    ///     Answers <paramref name="kind" /> from the run store's peek, and completes when the loop asks for it. The
+    ///     peek is the FIRST thing the run loop does and every exclusivity decision is made on the way back from it, so
+    ///     this is the signal a refusal assertion needs: without it, "no claim happened" is also what a loop that never
+    ///     ran looks like.
+    /// </summary>
+    private static TaskCompletionSource PeekSignal(ITrainingRunStore runs, TrainingWorkKind? kind)
+    {
+        var peeked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = runs.PeekNextKindAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            peeked.TrySetResult();
+            return kind;
+        });
+
+        return peeked;
+    }
+
+    /// <summary>
+    ///     Starts each queue, waits for <paramref name="reached" /> — a completion the queue's own collaborator sets
+    ///     when the loop gets where the test is asserting it gets — and stops them again. There is no unsignalled
+    ///     variant on purpose: stopping a queue that had only been settled cancels the loop wherever it happens to be,
+    ///     and every negative assertion after that passes on a loop that never reached the gate at all.
+    /// </summary>
+    private static async Task RunUntilAsync(Task reached, params BackgroundService[] queues)
     {
         foreach (var queue in queues)
         {
             await queue.StartAsync(CancellationToken.None);
         }
 
-        await Task.Delay(ObservationWindow);
+        await AssertEx.CompletesAsync(reached, BoundedWait, "The queue loop never reached the claim under test.");
 
         foreach (var queue in queues)
         {
             await queue.StopAsync(CancellationToken.None);
         }
+    }
+
+    /// <summary>
+    ///     The real gate, plus one completion per <see cref="GpuWorkKind" /> that fires when a queue loop first ASKS
+    ///     for that kind, carrying the answer it got. That ask is the observable iteration boundary a refusal
+    ///     assertion needs: "the queue did not claim" is also true of a loop that was cancelled before it ever
+    ///     consulted the gate.
+    /// </summary>
+    private sealed class ObservedGpuWorkGate(IGpuWorkGate inner) : IGpuWorkGate
+    {
+        private readonly ConcurrentDictionary<GpuWorkKind, TaskCompletionSource<bool>> _asks = new();
+
+        public GpuWorkKind? ExclusiveKind => inner.ExclusiveKind;
+
+        public IDisposable? TryBeginExclusive(GpuWorkKind kind) => Record(kind, inner.TryBeginExclusive(kind));
+
+        public IDisposable? TryBeginShared(GpuWorkKind kind) => Record(kind, inner.TryBeginShared(kind));
+
+        /// <summary>Completes with the answer the FIRST admission attempt for <paramref name="kind" /> got: true = admitted.</summary>
+        public Task<bool> Asked(GpuWorkKind kind) => Ask(kind).Task;
+
+        private IDisposable? Record(GpuWorkKind kind, IDisposable? admission)
+        {
+            _ = Ask(kind).TrySetResult(admission is not null);
+            return admission;
+        }
+
+        private TaskCompletionSource<bool> Ask(GpuWorkKind kind) =>
+            _asks.GetOrAdd(kind, static _ => new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously));
     }
 }

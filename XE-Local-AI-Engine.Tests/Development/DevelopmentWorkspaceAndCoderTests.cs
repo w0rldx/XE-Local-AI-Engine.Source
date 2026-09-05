@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Development;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Runtime.Versioning;
 using System.Text;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -21,6 +22,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
+using OS = TUnit.Core.Enums.OS;
 
 public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 {
@@ -331,14 +333,10 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     ///     </para>
     /// </summary>
     [Test]
+    // The workspace is prepared through the Linux-only process sandbox provider.
+    [RunOn(OS.Linux)]
     public async Task SearchAndList_ExcludeSecretFilesButStillReturnOrdinaryContent()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            Skip.Test("The workspace is prepared through the Linux-only process sandbox provider.");
-            return;
-        }
-
         var repository = await CreateRepositoryAsync().ConfigureAwait(false);
         var data = Path.Combine(_root, "search-exclusion-data");
         Directory.CreateDirectory(data);
@@ -389,14 +387,10 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     ///     </para>
     /// </summary>
     [Test]
+    // The workspace is prepared through the Linux-only process sandbox provider.
+    [RunOn(OS.Linux)]
     public async Task ListFiles_WhenSuppressedTreesOutrunTheOutputCap_StillReturnsTheActionableFiles()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            Skip.Test("The workspace is prepared through the Linux-only process sandbox provider.");
-            return;
-        }
-
         var repository = await CreateRepositoryAsync().ConfigureAwait(false);
         var data = Path.Combine(_root, "list-truncation-data");
         Directory.CreateDirectory(data);
@@ -629,14 +623,12 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
     [Test]
     [NotInParallel]
+    // The executable PATH probe uses a Linux shell script.
+    [RunOn(OS.Linux)]
+    // [RunOn] is invisible to CA1416, and the probe chmods the script it writes.
+    [UnsupportedOSPlatform("windows")]
     public async Task EvidenceExport_WhenAlreadyCancelled_DoesNotStartGit()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            Skip.Test("The executable PATH probe uses a Linux shell script.");
-            return;
-        }
-
         var repository = await CreateRepositoryAsync().ConfigureAwait(false);
         var runtime = Path.Combine(_root, "cancel-runtime");
         var fakeBin = Path.Combine(_root, "fake-bin");
@@ -886,14 +878,10 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     ///     </para>
     /// </summary>
     [Test]
+    // The planted fsmonitor payload is a POSIX shell command.
+    [RunOn(OS.Linux)]
     public async Task EvidenceExport_WhenWorkspaceConfigPlantsFsmonitor_DoesNotExecuteItOnTheHost()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            Skip.Test("The planted fsmonitor payload is a POSIX shell command.");
-            return;
-        }
-
         var repository = await CreateRepositoryAsync().ConfigureAwait(false);
         var data = Path.Combine(_root, "fsmonitor-data");
         Directory.CreateDirectory(data);
@@ -1378,13 +1366,9 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     ///     </para>
     /// </summary>
     [Test]
+    [RunOn(OS.Linux)]
     public async Task WorkspaceProvider_WritesBuildConfigurationBarrierAboveTheWorkspaceAndNotInsideIt()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var repository = await CreateRepositoryAsync().ConfigureAwait(false);
         var data = Path.Combine(_root, "barrier-data");
         Directory.CreateDirectory(data);

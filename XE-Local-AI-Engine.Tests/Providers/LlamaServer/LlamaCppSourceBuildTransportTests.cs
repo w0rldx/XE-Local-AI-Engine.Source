@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
+using OS = TUnit.Core.Enums.OS;
 
 public sealed class LlamaCppSourceBuildTransportTests
 {
@@ -132,13 +133,9 @@ public sealed class LlamaCppSourceBuildTransportTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task StartEndpoint_WhenKeepModelWarmEnabled_BlocksBeforeStartingBuild()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var service = Substitute.For<ILlamaCppSourceBuildService>();
         var runtimeSettings = StubNodeRuntimeSettings.Create()
                                                      .WithKeepModelWarm(enabled: true, modelName: "model-a")
@@ -176,17 +173,13 @@ public sealed class LlamaCppSourceBuildTransportTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task StartEndpoint_OfficialSource_HandsTheServiceAnUnnormalizedRequestAndStarts()
     {
         // Regression: the endpoint used to normalize the request before calling the service, which normalizes again.
         // The second pass saw the repository the FIRST pass had selected and rejected it as a client override, so every
         // official-source build answered 409 {"reason":"prerequisites","message":"The official source repository is
         // selected by the server."}. Assert the endpoint forwards the raw request and that real normalization succeeds.
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var service = Substitute.For<ILlamaCppSourceBuildService>();
         service.StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>())
                .Returns(call =>
@@ -241,15 +234,11 @@ public sealed class LlamaCppSourceBuildTransportTests
     [Arguments(LlamaCppSourceBuildStartOutcome.MissingPrerequisites, "prerequisites", 0)]
     [Arguments(LlamaCppSourceBuildStartOutcome.ProcessesRunning, "processes-running", 4)]
     [Arguments(LlamaCppSourceBuildStartOutcome.RuntimeBusy, "runtime-busy", 0)]
+    [RunOn(OS.Linux)]
     public async Task LegacyStartEndpoint_MapsTypedAdmissionWithoutDuplicatingProbes(LlamaCppSourceBuildStartOutcome outcome,
         string expectedReason,
         int runningProcessCount)
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         var service = Substitute.For<ILlamaCppSourceBuildService>();
         service.StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>())
                .Returns(new LlamaCppSourceBuildStartResult(outcome, RunningProcessCount: runningProcessCount));

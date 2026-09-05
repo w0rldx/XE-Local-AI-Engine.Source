@@ -74,6 +74,9 @@ internal sealed class StubDevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelem
 
             if (Delay > TimeSpan.Zero)
             {
+                // real-timer: the collector's latency is the subject's input — the decorator under test measures it
+                // against a wall-clock budget, so a gate that completes on command cannot stand in for it. The
+                // IgnoresCancellationUntil gate above is the deterministic seam for the non-timing cases.
                 await Task.Delay(Delay, cancellationToken).ConfigureAwait(false);
             }
 

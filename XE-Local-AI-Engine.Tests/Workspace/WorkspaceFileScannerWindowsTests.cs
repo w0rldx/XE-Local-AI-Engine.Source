@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Workspace;
 
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     The parts of the two workspace surveys that only a real Windows filesystem can express.
@@ -151,13 +152,10 @@ public sealed class WorkspaceFileScannerWindowsTests : IDisposable
     ///     </para>
     /// </summary>
     [Test]
+    // MAX_PATH is a Windows concept; the OS-agnostic suite covers deep trees generally.
+    [RunOn(OS.Windows)]
     public void ListFilesAndSearchText_WorkOnATreeDeeperThanMaxPath()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            return; // MAX_PATH is a Windows concept; the OS-agnostic suite covers deep trees generally.
-        }
-
         var workspace = CreateWorkspace();
 
         // Long segment names rather than many levels, so the DEPTH ceiling is not what is being measured here.

@@ -481,7 +481,11 @@ public sealed class DevWorkflowDispatcherTests
         await dispatcher.StartAsync(CancellationToken.None).ConfigureAwait(false);
         dispatcher.Signal(runId);
 
-        await Task.Delay(200).ConfigureAwait(false);
+        await AssertEx.SettleAsync().ConfigureAwait(false);
+
+        // The status alone would be true by construction — nothing moved it before the signal either. The signal
+        // sitting UNREAD in the channel is what proves the pump never started: a running pump drains it.
+        AssertEx.Equal(expected: 1, dispatcher.PendingSignals.Count, "a disabled node must leave the signal unconsumed.");
         AssertEx.Equal(DevWorkflowRunStatus.Pending, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
     }
 

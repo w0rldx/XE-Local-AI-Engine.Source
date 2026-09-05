@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Sandbox;
 using System.Text;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Unit coverage for <see cref="SandboxJailPathGuard" /> — the sandbox path-safety guards on their own, without a
@@ -52,20 +53,23 @@ public sealed class SandboxJailPathGuardTests : IDisposable
     }
 
     [Test]
-    public async Task EnsureNoSymlinkComponentsUnderJail_RejectsAnIntermediateOrLeafLink_ButAllowsARealPath()
+    public async Task EnsureNoSymlinkComponentsUnderJail_AllowsAPathOfRealComponents()
     {
         var real = Path.Combine(_jailRoot, "workspace", "file.txt");
         Directory.CreateDirectory(Path.GetDirectoryName(real)!);
         await File.WriteAllTextAsync(real, "in-jail");
 
         // A path made only of real components passes — the guard rejects links, not depth.
-        SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(_jailRoot, real, "workspace/file.txt");
+        AssertEx.DoesNotThrow(() => SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(_jailRoot, real, "workspace/file.txt"),
+            "a nested path of real components is not an escape.");
+    }
 
-        if (!OperatingSystem.IsLinux())
-        {
-            // Real symlink semantics are the Linux guarantee under test.
-            return;
-        }
+    [Test]
+    // Real symlink semantics are the Linux guarantee under test.
+    [RunOn(OS.Linux)]
+    public async Task EnsureNoSymlinkComponentsUnderJail_RejectsAnIntermediateOrLeafLinkOutOfTheJail()
+    {
+        Directory.CreateDirectory(Path.Combine(_jailRoot, "workspace"));
 
         using var outside = new TempDir();
         await File.WriteAllTextAsync(Path.Combine(outside.Path, "secret.txt"), "OUTSIDE-THE-JAIL");
@@ -86,7 +90,7 @@ public sealed class SandboxJailPathGuardTests : IDisposable
     }
 
     [Test]
-    public async Task WriteAndReadJailFileNoFollow_RoundTripsBytes_AndRefusesASymlinkedLeaf()
+    public async Task WriteAndReadJailFileNoFollow_RoundTripsBytes_AndEnforcesTheReadBound()
     {
         var target = Path.Combine(_jailRoot, "workspace", "round-trip.txt");
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
@@ -99,12 +103,15 @@ public sealed class SandboxJailPathGuardTests : IDisposable
         // The requested read bound is enforced on the sized length.
         await AssertEx.ThrowsAsync<InvalidDataException>(() =>
             SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(target, maxBytes: 2, CancellationToken.None));
+    }
 
-        if (!OperatingSystem.IsLinux())
-        {
-            // O_NOFOLLOW is the Linux guarantee; the non-Linux fallback relies on the component walk above.
-            return;
-        }
+    [Test]
+    // O_NOFOLLOW is the Linux guarantee; the non-Linux fallback relies on the component walk instead.
+    [RunOn(OS.Linux)]
+    public async Task ReadAndWriteJailFileNoFollow_RefuseALeafSwappedForASymlinkAfterTheComponentWalk()
+    {
+        Directory.CreateDirectory(Path.Combine(_jailRoot, "workspace"));
+        var content = Encoding.UTF8.GetBytes("jail bytes");
 
         using var outside = new TempDir();
         var outsideFile = Path.Combine(outside.Path, "secret.txt");
@@ -122,18 +129,22 @@ public sealed class SandboxJailPathGuardTests : IDisposable
     }
 
     [Test]
-    public async Task ReadHostFileUnderGuard_ReadsWithinTheCap_AndRejectsAnOverCapOrSymlinkedSource()
+    public async Task ReadHostFileUnderGuard_ReadsWithinTheCap_AndRejectsAnOverCapSource()
     {
         var source = Path.Combine(_jailRoot, "host-source.txt");
         await File.WriteAllTextAsync(source, "host bytes");
 
         AssertEx.Equal("host bytes", Encoding.UTF8.GetString(SandboxJailPathGuard.ReadHostFileUnderGuard(source, maxCopyFileBytes: 1024)));
         AssertEx.Throws<InvalidDataException>(() => SandboxJailPathGuard.ReadHostFileUnderGuard(source, maxCopyFileBytes: 4));
+    }
 
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
+    [Test]
+    // The cap leg above is asserted everywhere; only the symlink leg needs real Linux link semantics.
+    [RunOn(OS.Linux)]
+    public async Task ReadHostFileUnderGuard_RejectsASymlinkedSource()
+    {
+        var source = Path.Combine(_jailRoot, "host-source.txt");
+        await File.WriteAllTextAsync(source, "host bytes");
 
         var link = Path.Combine(_jailRoot, "host-link.txt");
         File.CreateSymbolicLink(link, source);
@@ -141,15 +152,11 @@ public sealed class SandboxJailPathGuardTests : IDisposable
     }
 
     [Test]
+    // The reads go through the libc no-follow open on Linux only, and a second writable handle on the file
+    // being read is a Linux-shareable open — the Windows fallback denies it.
+    [RunOn(OS.Linux)]
     public async Task BothReadLegs_RefuseAFileThatGrewAfterItWasSized_RatherThanReturningAStaleCopy()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            // The reads go through the libc no-follow open on Linux only, and a second writable handle on the file
-            // being read is a Linux-shareable open — the Windows fallback denies it.
-            return;
-        }
-
         await AssertGrowthAfterSizingIsRefusedAsync("jail-growing.bin",
             path => SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(path, int.MaxValue, CancellationToken.None));
 
@@ -158,15 +165,19 @@ public sealed class SandboxJailPathGuardTests : IDisposable
     }
 
     [Test]
+    public async Task EnsureNoSymbolicLinkComponents_AcceptsARealTrustedHostWorkspacePath()
+    {
+        AssertEx.DoesNotThrow(() => SandboxJailPathGuard.EnsureNoSymbolicLinkComponents(_jailRoot),
+            "a real host workspace directory is not a linked component.");
+
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    // The clean-path leg above is asserted everywhere; only the link leg needs real Linux link semantics.
+    [RunOn(OS.Linux)]
     public async Task EnsureNoSymbolicLinkComponents_RejectsALinkedTrustedHostWorkspaceComponent()
     {
-        SandboxJailPathGuard.EnsureNoSymbolicLinkComponents(_jailRoot);
-
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var outside = new TempDir();
         var linked = Path.Combine(_jailRoot, "workspace-link");
         Directory.CreateSymbolicLink(linked, outside.Path);

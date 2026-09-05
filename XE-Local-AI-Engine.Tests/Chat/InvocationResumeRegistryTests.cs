@@ -297,9 +297,9 @@ public sealed class InvocationResumeRegistryTests
                 }
             });
 
-            var finished = await Task.WhenAny(drain, Task.Delay(TimeSpan.FromSeconds(5)));
-            AssertEx.True(finished == drain, "Resume enumeration must complete instead of blocking on a channel that never carries the terminal.");
-            await drain;
+            await AssertEx.CompletesAsync(drain,
+                TestBudgets.Contended,
+                "Resume enumeration must complete instead of blocking on a channel that never carries the terminal.");
 
             AssertEx.True(events.Count > 0, "Expected at least the snapshot replay and the terminal.");
             var terminal = events[^1];
