@@ -186,6 +186,15 @@ A build that fails in project B leaves B's output directory untouched, including
 
 A fixture that restores under an isolated `HOME` rewrites `obj/*.nuget.g.props` with a since-deleted package root; the next Release build fails `CS0006` on every analyzer assembly. It looks exactly like the MSBuild node-reuse trap, but the cure is `dotnet restore` with `NUGET_PACKAGES` pinned to the real store, not a build-server shutdown. Authority: reproduced in the S5 worktree 2026-09-04.
 
+### A Dev-mode sandbox run leaves MSBuild worker nodes holding a dead `NUGET_PACKAGES`
+
+Development Mode gives each sandboxed task its own `NUGET_PACKAGES` under the task's runtime directory. On the process provider those `dotnet` children are host processes, and MSBuild's reusable worker nodes (`MSBuild.dll /nodemode:1`) outlive them with that per-task path still in their environment. A later `dotnet restore` anywhere on this box can attach to one and write the by-then-deleted path into `obj/*.dgspec.json`, after which the build fails naming a `/tmp/xe-…/nuget` directory nothing asked for: **NU5037** during the graph-workflows S0 merge, **CS0006** in the session after it.
+
+- Recover with `dotnet build-server shutdown`, then `MSBUILDDISABLENODEREUSE=1 NUGET_PACKAGES=$HOME/.nuget/packages dotnet restore --force`.
+- Prefix long-lived agent shells with the same two variables; the dead path is inherited, not typed.
+- Distinct from the props-poisoning entry above (same `CS0006` face, dead path in `obj/*.nuget.g.props` and no live worker): here the path is carried by a live `MSBuild.dll /nodemode:1` process, so a plain re-restore is re-poisoned until node reuse is off.
+- The writer was `DevelopmentWorkspaceTools.BuildEnvironment`, which now sets `MSBUILDDISABLENODEREUSE=1` alongside the per-task `NUGET_PACKAGES`. `DevelopmentMountBrokerTests` asserts it.
+
 ### Never classify a cancellation from a `CancellationToken.Register` callback
 
 Registration callbacks race disposal and execute synchronously. They may signal/kill, but must not own terminal classification or throw the final exception. Classify after the awaited operation observes authoritative cancellation state.
