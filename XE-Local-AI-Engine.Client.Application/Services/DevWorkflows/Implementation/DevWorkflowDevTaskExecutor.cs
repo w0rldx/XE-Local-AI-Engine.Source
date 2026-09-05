@@ -739,7 +739,7 @@ internal sealed class DevWorkflowDevTaskExecutor
     ///         reason itself is scoped by attempt on the way in, so a later automatic re-attempt quotes nobody.
     ///     </para>
     /// </summary>
-    private static async Task<bool> CarryOperatorRetryAsync(IDevelopmentStore development,
+    private async Task<bool> CarryOperatorRetryAsync(IDevelopmentStore development,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         Guid projectId,
@@ -785,6 +785,21 @@ internal sealed class DevWorkflowDevTaskExecutor
                                      WidenReviewRounds: atTheRoundCap),
                                  cancellationToken)
                              .ConfigureAwait(false);
+
+            // The one task status hop nothing else records. DevelopmentManagementService logs the hops IT decides,
+            // and this edge is bought by an operator's Retry in the workflow lane instead — so a live round could see
+            // the cap widen and the task move with no line saying either happened. Same literal "task status" phrase,
+            // so the one grep that finds every hop still finds this one.
+            if (atTheRoundCap)
+            {
+                _logger.LogInformation(
+                    "Development task status moved Blocked to ChangesRequested for task {TaskId} in project {ProjectId}, widening the review-round cap to {MaxReviewRounds}; operator reason carried: {CarriedReason}.",
+                    task.Id,
+                    projectId,
+                    task.MaxReviewRounds + 1,
+                    said is not null);
+            }
+
             return true;
         }
         catch (DevelopmentConcurrencyException)

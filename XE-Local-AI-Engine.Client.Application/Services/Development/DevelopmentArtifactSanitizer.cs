@@ -61,13 +61,19 @@ internal static partial class DevelopmentArtifactSanitizer
     // all and a reviewer could not tell which file failed. Excluding the marker keeps exactly the workspace-relative
     // remainder, which is the part a reviewer needs and the part that carries no host information.
     //
-    // '*' is in the excluded class for the same reason ']' is: a leading '/' preceded by '*' is glob syntax, not the
-    // start of a host path. The 2026-09-05 live round found every coder and reviewer prompt carrying
-    // "Protected test patterns: **[REDACTED:development-path]/*.cs, **[REDACTED:development-path] ..." - all nine of
-    // DevelopmentCommandProfileCatalog.DefaultProtectedPaths swallowed, so the one line of the prompt naming the files
-    // the coder was forbidden to touch was the one line the operator could not read. A relative glob names no host, so
-    // there is nothing in it to redact.
-    [GeneratedRegex(@"(?<![A-Za-z0-9:/*])(?<!\[REDACTED:development-path\])/(?!/)[^\s\x00-\x1F\""'<>|]+", RegexOptions.ExplicitCapture, 2000)]
+    // The third lookbehind exempts the '**' GLOB TOKEN, not any star. The 2026-09-05 live round found every coder and
+    // reviewer prompt carrying "Protected test patterns: **[REDACTED:development-path]/*.cs,
+    // **[REDACTED:development-path] ..." - all nine of DevelopmentCommandProfileCatalog.DefaultProtectedPaths
+    // swallowed, so the one line of the prompt naming the files the coder was forbidden to touch was the one line the
+    // operator could not read. A relative glob names no host, so there is nothing in it to redact, and each of those
+    // nine patterns reaches every one of its '/' either after an alphanumeric or after '**'.
+    //
+    // Exempting a bare '*' instead would be a hole rather than a relaxation: a literal star glued to a real path -
+    // "*/etc/shadow", or a C comment closer butted against a path inside a file excerpt - would carry that path
+    // through this pass and out to a cloud provider via DevelopmentCloudContextBuilder, for which SanitizeText is the
+    // boundary. What remains is narrower and deliberate: a real absolute path immediately after '**' still survives.
+    // DevelopmentArtifactSanitizerRootsTests asserts both halves, so widening this again has to be a decision.
+    [GeneratedRegex(@"(?<![A-Za-z0-9:/])(?<!\[REDACTED:development-path\])(?<!\*\*)/(?!/)[^\s\x00-\x1F\""'<>|]+", RegexOptions.ExplicitCapture, 2000)]
     private static partial Regex UnixAbsolutePathRegex();
 
     [GeneratedRegex(@"(?<![A-Za-z0-9])(?<!\[REDACTED:development-path\])[A-Za-z]:[\\/][^\s\x00-\x1F\""'<>|]+", RegexOptions.ExplicitCapture, 2000)]

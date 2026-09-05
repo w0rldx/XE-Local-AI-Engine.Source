@@ -215,7 +215,7 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
         var prompt = DevelopmentTestWritePolicy.Prompt(profile)
                      + "\nFiles in this shared workspace that already differ from the base commit: "
                      + RepositoryRoot
-                     + "/src/Lib/Calculator.cs\ncould not open /etc/shadow, nor \"/etc/shadow\", nor XE_HOME=/etc/shadow, nor (/etc/shadow)\n";
+                     + "/src/Lib/Calculator.cs\ncould not open /etc/shadow, nor \"/etc/shadow\", nor XE_HOME=/etc/shadow, nor (/etc/shadow), nor */etc/shadow\n";
 
         var sanitized = DevelopmentArtifactSanitizer.SanitizePromptText(prompt, RepositoryRoot);
 
@@ -224,10 +224,43 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
         AssertEx.Contains(sanitized, DevelopmentTestWritePolicy.Prompt(profile));
 
         // The relaxation is not a hole. A path under a protected root still loses the root, and an unrelated absolute
-        // path is still redacted at every delimiter a prompt puts in front of one.
+        // path is still redacted at every delimiter a prompt puts in front of one — including a single literal '*',
+        // which is not the glob token and does not buy an exemption.
         AssertEx.False(sanitized.Contains(RepositoryRoot, StringComparison.Ordinal), sanitized);
         AssertEx.Contains(sanitized, "[REDACTED:development-path]/src/Lib/Calculator.cs");
         AssertEx.False(sanitized.Contains("/etc/shadow", StringComparison.Ordinal), sanitized);
+    }
+
+    /// <summary>
+    ///     The exemption above is the <c>**</c> glob token and nothing wider. A single <c>*</c> glued to a real
+    ///     absolute path is the shape that would turn a legibility fix into a leak, because <c>SanitizeText</c> is the
+    ///     boundary <see cref="DevelopmentCloudContextBuilder" /> crosses when it sends requirements and file excerpts
+    ///     to a cloud provider — so <c>*/etc/shadow</c>, and a C comment closer butted against a path inside an
+    ///     excerpt, must still redact.
+    ///     <para>
+    ///         The second half asserts the residual that remains rather than hiding it: a real absolute path written
+    ///         immediately after <c>**</c> survives, because that prefix is indistinguishable from a glob at this
+    ///         layer. It is accepted for the same reason the <c>]</c> exclusion's residual is — the engine's own roots
+    ///         are replaced by literal match in the pass BEFORE these patterns, whatever precedes them, so what
+    ///         survives is an unrelated path a model volunteered. Asserting it makes any future widening a decision.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public void SanitizePromptText_ExemptsTheDoubleStarGlobTokenOnly_AndPinsTheResidualPathAfterIt()
+    {
+        var single = DevelopmentArtifactSanitizer.SanitizePromptText("could not open */etc/shadow", RepositoryRoot);
+
+        AssertEx.False(single.Contains("/etc/shadow", StringComparison.Ordinal), single);
+        AssertEx.Contains(single, "[REDACTED:development-path]");
+
+        var comment = DevelopmentArtifactSanitizer.SanitizePromptText("close the block */etc/shadow is still a host path", RepositoryRoot);
+
+        AssertEx.False(comment.Contains("/etc/shadow", StringComparison.Ordinal), comment);
+
+        // Documented residual, pinned deliberately: '**' exempts whatever follows it, so this path is NOT redacted.
+        var residual = DevelopmentArtifactSanitizer.SanitizePromptText("excluded: **/home/user/repo/x.cs", RepositoryRoot);
+
+        AssertEx.Contains(residual, "**/home/user/repo/x.cs");
     }
 
     [Test]
