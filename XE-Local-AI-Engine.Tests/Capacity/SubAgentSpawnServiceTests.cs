@@ -189,7 +189,68 @@ public sealed class SubAgentSpawnServiceTests
             Task = "do it"
         }, CancellationToken.None);
 
-        await harness.Resolver.Received().ResolveAsync(id, cloudModel, Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await harness.Resolver.Received().ResolveAsync(Arg.Is<AgentDefinitionRecord>(record => record.Id == id),
+            cloudModel,
+            Arg.Any<string?>(),
+            Arg.Any<bool>(),
+            Arg.Any<bool>(),
+            Arg.Any<bool>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Spawn_WhenTheStoreReturnsTwoVersions_AssemblesTheChildFromOneSnapshot()
+    {
+        // A profile-bound child must be assembled from exactly ONE definition snapshot. The store here hands out a
+        // DIFFERENT record on a second read, which is what a concurrent edit does: the spawn takes the model from its
+        // own read and, if it re-resolves by id, the prompt from a second one — a child running version A's model on
+        // version B's persona. One read, one snapshot, or the two halves can disagree.
+        using var harness = new Harness();
+        harness.AllowLocal();
+        const string modelBeforeTheEdit = "model-before-the-edit";
+        var id = Guid.NewGuid();
+        var first = RacingDefinition(id, modelBeforeTheEdit, instructions: "instructions before the edit");
+        var second = first with
+        {
+            ModelProfile = "model-after-the-edit",
+            Instructions = "instructions after the edit",
+            Version = 2
+        };
+        harness.RegisterRacingProfile(id, first, second);
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        await service.SpawnAsync(new SubAgentSpawnRequest
+        {
+            SubAgentKey = id.ToString(),
+            Task = "do it"
+        }, CancellationToken.None);
+
+        // Model and prompt must come from the SAME record, and the definition must have been read exactly once.
+        AssertEx.Equal(modelBeforeTheEdit, harness.ChatClient.LastModelId);
+        AssertEx.Equal(ProjectedPromptFor(first), harness.ChatClient.LastInstructions);
+        await harness.DefinitionStore.Received(1).GetByIdAsync(id, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Spawn_WhenTheDefinitionIsMissing_RejectsAsUnresolved()
+    {
+        // A spawn naming a definition the store does not have is still rejected as unresolved, not fabricated. The
+        // seeded root is load-bearing: with no ambient context the fan-out check rejects first and this would pin the
+        // wrong reason.
+        using var harness = new Harness();
+        harness.AllowLocal();
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var result = await service.SpawnAsync(new SubAgentSpawnRequest
+        {
+            SubAgentKey = Guid.NewGuid().ToString(),
+            Task = "do it"
+        }, CancellationToken.None);
+
+        AssertEx.Contains(result, "could not be resolved");
+        AssertEx.Equal(0, harness.ChatClient.CallCount);
     }
 
     [Test]
@@ -1215,6 +1276,30 @@ public sealed class SubAgentSpawnServiceTests
         };
     }
 
+    // A definition whose model and persona are both distinctive, so a child assembled from two versions of it is visible
+    // in the model id AND in the instructions rather than in only one of them.
+    private static AgentDefinitionRecord RacingDefinition(Guid id, string modelProfile, string instructions)
+    {
+        return new AgentDefinitionRecord(id,
+            "racing-child",
+            Description: null,
+            instructions,
+            modelProfile,
+            ReasoningEffort: null,
+            AgentDefinitionKind.Single,
+            AllowedToolNames: [],
+            ToolApprovals: new Dictionary<string, bool>(StringComparer.Ordinal),
+            OrchestrationTopologyJson: null,
+            Version: 1,
+            CreatedAtUtc: 0,
+            UpdatedAtUtc: 0);
+    }
+
+    private static string ProjectedPromptFor(AgentDefinitionRecord definition)
+    {
+        return $"SCAFFOLD+{definition.Instructions}";
+    }
+
     private static AllowedToolDto McpTool(string name)
     {
         return new AllowedToolDto
@@ -1307,6 +1392,9 @@ public sealed class SubAgentSpawnServiceTests
 
         public IAgentDefinitionResolver Resolver => _resolver;
 
+        /// <summary>The definition store the spawn reads its snapshot from — exposed so a test can count the reads.</summary>
+        public IAgentDefinitionStore DefinitionStore => _definitionStore;
+
         public FakeMcpWorkspaceExecutionSessionFactory WorkspaceSessionFactory => _mcpWorkspaceSessionFactory;
 
         public IMcpAgenticToolAdapter AgenticToolAdapter => _mcpAgenticToolAdapter;
@@ -1350,9 +1438,55 @@ public sealed class SubAgentSpawnServiceTests
                               RequiresApproval = false
                           })
                           .ToArray();
-            _resolver.ResolveAsync(id, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            _resolver.ResolveAsync(Arg.Is<AgentDefinitionRecord>(record => record.Id == id),
+                         Arg.Any<string?>(),
+                         Arg.Any<string?>(),
+                         Arg.Any<bool>(),
+                         Arg.Any<bool>(),
+                         Arg.Any<bool>(),
+                         Arg.Any<CancellationToken>())
                      .Returns(new ResolvedAgentRuntime("child instructions", offered, modelProfile, null, 1, id, name, []));
             return id;
+        }
+
+        // The resolver's projection, faithful in the one respect the racing test turns on: the resolved prompt and the
+        // resolved model profile both come from the SAME record, so a mismatch between them names the version each half
+        // came from.
+        private static ResolvedAgentRuntime Project(AgentDefinitionRecord definition)
+        {
+            return new ResolvedAgentRuntime(ProjectedPromptFor(definition),
+                [],
+                definition.ModelProfile,
+                definition.ReasoningEffort,
+                definition.Version,
+                definition.Id,
+                definition.Name,
+                []);
+        }
+
+        // Registers a definition whose store hands out a DIFFERENT record on a second read, and a resolver that behaves
+        // like the real one on BOTH overloads: the id overload re-reads the store (it is the second read), the record
+        // overload projects the snapshot it was handed and reads nothing. That difference is the whole subject — with
+        // one read the two halves of the child cannot come from two versions.
+        public void RegisterRacingProfile(Guid id, AgentDefinitionRecord first, AgentDefinitionRecord second)
+        {
+            _definitionStore.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(first, second);
+
+            _resolver.ResolveAsync(id, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                     .Returns<Task<ResolvedAgentRuntime?>>(async call =>
+                     {
+                         var reread = await _definitionStore.GetByIdAsync(id, call.Arg<CancellationToken>()).ConfigureAwait(false);
+                         return Project(reread!);
+                     });
+
+            _resolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(),
+                         Arg.Any<string?>(),
+                         Arg.Any<string?>(),
+                         Arg.Any<bool>(),
+                         Arg.Any<bool>(),
+                         Arg.Any<bool>(),
+                         Arg.Any<CancellationToken>())
+                     .Returns<Task<ResolvedAgentRuntime?>>(call => Task.FromResult<ResolvedAgentRuntime?>(Project(call.Arg<AgentDefinitionRecord>())));
         }
 
         // Registers a profile (subAgentKey → definition) whose resolved AllowedTools are the supplied offer names, so the
@@ -1406,7 +1540,13 @@ public sealed class SubAgentSpawnServiceTests
                               RequiresApproval = false
                           })
                           .ToArray();
-            _resolver.ResolveAsync(id, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            _resolver.ResolveAsync(Arg.Is<AgentDefinitionRecord>(record => record.Id == id),
+                         Arg.Any<string?>(),
+                         Arg.Any<string?>(),
+                         Arg.Any<bool>(),
+                         Arg.Any<bool>(),
+                         Arg.Any<bool>(),
+                         Arg.Any<CancellationToken>())
                      .Returns(new ResolvedAgentRuntime(resolvedPrompt, offered, Model, reasoningEffort, 1, id, name, skills));
             return id;
         }
@@ -1452,7 +1592,13 @@ public sealed class SubAgentSpawnServiceTests
                     RequiresApproval = false
                 }
             };
-            _resolver.ResolveAsync(id, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            _resolver.ResolveAsync(Arg.Is<AgentDefinitionRecord>(record => record.Id == id),
+                         Arg.Any<string?>(),
+                         Arg.Any<string?>(),
+                         Arg.Any<bool>(),
+                         Arg.Any<bool>(),
+                         Arg.Any<bool>(),
+                         Arg.Any<CancellationToken>())
                      .Returns(new ResolvedAgentRuntime("child instructions", offered, Model, null, 1, id, name, []));
             return id;
         }

@@ -29,12 +29,15 @@ internal sealed partial class SubAgentSpawnService
         // reasoning effort, and skills as one unit, not just its curated tool set. Reading only AllowedTools here used to
         // let a saved sub-agent silently run on raw definition.Instructions with no scaffold, reasoning, or
         // skills — LESS grounding than the anonymous model-id-only path, which already composes the base scaffold.
+        // Hand the resolver the snapshot ALREADY read above rather than the id: resolving by id would read the row a
+        // second time, and a concurrent edit landing between the two reads would assemble one child out of two
+        // versions — its model from this read, its prompt/tools/reasoning/skills from the other.
         var resolved = await _agentDefinitionResolver
-                             .ResolveAsync(definition.Id, definition.ModelProfile, cancellationToken: ct)
+                             .ResolveAsync(definition, definition.ModelProfile, cancellationToken: ct)
                              .ConfigureAwait(false);
         if (resolved is null)
         {
-            // TOCTOU: the definition was deleted between the fetch above and this resolve. Reject with the sanitized
+            // The resolver seam is nullable for every caller, so guard it here too: reject with the sanitized
             // unresolved reason rather than degrade to raw instructions (the very bypass this fix closes).
             return null;
         }

@@ -31,7 +31,7 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 ///         by the send path of the ONE projection it is about to hand the model — one resolution, one decision.
 ///     </para>
 ///     <para>
-///         ponytail: this runs a COMPLETE <see cref="IAgentDefinitionResolver.ResolveAsync" /> — persona composition and
+///         ponytail: this runs a COMPLETE <see cref="IAgentDefinitionResolver.ResolveAsync(Guid?, string?, string?, bool, bool, bool, CancellationToken)" /> — persona composition and
 ///         the playbook read included — to read tool categories. Every read is a store read on a cache-first path and
 ///         there is no provider round trip (the retrieval query is null, so the playbook takes its static prepend). The
 ///         upgrade path is a projection-only overload on that resolver returning <c>AllowedTools</c> alone; worth it
