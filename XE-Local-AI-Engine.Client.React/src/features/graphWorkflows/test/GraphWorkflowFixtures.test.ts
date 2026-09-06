@@ -33,8 +33,8 @@ describe("eightNodeGraph", () => {
 		const edgeKeys = (eightNodeGraph.edges ?? []).map((edge) => edge.key ?? "");
 
 		expect(nodeKeys).toEqual(["start", "analyze", "check", "review", "lookup", "fanout", "merge", "done"]);
-		expect(edgeKeys).toHaveLength(8);
-		expect(new Set([...nodeKeys, ...edgeKeys]).size).toBe(16);
+		expect(edgeKeys).toHaveLength(9);
+		expect(new Set([...nodeKeys, ...edgeKeys]).size).toBe(17);
 		for (const key of [...nodeKeys, ...edgeKeys]) {
 			expect(GRAPH_WORKFLOW_KEY_PATTERN.test(key), key).toBe(true);
 		}
@@ -61,9 +61,21 @@ describe("eightNodeGraph", () => {
 		// No `path` on either: both inherit the Condition node's own `config.path`.
 		expect(conditionEdges.every((edge) => edge.condition?.path === undefined)).toBe(true);
 
-		const pauseEdge = (eightNodeGraph.edges ?? []).find((edge) => edge.from === "review");
-		expect(pauseEdge?.sourceHandle).toBe("Approve");
-		expect(pauseEdge?.condition).toEqual({ path: "output.decision", op: "Eq", value: "Approve" });
+		// One out-edge per allowed decision, or the server refuses the Pause node at save time.
+		const pauseEdges = (eightNodeGraph.edges ?? []).filter((edge) => edge.from === "review");
+		expect(pauseEdges.map((edge) => edge.sourceHandle)).toEqual(["Approve", "Reject"]);
+		expect(pauseEdges.map((edge) => edge.condition)).toEqual([
+			{ path: "output.decision", op: "Eq", value: "Approve" },
+			{ path: "output.decision", op: "Eq", value: "Reject" },
+		]);
+	});
+
+	it("gives the reconverging End an Any join, so the approve path is not skipped on the dead reject edge", () => {
+		const done = (eightNodeGraph.nodes ?? []).find((node) => node.key === "done");
+		const inbound = (eightNodeGraph.edges ?? []).filter((edge) => edge.to === "done");
+
+		expect(inbound).toHaveLength(2);
+		expect(done?.joinPolicy).toBe("Any");
 	});
 
 	it("writes every operator in its canonical PascalCase form", () => {

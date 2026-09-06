@@ -5608,6 +5608,85 @@
 				"node_interrupted": "Node interrupted by a restart",
 				"gate_requested": "A decision was requested",
 				"gate_decided": "A decision was made"
+			},
+			"definition": {
+				"issues": {
+					"duplicateNodeKey": "Two nodes share the key “{{subject}}”. Every node and edge key must be unique.",
+					"missingNodeKey": "A node has no key. Give it one before saving.",
+					"invalidNodeKey": "“{{subject}}” is not a valid key. Use letters, digits, hyphens and underscores, up to 64 characters.",
+					"unknownEdgeEndpoint": "Edge “{{subject}}” points at a node that is not in this graph.",
+					"duplicateEdgeKey": "The key “{{subject}}” is already taken. Nodes and edges share one set of keys.",
+					"parallelEdgesBothUnconditional": "Edge “{{subject}}” is a second unconditional edge between the same two nodes. Give one of them a condition.",
+					"conditionEdgeHasNoPath": "Edge “{{subject}}” has a condition but no path, and its source node has none to inherit.",
+					"noStart": "The graph has no Start node.",
+					"multipleStarts": "“{{subject}}” is a second Start node. A graph has exactly one.",
+					"noEnd": "The graph has no End node.",
+					"cycle": "The graph loops back on itself. A graph workflow must run forward only.",
+					"unreachable": "“{{subject}}” cannot be reached from the Start node.",
+					"danglingNonEnd": "“{{subject}}” has no outgoing edge. Only an End node may be a dead end.",
+					"endHasOutbound": "“{{subject}}” is an End node and cannot have outgoing edges.",
+					"startHasInbound": "“{{subject}}” is the Start node and cannot have incoming edges.",
+					"joinAnyNeedsTwoInbound": "“{{subject}}” continues on the first incoming branch but has fewer than two of them.",
+					"conditionNeedsTwoOutbound": "“{{subject}}” is a Condition node and needs at least two outgoing edges.",
+					"conditionMultipleDefaults": "“{{subject}}” has more than one unconditional outgoing edge. At most one may be the default.",
+					"tooManyNodes": "The graph has more nodes than this node accepts.",
+					"invalidJson": "A JSON field on “{{subject}}” is not a valid JSON object.",
+					"pauseDecisionUnroutable": "“{{subject}}” offers a decision that no outgoing edge routes.",
+					"unknownNodeKind": "“{{subject}}” has a node type this version does not know.",
+					"unknownConditionOperator": "Edge “{{subject}}” uses a comparison this version does not know.",
+					"toolNameMissing": "“{{subject}}” is a Tool node with no tool selected.",
+					"serverRejected": "The node refused this graph."
+				}
+			},
+			"form": {
+				"key": {
+					"invalid": "Use letters, digits, hyphens and underscores, up to 64 characters."
+				},
+				"maxAttempts": {
+					"range": "Enter a whole number between 1 and 10."
+				},
+				"timeoutSeconds": {
+					"min": "Enter a whole number of seconds, or leave it empty for no timeout."
+				},
+				"inputSchema": {
+					"notObject": "Enter a JSON object, or leave it empty."
+				},
+				"defaultInput": {
+					"invalidJson": "Enter valid JSON, or leave it empty."
+				},
+				"instructions": {
+					"required": "Enter the instructions this agent runs on."
+				},
+				"responseJsonSchema": {
+					"notObject": "Enter a JSON object schema, or leave it empty."
+				},
+				"toolName": {
+					"required": "Choose a tool."
+				},
+				"argumentsJson": {
+					"notObject": "Enter a JSON object of arguments, or leave it empty."
+				},
+				"argumentBindings": {
+					"pathRequired": "Enter the path this argument reads from."
+				},
+				"path": {
+					"invalid": "Use a dot path such as output.json.status."
+				},
+				"resultPath": {
+					"invalid": "Use a dot path such as output.json.status."
+				},
+				"prompt": {
+					"required": "Enter the question the operator answers."
+				},
+				"allowedDecisions": {
+					"required": "Offer at least one decision."
+				},
+				"outcome": {
+					"required": "Enter an outcome name."
+				},
+				"condition": {
+					"valueRequired": "Enter a value to compare against."
+				}
 			}
 		},
 		"integrations": {

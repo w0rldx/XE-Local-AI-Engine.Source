@@ -3,7 +3,7 @@
 //
 // Every builder returns the WIRE shape (all fields optional, as hey-api types them from the OpenAPI document), so a
 // test can spread overrides in without fighting a stricter local type than the server actually promises. The graph is
-// `00-brief.md` §3.1 verbatim — the same eight nodes and eight edges the S2 live round drove — because a fixture that
+// `00-brief.md` §3.1 — eight nodes and nine edges — because a fixture that
 // diverges from the real body is a test that proves the client agrees with itself.
 //
 // Timestamps are epoch MILLISECONDS (numbers), as every Graph Workflows DTO carries them.
@@ -31,12 +31,17 @@ export const graphWorkflowTestIds = {
 export const graphWorkflowTestGraphHash = "sha256:0f2a9c1d4e6b8a70";
 
 /**
- * The brief's §3.1 graph: Start → Agent → Condition → { Pause | Tool } → Parallel → Join → End. Eight nodes, eight
+ * The brief's §3.1 graph: Start → Agent → Condition → { Pause | Tool } → Parallel → Join → End. Eight nodes, nine
  * edges — the plan calls it "the six-node definition" but the graph it points at has eight, and the graph wins.
  *
  * The two Condition out-edges carry `sourceHandle` `true`/`false` with `Eq true` / `Ne true` and no `path` (they
- * inherit the Condition node's `config.path`); the Pause out-edge carries the full `output.decision Eq "Approve"`
- * condition the server pre-flight requires.
+ * inherit the Condition node's `config.path`).
+ *
+ * The Pause node has TWO out-edges, one per entry in its `allowedDecisions`. The brief's own §3.1 listing draws only
+ * the `Approve` one, which breaks the Pause pre-flight rule the same section states: the server refuses a Pause whose
+ * allowed decision has no matching or unconditional out-edge. `e9` is the missing `Reject` edge, and it makes `done` a
+ * reconverging End, which needs `joinPolicy: "Any"` or the approve path is skipped on the dead reject edge. Both
+ * shapes are the ones the S2 live graph uses.
  */
 export const eightNodeGraph: GraphWorkflowGraph = {
 	schemaVersion: 1,
@@ -92,7 +97,14 @@ export const eightNodeGraph: GraphWorkflowGraph = {
 		},
 		{ key: "fanout", kind: "Parallel", label: "Both", position: { x: 0, y: 480 }, config: {} },
 		{ key: "merge", kind: "Join", label: "Merge", position: { x: 0, y: 600 }, joinPolicy: "All", config: {} },
-		{ key: "done", kind: "End", label: "Done", position: { x: 0, y: 720 }, config: { outcome: "completed", resultPath: null } },
+			{
+			key: "done",
+			kind: "End",
+			label: "Done",
+			position: { x: 0, y: 720 },
+			joinPolicy: "Any",
+			config: { outcome: "completed", resultPath: null },
+		},
 	],
 	edges: [
 		{ key: "e1", from: "start", to: "analyze" },
@@ -110,6 +122,14 @@ export const eightNodeGraph: GraphWorkflowGraph = {
 		{ key: "e6", from: "lookup", to: "fanout" },
 		{ key: "e7", from: "fanout", to: "merge" },
 		{ key: "e8", from: "merge", to: "done" },
+		{
+			key: "e9",
+			from: "review",
+			to: "done",
+			label: "rejected",
+			sourceHandle: "Reject",
+			condition: { path: "output.decision", op: "Eq", value: "Reject" },
+		},
 	],
 };
 
