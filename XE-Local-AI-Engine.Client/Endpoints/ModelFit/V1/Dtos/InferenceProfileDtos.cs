@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 
+using System.ComponentModel.DataAnnotations;
+
 /// <summary>
 ///     A node-local inference profile projected for transport (shared by the list, explore, freeze and invalidate
 ///     responses). It carries only the launch-arg facts and lifecycle metadata; the local-only machine key is
@@ -127,7 +129,7 @@ public sealed class ExploreInferenceProfileRequest
     // The annotation is documentation only: it publishes minimum/maximum into the OpenAPI schema and the generated
     // client's Zod validators. FastEndpoints does not run DataAnnotations, so the endpoint's inline check stays the
     // enforcing path — a hand-rolled request that skips the generated client still gets a 400.
-    [System.ComponentModel.DataAnnotations.Range(MinExploreContextTokens, MaxExploreContextTokens)]
+    [Range(MinExploreContextTokens, MaxExploreContextTokens)]
     public int? ContextTokens { get; init; }
 }
 

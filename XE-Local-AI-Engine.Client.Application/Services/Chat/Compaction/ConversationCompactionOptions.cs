@@ -49,8 +49,9 @@ public sealed class ConversationCompactionOptions : IValidatableObject
     ///     than this — including one individually oversized message — the summarizer folds it in multiple passes so no
     ///     provider request exceeds the bound. The default leaves ≥ 6,500 characters of source room per fold even when
     ///     the running summary is at the 4,000-character cap (12,000 − the 1,400-character system prompt − 4,000 − the
-    ///     JSON frame), which is what keeps a long conversation from folding in dozens of lossy passes; ~3k tokens is
-    ///     trivial for a node-local model.
+    ///     JSON frame), which is what keeps a long conversation from folding in dozens of lossy passes. The summarizer
+    ///     never probes the model's window: ~3k input tokens plus the <c>MaxSummaryChars</c>-sized output must fit it,
+    ///     so lower this on a model with a 4k-token context.
     ///     <para>
     ///         ponytail: fixed char budget, not the model's probed effective window — upgrade to per-model window probing
     ///         if a large-context model should fold in fewer passes.

@@ -54,7 +54,7 @@ public sealed class ModelFitMapperMetricsTests
         var metrics = Metrics() with
         {
             RawJson = """{"llamacpp:n_tokens_max":24576}""",
-            DiagnosticsJson = """{"speculative":{"draft":900}}"""
+            DiagnosticsJson = """{"speculative_draft_sentinel_900":{"draft":900}}"""
         };
 
         var dto = metrics.ToDto();
@@ -62,12 +62,14 @@ public sealed class ModelFitMapperMetricsTests
         var properties = dto.GetType().GetProperties().Select(property => property.Name).ToArray();
         AssertEx.Empty(properties.Where(name => name is "RawJson" or "DiagnosticsJson"));
 
-        // Serialize the way the endpoint does, so the populated setup is load-bearing: the sentinels are unique to the
-        // raw scrape and the diagnostics blob, so their absence proves nothing carried them onto the wire — a property
-        // rename or an added passthrough would put them back.
+        // Serialize with library defaults (the sentinels are quote-free VALUE fragments, so name casing and the encoder
+        // do not matter): the populated setup is load-bearing because the sentinels are unique to the raw scrape and
+        // the diagnostics blob, so their absence proves nothing carried them onto the wire — a property rename or an
+        // added passthrough would put them back. A quoted sentinel would never match: a leaked string property is
+        // serialized with its inner quotes escaped.
         var json = System.Text.Json.JsonSerializer.Serialize(dto);
         AssertEx.False(json.Contains("llamacpp:n_tokens_max", StringComparison.Ordinal));
-        AssertEx.False(json.Contains("\"speculative\"", StringComparison.Ordinal));
+        AssertEx.False(json.Contains("speculative_draft_sentinel_900", StringComparison.Ordinal));
     }
 
     private static InferenceBenchmarkMetrics Metrics()
