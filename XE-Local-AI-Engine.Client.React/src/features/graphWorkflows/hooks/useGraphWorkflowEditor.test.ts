@@ -245,12 +245,14 @@ describe("useGraphWorkflowEditor dirty state", () => {
 		expect(result.current.nodes.find((node) => node.id === "analyze")?.data.label).toBe("Analyse");
 	});
 
-	it("keeps a loaded graph's unrepresentable token in the issue list across an unrelated edit", () => {
-		// `graphToCanvas` DROPS an `op` it cannot name, so the evidence is gone by the time `canvasToGraph` runs and a save
+	it("keeps a loaded graph's unreadable operator token open until the graph is replaced", () => {
+		// `graphToCanvas` DROPS an `op` it cannot read, so the evidence is gone by the time `canvasToGraph` runs and a save
 		// would quietly rewrite this branch as unconditional. The issue has to outlive every edit that is not a reload.
 		const lossy: GraphWorkflowGraph = {
 			...eightNodeGraph,
-			edges: (eightNodeGraph.edges ?? []).map((edge) => (edge.key === "e3" ? { ...edge, condition: { op: "between", value: 1 } } : edge)),
+			edges: (eightNodeGraph.edges ?? []).map((edge) =>
+				edge.key === "e3" ? { ...edge, condition: { op: "between", value: 1 } } : edge,
+			),
 		};
 		const { result } = renderHook(() => useGraphWorkflowEditor(undefined));
 
@@ -265,7 +267,6 @@ describe("useGraphWorkflowEditor dirty state", () => {
 		expect(result.current.nodes.find((node) => node.id === "analyze")?.position).toEqual({ x: 40, y: 40 });
 		expect(result.current.issues).toContainEqual({ rule: "unknownConditionOperator", subject: "e3" });
 
-		// A save wrote what the canvas holds, so what the server stored that the canvas could not represent is gone with it.
 		act(() => {
 			result.current.markSaved(result.current.graph);
 		});

@@ -38,6 +38,7 @@ import {
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import {
 	type GraphWorkflowGraphIssue,
+	loadedGraphIssues,
 	validateGraphWorkflowGraph,
 } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 
@@ -61,7 +62,7 @@ export interface GraphWorkflowEditorState {
 	/** `canvasToGraph(nodes, edges).graph`, memoised — what a save would send. */
 	readonly graph: GraphWorkflowGraph;
 	/**
-	 * What the LOADED graph carried that the canvas cannot represent, plus the conversion's own issues, plus the
+	 * What the LOADED graph carried that the canvas cannot round-trip, plus the conversion's own issues, plus the
 	 * structural rules. Client-side only; the server's own errors are merged in by the page.
 	 */
 	readonly issues: readonly GraphWorkflowGraphIssue[];
@@ -112,19 +113,6 @@ function connectionPrefill(
 	return {};
 }
 
-/**
- * What the canvas could not represent about the graph it just loaded. `graphToCanvas` drops an unknown `op` and narrows
- * an unknown `kind`, so by the time `canvasToGraph` runs the evidence is gone and a save would silently rewrite the
- * branch. These are computed once, over the WIRE graph, and held until the next load or save.
- *
- * ponytail: inline filter over the full validator; swap for Lane B's `loadedGraphIssues` helper when that merges.
- */
-function loadedGraphIssues(graph: GraphWorkflowGraph | undefined): readonly GraphWorkflowGraphIssue[] {
-	return validateGraphWorkflowGraph(graph).filter(
-		(issue) => issue.rule === "unknownConditionOperator" || issue.rule === "unknownNodeKind",
-	);
-}
-
 /** Where a palette click drops a node when nothing said where. Staggered so a run of clicks does not stack one card. */
 function nextFreePosition(count: number): XYPosition {
 	return { x: 320, y: 80 + count * 60 };
@@ -137,6 +125,8 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 	const [edges, setEdges] = useState<readonly GraphWorkflowCanvasEdge[]>(() => graphToCanvas(initial).edges);
 	const [baseline, setBaseline] = useState<GraphWorkflowGraph | undefined>(initial);
 	const [lastRefusal, setLastRefusal] = useState<GraphWorkflowEditorRefusal | undefined>(undefined);
+	// Held in state, not derived: `graphToCanvas` has already dropped the unreadable `op` and narrowed the unknown kind
+	// by the time anything downstream can look, so the wire document it was read from is the only place this is visible.
 	const [loadedIssues, setLoadedIssues] = useState<readonly GraphWorkflowGraphIssue[]>(() => loadedGraphIssues(initial));
 
 	const refuse = useCallback((rule: GraphWorkflowEditorRefusal["rule"]) => {
@@ -144,8 +134,8 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 	}, []);
 
 	const conversion = useMemo(() => canvasToGraph(nodes, edges), [nodes, edges]);
-	// The loaded-graph issues survive every edit: moving a node does not make an operator's unrepresentable `op` token
-	// representable, and Save has to stay refused until the graph is loaded or saved again.
+	// The loaded-graph issues outlive every edit: moving a node does not make an unreadable operator token readable, and
+	// Save has to stay refused until the graph is loaded again or written over.
 	const issues = useMemo(
 		() => [...loadedIssues, ...conversion.issues, ...validateGraphWorkflowGraph(conversion.graph)],
 		[conversion.graph, conversion.issues, loadedIssues],
@@ -296,8 +286,8 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 
 	const markSaved = useCallback((graph: GraphWorkflowGraph) => {
 		setBaseline(graph);
-		// The save just wrote what the canvas holds, so whatever the server stored that the canvas could not represent is
-		// gone with it.
+		// The save wrote what the canvas holds, so whatever the server had stored that the canvas could not represent went
+		// with it.
 		setLoadedIssues([]);
 	}, []);
 
