@@ -29,6 +29,21 @@
 #
 # xformers is not a direct dependency: unsloth pulls a prebuilt wheel transitively and
 # PyTorch SDPA is the documented fallback, so nothing here needs a CUDA build step.
+#
+# Dependabot alerts that cannot be taken while unsloth==2026.8.22 is the pin (dismissed
+# 2026-09-06 as tolerable risk):
+#   * transformers 5.5.0, floor 5.10.0 (GHSA-xrqw-3rrv-vx5w): unsloth and unsloth_zoo both
+#     cap transformers<=5.5.0, so the floor is unsatisfiable.
+#   * setuptools 81.0.0, floor 83.0.0 (GHSA-h35f-9h28-mq5c): the torch 2.11.0+cu128 wheel
+#     metadata requires setuptools<82.
+#   * torch 2.11.0+cu128, floor 2.13.0 (GHSA-rrmf-rvhw-rf47): the cu128 index ships no
+#     2.12/2.13, unsloth caps torch<2.12.0, torchvision 0.26.0+cu128 pins torch==2.11.0.
+# Exposure is bounded: this runtime is Linux-only, operator-invoked, works on local files,
+# and never calls torch.jit.script. Re-check by bumping unsloth (its and unsloth_zoo's
+# requires_dist on PyPI carry the caps), then
+# `uv lock --upgrade-package transformers --upgrade-package setuptools`; torch additionally
+# needs a cu128 2.13+ wheel on https://download.pytorch.org/whl/cu128/torch/ and the
+# torchvision built against it.
 
 [project]
 name = "xe-training-runtime"
@@ -41,7 +56,9 @@ dependencies = [
     "unsloth==2026.8.22",
     "bitsandbytes==0.50.1",
     "triton>=3.3.1",
-    # Convert-script closure (llama.cpp requirements-convert_legacy_llama.txt at the inference pin).
+    # The highest transformers unsloth 2026.8.22 permits. llama.cpp's
+    # requirements-convert_legacy_llama.txt names transformers==4.57.6 at the pinned commit;
+    # the convert scripts run on 5.5.0 in this venv, which is not separately verified.
     "transformers==5.5.0",
     "numpy>=1.17",
     "sentencepiece>=0.1.98,<0.3.0",

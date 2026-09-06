@@ -99,8 +99,8 @@ Installed runtime metadata and effective execution disagree in both directions: 
 
 - `.github/workflows/release.yml` is the tag-triggered win-x64/linux-x64 Velopack path. It reuses `build-and-test.yml` as `validate`; packaging depends on validation.
 - Actions enablement is external state. Check `gh workflow list --all` / `gh run list`; never quote a dated observation as current.
-- `build-and-test.yml` targets `develop` and runs `python-quality`, `release-contracts`, `build-and-test`, and `client-react`. E2E is manual or label-triggered, not a blocking merge gate.
-- Backend projects run concurrently with separate `--results-directory` values. `XE-Local-AI-Engine.Tests` uses `scripts/run-tests-memory-safe.sh` with grouped namespace filters; other projects use `--maximum-parallel-tests 2`.
+- `build-and-test.yml` targets `develop` and runs `python-quality`, `release-contracts`, `backend-tests`, `build-and-test`, and `client-react`. E2E is manual or label-triggered, not a blocking merge gate.
+- `backend-tests` is a matrix: one `siblings` leg for every enrolled project except `XE-Local-AI-Engine.Tests`, and four `tests-<i>` legs that each run one `TEST_SHARD` of it through `scripts/run-tests-memory-safe.sh` with grouped namespace filters. Projects within a leg run concurrently with separate `--results-directory` values; the siblings use `--maximum-parallel-tests 2` (the last measured-safe width, not a limit of the dedicated runner).
 - Coverage is merged by `(filename,line)` and checked against `scripts/backend-coverage-baseline.txt`. Keep discovery depth-bounded because `--report-trx` creates byte-identical attachment copies.
 - `python-quality` uses the root tooling manifest, not the shipped training runtime. Never add dev tools to `tools/training/pyproject.toml`.
 - `release-contracts` installs shellcheck **0.11.0** pinned and sha256-verified because `ubuntu-latest` ships 0.9.0, whose SC2317/SC2015 false positives fail the `--severity=style` pass; `scripts/lint-release-scripts.sh` refuses anything below 0.10.0 (exit 2). Do not "fix" the pin by lowering the severity.
@@ -112,6 +112,25 @@ Installed runtime metadata and effective execution disagree in both directions: 
 Coverage instrumentation rewrites assemblies **in place**. Concurrent covered processes must use separate cloned output trees; without coverage, processes may share the built tree. `scripts/run-tests-memory-safe.sh` keeps coverage slots inside the repository because hosting tests locate the Client source by walking upward from the test binary. An empty dynamic-instrumentation report can claim `line-rate="1"`; `merge-cobertura.py` therefore treats zero source lines as an error. Keep the report-count checks as well as the percentage baseline, and raise the baseline only when coverage improves.
 
 The architecture tests are ordinary tests inside `XE-Local-AI-Engine.Tests`; a full module run is what executes them. The deprecated manual packager is reference-only and is not the release authority.
+
+### Keep a job literally named `build-and-test`, however the backend gate is split
+
+**Rule:** `.github/workflows/build-and-test.yml` may spread the backend tests across as many matrix legs as it
+likes, but exactly one non-matrix job must keep the id `build-and-test`, and that job is where the cross-checks and
+the coverage merge live. **Failure prevented:** `develop`'s branch protection requires the literal status context
+`build-and-test`; a matrix job reports as `backend-tests (siblings)` and friends, so renaming the job leaves every
+PR waiting forever on a required check that no leg can ever satisfy. **Authority:** the `build-and-test` job in that
+workflow — `needs: backend-tests`, `if: always()`, and a first step that fails unless the aggregate leg result is
+`success`, because a *skipped* required check never resolves either.
+
+**Rule:** `TEST_SHARD=i/N` in `scripts/run-tests-memory-safe.sh` is only accepted together with `TEST_GROUPS`, and
+the shards must be proven to partition the module rather than assumed to. **Failure prevented:** the per-namespace
+shape has no group index to slice, so silently ignoring the knob there would ship a "shard" that ran the whole
+module on every leg; and a stride that overlaps or leaves a gap cannot be caught downstream, because
+`scripts/merge-cobertura.py` unions by `(filename, line)` and merges a duplicated or a missing group to an equally
+plausible percentage. **Authority:** the
+`TEST_SHARD` parse in `scripts/run-tests-memory-safe.sh` (it rejects the combination before the Release build), and
+the `build-and-test` job's check that the group indices across the legs' `units.txt` files, sorted, equal `0`…`GROUPS-1` exactly. A duplicate-only check is not enough: it passes a run that skipped groups.
 
 ### Add a hub, a route family, a React feature or a project — and name it in the wiki, or `python-quality` goes red
 
@@ -1389,7 +1408,7 @@ These are intentionally terse. Follow the linked/current section for the active 
 | Bash variable `GROUPS` is available. | Bash owns it; use `TEST_GROUPS` (§1). |
 | CI runs test projects sequentially. | Projects run concurrently with separate result directories; the main Tests module uses grouped batch runner (§1). |
 | Memory-safe runner defaults to `JOBS=4`; increase in-process width. | Default is `JOBS=10`; process batches, not width, provide the useful concurrency (§1). |
-| Coverage should use one process per namespace. | Coverage instrumentation makes that prohibitively expensive; use `TEST_GROUPS=$(nproc)` groups (§1). |
+| Coverage should use one process per namespace. | Coverage instrumentation makes that prohibitively expensive; group instead. A local run uses `TEST_GROUPS=$(nproc)`; CI uses `TEST_GROUPS=16` split across 4 `TEST_SHARD` legs (§1). |
 | Development Mode must be unrestricted because restore needs network. | A short warm sandbox restores, then the agent-facing sandbox requests deny-egress where supported (§2). |
 | WSL has no GPU (or a specific older card). | Hardware changes between verifications; always query live (§2). |
 | llama.cpp native MCP should replace the app client. | Its MCP proxy is for llama-server's browser UI; keep the .NET MCP integration and approval boundary (§3). |
