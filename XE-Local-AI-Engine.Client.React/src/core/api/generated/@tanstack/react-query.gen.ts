@@ -87,6 +87,7 @@ import {
 	createWorkSession,
 	createWorkspace,
 	decideDevWorkflowNodeRun,
+	decideGraphWorkflowNodeRun,
 	decideTrainingArtifactQuality,
 	deleteAgentDefinition,
 	deleteBaseArtifact,
@@ -278,6 +279,7 @@ import {
 	listGraphWorkflowDefinitions,
 	listGraphWorkflowRunEvents,
 	listGraphWorkflowRuns,
+	listGraphWorkflowTools,
 	listImageJobs,
 	listImageModelDownloads,
 	listImageModels,
@@ -617,6 +619,9 @@ import type {
 	DecideDevWorkflowNodeRunData,
 	DecideDevWorkflowNodeRunError,
 	DecideDevWorkflowNodeRunResponse,
+	DecideGraphWorkflowNodeRunData,
+	DecideGraphWorkflowNodeRunError,
+	DecideGraphWorkflowNodeRunResponse,
 	DecideTrainingArtifactQualityData,
 	DecideTrainingArtifactQualityError,
 	DecideTrainingArtifactQualityResponse,
@@ -1057,6 +1062,8 @@ import type {
 	ListGraphWorkflowRunsData,
 	ListGraphWorkflowRunsError,
 	ListGraphWorkflowRunsResponse,
+	ListGraphWorkflowToolsData,
+	ListGraphWorkflowToolsResponse,
 	ListImageJobsData,
 	ListImageJobsResponse,
 	ListImageModelDownloadsData,
@@ -6861,6 +6868,30 @@ export const createGraphWorkflowDefinitionMutation = (
 	return mutationOptions;
 };
 
+export const decideGraphWorkflowNodeRunMutation = (
+	options?: Partial<Options<DecideGraphWorkflowNodeRunData>>,
+): UseMutationOptions<
+	DecideGraphWorkflowNodeRunResponse,
+	AxiosError<DecideGraphWorkflowNodeRunError>,
+	Options<DecideGraphWorkflowNodeRunData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		DecideGraphWorkflowNodeRunResponse,
+		AxiosError<DecideGraphWorkflowNodeRunError>,
+		Options<DecideGraphWorkflowNodeRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await decideGraphWorkflowNodeRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const deleteGraphWorkflowDefinitionMutation = (
 	options?: Partial<Options<DeleteGraphWorkflowDefinitionData>>,
 ): UseMutationOptions<
@@ -7017,6 +7048,28 @@ export const listGraphWorkflowRunsOptions = (options: Options<ListGraphWorkflowR
 			return data;
 		},
 		queryKey: listGraphWorkflowRunsQueryKey(options),
+	});
+
+export const listGraphWorkflowToolsQueryKey = (options?: Options<ListGraphWorkflowToolsData>) =>
+	createQueryKey("listGraphWorkflowTools", options);
+
+export const listGraphWorkflowToolsOptions = (options?: Options<ListGraphWorkflowToolsData>) =>
+	queryOptions<
+		ListGraphWorkflowToolsResponse,
+		AxiosError<DefaultError>,
+		ListGraphWorkflowToolsResponse,
+		ReturnType<typeof listGraphWorkflowToolsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listGraphWorkflowTools({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listGraphWorkflowToolsQueryKey(options),
 	});
 
 export const startGraphWorkflowRunMutation = (

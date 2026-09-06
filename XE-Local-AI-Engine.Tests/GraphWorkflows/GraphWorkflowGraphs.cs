@@ -493,4 +493,191 @@ internal static class GraphWorkflowGraphs
                                         ]
                                       }
                                       """;
+
+    /// <summary>
+    ///     Two pauses in a row, each offering only <c>Approve</c> over an unconditional edge. The shape the run-wide
+    ///     operation-id scope needs: an id that answered the first pause must not be able to answer the second.
+    /// </summary>
+    public const string PauseTwoPausesInSequence = """
+                                                   {
+                                                     "schemaVersion": 1,
+                                                     "nodes": [
+                                                       { "key": "start", "kind": "Start" },
+                                                       { "key": "first", "kind": "Pause",
+                                                         "config": { "prompt": "First gate?", "allowedDecisions": ["Approve"], "requireComment": false } },
+                                                       { "key": "second", "kind": "Pause",
+                                                         "config": { "prompt": "Second gate?", "allowedDecisions": ["Approve"], "requireComment": false } },
+                                                       { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                     ],
+                                                     "edges": [
+                                                       { "key": "e1", "from": "start", "to": "first" },
+                                                       { "key": "e2", "from": "first", "to": "second" },
+                                                       { "key": "e3", "from": "second", "to": "done" }
+                                                     ]
+                                                   }
+                                                   """;
+
+    /// <summary>A pause that will not take an answer without a comment, over an unconditional out-edge.</summary>
+    public const string PauseRequiringComment = """
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [
+                                                    { "key": "start", "kind": "Start" },
+                                                    { "key": "review", "kind": "Pause",
+                                                      "config": { "prompt": "Why?", "allowedDecisions": ["Approve"], "requireComment": true } },
+                                                    { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                  ],
+                                                  "edges": [
+                                                    { "key": "e1", "from": "start", "to": "review" },
+                                                    { "key": "e2", "from": "review", "to": "done" }
+                                                  ]
+                                                }
+                                                """;
+
+    /// <summary>
+    ///     A rejection with somewhere to go and nowhere to arrive: the reject edge fires into a pass-through whose own
+    ///     out-edge only accepts an approval, so the run reaches no End. The definition-time pre-flight is satisfied —
+    ///     every answer HAS an edge — which is exactly why the runtime still has to record the stranding honestly.
+    /// </summary>
+    public const string PauseStrandedRejection = """
+                                                 {
+                                                   "schemaVersion": 1,
+                                                   "nodes": [
+                                                     { "key": "start", "kind": "Start" },
+                                                     { "key": "review", "kind": "Pause",
+                                                       "config": { "prompt": "Ship it?", "allowedDecisions": ["Approve", "Reject"], "requireComment": false } },
+                                                     { "key": "deadend", "kind": "Parallel", "config": {} },
+                                                     { "key": "shipped", "kind": "End", "config": { "outcome": "completed" } },
+                                                     { "key": "stranded", "kind": "End", "config": { "outcome": "completed" } }
+                                                   ],
+                                                   "edges": [
+                                                     { "key": "e1", "from": "start", "to": "review" },
+                                                     { "key": "e2", "from": "review", "to": "shipped",
+                                                       "condition": { "path": "output.decision", "op": "eq", "value": "Approve" } },
+                                                     { "key": "e3", "from": "review", "to": "deadend",
+                                                       "condition": { "path": "output.decision", "op": "eq", "value": "Reject" } },
+                                                     { "key": "e4", "from": "deadend", "to": "stranded",
+                                                       "condition": { "path": "output.decision", "op": "eq", "value": "Approve" } }
+                                                   ]
+                                                 }
+                                                 """;
+
+    /// <summary>
+    ///     Structurally sound and refused by the D6 tool gate alone: <c>run_python</c> parses as a tool name like any
+    ///     other, and only the catalog knows it is WriteExecute. One offending node, so the error keying is readable.
+    /// </summary>
+    public const string ToolValidationWriteExecuteTool = """
+                                                         {
+                                                           "schemaVersion": 1,
+                                                           "nodes": [
+                                                             { "key": "start", "kind": "Start" },
+                                                             { "key": "runner", "kind": "Tool", "config": { "toolName": "run_python" } },
+                                                             { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                           ],
+                                                           "edges": [
+                                                             { "key": "e1", "from": "start", "to": "runner" },
+                                                             { "key": "e2", "from": "runner", "to": "done" }
+                                                           ]
+                                                         }
+                                                         """;
+
+    /// <summary>
+    ///     Two Tool nodes outside the envelope for two different reasons — a write tool and an approval-gated one — so
+    ///     the gate has to report BOTH keys rather than stopping at the first.
+    /// </summary>
+    public const string ToolValidationTwoRefusedTools = """
+                                                        {
+                                                          "schemaVersion": 1,
+                                                          "nodes": [
+                                                            { "key": "start", "kind": "Start" },
+                                                            { "key": "runner", "kind": "Tool", "config": { "toolName": "run_python" } },
+                                                            { "key": "asker", "kind": "Tool", "config": { "toolName": "ask_user" } },
+                                                            { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                          ],
+                                                          "edges": [
+                                                            { "key": "e1", "from": "start", "to": "runner" },
+                                                            { "key": "e2", "from": "runner", "to": "asker" },
+                                                            { "key": "e3", "from": "asker", "to": "done" }
+                                                          ]
+                                                        }
+                                                        """;
+
+    /// <summary>
+    ///     A <c>Tool</c> node whose answer a <c>Condition</c> routes on. It is the shape that makes the tool lane's
+    ///     result embedding matter: a <c>Condition</c> passes its predecessor's output through verbatim, so an edge
+    ///     leaving it can only read <c>output.result.ok</c> if the tool's JSON answer survived as JSON.
+    /// </summary>
+    public const string ToolThenCondition = """
+                                            {
+                                              "schemaVersion": 1,
+                                              "nodes": [
+                                                { "key": "start", "kind": "Start" },
+                                                { "key": "call", "kind": "Tool", "config": { "toolName": "probe_json" } },
+                                                { "key": "check", "kind": "Condition", "config": { "path": "output.result.ok" } },
+                                                { "key": "okend", "kind": "End", "config": { "outcome": "completed" } },
+                                                { "key": "badend", "kind": "End", "config": { "outcome": "rejected" } }
+                                              ],
+                                              "edges": [
+                                                { "key": "e1", "from": "start", "to": "call" },
+                                                { "key": "e2", "from": "call", "to": "check" },
+                                                { "key": "e3", "from": "check", "to": "okend", "label": "ok", "condition": { "op": "eq", "value": true } },
+                                                { "key": "e4", "from": "check", "to": "badend", "label": "not-ok", "condition": { "op": "ne", "value": true } }
+                                              ]
+                                            }
+                                            """;
+
+    /// <summary>
+    ///     Three <c>Tool</c> nodes fanned out in parallel. Unlike the agent fan-out there is no node-wide slot behind
+    ///     them, so what bounds this one is the tool lane itself — which is the whole reason the lane exists.
+    /// </summary>
+    public const string ToolFanOut = """
+                                     {
+                                       "schemaVersion": 1,
+                                       "nodes": [
+                                         { "key": "start", "kind": "Start" },
+                                         { "key": "fanout", "kind": "Parallel", "config": {} },
+                                         { "key": "left", "kind": "Tool", "config": { "toolName": "probe_fanout" } },
+                                         { "key": "middle", "kind": "Tool", "config": { "toolName": "probe_fanout" } },
+                                         { "key": "right", "kind": "Tool", "config": { "toolName": "probe_fanout" } },
+                                         { "key": "merge", "kind": "Join", "config": {} },
+                                         { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                       ],
+                                       "edges": [
+                                         { "key": "e1", "from": "start", "to": "fanout" },
+                                         { "key": "e2", "from": "fanout", "to": "left" },
+                                         { "key": "e3", "from": "fanout", "to": "middle" },
+                                         { "key": "e4", "from": "fanout", "to": "right" },
+                                         { "key": "e5", "from": "left", "to": "merge" },
+                                         { "key": "e6", "from": "middle", "to": "merge" },
+                                         { "key": "e7", "from": "right", "to": "merge" },
+                                         { "key": "e8", "from": "merge", "to": "done" }
+                                       ]
+                                     }
+                                     """;
+
+    /// <summary>
+    ///     The slice's whole shape in one graph: a <c>Pause</c> a person answers, and on the approving branch alone a
+    ///     <c>Tool</c> node that really invokes a built-in. Both of the pause's allowed decisions route somewhere, which
+    ///     is what the definition-time pre-flight requires, and the two branches reconverge on an <c>Any</c> End.
+    /// </summary>
+    public const string PauseThenToolEndToEnd = """
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [
+                                                    { "key": "start", "kind": "Start" },
+                                                    { "key": "review", "kind": "Pause",
+                                                      "config": { "prompt": "Look up the time?", "allowedDecisions": ["Approve", "Reject"], "requireComment": false } },
+                                                    { "key": "lookup", "kind": "Tool", "config": { "toolName": "GetCurrentTime", "arguments": {} } },
+                                                    { "key": "done", "kind": "End", "joinPolicy": "Any", "config": { "outcome": "completed" } }
+                                                  ],
+                                                  "edges": [
+                                                    { "key": "e1", "from": "start", "to": "review" },
+                                                    { "key": "e2", "from": "review", "to": "lookup", "label": "approved",
+                                                      "condition": { "path": "output.decision", "op": "eq", "value": "Approve" } },
+                                                    { "key": "e3", "from": "review", "to": "done", "label": "rejected",
+                                                      "condition": { "path": "output.decision", "op": "eq", "value": "Reject" } },
+                                                    { "key": "e4", "from": "lookup", "to": "done" }
+                                                  ]
+                                                }
+                                                """;
 }

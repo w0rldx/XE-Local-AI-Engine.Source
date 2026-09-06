@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
@@ -87,6 +88,25 @@ public sealed class ConflictExceptionHandlerTests
         AssertEx.Equal(expected: 409, body.Status);
         AssertEx.Equal(exception.Message, body.Detail);
         AssertEx.NotEmpty(body.TraceId);
+    }
+
+    /// <summary>
+    ///     The pause conflict's own arm, and the member that makes it worth having a member: <c>standingDecision</c>
+    ///     tells the second person to click WHAT was decided rather than only that their click failed.
+    /// </summary>
+    [Test]
+    public async Task TryHandleAsync_ForAGraphWorkflowGateAlreadyDecided_WritesTheStandingDecision()
+    {
+        var exception = new GraphWorkflowGateAlreadyDecidedException("Node run 'review' is Succeeded, so there is nothing to decide on it. It was answered Reject.",
+            GraphWorkflowDecisionKind.Reject);
+
+        var body = await HandleAsync(exception).ConfigureAwait(false);
+
+        AssertEx.Equal("GraphWorkflowGateAlreadyDecided", body.ConflictType);
+        AssertEx.Equal(expected: 409, body.Status);
+        AssertEx.Equal(exception.Message, body.Detail);
+        AssertEx.Equal("Reject", body.StandingDecision);
+        AssertEx.Null(body.MaxConcurrentRuns, "a gate conflict carries no cap numbers.");
     }
 
     /// <summary>
@@ -180,5 +200,6 @@ public sealed class ConflictExceptionHandlerTests
         string TraceId,
         int? MaxConcurrentRuns,
         int? DistinctModelCount,
-        int? MaxLoadedProcesses);
+        int? MaxLoadedProcesses,
+        string? StandingDecision);
 }

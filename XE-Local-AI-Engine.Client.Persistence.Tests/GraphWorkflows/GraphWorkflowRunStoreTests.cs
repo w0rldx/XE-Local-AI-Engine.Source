@@ -432,6 +432,195 @@ public sealed class GraphWorkflowRunStoreTests
             "terminalizing the run writes its own event, so a reader following the log sees where it ended.");
     }
 
+    /// <summary>
+    ///     One decision, one commit: the status move, the decision columns, the composed output and the
+    ///     <c>gate.decided</c> event — with the subject through the encrypt/decrypt pair like every other text column.
+    /// </summary>
+    [Test]
+    public async Task DecideNodeRun_CommitsTheAnswerItsColumnsAndItsEventTogether()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = GraphWorkflowTestFixture.StoreFor(context);
+        var run = await StartAsync(store).ConfigureAwait(false);
+        await ParkAsync(store, run.Id, "start").ConfigureAwait(false);
+        var waiting = await store.GetNodeRunAsync(run.Id, "start").ConfigureAwait(false);
+        var operationId = Guid.NewGuid();
+
+        var result = await store.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand(run.Id,
+                                    waiting.Id,
+                                    GraphWorkflowVersions.Any,
+                                    operationId,
+                                    GraphWorkflowDecisionKind.Approve,
+                                    "operator@localhost",
+                                    """{"status":"succeeded","output":{"decision":"Approve"}}"""))
+                                .ConfigureAwait(false);
+
+        AssertEx.NotNull(result, "the row was waiting and undecided, so the conditional write applied.");
+        var decided = await store.GetNodeRunAsync(run.Id, "start").ConfigureAwait(false);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, decided.Status, "both answers succeed the pause; routing is the edges' job.");
+        AssertEx.Equal<GraphWorkflowDecisionKind?>(expected: null, decided.PendingDecisionKind, "it is no longer waiting for anything.");
+        AssertEx.Equal<Guid?>(operationId, decided.DecisionOperationId);
+        AssertEx.Equal("operator@localhost", decided.DecidedBySubject);
+        AssertEx.Equal("""{"status":"succeeded","output":{"decision":"Approve"}}""", decided.OutputJson);
+        AssertEx.True(decided.CompletedAtUtc is not null);
+
+        var events = await store.ListEventsAsync(run.Id).ConfigureAwait(false);
+        AssertEx.Equal("run.created, run.started, node.started, gate.requested, gate.decided", string.Join(", ", events.Select(static entry => entry.EventType)));
+        AssertEx.Equal("""{"nodeKey":"start","decision":"Approve"}""", events[^1].DetailJson, "the detail names which pause was answered and how.");
+    }
+
+    /// <summary>
+    ///     The compare-and-set. A row that is no longer waiting, or already carries a decision, is simply not matched —
+    ///     and losing that race is an ordinary outcome the caller re-reads its way out of, not an exception.
+    /// </summary>
+    [Test]
+    [Arguments(GraphWorkflowNodeRunStatus.Running)]
+    [Arguments(GraphWorkflowNodeRunStatus.WaitingForApproval)]
+    public async Task DecideNodeRun_OnARowThatIsNotOpenToOne_WritesNothingAndAnswersNull(GraphWorkflowNodeRunStatus staged)
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = GraphWorkflowTestFixture.StoreFor(context);
+        var run = await StartAsync(store).ConfigureAwait(false);
+        await StartRunningAsync(store, run.Id).ConfigureAwait(false);
+        await MoveAsync(store, run.Id, "start", GraphWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        if (staged == GraphWorkflowNodeRunStatus.WaitingForApproval)
+        {
+            // Answered, so Succeeded AND carrying a decision: both halves of the predicate refuse this one.
+            await MoveAsync(store, run.Id, "start", GraphWorkflowNodeRunStatus.WaitingForApproval).ConfigureAwait(false);
+            _ = await DecideAsync(store, run.Id, Guid.NewGuid()).ConfigureAwait(false);
+        }
+
+        var before = await store.GetNodeRunAsync(run.Id, "start").ConfigureAwait(false);
+        var eventsBefore = (await store.ListEventsAsync(run.Id).ConfigureAwait(false)).Count;
+
+        var result = await DecideAsync(store, run.Id, Guid.NewGuid()).ConfigureAwait(false);
+
+        AssertEx.Null(result, "the conditional write matched no row, and says so rather than raising.");
+        var after = await store.GetNodeRunAsync(run.Id, "start").ConfigureAwait(false);
+        AssertEx.Equal(before.Status, after.Status);
+        AssertEx.Equal<Guid?>(before.DecisionOperationId, after.DecisionOperationId);
+        AssertEx.Equal(eventsBefore, (await store.ListEventsAsync(run.Id).ConfigureAwait(false)).Count, "a declined mutation appends nothing.");
+    }
+
+    /// <summary>
+    ///     The run row is re-read INSIDE the write's transaction, so a cancel that committed after the caller's own
+    ///     check still refuses the decision. Without it the answer lands on a run that has no tick left to route it,
+    ///     and the drain overwrites the decided row to Cancelled while keeping its decision columns.
+    /// </summary>
+    [Test]
+    [Arguments(GraphWorkflowRunStatus.Cancelling)]
+    [Arguments(GraphWorkflowRunStatus.Cancelled)]
+    public async Task DecideNodeRun_OnceTheRunStoppedBeingLive_WritesNothingAndAnswersNull(GraphWorkflowRunStatus stopped)
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = GraphWorkflowTestFixture.StoreFor(context);
+        var run = await StartAsync(store).ConfigureAwait(false);
+        await ParkAsync(store, run.Id, "start").ConfigureAwait(false);
+        _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(run.Id, GraphWorkflowVersions.Any, GraphWorkflowRunStatus.Cancelling))
+                       .ConfigureAwait(false);
+        if (stopped == GraphWorkflowRunStatus.Cancelled)
+        {
+            _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(run.Id, GraphWorkflowVersions.Any, GraphWorkflowRunStatus.Cancelled))
+                           .ConfigureAwait(false);
+        }
+
+        var eventsBefore = (await store.ListEventsAsync(run.Id).ConfigureAwait(false)).Count;
+
+        AssertEx.Null(await DecideAsync(store, run.Id, Guid.NewGuid()).ConfigureAwait(false), "a run that stopped being live declines the answer.");
+
+        var untouched = await store.GetNodeRunAsync(run.Id, "start").ConfigureAwait(false);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.WaitingForApproval, untouched.Status);
+        AssertEx.Null(untouched.DecisionOperationId, "and the decision columns stay empty, so no audit claims it was answered.");
+        AssertEx.Equal(eventsBefore, (await store.ListEventsAsync(run.Id).ConfigureAwait(false)).Count);
+    }
+
+    /// <summary>
+    ///     The run-wide lookup the decide surface resolves idempotency with, and the scope the filtered unique index
+    ///     enforces: keyed by the run and the operation, never by the node run.
+    /// </summary>
+    [Test]
+    public async Task FindNodeRunByDecisionOperation_AnswersTheRowThatOperationDecidedAndNothingForAnother()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = GraphWorkflowTestFixture.StoreFor(context);
+        var run = await StartAsync(store).ConfigureAwait(false);
+        await ParkAsync(store, run.Id, "start").ConfigureAwait(false);
+        var operationId = Guid.NewGuid();
+        _ = await DecideAsync(store, run.Id, operationId).ConfigureAwait(false);
+
+        var found = AssertEx.NotNull(await store.FindNodeRunByDecisionOperationAsync(run.Id, operationId).ConfigureAwait(false));
+
+        AssertEx.Equal("start", found.NodeKey);
+        AssertEx.Null(await store.FindNodeRunByDecisionOperationAsync(run.Id, Guid.NewGuid()).ConfigureAwait(false), "an id nobody used names no row.");
+        AssertEx.Null(await store.FindNodeRunByDecisionOperationAsync(Guid.NewGuid(), operationId).ConfigureAwait(false),
+            "and the lookup is scoped to its run, never global.");
+    }
+
+    /// <summary>
+    ///     One operation id, one decision per run — the filtered unique index. Reached only by two decides racing past
+    ///     the run-wide lookup, and it reaches the caller as the same "re-read the run" story every other lost write does.
+    /// </summary>
+    [Test]
+    public async Task DecideNodeRun_WithAnOperationIdAnotherNodeRunOfTheRunHolds_IsRefused()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = GraphWorkflowTestFixture.StoreFor(context);
+        var run = await StartAsync(store).ConfigureAwait(false);
+        var operationId = Guid.NewGuid();
+        foreach (var nodeKey in new[] { "start", "done" })
+        {
+            await ParkAsync(store, run.Id, nodeKey).ConfigureAwait(false);
+        }
+
+        _ = await DecideAsync(store, run.Id, operationId).ConfigureAwait(false);
+
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() => DecideAsync(store, run.Id, operationId, "done")).ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.WaitingForApproval,
+            (await store.GetNodeRunAsync(run.Id, "done").ConfigureAwait(false)).Status,
+            "the refused write left the second row exactly as it found it.");
+    }
+
+    private static async Task<GraphWorkflowMutationResult?> DecideAsync(GraphWorkflowStore store, Guid runId, Guid operationId, string nodeKey = "start")
+    {
+        var nodeRun = await store.GetNodeRunAsync(runId, nodeKey).ConfigureAwait(false);
+        return await store.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand(runId,
+                              nodeRun.Id,
+                              GraphWorkflowVersions.Any,
+                              operationId,
+                              GraphWorkflowDecisionKind.Approve,
+                              "operator@localhost",
+                              """{"status":"succeeded","output":{"decision":"Approve"}}"""))
+                          .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     A node run parked on a person, under a run that has actually STARTED. Both halves matter: the decide write
+    ///     re-reads the run row and refuses one that is not live, and a Pending run never carries a waiting node run in
+    ///     the first place — only a dispatcher tick produces one, and that tick moves the run to Running.
+    /// </summary>
+    private static async Task ParkAsync(GraphWorkflowStore store, Guid runId, string nodeKey)
+    {
+        await StartRunningAsync(store, runId).ConfigureAwait(false);
+        await MoveAsync(store, runId, nodeKey, GraphWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        await MoveAsync(store, runId, nodeKey, GraphWorkflowNodeRunStatus.WaitingForApproval).ConfigureAwait(false);
+    }
+
+    /// <summary>Idempotent: a run already Running has nothing to move, and the state machine has no self-edge.</summary>
+    private static async Task StartRunningAsync(GraphWorkflowStore store, Guid runId)
+    {
+        if ((await store.GetRunAsync(runId).ConfigureAwait(false)).Status == GraphWorkflowRunStatus.Pending)
+        {
+            _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(runId, GraphWorkflowVersions.Any, GraphWorkflowRunStatus.Running))
+                           .ConfigureAwait(false);
+        }
+    }
+
     private static async Task MoveAsync(GraphWorkflowStore store, Guid runId, string nodeKey, GraphWorkflowNodeRunStatus target)
     {
         var nodeRun = await store.GetNodeRunAsync(runId, nodeKey).ConfigureAwait(false);

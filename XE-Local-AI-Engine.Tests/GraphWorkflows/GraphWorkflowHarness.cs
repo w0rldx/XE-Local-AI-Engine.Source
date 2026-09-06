@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -8,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -25,6 +27,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 internal sealed class GraphWorkflowHarness : IAsyncDisposable
 {
+    /// <summary>How long <see cref="AdvanceUntilAsync" /> stands aside between ticks. See the comment at its use.</summary>
+    private static readonly TimeSpan PollPause = TimeSpan.FromMilliseconds(5);
+
     private readonly TestServerWebAppFactory _factory;
 
     /// <summary>Whether this harness built the host and so has to tear it down; false for the class's shared one.</summary>
@@ -50,9 +55,32 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
     public GraphWorkflowHarness(GraphWorkflowAgentHostFixture host) =>
         _factory = (host ?? throw new ArgumentNullException(nameof(host))).Factory;
 
+    /// <summary>The tool-lane host, whose invocation service is scripted per tool name.</summary>
+    public GraphWorkflowHarness(GraphWorkflowToolHostFixture host) =>
+        _factory = (host ?? throw new ArgumentNullException(nameof(host))).Factory;
+
     /// <summary>An agent host of this test's own, for host-level state a concurrent sibling must not see.</summary>
     public static GraphWorkflowHarness PrivateAgentHost(params (string Key, string Value)[] configuration) =>
         new(GraphWorkflowAgentHostFixture.NewFactory(configuration), ownsFactory: true);
+
+    /// <summary>
+    ///     A tool host of this test's own. Take one for host-level state a concurrent sibling must not see — a config
+    ///     value, or a PARKED call, which holds a lane slot that on a shared host is every sibling's too.
+    /// </summary>
+    public static GraphWorkflowHarness PrivateToolHost(params (string Key, string Value)[] configuration) =>
+        new(GraphWorkflowToolHostFixture.NewFactory(configuration), ownsFactory: true);
+
+    /// <summary>
+    ///     A plain graph-workflow host of this test's own with one more registration pass — the seam a test needs to
+    ///     stand up a container this module does not ship, such as one that registers no <c>Tool</c> lane.
+    /// </summary>
+    [SuppressMessage("Reliability",
+        "CA2000:Dispose objects before losing scope",
+        Justification = "Ownership transfers to the harness, which disposes a factory it built in its own DisposeAsync — the "
+                        + "ownsFactory flag this passes is exactly that contract, and disposing here would tear the host down "
+                        + "before the caller's first assertion.")]
+    public static GraphWorkflowHarness PrivateHost(Action<IServiceCollection> configureServices, params (string Key, string Value)[] configuration) =>
+        new(GraphWorkflowHostFixture.NewFactory(configureServices, configuration), ownsFactory: true);
 
     private GraphWorkflowHarness(TestServerWebAppFactory factory, bool ownsFactory)
     {
@@ -64,6 +92,9 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
 
     /// <summary>The faked invocation runner, on a host built by <see cref="GraphWorkflowAgentHostFixture" />.</summary>
     public FakeGraphWorkflowInvocation Invocations => (FakeGraphWorkflowInvocation)Services.GetRequiredService<IInvocationRunner>();
+
+    /// <summary>The scripted tool service, on a host built by <see cref="GraphWorkflowToolHostFixture" />.</summary>
+    public FakeGraphWorkflowToolInvocation Tools => (FakeGraphWorkflowToolInvocation)Services.GetRequiredService<IToolInvocationService>();
 
     /// <summary>The container's dispatcher, so its wiring is under test too — or the replacement a restart installed.</summary>
     public GraphWorkflowDispatcher Dispatcher => _replacement ?? Services.GetRequiredService<GraphWorkflowDispatcher>();
@@ -119,6 +150,13 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
                 fake.ReleaseAll();
             }
 
+            // The same for a parked TOOL call, and for the same reason: the tool lane's disposal waits for every entry
+            // it is still driving, and a test that failed its assertion before releasing must not hang the teardown.
+            if (_factory.Services.GetService<IToolInvocationService>() is FakeGraphWorkflowToolInvocation tools)
+            {
+                tools.ReleaseAll();
+            }
+
             await _factory.DisposeAsync().ConfigureAwait(false);
         }
     }
@@ -163,6 +201,38 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
         }
 
         throw new AssertionException($"Run {runId} was still writing transitions after {maxTicks} ticks.");
+    }
+
+    /// <summary>
+    ///     Ticks until <paramref name="done" /> answers yes, bounded by tick count rather than by a clock.
+    ///     <para>
+    ///         The counterpart to <see cref="AdvanceUntilQuiescentAsync" />, and needed wherever a LANE is involved: a
+    ///         tick that finds work still in flight writes nothing, which "advance until nothing is written" reads as a
+    ///         run that has finished. Every tick is a real round trip through the store, which is what gives a detached
+    ///         call or turn its chance to land.
+    ///     </para>
+    /// </summary>
+    public async Task AdvanceUntilAsync(Guid runId, Func<Task<bool>> done, string message, int maxTicks = 60)
+    {
+        ArgumentNullException.ThrowIfNull(done);
+
+        for (var tick = 0; tick < maxTicks; tick++)
+        {
+            if (await done().ConfigureAwait(false))
+            {
+                return;
+            }
+
+            _ = await AdvanceAsync(runId).ConfigureAwait(false);
+
+            // real-timer: NOT a wait for the event — the loop polls a real condition and is bounded by tick count.
+            // This hands the thread pool back between ticks, because what these ticks are waiting for is a lane's
+            // detached work, and a loop that spins through sixty database round trips without yielding starves the
+            // very continuation it is asking about.
+            await Task.Delay(PollPause).ConfigureAwait(false);
+        }
+
+        throw new AssertionException($"{message} (after {maxTicks} ticks of run {runId})");
     }
 
     public async Task<Guid> SeedDefinitionAsync(string graphJson)
@@ -213,6 +283,21 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
     {
         await using var scope = Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>().CancelAsync(runId).ConfigureAwait(false);
+    }
+
+    /// <summary>Answers a pause through the real command surface, which is where every rule about a decision lives.</summary>
+    public async Task<GraphWorkflowDecisionResult> DecideAsync(Guid runId,
+        string nodeKey,
+        Guid operationId,
+        GraphWorkflowDecisionKind decision,
+        string? comment = null,
+        string? payloadJson = null,
+        string? decidedBySubject = "operator")
+    {
+        await using var scope = Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>()
+                          .DecideAsync(runId, nodeKey, operationId, decision, comment, payloadJson, decidedBySubject)
+                          .ConfigureAwait(false);
     }
 
     public async Task<GraphWorkflowRunSnapshot> ReadRunAsync(Guid runId)

@@ -445,6 +445,12 @@ internal sealed class DriftingGraphWorkflowStore : IGraphWorkflowStore
     public Task<GraphWorkflowMutationResult> AppendEventAsync(AppendGraphWorkflowEventCommand command, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
+    public Task<GraphWorkflowMutationResult?> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public Task<GraphWorkflowNodeRunSnapshot?> FindNodeRunByDecisionOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
     public Task<IReadOnlyList<GraphWorkflowRunEventSnapshot>> ListEventsAsync(Guid runId, long afterSeq = 0, int limit = 200, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 }

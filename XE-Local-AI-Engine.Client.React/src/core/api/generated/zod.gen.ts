@@ -4041,6 +4041,19 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1CreateGraphWorkflowD
 	graph: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph,
 });
 
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDecisionResultResponse = z.object({
+	decision: z.string().optional(),
+	runStatus: z.string().optional(),
+	nodeRunStatus: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1DecideGraphWorkflowNodeRunRequest = z.object({
+	operationId: z.guid().min(1),
+	decision: z.string().optional(),
+	comment: z.string().nullish(),
+	payload: z.unknown().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunResponse = z.object({
@@ -4117,6 +4130,16 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRun
 });
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolResponse = z.object({
+	name: z.string().optional(),
+	description: z.string().optional(),
+	parameterSchema: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowToolsResponse = z.object({
+	tools: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolResponse).optional(),
+});
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunResponse = z.object({
 	runId: z.guid().optional(),
@@ -9336,6 +9359,19 @@ export const zCreateGraphWorkflowDefinitionBody =
 export const zCreateGraphWorkflowDefinitionResponse =
 	zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse;
 
+export const zDecideGraphWorkflowNodeRunBody = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1DecideGraphWorkflowNodeRunRequest;
+
+export const zDecideGraphWorkflowNodeRunPath = z.object({
+	runId: z.guid(),
+	nodeKey: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zDecideGraphWorkflowNodeRunResponse =
+	zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDecisionResultResponse;
+
 export const zDeleteGraphWorkflowDefinitionPath = z.object({
 	definitionId: z.guid(),
 });
@@ -9412,6 +9448,11 @@ export const zListGraphWorkflowRunsQuery = z.object({
  * Success
  */
 export const zListGraphWorkflowRunsResponse = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunsResponse;
+
+/**
+ * Success
+ */
+export const zListGraphWorkflowToolsResponse = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowToolsResponse;
 
 export const zStartGraphWorkflowRunBody = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunRequest;
 

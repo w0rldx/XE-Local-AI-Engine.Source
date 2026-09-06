@@ -12711,6 +12711,95 @@
         ]
       }
     },
+    "/api/local/v1/graph-workflows/runs/{runId}/nodes/{nodeKey}/decide": {
+      "post": {
+        "tags": [
+          "Graph-Workflows"
+        ],
+        "operationId": "decideGraphWorkflowNodeRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "nodeKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DecideGraphWorkflowNodeRunRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1DecideGraphWorkflowNodeRunRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowDecisionResultResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/graph-workflows/definitions/{definitionId}": {
       "delete": {
         "tags": [
@@ -13119,6 +13208,40 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/graph-workflows/tools": {
+      "get": {
+        "tags": [
+          "Graph-Workflows"
+        ],
+        "operationId": "listGraphWorkflowTools",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowToolsResponse"
                 }
               }
             }
@@ -33581,6 +33704,46 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowDecisionResultResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "type": "string"
+          },
+          "runStatus": {
+            "type": "string"
+          },
+          "nodeRunStatus": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1DecideGraphWorkflowNodeRunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "operationId"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "guid",
+            "minLength": 1,
+            "nullable": false
+          },
+          "decision": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          },
+          "payload": {
+            "nullable": true
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionRequest": {
         "type": "object",
         "additionalProperties": false
@@ -33762,6 +33925,33 @@
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunsRequest": {
         "type": "object",
         "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowToolsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "parameterSchema": {
+            "type": "string"
+          }
+        }
       },
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunResponse": {
         "type": "object",

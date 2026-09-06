@@ -24,12 +24,20 @@ public static class GraphWorkflowGraphContract
     ///         testable without a container, and this is the one place a save and a run both come through.
     ///     </para>
     /// </summary>
-    public static int ValidateAndCountNodes(string graphJson, int maxNodes)
+    public static int ValidateAndCountNodes(string graphJson, int maxNodes) =>
+        ValidateAndParse(graphJson, maxNodes).Nodes.Count;
+
+    /// <summary>
+    ///     The same save-time validation, keeping the graph it parsed. The tool gate has to say which NODE names each
+    ///     refused tool, and the deduplicated <see cref="GraphWorkflowGraph.ToolNodeNames" /> carries no keys, so it
+    ///     walks the nodes — over this graph rather than over a second parse of the same document.
+    /// </summary>
+    internal static GraphWorkflowGraph ValidateAndParse(string graphJson, int maxNodes)
     {
-        var count = GraphWorkflowGraph.Parse(graphJson).Nodes.Count;
-        return count <= maxNodes
-            ? count
-            : throw new GraphWorkflowValidationException($"The graph declares {count} nodes, more than the {maxNodes} one definition may carry.");
+        var graph = GraphWorkflowGraph.Parse(graphJson);
+        return graph.Nodes.Count <= maxNodes
+            ? graph
+            : throw new GraphWorkflowValidationException($"The graph declares {graph.Nodes.Count} nodes, more than the {maxNodes} one definition may carry.");
     }
 
     /// <summary>

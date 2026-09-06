@@ -84,6 +84,23 @@ internal sealed class PublishingGraphWorkflowStore(
         return PublishAsync(_inner.TransitionNodeRunAsync(command, cancellationToken), kind, cancellationToken);
     }
 
+    /// <summary>
+    ///     An answered pause is the change a watching client most needs told: it is what removes the badge asking for a
+    ///     person. A write that matched no row announces nothing, because nothing committed.
+    /// </summary>
+    public async Task<GraphWorkflowMutationResult?> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default)
+    {
+        if (await _inner.DecideNodeRunAsync(command, cancellationToken).ConfigureAwait(false) is not { } result)
+        {
+            return null;
+        }
+
+        return await PublishAsync(Task.FromResult(result), GraphWorkflowChangeKind.Gate, cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task<GraphWorkflowNodeRunSnapshot?> FindNodeRunByDecisionOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default) =>
+        _inner.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken);
+
     public Task<GraphWorkflowMutationResult> AppendEventAsync(AppendGraphWorkflowEventCommand command, CancellationToken cancellationToken = default) =>
         PublishAsync(_inner.AppendEventAsync(command, cancellationToken), GraphWorkflowChangeKind.Run, cancellationToken);
 
