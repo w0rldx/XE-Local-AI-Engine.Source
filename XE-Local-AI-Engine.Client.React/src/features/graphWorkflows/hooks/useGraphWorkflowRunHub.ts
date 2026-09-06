@@ -103,13 +103,17 @@ export function useGraphWorkflowRunHub(runId: string | undefined): GraphWorkflow
 			invalidate(graphWorkflowInvalidationKey(graphWorkflowQueryIds.events, { runId }));
 		};
 
-		// Both call sites gate on `change.seq > watermark` first, and `watermark` is bumped here before the next one is
-		// read, so the sequence itself is the dedupe — a separate seen-set would only grow for the hook's life.
+		// The sequence is the dedupe — a separate seen-set would only grow for the hook's life — but the gate is
+		// `seq < watermark`, NOT `<=`. A transition that writes no event reports the run's CURRENT sequence rather than
+		// a new one (`GraphWorkflowStore.ApplyOutcome`), and `Cancelling → Cancelled` is exactly that: `run.cancelled`
+		// is written when the cancel is requested, so the terminal ping repeats the watermark. Dropping it left the run
+		// badge on `Cancelling` while the REST read already said `Cancelled`, until something else happened to refetch.
+		// The ping is content-free, so a repeated one costs an invalidation and can never paint anything wrong.
 		const apply = (change: GraphWorkflowChanged): void => {
-			if (change.runId !== runId || change.seq <= watermark) {
+			if (change.runId !== runId || change.seq < watermark) {
 				return;
 			}
-			watermark = change.seq;
+			watermark = Math.max(watermark, change.seq);
 			// Every kind moves the append-only event feed, which is why there is no `event` kind to miss.
 			invalidate(graphWorkflowInvalidationKey(graphWorkflowQueryIds.events, { runId }));
 			const kind = isChangeKind(change.kind) ? change.kind : undefined;
@@ -143,9 +147,7 @@ export function useGraphWorkflowRunHub(runId: string | undefined): GraphWorkflow
 				buffered.push(change);
 				return;
 			}
-			if (change.seq > watermark) {
-				apply(change);
-			}
+			apply(change);
 		};
 
 		const subscribe = async (reconnecting: boolean): Promise<void> => {
@@ -178,10 +180,10 @@ export function useGraphWorkflowRunHub(runId: string | undefined): GraphWorkflow
 					invalidateEveryFeed();
 				}
 				snapshotResolved = true;
+				// One gate, in `apply`: a buffered ping that repeats the snapshot's `lastSeq` is the same event-less
+				// transition and must survive the replay too.
 				for (const change of buffered.toSorted((left, right) => left.seq - right.seq)) {
-					if (change.seq > watermark) {
-						apply(change);
-					}
+					apply(change);
 				}
 				buffered = [];
 			} catch {

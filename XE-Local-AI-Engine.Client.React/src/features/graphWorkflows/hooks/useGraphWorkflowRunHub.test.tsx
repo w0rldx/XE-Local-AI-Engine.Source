@@ -215,7 +215,7 @@ describe("useGraphWorkflowRunHub", () => {
 		await waitFor(() => expect(result.current.watermark).toBe(9));
 	});
 
-	it("ignores duplicate sequences and other runs' pushes", async () => {
+	it("ignores a ping BELOW the watermark and other runs' pushes", async () => {
 		hubMock.connection.invoke.mockResolvedValue(snapshot({ lastSeq: 0 }));
 		const { queryClient, wrapper } = harness();
 		const { result } = renderHook(() => useGraphWorkflowRunHub(runId), { wrapper });
@@ -224,11 +224,32 @@ describe("useGraphWorkflowRunHub", () => {
 
 		emit({ runId, seq: 4, kind: "node" });
 		invalidate.mockClear();
-		emit({ runId, seq: 4, kind: "node" });
+		emit({ runId, seq: 3, kind: "node" });
 		emit({ runId: "77777777-7777-4777-8777-777777777777", seq: 5, kind: "node" });
 
 		expect(invalidate).not.toHaveBeenCalled();
 		expect(result.current.watermark).toBe(4);
+	});
+
+	it("still re-reads on a ping that REPEATS the watermark — the terminal cancel", async () => {
+		// Live: the node table reached `Cancelled` and the run badge sat on `Cancelling` for 90 s while `GET runs/{id}`
+		// already said `Cancelled`. `Cancelling → Cancelled` writes no event, so the store reports the run's current
+		// sequence and the ping repeats the watermark; a `<=` gate dropped the only notification of the terminal state.
+		hubMock.connection.invoke.mockResolvedValue(snapshot({ lastSeq: 5 }));
+		const { queryClient, wrapper } = harness();
+		const { result } = renderHook(() => useGraphWorkflowRunHub(runId), { wrapper });
+		await waitFor(() => expect(result.current.watermark).toBe(5));
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+
+		emit({ runId, seq: 5, kind: "run" });
+
+		expect(invalidatedKeys(invalidate)).toEqual([events, run, runList]);
+		expect(result.current.watermark).toBe(5);
+
+		invalidate.mockClear();
+		emit({ runId, seq: 4, kind: "run" });
+
+		expect(invalidate).not.toHaveBeenCalled();
 	});
 
 	it("refreshes every feed when the replay was truncated", async () => {
