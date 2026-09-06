@@ -234,9 +234,12 @@ public sealed class ConversationSummarizerBoundaryTests
         AssertEx.NotNull(result);
         AssertEx.NotEmpty(client.Requests);
         var systemPrompt = client.Requests[0].Single(static message => message.Role == ChatRole.System).Text;
-        AssertEx.Contains(systemPrompt, "in \"priorSummary\" and in \"messages\"", StringComparison.Ordinal,
+        AssertEx.Contains(systemPrompt, "from \"priorSummary\" and \"messages\"", StringComparison.Ordinal,
             "The fidelity rule must bind the new messages too: fold 0 has no prior summary, so a priorSummary-only "
             + "rule could not make an early fact survive its own fold.");
+        AssertEx.Contains(systemPrompt, "written as compressed notes", StringComparison.Ordinal,
+            "Fidelity without a compression demand is what drove the model to near-transcription, filling the cap "
+            + "within a few folds so the clamp cut the tail off every fold after.");
         AssertEx.Contains(systemPrompt, "in the conversation's language", StringComparison.Ordinal,
             "Nothing else in the pipeline detects or sets the synopsis language; the prompt is the only pin.");
     }
@@ -244,11 +247,11 @@ public sealed class ConversationSummarizerBoundaryTests
     [Test]
     public async Task SummarizeAsync_WhenAHanBatchFitsOnlyUnderRelaxedEscaping_SendsItAsOneRequest()
     {
-        // 200 Han characters, at this test's maxSummaryChars of 300 (so the prompt renders "under 262 characters" and
-        // is 1,395 chars, one shorter than the 1,396 of the 4,000-cap rendering). RequestFitsBudget charges the prompt
-        // plus the SERIALIZED request: a 63-char JSON frame plus the content. Relaxed, that is 1,395 + 63 + 200 =
-        // 1,658, which fits the 2,000 budget; under the default encoder each Han rune becomes a 6-char \uXXXX escape,
-        // so the same batch is 1,395 + 63 + 1,200 = 2,658 and does not, and one short message would be fragmented.
+        // 200 Han characters, at this test's maxSummaryChars of 300 (so the prompt renders "under 150 characters" and
+        // is 1,399 chars, one shorter than the 1,400 of the 4,000-cap rendering). RequestFitsBudget charges the prompt
+        // plus the SERIALIZED request: a 63-char JSON frame plus the content. Relaxed, that is 1,399 + 63 + 200 =
+        // 1,662, which fits the 2,000 budget; under the default encoder each Han rune becomes a 6-char \uXXXX escape,
+        // so the same batch is 1,399 + 63 + 1,200 = 2,662 and does not, and one short message would be fragmented.
         // The 63 here is this request's own frame, NOT the FrameOverhead constant: that one probes with an emoji, whose
         // supplementary scalar the relaxed encoder still writes as two escapes, and it is charged only by
         // GetMinimumRequestBudget. This pins that RequestFitsBudget measures the relaxed form the request carries.
@@ -268,8 +271,8 @@ public sealed class ConversationSummarizerBoundaryTests
     }
 
     [Test]
-    [Arguments(4000, "under 3500 characters")]
-    [Arguments(1000, "under 875 characters")]
+    [Arguments(4000, "under 2000 characters")]
+    [Arguments(1000, "under 500 characters")]
     public async Task SystemPrompt_StatesTheCeilingDerivedFromTheConfiguredCap(int maxSummaryChars, string expectedCeiling)
     {
         using var client = new CapturingChatClient();
@@ -283,7 +286,8 @@ public sealed class ConversationSummarizerBoundaryTests
         AssertEx.NotEmpty(client.Requests);
         var systemPrompt = client.Requests[0].Single(static message => message.Role == ChatRole.System).Text;
         AssertEx.Contains(systemPrompt, expectedCeiling, StringComparison.Ordinal,
-            "The stated ceiling must track the configured cap; a fixed 3,500 invites a synopsis the clamp then tail-cuts.");
+            "The stated ceiling must track the configured cap at half of it; a ceiling near the cap invites a synopsis "
+            + "the clamp then tail-cuts on every later fold.");
         AssertEx.Equal(ConversationSummarizer.RenderSystemPrompt(maxSummaryChars).Length, systemPrompt.Length,
             "Sending and budget validation must charge one rendering; a drift between them invalidates every budget decision.");
     }

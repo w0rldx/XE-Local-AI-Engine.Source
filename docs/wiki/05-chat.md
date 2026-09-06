@@ -305,11 +305,10 @@ runs with `applyCompaction: false` because it mines *real* user turns and must n
 
 `ConversationCompactionOptions` (`Agent:ConversationCompaction`) carries the knobs:
 `RecentMessagesToKeepVerbatim` (default 8, minimum 2 so the latest user turn and its answer survive),
-`MaxSummaryChars` (default 4000), and `MaxInputCharsPerSummarizationCall` (default 6000 — a fold span larger than
+`MaxSummaryChars` (default 4000), and `MaxInputCharsPerSummarizationCall` (default 12000 — a fold span larger than
 this is summarized in multiple running-summary passes so no single provider request overruns a small context
-window). The per-call budget must also fit the rendered system prompt plus the JSON frame plus one whole synopsis,
-and that floor is validated at startup: a small budget paired with a small cap that used to bind now **refuses to
-start the host** rather than failing every fold at run time. The shipped defaults clear it with room to spare.
+window; the default leaves ≥ 6,500 characters of source room per fold even with the running summary at its cap,
+so a long conversation folds in few passes instead of many lossy ones).
 
 ## Persistence
 

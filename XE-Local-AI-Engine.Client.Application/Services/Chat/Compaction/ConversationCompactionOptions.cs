@@ -47,15 +47,17 @@ public sealed class ConversationCompactionOptions : IValidatableObject
     ///     Total character budget for the model-facing messages in a SINGLE summarization call: system prompt plus the
     ///     serialized JSON containing the running summary and source-message batch. When the older history is larger
     ///     than this — including one individually oversized message — the summarizer folds it in multiple passes so no
-    ///     provider request exceeds the bound. Deliberately conservative so even a 4096-token model retains room for
-    ///     reserved output and provider framing.
+    ///     provider request exceeds the bound. The default leaves ≥ 6,500 characters of source room per fold even when
+    ///     the running summary is at the 4,000-character cap (12,000 − the 1,400-character system prompt − 4,000 − the
+    ///     JSON frame), which is what keeps a long conversation from folding in dozens of lossy passes; ~3k tokens is
+    ///     trivial for a node-local model.
     ///     <para>
     ///         ponytail: fixed char budget, not the model's probed effective window — upgrade to per-model window probing
     ///         if a large-context model should fold in fewer passes.
     ///     </para>
     /// </summary>
     [Range(MinimumInputCharsPerSummarizationCall, int.MaxValue)]
-    public int MaxInputCharsPerSummarizationCall { get; set; } = 6000;
+    public int MaxInputCharsPerSummarizationCall { get; set; } = 12_000;
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {

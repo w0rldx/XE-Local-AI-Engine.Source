@@ -46,6 +46,21 @@ public sealed class ConversationCompactionOptionsTests
         AssertEx.Empty(Validate(options).Select(static result => result.ErrorMessage));
     }
 
+    [Test]
+    public void Defaults_LeaveRoomForSourceContentBesideTheSystemPromptAndAFullRunningSummary()
+    {
+        var options = new ConversationCompactionOptions();
+
+        AssertEx.Equal(expected: 12_000, options.MaxInputCharsPerSummarizationCall,
+            "The default budget is what bounds how much source each fold can carry; at 6,000 a full running summary "
+            + "left ~600 characters per fold, which multiplied the folds and the loss.");
+        AssertEx.Empty(Validate(options).Select(static result => result.ErrorMessage));
+        AssertEx.True(options.MaxInputCharsPerSummarizationCall
+                      - ConversationSummarizer.GetMinimumRequestBudget(options.MaxSummaryChars) >= 6_000,
+            "The defaults must leave several thousand characters of source room per fold even with the running "
+            + "summary at its cap; that margin is the reason the default was raised.");
+    }
+
     private static IReadOnlyList<ValidationResult> Validate(ConversationCompactionOptions options)
     {
         var results = new List<ValidationResult>();

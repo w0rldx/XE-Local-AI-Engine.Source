@@ -34,9 +34,10 @@ internal sealed class ConversationSummarizer(
     // what removes the dependency on _options being declared first.
     private readonly string _systemPrompt = RenderSystemPrompt((options ?? throw new ArgumentNullException(nameof(options))).Value.MaxSummaryChars);
 
-    // The synopsis ceiling is rendered from the configured cap, never hard-coded: at a MaxSummaryChars below the
-    // 4,000 default a prompt that still promised 3,500 characters would invite a synopsis the rune-safe clamp in
-    // FoldAsync then cuts from the tail, which is the exact fidelity loss this prompt exists to remove.
+    // The synopsis ceiling is rendered at HALF the configured cap, never hard-coded. A ceiling close to the cap is
+    // what the first live round proved wrong: the running summary reached the cap within a few folds and the rune-safe
+    // clamp in FoldAsync then cut the tail off EVERY later fold, which is the exact fidelity loss this prompt exists
+    // to remove. Half leaves the model room to keep merging instead of hitting the clamp.
     private const string SystemPromptTemplate = """
                                         You compress an ongoing chat conversation into a single compact synopsis so the assistant can keep going
                                         after the older turns are dropped from its context window.
@@ -48,9 +49,10 @@ internal sealed class ConversationSummarizer(
                                         Rules:
                                         - Preserve everything the assistant must remember to continue: facts established, decisions made, the user's
                                           stated goals and preferences, named entities/files/values, and any open questions or unfinished tasks.
-                                        - Carry EVERY fact, entity, file path, value, decision and open item in "priorSummary" and in "messages" into the
-                                          output. When space is tight, shorten wording, not coverage; drop a fact only when a later message supersedes it.
-                                        - Keep the synopsis under {0} characters. If it would exceed that, merge and compress items; delete none.
+                                        - Keep every fact, decision, named entity, file path, value and open item from "priorSummary" and "messages",
+                                          written as compressed notes: the synopsis must be far shorter than the messages it replaces.
+                                        - Hard limit: keep the synopsis under {0} characters. If it would not fit, merge related items and shorten
+                                          wording; keep the facts.
                                         - Write the synopsis in the conversation's language: the most recent user turn's if they mix, or the language of
                                           "priorSummary" if this input has no user turn.
                                         - Write terse third-person notes, not a transcript. Drop pleasantries, restated questions, and filler.
@@ -227,7 +229,7 @@ internal sealed class ConversationSummarizer(
     }
 
     internal static string RenderSystemPrompt(int maxSummaryChars) =>
-        string.Format(CultureInfo.InvariantCulture, SystemPromptFormat, (Math.Max(1, maxSummaryChars) * 7) / 8);
+        string.Format(CultureInfo.InvariantCulture, SystemPromptFormat, Math.Max(1, maxSummaryChars / 2));
 
     internal static long GetMinimumRequestBudget(int maxSummaryChars) =>
         RenderSystemPrompt(maxSummaryChars).Length + FrameOverhead + (long)Math.Max(0, maxSummaryChars);
