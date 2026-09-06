@@ -121,7 +121,9 @@ function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow }: Mod
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
 	const editor = useGraphWorkflowEditor(undefined);
-	useUnsavedChangesGuard({ isDirty: editor.isDirty });
+	// Selecting a node or a tab writes a search param, which is a router transition like any other. Without this the
+	// guard asked the operator to discard their work in order to configure the node they had just added.
+	useUnsavedChangesGuard({ isDirty: editor.isDirty, allowSameRoute: true });
 
 	const definitionId = selection.definitionId;
 	const definitionsQuery = useGraphWorkflowDefinitions();

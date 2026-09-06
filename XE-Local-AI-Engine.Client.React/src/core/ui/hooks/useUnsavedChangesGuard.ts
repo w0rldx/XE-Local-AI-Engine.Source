@@ -7,6 +7,14 @@ import { useConfirm } from "@/core/ui/hooks/useConfirm";
 export interface UseUnsavedChangesGuardOptions {
 	/** When true, navigation away (and tab close) is blocked until the user confirms. */
 	isDirty: boolean;
+	/**
+	 * Treat a move that keeps the same pathname as staying put, so only a search-param change is not "leaving".
+	 *
+	 * A page that keeps its selection in search params navigates on every click, and the router blocks those
+	 * transitions like any other — which asked an operator to discard their work in order to select the node they had
+	 * just added. Opt-in: every other caller edits inside a dialog and blocks whole-route moves only.
+	 */
+	allowSameRoute?: boolean;
 }
 
 /**
@@ -18,12 +26,13 @@ export interface UseUnsavedChangesGuardOptions {
  * while `isDirty` is false — the blocker is disabled so non-dirty forms never
  * intercept navigation.
  */
-export function useUnsavedChangesGuard({ isDirty }: UseUnsavedChangesGuardOptions): void {
+export function useUnsavedChangesGuard({ isDirty, allowSameRoute = false }: UseUnsavedChangesGuardOptions): void {
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
 
 	const { status, proceed, reset } = useBlocker({
-		shouldBlockFn: () => isDirty,
+		// `args` is only read when the caller asked for it, so the default predicate stays a plain dirty check.
+		shouldBlockFn: (args) => isDirty && (!allowSameRoute || args.current.pathname !== args.next.pathname),
 		withResolver: true,
 		enableBeforeUnload: isDirty,
 		disabled: !isDirty,

@@ -18,7 +18,23 @@ vi.mock("@xyflow/react", async (importOriginal) => ({
 	Handle: () => null,
 	ReactFlowProvider: ({ children }: { readonly children: React.ReactNode }) => children,
 	useReactFlow: () => ({ screenToFlowPosition: () => ({ x: 0, y: 0 }), fitView: () => Promise.resolve(true) }),
-	ReactFlow: () => <div data-testid="react-flow" />,
+	// One button per node, so a card click is reachable: selecting a node is a search-param write, and that write is
+	// what the navigation guard used to block.
+	ReactFlow: ({
+		nodes,
+		onNodeClick,
+	}: {
+		readonly nodes?: readonly { readonly id: string }[];
+		readonly onNodeClick?: (event: unknown, node: { readonly id: string }) => void;
+	}) => (
+		<div data-testid="react-flow">
+			{(nodes ?? []).map((node) => (
+				<button key={node.id} type="button" data-testid={`flow-node-${node.id}`} onClick={(event) => onNodeClick?.(event, node)}>
+					{node.id}
+				</button>
+			))}
+		</div>
+	),
 }));
 
 // Monaco is ~3 MB behind a lazy import and wants a layout engine. The documents are other files' subject.
@@ -28,12 +44,30 @@ vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({
 	),
 }));
 
-// `useUnsavedChangesGuard` reaches for router context; its own file tests the blocking. Here it only has to be inert,
-// so the page can render without the async memory-router mount.
+// `useUnsavedChangesGuard` reaches for router context; the confirm-driving half is its own file's subject. Here the
+// blocker is inert (so the page renders without the async memory-router mount) but RECORDED, because the predicate the
+// page hands it is the whole of "does selecting a node count as leaving the editor".
+interface BlockerOpts {
+	readonly shouldBlockFn: (args: { current: { pathname: string }; next: { pathname: string } }) => boolean;
+}
+
+const blockerMock = vi.hoisted(() =>
+	vi.fn((_options: BlockerOpts) => ({ status: "idle", proceed: undefined, reset: undefined })),
+);
+
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@tanstack/react-router")>()),
-	useBlocker: () => ({ status: "idle", proceed: undefined, reset: undefined }),
+	useBlocker: blockerMock,
 }));
+
+/** The predicate the page most recently gave the router, asked about a move that keeps the pathname. */
+function blocksSameRouteMove(): boolean {
+	const options = blockerMock.mock.calls.at(-1)?.[0];
+	if (options === undefined) {
+		throw new Error("the page never armed the navigation guard");
+	}
+	return options.shouldBlockFn({ current: { pathname: "/graph-workflows" }, next: { pathname: "/graph-workflows" } });
+}
 
 // The hub is exercised in `useGraphWorkflowRunHub.test.tsx`; here it only has to not reach for a real socket.
 vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
@@ -178,6 +212,22 @@ describe("GraphWorkflowsPage", () => {
 		expect(await screen.findByTestId("gw-page-unsaved-layout")).toBeDefined();
 		expect(screen.getByTestId<HTMLButtonElement>("gw-page-save").disabled).toBe(true);
 		expect(screen.getByTestId("graph-workflow-validation-unkeyed").textContent).toMatch(/no End node/i);
+	});
+
+	// Live round, HIGH: clicking a card with unsaved edits opened "Discard unsaved changes?", because selecting a node
+	// writes `nodeKey` through the router and the guard blocked every transition. Configuring the node you just added
+	// must not cost you the graph.
+	it("lets a dirty editor select a node without treating it as leaving the editor", async () => {
+		server.use(...editorRoutes());
+		const { onSelectionChange } = renderPage({ definitionId });
+		await openAndDirty();
+
+		fireEvent.click(screen.getByTestId("flow-node-analyze"));
+
+		expect(onSelectionChange).toHaveBeenCalledWith({ definitionId, nodeKey: "analyze" });
+		// Still dirty, and still guarded against a real departure — only the same-route move is let through.
+		expect(screen.getByTestId<HTMLButtonElement>("gw-page-save").disabled).toBe(false);
+		expect(blocksSameRouteMove()).toBe(false);
 	});
 
 	it("refuses to start a run from a dirty canvas and says why", async () => {
