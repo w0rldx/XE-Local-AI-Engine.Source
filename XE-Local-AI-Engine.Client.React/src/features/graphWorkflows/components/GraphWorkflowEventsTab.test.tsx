@@ -104,8 +104,11 @@ describe("GraphWorkflowEventsTab", () => {
 		renderWithProviders(<GraphWorkflowEventsTab runId={runId} />);
 
 		await waitFor(() => expect(screen.getByTestId(`graph-workflow-event-toggle-${eventId(5)}`)).toBeDefined());
-		fireEvent.click(screen.getByTestId(`graph-workflow-event-toggle-${eventId(5)}`));
+		const toggle = screen.getByTestId(`graph-workflow-event-toggle-${eventId(5)}`);
+		expect(toggle.getAttribute("aria-expanded")).toBe("false");
+		fireEvent.click(toggle);
 
+		expect(toggle.getAttribute("aria-expanded")).toBe("true");
 		expect(screen.getByTestId(`graph-workflow-event-detail-${eventId(5)}`).textContent).toContain("Timeout");
 	});
 

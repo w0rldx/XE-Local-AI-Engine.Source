@@ -24,7 +24,7 @@ export interface GraphWorkflowEventsTabProps {
  * means the NEWEST events are not on screen yet — which is what the banner says, and what "Load more" fetches.
  */
 export function GraphWorkflowEventsTab({ runId }: GraphWorkflowEventsTabProps) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const [expandedId, setExpandedId] = useState<string | undefined>(undefined);
 	const query = useGraphWorkflowRunEvents(runId);
 
@@ -64,7 +64,9 @@ export function GraphWorkflowEventsTab({ runId }: GraphWorkflowEventsTabProps) {
 
 	return (
 		<Stack gap="xs" data-testid="graph-workflow-events-tab">
-			{/* Not a silently short list: a trail cut at the cap looks exactly like a run that has done little. */}
+			{/* Not a silently short list: a trail cut at the cap looks exactly like a run that has done little. The feed
+			    reads FORWARD from `afterSeq: 0`, so `replayTruncated` means the NEWEST events are missing, not the
+			    oldest — the plan's "starts mid-run" wording describes the hub snapshot and is the stale one here. */}
 			{query.data.replayTruncated ? (
 				<Alert color="blue" variant="light" data-testid="graph-workflow-events-truncated">
 					{t(
@@ -95,7 +97,7 @@ export function GraphWorkflowEventsTab({ runId }: GraphWorkflowEventsTabProps) {
 									{t("pages.graphWorkflows.events.meta", "#{{seq}}", { seq: event.seq ?? 0 })}
 								</Text>
 								<Text size="xs" c="dimmed">
-									{new Date(event.createdAtUtc ?? 0).toLocaleTimeString()}
+									{new Date(event.createdAtUtc ?? 0).toLocaleTimeString(i18n.language)}
 								</Text>
 							</Group>
 							{/* Which node it happened on: the same key the canvas card and the table row are addressed by. */}
@@ -111,6 +113,7 @@ export function GraphWorkflowEventsTab({ runId }: GraphWorkflowEventsTabProps) {
 										type="button"
 										size="xs"
 										onClick={() => setExpandedId((current) => (current === eventId ? undefined : eventId))}
+										aria-expanded={expandedId === eventId}
 										data-testid={`graph-workflow-event-toggle-${eventId}`}
 									>
 										{expandedId === eventId

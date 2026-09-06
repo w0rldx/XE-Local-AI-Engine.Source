@@ -5815,7 +5815,7 @@
 				"label": "Run graph",
 				"attempt": "attempt {{attempt}}",
 				"empty": "This run has no nodes yet.",
-				"overCap": "This run has {{count}} nodes — more than the graph draws. Use the node table to work through them.",
+				"overCap": "This run has {{nodeCount}} nodes — more than the graph draws. Use the node table to work through them.",
 				"graphMismatch": "The definition changed after this run started, so the connections it ran on are unknown. Showing its nodes only."
 			},
 			"runs": {

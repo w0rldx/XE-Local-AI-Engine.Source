@@ -37,7 +37,8 @@ export interface GraphWorkflowNodeRunTableProps {
  * here, and the definition's label lives on the card the canvas draws.
  */
 export function GraphWorkflowNodeRunTable({ nodeRuns, selectedNodeKey, onSelectNode }: GraphWorkflowNodeRunTableProps) {
-	const { t } = useTranslation();
+	// The UI language, not the browser's: a German UI must not print US dates.
+	const { t, i18n } = useTranslation();
 
 	if (nodeRuns.length === 0) {
 		return (
@@ -135,7 +136,7 @@ export function GraphWorkflowNodeRunTable({ nodeRuns, selectedNodeKey, onSelectN
 								</Table.Td>
 								<Table.Td>
 									<Text size="xs" c="dimmed" data-testid={`graph-workflow-node-started-${nodeKey}`}>
-										{nodeRun.startedAtUtc != null ? new Date(nodeRun.startedAtUtc).toLocaleTimeString() : "—"}
+										{nodeRun.startedAtUtc != null ? new Date(nodeRun.startedAtUtc).toLocaleTimeString(i18n.language) : "—"}
 									</Text>
 								</Table.Td>
 								<Table.Td>

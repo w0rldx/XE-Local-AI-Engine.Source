@@ -20,7 +20,8 @@ export interface GraphWorkflowRunListProps {
 
 /** The runs of one definition, newest first — the run an operator came to look at is the one they just started. */
 export function GraphWorkflowRunList({ runs, isLoading, error, selectedRunId, onSelectRun }: GraphWorkflowRunListProps) {
-	const { t } = useTranslation();
+	// The UI language, not the browser's: a German UI must not print US dates.
+	const { t, i18n } = useTranslation();
 
 	if (isLoading === true) {
 		return (
@@ -88,14 +89,14 @@ export function GraphWorkflowRunList({ runs, isLoading, error, selectedRunId, on
 							<Text size="xs" c="dimmed" data-testid={`graph-workflow-run-times-${runId}`}>
 								{run.completedAtUtc != null
 									? t("pages.graphWorkflows.runs.completedAt", "Finished {{time}}", {
-											time: new Date(run.completedAtUtc).toLocaleString(),
+											time: new Date(run.completedAtUtc).toLocaleString(i18n.language),
 										})
 									: run.startedAtUtc != null
 										? t("pages.graphWorkflows.runs.startedAt", "Started {{time}}", {
-												time: new Date(run.startedAtUtc).toLocaleString(),
+												time: new Date(run.startedAtUtc).toLocaleString(i18n.language),
 											})
 										: t("pages.graphWorkflows.runs.createdAt", "Created {{time}}", {
-												time: new Date(run.createdAtUtc ?? 0).toLocaleString(),
+												time: new Date(run.createdAtUtc ?? 0).toLocaleString(i18n.language),
 											})}
 							</Text>
 						</Stack>

@@ -24,7 +24,7 @@ import type {
 	GraphWorkflowCanvasRunState,
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import { graphWorkflowNodeTypeByKind } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
-import { GRAPH_WORKFLOW_MAX_RENDERED_NODES, type GraphWorkflowNodeKind } from "@/features/graphWorkflows/models/GraphWorkflowModels";
+import type { GraphWorkflowNodeKind } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import type { GraphWorkflowRunCanvas } from "@/features/graphWorkflows/models/GraphWorkflowRunGraph";
 
 const kindIcons: Record<GraphWorkflowNodeKind, typeof IconRobot> = {
@@ -153,8 +153,10 @@ function GraphWorkflowRunGraphViewInner({ canvas, selectedNodeKey, onSelectNode 
 				<Alert color="yellow" variant="light" data-testid="graph-workflow-run-graph-over-cap">
 					{t(
 						"pages.graphWorkflows.run.overCap",
-						"This run has {{count}} nodes — more than the graph draws. Use the node table to work through them.",
-						{ count: canvas.nodeCount, max: GRAPH_WORKFLOW_MAX_RENDERED_NODES },
+						"This run has {{nodeCount}} nodes — more than the graph draws. Use the node table to work through them.",
+						// NOT `count`: that is i18next's plural selector, and a plural rule would pick a variant that does not
+						// exist instead of interpolating the number.
+						{ nodeCount: canvas.nodeCount },
 					)}
 				</Alert>
 			</Stack>
