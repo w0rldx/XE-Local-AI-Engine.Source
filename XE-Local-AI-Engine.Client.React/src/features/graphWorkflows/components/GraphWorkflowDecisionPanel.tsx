@@ -1,6 +1,6 @@
 import { Alert, Button, Collapse, Group, Stack, Text, Textarea } from "@mantine/core";
 import { IconChevronDown, IconChevronRight } from "@tabler/icons-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -25,7 +25,7 @@ export interface GraphWorkflowDecisionPanelProps {
 	readonly prompt?: string;
 }
 
-/** `MaxDecisionCommentLength` server-side: past this the decide endpoint answers 400. */
+/** `MaxDecisionComment` server-side: past this the decide endpoint answers 400. */
 const COMMENT_MAX = 500;
 
 const decisionColors: Partial<Record<GraphWorkflowDecisionKind, string>> = {
@@ -76,6 +76,16 @@ export function GraphWorkflowDecisionPanel({
 	const nodeKey = nodeRun.nodeKey ?? "";
 	const decisionKey = `${nodeKey}:${nodeRun.attempt ?? 0}:${pendingDecisionKind ?? ""}`;
 	const [operation, setOperation] = useState(() => ({ key: decisionKey, id: crypto.randomUUID() }));
+	// The mutation's error outlives the decision it belongs to. Without this, a 409 on one attempt keeps the buttons
+	// disabled and "already answered" on screen when the runtime asks again on the next attempt of the same node.
+	const resetDecide = decide.reset;
+	const answeredKey = useRef(decisionKey);
+	useEffect(() => {
+		if (answeredKey.current !== decisionKey) {
+			answeredKey.current = decisionKey;
+			resetDecide();
+		}
+	}, [decisionKey, resetDecide]);
 	if (pendingDecisionKind && operation.key !== decisionKey) {
 		setOperation({ key: decisionKey, id: crypto.randomUUID() });
 		setComment("");
@@ -153,6 +163,7 @@ export function GraphWorkflowDecisionPanel({
 				size="xs"
 				variant="subtle"
 				leftSection={advancedOpen ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+				aria-expanded={advancedOpen}
 				onClick={() => setAdvancedOpen((open) => !open)}
 				data-testid="graph-workflow-decision-advanced-toggle"
 			>

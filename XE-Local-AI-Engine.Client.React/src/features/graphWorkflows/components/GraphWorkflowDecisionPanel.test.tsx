@@ -197,6 +197,21 @@ describe("GraphWorkflowDecisionPanel", () => {
 		expect(bodies[0]?.payload).toEqual({ ticket: "XE-1" });
 	});
 
+	it("re-arms when the runtime asks again, rather than staying closed on the last attempt's 409", async () => {
+		recordDecides(() => alreadyDecided("Reject"));
+		const { update } = renderPanel(pendingPauseNodeRun({ attempt: 1 }));
+
+		fireEvent.click(screen.getByTestId("graph-workflow-decision-Approve"));
+		await screen.findByTestId("graph-workflow-decision-already-decided");
+
+		// The 409 belongs to the decision that was refused. A second Pause on the same node is a NEW question, so the
+		// panel must not still be showing the old answer with every button dead.
+		update(pendingPauseNodeRun({ attempt: 2 }));
+
+		await waitFor(() => expect(screen.queryByTestId("graph-workflow-decision-already-decided")).toBeNull());
+		expect((screen.getByTestId("graph-workflow-decision-Approve") as HTMLButtonElement).disabled).toBe(false);
+	});
+
 	it("reports the decision that stands on a 409 and does not submit again", async () => {
 		const bodies = recordDecides(() => alreadyDecided("Reject"));
 		renderPanel(pendingPauseNodeRun());

@@ -83,8 +83,6 @@ function StartRunForm({
 	const [requestId] = useState(() => crypto.randomUUID());
 
 	const trimmed = input.trim();
-	const byteCount = new TextEncoder().encode(trimmed).length;
-	const tooLarge = byteCount > GRAPH_WORKFLOW_MAX_RUN_INPUT_BYTES;
 	let parsed: unknown;
 	let invalidJson = false;
 	if (trimmed.length > 0) {
@@ -94,6 +92,10 @@ function StartRunForm({
 			invalidJson = true;
 		}
 	}
+	// The cap is on the BODY, so the count is of the compact document that goes on the wire — the editor keeps the
+	// pretty text, whose indentation is not something the server ever sees.
+	const byteCount = parsed === undefined ? 0 : new TextEncoder().encode(JSON.stringify(parsed)).length;
+	const tooLarge = byteCount > GRAPH_WORKFLOW_MAX_RUN_INPUT_BYTES;
 
 	const conflict = readGraphWorkflowConflict(start.error);
 	const blocked = isDirty || tooLarge || invalidJson;

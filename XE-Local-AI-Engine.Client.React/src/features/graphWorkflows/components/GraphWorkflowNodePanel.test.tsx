@@ -5,7 +5,9 @@
 // the wire uses, the one line that says a structural node's output is SUPPOSED to look like its predecessor's — and
 // currency-versus-failure, the precedent that a node which failed stays failed after the run has moved on.
 
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { QueryClient } from "@tanstack/react-query";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, useState } from "react";
 import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -17,6 +19,7 @@ vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({
 	),
 }));
 
+import { getGraphWorkflowNodeRunQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
 import { GraphWorkflowNodePanel } from "@/features/graphWorkflows/components/GraphWorkflowNodePanel";
 import type { GraphWorkflowNodeRunResponse } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { agentNodeRunDetail, graphWorkflowTestIds } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
@@ -111,12 +114,12 @@ describe("GraphWorkflowNodePanel", () => {
 		);
 		renderPanel("lookup", "Running");
 
-		// A string result is not JSON-encoded on the way to the screen: quoting it would read as part of the answer.
+		// A string result is the answer itself, so it reads as text rather than through the JSON viewer — and it is
+		// not JSON-encoded on the way there, since the quotes would read as part of the answer.
 		await waitFor(() =>
-			expect((screen.getByTestId("graph-workflow-node-panel-tool-result") as HTMLTextAreaElement).value).toBe(
-				"the file was empty",
-			),
+			expect(screen.getByTestId("graph-workflow-node-panel-tool-result").textContent).toBe("the file was empty"),
 		);
+		expect(screen.getByTestId("graph-workflow-node-panel-tool-result").tagName).not.toBe("TEXTAREA");
 	});
 
 	it("says out loud that a Condition passes its input through, so an identical output is not read as a bug", async () => {
@@ -136,6 +139,37 @@ describe("GraphWorkflowNodePanel", () => {
 		renderPanel("merge", "Running");
 
 		expect((await screen.findByTestId("graph-workflow-node-panel-pass-through")).textContent).toContain("keyed by");
+	});
+
+	it("starts each node on its Output tab rather than inheriting the last node's choice", async () => {
+		// Both node runs are already in the cache, so switching nodes never passes through the loading state. That is
+		// the case the tab actually has to be reset for: with a cold cache the panel unmounts and resets by accident.
+		const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } } });
+		for (const [nodeKey, body] of [
+			["analyze", detail({})],
+			["check", detail({ nodeKey: "check", kind: "Condition" })],
+		] as const) {
+			queryClient.setQueryData(getGraphWorkflowNodeRunQueryKey({ path: { runId, nodeKey } }), body);
+		}
+		let select: (nodeKey: string) => void = () => undefined;
+
+		function Harness() {
+			const [nodeKey, setNodeKey] = useState("analyze");
+			select = setNodeKey;
+			return <GraphWorkflowNodePanel runId={runId} nodeKey={nodeKey} runStatus="Running" onClose={() => undefined} />;
+		}
+
+		renderWithProviders(<Harness />, { queryClient });
+
+		fireEvent.click(await screen.findByTestId("graph-workflow-node-panel-tab-input"));
+		expect(screen.getByTestId("graph-workflow-node-panel-tab-input").getAttribute("data-active")).toBe("true");
+
+		// A different node is a different question, and the Input tab was an answer to the last one.
+		act(() => select("check"));
+
+		await waitFor(() =>
+			expect(screen.getByTestId("graph-workflow-node-panel-tab-output").getAttribute("data-active")).toBe("true"),
+		);
 	});
 
 	it("renders the load failure rather than an empty pane when the node cannot be read", async () => {
