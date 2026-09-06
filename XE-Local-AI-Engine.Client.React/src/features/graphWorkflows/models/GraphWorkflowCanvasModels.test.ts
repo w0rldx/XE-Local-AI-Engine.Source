@@ -422,17 +422,18 @@ describe("renameNodeKey", () => {
 		expect(result.edges.find((edge) => edge.id === "e3")?.target).toBe("human-review");
 	});
 
-	it("cascades into a Pause out-edge whose condition value named the renamed key", () => {
+	it("leaves a Pause out-edge's condition value alone — it is a decision, not a node key", () => {
 		const canvas = graphToCanvas(eightNodeGraph);
-		const result = renameNodeKey(canvas.nodes, canvas.edges, "Approve", "approved");
+		const result = renameNodeKey(canvas.nodes, canvas.edges, "review", "human-review");
 
 		expect("error" in result).toBe(false);
 		if ("error" in result) {
 			return;
 		}
-		expect(result.edges.find((edge) => edge.id === "e5")?.data?.condition?.value).toBe("approved");
-		// The Condition node's own out-edge is untouched: its source is not a Pause.
-		expect(result.edges.find((edge) => edge.id === "e3")?.data?.condition?.value).toBe("true");
+		const approve = result.edges.find((edge) => edge.id === "e5");
+		expect(approve?.source).toBe("human-review");
+		expect(approve?.data?.condition?.value).toBe("Approve");
+		expect(result.edges.find((edge) => edge.id === "e9")?.data?.condition?.value).toBe("Reject");
 	});
 
 	it("refuses a name held by another node or by an edge, and one outside the server's charset", () => {

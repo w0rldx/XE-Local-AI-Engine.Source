@@ -46,6 +46,8 @@ export const graphWorkflowGraphRules = [
 	"invalidNodeKey",
 	"unknownEdgeEndpoint",
 	"duplicateEdgeKey",
+	"missingEdgeKey",
+	"invalidEdgeKey",
 	"parallelEdgesBothUnconditional",
 	"conditionEdgeHasNoPath",
 	"noStart",
@@ -65,6 +67,10 @@ export const graphWorkflowGraphRules = [
 	"unknownNodeKind",
 	"unknownConditionOperator",
 	"toolNameMissing",
+	"agentInstructionsMissing",
+	"pausePromptMissing",
+	"pauseNoDecisions",
+	"endOutcomeMissing",
 	"serverRejected",
 ] as const;
 export type GraphWorkflowGraphRule = (typeof graphWorkflowGraphRules)[number];
@@ -207,8 +213,25 @@ function nodeIssues(nodes: readonly GraphWorkflowGraphNode[]): readonly GraphWor
 				issues.push({ rule: "invalidJson", subject: key });
 			}
 		}
+		// The four members the server's `ParseConfig` refuses outright. Mirrored because the drawer authors all of them
+		// and a save that fails on an empty prompt should say which node, not just 400.
 		if (kind === "Tool" && text(config["toolName"]).trim().length === 0) {
 			issues.push({ rule: "toolNameMissing", subject: key });
+		}
+		if (kind === "Agent" && text(config["instructions"]).trim().length === 0) {
+			issues.push({ rule: "agentInstructionsMissing", subject: key });
+		}
+		if (kind === "Pause") {
+			if (text(config["prompt"]).trim().length === 0) {
+				issues.push({ rule: "pausePromptMissing", subject: key });
+			}
+			const allowed = config["allowedDecisions"];
+			if (!Array.isArray(allowed) || allowed.length === 0) {
+				issues.push({ rule: "pauseNoDecisions", subject: key });
+			}
+		}
+		if (kind === "End" && text(config["outcome"]).trim().length === 0) {
+			issues.push({ rule: "endOutcomeMissing", subject: key });
 		}
 	}
 	return issues;
@@ -223,12 +246,20 @@ function edgeIssues(
 	const edgeKeys = new Set<string>();
 	const unconditionalPairs = new Set<string>();
 	for (const edge of edges) {
+		// Edge keys answer to the same charset and the same namespace as node keys (brief §3.1), which is what keeps an
+		// issue's `subject` unambiguous about what it points at.
 		const key = edge.key ?? "";
-		if (edgeKeys.has(key) || nodeByKey.has(key)) {
-			// One namespace for node and edge keys (brief §3.1), which is what keeps an issue's `subject` unambiguous.
-			issues.push({ rule: "duplicateEdgeKey", subject: edgeSubject(edge) });
+		if (key.length === 0) {
+			issues.push({ rule: "missingEdgeKey", subject: edgeSubject(edge) });
+		} else {
+			if (!GRAPH_WORKFLOW_KEY_PATTERN.test(key)) {
+				issues.push({ rule: "invalidEdgeKey", subject: key });
+			}
+			if (edgeKeys.has(key) || nodeByKey.has(key)) {
+				issues.push({ rule: "duplicateEdgeKey", subject: key });
+			}
+			edgeKeys.add(key);
 		}
-		edgeKeys.add(key);
 
 		const from = edge.from ?? "";
 		const to = edge.to ?? "";
@@ -398,6 +429,18 @@ export function validateGraphWorkflowGraph(graph: GraphWorkflowGraph | undefined
 }
 
 /**
+ * The issues a LOADED wire graph carries that the canvas cannot round-trip: an operator token this client cannot read
+ * (the condition is dropped) and a node kind it cannot draw (narrowed to `End`). Both are lost the moment the graph
+ * becomes canvas state, so the loader runs this over the wire document it just read and holds the result until a
+ * different graph is loaded — that is what stops a save from silently rewriting the branch or the node.
+ */
+export function loadedGraphIssues(graph: GraphWorkflowGraph | undefined): readonly GraphWorkflowGraphIssue[] {
+	return validateGraphWorkflowGraph(graph).filter(
+		(issue) => issue.rule === "unknownConditionOperator" || issue.rule === "unknownNodeKind",
+	);
+}
+
+/**
  * The server's `errors[]` in the client's shape (S0 ruled it hybrid: keyed failures accumulate, a malformed document
  * throws first as one unkeyed message). A keyed error attaches to its node or edge; an unkeyed one renders once above
  * the canvas. Same component, same path.
@@ -416,8 +459,12 @@ export function serverErrorsToIssues(
 // Zod schemas for the config drawer. Messages are full i18n keys: the form renders `t(issue.message)`.
 // ---------------------------------------------------------------------------------------------------------------
 
-/** Dot paths only — no wildcards, indexes or functions (brief §3.1). */
-const GRAPH_WORKFLOW_PATH_PATTERN = /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)*$/;
+/**
+ * `GraphWorkflowTokens.IsDotPath` verbatim: dot-separated segments of anything but whitespace and the bracket, star and
+ * parenthesis characters that would make it a wildcard, an index or a function call (brief §3.1). Deliberately not
+ * narrower than the server's — a JSON property may be hyphenated, and refusing one the server accepts blocks a save.
+ */
+const GRAPH_WORKFLOW_PATH_PATTERN = /^[^\s[\]*()]+(\.[^\s[\]*()]+)*$/;
 
 function messageKey(field: string, error: string): string {
 	return `pages.graphWorkflows.form.${field}.${error}`;
@@ -458,11 +505,13 @@ function optionalDotPath(field: string) {
 export const nodeCommonSchema = z.object({
 	key: z.string().regex(GRAPH_WORKFLOW_KEY_PATTERN, { message: messageKey("key", "invalid") }),
 	label: z.string(),
+	// 100 is a CLIENT-only sanity cap: the server bounds the run through `MaxTotalAttempts`, not per node, so this only
+	// keeps a typo out of the field. Raise it freely; nothing on the wire agrees with the number.
 	maxAttempts: z
 		.number()
 		.int({ message: messageKey("maxAttempts", "range") })
 		.min(1, { message: messageKey("maxAttempts", "range") })
-		.max(10, { message: messageKey("maxAttempts", "range") })
+		.max(100, { message: messageKey("maxAttempts", "range") })
 		.optional(),
 	timeoutSeconds: z
 		.number()

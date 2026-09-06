@@ -70,12 +70,18 @@ describe("eightNodeGraph", () => {
 		]);
 	});
 
-	it("gives the reconverging End an Any join, so the approve path is not skipped on the dead reject edge", () => {
-		const done = (eightNodeGraph.nodes ?? []).find((node) => node.key === "done");
-		const inbound = (eightNodeGraph.edges ?? []).filter((edge) => edge.to === "done");
+	it("gives every reconverging node an Any join, so no branch waits on one that was never taken", () => {
+		// Both nodes with more than one inbound edge here reconverge the Condition's two exclusive branches — `fanout`
+		// via the Pause and the Tool, `done` via the merge and the Pause's Reject. Under the default `All` join each
+		// would wait forever for the branch the run did not take.
+		const reconverging = (eightNodeGraph.nodes ?? []).filter(
+			(node) => (eightNodeGraph.edges ?? []).filter((edge) => edge.to === node.key).length > 1,
+		);
 
-		expect(inbound).toHaveLength(2);
-		expect(done?.joinPolicy).toBe("Any");
+		expect(reconverging.map((node) => node.key)).toEqual(["fanout", "done"]);
+		for (const node of reconverging) {
+			expect(node.joinPolicy, node.key).toBe("Any");
+		}
 	});
 
 	it("writes every operator in its canonical PascalCase form", () => {

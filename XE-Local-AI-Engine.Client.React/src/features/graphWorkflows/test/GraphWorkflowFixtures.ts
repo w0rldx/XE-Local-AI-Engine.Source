@@ -95,9 +95,11 @@ export const eightNodeGraph: GraphWorkflowGraph = {
 				argumentBindings: { path: "output.json.path" },
 			},
 		},
-		{ key: "fanout", kind: "Parallel", label: "Both", position: { x: 0, y: 480 }, config: {} },
+		// `Any`, like `done`: the Condition's two branches are exclusive, so under the default `All` join this node would
+		// wait forever for the branch that was never taken and the run could never reach an End.
+		{ key: "fanout", kind: "Parallel", label: "Both", position: { x: 0, y: 480 }, joinPolicy: "Any", config: {} },
 		{ key: "merge", kind: "Join", label: "Merge", position: { x: 0, y: 600 }, joinPolicy: "All", config: {} },
-			{
+		{
 			key: "done",
 			kind: "End",
 			label: "Done",
@@ -133,11 +135,13 @@ export const eightNodeGraph: GraphWorkflowGraph = {
 	],
 };
 
-export function graphWorkflowDefinition(overrides: Partial<GraphWorkflowDefinitionResponse> = {}): GraphWorkflowDefinitionResponse {
+export function graphWorkflowDefinition(
+	overrides: Partial<GraphWorkflowDefinitionResponse> = {},
+): GraphWorkflowDefinitionResponse {
 	return {
 		id: graphWorkflowTestIds.definition,
 		name: "Analyze → review → read",
-		description: "The S2 live graph: an agent decides, a human approves, a tool reads.",
+		description: "An agent decides, a human approves, a tool reads.",
 		graph: eightNodeGraph,
 		graphHash: graphWorkflowTestGraphHash,
 		nodeCount: 8,
@@ -155,7 +159,7 @@ export function graphWorkflowDefinitionSummary(
 	return {
 		id: graphWorkflowTestIds.definition,
 		name: "Analyze → review → read",
-		description: "The S2 live graph: an agent decides, a human approves, a tool reads.",
+		description: "An agent decides, a human approves, a tool reads.",
 		graphHash: graphWorkflowTestGraphHash,
 		nodeCount: 8,
 		schemaVersion: 1,
@@ -166,7 +170,9 @@ export function graphWorkflowDefinitionSummary(
 	};
 }
 
-export function graphWorkflowRunSummary(overrides: Partial<GraphWorkflowRunSummaryResponse> = {}): GraphWorkflowRunSummaryResponse {
+export function graphWorkflowRunSummary(
+	overrides: Partial<GraphWorkflowRunSummaryResponse> = {},
+): GraphWorkflowRunSummaryResponse {
 	return {
 		id: graphWorkflowTestIds.run,
 		requestId: graphWorkflowTestIds.request,
@@ -231,7 +237,14 @@ export function graphWorkflowRun(overrides: Partial<GraphWorkflowRunResponse> = 
 				attempt: 3,
 				failureClass: "AttemptsExhausted",
 			}),
-			makeNodeRun({ id: "nr-fanout", nodeKey: "fanout", kind: "Parallel", status: "Pending", startedAtUtc: null, completedAtUtc: null }),
+			makeNodeRun({
+				id: "nr-fanout",
+				nodeKey: "fanout",
+				kind: "Parallel",
+				status: "Pending",
+				startedAtUtc: null,
+				completedAtUtc: null,
+			}),
 			makeNodeRun({ id: "nr-merge", nodeKey: "merge", kind: "Join", status: "Skipped", startedAtUtc: null }),
 			makeNodeRun({ id: "nr-done", nodeKey: "done", kind: "End", status: "Pending", startedAtUtc: null, completedAtUtc: null }),
 		],
@@ -305,7 +318,9 @@ export function graphWorkflowRunEvent(overrides: Partial<GraphWorkflowRunEventRe
 }
 
 /** A trail covering the run above, including the two S2 event types and a `node.retried` with its detail document. */
-export function graphWorkflowEvents(overrides: Partial<ListGraphWorkflowRunEventsResponse> = {}): ListGraphWorkflowRunEventsResponse {
+export function graphWorkflowEvents(
+	overrides: Partial<ListGraphWorkflowRunEventsResponse> = {},
+): ListGraphWorkflowRunEventsResponse {
 	return {
 		events: [
 			graphWorkflowRunEvent({ id: "ev-1", seq: 1, eventType: "run.created" }),
@@ -337,7 +352,11 @@ export function graphWorkflowEvents(overrides: Partial<ListGraphWorkflowRunEvent
 export function graphWorkflowTools(overrides: Partial<ListGraphWorkflowToolsResponse> = {}): ListGraphWorkflowToolsResponse {
 	return {
 		tools: [
-			{ name: "GetCurrentTime", description: "The current time on this node.", parameterSchema: '{"type":"object","properties":{}}' },
+			{
+				name: "GetCurrentTime",
+				description: "The current time on this node.",
+				parameterSchema: '{"type":"object","properties":{}}',
+			},
 			{
 				name: "Calculate",
 				description: "Evaluates an arithmetic expression.",
