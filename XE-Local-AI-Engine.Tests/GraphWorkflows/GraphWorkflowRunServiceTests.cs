@@ -165,6 +165,46 @@ public sealed class GraphWorkflowRunServiceTests
             "the refusal lands before the signal, so nothing wakes the dispatcher for a run this caller never asked for.");
     }
 
+    /// <summary>
+    ///     The decide write can lose in TWO ways and both are the same story to the caller: the compare-and-set
+    ///     matching no row, and the run row's own concurrency token — which is what two operators answering at once
+    ///     with different operation ids actually produce. Neither may escape as a bare run conflict: the person whose
+    ///     click lost has to be told what was decided.
+    ///     <para>
+    ///         Everything is the REAL store behind a one-method seam that lets the other operator's answer land inside
+    ///         this caller's write, so the checks above it pass exactly as they would in the race being simulated.
+    ///     </para>
+    /// </summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task DecideAsync_WhenAConcurrentAnswerLandsInsideTheWrite_RefusesWithTheStandingDecision(bool byConcurrencyToken)
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoDecisions).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        await using var scope = Host.Factory.Services.CreateAsyncScope();
+        var racing = new RacingGraphWorkflowStore(scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>(),
+            GraphWorkflowDecisionKind.Reject,
+            byConcurrencyToken);
+        var runs = new GraphWorkflowRunService(racing,
+            new RecordingGraphWorkflowDispatcherSignal(),
+            Substitute.For<IToolInvocationService>(),
+            Options.Create(harness.CurrentOptions()));
+
+        var refusal = await AssertEx
+                            .ThrowsAsync<GraphWorkflowGateAlreadyDecidedException>(() =>
+                                runs.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, comment: null, payloadJson: null, "operator"))
+                            .ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowDecisionKind.Reject, refusal.StandingDecision, "the answer that WON is what the loser is told about.");
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "review").ConfigureAwait(false)).Status);
+        AssertEx.Equal(expected: 1,
+            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == GraphWorkflowEventTypes.GateDecided),
+            "the loser wrote nothing, so the winner's answer is the only decision on the run.");
+    }
+
     /// <summary>A start against a version that has since been edited answers a conflict rather than running a graph the caller never saw.</summary>
     [Test]
     public async Task StartAsync_WithAStaleDefinitionVersion_Conflicts()
@@ -425,4 +465,96 @@ public sealed class GraphWorkflowRunServiceTests
 
     /// <summary>What one racer came back with: a run, or the refusal it was given instead.</summary>
     private sealed record StartOutcome(GraphWorkflowRunDetail? Detail, GraphWorkflowInvalidTransitionException? Refusal);
+}
+
+/// <summary>
+///     The real store with ONE seam: another operator's answer commits inside this caller's decide write, and the
+///     write then reports the loss the way the database would — by the run row's concurrency token, or by the
+///     compare-and-set matching no row. Everything else forwards, so every check the service made before the write is
+///     the real one.
+/// </summary>
+internal sealed class RacingGraphWorkflowStore(IGraphWorkflowStore inner, GraphWorkflowDecisionKind winningDecision, bool loseByConcurrencyToken) : IGraphWorkflowStore
+{
+    public async Task<GraphWorkflowMutationResult?> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default)
+    {
+        // The winner, committed for real between this caller's checks and its own write — with its own operation id,
+        // its own answer and its own output, which is what makes it a second human act rather than a replay.
+        _ = await inner.DecideNodeRunAsync(command with
+                       {
+                           OperationId = Guid.NewGuid(),
+                           Decision = winningDecision,
+                           OutputJson = GraphWorkflowStateMachine.PauseOutputJson(winningDecision)
+                       },
+                       cancellationToken)
+                       .ConfigureAwait(false);
+
+        return loseByConcurrencyToken
+            ? throw new GraphWorkflowInvalidTransitionException($"A concurrent writer moved graph workflow run '{command.RunId}' before this write could commit.")
+            : null;
+    }
+
+    public Task<GraphWorkflowDefinitionSnapshot> CreateDefinitionAsync(CreateGraphWorkflowDefinitionCommand command, CancellationToken cancellationToken = default) =>
+        inner.CreateDefinitionAsync(command, cancellationToken);
+
+    public Task<GraphWorkflowDefinitionSnapshot> UpdateDefinitionAsync(UpdateGraphWorkflowDefinitionCommand command, CancellationToken cancellationToken = default) =>
+        inner.UpdateDefinitionAsync(command, cancellationToken);
+
+    public Task<IReadOnlyList<GraphWorkflowDefinitionSummary>> ListDefinitionsAsync(CancellationToken cancellationToken = default) =>
+        inner.ListDefinitionsAsync(cancellationToken);
+
+    public Task<GraphWorkflowDefinitionSnapshot> GetDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
+        inner.GetDefinitionAsync(definitionId, cancellationToken);
+
+    public Task DeleteDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
+        inner.DeleteDefinitionAsync(definitionId, cancellationToken);
+
+    public Task<GraphWorkflowRunSnapshot> StartRunAsync(StartGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
+        inner.StartRunAsync(command, cancellationToken);
+
+    public Task<GraphWorkflowRunSnapshot?> FindRunByRequestAsync(Guid requestId, CancellationToken cancellationToken = default) =>
+        inner.FindRunByRequestAsync(requestId, cancellationToken);
+
+    public Task<GraphWorkflowRunSnapshot> GetRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
+        inner.GetRunAsync(runId, cancellationToken);
+
+    public Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status = null,
+        int limit = 50,
+        CancellationToken cancellationToken = default) =>
+        inner.ListRunsAsync(status, limit, cancellationToken);
+
+    public Task<int> CountActiveRunsAsync(int probeLimit, CancellationToken cancellationToken = default) =>
+        inner.CountActiveRunsAsync(probeLimit, cancellationToken);
+
+    public Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
+        inner.TransitionRunAsync(command, cancellationToken);
+
+    public Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default) =>
+        inner.ListNodeRunsAsync(runId, cancellationToken);
+
+    public Task<GraphWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid runId, string nodeKey, CancellationToken cancellationToken = default) =>
+        inner.GetNodeRunAsync(runId, nodeKey, cancellationToken);
+
+    public Task<GraphWorkflowMutationResult> TransitionNodeRunAsync(TransitionGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default) =>
+        inner.TransitionNodeRunAsync(command, cancellationToken);
+
+    public Task<GraphWorkflowNodeRunSnapshot?> FindNodeRunByDecisionOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default) =>
+        inner.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken);
+
+    public Task<GraphWorkflowMutationResult> AppendEventAsync(AppendGraphWorkflowEventCommand command, CancellationToken cancellationToken = default) =>
+        inner.AppendEventAsync(command, cancellationToken);
+
+    public Task<IReadOnlyList<GraphWorkflowRunEventSnapshot>> ListEventsAsync(Guid runId,
+        long afterSeq = 0,
+        int limit = 200,
+        CancellationToken cancellationToken = default) =>
+        inner.ListEventsAsync(runId, afterSeq, limit, cancellationToken);
+
+    public Task<IReadOnlyList<GraphWorkflowReconciledNodeRun>> ListInterruptedNodeRunsAsync(CancellationToken cancellationToken = default) =>
+        inner.ListInterruptedNodeRunsAsync(cancellationToken);
+
+    public Task<IReadOnlyList<GraphWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
+        IReadOnlyList<GraphWorkflowNodeRunVerdict> verdicts,
+        GraphWorkflowUnjudgedNodeRunSettlement? unjudged = null,
+        CancellationToken cancellationToken = default) =>
+        inner.ReconcileNonTerminalNodeRunsAsync(sanitizedReason, verdicts, unjudged, cancellationToken);
 }

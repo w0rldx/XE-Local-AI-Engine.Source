@@ -3,7 +3,9 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.GraphWorkflows.V1;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Tests.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -23,6 +25,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class GraphWorkflowDecisionEndpointTests
 {
     private const string Root = "/api/local/v1/graph-workflows";
+
+    /// <summary>The <c>sub</c> claim on the operator token this suite sends — the node user id, not the address.</summary>
+    private const string OperatorSubject = "node-admin-test";
 
     /// <summary>A route shape for the auth and feature-gate sweeps; the ids need not exist, because none of those reach a store.</summary>
     private const string DecideRoute = $"{Root}/runs/33333333-3333-3333-3333-333333333333/nodes/review/decide";
@@ -240,6 +245,52 @@ public sealed class GraphWorkflowDecisionEndpointTests
 
         using var stored = await NodeRunAsync(runId, "review").ConfigureAwait(false);
         AssertEx.Equal("XE-42", stored.RootElement.GetProperty("output").GetProperty("output").GetProperty("payload").GetProperty("ticket").GetString());
+    }
+
+    /// <summary>
+    ///     Attribution, end to end. The row has to record WHICH ACCOUNT answered — the one question a review of an
+    ///     AI-driven run actually gets asked — and nothing but a real token through the real endpoint proves the claim
+    ///     survives the hop. Read through the store because the node-run DTO deliberately does not publish a subject.
+    /// </summary>
+    [Test]
+    public async Task Decide_RecordsTheDecidingSubjectFromTheOperatorToken()
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await ParkedRunAsync(harness).ConfigureAwait(false);
+
+        using var response = await SendAsync(RouteFor(runId, "review"), Body(Guid.NewGuid(), "Approve")).ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var scope = Host.Factory.Services.CreateAsyncScope();
+        var decided = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetNodeRunAsync(runId, "review").ConfigureAwait(false);
+        AssertEx.Equal(OperatorSubject, decided.DecidedBySubject, "the sub claim on the operator token is what the audit trail keeps.");
+    }
+
+    /// <summary>
+    ///     A pass-through node downstream of an answered pause carries that pause's <c>output.decision</c> verbatim, so
+    ///     a standing decision must be read off the column an answered gate WRITES rather than off the document. Without
+    ///     that, deciding a Condition or Parallel node would be refused with a decision nobody ever took on it.
+    /// </summary>
+    [Test]
+    public async Task Decide_OnAPassThroughNodeCarryingAnUpstreamDecision_Answers409WithoutAStandingDecision()
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseStrandedRejection).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        using var rejected = await SendAsync(RouteFor(runId, "review"), Body(Guid.NewGuid(), "Reject")).ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, rejected.StatusCode);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var passThrough = await harness.ReadNodeRunAsync(runId, "deadend").ConfigureAwait(false);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, passThrough.Status);
+        AssertEx.Contains(passThrough.OutputJson, "\"decision\":\"Reject\"", StringComparison.Ordinal, "the pass-through really does carry the pause's answer.");
+
+        using var response = await SendAsync(RouteFor(runId, "deadend"), Body(Guid.NewGuid(), "Approve")).ConfigureAwait(false);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertEx.Equal("GraphWorkflowRunConflict", document.RootElement.GetProperty("conflictType").GetString());
+        AssertEx.False(document.RootElement.TryGetProperty("standingDecision", out _), "nobody decided this node, so nothing stands on it.");
     }
 
     private async Task<JsonDocument> NodeRunAsync(Guid runId, string nodeKey)
