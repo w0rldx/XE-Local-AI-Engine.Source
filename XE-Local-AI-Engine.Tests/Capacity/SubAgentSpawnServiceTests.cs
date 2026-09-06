@@ -1173,6 +1173,37 @@ public sealed class SubAgentSpawnServiceTests
     }
 
     [Test]
+    public async Task Spawn_WhenFanOutIsSaturatedAndTheBindingIsUnresolvable_RejectsForFanOut()
+    {
+        // A saturated turn rejects BEFORE it pays for a binding resolution — a definition store read plus a full
+        // projection — so the fan-out reason wins over the unresolved one and the resolver is never asked. The first
+        // spawn is a bare model binding on purpose: that path short-circuits without touching the resolver, so the
+        // zero-calls assertion is about the SECOND spawn alone rather than being vacuous.
+        using var harness = new Harness();
+        harness.AllowLocal();
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 1, cloudSpawnCap: 3);
+        var gate = new TaskCompletionSource();
+        harness.ChatClient.HoldUntil(gate.Task);
+
+        var first = service.SpawnAsync(ModelRequest("first"), CancellationToken.None);
+        await harness.ChatClient.WaitUntilRunningAsync();
+
+        var secondResult = await service.SpawnAsync(new SubAgentSpawnRequest
+        {
+            SubAgentKey = Guid.NewGuid().ToString(),
+            Task = "second"
+        }, CancellationToken.None);
+
+        AssertEx.Contains(secondResult, "concurrent sub-agents");
+        AssertEx.Empty(harness.Resolver.ReceivedCalls(), "a spawn rejected for fan-out must not pay for a binding resolution");
+
+        gate.SetResult();
+        await first;
+    }
+
+    [Test]
     public async Task Spawn_WhenCloudSpawnCapExceeded_Rejects()
     {
         // Cloud Allow carries a NULL reservation; the cloud-spawn cap is the gate. Cap = 1 → the 2nd cloud spawn rejects.
