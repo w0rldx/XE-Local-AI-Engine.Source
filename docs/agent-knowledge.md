@@ -100,7 +100,7 @@ Installed runtime metadata and effective execution disagree in both directions: 
 - `.github/workflows/release.yml` is the tag-triggered win-x64/linux-x64 Velopack path. It reuses `build-and-test.yml` as `validate`; packaging depends on validation.
 - Actions enablement is external state. Check `gh workflow list --all` / `gh run list`; never quote a dated observation as current.
 - `build-and-test.yml` targets `develop` and runs `python-quality`, `release-contracts`, `backend-tests`, `build-and-test`, and `client-react`. E2E is manual or label-triggered, not a blocking merge gate.
-- `backend-tests` is a matrix: one `siblings` leg for every enrolled project except `XE-Local-AI-Engine.Tests`, and four `tests-<i>` legs that each run one `TEST_SHARD` of it through `scripts/run-tests-memory-safe.sh` with grouped namespace filters. Projects within a leg run concurrently with separate `--results-directory` values; the siblings use `--maximum-parallel-tests 4`.
+- `backend-tests` is a matrix: one `siblings` leg for every enrolled project except `XE-Local-AI-Engine.Tests`, and four `tests-<i>` legs that each run one `TEST_SHARD` of it through `scripts/run-tests-memory-safe.sh` with grouped namespace filters. Projects within a leg run concurrently with separate `--results-directory` values; the siblings use `--maximum-parallel-tests 2` (the last measured-safe width, not a limit of the dedicated runner).
 - Coverage is merged by `(filename,line)` and checked against `scripts/backend-coverage-baseline.txt`. Keep discovery depth-bounded because `--report-trx` creates byte-identical attachment copies.
 - `python-quality` uses the root tooling manifest, not the shipped training runtime. Never add dev tools to `tools/training/pyproject.toml`.
 - `release-contracts` installs shellcheck **0.11.0** pinned and sha256-verified because `ubuntu-latest` ships 0.9.0, whose SC2317/SC2015 false positives fail the `--severity=style` pass; `scripts/lint-release-scripts.sh` refuses anything below 0.10.0 (exit 2). Do not "fix" the pin by lowering the severity.
@@ -126,10 +126,11 @@ workflow — `needs: backend-tests`, `if: always()`, and a first step that fails
 **Rule:** `TEST_SHARD=i/N` in `scripts/run-tests-memory-safe.sh` is only accepted together with `TEST_GROUPS`, and
 the shards must be proven to partition the module rather than assumed to. **Failure prevented:** the per-namespace
 shape has no group index to slice, so silently ignoring the knob there would ship a "shard" that ran the whole
-module on every leg; and an overlapping stride cannot be caught downstream, because `scripts/merge-cobertura.py`
-unions by `(filename, line)` and merges a duplicated group to a perfectly plausible percentage. **Authority:** the
+module on every leg; and a stride that overlaps or leaves a gap cannot be caught downstream, because
+`scripts/merge-cobertura.py` unions by `(filename, line)` and merges a duplicated or a missing group to an equally
+plausible percentage. **Authority:** the
 `TEST_SHARD` parse in `scripts/run-tests-memory-safe.sh` (it rejects the combination before the Release build), and
-the `build-and-test` job's check that the union of the legs' `units.txt` names holds no duplicate.
+the `build-and-test` job's check that the group indices across the legs' `units.txt` files, sorted, equal `0`…`GROUPS-1` exactly. A duplicate-only check is not enough: it passes a run that skipped groups.
 
 ### Add a hub, a route family, a React feature or a project — and name it in the wiki, or `python-quality` goes red
 
