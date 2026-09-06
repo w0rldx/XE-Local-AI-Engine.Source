@@ -138,6 +138,8 @@ describe("NodeSettingsFieldsModel mapping", () => {
 		expect(form.enableTools).toBe(false);
 		// Absent in the response -> seed default (StoredNodeSettings.DefaultCustomToolsEnabled, off).
 		expect(form.customToolsEnabled).toBe(false);
+		// Absent in the response -> seed default (StoredNodeSettings.DefaultToolRelevanceEnabled, off).
+		expect(form.toolRelevanceEnabled).toBe(false);
 		expect(form.toolCapableModels).toEqual(["qwen3:8b"]);
 		expect(form.llamaMaxLoadedProcesses).toBe(5);
 		expect(form.keepModelWarmEnabled).toBe(true);
@@ -152,6 +154,7 @@ describe("NodeSettingsFieldsModel mapping", () => {
 		// byte-cap fallbacks pass the backend `> 0` validator if ever saved.
 		expect(nodeSettingsFieldDefaults.enableTools).toBe(true);
 		expect(nodeSettingsFieldDefaults.customToolsEnabled).toBe(false);
+		expect(nodeSettingsFieldDefaults.toolRelevanceEnabled).toBe(false); // DefaultToolRelevanceEnabled
 		expect(nodeSettingsFieldDefaults.llamaMaxLoadedProcesses).toBe(3);
 		expect(nodeSettingsFieldDefaults.llamaIdleTimeToLiveSeconds).toBe(900);
 		expect(nodeSettingsFieldDefaults.keepModelWarmEnabled).toBe(false);
@@ -193,6 +196,18 @@ describe("buildNodeSettingsRequest", () => {
 		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
 		expect(errors).toEqual({});
 		expect(body).toEqual({ customToolsEnabled: true });
+	});
+
+	it("sends the tool-relevance switch only when toggled", () => {
+		const form = { ...baseline, toolRelevanceEnabled: true };
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+		expect(errors).toEqual({});
+		expect(body).toEqual({ toolRelevanceEnabled: true });
+	});
+
+	it("omits the tool-relevance switch when it is unchanged", () => {
+		const { body } = buildNodeSettingsRequest({ ...baseline }, baseline, bounds, false);
+		expect(body.toolRelevanceEnabled).toBeUndefined();
 	});
 
 	it("rejects an out-of-range bounded number with a range error", () => {
@@ -594,6 +609,7 @@ describe("restart-gated fields", () => {
 		for (const live of [
 			"enableTools",
 			"customToolsEnabled",
+			"toolRelevanceEnabled",
 			"toolCapableModels",
 			"keepModelWarmEnabled",
 			"keepModelWarmModelName",

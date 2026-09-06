@@ -1836,6 +1836,10 @@
 					"label": "Benutzerdefinierte Tools aktivieren",
 					"description": "Erlaubt Agenten, benutzerdefinierte Tools auszuführen, die Host-Befehle ausführen, Programme starten und Netzwerkanfragen stellen. Standardmäßig deaktiviert. Jeder Aufruf erfordert weiterhin Ihre Genehmigung."
 				},
+				"toolRelevanceEnabled": {
+					"label": "Tools nach Relevanz filtern",
+					"description": "Sendet nur die für die jeweilige Nachricht relevantesten Tools, wenn ein Agent viele davon hat. Der Assistent kann die übrigen weiterhin über list_tools abrufen. Standardmäßig deaktiviert."
+				},
 				"toolCapableModels": {
 					"label": "Tool-fähige Modelle",
 					"description": "Modellnamen, die Tool-Aufrufe unterstützen. Enter drücken, um jeden Namen hinzuzufügen. Änderungen werden ohne Neustart des Knotens wirksam."

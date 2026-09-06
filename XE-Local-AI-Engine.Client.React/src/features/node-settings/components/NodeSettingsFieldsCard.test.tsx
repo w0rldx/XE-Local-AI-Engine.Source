@@ -142,6 +142,37 @@ describe("NodeSettingsFieldsCard — fast model for automatic reasoning effort",
 	});
 });
 
+describe("NodeSettingsFieldsCard — tool-relevance switch", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+		vi.clearAllMocks();
+	});
+
+	afterEach(() => cleanup());
+
+	it("renders off by default, with no restart hint (the backend reads it live)", () => {
+		renderCard();
+
+		const toggle = screen.getByTestId("node-settings-tool-relevance-enabled") as HTMLInputElement;
+		expect(toggle.checked).toBe(false);
+		expect(screen.queryByTestId("node-settings-restart-hint-toolRelevanceEnabled")).toBeNull();
+	});
+
+	it("renders on when the form says so", () => {
+		renderCard({ form: { ...toNodeSettingsFieldsForm(undefined), toolRelevanceEnabled: true } });
+
+		expect((screen.getByTestId("node-settings-tool-relevance-enabled") as HTMLInputElement).checked).toBe(true);
+	});
+
+	it("reports a click through the generic onChange", () => {
+		const { onChange } = renderCard();
+
+		fireEvent.click(screen.getByTestId("node-settings-tool-relevance-enabled"));
+
+		expect(onChange).toHaveBeenCalledWith("toolRelevanceEnabled", true);
+	});
+});
+
 describe("NodeSettingsFieldsCard — keep model warm", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
