@@ -59,6 +59,10 @@ public sealed class ModelFitMapperMetricsTests
 
         var dto = metrics.ToDto();
 
+        // Read the source values back, so the populated setup is load-bearing: without this the test would pass
+        // identically on an empty record, proving the DTO lacks the properties but not that there was anything to leak.
+        AssertEx.NotNull(metrics.RawJson);
+        AssertEx.NotNull(metrics.DiagnosticsJson);
         var properties = dto.GetType().GetProperties().Select(property => property.Name).ToArray();
         AssertEx.Empty(properties.Where(name => name is "RawJson" or "DiagnosticsJson"));
     }

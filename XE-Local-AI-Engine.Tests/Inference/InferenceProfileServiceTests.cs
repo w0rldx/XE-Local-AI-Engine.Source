@@ -655,7 +655,6 @@ public sealed class InferenceProfileServiceTests
             LaunchPolicyFingerprint: profile.LaunchPolicyFingerprint);
     }
 
-    // Wires the substituted seams the orchestrator composes, with safe defaults, and exposes the doubles the tests assert on.
     [Test]
     public async Task Explore_WhenContextTokensSupplied_PassesOverrideToSupervisor()
     {
@@ -796,6 +795,7 @@ public sealed class InferenceProfileServiceTests
                          Arg.Any<CancellationToken>());
     }
 
+    // Wires the substituted seams the orchestrator composes, with safe defaults, and exposes the doubles the tests assert on.
     private sealed class ServiceFixture
     {
         private static ModelFitSnapshotSummaryRecord Summary(Guid id, ModelFitRunStatus status)

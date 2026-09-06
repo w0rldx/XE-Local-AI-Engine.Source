@@ -150,12 +150,13 @@ describe("NodeSettingsFieldsCard — tool-relevance switch", () => {
 
 	afterEach(() => cleanup());
 
-	it("renders off by default, with no restart hint (the backend reads it live)", () => {
+	it("renders off by default", () => {
+		// That the field is NOT restart-gated is pinned in NodeSettingsFieldsModel.test.ts against
+		// restartGatedNodeSettingsFields; a queryByTestId for the hint here could not fail, so it is not asserted.
 		renderCard();
 
 		const toggle = screen.getByTestId("node-settings-tool-relevance-enabled") as HTMLInputElement;
 		expect(toggle.checked).toBe(false);
-		expect(screen.queryByTestId("node-settings-restart-hint-toolRelevanceEnabled")).toBeNull();
 	});
 
 	it("renders on when the form says so", () => {

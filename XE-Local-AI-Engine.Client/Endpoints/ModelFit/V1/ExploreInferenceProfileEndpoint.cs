@@ -9,8 +9,10 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 /// <summary>
 ///     FastEndpoints handler that explores a node-local GGUF model to draft its launch args (POST
 ///     model-fit/profiles/explore). Validates the model name (non-blank) and role
-///     (<c>chat|embedding|reranker</c>) and the optional <c>contextTokens</c> override (a shape bound of 2048–1048576;
-///     the model's train ceiling is the resolver's job) before calling the service's explore overload. A domain
+///     (<c>chat|embedding|reranker</c>) and the optional <c>contextTokens</c> override (a shape bound of 2048–1048576,
+///     read from <see cref="ExploreInferenceProfileRequest.MinExploreContextTokens" /> and
+///     <see cref="ExploreInferenceProfileRequest.MaxExploreContextTokens" />; the model's train ceiling is the
+///     resolver's job) before calling the service's explore overload. A domain
 ///     rejection — a cloud or missing model, or any
 ///     sanitized failure reason the service returns — is surfaced as a 400 via <c>AddError</c> + <c>Send.ErrorsAsync</c>,
 ///     not an exception. A SKIPPED result (the model was serving inference, so nothing ran and nothing was evicted) is
@@ -20,17 +22,10 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 public sealed class ExploreInferenceProfileEndpoint(IInferenceProfileService inferenceProfileService)
     : Endpoint<ExploreInferenceProfileRequest, InferenceProfileActionResponse>
 {
-    /// <summary>
-    ///     Lowest accepted <c>contextTokens</c> — the launch policy's smallest chat tier. A shape bound: the resolver
-    ///     itself has no minimum beyond its 256-token alignment unit.
-    /// </summary>
-    private const int MinExploreContextTokens = 2048;
-
-    /// <summary>
-    ///     Highest accepted <c>contextTokens</c>. A shape bound only; the model-specific ceiling belongs to the
-    ///     resolver's cap-and-align step, which is why this endpoint must not try to guess it.
-    /// </summary>
-    private const int MaxExploreContextTokens = 1_048_576;
+    // The bounds live on the request DTO, next to the XML doc that publishes them, so the documented range and the
+    // range this endpoint enforces cannot drift apart. This check stays the enforcing path.
+    private const int MinExploreContextTokens = ExploreInferenceProfileRequest.MinExploreContextTokens;
+    private const int MaxExploreContextTokens = ExploreInferenceProfileRequest.MaxExploreContextTokens;
 
     private readonly IInferenceProfileService _inferenceProfileService = inferenceProfileService ?? throw new ArgumentNullException(nameof(inferenceProfileService));
 

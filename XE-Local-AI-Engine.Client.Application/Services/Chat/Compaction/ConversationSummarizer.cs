@@ -29,8 +29,10 @@ internal sealed class ConversationSummarizer(
     private readonly ConversationCompactionOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
 
     // The string SENT as the system message and the string budget validation CHARGES must come from one rendering;
-    // a drift between them silently invalidates every budget decision.
-    private readonly string _systemPrompt = RenderSystemPrompt(options.Value.MaxSummaryChars);
+    // a drift between them silently invalidates every budget decision. The null guard is repeated rather than read
+    // off _options because a field initializer cannot reference another instance field (CS0236) — repeating it is
+    // what removes the dependency on _options being declared first.
+    private readonly string _systemPrompt = RenderSystemPrompt((options ?? throw new ArgumentNullException(nameof(options))).Value.MaxSummaryChars);
 
     // The synopsis ceiling is rendered from the configured cap, never hard-coded: at a MaxSummaryChars below the
     // 4,000 default a prompt that still promised 3,500 characters would invite a synopsis the rune-safe clamp in

@@ -78,6 +78,20 @@ public sealed class ListInferenceProfilesResponse
 /// </summary>
 public sealed class ExploreInferenceProfileRequest
 {
+    /// <summary>
+    ///     Lowest accepted <see cref="ContextTokens" /> — the launch policy's smallest chat tier. A shape bound: the
+    ///     resolver itself has no minimum beyond its 256-token alignment unit. Lives on the DTO so the documented range
+    ///     and the value <c>ExploreInferenceProfileEndpoint</c> enforces cannot drift apart. Not a data annotation: no
+    ///     request DTO under <c>V1/Dtos</c> uses one, and adding one here would change the generated OpenAPI schema.
+    /// </summary>
+    internal const int MinExploreContextTokens = 2048;
+
+    /// <summary>
+    ///     Highest accepted <see cref="ContextTokens" />. A shape bound only; the model-specific ceiling belongs to the
+    ///     resolver's cap-and-align step, which is why the endpoint must not try to guess it.
+    /// </summary>
+    internal const int MaxExploreContextTokens = 1_048_576;
+
     public required string ModelName { get; init; }
 
     /// <summary>Role to explore — <c>chat|embedding|reranker</c>. Defaults to <c>chat</c> when omitted.</summary>
@@ -89,10 +103,18 @@ public sealed class ExploreInferenceProfileRequest
     ///     field existed. Nothing about the value is persisted — it reaches one spawn and is never written to node
     ///     settings or the launch policy.
     ///     <para>
-    ///         Accepted range is 2048–1048576. The floor is the launch policy's LOWEST chat tier rather than a
-    ///         resolver-enforced minimum (the resolver's own floor is the 256-token alignment unit); the ceiling is a
-    ///         shape bound only. The model's train ceiling caps the value SILENTLY, so a request above it succeeds with
-    ///         a smaller window: read <c>ctxSize</c> on the returned profile for what was actually used.
+    ///         Accepted range is <see cref="MinExploreContextTokens" />–<see cref="MaxExploreContextTokens" />
+    ///         (2048–1048576), enforced by <c>ExploreInferenceProfileEndpoint</c> from these same consts. The floor is
+    ///         the launch policy's LOWEST chat tier rather than a resolver-enforced minimum (the resolver's own floor is
+    ///         the 256-token alignment unit); the ceiling is a shape bound only. The model's train ceiling caps the
+    ///         value SILENTLY, so a request above it succeeds with a smaller window: read <c>ctxSize</c> on the
+    ///         returned profile for what was actually used.
+    ///     </para>
+    ///     <para>
+    ///         An override the box cannot fit FAILS the explore rather than being reduced: it routes the allocation
+    ///         down the deterministic-override branch, and <c>ProcessContextAllocationResolver.TryDownTierForAdmission</c>
+    ///         down-tiers hardware-tier allocations only. So the value is honoured verbatim or the spawn is rejected;
+    ///         an unoverridden explore, by contrast, steps down a tier instead of failing.
     ///     </para>
     ///     <para>
     ///         GPU-only. A non-null value on a CPU-variant node is rejected with a 400, because

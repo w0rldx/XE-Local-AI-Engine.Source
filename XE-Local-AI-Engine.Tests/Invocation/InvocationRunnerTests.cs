@@ -4642,6 +4642,8 @@ public sealed class InvocationRunnerTests
         var runtimeSettings = StubNodeRuntimeSettings.Create()
                                                      .WithMaxResponseSizeMb(resolvedWorkerOptions.MaxResponseSizeMb)
                                                      .WithMaxPendingToolCallAgeMinutes(resolvedWorkerOptions.MaxPendingToolCallAgeMinutes)
+                                                     // Tool relevance stays OFF by default here: every existing assertion in this file is a
+                                                     // byte-identical-offer assertion. The notice-drain tests pass their own enabled read.
                                                      .WithToolRelevanceEnabled(toolRelevanceRead ?? (static _ => Task.FromResult(false)))
                                                      .Build();
 
@@ -4665,8 +4667,6 @@ public sealed class InvocationRunnerTests
             Options.Create(new ProviderResilienceOptions()),
             Options.Create(new AgentToolPipelineOptions()),
             Options.Create(new ProviderCallBudgetOptions()),
-            // Tool relevance stays OFF by default here: every existing assertion in this file is a byte-identical-offer
-            // assertion. The notice-drain tests pass their own enabled read.
             toolRelevanceCoreSet ?? new FakeToolRelevanceCoreSet(),
             configuration,
             runtimeSettings,

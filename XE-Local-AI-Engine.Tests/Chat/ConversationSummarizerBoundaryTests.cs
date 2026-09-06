@@ -244,10 +244,14 @@ public sealed class ConversationSummarizerBoundaryTests
     [Test]
     public async Task SummarizeAsync_WhenAHanBatchFitsOnlyUnderRelaxedEscaping_SendsItAsOneRequest()
     {
-        // 200 Han characters: the 1,396-char prompt plus a 63-char JSON frame plus 200 raw characters is 1,659 and
-        // fits the 2,000 budget; escaped to \uXXXX the same batch costs 1,200 and does not, so the default encoder
-        // would fragment one short message. This pins that ConversationSummarizer.RequestFitsBudget measures the
-        // relaxed form the request actually carries.
+        // 200 Han characters, at this test's maxSummaryChars of 300 (so the prompt renders "under 262 characters" and
+        // is 1,395 chars, one shorter than the 1,396 of the 4,000-cap rendering). RequestFitsBudget charges the prompt
+        // plus the SERIALIZED request: a 63-char JSON frame plus the content. Relaxed, that is 1,395 + 63 + 200 =
+        // 1,658, which fits the 2,000 budget; under the default encoder each Han rune becomes a 6-char \uXXXX escape,
+        // so the same batch is 1,395 + 63 + 1,200 = 2,658 and does not, and one short message would be fragmented.
+        // The 63 here is this request's own frame, NOT the FrameOverhead constant: that one probes with an emoji, whose
+        // supplementary scalar the relaxed encoder still writes as two escapes, and it is charged only by
+        // GetMinimumRequestBudget. This pins that RequestFitsBudget measures the relaxed form the request carries.
         const int requestBudget = 2000;
         var content = new string('中', 200);
         using var client = new CapturingChatClient();
