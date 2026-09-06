@@ -1,9 +1,12 @@
 namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -95,6 +98,67 @@ public sealed class GraphWorkflowRunServiceTests
         var stored = AssertEx.NotNull(await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().FindRunByRequestAsync(requestId).ConfigureAwait(false));
         AssertEx.Equal(winner.Run.Id, stored.Id, "one run row holds the request id.");
         AssertEx.Equal(winner.Run.DefinitionId, stored.DefinitionId, "and it is a run of the definition that won, not of the one that lost.");
+    }
+
+    /// <summary>
+    ///     The loser's refusal, pinned deterministically. The race above can be won SERIALLY — one start commits before
+    ///     the other reads — and then the fast path refuses and the post-insert check never runs. Here the store is
+    ///     substituted so only the other shape exists: nothing found by request id, and the insert answering with the
+    ///     WINNER's run, which names a definition this caller never asked for. That run is refused, the dispatcher is
+    ///     never signalled for it, and the refusal provably comes from AFTER the insert.
+    /// </summary>
+    [Test]
+    public async Task StartAsync_WhenTheInsertAnswersWithAnotherDefinitionsRun_RefusesAfterTheInsertWithoutSignalling()
+    {
+        var definitionId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var winnerRunId = Guid.NewGuid();
+
+        var store = Substitute.For<IGraphWorkflowStore>();
+        _ = store.FindRunByRequestAsync(requestId, Arg.Any<CancellationToken>()).Returns((GraphWorkflowRunSnapshot?)null);
+        _ = store.GetDefinitionAsync(definitionId, Arg.Any<CancellationToken>())
+                 .Returns(new GraphWorkflowDefinitionSnapshot(definitionId,
+                     "Substituted",
+                     Description: null,
+                     GraphWorkflowGraphs.InlineLinear,
+                     "graph-hash",
+                     NodeCount: 3,
+                     SchemaVersion: 1,
+                     Version: 1,
+                     CreatedAtUtc: 0,
+                     UpdatedAtUtc: 0));
+
+        // What the store answers a LOST unique-index race with: the run that won the request id, which is a run of
+        // somebody else's definition.
+        _ = store.StartRunAsync(Arg.Any<StartGraphWorkflowRunCommand>(), Arg.Any<CancellationToken>())
+                 .Returns(new GraphWorkflowRunSnapshot(winnerRunId,
+                     requestId,
+                     Guid.NewGuid(),
+                     DefinitionVersion: 1,
+                     "graph-hash",
+                     GraphWorkflowRunStatus.Pending,
+                     GraphWorkflowFailureClass.None,
+                     GraphWorkflowGraphs.InlineLinear,
+                     InputJson: null,
+                     OutputJson: null,
+                     Seq: 1,
+                     Version: 1,
+                     CancelRequestedAtUtc: null,
+                     StartedAtUtc: null,
+                     CompletedAtUtc: null,
+                     CreatedAtUtc: 0));
+
+        var signals = new RecordingGraphWorkflowDispatcherSignal();
+        var runs = new GraphWorkflowRunService(store, signals, Options.Create(new GraphWorkflowOptions()));
+
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() =>
+                              runs.StartAsync(definitionId, requestId, inputJson: null, definitionVersion: null))
+                          .ConfigureAwait(false);
+
+        _ = store.Received(requiredNumberOfCalls: 1).StartRunAsync(Arg.Any<StartGraphWorkflowRunCommand>(), Arg.Any<CancellationToken>());
+        AssertEx.Equal(expected: 0,
+            signals.CountFor(winnerRunId),
+            "the refusal lands before the signal, so nothing wakes the dispatcher for a run this caller never asked for.");
     }
 
     /// <summary>A start against a version that has since been edited answers a conflict rather than running a graph the caller never saw.</summary>
