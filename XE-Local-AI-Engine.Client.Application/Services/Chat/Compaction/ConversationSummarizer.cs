@@ -154,12 +154,15 @@ internal sealed class ConversationSummarizer(
         {
             Temperature = 0f,
 
-            // A token cap equal to the CHARACTER cap below. No tokenizer emits more than one token per character on text
-            // this class will keep, so the cap can never truncate a synopsis the character backstop would have kept — for
-            // any script, including CJK, where a Qwen3-class tokenizer runs about 1.3 characters per token. Deliberately
-            // LOOSE: its job is to stop a reasoning model spending a 64k window on one fold, not to squeeze the synopsis.
-            // Same Math.Max(1, ...) guard the character truncation already uses, so a pathological configured value
-            // cannot produce a non-positive cap.
+            // A token cap numerically equal to the CHARACTER cap below. At least one character per token holds for Latin
+            // and for CJK — where a Qwen3-class tokenizer runs about 1.3 characters per token — so on those scripts the
+            // cap sits above the character backstop and cannot bind first. It is NOT a universal property: byte-fallback
+            // BPE spends several tokens per character for any character outside its merge table (Georgian, Burmese,
+            // Devanagari, rare CJK, most emoji), and for a synopsis in such a script the token cap CAN bind before the
+            // character backstop. TruncateAtRuneBoundary below therefore stays the only guarantee on synopsis length.
+            // Deliberately LOOSE: the cap's job is to stop a reasoning model spending a 64k window on one fold, not to
+            // size the synopsis. Same Math.Max(1, ...) guard the character truncation already uses, so a pathological
+            // configured value cannot produce a non-positive cap.
             MaxOutputTokens = Math.Max(1, _options.MaxSummaryChars)
         };
 

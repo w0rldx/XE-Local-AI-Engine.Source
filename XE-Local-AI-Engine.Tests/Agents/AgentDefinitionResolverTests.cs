@@ -921,6 +921,11 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.True((byId.Skills ?? []).SequenceEqual(byRecord.Skills ?? []), "Both overloads must project the same skills, in the same order.");
         AssertEx.True((byId.CustomTools ?? []).SequenceEqual(byRecord.CustomTools ?? []), "Both overloads must project the same custom tools, in the same order.");
 
+        // ONE store read for TWO resolutions: the id overload fetches, the record overload projects the snapshot it was
+        // handed. This is the hand-off contract the spawn seam depends on — a record overload that secretly re-read by
+        // id would make that spawn cost two reads again, and no assertion above would notice.
+        await store.Received(1).GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+
         // The config hash is the contract the runtime package is keyed on, so prove the two projections hash alike
         // through the real builder rather than trusting the field walk above to be exhaustive.
         var builder = new LocalChatRuntimePackageBuilder();

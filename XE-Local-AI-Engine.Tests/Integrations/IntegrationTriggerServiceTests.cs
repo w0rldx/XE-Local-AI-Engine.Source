@@ -132,6 +132,7 @@ public sealed class IntegrationTriggerServiceTests
         AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
         AssertEx.Equal(IntegrationSessionPolicy.CallerManaged, harness.Triggers.Rows.Single().SessionPolicy);
         _ = harness.AgentResolver.DidNotReceiveWithAnyArgs().ResolveAsync(default(Guid?), default);
+        _ = harness.AgentResolver.DidNotReceiveWithAnyArgs().ResolveAsync(default(AgentDefinitionRecord)!, default);
     }
 
     [Test]

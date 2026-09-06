@@ -172,6 +172,38 @@ public sealed class CustomToolCatalogTests
         await store.Received(2).ListAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
+    [Test]
+    public async Task TryResolveManyAsync_WhenADuplicateNameIsStored_LetsTheFirstOfferableRecordClaimIt()
+    {
+        // The claimed-set semantic, which nothing else pins: the FIRST offerable record for a name owns it in store
+        // order, so a later duplicate is never tried even when the owner then fails its schema check. Moving claimed.Add
+        // below the executor/schema checks — the natural "cleanup" — would silently let the second row's configuration
+        // execute instead, which is a different HTTP call under the same tool name.
+        var store = BuildStore([
+            Record("custom__dup", parametersJson: "{ not json"),
+            Record("custom__dup")
+        ]);
+        var storeResolutions = new ReadCounter();
+        var catalog = CreateCatalog(store, storeResolutions, Settings(customToolsEnabled: true));
+
+        var resolved = await catalog.TryResolveManyAsync(["custom__dup"], CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.False(resolved.ContainsKey("custom__dup"),
+            "the first offerable record claimed the name and then failed its schema, so the name must resolve to nothing");
+        AssertEx.Empty(resolved, "the duplicate must not resolve under any other key either");
+        AssertEx.Equal(expected: 1, storeResolutions.Value, "a duplicate name must not cost a second read");
+        await store.Received(1).ListAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
+
+        // Control: the second record is valid on its own, so the absence above is the claim order and not an unresolvable
+        // second row.
+        var soloStore = BuildStore([Record("custom__dup")]);
+        var soloCatalog = CreateCatalog(soloStore, new ReadCounter(), Settings(customToolsEnabled: true));
+
+        var solo = await soloCatalog.TryResolveManyAsync(["custom__dup"], CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.True(solo.ContainsKey("custom__dup"), "the second record resolves when no earlier record claims the name");
+    }
+
     private static CustomToolCatalog CreateCatalog(ICustomToolStore store,
         ReadCounter storeResolutions,
         INodeRuntimeSettings settings)

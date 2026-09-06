@@ -1176,9 +1176,12 @@ public sealed class SubAgentSpawnServiceTests
     public async Task Spawn_WhenFanOutIsSaturatedAndTheBindingIsUnresolvable_RejectsForFanOut()
     {
         // A saturated turn rejects BEFORE it pays for a binding resolution — a definition store read plus a full
-        // projection — so the fan-out reason wins over the unresolved one and the resolver is never asked. The first
-        // spawn is a bare model binding on purpose: that path short-circuits without touching the resolver, so the
-        // zero-calls assertion is about the SECOND spawn alone rather than being vacuous.
+        // projection — so the fan-out reason wins over the unresolved one and neither the store nor the resolver is
+        // asked. The DEFINITION STORE is the discriminating spy: the second spawn's key is a well-formed GUID, so on
+        // the old order ResolveDefinitionAsync would call GetByIdAsync once and only then return null. The resolver's
+        // zero-calls assertion alone does not discriminate (the null definition short-circuits before the resolver is
+        // reached either way); it is kept because it pins the second half of the saved work. The first spawn is a bare
+        // model binding on purpose: that path short-circuits without touching either seam.
         using var harness = new Harness();
         harness.AllowLocal();
         var service = harness.Build();
@@ -1197,6 +1200,7 @@ public sealed class SubAgentSpawnServiceTests
         }, CancellationToken.None);
 
         AssertEx.Contains(secondResult, "concurrent sub-agents");
+        await harness.DefinitionStore.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
         AssertEx.Empty(harness.Resolver.ReceivedCalls(), "a spawn rejected for fan-out must not pay for a binding resolution");
 
         gate.SetResult();
