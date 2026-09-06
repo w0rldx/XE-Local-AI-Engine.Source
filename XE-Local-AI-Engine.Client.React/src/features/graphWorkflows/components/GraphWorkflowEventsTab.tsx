@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import {
 	asGraphWorkflowEventType,
@@ -24,7 +25,7 @@ export interface GraphWorkflowEventsTabProps {
  * means the NEWEST events are not on screen yet — which is what the banner says, and what "Load more" fetches.
  */
 export function GraphWorkflowEventsTab({ runId }: GraphWorkflowEventsTabProps) {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 	const [expandedId, setExpandedId] = useState<string | undefined>(undefined);
 	const query = useGraphWorkflowRunEvents(runId);
 
@@ -97,7 +98,7 @@ export function GraphWorkflowEventsTab({ runId }: GraphWorkflowEventsTabProps) {
 									{t("pages.graphWorkflows.events.meta", "#{{seq}}", { seq: event.seq ?? 0 })}
 								</Text>
 								<Text size="xs" c="dimmed">
-									{new Date(event.createdAtUtc ?? 0).toLocaleTimeString(i18n.language)}
+									{formatTimestamp(event.createdAtUtc ?? null)}
 								</Text>
 							</Group>
 							{/* Which node it happened on: the same key the canvas card and the table row are addressed by. */}

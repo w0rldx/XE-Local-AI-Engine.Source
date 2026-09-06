@@ -1,6 +1,7 @@
 import { Anchor, Badge, Group, Stack, Table, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { GraphWorkflowNodeStatusBadge } from "@/features/graphWorkflows/components/GraphWorkflowStatusBadge";
 import {
@@ -37,8 +38,7 @@ export interface GraphWorkflowNodeRunTableProps {
  * here, and the definition's label lives on the card the canvas draws.
  */
 export function GraphWorkflowNodeRunTable({ nodeRuns, selectedNodeKey, onSelectNode }: GraphWorkflowNodeRunTableProps) {
-	// The UI language, not the browser's: a German UI must not print US dates.
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 
 	if (nodeRuns.length === 0) {
 		return (
@@ -136,7 +136,7 @@ export function GraphWorkflowNodeRunTable({ nodeRuns, selectedNodeKey, onSelectN
 								</Table.Td>
 								<Table.Td>
 									<Text size="xs" c="dimmed" data-testid={`graph-workflow-node-started-${nodeKey}`}>
-										{nodeRun.startedAtUtc != null ? new Date(nodeRun.startedAtUtc).toLocaleTimeString(i18n.language) : "—"}
+										{formatTimestamp(nodeRun.startedAtUtc ?? null)}
 									</Text>
 								</Table.Td>
 								<Table.Td>
