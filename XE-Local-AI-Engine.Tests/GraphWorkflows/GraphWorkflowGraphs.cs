@@ -601,4 +601,57 @@ internal static class GraphWorkflowGraphs
                                                           ]
                                                         }
                                                         """;
+
+    /// <summary>
+    ///     A <c>Tool</c> node whose answer a <c>Condition</c> routes on. It is the shape that makes the tool lane's
+    ///     result embedding matter: a <c>Condition</c> passes its predecessor's output through verbatim, so an edge
+    ///     leaving it can only read <c>output.result.ok</c> if the tool's JSON answer survived as JSON.
+    /// </summary>
+    public const string ToolThenCondition = """
+                                            {
+                                              "schemaVersion": 1,
+                                              "nodes": [
+                                                { "key": "start", "kind": "Start" },
+                                                { "key": "call", "kind": "Tool", "config": { "toolName": "probe_json" } },
+                                                { "key": "check", "kind": "Condition", "config": { "path": "output.result.ok" } },
+                                                { "key": "okend", "kind": "End", "config": { "outcome": "completed" } },
+                                                { "key": "badend", "kind": "End", "config": { "outcome": "rejected" } }
+                                              ],
+                                              "edges": [
+                                                { "key": "e1", "from": "start", "to": "call" },
+                                                { "key": "e2", "from": "call", "to": "check" },
+                                                { "key": "e3", "from": "check", "to": "okend", "label": "ok", "condition": { "op": "eq", "value": true } },
+                                                { "key": "e4", "from": "check", "to": "badend", "label": "not-ok", "condition": { "op": "ne", "value": true } }
+                                              ]
+                                            }
+                                            """;
+
+    /// <summary>
+    ///     Three <c>Tool</c> nodes fanned out in parallel. Unlike the agent fan-out there is no node-wide slot behind
+    ///     them, so what bounds this one is the tool lane itself — which is the whole reason the lane exists.
+    /// </summary>
+    public const string ToolFanOut = """
+                                     {
+                                       "schemaVersion": 1,
+                                       "nodes": [
+                                         { "key": "start", "kind": "Start" },
+                                         { "key": "fanout", "kind": "Parallel", "config": {} },
+                                         { "key": "left", "kind": "Tool", "config": { "toolName": "probe_fanout" } },
+                                         { "key": "middle", "kind": "Tool", "config": { "toolName": "probe_fanout" } },
+                                         { "key": "right", "kind": "Tool", "config": { "toolName": "probe_fanout" } },
+                                         { "key": "merge", "kind": "Join", "config": {} },
+                                         { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                       ],
+                                       "edges": [
+                                         { "key": "e1", "from": "start", "to": "fanout" },
+                                         { "key": "e2", "from": "fanout", "to": "left" },
+                                         { "key": "e3", "from": "fanout", "to": "middle" },
+                                         { "key": "e4", "from": "fanout", "to": "right" },
+                                         { "key": "e5", "from": "left", "to": "merge" },
+                                         { "key": "e6", "from": "middle", "to": "merge" },
+                                         { "key": "e7", "from": "right", "to": "merge" },
+                                         { "key": "e8", "from": "merge", "to": "done" }
+                                       ]
+                                     }
+                                     """;
 }
