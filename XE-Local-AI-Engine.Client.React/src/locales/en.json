@@ -5680,7 +5680,7 @@
 					"collision": "That key already belongs to another node or edge."
 				},
 				"maxAttempts": {
-					"range": "Enter a whole number between 1 and 10."
+					"range": "Enter a whole number between 1 and 100."
 				},
 				"timeoutSeconds": {
 					"min": "Enter a whole number of seconds, or leave it empty for no timeout."
@@ -5726,7 +5726,7 @@
 				},
 				"name": {
 					"required": "Enter a name.",
-					"tooLong": "Use at most 120 characters."
+					"tooLong": "Use at most 200 characters."
 				}
 			},
 			"config": {

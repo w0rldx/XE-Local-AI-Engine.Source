@@ -5,6 +5,7 @@ import { Group, Select, Switch, Textarea } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { GraphWorkflowJsonField } from "@/features/graphWorkflows/components/config/GraphWorkflowJsonField";
+import { withCurrentValue } from "@/features/graphWorkflows/components/config/GraphWorkflowSelectOptions";
 import type { GraphWorkflowCanvasNodeData } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 
 type AgentNodeData = Extract<GraphWorkflowCanvasNodeData, { kind: "Agent" }>;
@@ -42,7 +43,7 @@ export function GraphWorkflowAgentConfigForm({
 			<Select
 				label={t("pages.graphWorkflows.config.agent", "Agent")}
 				placeholder={t("pages.graphWorkflows.config.agentPlaceholder", "This node's default agent")}
-				data={agentOptions.map((option) => ({ value: option.value, label: option.label }))}
+				data={withCurrentValue(agentOptions, node.agentDefinitionId)}
 				value={node.agentDefinitionId}
 				clearable={true}
 				searchable={true}
@@ -66,7 +67,7 @@ export function GraphWorkflowAgentConfigForm({
 				<Select
 					label={t("pages.graphWorkflows.config.model", "Model")}
 					placeholder={t("pages.graphWorkflows.config.modelPlaceholder", "The agent's own model")}
-					data={modelOptions.map((option) => ({ value: option.value, label: option.label }))}
+					data={withCurrentValue(modelOptions, node.model)}
 					value={node.model}
 					clearable={true}
 					searchable={true}

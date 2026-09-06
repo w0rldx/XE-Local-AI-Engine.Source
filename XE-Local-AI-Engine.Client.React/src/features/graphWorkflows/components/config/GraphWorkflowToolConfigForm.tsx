@@ -8,6 +8,7 @@ import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { GraphWorkflowJsonField } from "@/features/graphWorkflows/components/config/GraphWorkflowJsonField";
+import { withCurrentValue } from "@/features/graphWorkflows/components/config/GraphWorkflowSelectOptions";
 import type {
 	GraphWorkflowArgumentBinding,
 	GraphWorkflowCanvasNodeData,
@@ -97,7 +98,10 @@ export function GraphWorkflowToolConfigForm({
 				placeholder={t("pages.graphWorkflows.config.toolPlaceholder", "Choose a tool")}
 				// Exactly the list the page was given: `GET graph-workflows/tools` is already filtered server-side to what
 				// a graph node may run, and re-deriving that here would be a second rule that drifts.
-				data={tools.map((tool) => ({ value: tool.name ?? "", label: tool.name ?? "" }))}
+				data={withCurrentValue(
+					tools.map((tool) => ({ value: tool.name ?? "", label: tool.name ?? "" })),
+					node.toolName,
+				)}
 				value={node.toolName}
 				searchable={true}
 				disabled={readOnly}
@@ -169,7 +173,10 @@ export function GraphWorkflowToolConfigForm({
 						>
 							<Select
 								label={t("pages.graphWorkflows.config.bindingParameter", "Parameter")}
-								data={properties.map((property) => ({ value: property.name, label: property.name }))}
+								data={withCurrentValue(
+									properties.map((property) => ({ value: property.name, label: property.name })),
+									binding.parameter,
+								)}
 								value={binding.parameter.length > 0 ? binding.parameter : null}
 								searchable={true}
 								disabled={readOnly}
@@ -184,6 +191,7 @@ export function GraphWorkflowToolConfigForm({
 								value={binding.path}
 								disabled={readOnly}
 								style={{ flex: 1, minWidth: 0 }}
+								onBlur={() => onTouch("argumentBindings")}
 								onChange={(event) =>
 									onChange({ argumentBindings: patchBinding(node.argumentBindings, index, { path: event.currentTarget.value }) })
 								}
@@ -204,6 +212,11 @@ export function GraphWorkflowToolConfigForm({
 						</Group>
 					))
 				)}
+				{errorFor("argumentBindings") ? (
+					<Text size="xs" c="red" data-testid="gw-node-config-bindings-error">
+						{errorFor("argumentBindings")}
+					</Text>
+				) : null}
 			</Stack>
 		</>
 	);

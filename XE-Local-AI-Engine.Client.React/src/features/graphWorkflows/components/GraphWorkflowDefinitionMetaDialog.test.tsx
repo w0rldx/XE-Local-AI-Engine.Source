@@ -43,16 +43,26 @@ describe("GraphWorkflowDefinitionMetaDialog", () => {
 		expect(onSubmit).not.toHaveBeenCalled();
 	});
 
-	it("refuses a name past the server's 120-character bound", () => {
+	it("accepts a name at the server's 200-character bound", () => {
+		const onSubmit = vi.fn<SubmitHandler>();
+		renderDialog(onSubmit);
+
+		fireEvent.change(screen.getByTestId("gw-definition-meta-name"), { target: { value: "n".repeat(200) } });
+		fireEvent.click(screen.getByTestId("gw-definition-meta-submit"));
+
+		expect(onSubmit).toHaveBeenCalledWith({ name: "n".repeat(200), description: null });
+	});
+
+	it("refuses a name past the server's 200-character bound", () => {
 		const onSubmit = vi.fn<SubmitHandler>();
 		renderDialog(onSubmit);
 
 		// `maxLength` stops typing past the bound in a browser; a paste or an autofill still gets through, so the
 		// schema is what actually refuses it.
-		fireEvent.change(screen.getByTestId("gw-definition-meta-name"), { target: { value: "n".repeat(121) } });
+		fireEvent.change(screen.getByTestId("gw-definition-meta-name"), { target: { value: "n".repeat(201) } });
 		fireEvent.click(screen.getByTestId("gw-definition-meta-submit"));
 
-		expect(screen.getByText("Use at most 120 characters.")).toBeTruthy();
+		expect(screen.getByText("Use at most 200 characters.")).toBeTruthy();
 		expect(onSubmit).not.toHaveBeenCalled();
 	});
 
