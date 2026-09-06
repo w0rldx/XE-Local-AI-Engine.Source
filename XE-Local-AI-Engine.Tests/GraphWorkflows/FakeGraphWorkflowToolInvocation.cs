@@ -49,8 +49,11 @@ internal sealed record GraphWorkflowScriptedTool(
 /// </summary>
 internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService, IDisposable
 {
+    /// <summary>What a call answers when its block hit the ceiling instead of being released. Never a passing path.</summary>
+    public const string BlockCeilingReached = "the fake tool service gave up waiting to be released";
+
     /// <summary>How long a synchronous block waits before giving up, so a failed assertion cannot hang the suite.</summary>
-    private static readonly TimeSpan BlockCeiling = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan BlockCeiling = TimeSpan.FromSeconds(10);
 
     private readonly ManualResetEventSlim _unblocked = new(initialState: false);
 
@@ -127,10 +130,12 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService, 
         }
 
         // Blocking the THREAD, on purpose, and bounded so a failed assertion cannot hang the suite. real-timer: the
-        // ceiling is a backstop, never the path a passing test takes — ReleaseAll is.
-        if (script.Blocks && Volatile.Read(ref _open) == 0)
+        // ceiling is a backstop, never the path a passing test takes — ReleaseAll is. Reaching it is REPORTED rather
+        // than swallowed: a ceiling that quietly returned the happy path would let a test pass slowly instead of
+        // failing, which is what it was written to catch.
+        if (script.Blocks && Volatile.Read(ref _open) == 0 && !_unblocked.Wait(BlockCeiling, cancellationToken))
         {
-            _ = _unblocked.Wait(BlockCeiling, cancellationToken);
+            return new ToolInvocationOutcome(ToolInvocationOutcomeKind.Faulted, Result: null, BlockCeilingReached);
         }
 
         if (script.Parks && Volatile.Read(ref _open) == 0)

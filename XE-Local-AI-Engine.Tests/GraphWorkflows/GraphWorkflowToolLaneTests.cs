@@ -75,29 +75,45 @@ public sealed class GraphWorkflowToolLaneTests
     ///     A tool that does its work SYNCHRONOUSLY does it off the tick. The lane starts a work delegate inline, and
     ///     the dispatcher advances one run at a time behind a process-wide gate, so a read tool scanning a filesystem
     ///     before its first await would hold every other run — and the cancel drain — for the whole scan.
+    ///     <para>
+    ///         Falsifiable by construction: the dispatching tick returns while the call is STILL blocked, and the
+    ///         block is then released explicitly. Started inline, that tick would instead sit out the fake's ceiling,
+    ///         answer <see cref="FakeGraphWorkflowToolInvocation.BlockCeilingReached" /> and be re-attempted — so the
+    ///         settled row would carry a second attempt rather than the first one's answer.
+    ///     </para>
     /// </summary>
     [Test]
     public async Task ASynchronouslyBlockingCall_DoesNotRunInsideTheTick()
     {
         const string blocking = "probe_blocking";
-        const string quick = "probe_unblocked";
         await using var harness = GraphWorkflowHarness.PrivateToolHost();
         harness.Tools.Script(blocking, new GraphWorkflowScriptedTool(Blocks: true));
-        harness.Tools.Declare(quick);
 
-        // The dispatch tick RETURNING is the assertion: with the call started inline, this never comes back until the
-        // block is released. The harness releases every block on disposal, so a failure here cannot hang the suite.
+        // The dispatch tick RETURNING is the assertion: started inline, it comes back only once the block has ended.
         var blocked = await DispatchedToolRunAsync(harness, blocking).ConfigureAwait(false);
 
-        var other = await harness.StartRunAsync(Graph(quick)).ConfigureAwait(false);
-        await harness.AdvanceUntilAsync(other,
-                async () => (await harness.ReadRunAsync(other).ConfigureAwait(false)).Status == GraphWorkflowRunStatus.Completed,
-                "a second run could not advance while a synchronous tool call was in flight.")
-            .ConfigureAwait(false);
-
+        AssertEx.Equal(expected: 1, harness.Tools.CallCountFor(blocking), "the call started, exactly once.");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Running,
             (await harness.ReadNodeRunAsync(blocked, "call").ConfigureAwait(false)).Status,
-            "and the blocking call was still blocked throughout, so the second run really did overtake it.");
+            "and the row says so while that call's thread is still blocked.");
+
+        // Released straight away rather than after a second run's worth of ticks: the block holds a thread-pool
+        // thread, and every tool call in the process now needs one for its own continuation.
+        harness.Tools.ReleaseAll();
+        await harness.AdvanceUntilAsync(blocked,
+                async () => (await harness.ReadRunAsync(blocked).ConfigureAwait(false)).Status == GraphWorkflowRunStatus.Completed,
+                "the released call never settled its own run.")
+            .ConfigureAwait(false);
+
+        var call = await harness.ReadNodeRunAsync(blocked, "call").ConfigureAwait(false);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, call.Status);
+
+        // The falsifier, and it has to be the ATTEMPT rather than the answer: a call started inside the tick sits out
+        // the fake's ceiling, faults, and is then re-attempted — by which time the block is open, so the SECOND try
+        // succeeds and every assertion about the final row would pass. One attempt and one invocation is the only
+        // shape that says this call was never blocked on the tick thread at all.
+        AssertEx.Equal(expected: 1, call.Attempt, $"the first attempt answered; a ceiling hit ({FakeGraphWorkflowToolInvocation.BlockCeilingReached}) would have spent another.");
+        AssertEx.Equal(expected: 1, harness.Tools.CallCountFor(blocking), "and the tool was asked exactly once.");
     }
 
     /// <summary>

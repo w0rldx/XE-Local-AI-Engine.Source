@@ -119,7 +119,10 @@ public sealed class GraphWorkflowToolExecutorTests
         harness.Tools.Script("probe_json", new GraphWorkflowScriptedTool(Result: """{"ok":true,"hits":3}"""));
         var runId = await harness.StartRunAsync(GraphWorkflowGraphs.ToolThenCondition).ConfigureAwait(false);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceUntilAsync(runId,
+                async () => (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status == GraphWorkflowRunStatus.Completed,
+                "the tool node's answer never routed the run to an end.")
+            .ConfigureAwait(false);
 
         AssertEx.Contains(AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false)).OutputJson, "the tool node carries a document."),
             "\"result\":{\"ok\":true,\"hits\":3}",
@@ -298,20 +301,13 @@ public sealed class GraphWorkflowToolExecutorTests
     ///         asking what an outcome mapped to would then be reading the retry stage's answer instead of the lane's.
     ///     </para>
     /// </summary>
-    private static async Task<GraphWorkflowNodeRunSnapshot> SettleToolAsync(GraphWorkflowHarness harness, Guid runId, int maxTicks = 60)
+    private static async Task<GraphWorkflowNodeRunSnapshot> SettleToolAsync(GraphWorkflowHarness harness, Guid runId)
     {
-        for (var tick = 0; tick < maxTicks; tick++)
-        {
-            var nodeRun = await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false);
-            if (GraphWorkflowStateMachine.IsTerminal(nodeRun.Status))
-            {
-                return nodeRun;
-            }
-
-            _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        }
-
-        throw new AssertionException($"Run {runId} left its tool node unsettled after {maxTicks} ticks.");
+        await harness.AdvanceUntilAsync(runId,
+                async () => GraphWorkflowStateMachine.IsTerminal((await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false)).Status),
+                $"Run {runId} left its tool node unsettled.")
+            .ConfigureAwait(false);
+        return await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false);
     }
 
     /// <summary>The <c>output.result</c> of a settled tool node.</summary>
