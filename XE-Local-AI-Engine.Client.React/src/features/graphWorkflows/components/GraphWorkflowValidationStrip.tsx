@@ -63,7 +63,14 @@ export function GraphWorkflowValidationStrip({ issues, onSelectSubject }: GraphW
 				</Alert>
 			) : null}
 			{keyed.size > 0 ? (
-				<Group gap="xs" wrap="wrap">
+				// A long issue list SCROLLS rather than growing: fifteen chips would otherwise push the strip up over the canvas
+				// and cover the controls. `flex: "0 0 auto"` keeps it out of the canvas's share of the column.
+				<Group
+					gap="xs"
+					wrap="wrap"
+					style={{ maxHeight: 120, overflowY: "auto", flex: "0 0 auto" }}
+					data-testid="graph-workflow-validation-issues"
+				>
 					{[...keyed.entries()].map(([identity, issue]) => (
 						<Button
 							key={identity}

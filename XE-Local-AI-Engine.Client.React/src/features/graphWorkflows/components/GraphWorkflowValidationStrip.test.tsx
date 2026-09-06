@@ -50,6 +50,21 @@ describe("GraphWorkflowValidationStrip", () => {
 		expect(onSelectSubject).toHaveBeenCalledWith("e3");
 	});
 
+	it("scrolls a long issue list instead of growing over the canvas", () => {
+		renderWithProviders(
+			<GraphWorkflowValidationStrip
+				issues={Array.from({ length: 15 }, (_unused, index) => ({ rule: "unreachable" as const, subject: `n${index}` }))}
+				onSelectSubject={vi.fn()}
+			/>,
+		);
+
+		const chips = screen.getByTestId("graph-workflow-validation-issues");
+		expect(chips.style.maxHeight).toBe("120px");
+		expect(chips.style.overflowY).toBe("auto");
+		// Without this the strip takes a share of the height-constrained editor column and covers the canvas controls.
+		expect(chips.style.flex).toBe("0 0 auto");
+	});
+
 	it("keeps one chip per subject when two server errors read the same", () => {
 		// De-duplicating on the sentence would hide one of two bad cards behind the other.
 		renderWithProviders(

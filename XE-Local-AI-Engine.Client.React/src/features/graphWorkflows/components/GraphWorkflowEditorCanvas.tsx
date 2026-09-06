@@ -182,7 +182,9 @@ function GraphWorkflowEditorCanvasInner({
 					);
 
 	return (
-		<Stack gap="sm" style={{ height: "100%" }} data-testid="graph-workflow-editor">
+		// `minHeight: 0` lets this column actually shrink inside the page's height-constrained pane. Without it the canvas
+		// floor below is a hard floor on the whole editor, and the validation strip is pushed over the canvas it sits under.
+		<Stack gap="sm" style={{ height: "100%", minHeight: 0 }} data-testid="graph-workflow-editor">
 			<Group justify="space-between" align="flex-end" wrap="wrap" gap="sm">
 				<Group gap="xs" role="group" aria-label={t("pages.graphWorkflows.palette.title", "Add a node")}>
 					{graphWorkflowNodeKinds.map((kind) => {
@@ -244,7 +246,7 @@ function GraphWorkflowEditorCanvasInner({
 					"Drag a node onto the canvas or click it in the palette. Select a node or a connection and press Delete to remove it.",
 				)}
 			</Text>
-			<Paper withBorder={true} style={{ flex: 1, minHeight: 360 }} data-testid="graph-workflow-canvas">
+			<Paper withBorder={true} style={{ flex: 1, minHeight: 240 }} data-testid="graph-workflow-canvas">
 				<ReactFlow
 					nodes={renderNodes}
 					edges={renderEdges}
