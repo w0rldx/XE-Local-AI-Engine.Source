@@ -1407,7 +1407,7 @@ These are intentionally terse. Follow the linked/current section for the active 
 | Bash variable `GROUPS` is available. | Bash owns it; use `TEST_GROUPS` (§1). |
 | CI runs test projects sequentially. | Projects run concurrently with separate result directories; the main Tests module uses grouped batch runner (§1). |
 | Memory-safe runner defaults to `JOBS=4`; increase in-process width. | Default is `JOBS=10`; process batches, not width, provide the useful concurrency (§1). |
-| Coverage should use one process per namespace. | Coverage instrumentation makes that prohibitively expensive; use `TEST_GROUPS=$(nproc)` groups (§1). |
+| Coverage should use one process per namespace. | Coverage instrumentation makes that prohibitively expensive; group instead. A local run uses `TEST_GROUPS=$(nproc)`; CI uses `TEST_GROUPS=16` split across 4 `TEST_SHARD` legs (§1). |
 | Development Mode must be unrestricted because restore needs network. | A short warm sandbox restores, then the agent-facing sandbox requests deny-egress where supported (§2). |
 | WSL has no GPU (or a specific older card). | Hardware changes between verifications; always query live (§2). |
 | llama.cpp native MCP should replace the app client. | Its MCP proxy is for llama-server's browser UI; keep the .NET MCP integration and approval boundary (§3). |

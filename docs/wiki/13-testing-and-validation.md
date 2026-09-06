@@ -199,13 +199,14 @@ Two gates ride the packaging path rather than any test suite:
 
 ## Coverage gates
 
-- **Backend**: enforced. Each project's `dotnet test` run in `build-and-test.yml` emits a Cobertura report;
+- **Backend**: enforced. Every `backend-tests` leg emits Cobertura reports — one per sibling project, one per
+  namespace group on each shard leg — and the `build-and-test` job merges them all;
   [`scripts/merge-cobertura.py`](../../scripts/merge-cobertura.py) merges them (deduplicating source lines that
   appear in more than one report) and fails the job if merged line coverage falls below the value in
   [`scripts/backend-coverage-baseline.txt`](../../scripts/backend-coverage-baseline.txt), currently **90.50**.
   The baseline file is the single place to change that number — raise it when coverage rises; lowering it is a
   reviewed decision, not a way to make a red build green. The merged XML and the TRX files are retained as the
-  `backend-test-results` artifact, so a failure can be inspected rather than re-run blind.
+  per-leg `backend-test-results-<leg>` artifacts, so a failure can be inspected rather than re-run blind.
 - **Frontend**: Vitest v8 coverage. Thresholds are enforced only by the `test:coverage:check` script, which sets
   `VITEST_COVERAGE_CHECK=true`. The thresholds live in the `coverageThresholds` constant in
   [`XE-Local-AI-Engine.Client.React/vite.config.ts`](../../XE-Local-AI-Engine.Client.React/vite.config.ts) — read them
