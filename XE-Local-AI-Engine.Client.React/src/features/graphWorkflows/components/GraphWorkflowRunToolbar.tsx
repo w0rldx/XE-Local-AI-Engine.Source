@@ -3,6 +3,7 @@ import { IconArrowLeft, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { GraphWorkflowRunStatusBadge } from "@/features/graphWorkflows/components/GraphWorkflowStatusBadge";
 import {
@@ -18,8 +19,9 @@ export interface GraphWorkflowRunToolbarProps {
 	readonly onBackToEditor: () => void;
 }
 
+/** The shared core formatter, so a run instant reads the same here as in every other table in the app. */
 function timestamp(value: number | null | undefined): string | undefined {
-	return value == null ? undefined : new Date(value).toLocaleString();
+	return value == null ? undefined : formatTimestamp(value);
 }
 
 export function GraphWorkflowRunToolbar({ run, onBackToEditor }: GraphWorkflowRunToolbarProps) {

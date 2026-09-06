@@ -1,9 +1,9 @@
-import { Alert, Badge, Button, Group, Loader, ScrollArea, Stack, Tabs, Text } from "@mantine/core";
+import { Alert, Badge, Button, Code, Group, Loader, ScrollArea, Stack, Tabs, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { GraphWorkflowDecisionPanel } from "@/features/graphWorkflows/components/GraphWorkflowDecisionPanel";
@@ -54,8 +54,9 @@ function field(value: unknown, name: string): unknown {
 	return (value as Record<string, unknown>)[name];
 }
 
+/** The shared core formatter, so a run instant reads the same here as in every other table in the app. */
 function timestamp(value: number | null | undefined): string | undefined {
-	return value == null ? undefined : new Date(value).toLocaleString();
+	return value == null ? undefined : formatTimestamp(value);
 }
 
 /**
@@ -81,7 +82,6 @@ function passThroughKey(kind: GraphWorkflowNodeKind): string | undefined {
 export function GraphWorkflowNodePanel({ runId, nodeKey, runStatus, pauseConfig, onClose }: GraphWorkflowNodePanelProps) {
 	const { t } = useTranslation();
 	const { data: nodeRun, isPending, error } = useGraphWorkflowNodeRun(runId, nodeKey);
-	const [tab, setTab] = useState<string | null>("output");
 
 	if (isPending) {
 		return <Loader size="sm" data-testid="graph-workflow-node-panel-loading" />;
@@ -162,7 +162,8 @@ export function GraphWorkflowNodePanel({ runId, nodeKey, runStatus, pauseConfig,
 					/>
 				) : null}
 
-				<Tabs value={tab} onChange={setTab} data-testid="graph-workflow-node-panel-tabs">
+				{/* Keyed on the node: a tab chosen while reading one node must not carry over to the next one. */}
+				<Tabs key={nodeKey} defaultValue="output" data-testid="graph-workflow-node-panel-tabs">
 					<Tabs.List>
 						<Tabs.Tab value="input" data-testid="graph-workflow-node-panel-tab-input">
 							{t("pages.graphWorkflows.nodePanel.tabInput", "Input")}
@@ -189,9 +190,16 @@ export function GraphWorkflowNodePanel({ runId, nodeKey, runStatus, pauseConfig,
 								</Text>
 							) : null}
 							{/* A tool answers with an object or an array when it has structure and a bare string when it
-							    does not; both are the tool's result, so both are rendered as one. */}
+							    does not. A string is the answer itself — rendering it through a JSON viewer would frame a
+							    file's contents as a document it is not. */}
 							{kind === "Tool" && field(inner, "result") !== undefined ? (
-								<Document value={field(inner, "result")} testId="graph-workflow-node-panel-tool-result" />
+								typeof field(inner, "result") === "string" ? (
+									<Code block={true} data-testid="graph-workflow-node-panel-tool-result">
+										{field(inner, "result") as string}
+									</Code>
+								) : (
+									<Document value={field(inner, "result")} testId="graph-workflow-node-panel-tool-result" />
+								)
 							) : null}
 							{kind === "Pause" && inner !== undefined ? (
 								<Stack gap={2} data-testid="graph-workflow-node-panel-pause">
