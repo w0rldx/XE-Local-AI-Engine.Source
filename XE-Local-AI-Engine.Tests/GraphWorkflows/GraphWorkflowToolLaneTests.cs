@@ -56,6 +56,7 @@ public sealed class GraphWorkflowToolLaneTests
         const string quick = "probe_prompt";
         await using var harness = GraphWorkflowHarness.PrivateToolHost();
         harness.Tools.Script(slow, new GraphWorkflowScriptedTool(Parks: true));
+        harness.Tools.Declare(quick);
 
         var parked = await DispatchedToolRunAsync(harness, slow).ConfigureAwait(false);
 
@@ -166,6 +167,7 @@ public sealed class GraphWorkflowToolLaneTests
     {
         const string tool = "probe_restart";
         await using var harness = GraphWorkflowHarness.PrivateToolHost();
+        harness.Tools.Declare(tool);
         var runId = await harness.StartRunAsync(Graph(tool)).ConfigureAwait(false);
         _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
         _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
