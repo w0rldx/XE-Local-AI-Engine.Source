@@ -10,7 +10,6 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -107,6 +106,9 @@ public sealed class BenchmarkComparisonExecutorTests
                 "intended", null, launchIdentityScheme));
 
     private static BenchmarkRunRecord Run() =>
-        new(Guid.NewGuid(), Guid.NewGuid(), new byte[] { 1 }, "model.gguf", LocalModelOrigin.Imported, $"v1:{new string('a', 64)}", "Agent", 1, 8192,
+        new(Guid.NewGuid(), Guid.NewGuid(), new byte[]
+            {
+                1
+            }, "model.gguf", LocalModelOrigin.Imported, $"v1:{new string('a', 64)}", "Agent", 1, 8192,
             BenchmarkPrimaryStatus.Succeeded, null, null, null, null, null, 0, null, null, 1, 1, 1, null, 1);
 }

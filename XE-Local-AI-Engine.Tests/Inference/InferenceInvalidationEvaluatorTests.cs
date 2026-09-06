@@ -295,7 +295,11 @@ public sealed class InferenceInvalidationEvaluatorTests
         var evaluator = BuildEvaluatorWithPlacement(ProcessPlacementMode.ExpertOffload, out _);
 
         var contradicts =
-            await evaluator.ContradictsCurrentPlacementAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb) with { IsMoe = true, ExpertCount = 128 },
+            await evaluator.ContradictsCurrentPlacementAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb) with
+                {
+                    IsMoe = true,
+                    ExpertCount = 128
+                },
                 CancellationToken.None);
 
         AssertEx.True(contradicts);
@@ -308,8 +312,7 @@ public sealed class InferenceInvalidationEvaluatorTests
         // verdict is never even priced.
         var evaluator = BuildEvaluatorWithPlacement(ProcessPlacementMode.ExpertOffload, out var allocationResolver);
 
-        var contradicts = await evaluator.ContradictsCurrentPlacementAsync(
-            FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb) with
+        var contradicts = await evaluator.ContradictsCurrentPlacementAsync(FrozenRecord(FrozenBuild, freeVramAtFreeze: 8 * Gb) with
             {
                 IsMoe = true,
                 ExpertCount = 128,

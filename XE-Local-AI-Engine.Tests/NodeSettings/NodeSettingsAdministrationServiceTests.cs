@@ -6,12 +6,11 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
-using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Validation;
-using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -479,7 +478,10 @@ public sealed class NodeSettingsAdministrationServiceTests
                         .Returns(Task.FromResult("external"));
         var service = CreateService(store, localModelProviderResolver: providerResolver);
 
-        var result = await service.SaveTrustedMergedAsync(_ => stored with { ChatCacheReuse = 512 }).ConfigureAwait(false);
+        var result = await service.SaveTrustedMergedAsync(_ => stored with
+        {
+            ChatCacheReuse = 512
+        }).ConfigureAwait(false);
 
         AssertEx.True(result.Updated);
         AssertEx.Equal("qwen3-1.7b", result.Settings.AutoEffortFastModelName);
@@ -505,7 +507,10 @@ public sealed class NodeSettingsAdministrationServiceTests
         AssertEx.True(result.Updated);
         AssertEx.Equal("abc", result.Settings.MachineKey);
         await store.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
-                Persisted(mutate, new StoredNodeSettings { MachineKey = "abc" }).MachineKey == "abc"),
+                Persisted(mutate, new StoredNodeSettings
+                {
+                    MachineKey = "abc"
+                }).MachineKey == "abc"),
             Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 

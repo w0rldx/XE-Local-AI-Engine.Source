@@ -21,7 +21,6 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
-using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -983,8 +982,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             {
                 // WHICH attempt this validation is about, read before it runs: two entries for one id is the livelock.
                 validatedAttempts.Add((await store.ListAttemptsAsync(seed.TaskId).ConfigureAwait(false))
-                    .Last(attempt => attempt.Role == DevelopmentAttemptRole.Coder && attempt.Status == Client.Persistence.Entities.DevelopmentAttemptStatus.Succeeded)
-                    .Id);
+                                      .Last(attempt => attempt.Role == DevelopmentAttemptRole.Coder && attempt.Status == Client.Persistence.Entities.DevelopmentAttemptStatus.Succeeded)
+                                      .Id);
                 _ = await validator.RunAsync(seed.TaskId, repositoryBinding).ConfigureAwait(false);
                 continue;
             }

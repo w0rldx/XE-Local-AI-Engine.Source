@@ -11,7 +11,10 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 /// </summary>
 public sealed class IntegrationSessionStoreTests
 {
-    private static readonly IReadOnlySet<IntegrationExecutionStatus> Accepted = new HashSet<IntegrationExecutionStatus> { IntegrationExecutionStatus.Accepted };
+    private static readonly IReadOnlySet<IntegrationExecutionStatus> Accepted = new HashSet<IntegrationExecutionStatus>
+    {
+        IntegrationExecutionStatus.Accepted
+    };
 
     [Test]
     public async Task ASessionCreatedThroughAcceptAsync_CarriesTheCommandsPrincipalAndConversation()
@@ -87,15 +90,15 @@ public sealed class IntegrationSessionStoreTests
         // Writer two, which is why terminalisation can bypass AppendEventAsync without stranding the watermark the UI
         // renders.
         AssertEx.True(await executionStore.TryTerminalizeAsync(new IntegrationTerminalizeCommand(executionId,
-                          ExpectedVersion: 0,
-                          Accepted,
-                          IntegrationExecutionStatus.Completed,
-                          Sequence: 4,
-                          "execution.completed",
-                          EndedAtUtc: 6_000,
-                          FailureCategory: null,
-                          FailureSummary: null))
-                      .ConfigureAwait(false));
+                                              ExpectedVersion: 0,
+                                              Accepted,
+                                              IntegrationExecutionStatus.Completed,
+                                              Sequence: 4,
+                                              "execution.completed",
+                                              EndedAtUtc: 6_000,
+                                              FailureCategory: null,
+                                              FailureSummary: null))
+                                          .ConfigureAwait(false));
 
         var afterTerminal = AssertEx.NotNull(await sessionStore.GetByIdAsync(sessionId).ConfigureAwait(false));
         AssertEx.Equal(expected: 4L, afterTerminal.LastSequence);

@@ -46,7 +46,8 @@ public enum IntegrationAccessOutcome
 }
 
 /// <summary>The resolved row, populated only for <see cref="IntegrationAccessOutcome.Allowed" />.</summary>
-public sealed record IntegrationAccessResult(IntegrationAccessOutcome Outcome,
+public sealed record IntegrationAccessResult(
+    IntegrationAccessOutcome Outcome,
     IntegrationExecutionSnapshot? Execution,
     IntegrationSessionSnapshot? Session);
 
@@ -118,8 +119,7 @@ public sealed class IntegrationExternalAccess
     }
 
     /// <summary>Unknown, foreign, revoked and out-of-allowlist are indistinguishable, on purpose.</summary>
-    private static IntegrationAccessResult Masked =>
-        new(IntegrationAccessOutcome.Masked, Execution: null, Session: null);
+    private static IntegrationAccessResult Masked => new(IntegrationAccessOutcome.Masked, Execution: null, Session: null);
 
     private async Task<bool> AllowsAsync(IntegrationCallerIdentity caller, Guid triggerId, CancellationToken cancellationToken)
     {

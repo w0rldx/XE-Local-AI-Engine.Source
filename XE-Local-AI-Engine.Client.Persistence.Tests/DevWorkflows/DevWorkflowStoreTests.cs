@@ -395,13 +395,13 @@ public sealed class DevWorkflowStoreTests
         AssertEx.Equal("qwen3-27b", settled.ServedModelName, "The served model is what the provider answered with, written beside the counts.");
 
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
-                              nodeRunId,
-                              failed.Version,
-                              DevWorkflowNodeRunStatus.Pending,
-                              DetailJson: """{"attempt":1,"failureClass":"ProviderError"}""",
-                              IncrementAttempt: true,
-                              ClearWorkSession: true))
-                          .ConfigureAwait(false);
+                           nodeRunId,
+                           failed.Version,
+                           DevWorkflowNodeRunStatus.Pending,
+                           DetailJson: """{"attempt":1,"failureClass":"ProviderError"}""",
+                           IncrementAttempt: true,
+                           ClearWorkSession: true))
+                       .ConfigureAwait(false);
 
         var reset = await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false);
         const string Because = "A re-attempt starts from a clean slate, and the cost columns are part of it.";
@@ -496,11 +496,11 @@ public sealed class DevWorkflowStoreTests
         AssertEx.Null(blank.VramAdmittedBytes, "Neither member, so neither column.");
 
         var settled = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
-                                      nodeRunId,
-                                      afterBlank.Version,
-                                      DevWorkflowNodeRunStatus.Failed,
-                                      Telemetry: new DevWorkflowNodeTelemetry(VramFreeAtLoadBytes: 7_340_032_000L, VramAdmittedBytes: 5_368_709_120L)))
-                                  .ConfigureAwait(false);
+                                     nodeRunId,
+                                     afterBlank.Version,
+                                     DevWorkflowNodeRunStatus.Failed,
+                                     Telemetry: new DevWorkflowNodeTelemetry(VramFreeAtLoadBytes: 7_340_032_000L, VramAdmittedBytes: 5_368_709_120L)))
+                                 .ConfigureAwait(false);
         AssertEx.True(settled.Version > afterBlank.Version, "The second settle has to have landed for the assertion below to mean anything.");
 
         var filled = await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false);

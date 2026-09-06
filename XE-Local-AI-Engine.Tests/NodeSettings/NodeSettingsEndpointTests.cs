@@ -85,7 +85,10 @@ public sealed class NodeSettingsEndpointTests
         // The key comes off the record the store holds when the write runs, not off the one the request carried:
         // that is what survives a key minted between this save's load and its write.
         await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
-                Persisted(mutate, new StoredNodeSettings { MachineKey = "abc" }).MachineKey == "abc"),
+                Persisted(mutate, new StoredNodeSettings
+                {
+                    MachineKey = "abc"
+                }).MachineKey == "abc"),
             Arg.Any<CancellationToken>());
     }
 

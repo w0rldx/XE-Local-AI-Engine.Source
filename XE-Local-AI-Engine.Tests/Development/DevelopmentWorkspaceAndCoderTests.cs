@@ -1233,9 +1233,9 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var second = new ScriptedCoderModel([("README.md", "base\n"), ("feature.txt", "implemented\n")], ["README.md", "feature.txt"]);
 
         await RunTwoAttemptsOnOneTaskAsync("carried-accept-data",
-                  new ScriptedCoderModel([("README.md", "changed\n")], ["README.md"]),
-                  second)
-              .ConfigureAwait(false);
+                new ScriptedCoderModel([("README.md", "changed\n")], ["README.md"]),
+                second)
+            .ConfigureAwait(false);
 
         AssertEx.Contains(second.Prompt, "Files in this shared workspace that already differ from the base commit");
         AssertEx.Contains(second.Prompt, "README.md");
@@ -1255,9 +1255,9 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     public async Task CoderRunner_CarriesBothEndsOfARenameAnEarlierAttemptMade()
     {
         await RunTwoAttemptsOnOneTaskAsync("carried-rename-data",
-                  new ScriptedCoderModel([], ["renamed.md"], Rename("README.md", "renamed.md")),
-                  new ScriptedCoderModel([("feature.txt", "implemented\n")], ["README.md", "feature.txt"], Rename("renamed.md", "README.md")))
-              .ConfigureAwait(false);
+                new ScriptedCoderModel([], ["renamed.md"], Rename("README.md", "renamed.md")),
+                new ScriptedCoderModel([("feature.txt", "implemented\n")], ["README.md", "feature.txt"], Rename("renamed.md", "README.md")))
+            .ConfigureAwait(false);
     }
 
     /// <summary>A pure rename patch, which is what git emits for a move with no content change.</summary>
@@ -1269,10 +1269,10 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     public async Task CoderRunner_StillRefusesAPathThatNeverDifferedFromTheBaseCommit()
     {
         var exception = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() =>
-                                  RunTwoAttemptsOnOneTaskAsync("carried-overreport-data",
-                                      new ScriptedCoderModel([("feature.txt", "implemented\n")], ["feature.txt"]),
-                                      new ScriptedCoderModel([("second.txt", "more\n")], ["feature.txt", "second.txt", "README.md"])))
-                              .ConfigureAwait(false);
+                                          RunTwoAttemptsOnOneTaskAsync("carried-overreport-data",
+                                              new ScriptedCoderModel([("feature.txt", "implemented\n")], ["feature.txt"]),
+                                              new ScriptedCoderModel([("second.txt", "more\n")], ["feature.txt", "second.txt", "README.md"])))
+                                      .ConfigureAwait(false);
 
         AssertEx.Equal(DevelopmentAttemptFailureCodes.ChangedFileManifestMismatch, exception.FailureCode);
         AssertEx.Contains(exception.OperatorReason, "Submitted but not changed: README.md");
@@ -1283,10 +1283,10 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     public async Task CoderRunner_StillRefusesAnAttemptThatOmitsAFileTheWorkspaceCarries()
     {
         var exception = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() =>
-                                  RunTwoAttemptsOnOneTaskAsync("carried-underreport-data",
-                                      new ScriptedCoderModel([("feature.txt", "implemented\n")], ["feature.txt"]),
-                                      new ScriptedCoderModel([("second.txt", "more\n")], ["second.txt"])))
-                              .ConfigureAwait(false);
+                                          RunTwoAttemptsOnOneTaskAsync("carried-underreport-data",
+                                              new ScriptedCoderModel([("feature.txt", "implemented\n")], ["feature.txt"]),
+                                              new ScriptedCoderModel([("second.txt", "more\n")], ["second.txt"])))
+                                      .ConfigureAwait(false);
 
         AssertEx.Equal(DevelopmentAttemptFailureCodes.ChangedFileManifestMismatch, exception.FailureCode);
         AssertEx.Contains(exception.OperatorReason, "Changed but not submitted: feature.txt");
@@ -1325,6 +1325,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         using var sandbox = CreateSandbox();
         var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
         var binding = Binding(firstAttempt, repository);
+
         DevelopmentCoderAttemptRunner Runner(IDevelopmentCoderModel model) =>
             new(store, workspace, sandbox, new DevelopmentPatchEvidenceService(options), blob, model, new UnexpectedCloudContextService(), options, NullLogger<DevelopmentCoderAttemptRunner>.Instance);
 

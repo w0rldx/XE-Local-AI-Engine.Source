@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
-using Harness = XE_Local_AI_Engine.Tests.Integrations.IntegrationCoordinatorHarness;
+using Harness = IntegrationCoordinatorHarness;
 
 /// <summary>
 ///     ONE terminal detail shape, whichever path terminalized the row: <c>execution.failed</c> persists and publishes

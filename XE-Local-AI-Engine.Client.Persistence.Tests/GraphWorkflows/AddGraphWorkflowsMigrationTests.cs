@@ -127,7 +127,11 @@ public sealed class AddGraphWorkflowsMigrationTests
 
         // What HasConversion<string>() buys, asserted rather than assumed: an int enum mapping would still create the
         // column and would still pass every column-name assertion above, while making the durable log unreadable.
-        foreach (var table in new[] { "graph_workflow_runs", "graph_workflow_node_runs" })
+        foreach (var table in new[]
+                 {
+                     "graph_workflow_runs",
+                     "graph_workflow_node_runs"
+                 })
         {
             AssertEx.Equal("TEXT", await ColumnTypeAsync(probe, table, "failure_class").ConfigureAwait(false),
                 $"{table}.failure_class must be TEXT — the failure class is persisted by name, not by ordinal.");
@@ -213,20 +217,20 @@ public sealed class AddGraphWorkflowsMigrationTests
     private static async Task<string?> ColumnTypeAsync(MigrationSchemaProbe probe, string table, string column)
     {
         var value = await probe.ScalarAsync("SELECT type FROM pragma_table_info($table) WHERE name = $column;",
-                            command =>
-                            {
-                                command.Parameters.AddWithValue("$table", table);
-                                command.Parameters.AddWithValue("$column", column);
-                            })
-                        .ConfigureAwait(false);
+                                   command =>
+                                   {
+                                       command.Parameters.AddWithValue("$table", table);
+                                       command.Parameters.AddWithValue("$column", column);
+                                   })
+                               .ConfigureAwait(false);
         return value is null ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
     }
 
     private static async Task<string?> IndexFilterAsync(MigrationSchemaProbe probe, string indexName)
     {
         var value = await probe.ScalarAsync("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = $name;",
-                            command => command.Parameters.AddWithValue("$name", indexName))
-                        .ConfigureAwait(false);
+                                   command => command.Parameters.AddWithValue("$name", indexName))
+                               .ConfigureAwait(false);
         var sql = value is null ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
         var whereIndex = sql?.IndexOf(" WHERE ", StringComparison.Ordinal) ?? -1;
         return whereIndex < 0 ? null : sql![(whereIndex + " WHERE ".Length)..].Trim();

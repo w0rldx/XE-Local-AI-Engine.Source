@@ -138,16 +138,30 @@ public sealed class AnnotatedOptionsBoundsTests
         // A TimeSpan cannot carry a [Range], so the bound lives in the class's own IValidatableObject member — which
         // Validator.TryValidateObject(..., validateAllProperties: true) runs, and which the table-driven probe above
         // cannot reach.
-        foreach (var rejected in new[] { TimeSpan.FromSeconds(9), TimeSpan.FromHours(25) })
+        foreach (var rejected in new[]
+                 {
+                     TimeSpan.FromSeconds(9),
+                     TimeSpan.FromHours(25)
+                 })
         {
-            AssertEx.Contains(Validate(new IntegrationOptions { EventBufferTtlAfterTerminal = rejected }),
+            AssertEx.Contains(Validate(new IntegrationOptions
+                {
+                    EventBufferTtlAfterTerminal = rejected
+                }),
                 error => error.MemberNames.Contains(nameof(IntegrationOptions.EventBufferTtlAfterTerminal), StringComparer.Ordinal),
                 $"{rejected} is outside [10s, 24h] and must be rejected.");
         }
 
-        foreach (var accepted in new[] { TimeSpan.FromSeconds(10), TimeSpan.FromHours(24) })
+        foreach (var accepted in new[]
+                 {
+                     TimeSpan.FromSeconds(10),
+                     TimeSpan.FromHours(24)
+                 })
         {
-            AssertEx.Empty(Validate(new IntegrationOptions { EventBufferTtlAfterTerminal = accepted })
+            AssertEx.Empty(Validate(new IntegrationOptions
+                {
+                    EventBufferTtlAfterTerminal = accepted
+                })
                 .Where(static error => error.MemberNames.Contains(nameof(IntegrationOptions.EventBufferTtlAfterTerminal), StringComparer.Ordinal)));
         }
     }
@@ -156,21 +170,37 @@ public sealed class AnnotatedOptionsBoundsTests
     public void IntegrationCrossFieldCaps_RejectAPerUnitCeilingAboveItsAggregate()
     {
         // Neither pair can be caught by a [Range]: each member is individually in range and only the relation is wrong.
-        AssertEx.Contains(Validate(new IntegrationOptions { MaxQueuedExecutions = 4, MaxQueuedExecutionsPerPrincipal = 5 }),
+        AssertEx.Contains(Validate(new IntegrationOptions
+            {
+                MaxQueuedExecutions = 4,
+                MaxQueuedExecutionsPerPrincipal = 5
+            }),
             error => error.MemberNames.Contains(nameof(IntegrationOptions.MaxQueuedExecutionsPerPrincipal), StringComparer.Ordinal),
             "A per-principal cap above the node-wide one is a dead number: the node-wide count always bites first.");
 
-        AssertEx.Empty(Validate(new IntegrationOptions { MaxQueuedExecutions = 4, MaxQueuedExecutionsPerPrincipal = 4 })
+        AssertEx.Empty(Validate(new IntegrationOptions
+            {
+                MaxQueuedExecutions = 4,
+                MaxQueuedExecutionsPerPrincipal = 4
+            })
             .Where(static error => error.MemberNames.Contains(nameof(IntegrationOptions.MaxQueuedExecutionsPerPrincipal), StringComparer.Ordinal)));
 
         // The ring must be able to hold at least one whole output event, or a single one trims it to empty on arrival.
-        AssertEx.Contains(Validate(new IntegrationOptions { EventBufferMaxBytes = 65_536, MaxOutputBytes = 262_144 }),
+        AssertEx.Contains(Validate(new IntegrationOptions
+            {
+                EventBufferMaxBytes = 65_536,
+                MaxOutputBytes = 262_144
+            }),
             error => error.MemberNames.Contains(nameof(IntegrationOptions.EventBufferMaxBytes), StringComparer.Ordinal),
             "A 64 KiB ring with a 256 KiB per-output ceiling drops every event the moment a big one lands.");
 
         // Equality used to be accepted, and it is exactly the case that fails in production: MaxOutputBytes bounds the
         // persisted {contentType, payload} envelope, but the ring measures the whole serialized stream event around it.
-        AssertEx.Contains(Validate(new IntegrationOptions { EventBufferMaxBytes = 262_144, MaxOutputBytes = 262_144 }),
+        AssertEx.Contains(Validate(new IntegrationOptions
+            {
+                EventBufferMaxBytes = 262_144,
+                MaxOutputBytes = 262_144
+            }),
             error => error.MemberNames.Contains(nameof(IntegrationOptions.EventBufferMaxBytes), StringComparer.Ordinal),
             "A ring sized to the payload envelope alone cannot hold the stream event that wraps it.");
 
@@ -181,11 +211,19 @@ public sealed class AnnotatedOptionsBoundsTests
             })
             .Where(static error => error.MemberNames.Contains(nameof(IntegrationOptions.EventBufferMaxBytes), StringComparer.Ordinal)));
 
-        AssertEx.Contains(Validate(new IntegrationOptions { MaxOutputBytes = 262_144, MaxOutputBytesPerExecution = 131_072 }),
+        AssertEx.Contains(Validate(new IntegrationOptions
+            {
+                MaxOutputBytes = 262_144,
+                MaxOutputBytesPerExecution = 131_072
+            }),
             error => error.MemberNames.Contains(nameof(IntegrationOptions.MaxOutputBytes), StringComparer.Ordinal),
             "A single emit_output larger than the whole execution's budget could never be accepted.");
 
-        AssertEx.Empty(Validate(new IntegrationOptions { MaxOutputBytes = 131_072, MaxOutputBytesPerExecution = 131_072 })
+        AssertEx.Empty(Validate(new IntegrationOptions
+            {
+                MaxOutputBytes = 131_072,
+                MaxOutputBytesPerExecution = 131_072
+            })
             .Where(static error => error.MemberNames.Contains(nameof(IntegrationOptions.MaxOutputBytes), StringComparer.Ordinal)));
     }
 
@@ -252,7 +290,10 @@ public sealed class AnnotatedOptionsBoundsTests
     {
         var results = new List<ValidationResult>();
         _ = Validator.TryValidateProperty(property.GetValue(instance),
-            new ValidationContext(instance) { MemberName = property.Name },
+            new ValidationContext(instance)
+            {
+                MemberName = property.Name
+            },
             results);
         return results;
     }

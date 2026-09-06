@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
-using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -85,16 +84,16 @@ public sealed class AgentExecutionLogToolSchemaTokenTests : IDisposable
         var agentId = Guid.NewGuid();
 
         _ = await store.AddAsync(new AgentExecutionLogInput(agentId,
-                             ConversationId: null,
-                             MessageId: null,
-                             ModelName: "llama-3.1",
-                             ConfigHash: "hash",
-                             LatencyMs: 42L,
-                             PromptTokens: 10,
-                             CompletionTokens: 20,
-                             Success: true,
-                             ErrorClass: null))
-                         .ConfigureAwait(false);
+                           ConversationId: null,
+                           MessageId: null,
+                           ModelName: "llama-3.1",
+                           ConfigHash: "hash",
+                           LatencyMs: 42L,
+                           PromptTokens: 10,
+                           CompletionTokens: 20,
+                           Success: true,
+                           ErrorClass: null))
+                       .ConfigureAwait(false);
 
         var rows = await store.ListByAgentAsync(agentId, limit: 10).ConfigureAwait(false);
 

@@ -349,7 +349,10 @@ public sealed class IntegrationExecutionEndpointTests
                 sessionId,
                 principalId,
                 Guid.NewGuid(),
-                new byte[] { 7 },
+                new byte[]
+                {
+                    7
+                },
                 keyPrefix,
                 receivedAtUtc,
                 new IntegrationEventAppend(Guid.NewGuid(), executionId, Sequence: 1, IntegrationStreamEventTypes.ExecutionAccepted, DetailJson: null, receivedAtUtc)),
@@ -359,14 +362,16 @@ public sealed class IntegrationExecutionEndpointTests
         return executionId;
     }
 
-    private sealed record Seeded(Guid PrincipalId,
+    private sealed record Seeded(
+        Guid PrincipalId,
         string KeyPrefix,
         Guid TriggerId,
         Guid OtherTriggerId,
         IReadOnlyList<Guid> ExecutionIds,
         Guid OtherTriggerExecutionId);
 
-    private sealed record ExecutionSummaryBody(Guid Id,
+    private sealed record ExecutionSummaryBody(
+        Guid Id,
         Guid TriggerId,
         Guid SessionId,
         string Status,
@@ -379,7 +384,8 @@ public sealed class IntegrationExecutionEndpointTests
 
     private sealed record ExecutionListBody(IReadOnlyList<ExecutionSummaryBody> Items, int TotalCount);
 
-    private sealed record ExecutionDetailBody(ExecutionSummaryBody Execution,
+    private sealed record ExecutionDetailBody(
+        ExecutionSummaryBody Execution,
         Guid PrincipalId,
         string KeyPrefix,
         Guid RequestId,

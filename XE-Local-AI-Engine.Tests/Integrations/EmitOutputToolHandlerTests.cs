@@ -5,12 +5,10 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Integrations;
-using XE_Local_AI_Engine.Client.Services.Integrations.Tools;
 using XE_Local_AI_Engine.Client.Services.Integrations.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 

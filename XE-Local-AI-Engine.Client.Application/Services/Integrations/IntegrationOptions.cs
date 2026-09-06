@@ -144,8 +144,7 @@ public sealed class IntegrationOptions : IValidatableObject
     {
         if (EventBufferTtlAfterTerminal < MinEventBufferTtl || EventBufferTtlAfterTerminal > MaxEventBufferTtl)
         {
-            yield return new ValidationResult(
-                $"{Section}:{nameof(EventBufferTtlAfterTerminal)} must be between {MinEventBufferTtl} and {MaxEventBufferTtl}.",
+            yield return new ValidationResult($"{Section}:{nameof(EventBufferTtlAfterTerminal)} must be between {MinEventBufferTtl} and {MaxEventBufferTtl}.",
                 [nameof(EventBufferTtlAfterTerminal)]);
         }
 
@@ -153,8 +152,7 @@ public sealed class IntegrationOptions : IValidatableObject
         // node-wide count is checked first and always bites first.
         if (MaxQueuedExecutionsPerPrincipal > MaxQueuedExecutions)
         {
-            yield return new ValidationResult(
-                $"{Section}:{nameof(MaxQueuedExecutionsPerPrincipal)} must not exceed {nameof(MaxQueuedExecutions)}.",
+            yield return new ValidationResult($"{Section}:{nameof(MaxQueuedExecutionsPerPrincipal)} must not exceed {nameof(MaxQueuedExecutions)}.",
                 [nameof(MaxQueuedExecutionsPerPrincipal), nameof(MaxQueuedExecutions)]);
         }
 
@@ -163,8 +161,7 @@ public sealed class IntegrationOptions : IValidatableObject
         // against the payload envelope PLUS the stream event around it, because that is what the ring measures.
         if (EventBufferMaxBytes < (long)MaxOutputBytes + MaxStreamEventEnvelopeBytes)
         {
-            yield return new ValidationResult(
-                $"{Section}:{nameof(EventBufferMaxBytes)} must be at least {nameof(MaxOutputBytes)} plus {MaxStreamEventEnvelopeBytes} bytes of stream-event envelope.",
+            yield return new ValidationResult($"{Section}:{nameof(EventBufferMaxBytes)} must be at least {nameof(MaxOutputBytes)} plus {MaxStreamEventEnvelopeBytes} bytes of stream-event envelope.",
                 [nameof(EventBufferMaxBytes), nameof(MaxOutputBytes)]);
         }
 
@@ -172,8 +169,7 @@ public sealed class IntegrationOptions : IValidatableObject
         // would silently be the aggregate one.
         if (MaxOutputBytes > MaxOutputBytesPerExecution)
         {
-            yield return new ValidationResult(
-                $"{Section}:{nameof(MaxOutputBytes)} must not exceed {nameof(MaxOutputBytesPerExecution)}.",
+            yield return new ValidationResult($"{Section}:{nameof(MaxOutputBytes)} must not exceed {nameof(MaxOutputBytesPerExecution)}.",
                 [nameof(MaxOutputBytes), nameof(MaxOutputBytesPerExecution)]);
         }
     }

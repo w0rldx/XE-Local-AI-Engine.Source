@@ -52,7 +52,8 @@ internal enum GraphWorkflowTurnOutcome
 ///         provider-failure class.
 ///     </para>
 /// </summary>
-internal sealed record GraphWorkflowScriptedTurn(GraphWorkflowTurnOutcome Outcome = GraphWorkflowTurnOutcome.Completes,
+internal sealed record GraphWorkflowScriptedTurn(
+    GraphWorkflowTurnOutcome Outcome = GraphWorkflowTurnOutcome.Completes,
     string Text = "the fake agent answered",
     string FinishReason = "stop",
     FailureCategory FailureCategory = FailureCategory.ProviderUnreachable);
@@ -84,6 +85,7 @@ internal sealed class FakeGraphWorkflowInvocation(IServiceProvider services) : I
     private readonly ConcurrentDictionary<string, GraphWorkflowScriptedTurn> _scripts = new(StringComparer.Ordinal);
     private readonly ConcurrentQueue<Guid> _cancelled = new();
     private readonly ConcurrentQueue<RuntimePackage> _packages = new();
+
     /// <summary>
     ///     Resolved LAZILY, and it has to be: the real <c>WorkerEventDispatcher</c> takes an
     ///     <see cref="IInvocationRunner" /> of its own, so a fake that asked for the dispatcher in its constructor
@@ -94,12 +96,10 @@ internal sealed class FakeGraphWorkflowInvocation(IServiceProvider services) : I
         new((services ?? throw new ArgumentNullException(nameof(services))).GetRequiredService<IWorkerEventDispatcher>);
 
     /// <summary>Every package this fake was handed, so a test can assert the contract the fake itself cannot see.</summary>
-    public IReadOnlyList<RuntimePackage> Packages =>
-        [.. _packages];
+    public IReadOnlyList<RuntimePackage> Packages => [.. _packages];
 
     /// <summary>Every invocation id the stop path asked the runner to unwind, in order, WITH its repeats.</summary>
-    public IReadOnlyList<Guid> Cancelled =>
-        [.. _cancelled];
+    public IReadOnlyList<Guid> Cancelled => [.. _cancelled];
 
     public int ActiveInvocationCount => _parked.Count;
 

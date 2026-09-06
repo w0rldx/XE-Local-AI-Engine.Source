@@ -375,10 +375,10 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         await using var factory = EnabledFactory(store);
 
         using var response = await SendAsync(factory,
-                                       "PUT",
-                                       Definition,
-                                       $$"""{"version":4,"name":"renamed","graph":{{GraphWorkflowGraphs.StartAgentEnd}}}""")
-                                   .ConfigureAwait(false);
+                "PUT",
+                Definition,
+                $$"""{"version":4,"name":"renamed","graph":{{GraphWorkflowGraphs.StartAgentEnd}}}""")
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await store.Received(1)

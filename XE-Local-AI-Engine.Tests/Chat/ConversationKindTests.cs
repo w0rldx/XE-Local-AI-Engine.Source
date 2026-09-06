@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -164,7 +165,7 @@ public sealed class ConversationKindTests : IDisposable
         parameter.ParameterName = "$conversationId";
         parameter.Value = conversationId;
         command.Parameters.Add(parameter);
-        return Convert.ToString(await command.ExecuteScalarAsync().ConfigureAwait(false), System.Globalization.CultureInfo.InvariantCulture);
+        return Convert.ToString(await command.ExecuteScalarAsync().ConfigureAwait(false), CultureInfo.InvariantCulture);
     }
 
     private async Task<ServiceProvider> BuildProviderAsync(string fileName)

@@ -5,12 +5,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -437,8 +437,7 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     public bool LeaseDisposed => LeaseDisposedOrdinal > 0;
 
     /// <summary>The in-flight lease request, so a test can settle it instead of guessing at a delay.</summary>
-    public Task<IAsyncDisposable> LeaseRequest =>
-        _leaseRequest ?? throw new AssertionException("No lease was ever requested.");
+    public Task<IAsyncDisposable> LeaseRequest => _leaseRequest ?? throw new AssertionException("No lease was ever requested.");
 
     /// <summary>Stamps a durable stop marker on this row from inside the run, which bumps the version the terminal CAS carries.</summary>
     public Guid? StampStopMarkerFor { get; set; }
@@ -489,7 +488,7 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         _sessions.Rows.Single(row => row.Id == SessionId);
 
     /// <summary>One offered tool in the resolved runtime, so a suite can give the run a tool of a chosen category.</summary>
-    public static AllowedToolDto Tool(string name, XE_Local_AI_Engine.AI.Agent.Tools.ToolCategory category) =>
+    public static AllowedToolDto Tool(string name, ToolCategory category) =>
         new()
         {
             Id = Guid.NewGuid(),
@@ -555,13 +554,16 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         // CURRENT version, which bumps it and leaves the coordinator's terminal CAS holding a stale one.
         var row = Executions.Rows.Single(candidate => candidate.Id == target);
         _ = Executions.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(target,
-                                 row.Version,
-                                 new HashSet<IntegrationExecutionStatus> { row.Status },
-                                 row.Status,
-                                 StartedAtUtc: null,
-                                 EndedAtUtc: null,
-                                 InvocationId: null,
-                                 StopRequestedAtUtc: 4_242))
+                          row.Version,
+                          new HashSet<IntegrationExecutionStatus>
+                          {
+                              row.Status
+                          },
+                          row.Status,
+                          StartedAtUtc: null,
+                          EndedAtUtc: null,
+                          InvocationId: null,
+                          StopRequestedAtUtc: 4_242))
                       .GetAwaiter()
                       .GetResult();
     }
@@ -679,11 +681,12 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     /// <summary>Reads the harness's mutable queue age, so a test can move the deadline after the lease is requested.</summary>
     private sealed class QueueAgeOptions(IntegrationCoordinatorHarness harness) : IOptions<IntegrationOptions>
     {
-        public IntegrationOptions Value => new()
-        {
-            MaxQueueAgeSeconds = harness.MaxQueueAgeSeconds,
-            ContextBudgetTokens = harness.ContextBudgetTokens
-        };
+        public IntegrationOptions Value =>
+            new()
+            {
+                MaxQueueAgeSeconds = harness.MaxQueueAgeSeconds,
+                ContextBudgetTokens = harness.ContextBudgetTokens
+            };
     }
 
     private sealed class TrackingDisposable(IntegrationCoordinatorHarness harness) : IDisposable

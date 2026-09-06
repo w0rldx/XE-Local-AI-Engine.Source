@@ -56,8 +56,7 @@ internal static class LoopbackPort
             }
         }
 
-        throw new InvalidOperationException(
-            $"No loopback port could be bound: all {maxAttempts.ToString(CultureInfo.InvariantCulture)} candidates were "
-            + $"reported in use ({string.Join(", ", tried.Select(static port => port.ToString(CultureInfo.InvariantCulture)))}).");
+        throw new InvalidOperationException($"No loopback port could be bound: all {maxAttempts.ToString(CultureInfo.InvariantCulture)} candidates were "
+                                            + $"reported in use ({string.Join(", ", tried.Select(static port => port.ToString(CultureInfo.InvariantCulture)))}).");
     }
 }

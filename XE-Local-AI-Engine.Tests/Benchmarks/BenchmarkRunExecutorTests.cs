@@ -119,7 +119,11 @@ public sealed class BenchmarkRunExecutorTests
     {
         // The guard must be a no-op for current work AND for a row that recorded no intent at all. Both reach the
         // model-fingerprint check below it and fail there instead, which is the reach the guard must not shorten.
-        foreach (var intent in new[] { Intent(LlamaServerLaunchProjection.IdentitySchemeVersion), null })
+        foreach (var intent in new[]
+                 {
+                     Intent(LlamaServerLaunchProjection.IdentitySchemeVersion),
+                     null
+                 })
         {
             var run = Run(BenchmarkPrimaryStatus.Running, version: 2) with
             {

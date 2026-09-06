@@ -46,7 +46,8 @@ internal sealed class BenchmarkWaitBudget(BenchmarkAdmissionRetry retry)
     public int Remaining => retry.MaxRetries - _used;
 
     /// <summary>Takes one retry from the phase's share. Called immediately before each wait interval.</summary>
-    public void Consume() => _used++;
+    public void Consume() =>
+        _used++;
 }
 
 /// <summary>The per-call identity carried into the admission log line and the caller-facing failure message.</summary>
@@ -178,8 +179,7 @@ internal static class BenchmarkExclusiveSpawn
                 {
                     // The refusal's own sentence is the SKIP wording ("Retry when the model is idle"), which reads as
                     // advice on a row that is now terminal. The typed fields say the same thing as an outcome.
-                    throw new BenchmarkExecutionException(
-                        $"{refusal.ModelName} ({refusal.Role}) was still in use after {budget.Budget.TotalSeconds:0} s; the benchmark did not run.");
+                    throw new BenchmarkExecutionException($"{refusal.ModelName} ({refusal.Role}) was still in use after {budget.Budget.TotalSeconds:0} s; the benchmark did not run.");
                 }
             }
 

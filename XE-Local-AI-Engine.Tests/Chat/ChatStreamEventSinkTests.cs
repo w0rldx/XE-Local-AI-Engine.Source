@@ -166,7 +166,7 @@ public sealed class ChatStreamEventSinkTests
         });
 
         await AssertEx.StaysIncompleteAsync(drain,
-            "Detach must leave the queue open; completing it would surface as a persistence fault in the pump.")
+                          "Detach must leave the queue open; completing it would surface as a persistence fault in the pump.")
                       .ConfigureAwait(false);
 
         // Complete is the only thing that ends the stream, and it still does after a detach.

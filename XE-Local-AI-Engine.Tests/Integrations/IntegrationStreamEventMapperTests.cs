@@ -1,11 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Integrations;
 
 using System.Text;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
@@ -70,8 +68,7 @@ public sealed class IntegrationStreamEventMapperTests
     [Arguments(null, false)]
     public void ToolLifecycle_EmitOutput_ReportsOkOnlyForADeliveredPayload(string? result, bool expectedOk)
     {
-        var completed = AssertEx.NotNull(IntegrationStreamEventMapper.ToolLifecycle(
-            Payload(ToolCallLifecyclePhase.Completed, isError: false, "emit_output", result)));
+        var completed = AssertEx.NotNull(IntegrationStreamEventMapper.ToolLifecycle(Payload(ToolCallLifecyclePhase.Completed, isError: false, "emit_output", result)));
 
         AssertEx.Equal(IntegrationStreamEventTypes.ToolCompleted, completed.Type);
         AssertEx.Equal("emit_output", Field(completed, "name"));
@@ -90,14 +87,12 @@ public sealed class IntegrationStreamEventMapperTests
     [Arguments("run_python", "This tool only works inside an integration execution.")]
     public void ToolLifecycle_ForAnyOtherTool_KeepsTheExceptionOnlyOutcome(string toolName, string result)
     {
-        var completed = AssertEx.NotNull(IntegrationStreamEventMapper.ToolLifecycle(
-            Payload(ToolCallLifecyclePhase.Completed, isError: false, toolName, result)));
+        var completed = AssertEx.NotNull(IntegrationStreamEventMapper.ToolLifecycle(Payload(ToolCallLifecyclePhase.Completed, isError: false, toolName, result)));
 
         AssertEx.True(completed.Payload!.Value.GetProperty("ok").GetBoolean(),
             "a non-emit tool's outcome is the pipeline's exception flag and nothing else.");
 
-        var failed = AssertEx.NotNull(IntegrationStreamEventMapper.ToolLifecycle(
-            Payload(ToolCallLifecyclePhase.Completed, isError: true, toolName, result)));
+        var failed = AssertEx.NotNull(IntegrationStreamEventMapper.ToolLifecycle(Payload(ToolCallLifecyclePhase.Completed, isError: true, toolName, result)));
 
         AssertEx.False(failed.Payload!.Value.GetProperty("ok").GetBoolean());
     }
@@ -109,8 +104,7 @@ public sealed class IntegrationStreamEventMapperTests
     [Test]
     public void ToolLifecycle_EmitOutput_WhenThePipelineCaughtAnException_ReportsNotOk()
     {
-        var completed = AssertEx.NotNull(IntegrationStreamEventMapper.ToolLifecycle(
-            Payload(ToolCallLifecyclePhase.Completed, isError: true, "emit_output", "Error: Function failed.")));
+        var completed = AssertEx.NotNull(IntegrationStreamEventMapper.ToolLifecycle(Payload(ToolCallLifecyclePhase.Completed, isError: true, "emit_output", "Error: Function failed.")));
 
         AssertEx.False(completed.Payload!.Value.GetProperty("ok").GetBoolean());
     }
@@ -217,7 +211,7 @@ public sealed class IntegrationStreamEventMapperTests
         context.Raise("one two three", InvocationStatus.Completed);
 
         AssertEx.True((await context.TypesAsync())
-                             .SequenceEqual([IntegrationStreamEventTypes.AssistantDelta, IntegrationStreamEventTypes.AssistantDelta, IntegrationStreamEventTypes.AssistantCompleted]));
+            .SequenceEqual([IntegrationStreamEventTypes.AssistantDelta, IntegrationStreamEventTypes.AssistantDelta, IntegrationStreamEventTypes.AssistantCompleted]));
         AssertEx.Equal(" two three", Text((await context.EventsAsync())[1]), "A terminal emits its tail unconditionally, so the concatenated deltas equal the final text.");
         AssertEx.Equal("one two three", Text((await context.EventsAsync())[2]));
     }
@@ -481,6 +475,5 @@ public sealed class IntegrationStreamEventMapperTests
             await Mapper.DisposeAsync();
             _buffer.Dispose();
         }
-
     }
 }

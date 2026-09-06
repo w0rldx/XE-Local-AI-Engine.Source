@@ -265,8 +265,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
 
         if (operatorSelection is not null)
         {
-            _logger.LogInformation(
-                "First-run provisioning installed '{Model}' but kept the model '{Selected}' the operator selected while it downloaded.", ticket.ModelName,
+            _logger.LogInformation("First-run provisioning installed '{Model}' but kept the model '{Selected}' the operator selected while it downloaded.", ticket.ModelName,
                 operatorSelection);
             return;
         }

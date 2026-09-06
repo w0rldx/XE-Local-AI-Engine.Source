@@ -95,7 +95,11 @@ public sealed class IntegrationSessionGateTests
         // On the CONTINUE path the same narrowing is caught one step earlier, by the trigger allowlist, and answers the
         // byte-identical 404. Which of the two outcomes it is does not reach the caller — both map to one masked 404 —
         // so what this asserts is that the narrowed key reaches neither the trigger nor the session, and writes nothing.
-        AssertEx.Contains(new[] { IntegrationAcceptOutcome.TriggerNotFound, IntegrationAcceptOutcome.SessionNotFound }, continued.Outcome);
+        AssertEx.Contains(new[]
+        {
+            IntegrationAcceptOutcome.TriggerNotFound,
+            IntegrationAcceptOutcome.SessionNotFound
+        }, continued.Outcome);
         AssertEx.Empty(harness.Executions.Rows);
     }
 

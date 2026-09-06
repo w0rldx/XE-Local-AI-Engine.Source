@@ -323,19 +323,19 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         try
         {
             var terminalized = await _executions.TryTerminalizeAsync(new IntegrationTerminalizeCommand(executionId,
-                                                    ExpectedVersion: 0,
-                                                    new HashSet<IntegrationExecutionStatus>
-                                                    {
-                                                        IntegrationExecutionStatus.Accepted
-                                                    },
-                                                    IntegrationExecutionStatus.Failed,
-                                                    sequence,
-                                                    IntegrationStreamEventTypes.ExecutionFailed,
-                                                    endedAtUtc,
-                                                    IntegrationFailureCategories.QueueFull,
-                                                    QueueFullSummary,
-                                                    payload.GetRawText()),
-                                                CancellationToken.None)
+                                                        ExpectedVersion: 0,
+                                                        new HashSet<IntegrationExecutionStatus>
+                                                        {
+                                                            IntegrationExecutionStatus.Accepted
+                                                        },
+                                                        IntegrationExecutionStatus.Failed,
+                                                        sequence,
+                                                        IntegrationStreamEventTypes.ExecutionFailed,
+                                                        endedAtUtc,
+                                                        IntegrationFailureCategories.QueueFull,
+                                                        QueueFullSummary,
+                                                        payload.GetRawText()),
+                                                    CancellationToken.None)
                                                 .ConfigureAwait(false);
 
             if (terminalized)

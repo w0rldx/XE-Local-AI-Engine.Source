@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
@@ -55,15 +54,15 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
         try
         {
             var created = await _triggers.CreateAsync(new IntegrationTriggerCreateCommand(Guid.NewGuid(),
-                                                          name,
-                                                          input.DisplayName.Trim(),
-                                                          NormalizeDescription(input.Description),
-                                                          input.Enabled,
-                                                          input.TargetKind,
-                                                          input.TargetAgentDefinitionId,
-                                                          input.SessionPolicy,
-                                                          input.AcceptedInputKinds),
-                                                      cancellationToken)
+                                                 name,
+                                                 input.DisplayName.Trim(),
+                                                 NormalizeDescription(input.Description),
+                                                 input.Enabled,
+                                                 input.TargetKind,
+                                                 input.TargetAgentDefinitionId,
+                                                 input.SessionPolicy,
+                                                 input.AcceptedInputKinds),
+                                             cancellationToken)
                                          .ConfigureAwait(false);
 
             return new IntegrationTriggerResult(IntegrationTriggerOutcome.Saved, created, Message: null);
@@ -93,14 +92,14 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
         }
 
         var updated = await _triggers.UpdateAsync(new IntegrationTriggerUpdateCommand(triggerId,
-                                                      input.ExpectedVersion,
-                                                      input.DisplayName.Trim(),
-                                                      NormalizeDescription(input.Description),
-                                                      input.Enabled,
-                                                      input.TargetAgentDefinitionId,
-                                                      input.SessionPolicy,
-                                                      input.AcceptedInputKinds),
-                                                  cancellationToken)
+                                             input.ExpectedVersion,
+                                             input.DisplayName.Trim(),
+                                             NormalizeDescription(input.Description),
+                                             input.Enabled,
+                                             input.TargetAgentDefinitionId,
+                                             input.SessionPolicy,
+                                             input.AcceptedInputKinds),
+                                         cancellationToken)
                                      .ConfigureAwait(false);
         if (!updated)
         {

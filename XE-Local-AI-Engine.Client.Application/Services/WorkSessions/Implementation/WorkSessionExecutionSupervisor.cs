@@ -84,6 +84,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     ///     request from an ordinary stream drop — see the <c>AssistantReconcile</c> case in <see cref="DrainStepAsync" />.
     /// </summary>
     private readonly PendingToolCallRegistry _pendingToolCalls;
+
     private readonly ConcurrentDictionary<Guid, SessionRun> _runs = new();
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly CancellationTokenSource _shutdown = new();

@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Agents;
 
 using NSubstitute;
-using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
@@ -54,8 +53,7 @@ public sealed class ToolRelevanceCoreSetTests
     private static ToolRelevanceCoreSet BuildCoreSet()
     {
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetKnownTools().Returns(
-        [
+        offerProvider.GetKnownTools().Returns([
             Entry("run_python", requiresApproval: true, source: "builtin"),
             Entry("get_time", requiresApproval: false, source: "builtin"),
             // Approval-bearing, but not a built-in: the Source tag, not the approval flag, is what keeps these out.

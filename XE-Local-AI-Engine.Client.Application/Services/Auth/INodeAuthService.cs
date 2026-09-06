@@ -35,7 +35,8 @@ public sealed record NodeAuthStatus(bool SetupRequired, bool Authenticated);
 ///     one). Every other failure leaves it <c>null</c>, so the transport cannot accidentally tell a wrong password
 ///     apart from a locked account.
 /// </summary>
-public sealed record NodeAuthTokenResult(bool Succeeded,
+public sealed record NodeAuthTokenResult(
+    bool Succeeded,
     string? AccessToken,
     DateTime? AccessTokenExpiresAtUtc,
     string? RefreshToken,

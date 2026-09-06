@@ -70,6 +70,7 @@ internal sealed record class BenchmarkJudgeAttempt
     ///     before the scheme was recorded, which reads as scheme 1.
     /// </summary>
     public int? LaunchIdentityScheme { get; set; }
+
     public string? ReceiptHash { get; set; }
     public string? EnvironmentFactsHash { get; set; }
     public string? EffectiveLaunchIdentity { get; set; }

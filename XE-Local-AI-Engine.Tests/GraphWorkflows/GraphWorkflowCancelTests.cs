@@ -194,7 +194,11 @@ public sealed class GraphWorkflowCancelTests
         var superseded = Guid.NewGuid();
         var current = Guid.NewGuid();
 
-        foreach (var nodeRunId in new[] { superseded, current })
+        foreach (var nodeRunId in new[]
+                 {
+                     superseded,
+                     current
+                 })
         {
             _ = await lane.TryStartAsync(nodeRunId, attempt: 1, Guid.NewGuid(), Parked, CancellationToken.None).ConfigureAwait(false);
         }

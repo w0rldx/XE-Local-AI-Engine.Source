@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Integrations;
 
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
@@ -137,8 +138,7 @@ public sealed class IntegrationEntityConfigurationTests
 
         await using (var attackContext = fixture.CreateContext())
         {
-            _ = AssertEx.Throws<CryptographicException>(
-                () => _ = attackContext.IntegrationExecutionEvents.AsNoTracking().SingleOrDefault(entity => entity.Id == attackerEventId),
+            _ = AssertEx.Throws<CryptographicException>(() => _ = attackContext.IntegrationExecutionEvents.AsNoTracking().SingleOrDefault(entity => entity.Id == attackerEventId),
                 "A re-parented event row must fail authentication instead of reading back as another execution's output.");
         }
     }
@@ -203,7 +203,7 @@ public sealed class IntegrationEntityConfigurationTests
 
         AssertEx.Equal(expected: 3L,
             Convert.ToInt64(await fixture.RawScalarAsync("SELECT accepted_input_kinds FROM integration_triggers;").ConfigureAwait(false),
-                System.Globalization.CultureInfo.InvariantCulture),
+                CultureInfo.InvariantCulture),
             "A [Flags] combination is stored as an int; a string conversion would write \"Text, Json\", whose text depends on declaration order.");
 
         await using (var readContext = fixture.CreateContext())

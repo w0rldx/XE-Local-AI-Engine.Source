@@ -262,11 +262,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 var efficiency = providerBudget.CaptureEfficiencySnapshot();
                 await dispatcher.ReportToolSchemaTokensAsync(package.InvocationId, efficiency.ToolSchemaTokens, efficiency.MaximumToolSchemaTokens).ConfigureAwait(false);
                 await dispatcher.ReportTurnTelemetryAsync(package.InvocationId,
-                                   stream?.ModelReadinessDurationMs is { } readinessMs ? (long)readinessMs : null,
-                                   stream?.UsageSnapshot is { } turnUsage
-                                       ? new TurnUsageTotals(turnUsage.InputTokens, turnUsage.OutputTokens, turnUsage.TotalTokens, turnUsage.ReasoningTokens)
-                                       : null)
-                               .ConfigureAwait(false);
+                                    stream?.ModelReadinessDurationMs is { } readinessMs ? (long)readinessMs : null,
+                                    stream?.UsageSnapshot is { } turnUsage
+                                        ? new TurnUsageTotals(turnUsage.InputTokens, turnUsage.OutputTokens, turnUsage.TotalTokens, turnUsage.ReasoningTokens)
+                                        : null)
+                                .ConfigureAwait(false);
             }
             catch (Exception exception)
             {
@@ -534,7 +534,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     // Re-warm the ORIGINAL model and re-derive its window. The policy and effective-context above were
                     // both measured against the fast model's launched window; carrying them into the re-run would size
                     // this turn's history — and the agent definition's num_ctx — against a window this model never had.
-                    var retryRuntime = await _localRuntimeWarmer.PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken).ConfigureAwait(false);
+                    var retryRuntime = await _localRuntimeWarmer.PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken)
+                                                                .ConfigureAwait(false);
                     var retryContextTokens = retryRuntime.EffectiveContextTokens;
                     var retryPolicy = preWarmPolicy.WithEffectiveContext(retryContextTokens);
 

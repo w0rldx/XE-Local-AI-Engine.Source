@@ -723,7 +723,7 @@ public sealed class DevWorkflowRestartTests
                      Arg.Any<CancellationToken>())
                  .Returns(call => ++collapses <= refusals
                      ? throw new DevWorkflowRetryBudgetExceededException("This run has already spent or promised 1 re-attempts, which is as many "
-                                                                        + "re-attempts as this run allows, so it cannot be retried again.")
+                                                                         + "re-attempts as this run allows, so it cannot be retried again.")
                      : real.ReconcileNonTerminalNodeRunsAsync(call.ArgAt<string>(0),
                          call.ArgAt<IReadOnlyList<DevWorkflowNodeRunVerdict>>(1),
                          call.ArgAt<DevWorkflowUnjudgedNodeRunBlock?>(2),

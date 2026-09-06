@@ -18,7 +18,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         see it: the row honestly reads <c>Queued</c> until the work holds whatever node-wide slot it needs.
 ///     </para>
 /// </summary>
-internal sealed record GraphWorkflowInFlight<TResult>(CancellationTokenSource Cancellation,
+internal sealed record GraphWorkflowInFlight<TResult>(
+    CancellationTokenSource Cancellation,
     Task<TResult> Work,
     int Attempt,
     Guid InvocationId,

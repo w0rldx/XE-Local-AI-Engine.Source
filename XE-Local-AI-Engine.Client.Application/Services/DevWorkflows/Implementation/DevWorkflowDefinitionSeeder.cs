@@ -48,35 +48,35 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
     private const string ResearchPlanApprovalName = "Research → Plan → Approval";
 
     internal const string ResearchPlanApprovalGraph = $$"""
-                                                       {
-                                                         "schemaVersion": 1,
-                                                         "nodes": [
-                                                           {
-                                                             "nodeKey": "research",
-                                                             "nodeType": "Agent",
-                                                             "label": "Research",
-                                                             "agentSeedSlug": "{{AgentDefaults.WorkSessionResearchAgentSeedSlug}}",
-                                                             "instructions": "Research what the request asks about and record what you find. Ground every claim in something you actually read. Before you complete this session you MUST call save_artifact exactly once, with name \"research.md\", mediaType \"text/markdown\", kind \"Report\", and the whole write-up as text. record_finding is for notes along the way and does NOT satisfy this step: the next node reads your artifact, not your findings."
-                                                           },
-                                                           {
-                                                             "nodeKey": "plan",
-                                                             "nodeType": "Agent",
-                                                             "label": "Plan",
-                                                             "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
-                                                             "instructions": "Turn the research into a plan a person can approve: what to do, in what order, and what would show it worked. Before you complete this session you MUST call save_artifact exactly once, with name \"plan.md\", mediaType \"text/markdown\", kind \"Report\", and the whole plan as text. The approval gate shows the operator that artifact, so a plan left in findings is a plan nobody can approve."
-                                                           },
-                                                           {
-                                                             "nodeKey": "approve",
-                                                             "nodeType": "HumanGate",
-                                                             "label": "Approve the plan"
-                                                           }
-                                                         ],
-                                                         "edges": [
-                                                           { "from": "research", "to": "plan" },
-                                                           { "from": "plan", "to": "approve" }
-                                                         ]
-                                                       }
-                                                       """;
+                                                        {
+                                                          "schemaVersion": 1,
+                                                          "nodes": [
+                                                            {
+                                                              "nodeKey": "research",
+                                                              "nodeType": "Agent",
+                                                              "label": "Research",
+                                                              "agentSeedSlug": "{{AgentDefaults.WorkSessionResearchAgentSeedSlug}}",
+                                                              "instructions": "Research what the request asks about and record what you find. Ground every claim in something you actually read. Before you complete this session you MUST call save_artifact exactly once, with name \"research.md\", mediaType \"text/markdown\", kind \"Report\", and the whole write-up as text. record_finding is for notes along the way and does NOT satisfy this step: the next node reads your artifact, not your findings."
+                                                            },
+                                                            {
+                                                              "nodeKey": "plan",
+                                                              "nodeType": "Agent",
+                                                              "label": "Plan",
+                                                              "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
+                                                              "instructions": "Turn the research into a plan a person can approve: what to do, in what order, and what would show it worked. Before you complete this session you MUST call save_artifact exactly once, with name \"plan.md\", mediaType \"text/markdown\", kind \"Report\", and the whole plan as text. The approval gate shows the operator that artifact, so a plan left in findings is a plan nobody can approve."
+                                                            },
+                                                            {
+                                                              "nodeKey": "approve",
+                                                              "nodeType": "HumanGate",
+                                                              "label": "Approve the plan"
+                                                            }
+                                                          ],
+                                                          "edges": [
+                                                            { "from": "research", "to": "plan" },
+                                                            { "from": "plan", "to": "approve" }
+                                                          ]
+                                                        }
+                                                        """;
 
     /// <summary>
     ///     The Slice C template (§5.10): research and a plan a human approves, a decomposition that expands into one
@@ -138,93 +138,93 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
     private const string FeatureDevelopmentName = "Feature Development v1";
 
     internal const string FeatureDevelopmentGraph = $$"""
-                                                    {
-                                                      "schemaVersion": 1,
-                                                      "nodes": [
-                                                        {
-                                                          "nodeKey": "research",
-                                                          "nodeType": "Agent",
-                                                          "label": "Research",
-                                                          "agentSeedSlug": "{{AgentDefaults.WorkSessionResearchAgentSeedSlug}}",
-                                                          "instructions": "Research what this feature touches in this repository: the code that would change, the conventions it follows, and what already exists that you should reuse. Ground every claim in something you actually read. Before you complete this session you MUST call save_artifact exactly once, with name \"research.md\", mediaType \"text/markdown\", kind \"Report\", and the whole write-up as text."
-                                                        },
-                                                        {
-                                                          "nodeKey": "plan",
-                                                          "nodeType": "Agent",
-                                                          "label": "Plan",
-                                                          "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
-                                                          "instructions": "Turn the research into a plan a person can approve: what to build, in what order, and what would show it worked. Before you complete this session you MUST call save_artifact exactly once, with name \"plan.md\", mediaType \"text/markdown\", kind \"Report\", and the whole plan as text. The approval gate shows the operator that artifact, so a plan left in findings is a plan nobody can approve."
-                                                        },
-                                                        {
-                                                          "nodeKey": "planapproval",
-                                                          "nodeType": "HumanGate",
-                                                          "label": "Approve the plan"
-                                                        },
-                                                        {
-                                                          "nodeKey": "decompose",
-                                                          "nodeType": "Agent",
-                                                          "label": "Decompose",
-                                                          "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
-                                                          "instructions": "Split the approved plan into implementation tasks. Default to ONE task: a request that names one method, one file or one behaviour is a single task that implements it and adds its test file together, and splitting it only buys failures. Split only where the slices are independent features a build can judge separately; ten tasks is the ceiling. Every task must change code — never emit a survey, a read-only investigation or a verify-only slice, and never chain a \"build and verify\" task, because validation runs automatically after every task. Tests a task adds go in a NEW test file named in \"changes\"; a test file that already exists may not be edited. Before you complete this session you MUST call save_artifact exactly once, with name \"tasks.json\", mediaType \"application/json\", kind \"Report\", and a JSON array as the text: [{\"id\": \"short-slug\", \"title\": \"what it is\", \"goal\": \"what to implement, in full — this becomes the task's requirements and it is all the coder is told\", \"changes\": [\"src/…\", \"tests/…NewFile.cs\"], \"dependsOn\": [\"another-id\"], \"acceptanceCriteria\": [\"how to tell it is done\"]}]. Ids must be unique, dependsOn may only name ids in this same array, and there must be no dependency cycle. \"changes\" must name at least one workspace-relative file the task will add or edit. If the plan needs no implementation work, answer with an empty array rather than inventing one.",
-                                                          "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 10 }
-                                                        },
-                                                        {
-                                                          "nodeKey": "implement",
-                                                          "nodeType": "DevTask",
-                                                          "label": "Implement",
-                                                          "nodeTimeoutSeconds": 7200
-                                                        },
-                                                        {
-                                                          "nodeKey": "validate",
-                                                          "nodeType": "Tool",
-                                                          "label": "Validate",
-                                                          "retryTarget": "implement"
-                                                        },
-                                                        {
-                                                          "nodeKey": "join",
-                                                          "nodeType": "Join",
-                                                          "label": "Every slice implemented"
-                                                        },
-                                                        {
-                                                          "nodeKey": "verify",
-                                                          "nodeType": "Agent",
-                                                          "label": "Verify",
-                                                          "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
-                                                          "instructions": "Judge the implemented slices against the approved plan, independently: read what each task produced and say whether the feature is actually there, what is missing, and what you would not sign off. You are the last reader before an operator is asked to let these patches into the repository, so an honest \"not yet\" is worth more than an approval. Before you complete this session you MUST call save_artifact exactly once, with name \"verification.md\", mediaType \"text/markdown\", kind \"Report\", and your whole assessment as text."
-                                                        },
-                                                        {
-                                                          "nodeKey": "integrationapproval",
-                                                          "nodeType": "HumanGate",
-                                                          "label": "Approve integration"
-                                                        },
-                                                        {
-                                                          "nodeKey": "integrate",
-                                                          "nodeType": "Tool",
-                                                          "toolMode": "Apply",
-                                                          "label": "Apply the approved patches"
-                                                        },
-                                                        {
-                                                          "nodeKey": "fullvalidate",
-                                                          "nodeType": "Tool",
-                                                          "label": "Validate the integrated result",
-                                                          "retryTarget": "verify"
-                                                        }
-                                                      ],
-                                                      "edges": [
-                                                        { "from": "research", "to": "plan" },
-                                                        { "from": "plan", "to": "planapproval" },
-                                                        { "from": "planapproval", "to": "decompose", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
-                                                        { "from": "decompose", "to": "join" },
-                                                        { "from": "implement", "to": "validate" },
-                                                        { "from": "validate", "to": "join" },
-                                                        { "from": "join", "to": "verify" },
-                                                        { "from": "planapproval", "to": "verify", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
-                                                        { "from": "verify", "to": "integrationapproval" },
-                                                        { "from": "integrationapproval", "to": "integrate", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
-                                                        { "from": "integrate", "to": "fullvalidate" }
-                                                      ]
-                                                    }
-                                                    """;
+                                                      {
+                                                        "schemaVersion": 1,
+                                                        "nodes": [
+                                                          {
+                                                            "nodeKey": "research",
+                                                            "nodeType": "Agent",
+                                                            "label": "Research",
+                                                            "agentSeedSlug": "{{AgentDefaults.WorkSessionResearchAgentSeedSlug}}",
+                                                            "instructions": "Research what this feature touches in this repository: the code that would change, the conventions it follows, and what already exists that you should reuse. Ground every claim in something you actually read. Before you complete this session you MUST call save_artifact exactly once, with name \"research.md\", mediaType \"text/markdown\", kind \"Report\", and the whole write-up as text."
+                                                          },
+                                                          {
+                                                            "nodeKey": "plan",
+                                                            "nodeType": "Agent",
+                                                            "label": "Plan",
+                                                            "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
+                                                            "instructions": "Turn the research into a plan a person can approve: what to build, in what order, and what would show it worked. Before you complete this session you MUST call save_artifact exactly once, with name \"plan.md\", mediaType \"text/markdown\", kind \"Report\", and the whole plan as text. The approval gate shows the operator that artifact, so a plan left in findings is a plan nobody can approve."
+                                                          },
+                                                          {
+                                                            "nodeKey": "planapproval",
+                                                            "nodeType": "HumanGate",
+                                                            "label": "Approve the plan"
+                                                          },
+                                                          {
+                                                            "nodeKey": "decompose",
+                                                            "nodeType": "Agent",
+                                                            "label": "Decompose",
+                                                            "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
+                                                            "instructions": "Split the approved plan into implementation tasks. Default to ONE task: a request that names one method, one file or one behaviour is a single task that implements it and adds its test file together, and splitting it only buys failures. Split only where the slices are independent features a build can judge separately; ten tasks is the ceiling. Every task must change code — never emit a survey, a read-only investigation or a verify-only slice, and never chain a \"build and verify\" task, because validation runs automatically after every task. Tests a task adds go in a NEW test file named in \"changes\"; a test file that already exists may not be edited. Before you complete this session you MUST call save_artifact exactly once, with name \"tasks.json\", mediaType \"application/json\", kind \"Report\", and a JSON array as the text: [{\"id\": \"short-slug\", \"title\": \"what it is\", \"goal\": \"what to implement, in full — this becomes the task's requirements and it is all the coder is told\", \"changes\": [\"src/…\", \"tests/…NewFile.cs\"], \"dependsOn\": [\"another-id\"], \"acceptanceCriteria\": [\"how to tell it is done\"]}]. Ids must be unique, dependsOn may only name ids in this same array, and there must be no dependency cycle. \"changes\" must name at least one workspace-relative file the task will add or edit. If the plan needs no implementation work, answer with an empty array rather than inventing one.",
+                                                            "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 10 }
+                                                          },
+                                                          {
+                                                            "nodeKey": "implement",
+                                                            "nodeType": "DevTask",
+                                                            "label": "Implement",
+                                                            "nodeTimeoutSeconds": 7200
+                                                          },
+                                                          {
+                                                            "nodeKey": "validate",
+                                                            "nodeType": "Tool",
+                                                            "label": "Validate",
+                                                            "retryTarget": "implement"
+                                                          },
+                                                          {
+                                                            "nodeKey": "join",
+                                                            "nodeType": "Join",
+                                                            "label": "Every slice implemented"
+                                                          },
+                                                          {
+                                                            "nodeKey": "verify",
+                                                            "nodeType": "Agent",
+                                                            "label": "Verify",
+                                                            "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
+                                                            "instructions": "Judge the implemented slices against the approved plan, independently: read what each task produced and say whether the feature is actually there, what is missing, and what you would not sign off. You are the last reader before an operator is asked to let these patches into the repository, so an honest \"not yet\" is worth more than an approval. Before you complete this session you MUST call save_artifact exactly once, with name \"verification.md\", mediaType \"text/markdown\", kind \"Report\", and your whole assessment as text."
+                                                          },
+                                                          {
+                                                            "nodeKey": "integrationapproval",
+                                                            "nodeType": "HumanGate",
+                                                            "label": "Approve integration"
+                                                          },
+                                                          {
+                                                            "nodeKey": "integrate",
+                                                            "nodeType": "Tool",
+                                                            "toolMode": "Apply",
+                                                            "label": "Apply the approved patches"
+                                                          },
+                                                          {
+                                                            "nodeKey": "fullvalidate",
+                                                            "nodeType": "Tool",
+                                                            "label": "Validate the integrated result",
+                                                            "retryTarget": "verify"
+                                                          }
+                                                        ],
+                                                        "edges": [
+                                                          { "from": "research", "to": "plan" },
+                                                          { "from": "plan", "to": "planapproval" },
+                                                          { "from": "planapproval", "to": "decompose", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                          { "from": "decompose", "to": "join" },
+                                                          { "from": "implement", "to": "validate" },
+                                                          { "from": "validate", "to": "join" },
+                                                          { "from": "join", "to": "verify" },
+                                                          { "from": "planapproval", "to": "verify", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                          { "from": "verify", "to": "integrationapproval" },
+                                                          { "from": "integrationapproval", "to": "integrate", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                          { "from": "integrate", "to": "fullvalidate" }
+                                                        ]
+                                                      }
+                                                      """;
 
     /// <summary>
     ///     The <c>feature-development-v1</c> graph the first build shipped, kept so an installation still holding it
@@ -235,92 +235,92 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
     ///     this code can know — so they stay.
     /// </summary>
     internal const string FeatureDevelopmentGraphRevision1 = $$"""
-                                                    {
-                                                      "schemaVersion": 1,
-                                                      "nodes": [
-                                                        {
-                                                          "nodeKey": "research",
-                                                          "nodeType": "Agent",
-                                                          "label": "Research",
-                                                          "agentSeedSlug": "{{AgentDefaults.WorkSessionResearchAgentSeedSlug}}",
-                                                          "instructions": "Research what this feature touches in this repository: the code that would change, the conventions it follows, and what already exists that you should reuse. Ground every claim in something you actually read. Before you complete this session you MUST call save_artifact exactly once, with name \"research.md\", mediaType \"text/markdown\", kind \"Report\", and the whole write-up as text."
-                                                        },
-                                                        {
-                                                          "nodeKey": "plan",
-                                                          "nodeType": "Agent",
-                                                          "label": "Plan",
-                                                          "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
-                                                          "instructions": "Turn the research into a plan a person can approve: what to build, in what order, and what would show it worked. Before you complete this session you MUST call save_artifact exactly once, with name \"plan.md\", mediaType \"text/markdown\", kind \"Report\", and the whole plan as text. The approval gate shows the operator that artifact, so a plan left in findings is a plan nobody can approve."
-                                                        },
-                                                        {
-                                                          "nodeKey": "planapproval",
-                                                          "nodeType": "HumanGate",
-                                                          "label": "Approve the plan"
-                                                        },
-                                                        {
-                                                          "nodeKey": "decompose",
-                                                          "nodeType": "Agent",
-                                                          "label": "Decompose",
-                                                          "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
-                                                          "instructions": "Split the approved plan into independent implementation tasks, each one a slice a coder can finish and a build can judge on its own. Before you complete this session you MUST call save_artifact exactly once, with name \"tasks.json\", mediaType \"application/json\", kind \"Report\", and a JSON array as the text: [{\"id\": \"short-slug\", \"title\": \"what it is\", \"goal\": \"what to implement, in full — this becomes the task's requirements and it is all the coder is told\", \"dependsOn\": [\"another-id\"], \"acceptanceCriteria\": [\"how to tell it is done\"]}]. Ids must be unique, dependsOn may only name ids in this same array, and there must be no dependency cycle. Ten tasks is the ceiling. If the plan needs no implementation work, answer with an empty array rather than inventing one.",
-                                                          "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 10 }
-                                                        },
-                                                        {
-                                                          "nodeKey": "implement",
-                                                          "nodeType": "DevTask",
-                                                          "label": "Implement",
-                                                          "nodeTimeoutSeconds": 7200
-                                                        },
-                                                        {
-                                                          "nodeKey": "validate",
-                                                          "nodeType": "Tool",
-                                                          "label": "Validate",
-                                                          "retryTarget": "implement"
-                                                        },
-                                                        {
-                                                          "nodeKey": "join",
-                                                          "nodeType": "Join",
-                                                          "label": "Every slice implemented"
-                                                        },
-                                                        {
-                                                          "nodeKey": "verify",
-                                                          "nodeType": "Agent",
-                                                          "label": "Verify",
-                                                          "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
-                                                          "instructions": "Judge the implemented slices against the approved plan, independently: read what each task produced and say whether the feature is actually there, what is missing, and what you would not sign off. You are the last reader before an operator is asked to let these patches into the repository, so an honest \"not yet\" is worth more than an approval. Before you complete this session you MUST call save_artifact exactly once, with name \"verification.md\", mediaType \"text/markdown\", kind \"Report\", and your whole assessment as text."
-                                                        },
-                                                        {
-                                                          "nodeKey": "integrationapproval",
-                                                          "nodeType": "HumanGate",
-                                                          "label": "Approve integration"
-                                                        },
-                                                        {
-                                                          "nodeKey": "integrate",
-                                                          "nodeType": "Tool",
-                                                          "toolMode": "Apply",
-                                                          "label": "Apply the approved patches"
-                                                        },
-                                                        {
-                                                          "nodeKey": "fullvalidate",
-                                                          "nodeType": "Tool",
-                                                          "label": "Validate the integrated result"
-                                                        }
-                                                      ],
-                                                      "edges": [
-                                                        { "from": "research", "to": "plan" },
-                                                        { "from": "plan", "to": "planapproval" },
-                                                        { "from": "planapproval", "to": "decompose", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
-                                                        { "from": "decompose", "to": "join" },
-                                                        { "from": "implement", "to": "validate" },
-                                                        { "from": "validate", "to": "join" },
-                                                        { "from": "join", "to": "verify" },
-                                                        { "from": "planapproval", "to": "verify", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
-                                                        { "from": "verify", "to": "integrationapproval" },
-                                                        { "from": "integrationapproval", "to": "integrate", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
-                                                        { "from": "integrate", "to": "fullvalidate" }
-                                                      ]
-                                                    }
-                                                    """;
+                                                               {
+                                                                 "schemaVersion": 1,
+                                                                 "nodes": [
+                                                                   {
+                                                                     "nodeKey": "research",
+                                                                     "nodeType": "Agent",
+                                                                     "label": "Research",
+                                                                     "agentSeedSlug": "{{AgentDefaults.WorkSessionResearchAgentSeedSlug}}",
+                                                                     "instructions": "Research what this feature touches in this repository: the code that would change, the conventions it follows, and what already exists that you should reuse. Ground every claim in something you actually read. Before you complete this session you MUST call save_artifact exactly once, with name \"research.md\", mediaType \"text/markdown\", kind \"Report\", and the whole write-up as text."
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "plan",
+                                                                     "nodeType": "Agent",
+                                                                     "label": "Plan",
+                                                                     "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
+                                                                     "instructions": "Turn the research into a plan a person can approve: what to build, in what order, and what would show it worked. Before you complete this session you MUST call save_artifact exactly once, with name \"plan.md\", mediaType \"text/markdown\", kind \"Report\", and the whole plan as text. The approval gate shows the operator that artifact, so a plan left in findings is a plan nobody can approve."
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "planapproval",
+                                                                     "nodeType": "HumanGate",
+                                                                     "label": "Approve the plan"
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "decompose",
+                                                                     "nodeType": "Agent",
+                                                                     "label": "Decompose",
+                                                                     "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
+                                                                     "instructions": "Split the approved plan into independent implementation tasks, each one a slice a coder can finish and a build can judge on its own. Before you complete this session you MUST call save_artifact exactly once, with name \"tasks.json\", mediaType \"application/json\", kind \"Report\", and a JSON array as the text: [{\"id\": \"short-slug\", \"title\": \"what it is\", \"goal\": \"what to implement, in full — this becomes the task's requirements and it is all the coder is told\", \"dependsOn\": [\"another-id\"], \"acceptanceCriteria\": [\"how to tell it is done\"]}]. Ids must be unique, dependsOn may only name ids in this same array, and there must be no dependency cycle. Ten tasks is the ceiling. If the plan needs no implementation work, answer with an empty array rather than inventing one.",
+                                                                     "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 10 }
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "implement",
+                                                                     "nodeType": "DevTask",
+                                                                     "label": "Implement",
+                                                                     "nodeTimeoutSeconds": 7200
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "validate",
+                                                                     "nodeType": "Tool",
+                                                                     "label": "Validate",
+                                                                     "retryTarget": "implement"
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "join",
+                                                                     "nodeType": "Join",
+                                                                     "label": "Every slice implemented"
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "verify",
+                                                                     "nodeType": "Agent",
+                                                                     "label": "Verify",
+                                                                     "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
+                                                                     "instructions": "Judge the implemented slices against the approved plan, independently: read what each task produced and say whether the feature is actually there, what is missing, and what you would not sign off. You are the last reader before an operator is asked to let these patches into the repository, so an honest \"not yet\" is worth more than an approval. Before you complete this session you MUST call save_artifact exactly once, with name \"verification.md\", mediaType \"text/markdown\", kind \"Report\", and your whole assessment as text."
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "integrationapproval",
+                                                                     "nodeType": "HumanGate",
+                                                                     "label": "Approve integration"
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "integrate",
+                                                                     "nodeType": "Tool",
+                                                                     "toolMode": "Apply",
+                                                                     "label": "Apply the approved patches"
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "fullvalidate",
+                                                                     "nodeType": "Tool",
+                                                                     "label": "Validate the integrated result"
+                                                                   }
+                                                                 ],
+                                                                 "edges": [
+                                                                   { "from": "research", "to": "plan" },
+                                                                   { "from": "plan", "to": "planapproval" },
+                                                                   { "from": "planapproval", "to": "decompose", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                                   { "from": "decompose", "to": "join" },
+                                                                   { "from": "implement", "to": "validate" },
+                                                                   { "from": "validate", "to": "join" },
+                                                                   { "from": "join", "to": "verify" },
+                                                                   { "from": "planapproval", "to": "verify", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                                   { "from": "verify", "to": "integrationapproval" },
+                                                                   { "from": "integrationapproval", "to": "integrate", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                                   { "from": "integrate", "to": "fullvalidate" }
+                                                                 ]
+                                                               }
+                                                               """;
 
     /// <summary>
     ///     The revision this build replaces: <see cref="FeatureDevelopmentGraphRevision1" /> with the
@@ -329,93 +329,93 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
     ///     revision 1 is.
     /// </summary>
     internal const string FeatureDevelopmentGraphRevision2 = $$"""
-                                                    {
-                                                      "schemaVersion": 1,
-                                                      "nodes": [
-                                                        {
-                                                          "nodeKey": "research",
-                                                          "nodeType": "Agent",
-                                                          "label": "Research",
-                                                          "agentSeedSlug": "{{AgentDefaults.WorkSessionResearchAgentSeedSlug}}",
-                                                          "instructions": "Research what this feature touches in this repository: the code that would change, the conventions it follows, and what already exists that you should reuse. Ground every claim in something you actually read. Before you complete this session you MUST call save_artifact exactly once, with name \"research.md\", mediaType \"text/markdown\", kind \"Report\", and the whole write-up as text."
-                                                        },
-                                                        {
-                                                          "nodeKey": "plan",
-                                                          "nodeType": "Agent",
-                                                          "label": "Plan",
-                                                          "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
-                                                          "instructions": "Turn the research into a plan a person can approve: what to build, in what order, and what would show it worked. Before you complete this session you MUST call save_artifact exactly once, with name \"plan.md\", mediaType \"text/markdown\", kind \"Report\", and the whole plan as text. The approval gate shows the operator that artifact, so a plan left in findings is a plan nobody can approve."
-                                                        },
-                                                        {
-                                                          "nodeKey": "planapproval",
-                                                          "nodeType": "HumanGate",
-                                                          "label": "Approve the plan"
-                                                        },
-                                                        {
-                                                          "nodeKey": "decompose",
-                                                          "nodeType": "Agent",
-                                                          "label": "Decompose",
-                                                          "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
-                                                          "instructions": "Split the approved plan into independent implementation tasks, each one a slice a coder can finish and a build can judge on its own. Before you complete this session you MUST call save_artifact exactly once, with name \"tasks.json\", mediaType \"application/json\", kind \"Report\", and a JSON array as the text: [{\"id\": \"short-slug\", \"title\": \"what it is\", \"goal\": \"what to implement, in full — this becomes the task's requirements and it is all the coder is told\", \"dependsOn\": [\"another-id\"], \"acceptanceCriteria\": [\"how to tell it is done\"]}]. Ids must be unique, dependsOn may only name ids in this same array, and there must be no dependency cycle. Ten tasks is the ceiling. If the plan needs no implementation work, answer with an empty array rather than inventing one.",
-                                                          "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 10 }
-                                                        },
-                                                        {
-                                                          "nodeKey": "implement",
-                                                          "nodeType": "DevTask",
-                                                          "label": "Implement",
-                                                          "nodeTimeoutSeconds": 7200
-                                                        },
-                                                        {
-                                                          "nodeKey": "validate",
-                                                          "nodeType": "Tool",
-                                                          "label": "Validate",
-                                                          "retryTarget": "implement"
-                                                        },
-                                                        {
-                                                          "nodeKey": "join",
-                                                          "nodeType": "Join",
-                                                          "label": "Every slice implemented"
-                                                        },
-                                                        {
-                                                          "nodeKey": "verify",
-                                                          "nodeType": "Agent",
-                                                          "label": "Verify",
-                                                          "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
-                                                          "instructions": "Judge the implemented slices against the approved plan, independently: read what each task produced and say whether the feature is actually there, what is missing, and what you would not sign off. You are the last reader before an operator is asked to let these patches into the repository, so an honest \"not yet\" is worth more than an approval. Before you complete this session you MUST call save_artifact exactly once, with name \"verification.md\", mediaType \"text/markdown\", kind \"Report\", and your whole assessment as text."
-                                                        },
-                                                        {
-                                                          "nodeKey": "integrationapproval",
-                                                          "nodeType": "HumanGate",
-                                                          "label": "Approve integration"
-                                                        },
-                                                        {
-                                                          "nodeKey": "integrate",
-                                                          "nodeType": "Tool",
-                                                          "toolMode": "Apply",
-                                                          "label": "Apply the approved patches"
-                                                        },
-                                                        {
-                                                          "nodeKey": "fullvalidate",
-                                                          "nodeType": "Tool",
-                                                          "label": "Validate the integrated result",
-                                                          "retryTarget": "verify"
-                                                        }
-                                                      ],
-                                                      "edges": [
-                                                        { "from": "research", "to": "plan" },
-                                                        { "from": "plan", "to": "planapproval" },
-                                                        { "from": "planapproval", "to": "decompose", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
-                                                        { "from": "decompose", "to": "join" },
-                                                        { "from": "implement", "to": "validate" },
-                                                        { "from": "validate", "to": "join" },
-                                                        { "from": "join", "to": "verify" },
-                                                        { "from": "planapproval", "to": "verify", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
-                                                        { "from": "verify", "to": "integrationapproval" },
-                                                        { "from": "integrationapproval", "to": "integrate", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
-                                                        { "from": "integrate", "to": "fullvalidate" }
-                                                      ]
-                                                    }
-                                                    """;
+                                                               {
+                                                                 "schemaVersion": 1,
+                                                                 "nodes": [
+                                                                   {
+                                                                     "nodeKey": "research",
+                                                                     "nodeType": "Agent",
+                                                                     "label": "Research",
+                                                                     "agentSeedSlug": "{{AgentDefaults.WorkSessionResearchAgentSeedSlug}}",
+                                                                     "instructions": "Research what this feature touches in this repository: the code that would change, the conventions it follows, and what already exists that you should reuse. Ground every claim in something you actually read. Before you complete this session you MUST call save_artifact exactly once, with name \"research.md\", mediaType \"text/markdown\", kind \"Report\", and the whole write-up as text."
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "plan",
+                                                                     "nodeType": "Agent",
+                                                                     "label": "Plan",
+                                                                     "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
+                                                                     "instructions": "Turn the research into a plan a person can approve: what to build, in what order, and what would show it worked. Before you complete this session you MUST call save_artifact exactly once, with name \"plan.md\", mediaType \"text/markdown\", kind \"Report\", and the whole plan as text. The approval gate shows the operator that artifact, so a plan left in findings is a plan nobody can approve."
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "planapproval",
+                                                                     "nodeType": "HumanGate",
+                                                                     "label": "Approve the plan"
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "decompose",
+                                                                     "nodeType": "Agent",
+                                                                     "label": "Decompose",
+                                                                     "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
+                                                                     "instructions": "Split the approved plan into independent implementation tasks, each one a slice a coder can finish and a build can judge on its own. Before you complete this session you MUST call save_artifact exactly once, with name \"tasks.json\", mediaType \"application/json\", kind \"Report\", and a JSON array as the text: [{\"id\": \"short-slug\", \"title\": \"what it is\", \"goal\": \"what to implement, in full — this becomes the task's requirements and it is all the coder is told\", \"dependsOn\": [\"another-id\"], \"acceptanceCriteria\": [\"how to tell it is done\"]}]. Ids must be unique, dependsOn may only name ids in this same array, and there must be no dependency cycle. Ten tasks is the ceiling. If the plan needs no implementation work, answer with an empty array rather than inventing one.",
+                                                                     "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 10 }
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "implement",
+                                                                     "nodeType": "DevTask",
+                                                                     "label": "Implement",
+                                                                     "nodeTimeoutSeconds": 7200
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "validate",
+                                                                     "nodeType": "Tool",
+                                                                     "label": "Validate",
+                                                                     "retryTarget": "implement"
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "join",
+                                                                     "nodeType": "Join",
+                                                                     "label": "Every slice implemented"
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "verify",
+                                                                     "nodeType": "Agent",
+                                                                     "label": "Verify",
+                                                                     "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
+                                                                     "instructions": "Judge the implemented slices against the approved plan, independently: read what each task produced and say whether the feature is actually there, what is missing, and what you would not sign off. You are the last reader before an operator is asked to let these patches into the repository, so an honest \"not yet\" is worth more than an approval. Before you complete this session you MUST call save_artifact exactly once, with name \"verification.md\", mediaType \"text/markdown\", kind \"Report\", and your whole assessment as text."
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "integrationapproval",
+                                                                     "nodeType": "HumanGate",
+                                                                     "label": "Approve integration"
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "integrate",
+                                                                     "nodeType": "Tool",
+                                                                     "toolMode": "Apply",
+                                                                     "label": "Apply the approved patches"
+                                                                   },
+                                                                   {
+                                                                     "nodeKey": "fullvalidate",
+                                                                     "nodeType": "Tool",
+                                                                     "label": "Validate the integrated result",
+                                                                     "retryTarget": "verify"
+                                                                   }
+                                                                 ],
+                                                                 "edges": [
+                                                                   { "from": "research", "to": "plan" },
+                                                                   { "from": "plan", "to": "planapproval" },
+                                                                   { "from": "planapproval", "to": "decompose", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                                   { "from": "decompose", "to": "join" },
+                                                                   { "from": "implement", "to": "validate" },
+                                                                   { "from": "validate", "to": "join" },
+                                                                   { "from": "join", "to": "verify" },
+                                                                   { "from": "planapproval", "to": "verify", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                                   { "from": "verify", "to": "integrationapproval" },
+                                                                   { "from": "integrationapproval", "to": "integrate", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                                   { "from": "integrate", "to": "fullvalidate" }
+                                                                 ]
+                                                               }
+                                                               """;
 
     /// <summary>
     ///     Every <c>feature-development-v1</c> graph this build knows it published, which is the list an untouched row is

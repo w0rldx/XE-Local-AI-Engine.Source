@@ -1,14 +1,15 @@
 namespace XE_Local_AI_Engine.Tests.Integrations;
 
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using TUnit.Core.Interfaces;
+using XE_Local_AI_Engine.Client.Endpoints.Integrations.V1;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Endpoints.Integrations.V1;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Tests.Endpoints.Integrations.V1;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -463,7 +464,10 @@ public sealed class IntegrationSseRoutesTests
             // the node-wide admission cap for every later test in it.
             AssertEx.True(await store.TryTerminalizeAsync(new IntegrationTerminalizeCommand(executionId,
                 ExpectedVersion: 0,
-                new HashSet<IntegrationExecutionStatus> { IntegrationExecutionStatus.Accepted },
+                new HashSet<IntegrationExecutionStatus>
+                {
+                    IntegrationExecutionStatus.Accepted
+                },
                 IntegrationExecutionStatus.Completed,
                 Sequence: 1_000,
                 IntegrationStreamEventTypes.ExecutionCompleted,
@@ -486,7 +490,7 @@ public sealed class IntegrationSseRoutesTests
     {
         await using var stream = await response.Content.ReadAsStreamAsync();
         using var reader = new StreamReader(stream);
-        var frame = new System.Text.StringBuilder();
+        var frame = new StringBuilder();
         while (await reader.ReadLineAsync() is { } line)
         {
             if (line.Length == 0)
@@ -501,11 +505,11 @@ public sealed class IntegrationSseRoutesTests
     }
 
     private static IReadOnlyList<long> Sequences(string body) =>
-        [
-            .. body.Split('\n')
-                   .Where(static line => line.StartsWith("id: ", StringComparison.Ordinal))
-                   .Select(static line => long.Parse(line[4..].Trim(), System.Globalization.CultureInfo.InvariantCulture))
-        ];
+    [
+        .. body.Split('\n')
+               .Where(static line => line.StartsWith("id: ", StringComparison.Ordinal))
+               .Select(static line => long.Parse(line[4..].Trim(), CultureInfo.InvariantCulture))
+    ];
 
     private static async Task<HttpResponseMessage> SendAsync(HttpClient client,
         HttpMethod method,
@@ -549,7 +553,8 @@ public sealed class IntegrationSseRoutesTests
         return await client.SendAsync(request, completion);
     }
 
-    private sealed record Seeded(string TriggerName,
+    private sealed record Seeded(
+        string TriggerName,
         Guid TriggerId,
         Guid PrincipalId,
         string KeyPrefix,

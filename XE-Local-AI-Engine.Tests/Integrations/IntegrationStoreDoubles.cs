@@ -308,8 +308,8 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
             }
 
             var active = _rows.Where(static row => row.Status is IntegrationExecutionStatus.Accepted
-                                                   or IntegrationExecutionStatus.Queued
-                                                   or IntegrationExecutionStatus.Running)
+                                  or IntegrationExecutionStatus.Queued
+                                  or IntegrationExecutionStatus.Running)
                               .ToArray();
             if (active.Length >= maxActive || active.Count(row => row.PrincipalId == command.PrincipalId) >= maxActivePerPrincipal)
             {
@@ -743,6 +743,7 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
             {
                 Audits.Add(audit);
             }
+
             // The real store writes the caller's payload onto the terminal row; a double that dropped it would hide a
             // stream and a poll answering differently.
             AddEvent(new IntegrationEventAppend(Guid.NewGuid(), command.ExecutionId, command.Sequence, command.EventType, command.EventDetailJson, command.EndedAtUtc));

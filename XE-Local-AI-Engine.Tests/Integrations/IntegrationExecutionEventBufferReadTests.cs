@@ -117,7 +117,11 @@ public sealed class IntegrationExecutionEventBufferReadTests
         _ = Append(buffer, evicted, IntegrationStreamEventTypes.ExecutionCompleted);
         buffer.Remove(evicted);
 
-        foreach (var executionId in new[] { never, evicted })
+        foreach (var executionId in new[]
+                 {
+                     never,
+                     evicted
+                 })
         {
             AssertEx.False(buffer.IsTracked(executionId));
             AssertEx.Equal(expected: 0L, buffer.Floor(executionId));
@@ -523,15 +527,15 @@ public sealed class IntegrationExecutionEventBufferReadTests
 
         public Reader(IIntegrationExecutionEventBuffer buffer, Guid executionId, long sinceSequence) =>
             Completion = Task.Run(async () =>
-            {
-                await foreach (var streamEvent in buffer.ReadAsync(executionId, sinceSequence, _cancellation.Token).ConfigureAwait(false))
                 {
-                    lock (_gate)
+                    await foreach (var streamEvent in buffer.ReadAsync(executionId, sinceSequence, _cancellation.Token).ConfigureAwait(false))
                     {
-                        _events.Add(streamEvent);
+                        lock (_gate)
+                        {
+                            _events.Add(streamEvent);
+                        }
                     }
-                }
-            },
+                },
                 _cancellation.Token);
 
         public Task Completion { get; }

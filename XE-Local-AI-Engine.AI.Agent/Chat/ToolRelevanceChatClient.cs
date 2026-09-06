@@ -152,9 +152,9 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
         try
         {
             decision = await scope.GetOrComputeAsync(key,
-                                       () => SelectAsync(scope, tools, query, options, messages),
-                                       cancellationToken)
-                                   .ConfigureAwait(false);
+                                      () => SelectAsync(scope, tools, query, options, messages),
+                                      cancellationToken)
+                                  .ConfigureAwait(false);
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {

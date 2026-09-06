@@ -382,8 +382,7 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
             // endpoint or be silently dropped — neither is a defensible reading of the operator's input.
             if (string.Equals(ReasoningEffortNormalizer.Normalize(model.DefaultReasoningEffort), "auto", StringComparison.Ordinal))
             {
-                throw new ExternalProviderValidationException(
-                    "A registered model's default reasoning effort cannot be 'auto'; auto is resolved per turn by this node.");
+                throw new ExternalProviderValidationException("A registered model's default reasoning effort cannot be 'auto'; auto is resolved per turn by this node.");
             }
 
             // Refused, not silently canonicalized. Every capability here is an operator ASSERTION about a remote server

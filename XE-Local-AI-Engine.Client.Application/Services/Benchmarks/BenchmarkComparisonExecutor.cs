@@ -175,28 +175,28 @@ public sealed class BenchmarkComparisonExecutor(
             // A refused pre-spawn eviction is transient — the model is serving a request that ends on its own — so the
             // spawn waits and retries rather than terminalizing this comparison. See BenchmarkExclusiveSpawn.
             _ = await BenchmarkExclusiveSpawn.RunAsync(spawnToken =>
-                                    supervisor.RunExclusiveBenchmarkAsync(runtime.Model.ModelName,
-                                        ModelRole.Chat,
-                                        runtime.Runtime.ToResolvedLaunchArguments(),
-                                        runtime.Runtime.LaunchPolicy,
-                                        async (profiling, profilingToken) =>
-                                        {
-                                            // Durable BEFORE a token is generated: the receipt, the environment facts and
-                                            // the execution key the fit will insist every fitted comparison shares.
-                                            await CheckpointAsync(work, judged, judgedPolicyHash, profiling.LaunchReceipt, environment).ConfigureAwait(false);
-                                            using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
-                                            await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
-                                            using var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty, generationAdmissionPolicy: admission);
-                                            await runner.RunAsync(context, profilingToken).ConfigureAwait(false);
-                                            return true;
-                                        },
-                                        spawnToken),
-                                    waitBudget,
-                                    work.RunId,
-                                    "comparison",
-                                    logger,
-                                    token)
-                                .ConfigureAwait(false);
+                                                     supervisor.RunExclusiveBenchmarkAsync(runtime.Model.ModelName,
+                                                         ModelRole.Chat,
+                                                         runtime.Runtime.ToResolvedLaunchArguments(),
+                                                         runtime.Runtime.LaunchPolicy,
+                                                         async (profiling, profilingToken) =>
+                                                         {
+                                                             // Durable BEFORE a token is generated: the receipt, the environment facts and
+                                                             // the execution key the fit will insist every fitted comparison shares.
+                                                             await CheckpointAsync(work, judged, judgedPolicyHash, profiling.LaunchReceipt, environment).ConfigureAwait(false);
+                                                             using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
+                                                             await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
+                                                             using var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty, generationAdmissionPolicy: admission);
+                                                             await runner.RunAsync(context, profilingToken).ConfigureAwait(false);
+                                                             return true;
+                                                         },
+                                                         spawnToken),
+                                                 waitBudget,
+                                                 work.RunId,
+                                                 "comparison",
+                                                 logger,
+                                                 token)
+                                             .ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
             var terminal = capture.TerminalState;
             if (terminal?.Status != InvocationStatus.Completed)

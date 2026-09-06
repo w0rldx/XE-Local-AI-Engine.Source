@@ -169,13 +169,17 @@ public sealed class LexicalToolRelevanceSelectorTests
         // is ABOUT converting currency beats the essay that merely mentions it.
         List<ToolRelevanceCandidate> candidates =
         [
-            new("workspace_notes", $"A general workspace note reader. {string.Join(' ', Enumerable.Range(0, 60).Select(index => $"topic{index}"))} It can also convert a currency figure in passing.", IsCore: false),
+            new("workspace_notes", $"A general workspace note reader. {string.Join(' ', Enumerable.Range(0, 60).Select(index => $"topic{index}"))} It can also convert a currency figure in passing.",
+                IsCore: false),
             new("currency_convert", "Converts a currency amount between two currencies.", IsCore: false),
             .. BuildNonCore(count: 3)
         ];
 
         // One ranked slot, so the ordering itself is the assertion rather than the fill size.
-        var selector = new LexicalToolRelevanceSelector(Options.Create(new ToolRelevanceOptions { MinimumRankedSlots = 1 }));
+        var selector = new LexicalToolRelevanceSelector(Options.Create(new ToolRelevanceOptions
+        {
+            MinimumRankedSlots = 1
+        }));
 
         var selection = await selector.SelectAsync("convert currency", candidates, threshold: 1, CancellationToken.None);
 
@@ -197,7 +201,8 @@ public sealed class LexicalToolRelevanceSelectorTests
             new("Calculate", "Evaluates a basic arithmetic expression using +, -, *, / and parentheses, then returns the numeric result. Use it for any calculation the user asks for.", IsCore: false),
             new("list_files", "List files and folders in the read-only project workspace. Returns workspace-relative paths only; secrets and heavy generated directories are excluded.", IsCore: false),
             new("read_file", "Read a UTF-8 text file from the read-only project workspace. Optionally read a line range. Binary files are refused and oversized files are truncated.", IsCore: false),
-            new("search_text", "Search the read-only project workspace for a text or regex pattern. Returns matches as relative/path:line: text; secret files and directories are excluded.", IsCore: false),
+            new("search_text", "Search the read-only project workspace for a text or regex pattern. Returns matches as relative/path:line: text; secret files and directories are excluded.",
+                IsCore: false),
             new("search_knowledge_base",
                 "Search the node-local knowledge base (the operator's own uploaded documents) for passages relevant to a question, and use ONLY the returned passages to ground a document-specific answer. "
                 + "Prefer this tool whenever the question is about the operator's documents or local knowledge. Answering policy: rely solely on the retrieved passages for document-grounded claims; do not "

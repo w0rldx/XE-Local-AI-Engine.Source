@@ -54,12 +54,12 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
         // id, not an entity with a lifecycle, so a "principal not found" check would be a second table for no
         // behaviour.
         var snapshot = await _store.CreateAsync(new IntegrationApiKeyCreateCommand(Guid.NewGuid(),
-                                                    principalId ?? Guid.NewGuid(),
-                                                    prefix,
-                                                    HashKey(key),
-                                                    label.Trim(),
-                                                    SerializeAllowList(allowedTriggerIds)),
-                                                cancellationToken)
+                                           principalId ?? Guid.NewGuid(),
+                                           prefix,
+                                           HashKey(key),
+                                           label.Trim(),
+                                           SerializeAllowList(allowedTriggerIds)),
+                                       cancellationToken)
                                    .ConfigureAwait(false);
 
         // The only moment the plaintext exists outside the caller. Nothing downstream can reproduce it.

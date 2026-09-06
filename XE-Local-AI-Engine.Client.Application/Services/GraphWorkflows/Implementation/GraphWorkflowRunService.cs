@@ -66,14 +66,14 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store, IGraphW
         // ONE call. The run row, one Pending node run per graph node and the run.created event commit together, and the
         // definition is re-read inside that same transaction so a delete racing this start cannot leave an orphan run.
         var run = await _store.StartRunAsync(new StartGraphWorkflowRunCommand(Guid.NewGuid(),
-                                  requestId,
-                                  definitionId,
-                                  definition.Version,
-                                  definition.GraphHash,
-                                  definition.GraphJson,
-                                  inputJson,
-                                  [.. graph.Nodes.Values.Select(static node => new GraphWorkflowNodeRunSeed(Guid.NewGuid(), node.NodeKey, node.Kind))]),
-                              cancellationToken)
+                                      requestId,
+                                      definitionId,
+                                      definition.Version,
+                                      definition.GraphHash,
+                                      definition.GraphJson,
+                                      inputJson,
+                                      [.. graph.Nodes.Values.Select(static node => new GraphWorkflowNodeRunSeed(Guid.NewGuid(), node.NodeKey, node.Kind))]),
+                                  cancellationToken)
                               .ConfigureAwait(false);
 
         // The lookup above is a fast path both concurrent callers can pass, and the store answers a lost race on the

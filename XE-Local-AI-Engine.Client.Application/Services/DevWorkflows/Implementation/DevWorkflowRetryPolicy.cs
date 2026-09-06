@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
 using System.Collections.Concurrent;
 using System.Text.Json;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;

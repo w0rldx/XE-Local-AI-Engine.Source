@@ -171,8 +171,7 @@ public sealed class GraphWorkflowStoreTests
         var store = GraphWorkflowTestFixture.StoreFor(context);
         var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store).ConfigureAwait(false);
 
-        var refusal = await AssertEx.ThrowsAsync<ArgumentException>(
-                                        () => store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id,
+        var refusal = await AssertEx.ThrowsAsync<ArgumentException>(() => store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id,
                                             created.Version,
                                             GraphJson: ReplacementGraph)),
                                         "A graph without its node count must be refused rather than written.")
@@ -212,8 +211,7 @@ public sealed class GraphWorkflowStoreTests
         var store = GraphWorkflowTestFixture.StoreFor(context);
         var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store).ConfigureAwait(false);
 
-        var refusal = await AssertEx.ThrowsAsync<ArgumentException>(
-                                        () => store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id,
+        var refusal = await AssertEx.ThrowsAsync<ArgumentException>(() => store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id,
                                             created.Version,
                                             NodeCount: 99)),
                                         "A node count without the graph it counts must be refused rather than written.")
@@ -260,8 +258,7 @@ public sealed class GraphWorkflowStoreTests
         await using var second = fixture.CreateContext();
         var store = GraphWorkflowTestFixture.StoreFor(second);
 
-        _ = await AssertEx.ThrowsAsync<GraphWorkflowDefinitionConflictException>(
-                              () => store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(definitionId,
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowDefinitionConflictException>(() => store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(definitionId,
                                   "Triage again",
                                   GraphWorkflowTestFixture.SampleGraph,
                                   NodeCount: 2)),
@@ -274,8 +271,7 @@ public sealed class GraphWorkflowStoreTests
         // caller has to hear that rather than "it already exists".
         await fixture.RawExecuteAsync("DROP TABLE graph_workflow_definitions;").ConfigureAwait(false);
 
-        var broken = await AssertEx.ThrowsAsync<DbUpdateException>(
-                                       () => store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(Guid.NewGuid(),
+        var broken = await AssertEx.ThrowsAsync<DbUpdateException>(() => store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(Guid.NewGuid(),
                                            "Nowhere to go",
                                            GraphWorkflowTestFixture.SampleGraph,
                                            NodeCount: 2)),

@@ -241,8 +241,7 @@ public sealed class IntegrationSessionService
         new(IntegrationAcceptOutcome.Accepted, existing, "Accepted.");
 
     /// <summary>Unknown, foreign-principal, allowlist-excluded and another trigger's session are ONE answer.</summary>
-    private static IntegrationSessionGateResult Masked =>
-        new(IntegrationAcceptOutcome.SessionNotFound, Existing: null, SessionNotFoundMessage);
+    private static IntegrationSessionGateResult Masked => new(IntegrationAcceptOutcome.SessionNotFound, Existing: null, SessionNotFoundMessage);
 
     /// <summary>
     ///     The masked answer, and the gate entry the accept path minted for an id with NO row behind it. Without this an

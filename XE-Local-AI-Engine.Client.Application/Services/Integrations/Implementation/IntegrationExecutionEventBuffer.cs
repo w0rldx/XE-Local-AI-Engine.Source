@@ -177,8 +177,7 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
             {
                 // Never reserved, reserved for another execution, or already resolved. All three are wiring bugs, and
                 // a silent accept here would put an event on the stream that no reservation is holding a reader for.
-                throw new InvalidOperationException(
-                    $"Integration event sequence {streamEvent.Sequence} for execution {streamEvent.ExecutionId} was not reserved, or was already resolved.");
+                throw new InvalidOperationException($"Integration event sequence {streamEvent.Sequence} for execution {streamEvent.ExecutionId} was not reserved, or was already resolved.");
             }
 
             Insert(entry, streamEvent with
@@ -195,8 +194,7 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
             var entry = Require(executionId);
             if (!entry.Pending.Remove(sequence))
             {
-                throw new InvalidOperationException(
-                    $"Integration event sequence {sequence} for execution {executionId} was not reserved, or was already resolved.");
+                throw new InvalidOperationException($"Integration event sequence {sequence} for execution {executionId} was not reserved, or was already resolved.");
             }
 
             // Wake readers even though nothing became readable: a reader parked at this barrier must learn the hole is
@@ -247,7 +245,8 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
 
     public async IAsyncEnumerable<IntegrationStreamEvent> ReadAsync(Guid executionId,
         long sinceSequence,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(sinceSequence);
 

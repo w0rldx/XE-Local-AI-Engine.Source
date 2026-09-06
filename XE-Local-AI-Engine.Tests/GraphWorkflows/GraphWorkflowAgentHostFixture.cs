@@ -11,7 +11,6 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -196,8 +195,7 @@ internal sealed class FakeGraphWorkflowAgentRuntime : IAgentDefinitionResolver
 
     private readonly ConcurrentQueue<GraphWorkflowResolveCall> _calls = new();
 
-    public IReadOnlyList<GraphWorkflowResolveCall> Calls =>
-        [.. _calls];
+    public IReadOnlyList<GraphWorkflowResolveCall> Calls => [.. _calls];
 
     public GraphWorkflowResolveCall CallFor(string activeModelId) =>
         _calls.FirstOrDefault(call => string.Equals(call.ActiveModelId, activeModelId, StringComparison.Ordinal))
@@ -245,7 +243,8 @@ internal sealed class FakeGraphWorkflowAgentRuntime : IAgentDefinitionResolver
 }
 
 /// <summary>One resolve, as the executor asked for it.</summary>
-internal sealed record GraphWorkflowResolveCall(Guid? AgentDefinitionId,
+internal sealed record GraphWorkflowResolveCall(
+    Guid? AgentDefinitionId,
     string? ActiveModelId,
     string? RetrievalQuery,
     bool SupportsTools,

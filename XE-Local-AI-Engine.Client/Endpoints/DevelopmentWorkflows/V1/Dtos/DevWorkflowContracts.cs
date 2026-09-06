@@ -215,7 +215,8 @@ public sealed class DevWorkflowArtifactRequest
 // with. There is no edge table anywhere: this shape is composed from the encrypted graph blob on the definition row or
 // the run row, which is the single source of routing truth.
 
-public sealed record DevWorkflowGraph(int SchemaVersion,
+public sealed record DevWorkflowGraph(
+    int SchemaVersion,
     IReadOnlyList<DevWorkflowGraphNode> Nodes,
     IReadOnlyList<DevWorkflowGraphEdge> Edges,
     /// <summary>
@@ -360,7 +361,6 @@ public sealed record DevWorkflowRunResponse(
     long? CompletedAtUtc,
     long Version,
     long LastSequence,
-
     /// <summary>
     ///     The run's cost, summed over the node runs already on this response. A LOWER bound by construction: it is the
     ///     final attempt of each node, so a run that retried spent more. The runbook's total is this plus the run's
@@ -388,7 +388,8 @@ public sealed record DevWorkflowRunResponse(
 ///     Whether keys were dropped to keep the stored document inside its column bound. A truncated route must be shown
 ///     as truncated, or a short list reads as the whole one.
 /// </param>
-public sealed record DevWorkflowNodeRouteResponse(IReadOnlyList<string> Satisfied,
+public sealed record DevWorkflowNodeRouteResponse(
+    IReadOnlyList<string> Satisfied,
     IReadOnlyList<string> Dead,
     IReadOnlyList<string> Waived,
     string? GateAnswer,
@@ -398,7 +399,8 @@ public sealed record DevWorkflowNodeRouteResponse(IReadOnlyList<string> Satisfie
 ///     A run's headline spend, summed over its node runs' final attempts. Every member is null until some node run
 ///     reports one, because "nobody measured" and "zero" are different answers.
 /// </summary>
-public sealed record DevWorkflowRunCostResponse(long? InputTokens,
+public sealed record DevWorkflowRunCostResponse(
+    long? InputTokens,
     long? OutputTokens,
     int? ToolCalls,
     int? ProviderCalls,
@@ -550,7 +552,6 @@ public sealed record DevWorkflowNodeRunDetailResponse(
     long? StartedAtUtc,
     long? CompletedAtUtc,
     long Sequence,
-
     /// <summary>
     ///     What this node run's LAST attempt spent on the provider. Null means nobody reported it, never zero: the
     ///     columns are cleared by the <c>Pending</c> reset a re-attempt writes, so earlier attempts are on the run's
@@ -559,15 +560,12 @@ public sealed record DevWorkflowNodeRunDetailResponse(
     long? InputTokens,
     long? OutputTokens,
     long? ReasoningTokens,
-
     /// <summary>A character-profile estimate the agent loop made. Quote it only where <see cref="InputTokens" /> is null.</summary>
     long? EstimatedInputTokens,
     int? ProviderCalls,
     int? ToolCalls,
-
     /// <summary>Schema tokens SHIPPED across rounds, which is a cost, not the size of the schema.</summary>
     long? ToolSchemaTokens,
-
     /// <summary>
     ///     The distinct tools this node run's session called, names only and capped. A last element of <c>"…"</c> is a
     ///     truncation marker rather than a tool. Null means there were no work-session step rows to read — a DevTask,
@@ -575,7 +573,6 @@ public sealed record DevWorkflowNodeRunDetailResponse(
     ///     <see cref="ToolCalls" /> answers.
     /// </summary>
     IReadOnlyList<string>? ToolNames,
-
     /// <summary>
     ///     Wall-clock time inside the agent's chat turns, tool loop included — the envelope measures a whole run, and
     ///     no provider-round-only duration is persisted anywhere this collector can read. So the node's runtime minus
@@ -583,26 +580,21 @@ public sealed record DevWorkflowNodeRunDetailResponse(
     ///     as it.
     /// </summary>
     long? AgentTurnMs,
-
     /// <summary>
     ///     The model that actually served the last turn — the receipt, as opposed to <see cref="ModelLabel" />, which
     ///     is what the node or its agent ASKED for. Both are present because they can differ.
     /// </summary>
     string? ServedModelName,
-
     /// <summary>Where a terminal node run routed. Null while it has not finished, because it has routed nowhere yet.</summary>
     DevWorkflowNodeRouteResponse? Route,
-
     /// <summary>How many steps the node run's work session took. Zero is a measurement; null is an absence.</summary>
     int? WorkSessionSteps,
-
     /// <summary>
     ///     <see cref="FailureClass" /> projected onto the ONE cross-unit vocabulary
     ///     (<c>AgentUnitFailureClass</c>), so a workflow node run, a chat run envelope and a Development attempt can be
     ///     grouped together in a report. Null exactly when the row records no failure. Nothing routes on it.
     /// </summary>
     string? FailureClassGroup,
-
     /// <summary>
     ///     How much of <see cref="AgentTurnMs" /> the turns spent WAITING for a local runtime — llama-server launching
     ///     and loading the model — rather than generating. Null means unmeasured: no turn went through the
@@ -612,7 +604,6 @@ public sealed record DevWorkflowNodeRunDetailResponse(
     ///     itself proves only "under 1 ms", never residency on its own.
     /// </summary>
     long? ModelReadinessMs,
-
     /// <summary>
     ///     Machine-global free VRAM in bytes as the capacity gate measured it just before the most recent SUCCESSFUL
     ///     load of the model in <see cref="ServedModelName" /> THAT CARRIED A CAPACITY ADMISSION — not necessarily a
@@ -632,7 +623,6 @@ public sealed record DevWorkflowNodeRunDetailResponse(
     ///     </para>
     /// </summary>
     long? VramFreeAtLoadBytes,
-
     /// <summary>
     ///     The GPU bytes the capacity gate RESERVED for that same load's process. Zero is a real answer for a
     ///     CPU-placed allocation; null carries the same "nobody measured" meaning as

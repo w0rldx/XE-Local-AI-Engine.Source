@@ -124,8 +124,14 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     public async Task Telemetry_CollectorThrows_NodeStillSettles(bool faults)
     {
         var stub = faults
-            ? new StubDevWorkflowNodeTelemetrySource { Fault = new InvalidOperationException("The envelope read fell over.") }
-            : new StubDevWorkflowNodeTelemetrySource { Delay = TimeSpan.FromSeconds(30) };
+            ? new StubDevWorkflowNodeTelemetrySource
+            {
+                Fault = new InvalidOperationException("The envelope read fell over.")
+            }
+            : new StubDevWorkflowNodeTelemetrySource
+            {
+                Delay = TimeSpan.FromSeconds(30)
+            };
 
         await using var harness = NewHarness(stub);
         var runId = await harness.StartRunAsync(AgentThenGate).ConfigureAwait(false);
@@ -167,7 +173,11 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         }
 
         // Blocked, Failed and Skipped, all through the retry policy's own settle paths on a real dead branch.
-        foreach (var decision in new[] { DevWorkflowDecisionKind.Abandon, DevWorkflowDecisionKind.Skip })
+        foreach (var decision in new[]
+                 {
+                     DevWorkflowDecisionKind.Abandon,
+                     DevWorkflowDecisionKind.Skip
+                 })
         {
             await using var harness = new DevWorkflowHarness();
             var runId = await harness.StartRunAsync(DevWorkflowGraphs.AnyJoinOverADeadBranch, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
@@ -304,8 +314,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         }
 
         // A legacy row: the shape the supervisor wrote before the names existed.
-        var legacy = JsonSerializer.Deserialize<WorkSessionStepConsumptionDetail>(
-            """{"providerCalls":2,"estimatedInputTokens":10,"toolCallsCompleted":1,"providerCallCap":8,"attachedBudgets":1}""",
+        var legacy = JsonSerializer.Deserialize<WorkSessionStepConsumptionDetail>("""{"providerCalls":2,"estimatedInputTokens":10,"toolCallsCompleted":1,"providerCallCap":8,"attachedBudgets":1}""",
             ConsumptionJsonOptions);
         var legacyDetail = AssertEx.NotNull(legacy, "The legacy shape still has to parse.");
         AssertEx.Null(legacyDetail.ToolNames, "A row that predates the field has no list, which is not the same as an empty one.");

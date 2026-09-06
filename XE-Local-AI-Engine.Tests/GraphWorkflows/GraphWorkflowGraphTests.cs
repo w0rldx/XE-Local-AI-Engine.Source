@@ -700,7 +700,13 @@ public sealed class GraphWorkflowGraphTests
     [Test]
     public void TerminalNodeKeys_AreExactlyTheEndNodes()
     {
-        foreach (var json in new[] { GraphWorkflowGraphs.TwoEnds, GraphWorkflowGraphs.StartAgentEnd, GraphWorkflowGraphs.ParallelJoinAll, StartToEnd })
+        foreach (var json in new[]
+                 {
+                     GraphWorkflowGraphs.TwoEnds,
+                     GraphWorkflowGraphs.StartAgentEnd,
+                     GraphWorkflowGraphs.ParallelJoinAll,
+                     StartToEnd
+                 })
         {
             var graph = GraphWorkflowGraph.Parse(json);
             var ends = graph.Nodes.Values.Where(static node => node.Kind == GraphWorkflowNodeKind.End).Select(static node => node.NodeKey);

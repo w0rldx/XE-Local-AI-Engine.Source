@@ -261,9 +261,8 @@ public sealed class EngineCliProcessTests : IDisposable
                 return null;
             }
 
-            throw new InvalidOperationException(
-                $"The engine exited with code {_process.ExitCode.ToString(CultureInfo.InvariantCulture)} before readiness. "
-                + $"stderr: {await _standardError.ConfigureAwait(false)}");
+            throw new InvalidOperationException($"The engine exited with code {_process.ExitCode.ToString(CultureInfo.InvariantCulture)} before readiness. "
+                                                + $"stderr: {await _standardError.ConfigureAwait(false)}");
         }
 
         public async ValueTask DisposeAsync()

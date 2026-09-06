@@ -301,9 +301,11 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         return new DevWorkflowRunCostResponse(inputTokens, outputTokens, toolCalls, providerCalls, agentTurnMs);
     }
 
-    private static long? Add(long? total, long? term) => term is { } value ? (total ?? 0) + value : total;
+    private static long? Add(long? total, long? term) =>
+        term is { } value ? (total ?? 0) + value : total;
 
-    private static int? Add(int? total, int? term) => term is { } value ? (total ?? 0) + value : total;
+    private static int? Add(int? total, int? term) =>
+        term is { } value ? (total ?? 0) + value : total;
 
     /// <summary>
     ///     The stored route on the wire, parsed by the runtime's own reader — the one that owns the document — and only

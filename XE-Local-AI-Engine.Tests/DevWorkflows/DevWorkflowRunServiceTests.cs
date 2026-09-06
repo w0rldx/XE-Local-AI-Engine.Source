@@ -841,13 +841,13 @@ public sealed class DevWorkflowRunServiceTests
             NullLogger<DevWorkflowRunService>.Instance);
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(() => service.DecideAsync(runId,
-                                nodeRunId,
-                                Guid.NewGuid(),
-                                DevWorkflowDecisionKind.Retry,
-                                "Try it again.",
-                                payloadJson: null,
-                                "operator@localhost.test"))
-                            .ConfigureAwait(false);
+                              nodeRunId,
+                              Guid.NewGuid(),
+                              DevWorkflowDecisionKind.Retry,
+                              "Try it again.",
+                              payloadJson: null,
+                              "operator@localhost.test"))
+                          .ConfigureAwait(false);
 
         var command = AssertEx.NotNull(written);
         AssertEx.Equal(blocked.Attempt, command.ExpectedAttempt, "the answer names the attempt it was judged against, or the store cannot tell a moved row from a fresh one.");

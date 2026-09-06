@@ -223,14 +223,14 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
         try
         {
             recorded = await executionStore.AppendOutputEventAsync(new IntegrationEventAppend(Guid.NewGuid(),
-                        execution.Id,
-                        sequence,
-                        IntegrationStreamEventTypes.ExternalOutput,
-                        detailJson,
-                        occurredAtUtc),
-                    _options.MaxOutputBytesPerExecution,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                                                   execution.Id,
+                                                   sequence,
+                                                   IntegrationStreamEventTypes.ExternalOutput,
+                                                   detailJson,
+                                                   occurredAtUtc),
+                                               _options.MaxOutputBytesPerExecution,
+                                               cancellationToken)
+                                           .ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -269,6 +269,8 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
     ///     stored cannot disagree.
     /// </summary>
     private sealed record EmitOutputEnvelope(
-        [property: JsonPropertyName("contentType")] string ContentType,
-        [property: JsonPropertyName("payload")] JsonElement Payload);
+        [property: JsonPropertyName("contentType")]
+        string ContentType,
+        [property: JsonPropertyName("payload")]
+        JsonElement Payload);
 }

@@ -113,8 +113,7 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
     ///         spent, so retrieval degrades to its lexical fallback instead of failing unclassified.
     ///     </para>
     /// </summary>
-    private async Task<(IEmbeddingGenerator<string, Embedding<float>> Inner, ILlamaServerInferenceLease? Lease)> EnsureLeasedInnerAsync(
-        CancellationToken ct)
+    private async Task<(IEmbeddingGenerator<string, Embedding<float>> Inner, ILlamaServerInferenceLease? Lease)> EnsureLeasedInnerAsync(CancellationToken ct)
     {
         var attempt = 0;
         while (true)

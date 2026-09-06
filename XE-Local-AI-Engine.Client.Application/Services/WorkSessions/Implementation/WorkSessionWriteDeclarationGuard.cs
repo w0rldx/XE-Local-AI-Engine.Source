@@ -78,7 +78,7 @@ internal sealed class WorkSessionWriteDeclarationGuard
     {
         var activeModel = string.IsNullOrWhiteSpace(pinnedModelOverride)
             ? await _localDefaultModel.ResolveAsync((await _nodeSettings.LoadAsync(cancellationToken).ConfigureAwait(false)).DefaultModelName, cancellationToken)
-                .ConfigureAwait(false)
+                                      .ConfigureAwait(false)
             : pinnedModelOverride;
 
         // supportsTools: true is passed deliberately rather than probed. The question is what this binding COULD be

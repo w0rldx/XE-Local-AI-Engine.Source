@@ -36,8 +36,7 @@ public sealed class LlamaFitParamsOutputParserTests
         // The helper is handed --cpu-moe, fits against it, and echoes the override back verbatim (upstream
         // tools/fit-params/fit-params.cpp prints every tensor_buft_override as -ot). That -ot IS the frozen expert
         // placement, so the replay reproduces what the admission ledger booked without ever emitting --cpu-moe.
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(
-            [@"-c 8192 -ngl 48 -ot ""\.ffn_(up|down|gate|gate_up)_(ch|)exps=CPU"""],
+        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs([@"-c 8192 -ngl 48 -ot ""\.ffn_(up|down|gate|gate_up)_(ch|)exps=CPU"""],
             startupOutput: [],
             successfulLaunchArguments: ["-m", "/models/moe.gguf", "--fit", "on", "--cpu-moe"]);
 

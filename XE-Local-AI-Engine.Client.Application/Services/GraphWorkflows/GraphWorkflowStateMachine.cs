@@ -44,7 +44,8 @@ internal enum GraphWorkflowNodeAdmission
 ///     because nothing failed, and a run that DID fail would otherwise report class <c>None</c> while the node under it
 ///     names the real one.
 /// </summary>
-internal readonly record struct GraphWorkflowRunOutcome(GraphWorkflowRunStatus Status,
+internal readonly record struct GraphWorkflowRunOutcome(
+    GraphWorkflowRunStatus Status,
     GraphWorkflowFailureClass FailureClass = GraphWorkflowFailureClass.None,
     string? TerminalReason = null);
 

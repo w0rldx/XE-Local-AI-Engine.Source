@@ -354,7 +354,8 @@ public sealed partial class InvocationRunner
         // Folded onto the saturating Add so a DERIVED total clamps exactly like an accumulated one: Enumerable.Sum
         // over int is checked, so two in-range counts whose sum passes int.MaxValue threw OverflowException mid-stream
         // and failed the invocation. Null-preserving: with neither side reported the total stays null.
-        private static int? SumIfAny(int? left, int? right) => left is null && right is null ? null : Add(left, right);
+        private static int? SumIfAny(int? left, int? right) =>
+            left is null && right is null ? null : Add(left, right);
 
         // Saturating member-wise add, mirroring ToNullableInt's clamp: two in-range rounds can still sum past
         // int.MaxValue, and a token total must not wrap negative because a provider reported an absurd count.

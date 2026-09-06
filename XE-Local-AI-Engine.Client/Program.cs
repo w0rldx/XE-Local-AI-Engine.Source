@@ -737,8 +737,7 @@ namespace XE_Local_AI_Engine.Client
             // come from an IOptions<IntegrationOptions> instance resolved per request — that would be a second source
             // that can disagree with what the route already carries. Read from configuration here, the same shape the
             // rate-limit permit constants use.
-            var integrationMaxRequestBodyBytes = app.Configuration.GetValue(
-                $"{IntegrationOptions.Section}:{nameof(IntegrationOptions.MaxRequestBodyBytes)}",
+            var integrationMaxRequestBodyBytes = app.Configuration.GetValue($"{IntegrationOptions.Section}:{nameof(IntegrationOptions.MaxRequestBodyBytes)}",
                 defaultValue: 1024L * 1024L);
 
             app.MapPost(integrationRoutePrefix + LocalApiRoutes.IntegrationApi.Invoke,

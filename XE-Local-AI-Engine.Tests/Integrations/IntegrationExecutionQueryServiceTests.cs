@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Integrations;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Integrations;
@@ -112,7 +111,7 @@ public sealed class IntegrationExecutionQueryServiceTests
         private readonly IntegrationExecutionEventBuffer _buffer;
         private readonly IntegrationCancellationRegistry _cancellations = new();
         private readonly Guid _triggerId = Guid.NewGuid();
-            private CancellationToken _cancelToken;
+        private CancellationToken _cancelToken;
         private Guid _registered;
 
         public Harness()
@@ -160,15 +159,18 @@ public sealed class IntegrationExecutionQueryServiceTests
             var row = Row(executionId);
             AssertEx.True(_buffer.TryCreate(executionId, row.LastSequence));
             _ = Executions.TryTerminalizeAsync(new IntegrationTerminalizeCommand(executionId,
-                                       row.Version,
-                                       new HashSet<IntegrationExecutionStatus> { row.Status },
-                                       IntegrationExecutionStatus.Completed,
-                                       _buffer.Reserve(executionId),
-                                       IntegrationStreamEventTypes.ExecutionCompleted,
-                                       EndedAtUtc: 9,
-                                       FailureCategory: null,
-                                       FailureSummary: null),
-                                   CancellationToken.None)
+                                  row.Version,
+                                  new HashSet<IntegrationExecutionStatus>
+                                  {
+                                      row.Status
+                                  },
+                                  IntegrationExecutionStatus.Completed,
+                                  _buffer.Reserve(executionId),
+                                  IntegrationStreamEventTypes.ExecutionCompleted,
+                                  EndedAtUtc: 9,
+                                  FailureCategory: null,
+                                  FailureSummary: null),
+                              CancellationToken.None)
                           .GetAwaiter()
                           .GetResult();
         }

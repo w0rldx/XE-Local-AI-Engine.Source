@@ -73,14 +73,12 @@ public sealed record DevelopmentTransitionTaskCommand(
     long ExpectedTaskVersion,
     string? Reason = null,
     string? ApprovedSubjectHash = null,
-
     /// <summary>
     ///     That a PERSON wrote <see cref="Reason" />, rather than a reviewer, a gate or a workflow's own fix loop. It
     ///     is what lets the prompts rank it: an operator's sentence amends the task's immutable requirements, and a
     ///     reviewer's does not.
     /// </summary>
     bool OperatorDirected = false,
-
     /// <summary>
     ///     Raises the task's <c>MaxReviewRounds</c> by one, and is the ONLY thing that opens the single edge out of
     ///     <c>Blocked</c>. A person who retries a workflow node stopped at "all N rounds used" is buying the task the
@@ -222,7 +220,6 @@ public sealed record DevelopmentExecutionSnapshot(
     ///     sentence a reviewer wrote and a workflow's fix loop wrote.
     /// </summary>
     string? PreviousRoundFeedback = null,
-
     /// <summary>
     ///     The rule-set text a Development workflow injected onto this task, or nothing when no workflow drives it.
     ///     Resolved from the task's own event log rather than from a column, exactly as
@@ -236,7 +233,6 @@ public sealed record DevelopmentExecutionSnapshot(
     ///     </para>
     /// </summary>
     string? WorkflowPolicyText = null,
-
     /// <summary>
     ///     The last thing a PERSON told this task to do differently, or nothing. Read from the task's own event log
     ///     like the two above, and disjoint from <see cref="PreviousRoundFeedback" />: whichever of the two a row is,

@@ -321,13 +321,13 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
         {
             var attemptId = Guid.NewGuid();
             var started = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(task.Id,
-                                         attemptId,
-                                         Guid.NewGuid(),
-                                         DevelopmentAttemptRole.Coder,
-                                         "scripted-model",
-                                         "local",
-                                         (await store.GetTaskAsync(task.Id, cancellationToken).ConfigureAwait(false)).Version),
-                                     cancellationToken)
+                                             attemptId,
+                                             Guid.NewGuid(),
+                                             DevelopmentAttemptRole.Coder,
+                                             "scripted-model",
+                                             "local",
+                                             (await store.GetTaskAsync(task.Id, cancellationToken).ConfigureAwait(false)).Version),
+                                         cancellationToken)
                                      .ConfigureAwait(false);
             _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attemptId,
                                    Guid.NewGuid(),
@@ -339,9 +339,9 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
         }
 
         var opened = await store.StartValidationAsync(new DevelopmentStartValidationCommand(task.Id,
-                                    Guid.NewGuid(),
-                                    (await store.GetTaskAsync(task.Id, cancellationToken).ConfigureAwait(false)).Version),
-                                cancellationToken)
+                                        Guid.NewGuid(),
+                                        (await store.GetTaskAsync(task.Id, cancellationToken).ConfigureAwait(false)).Version),
+                                    cancellationToken)
                                 .ConfigureAwait(false);
         _ = await store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand(new DevelopmentAttachArtifactCommand(Guid.NewGuid(),
                                    projectId,

@@ -322,7 +322,12 @@ public sealed class GraphWorkflowRunStoreTests
         var store = GraphWorkflowTestFixture.StoreFor(context);
         var definition = await GraphWorkflowTestFixture.SeedDefinitionAsync(store).ConfigureAwait(false);
 
-        foreach (var status in new[] { GraphWorkflowRunStatus.Running, GraphWorkflowRunStatus.WaitingForApproval, GraphWorkflowRunStatus.Cancelling })
+        foreach (var status in new[]
+                 {
+                     GraphWorkflowRunStatus.Running,
+                     GraphWorkflowRunStatus.WaitingForApproval,
+                     GraphWorkflowRunStatus.Cancelling
+                 })
         {
             var run = await store.StartRunAsync(StartCommand(definition, Guid.NewGuid())).ConfigureAwait(false);
             _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(run.Id, run.Version, status)).ConfigureAwait(false);

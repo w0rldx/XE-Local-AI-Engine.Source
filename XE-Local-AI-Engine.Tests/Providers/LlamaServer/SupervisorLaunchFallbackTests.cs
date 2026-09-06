@@ -4,8 +4,8 @@ using Microsoft.Extensions.Logging;
 using NSubstitute;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
-using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -331,7 +331,8 @@ public sealed class SupervisorLaunchFallbackTests
     /// <summary>Reads normally; the WRITE the safe-retry verdict needs fails, which is what the policy has to absorb.</summary>
     private sealed class ThrowingOnWriteFallbackStore : ILlamaServerLaunchFallbackStore
     {
-        public Task<bool> IsOptimizedConfigDisabledAsync(GpuVariant variant, string kvCacheType, CancellationToken ct) => Task.FromResult(false);
+        public Task<bool> IsOptimizedConfigDisabledAsync(GpuVariant variant, string kvCacheType, CancellationToken ct) =>
+            Task.FromResult(false);
 
         public Task DisableOptimizedConfigAsync(GpuVariant variant, string kvCacheType, CancellationToken ct) =>
             throw new IOException("The launch-fallback state file could not be replaced.");

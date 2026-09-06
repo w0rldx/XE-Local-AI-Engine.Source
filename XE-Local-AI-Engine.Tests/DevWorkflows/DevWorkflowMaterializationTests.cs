@@ -141,9 +141,9 @@ public sealed class DevWorkflowMaterializationTests
     {
         await using var harness = new DevWorkflowHarness();
         var runId = await DecomposeAsync(harness,
-                              """[{"id":"survey","title":"Survey the style","goal":"Read the calculator and capture the style profile."}]""",
-                              DevWorkflowGraphs.DecompositionIntoDevTasks)
-                          .ConfigureAwait(false);
+                """[{"id":"survey","title":"Survey the style","goal":"Read the calculator and capture the style profile."}]""",
+                DevWorkflowGraphs.DecompositionIntoDevTasks)
+            .ConfigureAwait(false);
 
         // Two quiescent passes, as every other refusal here: the first hands the complaint back to the node, the second
         // — after the re-attempt saves nothing new — stands it down.
@@ -170,9 +170,9 @@ public sealed class DevWorkflowMaterializationTests
     {
         await using var harness = new DevWorkflowHarness();
         var runId = await DecomposeAsync(harness,
-                              """[{"id":"alpha","goal":"Add the method.","changes":["/etc/passwd"]}]""",
-                              DevWorkflowGraphs.DecompositionIntoDevTasks)
-                          .ConfigureAwait(false);
+                """[{"id":"alpha","goal":"Add the method.","changes":["/etc/passwd"]}]""",
+                DevWorkflowGraphs.DecompositionIntoDevTasks)
+            .ConfigureAwait(false);
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
         await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
@@ -193,14 +193,14 @@ public sealed class DevWorkflowMaterializationTests
     {
         await using var harness = new DevWorkflowHarness();
         var runId = await DecomposeAsync(harness,
-                              """
-                              [
-                                { "id": "alpha", "title": "Add Square", "goal": "Add a Square method.", "changes": ["src/Calc/Calculator.cs", "tests/CalculatorSquareTests.cs"] },
-                                { "id": "beta", "title": "Add Cube", "goal": "Add a Cube method.", "changes": ["src/Calc/Calculator.cs"] }
-                              ]
-                              """,
-                              DevWorkflowGraphs.DecompositionIntoDevTasks)
-                          .ConfigureAwait(false);
+                """
+                [
+                  { "id": "alpha", "title": "Add Square", "goal": "Add a Square method.", "changes": ["src/Calc/Calculator.cs", "tests/CalculatorSquareTests.cs"] },
+                  { "id": "beta", "title": "Add Cube", "goal": "Add a Cube method.", "changes": ["src/Calc/Calculator.cs"] }
+                ]
+                """,
+                DevWorkflowGraphs.DecompositionIntoDevTasks)
+            .ConfigureAwait(false);
 
         _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
 
@@ -223,9 +223,9 @@ public sealed class DevWorkflowMaterializationTests
     {
         await using var harness = new DevWorkflowHarness();
         var runId = await DecomposeAsync(harness,
-                              """[{"id":"survey","title":"Survey the style","goal":"Read the calculator and capture the style profile."}]""",
-                              DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask)
-                          .ConfigureAwait(false);
+                """[{"id":"survey","title":"Survey the style","goal":"Read the calculator and capture the style profile."}]""",
+                DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask)
+            .ConfigureAwait(false);
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
         await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
@@ -243,9 +243,9 @@ public sealed class DevWorkflowMaterializationTests
     {
         await using var harness = new DevWorkflowHarness();
         var runId = await DecomposeAsync(harness,
-                              """[{"id":"alpha","title":"Add Square","goal":"Add a Square method.","changes":["src/Calc/Calculator.cs"]}]""",
-                              DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask)
-                          .ConfigureAwait(false);
+                """[{"id":"alpha","title":"Add Square","goal":"Add a Square method.","changes":["src/Calc/Calculator.cs"]}]""",
+                DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask)
+            .ConfigureAwait(false);
 
         _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
 

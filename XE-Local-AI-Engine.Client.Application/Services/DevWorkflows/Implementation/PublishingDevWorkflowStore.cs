@@ -3,8 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
@@ -26,7 +24,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     writes one or two; a parallel stage would want a debounce here, keyed by run id, before the client turns each
 ///     ping into a refetch.
 /// </remarks>
-internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
+internal sealed class PublishingDevWorkflowStore(
+    IDevWorkflowStore inner,
     IDevWorkflowEventPublisher publisher,
     IServiceScopeFactory scopes,
     DevWorkflowGraphCache graphs,
@@ -208,7 +207,10 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
             resets.Add(await EnrichWithinDeadlineAsync(reset, deadline.Token, cancellationToken).ConfigureAwait(false));
         }
 
-        return await PublishAsync(_inner.RouteRetryAsync(command with { Resets = resets }, cancellationToken), DevWorkflowChangeKind.Node, cancellationToken)
+        return await PublishAsync(_inner.RouteRetryAsync(command with
+            {
+                Resets = resets
+            }, cancellationToken), DevWorkflowChangeKind.Node, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -439,7 +441,13 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
             return command;
         }
 
-        return command with { Telemetry = (collected ?? new DevWorkflowNodeTelemetry()) with { RouteJson = routeJson } };
+        return command with
+        {
+            Telemetry = (collected ?? new DevWorkflowNodeTelemetry()) with
+            {
+                RouteJson = routeJson
+            }
+        };
     }
 
     /// <summary>
@@ -542,7 +550,12 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner,
             return command;
         }
 
-        return MergeAttemptCost(command.DetailJson!, collected) is { } merged ? command with { DetailJson = merged } : command;
+        return MergeAttemptCost(command.DetailJson!, collected) is { } merged
+            ? command with
+            {
+                DetailJson = merged
+            }
+            : command;
     }
 
     /// <summary>

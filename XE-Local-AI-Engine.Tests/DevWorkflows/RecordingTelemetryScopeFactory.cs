@@ -42,7 +42,8 @@ internal sealed class RecordingTelemetryScopeFactory : IServiceScopeFactory
     {
         private readonly RecordingTelemetryScopeFactory _owner;
 
-        public Scope(RecordingTelemetryScopeFactory owner) => _owner = owner;
+        public Scope(RecordingTelemetryScopeFactory owner) =>
+            _owner = owner;
 
         public IServiceProvider ServiceProvider => this;
 
@@ -56,6 +57,7 @@ internal sealed class RecordingTelemetryScopeFactory : IServiceScopeFactory
             return serviceType == typeof(IDevWorkflowNodeTelemetrySource) ? _owner._telemetry : null;
         }
 
-        public void Dispose() => Interlocked.Increment(ref _owner._disposed);
+        public void Dispose() =>
+            Interlocked.Increment(ref _owner._disposed);
     }
 }

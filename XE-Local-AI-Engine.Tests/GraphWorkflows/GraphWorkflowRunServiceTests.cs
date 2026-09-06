@@ -321,8 +321,7 @@ public sealed class GraphWorkflowRunServiceTests
         _ = await AssertEx.ThrowsAsync<GraphWorkflowNotFoundException>(() => runs.GetNodeRunAsync(started.Run.Id, "nosuchnode")).ConfigureAwait(false);
     }
 
-    private RecordingGraphWorkflowDispatcherSignal Signals =>
-        (RecordingGraphWorkflowDispatcherSignal)Host.Factory.Services.GetRequiredService<IGraphWorkflowDispatcherSignal>();
+    private RecordingGraphWorkflowDispatcherSignal Signals => (RecordingGraphWorkflowDispatcherSignal)Host.Factory.Services.GetRequiredService<IGraphWorkflowDispatcherSignal>();
 
     private Task<Guid> SeedDefinitionAsync(string graphJson) =>
         SeedDefinitionAsync(Host.Factory, graphJson);

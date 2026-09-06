@@ -139,8 +139,7 @@ public sealed class GraphWorkflowDocumentTests
             graph.Nodes["merge"],
             attempt: 1,
             GraphWorkflowNodeOutputStatuses.Succeeded,
-            GraphWorkflowDocuments.JoinOutput(
-            [
+            GraphWorkflowDocuments.JoinOutput([
                 new GraphWorkflowUpstreamDocument("right", """{"status":"succeeded","attempt":1,"branch":null,"output":{"text":"R"}}"""),
                 new GraphWorkflowUpstreamDocument("left", """{"status":"succeeded","attempt":1,"branch":null,"output":{"text":"L"}}""")
             ]),

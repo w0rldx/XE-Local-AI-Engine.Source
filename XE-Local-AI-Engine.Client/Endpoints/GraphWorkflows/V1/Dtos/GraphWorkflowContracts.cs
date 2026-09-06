@@ -123,7 +123,8 @@ public sealed record GraphWorkflowGraphEdge(string Key, string From, string To, 
 ///         value (<c>Exists</c>, <c>NotExists</c>) still round-trip as the absent member they are stored as.
 ///     </para>
 /// </summary>
-public sealed record GraphWorkflowEdgeCondition(string? Path,
+public sealed record GraphWorkflowEdgeCondition(
+    string? Path,
     string Op,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     JsonElement Value);

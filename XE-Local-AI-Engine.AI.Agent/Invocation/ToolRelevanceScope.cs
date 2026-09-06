@@ -99,9 +99,11 @@ internal readonly struct ArrayKey : IEquatable<ArrayKey>
     /// <summary>The name sequence itself, kept for the compare; never mutated after construction.</summary>
     public string[] Names { get; }
 
-    public static bool operator ==(ArrayKey left, ArrayKey right) => left.Equals(right);
+    public static bool operator ==(ArrayKey left, ArrayKey right) =>
+        left.Equals(right);
 
-    public static bool operator !=(ArrayKey left, ArrayKey right) => !left.Equals(right);
+    public static bool operator !=(ArrayKey left, ArrayKey right) =>
+        !left.Equals(right);
 
     public bool Equals(ArrayKey other)
     {

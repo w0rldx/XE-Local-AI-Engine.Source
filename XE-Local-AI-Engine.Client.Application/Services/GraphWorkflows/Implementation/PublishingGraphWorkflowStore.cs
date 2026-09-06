@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
@@ -22,7 +21,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     reachable in v1, so a tick can write several in a row; if the client's refetch rate ever measures, a per-run
 ///     debounce goes here.
 /// </remarks>
-internal sealed class PublishingGraphWorkflowStore(IGraphWorkflowStore inner,
+internal sealed class PublishingGraphWorkflowStore(
+    IGraphWorkflowStore inner,
     IGraphWorkflowEventPublisher publisher,
     ILogger<PublishingGraphWorkflowStore> logger) : IGraphWorkflowStore
 {

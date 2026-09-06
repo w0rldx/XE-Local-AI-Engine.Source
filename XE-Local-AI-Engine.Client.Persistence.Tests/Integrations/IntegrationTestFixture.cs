@@ -33,7 +33,8 @@ internal sealed class IntegrationTestFixture : IDisposable
         }
     }
 
-    public NodeChatDbContext CreateContext() => AgentDefinitionTestContextFactory.Create(DatabasePath, _keyHolder);
+    public NodeChatDbContext CreateContext() =>
+        AgentDefinitionTestContextFactory.Create(DatabasePath, _keyHolder);
 
     public async Task<NodeChatDbContext> CreateSchemaAsync()
     {

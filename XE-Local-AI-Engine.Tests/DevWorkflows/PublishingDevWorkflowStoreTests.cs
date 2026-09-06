@@ -106,8 +106,7 @@ public sealed class PublishingDevWorkflowStoreTests
             store => store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked))),
         new(nameof(IDevWorkflowStore.RouteRetryAsync),
             DevWorkflowChangeKind.Node,
-            store => store.RouteRetryAsync(new RouteDevWorkflowRetryCommand(
-                new AppendDevWorkflowEventCommand(RunId, DevWorkflowVersions.Any, DevWorkflowEventTypes.NodeRetryRouted, NodeRunId),
+            store => store.RouteRetryAsync(new RouteDevWorkflowRetryCommand(new AppendDevWorkflowEventCommand(RunId, DevWorkflowVersions.Any, DevWorkflowEventTypes.NodeRetryRouted, NodeRunId),
                 [NodeRunTransition(DevWorkflowNodeRunStatus.Pending)]))),
         new(nameof(IDevWorkflowStore.AttachWorkSessionAsync),
             DevWorkflowChangeKind.Node,
@@ -166,13 +165,15 @@ public sealed class PublishingDevWorkflowStoreTests
     public async Task ARetryRoute_BoundsEveryResetWithOneDeadline()
     {
         const int resets = 10;
-        var route = new RouteDevWorkflowRetryCommand(
-            new AppendDevWorkflowEventCommand(RunId, DevWorkflowVersions.Any, DevWorkflowEventTypes.NodeRetryRouted, NodeRunId),
+        var route = new RouteDevWorkflowRetryCommand(new AppendDevWorkflowEventCommand(RunId, DevWorkflowVersions.Any, DevWorkflowEventTypes.NodeRetryRouted, NodeRunId),
             [.. Enumerable.Range(0, resets).Select(static _ => ReAttempt())]);
 
         // While the budget lasts. A budget nothing can exhaust, because this arm is about the token's identity rather
         // than the clock — a wall-clock budget here would only make the assertion flake on a loaded box.
-        var offered = new StubDevWorkflowNodeTelemetrySource { ExpectedEntries = resets };
+        var offered = new StubDevWorkflowNodeTelemetrySource
+        {
+            ExpectedEntries = resets
+        };
         var (store, publisher) = Create(offered, Hang, collectionSlots: resets);
 
         _ = await store.RouteRetryAsync(route).ConfigureAwait(false);
@@ -190,7 +191,11 @@ public sealed class PublishingDevWorkflowStoreTests
         // And once it is spent, nothing more is scheduled. The first reset's collector stalls for the whole 300 ms, so
         // the shared deadline is gone by the time the second is reached and the nine behind it start no collection at
         // all — which is also why the route still returns inside its budget.
-        var stalled = new StubDevWorkflowNodeTelemetrySource { Delay = TimeSpan.FromMinutes(1), ExpectedEntries = 1 };
+        var stalled = new StubDevWorkflowNodeTelemetrySource
+        {
+            Delay = TimeSpan.FromMinutes(1),
+            ExpectedEntries = 1
+        };
         var budget = TimeSpan.FromMilliseconds(300);
         var (spent, _) = Create(stalled, budget, collectionSlots: resets);
 
@@ -246,8 +251,8 @@ public sealed class PublishingDevWorkflowStoreTests
         AssertEx.True(elapsed.Elapsed < budget * 3,
             $"The refused settle waited {elapsed.ElapsedMilliseconds} ms against a {budget.TotalMilliseconds} ms budget; it should not wait at all.");
         _ = await harness.Inner.Received(2)
-                        .TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static forwarded => forwarded.Telemetry == null),
-                            Arg.Any<CancellationToken>());
+                         .TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static forwarded => forwarded.Telemetry == null),
+                             Arg.Any<CancellationToken>());
 
         // Re-offered in a loop rather than asserted once: the release runs in the abandoned task's own finally, just
         // after the scope it disposes, so the slot comes back a moment after the gate opens rather than with it.
@@ -310,8 +315,8 @@ public sealed class PublishingDevWorkflowStoreTests
         AssertEx.True(elapsed.Elapsed < Hang,
             $"A collector that ignores cancellation held the settle for {elapsed.ElapsedMilliseconds} ms against a {budget.TotalMilliseconds} ms budget.");
         _ = await harness.Inner.Received(1)
-                        .TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static forwarded => forwarded.Telemetry == null),
-                            Arg.Any<CancellationToken>());
+                         .TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static forwarded => forwarded.Telemetry == null),
+                             Arg.Any<CancellationToken>());
         await AssertEx.EventuallyAsync(() => harness.Scopes.Created == 1,
                           Hang,
                           "The collection reads on a scope it owns, not on the one the mutation is about to write through.")
@@ -339,8 +344,7 @@ public sealed class PublishingDevWorkflowStoreTests
             Answer = new DevWorkflowNodeTelemetry(InputTokens: 5)
         };
         var harness = CreateHarness(telemetry, budget);
-        var route = new RouteDevWorkflowRetryCommand(
-            new AppendDevWorkflowEventCommand(RunId, DevWorkflowVersions.Any, DevWorkflowEventTypes.NodeRetryRouted, NodeRunId),
+        var route = new RouteDevWorkflowRetryCommand(new AppendDevWorkflowEventCommand(RunId, DevWorkflowVersions.Any, DevWorkflowEventTypes.NodeRetryRouted, NodeRunId),
             [ReAttempt()]);
 
         var elapsed = Stopwatch.StartNew();
@@ -350,9 +354,8 @@ public sealed class PublishingDevWorkflowStoreTests
         AssertEx.True(elapsed.Elapsed < Hang,
             $"The route waited {elapsed.ElapsedMilliseconds} ms on a collector that ignores cancellation, against a {budget.TotalMilliseconds} ms budget.");
         _ = await harness.Inner.Received(1)
-                        .RouteRetryAsync(
-                            Arg.Is<RouteDevWorkflowRetryCommand>(static forwarded => forwarded.Resets[0].DetailJson == ReAttemptDetail),
-                            Arg.Any<CancellationToken>());
+                         .RouteRetryAsync(Arg.Is<RouteDevWorkflowRetryCommand>(static forwarded => forwarded.Resets[0].DetailJson == ReAttemptDetail),
+                             Arg.Any<CancellationToken>());
         AssertEx.Equal(expected: 0, harness.Scopes.Disposed, "The abandoned collection keeps its own scope while the route commits.");
 
         var callsBefore = harness.Inner.ReceivedCalls().Count();
@@ -425,7 +428,8 @@ public sealed class PublishingDevWorkflowStoreTests
 
     private sealed record Probe(string Method, DevWorkflowChangeKind Kind, Func<IDevWorkflowStore, Task> Invoke);
 
-    private sealed record Harness(IDevWorkflowStore Store,
+    private sealed record Harness(
+        IDevWorkflowStore Store,
         IDevWorkflowEventPublisher Publisher,
         IDevWorkflowStore Inner,
         RecordingTelemetryScopeFactory Scopes);

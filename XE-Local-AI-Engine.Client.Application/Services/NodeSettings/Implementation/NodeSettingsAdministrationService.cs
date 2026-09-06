@@ -217,26 +217,26 @@ internal sealed class NodeSettingsAdministrationService(
             // record too, ahead of whatever the projection produced, orphaning no frozen profile.
             var changedUnderTheValidation = false;
             var persisted = await _store.UpdateAsync(latest =>
-                                        {
-                                            changedUnderTheValidation = !SameExceptMachineKey(latest, validatedAgainst);
-                                            if (changedUnderTheValidation)
                                             {
-                                                // Nothing may be projected onto a record this attempt never
-                                                // validated — on the last attempt as much as on the first. Returning
-                                                // `latest` unchanged still costs one redundant write, because
-                                                // UpdateAsync always persists — that is the price of reading the
-                                                // write-time record under the store's own lock, and the file it
-                                                // rewrites is byte-identical.
-                                                return latest;
-                                            }
+                                                changedUnderTheValidation = !SameExceptMachineKey(latest, validatedAgainst);
+                                                if (changedUnderTheValidation)
+                                                {
+                                                    // Nothing may be projected onto a record this attempt never
+                                                    // validated — on the last attempt as much as on the first. Returning
+                                                    // `latest` unchanged still costs one redundant write, because
+                                                    // UpdateAsync always persists — that is the price of reading the
+                                                    // write-time record under the store's own lock, and the file it
+                                                    // rewrites is byte-identical.
+                                                    return latest;
+                                                }
 
-                                            return apply(latest) with
-                                            {
-                                                MachineKey = latest.MachineKey
-                                            };
-                                        },
-                                        cancellationToken)
-                                       .ConfigureAwait(false);
+                                                return apply(latest) with
+                                                {
+                                                    MachineKey = latest.MachineKey
+                                                };
+                                            },
+                                            cancellationToken)
+                                        .ConfigureAwait(false);
 
             if (changedUnderTheValidation)
             {

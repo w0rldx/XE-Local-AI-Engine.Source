@@ -32,7 +32,12 @@ public sealed class DevWorkflowRouteRetryTests
         _ = await store.RouteRetryAsync(RouteFrom(seed.RunId, Guid.NewGuid(), [VerifyId, IntegrateId, FullValidateId])).ConfigureAwait(false);
 
         var nodeRuns = (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).ToDictionary(row => row.NodeKey, StringComparer.Ordinal);
-        foreach (var key in new[] { "verify", "integrate", "fullvalidate" })
+        foreach (var key in new[]
+                 {
+                     "verify",
+                     "integrate",
+                     "fullvalidate"
+                 })
         {
             AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, nodeRuns[key].Status, $"'{key}' is under the node being re-run, so the route resets it.");
             AssertEx.Equal(expected: 2, nodeRuns[key].Attempt, $"'{key}' spends an attempt on the new round.");
@@ -128,7 +133,12 @@ public sealed class DevWorkflowRouteRetryTests
         _ = await store.RouteRetryAsync(RouteFrom(seed.RunId, Guid.NewGuid(), [VerifyId, IntegrateId, FullValidateId])).ConfigureAwait(false);
 
         var nodeRuns = (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).ToDictionary(row => row.NodeKey, StringComparer.Ordinal);
-        foreach (var key in new[] { "verify", "integrate", "fullvalidate" })
+        foreach (var key in new[]
+                 {
+                     "verify",
+                     "integrate",
+                     "fullvalidate"
+                 })
         {
             AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, nodeRuns[key].Status);
             AssertEx.Equal(expected: 2, nodeRuns[key].Attempt, $"'{key}' spends ONE attempt across both asks; a tracker the failure left dirty would have spent two.");
@@ -149,7 +159,11 @@ public sealed class DevWorkflowRouteRetryTests
         version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, IntegrateId, "integrate", version, DevWorkflowNodeType.Tool).ConfigureAwait(false);
         _ = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, FullValidateId, "fullvalidate", version, DevWorkflowNodeType.Tool).ConfigureAwait(false);
 
-        foreach (var nodeRunId in new[] { VerifyId, IntegrateId })
+        foreach (var nodeRunId in new[]
+                 {
+                     VerifyId,
+                     IntegrateId
+                 })
         {
             _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
                                nodeRunId,

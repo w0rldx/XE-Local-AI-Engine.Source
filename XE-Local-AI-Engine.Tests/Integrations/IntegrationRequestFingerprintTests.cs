@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Integrations;
 
+using System.Security.Cryptography;
 using System.Text;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -80,6 +81,6 @@ public sealed class IntegrationRequestFingerprintTests
         stream.AddRange(Encoding.UTF8.GetBytes(sessionId?.ToString("D") ?? string.Empty));
         stream.Add(0x1E);
         stream.AddRange(Encoding.UTF8.GetBytes(body));
-        return System.Security.Cryptography.SHA256.HashData(stream.ToArray());
+        return SHA256.HashData(stream.ToArray());
     }
 }

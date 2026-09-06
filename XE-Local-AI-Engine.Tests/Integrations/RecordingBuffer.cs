@@ -34,7 +34,8 @@ internal sealed class RecordingBuffer(long initialSequence = 0) : IIntegrationEx
     public HashSet<Guid> Untracked { get; } = [];
 
     /// <summary>Completes once a reservation has been taken, so a blocking-commit test never sleeps on a guess.</summary>
-    public Task WaitForReserveAsync() => _reserved.Task;
+    public Task WaitForReserveAsync() =>
+        _reserved.Task;
 
     public long Reserve(Guid executionId)
     {
@@ -69,7 +70,8 @@ internal sealed class RecordingBuffer(long initialSequence = 0) : IIntegrationEx
         }
     }
 
-    public bool TryCreate(Guid executionId, long initialSequence = 0) => true;
+    public bool TryCreate(Guid executionId, long initialSequence = 0) =>
+        true;
 
     public void Remove(Guid executionId)
     {
@@ -86,13 +88,17 @@ internal sealed class RecordingBuffer(long initialSequence = 0) : IIntegrationEx
         }
     }
 
-    public long LowestPendingReservation(Guid executionId) => long.MaxValue;
+    public long LowestPendingReservation(Guid executionId) =>
+        long.MaxValue;
 
-    public bool IsTracked(Guid executionId) => !Untracked.Contains(executionId);
+    public bool IsTracked(Guid executionId) =>
+        !Untracked.Contains(executionId);
 
-    public long LastSequence(Guid executionId) => _sequence;
+    public long LastSequence(Guid executionId) =>
+        _sequence;
 
-    public long Floor(Guid executionId) => 1;
+    public long Floor(Guid executionId) =>
+        1;
 
     public IAsyncEnumerable<IntegrationStreamEvent> ReadAsync(Guid executionId, long sinceSequence, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("This double records writes; the reader is the real buffer's own suite.");

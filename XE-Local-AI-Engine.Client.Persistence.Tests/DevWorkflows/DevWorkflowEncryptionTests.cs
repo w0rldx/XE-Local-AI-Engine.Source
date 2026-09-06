@@ -162,20 +162,25 @@ public sealed class DevWorkflowEncryptionTests
             var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "research", seed.RunVersion).ConfigureAwait(false);
 
             _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
-                                  nodeRunId,
-                                  version,
-                                  DevWorkflowNodeRunStatus.Succeeded,
-                                  Telemetry: new DevWorkflowNodeTelemetry(InputTokens: 10,
-                                      OutputTokens: 20,
-                                      ToolCalls: 1,
-                                      ToolNamesJson: $"""["{toolName}"]""",
-                                      ServedModelName: servedModel,
-                                      RouteJson: $$"""{"satisfied":["{{routeKey}}"],"dead":[],"gateAnswer":null,"truncated":false}""")))
+                               nodeRunId,
+                               version,
+                               DevWorkflowNodeRunStatus.Succeeded,
+                               Telemetry: new DevWorkflowNodeTelemetry(InputTokens: 10,
+                                   OutputTokens: 20,
+                                   ToolCalls: 1,
+                                   ToolNamesJson: $"""["{toolName}"]""",
+                                   ServedModelName: servedModel,
+                                   RouteJson: $$"""{"satisfied":["{{routeKey}}"],"dead":[],"gateAnswer":null,"truncated":false}""")))
                            .ConfigureAwait(false);
         }
 
         var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(fixture.DatabasePath).ConfigureAwait(false);
-        foreach (var value in new[] { servedModel, toolName, routeKey })
+        foreach (var value in new[]
+                 {
+                     servedModel,
+                     toolName,
+                     routeKey
+                 })
         {
             AssertEx.True(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(value)),
                 $"'{value[..12]}…' is telemetry metadata and must stay plaintext — the runbook's rollups read these columns with SQL.");

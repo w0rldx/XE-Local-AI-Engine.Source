@@ -8,7 +8,6 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
-using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -832,7 +831,8 @@ public sealed class ReasoningEffortDispatcherTests
 
         public bool Disposed => DisposeCount > 0;
 
-        public void Dispose() => DisposeCount++;
+        public void Dispose() =>
+            DisposeCount++;
     }
 
     private sealed class StubInferenceLease : ILlamaServerInferenceLease
@@ -841,7 +841,8 @@ public sealed class ReasoningEffortDispatcherTests
 
         public bool WasEjected => false;
 
-        public void Dispose() => Disposed = true;
+        public void Dispose() =>
+            Disposed = true;
     }
 
     private static IModelTrustResolver CreateTrustResolver(ModelTrustLocality locality)

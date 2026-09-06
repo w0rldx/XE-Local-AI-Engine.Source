@@ -191,7 +191,7 @@ internal sealed record GraphWorkflowCondition(string Path, GraphWorkflowConditio
         // By NAME: Enum.TryParse would accept "3" or "-1" and hand back an operator no member has, which Evaluate
         // would then route on.
         var op = element.TryGetProperty("op", out var opElement) && opElement.ValueKind == JsonValueKind.String
-                                                                && GraphWorkflowTokens.TryParseName<GraphWorkflowConditionOperator>(opElement.GetString(), out var parsed)
+                                                                 && GraphWorkflowTokens.TryParseName<GraphWorkflowConditionOperator>(opElement.GetString(), out var parsed)
             ? parsed
             : throw new GraphWorkflowValidationException($"The condition on edge {edgeDescription} needs an 'op' from "
                                                          + $"{string.Join(", ", Enum.GetNames<GraphWorkflowConditionOperator>())}.");

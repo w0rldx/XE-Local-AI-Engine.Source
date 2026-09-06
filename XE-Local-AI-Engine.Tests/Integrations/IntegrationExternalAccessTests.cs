@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Integrations;
 
 using System.Security.Claims;
 using System.Text.Json;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Integrations;
@@ -192,15 +191,24 @@ public sealed class IntegrationExternalAccessTests
             _ = _keys.CreateAsync(new IntegrationApiKeyCreateCommand(Guid.NewGuid(),
                 PrincipalId,
                 BroadPrefix,
-                new byte[] { 1 },
+                new byte[]
+                {
+                    1
+                },
                 "broad",
                 AllowedTriggerIdsJson: null)).GetAwaiter().GetResult();
             _ = _keys.CreateAsync(new IntegrationApiKeyCreateCommand(Guid.NewGuid(),
                 PrincipalId,
                 NarrowPrefix,
-                new byte[] { 2 },
+                new byte[]
+                {
+                    2
+                },
                 "narrow",
-                JsonSerializer.Serialize(new[] { TriggerA }))).GetAwaiter().GetResult();
+                JsonSerializer.Serialize(new[]
+                {
+                    TriggerA
+                }))).GetAwaiter().GetResult();
 
             Access = new IntegrationExternalAccess(_executions, _sessions, _keys);
         }
@@ -266,7 +274,10 @@ public sealed class IntegrationExternalAccessTests
         public void NarrowBroadKeyToTriggerA()
         {
             var row = _keys.Rows.Single(candidate => string.Equals(candidate.KeyPrefix, BroadPrefix, StringComparison.Ordinal));
-            _keys.Rescope(row.Id, JsonSerializer.Serialize(new[] { TriggerA }));
+            _keys.Rescope(row.Id, JsonSerializer.Serialize(new[]
+            {
+                TriggerA
+            }));
         }
     }
 }

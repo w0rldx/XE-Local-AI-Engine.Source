@@ -13,7 +13,6 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -252,8 +251,7 @@ public sealed class WorkSessionStepLoopTests
             // No StepTimeoutSeconds: the park clock has to be the only thing that can end this step, or the assertion
             // would pass off the deadline instead.
             AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxParkedSeconds", "1")),
-            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
-                services =>
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(services =>
                 {
                     var fake = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId);
                     stream = fake;
@@ -506,7 +504,6 @@ public sealed class WorkSessionStepLoopTests
     ///     What an operator does in Node Settings: the stored allow-list replaces the seeded one outright, so the
     ///     session's model is either on it or it is not.
     /// </summary>
-
     /// <summary>
     ///     <c>GRAPH-C4-2</c>'s runtime half, at the seam that makes it a rule rather than a snapshot. The development
     ///     workflow checks a node's effective tool projection before it creates the session — but every step re-resolves

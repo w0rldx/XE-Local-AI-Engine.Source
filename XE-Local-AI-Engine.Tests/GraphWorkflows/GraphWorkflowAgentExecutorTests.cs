@@ -285,7 +285,7 @@ public sealed class GraphWorkflowAgentExecutorTests
         AssertEx.Contains(analyze.Error, "length", message: "and the reason names the finish reason, because a truncated answer still Completed.");
 
         var retried = AssertEx.NotNull((await harness.ReadEventsAsync(runId).ConfigureAwait(false))
-                                       .FirstOrDefault(static entry => entry.EventType == GraphWorkflowEventTypes.NodeRetried),
+            .FirstOrDefault(static entry => entry.EventType == GraphWorkflowEventTypes.NodeRetried),
             "an unparseable answer is retryable, so the run tried again.");
         AssertEx.Contains(retried.DetailJson, nameof(GraphWorkflowFailureClass.NodeFailed), message: "the class it re-attempted is the retryable one, never ValidationFailed.");
         AssertEx.Contains(retried.DetailJson, "length");
@@ -336,7 +336,7 @@ public sealed class GraphWorkflowAgentExecutorTests
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
         AssertEx.Contains(analyze.Error, "out of time");
         var retried = AssertEx.NotNull((await harness.ReadEventsAsync(runId).ConfigureAwait(false))
-                                       .FirstOrDefault(static entry => entry.EventType == GraphWorkflowEventTypes.NodeRetried),
+            .FirstOrDefault(static entry => entry.EventType == GraphWorkflowEventTypes.NodeRetried),
             "a timeout is retryable, so the run tried again.");
         AssertEx.Contains(retried.DetailJson, nameof(GraphWorkflowFailureClass.Timeout), message: "the watchdog's category is what the class is read from.");
         AssertEx.False(retried.DetailJson?.Contains(nameof(GraphWorkflowFailureClass.NodeFailed), StringComparison.Ordinal) == true,
@@ -403,7 +403,7 @@ public sealed class GraphWorkflowAgentExecutorTests
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
         AssertEx.Equal(FakeGraphWorkflowCapacity.RejectionReason, analyze.Error, "a capacity refusal is already operator-facing, so the row repeats it verbatim.");
         var retried = AssertEx.NotNull((await harness.ReadEventsAsync(runId).ConfigureAwait(false))
-                                       .FirstOrDefault(static entry => entry.EventType == GraphWorkflowEventTypes.NodeRetried),
+            .FirstOrDefault(static entry => entry.EventType == GraphWorkflowEventTypes.NodeRetried),
             "a node that was merely refused for room is retryable, so the run tried again.");
         AssertEx.Contains(retried.DetailJson, nameof(GraphWorkflowFailureClass.NodeFailed));
         AssertEx.Empty(harness.Invocations.Packages.Where(package => Prompt(package).Contains(instructions, StringComparison.Ordinal)),
@@ -685,7 +685,12 @@ public sealed class GraphWorkflowAgentExecutorTests
     public async Task ThreeParallelAgentNodes_ReadRunningQueuedQueued()
     {
         await using var harness = GraphWorkflowHarness.PrivateAgentHost();
-        foreach (var branch in new[] { "Left.", "Middle.", "Right." })
+        foreach (var branch in new[]
+                 {
+                     "Left.",
+                     "Middle.",
+                     "Right."
+                 })
         {
             harness.Invocations.Script(branch, new GraphWorkflowScriptedTurn(GraphWorkflowTurnOutcome.Parks));
         }
@@ -701,8 +706,8 @@ public sealed class GraphWorkflowAgentExecutorTests
         _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
 
         var branches = (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false))
-            .Where(static nodeRun => nodeRun.Kind == GraphWorkflowNodeKind.Agent)
-            .ToList();
+                       .Where(static nodeRun => nodeRun.Kind == GraphWorkflowNodeKind.Agent)
+                       .ToList();
         AssertEx.Equal(expected: 1, branches.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Running), "one branch holds the slot.");
         AssertEx.Equal(expected: 2, branches.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Queued), "and the other two say so.");
 

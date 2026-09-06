@@ -41,7 +41,8 @@ public sealed class LexicalPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         var queryTokens = LexicalOverlapScoring.Tokenize(query);
 
         IReadOnlyList<PlaybookActionRecord> selected = candidates
-                                                       .Select(candidate => new ScoredCandidate(candidate, LexicalOverlapScoring.ScoreOverlap(queryTokens, LexicalOverlapScoring.Tokenize(candidate.TriggerCondition ?? candidate.Behavior))))
+                                                       .Select(candidate => new ScoredCandidate(candidate,
+                                                           LexicalOverlapScoring.ScoreOverlap(queryTokens, LexicalOverlapScoring.Tokenize(candidate.TriggerCondition ?? candidate.Behavior))))
                                                        .OrderByDescending(scored => scored.Score)
                                                        .ThenBy(scored => scored.Action.Priority)
                                                        .ThenBy(scored => scored.Action.CreatedAtUtc)

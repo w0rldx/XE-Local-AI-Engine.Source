@@ -1424,7 +1424,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                         // without KV quantization proves nothing about KV: the primary may have failed on placement or
                         // transient pressure. Recording it would disable the optimized config for EVERY model on this
                         // backend from one model's failure, so it is logged as inconclusive instead.
-                        _logger.LogInformation("Safe-retry readiness for expert-offload model {ModelName} role {Role} is inconclusive about the optimized KV config; nothing recorded for backend {Variant}.",
+                        _logger.LogInformation(
+                            "Safe-retry readiness for expert-offload model {ModelName} role {Role} is inconclusive about the optimized KV config; nothing recorded for backend {Variant}.",
                             key.ModelName,
                             key.Role,
                             variant);
@@ -2227,7 +2228,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ///     inference. <paramref name="claim" /> is the token to pass to <see cref="ReleaseEvictionClaim" />, and is
         ///     0 on any failure.
         /// </summary>
-        public bool TryBeginEvict(bool forProfiling, out long claim) => TryBeginEvict(forProfiling, out claim, out _);
+        public bool TryBeginEvict(bool forProfiling, out long claim) =>
+            TryBeginEvict(forProfiling, out claim, out _);
 
         /// <summary>
         ///     As <see cref="TryBeginEvict(bool, out long)" />, additionally reporting WHICH failure occurred:

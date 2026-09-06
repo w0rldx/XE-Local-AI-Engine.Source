@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
 using System.Runtime.InteropServices;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using System.Collections.Concurrent;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
@@ -51,7 +52,7 @@ internal sealed class StubDevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelem
     ///     The deadline token each collection was handed. Two tokens compare equal when they come from the same source,
     ///     so this is how a test tells one budget shared across a route from one budget per command.
     /// </summary>
-    public System.Collections.Concurrent.ConcurrentQueue<CancellationToken> Deadlines { get; } = new();
+    public ConcurrentQueue<CancellationToken> Deadlines { get; } = new();
 
     public async Task<DevWorkflowNodeTelemetry?> CollectAsync(DevWorkflowNodeRunSnapshot nodeRun,
         DevWorkflowNodeRunStatus targetStatus,

@@ -61,7 +61,8 @@ internal readonly record struct DevWorkflowRunOutcome(DevWorkflowRunStatus Statu
 /// </summary>
 /// <param name="GateAnswer">The decision token a human gate settled on; null on every other node type.</param>
 /// <param name="Truncated">Whether keys were dropped to keep the serialized document inside the column's bound.</param>
-public sealed record DevWorkflowRoute(IReadOnlyList<string> Satisfied,
+public sealed record DevWorkflowRoute(
+    IReadOnlyList<string> Satisfied,
     IReadOnlyList<string> Dead,
     IReadOnlyList<string> Waived,
     string? GateAnswer,
@@ -355,7 +356,12 @@ internal static class DevWorkflowStateMachine
 
             // Drop from the longest list, so a route with one satisfied edge and nine dead ones keeps the edge that says
             // where the run went rather than losing it to the ones that say where it did not.
-            var longest = new[] { satisfied, dead, waived }.MaxBy(static list => list.Count)!;
+            var longest = new[]
+            {
+                satisfied,
+                dead,
+                waived
+            }.MaxBy(static list => list.Count)!;
             longest.RemoveAt(longest.Count - 1);
             truncated = true;
         }

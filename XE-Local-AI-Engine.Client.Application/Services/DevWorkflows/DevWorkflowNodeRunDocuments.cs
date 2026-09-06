@@ -66,7 +66,8 @@ public static class DevWorkflowNodeRunDocuments
     ///     The stored document, whose lists may be absent — <see cref="TryParseRoute" /> is what normalises them. A row
     ///     written before the waived bucket existed simply omits it, which reads back as the empty list it means.
     /// </summary>
-    private sealed record StoredRoute(IReadOnlyList<string?>? Satisfied,
+    private sealed record StoredRoute(
+        IReadOnlyList<string?>? Satisfied,
         IReadOnlyList<string?>? Dead,
         IReadOnlyList<string?>? Waived,
         string? GateAnswer,

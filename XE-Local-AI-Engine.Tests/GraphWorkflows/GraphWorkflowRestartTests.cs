@@ -327,7 +327,10 @@ public sealed class GraphWorkflowRestartTests
 
     private static GraphWorkflowStartupReconciler NewReconciler(bool enabled) =>
         new(new ThrowingServiceScopeFactory(),
-            Options.Create(new GraphWorkflowOptions { Enabled = enabled }),
+            Options.Create(new GraphWorkflowOptions
+            {
+                Enabled = enabled
+            }),
             NullLogger<GraphWorkflowStartupReconciler>.Instance);
 
     /// <summary>A run ticked far enough that its inline work node is in flight, the way a host death would leave it.</summary>
@@ -381,7 +384,12 @@ internal sealed class DriftingGraphWorkflowStore : IGraphWorkflowStore
     public List<GraphWorkflowUnjudgedNodeRunSettlement?> Settlements { get; } = [];
 
     public Task<IReadOnlyList<GraphWorkflowReconciledNodeRun>> ListInterruptedNodeRunsAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<GraphWorkflowReconciledNodeRun>>([_stranded with { Attempt = _stranded.Attempt + ++_reads }]);
+        Task.FromResult<IReadOnlyList<GraphWorkflowReconciledNodeRun>>([
+            _stranded with
+            {
+                Attempt = _stranded.Attempt + ++_reads
+            }
+        ]);
 
     public Task<IReadOnlyList<GraphWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
         IReadOnlyList<GraphWorkflowNodeRunVerdict> verdicts,

@@ -6,7 +6,6 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
-using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -315,7 +314,8 @@ public sealed class DefaultReasoningEffortDispatcher(
     /// </summary>
     private readonly record struct SwapResolution(string? FastModel, string? RefusalReason, IDisposable? Reservation)
     {
-        public static SwapResolution Refused(string reason) => new(FastModel: null, reason, Reservation: null);
+        public static SwapResolution Refused(string reason) =>
+            new(FastModel: null, reason, Reservation: null);
 
         public static SwapResolution Admitted(string fastModel, IDisposable? reservation) =>
             new(fastModel, RefusalReason: null, reservation);

@@ -202,7 +202,10 @@ public sealed class IntegrationSessionEndpointTests
                 sessionId,
                 principalId,
                 Guid.NewGuid(),
-                new byte[] { 7 },
+                new byte[]
+                {
+                    7
+                },
                 keyPrefix,
                 receivedAtUtc,
                 new IntegrationEventAppend(Guid.NewGuid(), executionId, Sequence: 1, IntegrationStreamEventTypes.ExecutionAccepted, DetailJson: null, receivedAtUtc)),
@@ -214,7 +217,8 @@ public sealed class IntegrationSessionEndpointTests
 
     private sealed record Seeded(Guid TriggerId, string TriggerName, Guid PrincipalId, IReadOnlyList<Guid> SessionIds);
 
-    private sealed record SessionBody(Guid Id,
+    private sealed record SessionBody(
+        Guid Id,
         Guid TriggerId,
         string TriggerName,
         Guid PrincipalId,

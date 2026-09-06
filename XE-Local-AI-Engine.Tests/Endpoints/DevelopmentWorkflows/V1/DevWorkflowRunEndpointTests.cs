@@ -657,9 +657,22 @@ public sealed class DevWorkflowRunEndpointTests
         var root = document.RootElement;
         foreach (var member in new[]
                  {
-                     "inputTokens", "outputTokens", "reasoningTokens", "estimatedInputTokens", "providerCalls", "toolCalls", "toolSchemaTokens",
-                     "toolNames", "agentTurnMs", "modelReadinessMs", "vramFreeAtLoadBytes", "vramAdmittedBytes", "servedModelName", "route",
-                     "workSessionSteps", "failureClassGroup"
+                     "inputTokens",
+                     "outputTokens",
+                     "reasoningTokens",
+                     "estimatedInputTokens",
+                     "providerCalls",
+                     "toolCalls",
+                     "toolSchemaTokens",
+                     "toolNames",
+                     "agentTurnMs",
+                     "modelReadinessMs",
+                     "vramFreeAtLoadBytes",
+                     "vramAdmittedBytes",
+                     "servedModelName",
+                     "route",
+                     "workSessionSteps",
+                     "failureClassGroup"
                  })
         {
             AssertEx.Equal(JsonValueKind.Null, root.GetProperty(member).ValueKind, $"'{member}' has nothing to report on a legacy row, which is not zero.");
@@ -773,7 +786,14 @@ public sealed class DevWorkflowRunEndpointTests
 
         using var document = JsonDocument.Parse(body);
         var cost = document.RootElement.GetProperty("cost");
-        foreach (var member in new[] { "inputTokens", "outputTokens", "toolCalls", "providerCalls", "agentTurnMs" })
+        foreach (var member in new[]
+                 {
+                     "inputTokens",
+                     "outputTokens",
+                     "toolCalls",
+                     "providerCalls",
+                     "agentTurnMs"
+                 })
         {
             AssertEx.Equal(JsonValueKind.Null, cost.GetProperty(member).ValueKind, $"'{member}' was never measured on this run.");
         }
@@ -1217,7 +1237,10 @@ public sealed class DevWorkflowRunEndpointTests
                 WorkNodeRun(2, "excused", DevWorkflowNodeRunStatus.Skipped),
                 WorkNodeRun(3, "broken", DevWorkflowNodeRunStatus.Failed),
                 WorkNodeRun(4, "cascaded", DevWorkflowNodeRunStatus.Skipped),
-                WorkNodeRun(5, "join", DevWorkflowNodeRunStatus.Pending) with { NodeType = DevWorkflowNodeType.Join }
+                WorkNodeRun(5, "join", DevWorkflowNodeRunStatus.Pending) with
+                {
+                    NodeType = DevWorkflowNodeType.Join
+                }
             ],
             PendingDecisionCount: 0,
             BlockingGateNodeRunId: null));
@@ -1286,7 +1309,10 @@ public sealed class DevWorkflowRunEndpointTests
             MaterializedFromNodeRunId = retried.Id,
             MaterializationIndex = 2
         };
-        var runs = RunService(new DevWorkflowRunDetail(RunSnapshot() with { GraphJson = RetryGraph },
+        var runs = RunService(new DevWorkflowRunDetail(RunSnapshot() with
+            {
+                GraphJson = RetryGraph
+            },
             [retried, untouched, unapplied, preUpgrade, widenedClone, untouchedClone],
             PendingDecisionCount: 1,
             BlockingGateNodeRunId: null));
@@ -1353,7 +1379,10 @@ public sealed class DevWorkflowRunEndpointTests
     public async Task GetNodeRun_CountsTheAttemptsAnOperatorBoughtAMaterializedClone()
     {
         var store = Store();
-        _ = store.GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(RunSnapshot() with { GraphJson = RetryGraph });
+        _ = store.GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(RunSnapshot() with
+        {
+            GraphJson = RetryGraph
+        });
         _ = store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>())
                  .Returns(GateNodeRun() with
                  {

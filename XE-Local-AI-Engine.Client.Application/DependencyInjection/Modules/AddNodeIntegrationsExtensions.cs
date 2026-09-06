@@ -2,11 +2,11 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Integrations;
-using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 using XE_Local_AI_Engine.Client.Services.Integrations.Tools.Implementation;
 
@@ -59,8 +59,7 @@ internal static class AddNodeIntegrationsExtensions
         // One mutual-exclusion gate per caller-managed session id, shared by the scoped accept path and the scoped
         // session service — so a singleton, the same shape the cancellation registry has.
         builder.Services.AddSingleton<IntegrationSessionGate>();
-        builder.Services.AddScoped(static serviceProvider => new IntegrationSessionService(
-            serviceProvider.GetRequiredService<IIntegrationSessionStore>(),
+        builder.Services.AddScoped(static serviceProvider => new IntegrationSessionService(serviceProvider.GetRequiredService<IIntegrationSessionStore>(),
             serviceProvider.GetRequiredService<IIntegrationExecutionStore>(),
             serviceProvider.GetRequiredService<IIntegrationTriggerStore>(),
             serviceProvider.GetRequiredService<IntegrationExternalAccess>(),
@@ -73,8 +72,7 @@ internal static class AddNodeIntegrationsExtensions
         // Two concrete classes with no interface, registered as themselves and injected as themselves: a
         // one-implementation interface neither the brief nor a ruling asked for is scaffolding. Both take an INTERNAL
         // collaborator, so they are constructed here rather than by the container's public-constructor activator.
-        builder.Services.AddScoped(static serviceProvider => new IntegrationExecutionQueryService(
-            serviceProvider.GetRequiredService<IIntegrationExecutionStore>(),
+        builder.Services.AddScoped(static serviceProvider => new IntegrationExecutionQueryService(serviceProvider.GetRequiredService<IIntegrationExecutionStore>(),
             serviceProvider.GetRequiredService<IIntegrationTriggerStore>(),
             serviceProvider.GetRequiredService<IIntegrationExecutionEventBuffer>(),
             serviceProvider.GetRequiredService<IntegrationCancellationRegistry>(),

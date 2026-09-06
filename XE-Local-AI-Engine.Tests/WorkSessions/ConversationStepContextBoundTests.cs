@@ -351,8 +351,7 @@ public sealed class ConversationStepContextBoundTests
         var conversation = Conversation([completedWithSideEffect, Message(sequence: 1, "user", "recent")], "SYNOPSIS", coversToSequence: 0);
 
         var counted = ConversationStepContextBound.Project(conversation, estimator, modelName: null, includeToolHistory: true);
-        var exchangeOnly = ConversationStepContextBound.Project(Conversation(
-                [
+        var exchangeOnly = ConversationStepContextBound.Project(Conversation([
                     Message(sequence: 0, "assistant", string.Empty) with
                     {
                         Parts = [ToolPart("call-1", "save_artifact", "saved")]

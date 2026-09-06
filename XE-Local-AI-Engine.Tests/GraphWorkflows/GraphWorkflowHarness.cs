@@ -63,15 +63,13 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
     public IServiceProvider Services => _factory.Services;
 
     /// <summary>The faked invocation runner, on a host built by <see cref="GraphWorkflowAgentHostFixture" />.</summary>
-    public FakeGraphWorkflowInvocation Invocations =>
-        (FakeGraphWorkflowInvocation)Services.GetRequiredService<IInvocationRunner>();
+    public FakeGraphWorkflowInvocation Invocations => (FakeGraphWorkflowInvocation)Services.GetRequiredService<IInvocationRunner>();
 
     /// <summary>The container's dispatcher, so its wiring is under test too — or the replacement a restart installed.</summary>
     public GraphWorkflowDispatcher Dispatcher => _replacement ?? Services.GetRequiredService<GraphWorkflowDispatcher>();
 
     /// <summary>The recorded signal every command path calls. A container singleton: count only your own run id.</summary>
-    public RecordingGraphWorkflowDispatcherSignal Signals =>
-        (RecordingGraphWorkflowDispatcherSignal)Services.GetRequiredService<IGraphWorkflowDispatcherSignal>();
+    public RecordingGraphWorkflowDispatcherSignal Signals => (RecordingGraphWorkflowDispatcherSignal)Services.GetRequiredService<IGraphWorkflowDispatcherSignal>();
 
     /// <summary>
     ///     A second dispatcher over the same database, standing in for the one a restart would build. It gets a fresh

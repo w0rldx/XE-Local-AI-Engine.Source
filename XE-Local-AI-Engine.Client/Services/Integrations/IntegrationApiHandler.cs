@@ -271,10 +271,10 @@ internal sealed class IntegrationApiHandler
         // answered 410 on the stream falls back to, so it never answers 410 itself — after a restart the ring is empty
         // and the rows are not.
         var rows = await _executions.ListEventsAsync(executionId,
-                                       Math.Max(ReadLong(context, "sinceSeq"), val2: 0),
-                                       IntegrationEventPage.ClampLimit(ReadLimit(context)),
-                                       context.RequestAborted)
-                                   .ConfigureAwait(false);
+                                        Math.Max(ReadLong(context, "sinceSeq"), val2: 0),
+                                        IntegrationEventPage.ClampLimit(ReadLimit(context)),
+                                        context.RequestAborted)
+                                    .ConfigureAwait(false);
 
         await context.Response.WriteAsJsonAsync(rows.Select(IntegrationMapper.ToEventDto).ToArray(), context.RequestAborted).ConfigureAwait(false);
     }

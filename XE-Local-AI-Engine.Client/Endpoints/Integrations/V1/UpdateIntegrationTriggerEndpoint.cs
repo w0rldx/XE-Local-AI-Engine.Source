@@ -37,7 +37,7 @@ public sealed class UpdateIntegrationTriggerEndpoint(IIntegrationTriggerService 
                                                   req.SessionPolicy,
                                                   acceptedInputKinds),
                                               ct)
-                                     .ConfigureAwait(false);
+                                          .ConfigureAwait(false);
 
         if (result.Outcome != IntegrationTriggerOutcome.Saved)
         {

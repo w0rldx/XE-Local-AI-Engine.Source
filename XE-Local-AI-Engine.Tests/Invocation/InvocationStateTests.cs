@@ -30,7 +30,10 @@ public sealed class InvocationStateTests
     [Test]
     public void Clone_WhenNotDispatched_KeepsBothNull()
     {
-        var clone = new InvocationState { InvocationId = Guid.NewGuid() }.Clone();
+        var clone = new InvocationState
+        {
+            InvocationId = Guid.NewGuid()
+        }.Clone();
 
         AssertEx.Null(clone.DispatchedTier);
         AssertEx.Null(clone.AuthoredEffort);

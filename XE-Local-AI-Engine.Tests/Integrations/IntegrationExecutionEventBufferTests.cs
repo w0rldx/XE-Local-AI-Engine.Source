@@ -407,8 +407,8 @@ public sealed class IntegrationExecutionEventBufferTests
 
         var minted = await Task.WhenAll(Enumerable.Range(start: 0, count: 8)
                                                   .Select(_ => Task.Run(() => Enumerable.Range(start: 0, count: 50)
-                                                                              .Select(_ => Append(buffer, executionId).Sequence)
-                                                                              .ToArray())))
+                                                                                        .Select(_ => Append(buffer, executionId).Sequence)
+                                                                                        .ToArray())))
                                .ConfigureAwait(false);
 
         var sequences = minted.SelectMany(static batch => batch).OrderBy(static sequence => sequence).ToArray();

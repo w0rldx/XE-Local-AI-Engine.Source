@@ -22,7 +22,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///     What one agent turn cost, as the node run's output document reports it. Every member is nullable because the
 ///     runner reports what its provider gave it and no provider reports all of them.
 /// </summary>
-internal sealed record GraphWorkflowAgentUsage(int? InputTokens,
+internal sealed record GraphWorkflowAgentUsage(
+    int? InputTokens,
     int? OutputTokens,
     int? TotalTokens,
     int? ReasoningTokens,
@@ -38,7 +39,8 @@ internal sealed record GraphWorkflowAgentUsage(int? InputTokens,
 ///         faulted would leave the poll rethrowing on every tick forever, about work that is long over.
 ///     </para>
 /// </summary>
-internal sealed record GraphWorkflowAgentTurn(bool Succeeded,
+internal sealed record GraphWorkflowAgentTurn(
+    bool Succeeded,
     GraphWorkflowFailureClass FailureClass,
     string? SanitizedReason,
     string Text,
@@ -206,11 +208,11 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         // call for the whole of its first tick.
         var invocationId = Guid.NewGuid();
         var flight = await _lane.TryStartAsync(nodeRun.Id,
-                                   nodeRun.Attempt,
-                                   invocationId,
-                                   (leaseAcquired, token) => RunTurnAsync(run.Id, nodeRun.Id, node, config, invocationId, inputJson, leaseAcquired, token),
-                                   cancellationToken)
-                               .ConfigureAwait(false);
+                                    nodeRun.Attempt,
+                                    invocationId,
+                                    (leaseAcquired, token) => RunTurnAsync(run.Id, nodeRun.Id, node, config, invocationId, inputJson, leaseAcquired, token),
+                                    cancellationToken)
+                                .ConfigureAwait(false);
         if (flight is null)
         {
             // Queueing, not failure: every slot is held. No event and no failure class — the row's reason says what it
@@ -588,7 +590,8 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         var strippedTools = resolved.AllowedTools.Where(static tool => tool.RequiresApproval).ToArray();
         if (strippedTools.Length > 0)
         {
-            _logger.LogWarning("Graph workflow node '{NodeKey}' stripped {StrippedCount} approval-required tool(s) ({StrippedTools}) from its unattended offer: a graph workflow run has no approval round-trip.",
+            _logger.LogWarning(
+                "Graph workflow node '{NodeKey}' stripped {StrippedCount} approval-required tool(s) ({StrippedTools}) from its unattended offer: a graph workflow run has no approval round-trip.",
                 node.NodeKey,
                 strippedTools.Length,
                 string.Join(", ", strippedTools.Select(static tool => tool.Name)));

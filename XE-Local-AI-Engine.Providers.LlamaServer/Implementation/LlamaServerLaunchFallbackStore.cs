@@ -239,7 +239,8 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
                 // The lock file itself could not be opened for writing, and retrying cannot change that. It says
                 // nothing about whether the STATE write below will succeed — that write decides its own writability —
                 // so this only reports the degraded merge rather than predicting the outcome of the launch.
-                _logger.LogWarning("Could not open the llama-server launch-fallback write lock at {LockPath} for writing; merging under the in-process lock only, so a concurrent sibling write may be lost.",
+                _logger.LogWarning(
+                    "Could not open the llama-server launch-fallback write lock at {LockPath} for writing; merging under the in-process lock only, so a concurrent sibling write may be lost.",
                     _lockPath);
                 return null;
             }
@@ -250,7 +251,8 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
             }
         }
 
-        _logger.LogWarning("Could not take the llama-server launch-fallback write lock at {LockPath} after {Attempts} attempts; merging under the in-process lock only, so a concurrent sibling write may be lost.",
+        _logger.LogWarning(
+            "Could not take the llama-server launch-fallback write lock at {LockPath} after {Attempts} attempts; merging under the in-process lock only, so a concurrent sibling write may be lost.",
             _lockPath,
             LockAttempts);
         return null;
@@ -309,5 +311,6 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
 ///     <c>"{Variant}:{kvType}"</c> keys whose KV-quant + flash-attention config failed readiness. A <c>q4_0</c> failure
 ///     here leaves <c>q8_0</c> on the same backend enabled.
 /// </param>
-public sealed record LlamaServerLaunchFallbackState(IReadOnlyList<string> DisabledOptimizedVariants,
+public sealed record LlamaServerLaunchFallbackState(
+    IReadOnlyList<string> DisabledOptimizedVariants,
     IReadOnlyList<string>? DisabledOptimizedConfigs = null);

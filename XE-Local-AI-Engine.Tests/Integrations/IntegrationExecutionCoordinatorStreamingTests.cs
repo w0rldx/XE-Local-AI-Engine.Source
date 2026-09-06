@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
-using Harness = XE_Local_AI_Engine.Tests.Integrations.IntegrationCoordinatorHarness;
+using Harness = IntegrationCoordinatorHarness;
 
 /// <summary>The writer's options, spelled out once so the reaper test reads as one thought.</summary>
 internal sealed class IntegrationSseWriterOptions : IOptions<IntegrationOptions>, IDisposable

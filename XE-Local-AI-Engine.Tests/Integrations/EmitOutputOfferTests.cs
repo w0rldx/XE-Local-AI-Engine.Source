@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Integrations;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Integrations.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
-using Harness = XE_Local_AI_Engine.Tests.Integrations.IntegrationCoordinatorHarness;
+using Harness = IntegrationCoordinatorHarness;
 
 /// <summary>
 ///     Where <c>emit_output</c> is reachable from, and — far more of the surface — where it is not.

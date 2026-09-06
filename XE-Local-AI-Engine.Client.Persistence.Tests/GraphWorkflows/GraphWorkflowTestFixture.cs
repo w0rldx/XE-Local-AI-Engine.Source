@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.GraphWorkflows;
 
 using System.Globalization;
+using System.Text;
 using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -186,8 +187,8 @@ internal sealed class GraphWorkflowTestFixture : IDisposable
     }
 
     private static byte[] Utf8(string value) =>
-        System.Text.Encoding.UTF8.GetBytes(value);
+        Encoding.UTF8.GetBytes(value);
 
     private static byte[]? Utf8OrNull(string? value) =>
-        value is null ? null : System.Text.Encoding.UTF8.GetBytes(value);
+        value is null ? null : Encoding.UTF8.GetBytes(value);
 }

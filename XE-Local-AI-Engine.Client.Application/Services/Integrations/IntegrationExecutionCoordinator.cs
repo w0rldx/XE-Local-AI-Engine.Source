@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -14,14 +15,13 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.Invocation.Context;
-using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
-using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
@@ -538,7 +538,8 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         var (supportsThinking, supportsTools, effectiveModelIsCloud) = capabilities;
         if (effectiveModelIsCloud)
         {
-            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.CloudModelRejected, "The trigger's effective model is cloud-hosted, and unattended runs are node-local only.").ConfigureAwait(false);
+            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.CloudModelRejected, "The trigger's effective model is cloud-hosted, and unattended runs are node-local only.")
+                .ConfigureAwait(false);
             return;
         }
 
@@ -943,14 +944,14 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
             //     nothing else ever writes it.
             var startedAtUtc = NowUnixMilliseconds();
             if (!await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(executionId,
-                                     context.Version,
-                                     BeforeRunStatuses,
-                                     IntegrationExecutionStatus.Running,
-                                     startedAtUtc,
-                                     EndedAtUtc: null,
-                                     package.InvocationId),
-                                 runToken)
-                             .ConfigureAwait(false))
+                                    context.Version,
+                                    BeforeRunStatuses,
+                                    IntegrationExecutionStatus.Running,
+                                    startedAtUtc,
+                                    EndedAtUtc: null,
+                                    package.InvocationId),
+                                runToken)
+                            .ConfigureAwait(false))
             {
                 var reloaded = await store.GetByIdAsync(executionId, runToken).ConfigureAwait(false);
                 if (reloaded is null || !NonTerminalStatuses.Contains(reloaded.Status))
@@ -1213,14 +1214,14 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
     {
         var store = services.GetRequiredService<IIntegrationExecutionStore>();
         var executions = await store.ListAsync(new IntegrationExecutionFilter(TriggerId: null,
-                    session.Id,
-                    Status: null,
-                    // One MORE than the cap: the current execution occupies a row here and is skipped below, so asking
-                    // for exactly MaxPayloads would replay seven prior outputs where R4-9(b) promises eight.
-                    IntegrationPriorOutputsComposer.MaxPayloads + 1,
-                    Offset: 0),
-                cancellationToken)
-            .ConfigureAwait(false);
+                                            session.Id,
+                                            Status: null,
+                                            // One MORE than the cap: the current execution occupies a row here and is skipped below, so asking
+                                            // for exactly MaxPayloads would replay seven prior outputs where R4-9(b) promises eight.
+                                            IntegrationPriorOutputsComposer.MaxPayloads + 1,
+                                            Offset: 0),
+                                        cancellationToken)
+                                    .ConfigureAwait(false);
 
         var envelopes = new List<string>(IntegrationPriorOutputsComposer.MaxPayloads);
         foreach (var execution in executions)
@@ -1407,8 +1408,7 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
     ///         cancel endpoint returns says the stop was REQUESTED, never that it arrived in time.
     ///     </para>
     /// </summary>
-    private static (IntegrationExecutionStatus Status, string? FailureCategory, string? FailureSummary) HonourStopMarker(
-        IntegrationExecutionSnapshot row,
+    private static (IntegrationExecutionStatus Status, string? FailureCategory, string? FailureSummary) HonourStopMarker(IntegrationExecutionSnapshot row,
         IntegrationExecutionStatus status,
         string? failureCategory,
         string? failureSummary) =>
@@ -1450,18 +1450,18 @@ internal sealed class IntegrationExecutionCoordinator : BackgroundService
         {
             // Terminal writes never carry the run's cancellation token: a shutdown must still be able to close the row.
             var won = await context.Store.TryTerminalizeAsync(new IntegrationTerminalizeCommand(context.ExecutionId,
-                                             context.Version,
-                                             expectedStatuses,
-                                             status,
-                                             sequence,
-                                             eventType,
-                                             endedAtUtc,
-                                             failureCategory,
-                                             failureSummary,
-                                             payload?.GetRawText(),
-                                             BuildAudit(context, status, endedAtUtc)),
-                                         CancellationToken.None)
-                                     .ConfigureAwait(false);
+                                           context.Version,
+                                           expectedStatuses,
+                                           status,
+                                           sequence,
+                                           eventType,
+                                           endedAtUtc,
+                                           failureCategory,
+                                           failureSummary,
+                                           payload?.GetRawText(),
+                                           BuildAudit(context, status, endedAtUtc)),
+                                       CancellationToken.None)
+                                   .ConfigureAwait(false);
             if (!won)
             {
                 return false;

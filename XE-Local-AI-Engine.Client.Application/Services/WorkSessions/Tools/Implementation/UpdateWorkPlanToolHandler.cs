@@ -271,7 +271,8 @@ internal sealed class UpdateWorkPlanToolHandler(
             Normalized(operation.ParentTaskId)
         }));
 
-    private static string? Normalized(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+    private static string? Normalized(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
 
     // The batch's identity for idempotency: the operations it carries, in order. Two genuinely different batches in one
     // step therefore get different ids, while a replay of the same one collapses.

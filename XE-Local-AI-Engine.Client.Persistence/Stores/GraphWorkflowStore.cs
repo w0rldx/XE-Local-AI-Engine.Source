@@ -345,7 +345,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
             await RollbackAsync(transaction).ConfigureAwait(false);
             return await FindRunByRequestAsync(command.RequestId, cancellationToken).ConfigureAwait(false)
                    ?? throw new GraphWorkflowInvalidTransitionException($"Graph workflow run '{command.RunId}' could not be started and no run holds "
-                                                                       + $"request id '{command.RequestId}'.", exception);
+                                                                        + $"request id '{command.RequestId}'.", exception);
         }
         catch
         {

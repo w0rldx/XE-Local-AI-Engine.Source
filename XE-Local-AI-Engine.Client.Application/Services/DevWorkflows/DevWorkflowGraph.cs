@@ -135,14 +135,24 @@ internal sealed class DevWorkflowGraph
     private static readonly IReadOnlySet<DevWorkflowNodeEffect> NoEffects = new HashSet<DevWorkflowNodeEffect>();
 
     /// <summary>What a node that writes and nothing else can change. How FAR is the scope, which is asked separately.</summary>
-    private static readonly IReadOnlySet<DevWorkflowNodeEffect> WriteEffects = new HashSet<DevWorkflowNodeEffect> { DevWorkflowNodeEffect.WriteExecute };
+    private static readonly IReadOnlySet<DevWorkflowNodeEffect> WriteEffects = new HashSet<DevWorkflowNodeEffect>
+    {
+        DevWorkflowNodeEffect.WriteExecute
+    };
 
     /// <summary>A validation that names commands the project's catalog owns, none of which reaches the network.</summary>
-    private static readonly IReadOnlySet<DevWorkflowNodeEffect> LocalValidationEffects = new HashSet<DevWorkflowNodeEffect> { DevWorkflowNodeEffect.ReadLocal };
+    private static readonly IReadOnlySet<DevWorkflowNodeEffect> LocalValidationEffects = new HashSet<DevWorkflowNodeEffect>
+    {
+        DevWorkflowNodeEffect.ReadLocal
+    };
 
     /// <summary>A validation that restores packages, or one whose command set is not knowable until the run picks it up.</summary>
     private static readonly IReadOnlySet<DevWorkflowNodeEffect> NetworkValidationEffects =
-        new HashSet<DevWorkflowNodeEffect> { DevWorkflowNodeEffect.ReadLocal, DevWorkflowNodeEffect.Network };
+        new HashSet<DevWorkflowNodeEffect>
+        {
+            DevWorkflowNodeEffect.ReadLocal,
+            DevWorkflowNodeEffect.Network
+        };
 
     private readonly Dictionary<string, List<DevWorkflowGraphEdge>> _inbound;
     private readonly Dictionary<string, List<DevWorkflowGraphEdge>> _outbound;

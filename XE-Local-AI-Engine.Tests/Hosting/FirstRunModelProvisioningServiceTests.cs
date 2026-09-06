@@ -586,5 +586,4 @@ public sealed class FirstRunModelProvisioningServiceTests
             return [];
         }
     }
-
 }

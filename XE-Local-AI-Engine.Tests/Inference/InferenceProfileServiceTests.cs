@@ -147,8 +147,7 @@ public sealed class InferenceProfileServiceTests
 
         AssertEx.True(result.Success);
         AssertEx.Equal(ExpertOverride, AssertEx.NotNull(result.Profile).OverrideTensor);
-        await fixture.ProfileStore.Received(1).CreateOrUpdateExploredAsync(
-            Arg.Is<InferenceProfileInput>(input => input.OverrideTensor == ExpertOverride && input.IsMoe),
+        await fixture.ProfileStore.Received(1).CreateOrUpdateExploredAsync(Arg.Is<InferenceProfileInput>(input => input.OverrideTensor == ExpertOverride && input.IsMoe),
             Arg.Any<CancellationToken>());
     }
 

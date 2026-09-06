@@ -59,8 +59,7 @@ public sealed class DevWorkflowGraphTests
     [Test]
     public void Parse_ReadsThePerNodeModelAndReasoningEffort()
     {
-        var graph = DevWorkflowGraph.Parse(
-            """{"schemaVersion":1,"nodes":[{"nodeKey":"only","nodeType":"Agent","modelProfile":" qwen3-30b ","reasoningEffort":"High"}],"edges":[]}""");
+        var graph = DevWorkflowGraph.Parse("""{"schemaVersion":1,"nodes":[{"nodeKey":"only","nodeType":"Agent","modelProfile":" qwen3-30b ","reasoningEffort":"High"}],"edges":[]}""");
 
         AssertEx.Equal("qwen3-30b", graph.Nodes["only"].ModelProfile);
         AssertEx.Equal("High", graph.Nodes["only"].ReasoningEffort, "the effort travels to the provider as written; only its membership is checked.");
@@ -74,8 +73,7 @@ public sealed class DevWorkflowGraphTests
     [Test]
     public void ParseNode_WhenReasoningEffortIsAuto_IsAccepted()
     {
-        var graph = DevWorkflowGraph.Parse(
-            """{"schemaVersion":1,"nodes":[{"nodeKey":"only","nodeType":"Agent","reasoningEffort":"auto"}],"edges":[]}""");
+        var graph = DevWorkflowGraph.Parse("""{"schemaVersion":1,"nodes":[{"nodeKey":"only","nodeType":"Agent","reasoningEffort":"auto"}],"edges":[]}""");
 
         AssertEx.Equal("auto", graph.Nodes["only"].ReasoningEffort);
     }
@@ -96,8 +94,7 @@ public sealed class DevWorkflowGraphTests
     [Test]
     public void Parse_WithABlankPin_ReadsItAsUnpinnedRatherThanRefusingTheGraph()
     {
-        var only = DevWorkflowGraph.Parse(
-                                       """{"schemaVersion":1,"nodes":[{"nodeKey":"only","nodeType":"Agent","modelProfile":"","reasoningEffort":"  "}],"edges":[]}""")
+        var only = DevWorkflowGraph.Parse("""{"schemaVersion":1,"nodes":[{"nodeKey":"only","nodeType":"Agent","modelProfile":"","reasoningEffort":"  "}],"edges":[]}""")
                                    .Nodes["only"];
 
         AssertEx.Null(only.ModelProfile);
@@ -112,13 +109,12 @@ public sealed class DevWorkflowGraphTests
     [Test]
     public void Parse_ReadsRequiredCapabilitiesAsATypedEffectSet()
     {
-        var graph = DevWorkflowGraph.Parse(
-            """
-            {"schemaVersion":1,"allowUngatedWrites":true,
-             "nodes":[{"nodeKey":"release","nodeType":"Agent",
-                       "requiredCapabilities":{"writeexecute":"runs the release script","Network":"pushes the tag"}}],
-             "edges":[]}
-            """);
+        var graph = DevWorkflowGraph.Parse("""
+                                           {"schemaVersion":1,"allowUngatedWrites":true,
+                                            "nodes":[{"nodeKey":"release","nodeType":"Agent",
+                                                      "requiredCapabilities":{"writeexecute":"runs the release script","Network":"pushes the tag"}}],
+                                            "edges":[]}
+                                           """);
 
         AssertEx.Equal("Network, WriteExecute",
             string.Join(", ", DevWorkflowGraph.Effects(graph.Nodes["release"]).Select(static effect => effect.ToString()).Order(StringComparer.Ordinal)));
@@ -166,13 +162,12 @@ public sealed class DevWorkflowGraphTests
     [Test]
     public void Parse_ReadsAValidationsNetworkReachFromTheCommandsItNames()
     {
-        var graph = DevWorkflowGraph.Parse(
-            """
-            {"schemaVersion":1,
-             "nodes":[{"nodeKey":"local","nodeType":"Tool","validationCommandIds":["git_status","dotnet_build_release_no_restore"]},
-                      {"nodeKey":"restoring","nodeType":"Tool","validationCommandIds":["dotnet_restore"]}],
-             "edges":[{"from":"local","to":"restoring"}]}
-            """);
+        var graph = DevWorkflowGraph.Parse("""
+                                           {"schemaVersion":1,
+                                            "nodes":[{"nodeKey":"local","nodeType":"Tool","validationCommandIds":["git_status","dotnet_build_release_no_restore"]},
+                                                     {"nodeKey":"restoring","nodeType":"Tool","validationCommandIds":["dotnet_restore"]}],
+                                            "edges":[{"from":"local","to":"restoring"}]}
+                                           """);
 
         AssertEx.Equal("ReadLocal", Effects(graph, "local"));
         AssertEx.Equal("Network, ReadLocal", Effects(graph, "restoring"));
@@ -185,13 +180,12 @@ public sealed class DevWorkflowGraphTests
     [Test]
     public void Parse_ReadsMaxLoopIterationsBesideARetryTarget()
     {
-        var graph = DevWorkflowGraph.Parse(
-            """
-            {"schemaVersion":1,
-             "nodes":[{"nodeKey":"implement","nodeType":"Agent"},
-                      {"nodeKey":"check","nodeType":"Tool","retryTarget":"implement","maxLoopIterations":2}],
-             "edges":[{"from":"implement","to":"check"}]}
-            """);
+        var graph = DevWorkflowGraph.Parse("""
+                                           {"schemaVersion":1,
+                                            "nodes":[{"nodeKey":"implement","nodeType":"Agent"},
+                                                     {"nodeKey":"check","nodeType":"Tool","retryTarget":"implement","maxLoopIterations":2}],
+                                            "edges":[{"from":"implement","to":"check"}]}
+                                           """);
 
         AssertEx.Equal(expected: 2, graph.Nodes["check"].MaxLoopIterations);
         AssertEx.Null(graph.Nodes["implement"].MaxLoopIterations, "a node that names no cap has none, rather than inheriting a default nobody asked for.");
@@ -492,13 +486,12 @@ public sealed class DevWorkflowGraphTests
     [Test]
     public void Parse_WithAConditionalEdgeOutOfAnInlineGate_IsAccepted() =>
         AssertEx.Equal(expected: 3,
-            DevWorkflowGraph.Parse(
-                                """
-                                {"schemaVersion":1,
-                                 "nodes":[{"nodeKey":"decide","nodeType":"Gate"},{"nodeKey":"ship","nodeType":"Agent"},{"nodeKey":"stop","nodeType":"Agent"}],
-                                 "edges":[{"from":"decide","to":"ship","condition":{"path":"passed","op":"eq","value":true}},
-                                          {"from":"decide","to":"stop","condition":{"path":"passed","op":"eq","value":false}}]}
-                                """)
+            DevWorkflowGraph.Parse("""
+                                   {"schemaVersion":1,
+                                    "nodes":[{"nodeKey":"decide","nodeType":"Gate"},{"nodeKey":"ship","nodeType":"Agent"},{"nodeKey":"stop","nodeType":"Agent"}],
+                                    "edges":[{"from":"decide","to":"ship","condition":{"path":"passed","op":"eq","value":true}},
+                                             {"from":"decide","to":"stop","condition":{"path":"passed","op":"eq","value":false}}]}
+                                   """)
                             .Nodes.Count);
 
     /// <summary>

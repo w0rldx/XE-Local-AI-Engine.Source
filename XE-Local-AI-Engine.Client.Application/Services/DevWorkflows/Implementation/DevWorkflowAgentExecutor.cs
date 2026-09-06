@@ -620,7 +620,7 @@ internal sealed class DevWorkflowAgentExecutor
             // kept — which for an operator's decision is the operator's own words — with the heading folded into the
             // first line, so a budget that runs out leaves no heading promising steps it could not name.
             var lines = skipped.Select(static skip => string.Create(CultureInfo.InvariantCulture,
-                                    $"- '{skip.NodeKey}' was skipped{(skip.TerminalReason is { Length: > 0 } reason ? $": {reason}" : ".")}{Environment.NewLine}"))
+                                   $"- '{skip.NodeKey}' was skipped{(skip.TerminalReason is { Length: > 0 } reason ? $": {reason}" : ".")}{Environment.NewLine}"))
                                .ToList();
             if (lines.Count > 0)
             {

@@ -6,7 +6,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -175,7 +174,8 @@ internal static class IntegrationEndpointPayloads
 }
 
 /// <summary>The response shape the suites read back, declared here rather than reusing the server DTO.</summary>
-internal sealed record IntegrationTriggerBody(Guid Id,
+internal sealed record IntegrationTriggerBody(
+    Guid Id,
     string Name,
     string DisplayName,
     string? Description,
@@ -190,7 +190,8 @@ internal sealed record IntegrationTriggerBody(Guid Id,
 
 internal sealed record IntegrationTriggerListBody(IReadOnlyList<IntegrationTriggerBody> Items);
 
-internal sealed record IntegrationApiKeyBody(Guid Id,
+internal sealed record IntegrationApiKeyBody(
+    Guid Id,
     Guid PrincipalId,
     string KeyPrefix,
     string Label,

@@ -393,9 +393,8 @@ public sealed class DevWorkflowStateMachineTests
 
         AssertEx.Equal("Skipped: upstream 'implement' was skipped by an operator: This slice names a file the repository does not have.", validate);
 
-        AssertEx.Equal(
-            "Skipped: upstream 'lint' was skipped: upstream 'implement' was skipped by an operator: "
-            + "This slice names a file the repository does not have.",
+        AssertEx.Equal("Skipped: upstream 'lint' was skipped: upstream 'implement' was skipped by an operator: "
+                       + "This slice names a file the repository does not have.",
             DevWorkflowStateMachine.SkipReason(graph.Nodes["join"],
                 graph,
                 ByKey(decided,

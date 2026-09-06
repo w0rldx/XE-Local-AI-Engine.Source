@@ -638,12 +638,21 @@ public sealed class LaunchPolicyFingerprintProviderTests : IDisposable
         var binaryPath = await CreateBinaryFileAsync();
         try
         {
-            var cpuInput = Input(path) with { Backend = "cpu" };
-            var cpuRuntime = Runtime("runtime-sha") with { Variant = GpuVariant.Cpu };
+            var cpuInput = Input(path) with
+            {
+                Backend = "cpu"
+            };
+            var cpuRuntime = Runtime("runtime-sha") with
+            {
+                Variant = GpuVariant.Cpu
+            };
             var withDefault = await BuildProvider(cpuRuntime, binaryPath).CaptureAsync(cpuInput, CancellationToken.None);
             var withQ4 = await BuildProvider(cpuRuntime,
                     binaryPath,
-                    launchPolicyOptions: new LlamaServerLaunchPolicyOptions { KvCacheType = LlamaServerKvCacheTypes.Q4_0 })
+                    launchPolicyOptions: new LlamaServerLaunchPolicyOptions
+                    {
+                        KvCacheType = LlamaServerKvCacheTypes.Q4_0
+                    })
                 .CaptureAsync(cpuInput, CancellationToken.None);
 
             AssertEx.Equal(withDefault.Value, withQ4.Value);

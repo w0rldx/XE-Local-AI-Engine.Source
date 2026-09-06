@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 
 using System.ComponentModel;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -115,7 +114,7 @@ internal sealed class DevelopmentCoderModel(
             }
 
             contextBudget = await DevelopmentAttemptContextBudget.ResolveAsync(localProvider, modelId, maxOutputTokens, "coder", _logger, cancellationToken)
-                                                                  .ConfigureAwait(false);
+                                                                 .ConfigureAwait(false);
             options = new ChatOptions
             {
                 ModelId = modelId,
@@ -139,7 +138,8 @@ internal sealed class DevelopmentCoderModel(
                     AIFunctionFactory.Create(gateway.WriteFileAsync, "write_file", "Write one bounded UTF-8 workspace file."),
                     AIFunctionFactory.Create(gateway.ApplyPatchAsync, "apply_patch", "Apply one bounded Git patch to safe workspace paths."),
                     AIFunctionFactory.Create(gateway.GetStatusAsync, "get_status", "Inspect the current Git status."),
-                    AIFunctionFactory.Create(gateway.GetDiffAsync, "get_diff", "Inspect the bounded Git diff of the workspace against the base commit. Files created in this attempt are untracked and are not in it; get_status lists those."),
+                    AIFunctionFactory.Create(gateway.GetDiffAsync, "get_diff",
+                        "Inspect the bounded Git diff of the workspace against the base commit. Files created in this attempt are untracked and are not in it; get_status lists those."),
                     AIFunctionFactory.Create(gateway.RunCommandAsync, "run_command", "Run one code-owned command id from the fixed Development catalog."),
                     AIFunctionFactory.Create(gateway.SubmitImplementation, "submit_implementation", "Submit the typed final implementation evidence after all changes are complete.")
                 ]

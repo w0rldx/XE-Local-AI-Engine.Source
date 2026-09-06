@@ -459,8 +459,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
         if (verdict.SupportsTools is false)
         {
-            throw new WorkSessionValidationException(
-                $"{verdict.Subject}, which cannot call tools, so it could never record a task or a finding. Use a tool-capable model.");
+            throw new WorkSessionValidationException($"{verdict.Subject}, which cannot call tools, so it could never record a task or a finding. Use a tool-capable model.");
         }
 
         if (!verdict.IsAllowListed)

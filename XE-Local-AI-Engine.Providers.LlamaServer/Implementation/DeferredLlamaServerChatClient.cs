@@ -134,6 +134,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             {
                 _calibrationScheduler.Schedule(_modelName, resolved.BaseAddress);
             }
+
             try
             {
                 return await resolved.Client.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
@@ -208,6 +209,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             {
                 _calibrationScheduler.Schedule(_modelName, resolved.BaseAddress);
             }
+
             var enumerator =
                 resolved.Client.GetStreamingResponseAsync(messages, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
             var retry = false;

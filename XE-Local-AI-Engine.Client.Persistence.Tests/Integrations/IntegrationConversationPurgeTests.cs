@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Integrations;
 
+using System.Globalization;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
@@ -23,7 +24,11 @@ public sealed class IntegrationConversationPurgeTests
             _ = context.IntegrationTriggers.Add(trigger);
             _ = context.IntegrationApiKeys.Add(IntegrationTestFixture.ApiKey());
 
-            foreach (var conversationId in new[] { purgedConversationId, survivingConversationId })
+            foreach (var conversationId in new[]
+                     {
+                         purgedConversationId,
+                         survivingConversationId
+                     })
             {
                 _ = context.Conversations.Add(new NodeConversation
                 {
@@ -54,7 +59,7 @@ public sealed class IntegrationConversationPurgeTests
 
         var survivor = AssertEx.NotNull(await fixture.RawScalarAsync("SELECT conversation_id FROM integration_sessions;").ConfigureAwait(false));
         AssertEx.Equal(survivingConversationId,
-            Guid.Parse(Convert.ToString(survivor, System.Globalization.CultureInfo.InvariantCulture)!, System.Globalization.CultureInfo.InvariantCulture),
+            Guid.Parse(Convert.ToString(survivor, CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture),
             "The sibling session must be untouched — the purge is keyed on one conversation.");
 
         // Node-scoped tables are correctly outside a conversation's footprint.

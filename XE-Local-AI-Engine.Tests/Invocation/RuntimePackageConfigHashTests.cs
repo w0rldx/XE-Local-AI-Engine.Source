@@ -352,7 +352,16 @@ public sealed class RuntimePackageConfigHashTests
 
         AssertEx.NotEqual(nullDigest, autoDigest);
 
-        foreach (var graded in new[] { "none", "on", "minimal", "low", "medium", "high", "xhigh" })
+        foreach (var graded in new[]
+                 {
+                     "none",
+                     "on",
+                     "minimal",
+                     "low",
+                     "medium",
+                     "high",
+                     "xhigh"
+                 })
         {
             var gradedDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
                 "prompt",
@@ -385,7 +394,8 @@ public sealed class RuntimePackageConfigHashTests
             },
             authored);
 
-        AssertEx.Equal("{\"agentDefinitionVersion\":7,\"resolvedSystemPrompt\":\"prompt\",\"allowedTools\":[],\"modelProfile\":null,\"reasoningEffort\":\"auto\",\"timeouts\":{\"invocationTimeoutSeconds\":300,\"toolCallTimeoutSeconds\":60,\"streamIdleTimeoutSeconds\":30}}",
+        AssertEx.Equal(
+            "{\"agentDefinitionVersion\":7,\"resolvedSystemPrompt\":\"prompt\",\"allowedTools\":[],\"modelProfile\":null,\"reasoningEffort\":\"auto\",\"timeouts\":{\"invocationTimeoutSeconds\":300,\"toolCallTimeoutSeconds\":60,\"streamIdleTimeoutSeconds\":30}}",
             canonicalJson);
     }
 

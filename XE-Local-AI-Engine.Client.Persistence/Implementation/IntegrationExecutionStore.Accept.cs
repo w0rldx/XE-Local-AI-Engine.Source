@@ -141,7 +141,8 @@ public sealed partial class IntegrationExecutionStore
 
     [SuppressMessage("Performance", "CA1849:Call async methods when in an async method",
         Justification = "Microsoft.Data.Sqlite has no async transaction overload that preserves BEGIN IMMEDIATE serialization.")]
-    private static SqliteTransaction BeginImmediateTransaction(SqliteConnection connection) => connection.BeginTransaction(deferred: false);
+    private static SqliteTransaction BeginImmediateTransaction(SqliteConnection connection) =>
+        connection.BeginTransaction(deferred: false);
 
     [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "Command text is assembled exclusively from private fixed SQL fragments; all runtime values are bound parameters.")]
@@ -165,7 +166,8 @@ public sealed partial class IntegrationExecutionStore
     ///     the two Guid encodings have to agree, and the provider's own binding is what EF uses. (This is where
     ///     <c>McpAgentRunStore.ToDb</c> differs — every read of its table is raw, so it is free to pick its own form.)
     /// </summary>
-    private static object ToDb(object? value) => value ?? DBNull.Value;
+    private static object ToDb(object? value) =>
+        value ?? DBNull.Value;
 
     private static async Task<KeyRevocationState> ReadKeyRevocationAsync(SqliteConnection connection,
         SqliteTransaction transaction,
@@ -212,11 +214,11 @@ public sealed partial class IntegrationExecutionStore
         CancellationToken cancellationToken)
     {
         await using var insert = CreateCommand(connection, transaction, """
-                                                                       INSERT INTO integration_sessions (id, trigger_id, principal_id, conversation_id, agent_definition_id,
-                                                                                                         status, created_at_utc, last_activity_utc, execution_count, last_sequence)
-                                                                       VALUES ($sessionId, $triggerId, $principalId, $conversationId, $agentDefinitionId,
-                                                                               $status, $receivedAtUtc, $receivedAtUtc, 1, $sequence);
-                                                                       """);
+                                                                        INSERT INTO integration_sessions (id, trigger_id, principal_id, conversation_id, agent_definition_id,
+                                                                                                          status, created_at_utc, last_activity_utc, execution_count, last_sequence)
+                                                                        VALUES ($sessionId, $triggerId, $principalId, $conversationId, $agentDefinitionId,
+                                                                                $status, $receivedAtUtc, $receivedAtUtc, 1, $sequence);
+                                                                        """);
         Add(insert, "$sessionId", ToDb(newSession.SessionId));
         Add(insert, "$triggerId", ToDb(newSession.TriggerId));
         Add(insert, "$principalId", ToDb(command.PrincipalId));
@@ -234,10 +236,10 @@ public sealed partial class IntegrationExecutionStore
         CancellationToken cancellationToken)
     {
         await using var update = CreateCommand(connection, transaction, """
-                                                                       UPDATE integration_sessions
-                                                                          SET execution_count = execution_count + 1, last_activity_utc = $receivedAtUtc
-                                                                        WHERE id = $sessionId AND principal_id = $principalId AND status = $status;
-                                                                       """);
+                                                                        UPDATE integration_sessions
+                                                                           SET execution_count = execution_count + 1, last_activity_utc = $receivedAtUtc
+                                                                         WHERE id = $sessionId AND principal_id = $principalId AND status = $status;
+                                                                        """);
         Add(update, "$receivedAtUtc", command.ReceivedAtUtc);
         Add(update, "$sessionId", ToDb(command.SessionId));
         Add(update, "$principalId", ToDb(command.PrincipalId));
@@ -258,14 +260,14 @@ public sealed partial class IntegrationExecutionStore
         CancellationToken cancellationToken)
     {
         await using var insert = CreateCommand(connection, transaction, """
-                                                                       INSERT INTO integration_executions (id, trigger_id, session_id, principal_id, request_id, request_fingerprint,
-                                                                                                           key_prefix, invocation_id, status, received_at_utc, started_at_utc, ended_at_utc,
-                                                                                                           stop_requested_at_utc, failure_category, failure_summary,
-                                                                                                           output_count, output_bytes, last_sequence, version)
-                                                                       VALUES ($executionId, $triggerId, $sessionId, $principalId, $requestId, $fingerprint,
-                                                                               $keyPrefix, $invocationId, $status, $receivedAtUtc, NULL, NULL,
-                                                                               NULL, NULL, NULL, 0, 0, $sequence, 0);
-                                                                       """);
+                                                                        INSERT INTO integration_executions (id, trigger_id, session_id, principal_id, request_id, request_fingerprint,
+                                                                                                            key_prefix, invocation_id, status, received_at_utc, started_at_utc, ended_at_utc,
+                                                                                                            stop_requested_at_utc, failure_category, failure_summary,
+                                                                                                            output_count, output_bytes, last_sequence, version)
+                                                                        VALUES ($executionId, $triggerId, $sessionId, $principalId, $requestId, $fingerprint,
+                                                                                $keyPrefix, $invocationId, $status, $receivedAtUtc, NULL, NULL,
+                                                                                NULL, NULL, NULL, 0, 0, $sequence, 0);
+                                                                        """);
         Add(insert, "$executionId", ToDb(command.ExecutionId));
         Add(insert, "$triggerId", ToDb(command.TriggerId));
         Add(insert, "$sessionId", ToDb(command.SessionId));
@@ -286,9 +288,9 @@ public sealed partial class IntegrationExecutionStore
         CancellationToken cancellationToken)
     {
         await using var insert = CreateCommand(connection, transaction, """
-                                                                       INSERT INTO integration_execution_events (id, execution_id, sequence, event_type, detail_json, occurred_at_utc)
-                                                                       VALUES ($eventId, $executionId, $sequence, $eventType, NULL, $occurredAtUtc);
-                                                                       """);
+                                                                        INSERT INTO integration_execution_events (id, execution_id, sequence, event_type, detail_json, occurred_at_utc)
+                                                                        VALUES ($eventId, $executionId, $sequence, $eventType, NULL, $occurredAtUtc);
+                                                                        """);
         Add(insert, "$eventId", ToDb(acceptedEvent.EventId));
         Add(insert, "$executionId", ToDb(acceptedEvent.ExecutionId));
         Add(insert, "$sequence", acceptedEvent.Sequence);

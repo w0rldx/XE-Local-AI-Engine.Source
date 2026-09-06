@@ -476,12 +476,15 @@ public sealed class TrainingExclusivityTests
 
         public GpuWorkKind? ExclusiveKind => inner.ExclusiveKind;
 
-        public IDisposable? TryBeginExclusive(GpuWorkKind kind) => Record(kind, inner.TryBeginExclusive(kind));
+        public IDisposable? TryBeginExclusive(GpuWorkKind kind) =>
+            Record(kind, inner.TryBeginExclusive(kind));
 
-        public IDisposable? TryBeginShared(GpuWorkKind kind) => Record(kind, inner.TryBeginShared(kind));
+        public IDisposable? TryBeginShared(GpuWorkKind kind) =>
+            Record(kind, inner.TryBeginShared(kind));
 
         /// <summary>Completes with the answer the FIRST admission attempt for <paramref name="kind" /> got: true = admitted.</summary>
-        public Task<bool> Asked(GpuWorkKind kind) => Ask(kind).Task;
+        public Task<bool> Asked(GpuWorkKind kind) =>
+            Ask(kind).Task;
 
         private IDisposable? Record(GpuWorkKind kind, IDisposable? admission)
         {

@@ -677,7 +677,13 @@ public sealed class DevWorkflowIntegrationApplyTests
 
         await harness.RestartAsync().ConfigureAwait(false);
 
-        foreach (var nodeKey in new[] { "verify", "integrationapproval", "integrate", "fullvalidate" })
+        foreach (var nodeKey in new[]
+                 {
+                     "verify",
+                     "integrationapproval",
+                     "integrate",
+                     "fullvalidate"
+                 })
         {
             AssertEx.Equal(DevWorkflowNodeRunStatus.Pending,
                 (await harness.ReadNodeRunAsync(runId, nodeKey).ConfigureAwait(false)).Status,

@@ -20,7 +20,8 @@ internal sealed record GraphWorkflowStartConfig(JsonElement? InputSchema, JsonEl
 ///     is, so a graph does not become unsaveable because a model was uninstalled after it was authored. The effort IS
 ///     checked here: its vocabulary is closed and cannot go stale between authoring and a run.
 /// </summary>
-internal sealed record GraphWorkflowAgentConfig(Guid? AgentDefinitionId,
+internal sealed record GraphWorkflowAgentConfig(
+    Guid? AgentDefinitionId,
     string Instructions,
     string? Model,
     string? ReasoningEffort,
@@ -46,7 +47,8 @@ internal sealed record GraphWorkflowEmptyConfig : GraphWorkflowNodeConfig;
 ///     One node of the parsed graph. Only what the runtime reads: unknown properties survive in the stored blob either
 ///     way — this projection is not a re-serialization of it.
 /// </summary>
-internal sealed record GraphWorkflowGraphNode(string NodeKey,
+internal sealed record GraphWorkflowGraphNode(
+    string NodeKey,
     GraphWorkflowNodeKind Kind,
     string Label,
     GraphWorkflowJoinPolicy JoinPolicy,
@@ -141,9 +143,9 @@ internal sealed class GraphWorkflowGraph
         ToolNodeNames =
         [
             .. nodes.Values.Where(static node => node.Config is GraphWorkflowToolConfig)
-                   .OrderBy(static node => node.NodeKey, StringComparer.Ordinal)
-                   .Select(static node => ((GraphWorkflowToolConfig)node.Config).ToolName)
-                   .Distinct(StringComparer.Ordinal)
+                    .OrderBy(static node => node.NodeKey, StringComparer.Ordinal)
+                    .Select(static node => ((GraphWorkflowToolConfig)node.Config).ToolName)
+                    .Distinct(StringComparer.Ordinal)
         ];
     }
 

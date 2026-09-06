@@ -66,7 +66,8 @@ public sealed class LexicalToolRelevanceSelector : IToolRelevanceSelector
         var selectedNonCore = candidates
                               .Select(static (candidate, index) => (Candidate: candidate, Index: index))
                               .Where(static entry => !entry.Candidate.IsCore)
-                              .Select(entry => (entry.Index, Score: LexicalOverlapScoring.ScoreOverlap(queryTokens, LexicalOverlapScoring.Tokenize($"{entry.Candidate.Name} {entry.Candidate.Description}"))))
+                              .Select(entry => (entry.Index,
+                                  Score: LexicalOverlapScoring.ScoreOverlap(queryTokens, LexicalOverlapScoring.Tokenize($"{entry.Candidate.Name} {entry.Candidate.Description}"))))
                               .OrderByDescending(static scored => scored.Score)
                               .ThenBy(static scored => scored.Index)
                               .Take(rankedSlots)

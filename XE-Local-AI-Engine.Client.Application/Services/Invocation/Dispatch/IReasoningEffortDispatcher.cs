@@ -56,7 +56,8 @@ internal static class ReasoningTierLabels
 /// <param name="HasSkills">Whether the turn carries resolved agent skills.</param>
 /// <param name="HasResponseSchema">Whether the turn's output is constrained to a JSON schema.</param>
 /// <param name="IsUnattended">Whether this is a scheduled/headless run.</param>
-public sealed record ReasoningDispatchRequest(string ResolvedModel,
+public sealed record ReasoningDispatchRequest(
+    string ResolvedModel,
     bool SupportsThinking,
     bool ReasoningBudgetEnforceable,
     bool AllowAutoModelSwap,
@@ -92,7 +93,8 @@ public sealed record ReasoningDispatchRequest(string ResolvedModel,
 ///     The ledger reservation a swap's capacity admission produced, or null. The RUNNER owns its disposal and must
 ///     release it at turn end (or before a fallback re-run), or later admissions are wrongly rejected.
 /// </param>
-public sealed record ReasoningDispatchDecision(ReasoningTier Tier,
+public sealed record ReasoningDispatchDecision(
+    ReasoningTier Tier,
     string Model,
     string Effort,
     int? MaxOutputTokens,

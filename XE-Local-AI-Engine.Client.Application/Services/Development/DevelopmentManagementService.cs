@@ -104,6 +104,7 @@ internal sealed class DevelopmentManagementService(
     ///     <c>Planned → Ready</c>, the round start, and the stand-down at the round cap.
     /// </summary>
     private readonly ILogger<DevelopmentManagementService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
     private readonly IActiveCloudChatClientFactory _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
     private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
     private readonly IDevelopmentProfileBackfillService _profileBackfill = profileBackfill ?? throw new ArgumentNullException(nameof(profileBackfill));
@@ -331,8 +332,7 @@ internal sealed class DevelopmentManagementService(
 
         // InProgress behind a SUCCEEDED coder attempt is the state that means "implemented, validate it".
         var awaitingValidation = task.Status == DevelopmentTaskStatus.InProgress
-                                 && attempts.LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Coder) is
-                                     { Status: DevelopmentAttemptStatus.Succeeded };
+                                 && attempts.LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Coder) is { Status: DevelopmentAttemptStatus.Succeeded };
 
         // The budget is checked BEFORE the branch that would spend it, and covers the rework wait as well as the
         // validation wait: a task at the cap has nothing left whichever of the two it is sitting in. Gated on

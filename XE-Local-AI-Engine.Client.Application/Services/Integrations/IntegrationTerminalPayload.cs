@@ -30,17 +30,17 @@ internal static class IntegrationTerminalPayload
 
     public static JsonElement Failure(string? category, string? summary) =>
         JsonSerializer.SerializeToElement(new
-        {
-            category,
-            summary = summary is null ? null : IntegrationStreamEventMapper.TruncateToUtf8ByteBudget(summary, MaxSummaryBytes)
-        },
+            {
+                category,
+                summary = summary is null ? null : IntegrationStreamEventMapper.TruncateToUtf8ByteBudget(summary, MaxSummaryBytes)
+            },
             Options);
 
     public static JsonElement Completion(int? tokens, long durationMs) =>
         JsonSerializer.SerializeToElement(new
-        {
-            tokens,
-            durationMs
-        },
+            {
+                tokens,
+                durationMs
+            },
             Options);
 }

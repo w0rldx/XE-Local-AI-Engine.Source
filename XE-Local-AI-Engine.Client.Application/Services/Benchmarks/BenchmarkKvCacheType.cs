@@ -37,7 +37,8 @@ public static class BenchmarkKvCacheType
     public const string SourceAuto = "auto";
 
     /// <summary><see langword="true" /> when the canonical <paramref name="type" /> needs <c>-ctk/-ctv</c> + <c>-fa on</c>.</summary>
-    public static bool IsQuantized(string type) => LlamaServerKvCacheTypes.IsQuantized(type);
+    public static bool IsQuantized(string type) =>
+        LlamaServerKvCacheTypes.IsQuantized(type);
 
     /// <summary>
     ///     Canonicalizes a requested type: trimmed and lowercased, against the shared allow-list in

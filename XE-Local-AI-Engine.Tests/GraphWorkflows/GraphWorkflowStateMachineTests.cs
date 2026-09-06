@@ -513,7 +513,11 @@ public sealed class GraphWorkflowStateMachineTests
         ];
 
         GraphWorkflowNodeRunSnapshot[] reversed = [.. nodeRuns.Reverse()];
-        foreach (var ordering in new[] { nodeRuns, reversed })
+        foreach (var ordering in new[]
+                 {
+                     nodeRuns,
+                     reversed
+                 })
         {
             var outcome = GraphWorkflowStateMachine.Recompute(GraphWorkflowRunStatus.Running, Chain(4), ordering);
 

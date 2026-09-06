@@ -51,13 +51,14 @@ public sealed class HostBootSmokeE2ETests
     ///     <see cref="IOException" /> from the address binder and possibly further by the host builder,
     ///     so the whole chain is searched rather than the outermost type alone.
     /// </summary>
-    private static bool IsAddressInUse(Exception exception) => exception switch
-    {
-        AddressInUseException => true,
-        AggregateException aggregate => aggregate.InnerExceptions.Any(IsAddressInUse),
-        { InnerException: { } inner } => IsAddressInUse(inner),
-        _ => false,
-    };
+    private static bool IsAddressInUse(Exception exception) =>
+        exception switch
+        {
+            AddressInUseException => true,
+            AggregateException aggregate => aggregate.InnerExceptions.Any(IsAddressInUse),
+            { InnerException: { } inner } => IsAddressInUse(inner),
+            _ => false,
+        };
 
     private sealed record BoundHost(XENodeE2EWebApplicationFactory Factory, int Port);
 }

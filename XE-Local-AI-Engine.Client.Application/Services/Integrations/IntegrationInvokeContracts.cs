@@ -20,7 +20,8 @@ public sealed record IntegrationInputDto(IntegrationInputKinds Kind, string? Tex
 ///         credential was used.
 ///     </para>
 /// </summary>
-public sealed record IntegrationAcceptRequest(string TriggerName,
+public sealed record IntegrationAcceptRequest(
+    string TriggerName,
     Guid PrincipalId,
     string KeyPrefix,
     Guid RequestId,
@@ -75,7 +76,8 @@ public enum IntegrationAcceptOutcome
 ///     for <see cref="IntegrationAcceptOutcome.Accepted" /> and <see cref="IntegrationAcceptOutcome.Duplicate" /> and
 ///     are null otherwise — a rejection tells the caller nothing about rows it does not own.
 /// </summary>
-public sealed record IntegrationAcceptResult(IntegrationAcceptOutcome Outcome,
+public sealed record IntegrationAcceptResult(
+    IntegrationAcceptOutcome Outcome,
     Guid? ExecutionId,
     Guid? SessionId,
     IntegrationExecutionStatus? Status,
@@ -168,7 +170,8 @@ public sealed record IntegrationAcceptResponse(Guid ExecutionId, Guid SessionId,
 ///         <c>0</c> until the built-in output tool ships, which is the true answer rather than a placeholder.
 ///     </para>
 /// </summary>
-public sealed record IntegrationExecutionStatusResponse(Guid ExecutionId,
+public sealed record IntegrationExecutionStatusResponse(
+    Guid ExecutionId,
     Guid SessionId,
     string Status,
     string? FailureCategory,
@@ -184,7 +187,8 @@ public sealed record IntegrationExecutionStatusResponse(Guid ExecutionId,
 ///     status, and the two activity counters. It carries no principal, no key prefix and no conversation id — an
 ///     integrator needs none of them, and each would be a fact about the node it should not learn.
 /// </summary>
-public sealed record IntegrationSessionStatusResponse(Guid SessionId,
+public sealed record IntegrationSessionStatusResponse(
+    Guid SessionId,
     string TriggerName,
     string Status,
     int ExecutionCount,

@@ -56,12 +56,12 @@ public sealed class MachineKeyProvider : IMachineKeyProvider, IDisposable
                 // everyone after adopts that key instead of overwriting it with a second one — which would orphan
                 // every frozen inference profile, since profiles are keyed by machine key.
                 var persisted = await _settingsStore.UpdateAsync(latest => string.IsNullOrWhiteSpace(latest.MachineKey)
-                                                             ? latest with
-                                                             {
-                                                                 MachineKey = Guid.NewGuid().ToString("N")
-                                                             }
-                                                             : latest,
-                                                         ct)
+                                                            ? latest with
+                                                            {
+                                                                MachineKey = Guid.NewGuid().ToString("N")
+                                                            }
+                                                            : latest,
+                                                        ct)
                                                     .ConfigureAwait(false);
                 key = persisted.MachineKey;
                 if (string.IsNullOrWhiteSpace(key))

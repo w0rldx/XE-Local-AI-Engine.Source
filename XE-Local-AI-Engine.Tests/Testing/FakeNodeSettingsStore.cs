@@ -17,7 +17,8 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///         test that depends on either must use the real <c>NodeSettingsStore</c>.
 ///     </para>
 /// </remarks>
-internal sealed class FakeNodeSettingsStore(StoredNodeSettings initial,
+internal sealed class FakeNodeSettingsStore(
+    StoredNodeSettings initial,
     Func<StoredNodeSettings, StoredNodeSettings>? siblingWriteBeforeTheUpdate = null) : INodeSettingsStore
 {
     /// <summary>The record the store currently holds.</summary>

@@ -209,7 +209,8 @@ public sealed record WorkSessionRuntimeOverride(string? ModelProfile, string? Re
 ///     <c>CreateWorkSessionCommand</c>, which carries the ids and the concurrency token this one has no business
 ///     knowing about.
 /// </summary>
-public sealed record CreateWorkSessionRequestModel(string Title,
+public sealed record CreateWorkSessionRequestModel(
+    string Title,
     string Objective,
     AgentWorkSessionKind Kind,
     Guid AgentDefinitionId,

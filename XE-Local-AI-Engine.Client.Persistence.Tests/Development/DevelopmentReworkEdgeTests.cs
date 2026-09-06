@@ -142,7 +142,12 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                                .ConfigureAwait(false);
 
         // The whole way round to the next review: the coder round the retry asked for, its gate, and the review.
-        foreach (var status in new[] { DevelopmentTaskStatus.InProgress, DevelopmentTaskStatus.Validation, DevelopmentTaskStatus.InReview })
+        foreach (var status in new[]
+                 {
+                     DevelopmentTaskStatus.InProgress,
+                     DevelopmentTaskStatus.Validation,
+                     DevelopmentTaskStatus.InReview
+                 })
         {
             asked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), status, asked.Version)).ConfigureAwait(false);
         }
@@ -178,7 +183,10 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
-        var ruleSets = new[] { new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash") };
+        var ruleSets = new[]
+        {
+            new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash")
+        };
 
         // The node run's dispatch, then the operator's Retry inside it, then the round it asked for.
         _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), Policy, ruleSets).ConfigureAwait(false);
@@ -475,11 +483,11 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
         var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
 
         var moved = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                            Guid.NewGuid(),
-                            DevelopmentTaskStatus.ChangesRequested,
-                            version,
-                            Reason))
-                        .ConfigureAwait(false);
+                                   Guid.NewGuid(),
+                                   DevelopmentTaskStatus.ChangesRequested,
+                                   version,
+                                   Reason))
+                               .ConfigureAwait(false);
 
         var reworked = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
         AssertEx.Equal(Reason, reworked.BlockedReason, "a task asked for rework carries why it was asked, not only an event row saying so.");
@@ -509,7 +517,10 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
         var operationId = Guid.NewGuid();
-        var ruleSets = new[] { new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash") };
+        var ruleSets = new[]
+        {
+            new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash")
+        };
 
         var first = await store.RecordWorkflowPolicyAsync(seed.TaskId, operationId, Policy, ruleSets).ConfigureAwait(false);
         var replayed = await store.RecordWorkflowPolicyAsync(seed.TaskId, operationId, "Something else entirely.", ruleSets).ConfigureAwait(false);
@@ -557,7 +568,10 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
-        var ruleSets = new[] { new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash") };
+        var ruleSets = new[]
+        {
+            new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash")
+        };
 
         var reworking = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), DevelopmentTaskStatus.ChangesRequested, version))
                                    .ConfigureAwait(false);

@@ -10,12 +10,10 @@ using NSubstitute;
 using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
@@ -347,7 +345,12 @@ public sealed class IntegrationSessionEndToEndTests
                                              first.SessionId,
                                              seeded.PrincipalId,
                                              Guid.NewGuid(),
-                                             new byte[] { 9, 9, 9 },
+                                             new byte[]
+                                             {
+                                                 9,
+                                                 9,
+                                                 9
+                                             },
                                              seeded.KeyPrefix,
                                              DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                                              new IntegrationEventAppend(Guid.NewGuid(),

@@ -260,8 +260,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                 nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
             }
 
-            if (nodeRuns.FirstOrDefault(nodeRun => nodeRun.Id == candidate.Id) is not
-                    { Status: GraphWorkflowNodeRunStatus.Running or GraphWorkflowNodeRunStatus.Queued } current
+            if (nodeRuns.FirstOrDefault(nodeRun => nodeRun.Id == candidate.Id) is not { Status: GraphWorkflowNodeRunStatus.Running or GraphWorkflowNodeRunStatus.Queued } current
                 || !graph.Nodes.TryGetValue(current.NodeKey, out var node))
             {
                 continue;

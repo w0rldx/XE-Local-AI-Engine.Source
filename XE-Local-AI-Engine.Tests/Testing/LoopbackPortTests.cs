@@ -31,12 +31,11 @@ public sealed class LoopbackPortTests
     {
         var offered = new List<int>();
 
-        var failure = await AssertEx.ThrowsAsync<InvalidOperationException>(
-            () => LoopbackPort.BindWithRetryAsync<string>(port =>
-            {
-                offered.Add(port);
-                return Task.FromResult<string?>(null);
-            }, maxAttempts: 3)).ConfigureAwait(false);
+        var failure = await AssertEx.ThrowsAsync<InvalidOperationException>(() => LoopbackPort.BindWithRetryAsync<string>(port =>
+        {
+            offered.Add(port);
+            return Task.FromResult<string?>(null);
+        }, maxAttempts: 3)).ConfigureAwait(false);
 
         AssertEx.Equal(expected: 3, offered.Count);
         foreach (var port in offered)

@@ -1,28 +1,18 @@
 namespace XE_Local_AI_Engine.Tests.Integrations;
 
-using System.Threading.Channels;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Integrations;
-using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
-using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
-using Harness = XE_Local_AI_Engine.Tests.Integrations.IntegrationCoordinatorHarness;
+using Harness = IntegrationCoordinatorHarness;
 using ToolCategory = XE_Local_AI_Engine.AI.Agent.Tools.ToolCategory;
 
 /// <summary>
@@ -391,8 +381,8 @@ public sealed class IntegrationExecutionCoordinatorTests
 
         var events = harness.Executions.Events.Where(row => row.ExecutionId == executionId).OrderBy(static row => row.Sequence).ToArray();
         var terminals = events.Where(static row => row.EventType is IntegrationStreamEventTypes.ExecutionCompleted
-                                                       or IntegrationStreamEventTypes.ExecutionFailed
-                                                       or IntegrationStreamEventTypes.ExecutionCancelled)
+                                  or IntegrationStreamEventTypes.ExecutionFailed
+                                  or IntegrationStreamEventTypes.ExecutionCancelled)
                               .ToArray();
         AssertEx.Equal(expected: 1, terminals.Length, "The coordinator is the only terminal producer, and it produces exactly one.");
         AssertEx.Equal(events[^1].Sequence, terminals[0].Sequence, "A reader stops on the terminal, so it must be the highest sequence for the execution.");
@@ -615,7 +605,12 @@ public sealed class IntegrationExecutionCoordinatorTests
         await harness.Coordinator.StartAsync(CancellationToken.None);
         await harness.Coordinator.StopAsync(CancellationToken.None);
 
-        foreach (var executionId in new[] { accepted, queued, running })
+        foreach (var executionId in new[]
+                 {
+                     accepted,
+                     queued,
+                     running
+                 })
         {
             AssertEx.Equal(expected: 1,
                 harness.Executions.Events.Count(row => row.ExecutionId == executionId),
@@ -787,8 +782,8 @@ public sealed class IntegrationExecutionCoordinatorTests
             // the healthy run — which is exactly what happens once the namespace is under enough parallel load. The
             // assertion below still grades the outcome, so a run that genuinely ends Failed fails here by name.
             await WaitUntilAsync(() => harness.Row(faulting).Status is IntegrationExecutionStatus.Completed
-                                           or IntegrationExecutionStatus.Failed
-                                           or IntegrationExecutionStatus.Cancelled);
+                or IntegrationExecutionStatus.Failed
+                or IntegrationExecutionStatus.Cancelled);
 
             AssertEx.Equal(IntegrationExecutionStatus.Completed, harness.Row(faulting).Status,
                 "One transient read failure is retried, so the run still happens.");
@@ -818,7 +813,11 @@ public sealed class IntegrationExecutionCoordinatorTests
             // ExecuteAsync awaits its dispatched tasks, so StopAsync does not return until both have terminalized.
             await harness.Coordinator.StopAsync(CancellationToken.None);
 
-            foreach (var executionId in new[] { first, second })
+            foreach (var executionId in new[]
+                     {
+                         first,
+                         second
+                     })
             {
                 var row = harness.Row(executionId);
                 AssertEx.Equal(IntegrationExecutionStatus.Failed, row.Status);

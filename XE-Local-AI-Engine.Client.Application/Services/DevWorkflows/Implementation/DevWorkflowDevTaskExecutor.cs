@@ -771,20 +771,20 @@ internal sealed class DevWorkflowDevTaskExecutor
         try
         {
             _ = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(task.Id,
-                                     operationId,
-                                     DevelopmentTaskStatus.ChangesRequested,
-                                     task.Version,
+                                         operationId,
+                                         DevelopmentTaskStatus.ChangesRequested,
+                                         task.Version,
 
-                                     // A silent Retry writes an operator row with NO reason, which is already the
-                                     // retraction: the round it buys is told nothing rather than told the last
-                                     // person's sentence.
-                                     said is null
-                                         ? null
-                                         : $"An operator retried the '{nodeRun.NodeKey}' step of the workflow driving this task, and said: {said}",
-                                     OperatorDirected: true,
-                                     WidenReviewRounds: atTheRoundCap),
-                                 cancellationToken)
-                             .ConfigureAwait(false);
+                                         // A silent Retry writes an operator row with NO reason, which is already the
+                                         // retraction: the round it buys is told nothing rather than told the last
+                                         // person's sentence.
+                                         said is null
+                                             ? null
+                                             : $"An operator retried the '{nodeRun.NodeKey}' step of the workflow driving this task, and said: {said}",
+                                         OperatorDirected: true,
+                                         WidenReviewRounds: atTheRoundCap),
+                                     cancellationToken)
+                                 .ConfigureAwait(false);
 
             // The one task status hop nothing else records. DevelopmentManagementService logs the hops IT decides,
             // and this edge is bought by an operator's Retry in the workflow lane instead — so a live round could see
@@ -987,12 +987,12 @@ internal sealed class DevWorkflowDevTaskExecutor
         try
         {
             _ = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(task.Id,
-                                     ChangeRequestOperationId(run, nodeRun, routed),
-                                     DevelopmentTaskStatus.ChangesRequested,
-                                     task.Version,
-                                     reason.Reason),
-                                 cancellationToken)
-                             .ConfigureAwait(false);
+                                         ChangeRequestOperationId(run, nodeRun, routed),
+                                         DevelopmentTaskStatus.ChangesRequested,
+                                         task.Version,
+                                         reason.Reason),
+                                     cancellationToken)
+                                 .ConfigureAwait(false);
             return 1;
         }
         catch (Exception exception) when (exception is DevelopmentConcurrencyException or DevelopmentInvalidTransitionException)
@@ -1026,10 +1026,10 @@ internal sealed class DevWorkflowDevTaskExecutor
         }
 
         return await development.FindOperationAsync(projectId,
-                       ChangeRequestOperationId(run, nodeRun, routed),
-                       DevelopmentOperationPhases.Completed,
-                       cancellationToken)
-                   .ConfigureAwait(false) is null
+                                    ChangeRequestOperationId(run, nodeRun, routed),
+                                    DevelopmentOperationPhases.Completed,
+                                    cancellationToken)
+                                .ConfigureAwait(false) is null
             ? routed
             : null;
     }

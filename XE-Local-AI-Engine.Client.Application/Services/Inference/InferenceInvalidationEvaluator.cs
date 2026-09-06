@@ -103,14 +103,15 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
                 profile.KvTypeV,
                 profile.FlashAttn);
             var allocation = await _allocationResolver
-                .ResolveAsync(profile.ModelName, (ModelRole)profile.Role, variant, replay, ct)
-                .ConfigureAwait(false);
+                                   .ResolveAsync(profile.ModelName, (ModelRole)profile.Role, variant, replay, ct)
+                                   .ConfigureAwait(false);
             if (allocation?.Placement != ProcessPlacementMode.ExpertOffload)
             {
                 return false;
             }
 
-            _logger.LogWarning("Inference profile {ProfileId} carries no tensor override while the current memory-fit verdict places its experts in system RAM; flagging for re-explore rather than replaying it as fully resident.",
+            _logger.LogWarning(
+                "Inference profile {ProfileId} carries no tensor override while the current memory-fit verdict places its experts in system RAM; flagging for re-explore rather than replaying it as fully resident.",
                 profile.Id);
             return true;
         }

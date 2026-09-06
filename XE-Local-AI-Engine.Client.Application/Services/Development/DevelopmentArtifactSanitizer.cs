@@ -268,7 +268,8 @@ internal static partial class DevelopmentArtifactSanitizer
     ///     <c>[A-Za-z0-9+/=_-]</c> alphabet the secret scanner's entropy fallback measures. Only the digits between
     ///     them vary, and they cannot merge with neighbouring text because the delimiters bound them.
     /// </summary>
-    private static string Placeholder(int index) => $"\uE000{index}\uE001";
+    private static string Placeholder(int index) =>
+        $"\uE000{index}\uE001";
 
     /// <summary>
     ///     Sanitizes model-authored artifact text. Any credential-like match rejects the whole artifact — a reviewer

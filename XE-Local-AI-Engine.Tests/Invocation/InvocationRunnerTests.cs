@@ -51,8 +51,8 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Client.Services.Validation.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
@@ -496,10 +496,10 @@ public sealed class InvocationRunnerTests
                         .ReportTurnTelemetryAsync(package.InvocationId,
                             Arg.Any<long?>(),
                             Arg.Is<TurnUsageTotals?>(static usage => usage != null
-                                                                    && usage.InputTokens == 6_000
-                                                                    && usage.OutputTokens == 60
-                                                                    && usage.TotalTokens == 6_078
-                                                                    && usage.ReasoningTokens == 18));
+                                                                     && usage.InputTokens == 6_000
+                                                                     && usage.OutputTokens == 60
+                                                                     && usage.TotalTokens == 6_078
+                                                                     && usage.ReasoningTokens == 18));
     }
 
     [Test]
@@ -534,9 +534,9 @@ public sealed class InvocationRunnerTests
                         .ReportTurnTelemetryAsync(package.InvocationId,
                             Arg.Any<long?>(),
                             Arg.Is<TurnUsageTotals?>(static usage => usage != null
-                                                                    && usage.InputTokens == int.MaxValue
-                                                                    && usage.OutputTokens == 10
-                                                                    && usage.TotalTokens == int.MaxValue));
+                                                                     && usage.InputTokens == int.MaxValue
+                                                                     && usage.OutputTokens == 10
+                                                                     && usage.TotalTokens == int.MaxValue));
     }
 
     [Test]
@@ -3739,7 +3739,11 @@ public sealed class InvocationRunnerTests
         var nonAutoPins = await RunNoSwapTurnAndCapturePinsAsync("medium");
         var autoPins = await RunNoSwapTurnAndCapturePinsAsync("auto");
 
-        foreach (var pins in new[] { nonAutoPins, autoPins })
+        foreach (var pins in new[]
+                 {
+                     nonAutoPins,
+                     autoPins
+                 })
         {
             AssertEx.Equal(expected: 1, pins.Count, "a turn that never swapped must pin exactly the model it runs");
             AssertEx.Equal(ExternalProviderTestData.ModelId, pins[0].ModelId);
@@ -3840,7 +3844,11 @@ public sealed class InvocationRunnerTests
                 }),
             RuntimePackageBuilder.Valid().Build());
 
-        foreach (var dispatcher in new[] { shippedDefaultDispatcher, nothingHiddenDispatcher })
+        foreach (var dispatcher in new[]
+                 {
+                     shippedDefaultDispatcher,
+                     nothingHiddenDispatcher
+                 })
         {
             await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.ToolsFiltered));
         }
@@ -3891,13 +3899,13 @@ public sealed class InvocationRunnerTests
         var order = new List<string>();
         dispatcher.When(static call => call.ReportToolSchemaTokensAsync(Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<int?>())).Do(_ => order.Add("estimate"));
         dispatcher.When(static call => call.ReportInvocationCompletedAsync(Arg.Any<Guid>(),
-                            Arg.Any<int?>(),
-                            Arg.Any<int?>(),
-                            Arg.Any<int?>(),
-                            Arg.Any<int?>(),
-                            Arg.Any<long?>(),
-                            Arg.Any<string?>(),
-                            Arg.Any<InvocationThroughput?>()))
+                      Arg.Any<int?>(),
+                      Arg.Any<int?>(),
+                      Arg.Any<int?>(),
+                      Arg.Any<int?>(),
+                      Arg.Any<long?>(),
+                      Arg.Any<string?>(),
+                      Arg.Any<InvocationThroughput?>()))
                   .Do(_ => order.Add("completed"));
         var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: ToolSchemaBudgetedUpdates(640, 300));
         var package = RuntimePackageBuilder.Valid().Build();
@@ -4895,7 +4903,8 @@ public sealed class InvocationRunnerTests
         string modelId,
         OpenAiWireRecorder recorder,
         List<IReadOnlyList<ExternalProviderBindingPin>>? pinsAtSend,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken)
     {
         pinsAtSend?.Add(ExternalProviderBindingPinScope.Current);
         using var client = new ExternalOpenAiChatClient(registry, modelId, recorder.CreateHandler);
@@ -4914,7 +4923,10 @@ public sealed class InvocationRunnerTests
     /// <summary>Retry OFF, so a failing stream surfaces once and the test observes exactly the runner's own behaviour.</summary>
     private static IProviderStreamResilience NoRetryResilience()
     {
-        return new ProviderStreamResilience(Options.Create(new ProviderResilienceOptions { RetryEnabled = false }),
+        return new ProviderStreamResilience(Options.Create(new ProviderResilienceOptions
+            {
+                RetryEnabled = false
+            }),
             TimeProvider.System,
             NullLogger<ProviderStreamResilience>.Instance);
     }

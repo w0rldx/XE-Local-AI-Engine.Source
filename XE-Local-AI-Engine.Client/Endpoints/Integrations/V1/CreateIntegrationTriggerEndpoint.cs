@@ -31,15 +31,15 @@ public sealed class CreateIntegrationTriggerEndpoint(IIntegrationTriggerService 
         var acceptedInputKinds = IntegrationMapper.FromWireInputKinds(req.AcceptedInputKinds).GetValueOrDefault();
 
         var result = await _triggerService.CreateAsync(new IntegrationTriggerCreateInput(req.Name,
-                                              req.DisplayName,
-                                              req.Description,
-                                              req.Enabled,
-                                              req.TargetKind,
-                                              req.TargetAgentDefinitionId,
-                                              req.SessionPolicy,
-                                              acceptedInputKinds),
-                                          ct)
-                                     .ConfigureAwait(false);
+                                                  req.DisplayName,
+                                                  req.Description,
+                                                  req.Enabled,
+                                                  req.TargetKind,
+                                                  req.TargetAgentDefinitionId,
+                                                  req.SessionPolicy,
+                                                  acceptedInputKinds),
+                                              ct)
+                                          .ConfigureAwait(false);
 
         if (result.Outcome != IntegrationTriggerOutcome.Saved)
         {

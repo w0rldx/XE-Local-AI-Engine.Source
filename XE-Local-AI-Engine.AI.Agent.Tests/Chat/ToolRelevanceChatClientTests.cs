@@ -326,7 +326,10 @@ public sealed class ToolRelevanceChatClientTests
     public async Task GetResponseAsync_WhenTwoRoundsRaceOnOneToolArray_CallsTheSelectorExactlyOnce()
     {
         var (tools, _) = BuildArray(FillerNames(30));
-        var selector = new CountingSelector { Gate = new TaskCompletionSource() };
+        var selector = new CountingSelector
+        {
+            Gate = new TaskCompletionSource()
+        };
         using var inner = new CapturingChatClient();
         using var sut = BuildSut(inner, selector);
 
@@ -383,7 +386,10 @@ public sealed class ToolRelevanceChatClientTests
     public async Task GetResponseAsync_WhenTheCallerCancelsDuringSelection_Throws()
     {
         var (tools, _) = BuildArray(FillerNames(30));
-        var selector = new CountingSelector { Gate = new TaskCompletionSource() };
+        var selector = new CountingSelector
+        {
+            Gate = new TaskCompletionSource()
+        };
         using var inner = new CapturingChatClient();
         using var sut = BuildSut(inner, selector);
         using var caller = new CancellationTokenSource();
@@ -519,7 +525,10 @@ public sealed class ToolRelevanceChatClientTests
     public async Task GetResponseAsync_WhenTheSendIsCancelledDuringSelection_KeepsTheDecisionSoTheRetryReusesIt()
     {
         var (tools, _) = BuildArray(FillerNames(30));
-        var selector = new CountingSelector { Gate = new TaskCompletionSource() };
+        var selector = new CountingSelector
+        {
+            Gate = new TaskCompletionSource()
+        };
         using var inner = new CapturingChatClient();
         using var sut = BuildSut(inner, selector);
         using var abandoned = new CancellationTokenSource();

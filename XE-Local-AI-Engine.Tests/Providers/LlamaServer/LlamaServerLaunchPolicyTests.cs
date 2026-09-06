@@ -197,7 +197,10 @@ public sealed class LlamaServerLaunchPolicyTests
         // The policy never overrides a replay's KV: a frozen profile pins its own -ctk/-ctv verbatim. Under D13 that
         // stays true AND is now unreachable in the superseded case — changing the knob stales the profile through the
         // launch-policy fingerprint first, so a replay carrying a KV type the operator has since abandoned never runs.
-        var policy = NewPolicy(new LlamaServerLaunchPolicyOptions { KvCacheType = LlamaServerKvCacheTypes.Q4_0 });
+        var policy = NewPolicy(new LlamaServerLaunchPolicyOptions
+        {
+            KvCacheType = LlamaServerKvCacheTypes.Q4_0
+        });
 
         var gpuReplay = await policy.ResolveAsync(ModelRole.Chat,
             GpuVariant.Cuda,

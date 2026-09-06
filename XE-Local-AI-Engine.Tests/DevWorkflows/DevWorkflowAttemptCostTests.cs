@@ -116,7 +116,10 @@ public sealed class DevWorkflowAttemptCostTests
 
         var store = new PublishingDevWorkflowStore(inner,
             Substitute.For<IDevWorkflowEventPublisher>(),
-            new RecordingTelemetryScopeFactory(inner, new StubDevWorkflowNodeTelemetrySource { Answer = new DevWorkflowNodeTelemetry(InputTokens: 5) }),
+            new RecordingTelemetryScopeFactory(inner, new StubDevWorkflowNodeTelemetrySource
+            {
+                Answer = new DevWorkflowNodeTelemetry(InputTokens: 5)
+            }),
             new DevWorkflowGraphCache(),
 
             // Its own admission pool. The real one is a container singleton, and this assertion is about what the
@@ -125,13 +128,13 @@ public sealed class DevWorkflowAttemptCostTests
             NullLogger<PublishingDevWorkflowStore>.Instance);
 
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(runId,
-                          nodeRunId,
-                          DevWorkflowVersions.Any,
-                          DevWorkflowNodeRunStatus.Pending,
-                          DetailJson: RawDetail,
-                          IncrementAttempt: true,
-                          ClearWorkSession: true))
-                      .ConfigureAwait(false);
+                           nodeRunId,
+                           DevWorkflowVersions.Any,
+                           DevWorkflowNodeRunStatus.Pending,
+                           DetailJson: RawDetail,
+                           IncrementAttempt: true,
+                           ClearWorkSession: true))
+                       .ConfigureAwait(false);
 
         _ = await inner.Received(1)
                        .TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(forwarded => forwarded.DetailJson == RawDetail),

@@ -31,8 +31,10 @@ internal static class IntegrationToolOfferFactory
 
     private sealed class FakeAgentToolRegistry(IReadOnlyList<LocalChatToolDescriptor> descriptors) : IAgentToolRegistry
     {
-        public IReadOnlyList<AITool> GetLocalChatTools() => [];
+        public IReadOnlyList<AITool> GetLocalChatTools() =>
+            [];
 
-        public IReadOnlyList<LocalChatToolDescriptor> GetLocalChatToolDescriptors() => descriptors;
+        public IReadOnlyList<LocalChatToolDescriptor> GetLocalChatToolDescriptors() =>
+            descriptors;
     }
 }

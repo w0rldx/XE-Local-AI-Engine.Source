@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Integrations;
 
+using System.ComponentModel.DataAnnotations;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -108,6 +109,6 @@ public sealed class IntegrationStreamEventEnvelopeBoundTests
             },
             RingOptions);
 
-    private static IReadOnlyList<System.ComponentModel.DataAnnotations.ValidationResult> Validate(IntegrationOptions options) =>
-        [.. options.Validate(new System.ComponentModel.DataAnnotations.ValidationContext(options))];
+    private static IReadOnlyList<ValidationResult> Validate(IntegrationOptions options) =>
+        [.. options.Validate(new ValidationContext(options))];
 }

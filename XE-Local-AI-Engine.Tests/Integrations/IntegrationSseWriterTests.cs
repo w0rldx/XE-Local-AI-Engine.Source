@@ -107,9 +107,9 @@ public sealed class IntegrationSseWriterTests
         using var buffer = CreateBuffer();
         var executionId = Seed(buffer, out var sessionId);
         var payload = JsonSerializer.SerializeToElement(new
-        {
-            text = "line one\nline two"
-        },
+            {
+                text = "line one\nline two"
+            },
             Web);
         _ = buffer.Append(executionId, sessionId, IntegrationStreamEventTypes.AssistantDelta, contentType: null, payload);
         _ = buffer.Append(executionId, sessionId, IntegrationStreamEventTypes.ExecutionCompleted, contentType: null, payload: null);
@@ -397,8 +397,7 @@ public sealed class IntegrationSseWriterTests
         private readonly TaskCompletionSource _cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         /// <summary>Completes when the reader's token is cancelled, i.e. when the writer has torn its stream down.</summary>
-        public Task Cancelled =>
-            _cancelled.Task;
+        public Task Cancelled => _cancelled.Task;
 
         /// <summary>Whether the parked move ran to an end, which it cannot have done if it was disposed under.</summary>
         public bool Ended { get; private set; }
@@ -417,7 +416,8 @@ public sealed class IntegrationSseWriterTests
 
         public async IAsyncEnumerable<IntegrationStreamEvent> ReadAsync(Guid executionId,
             long sinceSequence,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
         {
             await using (cancellationToken.Register(() => _cancelled.TrySetResult()).ConfigureAwait(false))
             {

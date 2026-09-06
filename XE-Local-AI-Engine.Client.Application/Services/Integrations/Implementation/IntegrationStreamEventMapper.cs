@@ -1,9 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 
-using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Integrations.Tools;
@@ -351,13 +349,13 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
         await foreach (var streamEvent in _persist.Reader.ReadAllAsync(CancellationToken.None).ConfigureAwait(false))
         {
             await _executions.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(),
-                        streamEvent.ExecutionId,
-                        streamEvent.Sequence,
-                        streamEvent.Type,
-                        streamEvent.Payload?.GetRawText(),
-                        streamEvent.OccurredAtUtc),
-                    CancellationToken.None)
-                .ConfigureAwait(false);
+                                     streamEvent.ExecutionId,
+                                     streamEvent.Sequence,
+                                     streamEvent.Type,
+                                     streamEvent.Payload?.GetRawText(),
+                                     streamEvent.OccurredAtUtc),
+                                 CancellationToken.None)
+                             .ConfigureAwait(false);
         }
     }
 }

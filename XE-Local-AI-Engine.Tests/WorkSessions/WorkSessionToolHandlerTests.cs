@@ -476,7 +476,7 @@ public sealed class WorkSessionToolHandlerTests
         }
 
         AssertEx.False((await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false))
-                       .Any(static entry => entry.EventType == WorkSessionEventTypes.CompletionRequested),
+            .Any(static entry => entry.EventType == WorkSessionEventTypes.CompletionRequested),
             "A call the deserializer refused must not close the session.");
     }
 

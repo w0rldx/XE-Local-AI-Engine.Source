@@ -2,15 +2,15 @@ namespace XE_Local_AI_Engine.Tests.Integrations;
 
 using Microsoft.Extensions.AI;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Events;
-using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
-using Harness = XE_Local_AI_Engine.Tests.Integrations.IntegrationCoordinatorHarness;
+using Harness = IntegrationCoordinatorHarness;
 
 /// <summary>
 ///     The per-turn context an integration execution sends, assembled by the SAME builder the chat send path uses.
@@ -135,7 +135,7 @@ public sealed class IntegrationContinuationTests
         harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
         harness.OfferedTools =
         [
-            Harness.Tool("write_file", XE_Local_AI_Engine.AI.Agent.Tools.ToolCategory.WriteExecute)
+            Harness.Tool("write_file", ToolCategory.WriteExecute)
         ];
         var executionId = harness.SeedAccepted();
 
@@ -242,7 +242,7 @@ public sealed class IntegrationContinuationTests
         // order the model performed them, ahead of the answer it wrote afterwards.
         using var harness = new Harness();
         harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
-        harness.OfferedTools = [Harness.Tool("list_files", XE_Local_AI_Engine.AI.Agent.Tools.ToolCategory.ReadLocal)];
+        harness.OfferedTools = [Harness.Tool("list_files", ToolCategory.ReadLocal)];
         harness.AddHistory("user", "list the files");
         harness.AddHistory("assistant", "there are two files", [Harness.CompletedToolPart("call-1", "list_files", "{\"path\":\".\"}", "a.txt\nb.txt")]);
 
@@ -281,7 +281,7 @@ public sealed class IntegrationContinuationTests
         // ALREADY saved; without it the model reads only its own prose about having saved one and can save it twice.
         using var harness = new Harness();
         harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
-        harness.OfferedTools = [Harness.Tool("save_artifact", XE_Local_AI_Engine.AI.Agent.Tools.ToolCategory.WriteExecute)];
+        harness.OfferedTools = [Harness.Tool("save_artifact", ToolCategory.WriteExecute)];
         harness.AddHistory("user", "save the count");
         harness.AddHistory("assistant", "saved it", [Harness.CompletedToolPart("call-1", "save_artifact", "{\"name\":\"s6.txt\"}", "saved s6.txt")]);
 
@@ -390,7 +390,7 @@ public sealed class IntegrationContinuationTests
         // It also proves the read: the parts live in the metadata blob the CAPPED turn read blanks for exactly this row.
         using var harness = new Harness();
         harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
-        harness.OfferedTools = [Harness.Tool("save_artifact", XE_Local_AI_Engine.AI.Agent.Tools.ToolCategory.WriteExecute)];
+        harness.OfferedTools = [Harness.Tool("save_artifact", ToolCategory.WriteExecute)];
         harness.AddHistory("assistant",
             "I saved the artifact",
             [Harness.CompletedToolPart("call-1", "save_artifact", "{\"name\":\"s6.txt\"}", "saved s6.txt")]);

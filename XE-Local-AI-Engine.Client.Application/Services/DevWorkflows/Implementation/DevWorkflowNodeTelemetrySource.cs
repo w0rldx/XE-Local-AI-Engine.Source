@@ -27,7 +27,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///         which is what they say anyway for every model the node did not load itself.
 ///     </para>
 /// </remarks>
-internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore workSessions,
+internal sealed class DevWorkflowNodeTelemetrySource(
+    IAgentWorkSessionStore workSessions,
     IAgentExecutionLogStore executionLogs,
     IDevelopmentStore? development = null,
     NodeMetricsLlamaServerLoadTelemetry? localModelLoads = null) : IDevWorkflowNodeTelemetrySource
@@ -316,13 +317,15 @@ internal sealed class DevWorkflowNodeTelemetrySource(IAgentWorkSessionStore work
     private static int? Add(int? total, int? term) =>
         term is { } value ? (total ?? 0) + value : total;
 
-    private sealed record StepTotals(int? ProviderCalls,
+    private sealed record StepTotals(
+        int? ProviderCalls,
         long? EstimatedInputTokens,
         int? ToolCalls,
         long? ToolSchemaTokens,
         IReadOnlyList<string> ToolNames);
 
-    private sealed record EnvelopeTotals(long? InputTokens,
+    private sealed record EnvelopeTotals(
+        long? InputTokens,
         long? OutputTokens,
         long? ReasoningTokens,
         long? AgentTurnMs,

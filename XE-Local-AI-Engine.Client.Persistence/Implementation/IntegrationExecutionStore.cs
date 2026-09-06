@@ -439,7 +439,8 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         return JsonSerializer.SerializeToUtf8Bytes(new IntegrationTerminalDetail(failureCategory, failureSummary));
     }
 
-    private static string? TextOrNull(byte[]? value) => value is null ? null : Encoding.UTF8.GetString(value);
+    private static string? TextOrNull(byte[]? value) =>
+        value is null ? null : Encoding.UTF8.GetString(value);
 
     private static IntegrationExecutionSnapshot ToSnapshot(IntegrationExecution entity) =>
         new(entity.Id,
@@ -467,6 +468,8 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
     ///     a second failed-terminal shape in front of a reader.
     /// </summary>
     private sealed record IntegrationTerminalDetail(
-        [property: JsonPropertyName("category")] string? Category,
-        [property: JsonPropertyName("summary")] string? Summary);
+        [property: JsonPropertyName("category")]
+        string? Category,
+        [property: JsonPropertyName("summary")]
+        string? Summary);
 }

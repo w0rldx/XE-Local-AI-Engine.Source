@@ -316,7 +316,8 @@ public sealed class DevelopmentCloudScopedSecurityTests
     {
         public DevelopmentCloudContextBundle? Built { get; private set; }
 
-        public DevelopmentCloudContextBundle Build(DevelopmentCloudContextBuildRequest request) => Built = inner.Build(request);
+        public DevelopmentCloudContextBundle Build(DevelopmentCloudContextBuildRequest request) =>
+            Built = inner.Build(request);
     }
 
     private static DevelopmentCloudContextBundle BuildBundle() =>

@@ -31,10 +31,10 @@ public sealed class GetIntegrationExecutionEventsEndpoint(IntegrationExecutionQu
         ArgumentNullException.ThrowIfNull(req);
 
         var rows = await _executions.ListEventsAsync(Route<Guid>("executionId"),
-                                       Math.Max(req.SinceSeq ?? 0, val2: 0),
-                                       IntegrationEventPage.ClampLimit(req.Limit),
-                                       ct)
-                                   .ConfigureAwait(false);
+                                        Math.Max(req.SinceSeq ?? 0, val2: 0),
+                                        IntegrationEventPage.ClampLimit(req.Limit),
+                                        ct)
+                                    .ConfigureAwait(false);
 
         await Send.OkAsync(new ListIntegrationExecutionEventsResponse
             {

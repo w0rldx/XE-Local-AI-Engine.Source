@@ -100,7 +100,9 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
     /// <inheritdoc />
     public async Task RecordOptimizedConfigFailedAsync(GpuVariant variant, string kvCacheType, CancellationToken ct)
     {
-        _logger.LogWarning("Recording optimized llama-server launch config (KV-cache quant + flash attention) as unsupported for backend {Variant} at KV-cache type {KvCacheType}; future spawns of that pair will use the safe config.", variant, kvCacheType);
+        _logger.LogWarning(
+            "Recording optimized llama-server launch config (KV-cache quant + flash attention) as unsupported for backend {Variant} at KV-cache type {KvCacheType}; future spawns of that pair will use the safe config.",
+            variant, kvCacheType);
         try
         {
             await _fallbackStore.DisableOptimizedConfigAsync(variant, kvCacheType, ct).ConfigureAwait(false);

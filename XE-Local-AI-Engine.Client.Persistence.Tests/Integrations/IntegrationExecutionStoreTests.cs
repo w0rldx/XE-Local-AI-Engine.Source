@@ -14,8 +14,15 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 /// </summary>
 public sealed class IntegrationExecutionStoreTests
 {
-    private static readonly IReadOnlySet<IntegrationExecutionStatus> Running = new HashSet<IntegrationExecutionStatus> { IntegrationExecutionStatus.Running };
-    private static readonly IReadOnlySet<IntegrationExecutionStatus> Accepted = new HashSet<IntegrationExecutionStatus> { IntegrationExecutionStatus.Accepted };
+    private static readonly IReadOnlySet<IntegrationExecutionStatus> Running = new HashSet<IntegrationExecutionStatus>
+    {
+        IntegrationExecutionStatus.Running
+    };
+
+    private static readonly IReadOnlySet<IntegrationExecutionStatus> Accepted = new HashSet<IntegrationExecutionStatus>
+    {
+        IntegrationExecutionStatus.Accepted
+    };
 
     [Test]
     public async Task AcceptAsync_WritesSessionExecutionAndTheAcceptedEventInOneCommittedTransaction()
@@ -82,7 +89,10 @@ public sealed class IntegrationExecutionStoreTests
 
         // The other half of the same ruling: a different integrator is unaffected by the first one's saturation.
         var otherPrincipal = Guid.NewGuid();
-        AssertEx.True(await store.AcceptAsync(NewAccept(seed with { PrincipalId = otherPrincipal }), maxActive: 8, maxActivePerPrincipal: 1).ConfigureAwait(false));
+        AssertEx.True(await store.AcceptAsync(NewAccept(seed with
+        {
+            PrincipalId = otherPrincipal
+        }), maxActive: 8, maxActivePerPrincipal: 1).ConfigureAwait(false));
     }
 
     [Test]
@@ -115,15 +125,15 @@ public sealed class IntegrationExecutionStoreTests
         AssertEx.True(await store.AcceptAsync(first, maxActive: 1, maxActivePerPrincipal: 1).ConfigureAwait(false));
 
         AssertEx.True(await store.TryTerminalizeAsync(new IntegrationTerminalizeCommand(first.ExecutionId,
-                          ExpectedVersion: 0,
-                          Accepted,
-                          IntegrationExecutionStatus.Completed,
-                          Sequence: 2,
-                          "execution.completed",
-                          EndedAtUtc: 9_000,
-                          FailureCategory: null,
-                          FailureSummary: null))
-                      .ConfigureAwait(false));
+                                     ExpectedVersion: 0,
+                                     Accepted,
+                                     IntegrationExecutionStatus.Completed,
+                                     Sequence: 2,
+                                     "execution.completed",
+                                     EndedAtUtc: 9_000,
+                                     FailureCategory: null,
+                                     FailureSummary: null))
+                                 .ConfigureAwait(false));
 
         AssertEx.True(await store.AcceptAsync(NewAccept(seed), maxActive: 1, maxActivePerPrincipal: 1).ConfigureAwait(false),
             "Only Accepted, Queued and Running occupy a slot.");
@@ -164,10 +174,23 @@ public sealed class IntegrationExecutionStoreTests
         var first = NewAccept(seed);
         AssertEx.True(await store.AcceptAsync(first, maxActive: 8, maxActivePerPrincipal: 4).ConfigureAwait(false));
 
-        var missing = NewAccept(seed) with { NewSession = null, SessionId = Guid.NewGuid() };
-        var foreign = NewAccept(seed) with { NewSession = null, SessionId = first.SessionId, PrincipalId = Guid.NewGuid() };
+        var missing = NewAccept(seed) with
+        {
+            NewSession = null,
+            SessionId = Guid.NewGuid()
+        };
+        var foreign = NewAccept(seed) with
+        {
+            NewSession = null,
+            SessionId = first.SessionId,
+            PrincipalId = Guid.NewGuid()
+        };
 
-        foreach (var refused in new[] { missing, foreign })
+        foreach (var refused in new[]
+                 {
+                     missing,
+                     foreign
+                 })
         {
             var before = await CountsAsync(fixture).ConfigureAwait(false);
             _ = await AssertEx.ThrowsAsync<IntegrationSessionUnavailableException>(() => store.AcceptAsync(refused, maxActive: 8, maxActivePerPrincipal: 4))
@@ -182,7 +205,11 @@ public sealed class IntegrationExecutionStoreTests
                      .ConfigureAwait(false);
 
         var closedBefore = await CountsAsync(fixture).ConfigureAwait(false);
-        var closed = NewAccept(seed) with { NewSession = null, SessionId = first.SessionId };
+        var closed = NewAccept(seed) with
+        {
+            NewSession = null,
+            SessionId = first.SessionId
+        };
         _ = await AssertEx.ThrowsAsync<IntegrationSessionUnavailableException>(() => store.AcceptAsync(closed, maxActive: 8, maxActivePerPrincipal: 4))
                           .ConfigureAwait(false);
         AssertEx.Equal(closedBefore, await CountsAsync(fixture).ConfigureAwait(false));
@@ -191,7 +218,11 @@ public sealed class IntegrationExecutionStoreTests
         await fixture.RawExecuteAsync("UPDATE integration_sessions SET status = 'Active' WHERE id = $id;",
                          command => command.Parameters.AddWithValue("$id", first.SessionId))
                      .ConfigureAwait(false);
-        AssertEx.True(await store.AcceptAsync(NewAccept(seed) with { NewSession = null, SessionId = first.SessionId }, maxActive: 8, maxActivePerPrincipal: 4)
+        AssertEx.True(await store.AcceptAsync(NewAccept(seed) with
+                                 {
+                                     NewSession = null,
+                                     SessionId = first.SessionId
+                                 }, maxActive: 8, maxActivePerPrincipal: 4)
                                  .ConfigureAwait(false));
     }
 
@@ -206,15 +237,38 @@ public sealed class IntegrationExecutionStoreTests
         var before = await CountsAsync(fixture).ConfigureAwait(false);
 
         var wrongSessionId = NewAccept(seed);
-        wrongSessionId = wrongSessionId with { NewSession = wrongSessionId.NewSession! with { SessionId = Guid.NewGuid() } };
+        wrongSessionId = wrongSessionId with
+        {
+            NewSession = wrongSessionId.NewSession! with
+            {
+                SessionId = Guid.NewGuid()
+            }
+        };
 
         var wrongTriggerId = NewAccept(seed);
-        wrongTriggerId = wrongTriggerId with { NewSession = wrongTriggerId.NewSession! with { TriggerId = Guid.NewGuid() } };
+        wrongTriggerId = wrongTriggerId with
+        {
+            NewSession = wrongTriggerId.NewSession! with
+            {
+                TriggerId = Guid.NewGuid()
+            }
+        };
 
         var wrongExecutionId = NewAccept(seed);
-        wrongExecutionId = wrongExecutionId with { AcceptedEvent = wrongExecutionId.AcceptedEvent with { ExecutionId = Guid.NewGuid() } };
+        wrongExecutionId = wrongExecutionId with
+        {
+            AcceptedEvent = wrongExecutionId.AcceptedEvent with
+            {
+                ExecutionId = Guid.NewGuid()
+            }
+        };
 
-        foreach (var contradictory in new[] { wrongSessionId, wrongTriggerId, wrongExecutionId })
+        foreach (var contradictory in new[]
+                 {
+                     wrongSessionId,
+                     wrongTriggerId,
+                     wrongExecutionId
+                 })
         {
             _ = await AssertEx.ThrowsAsync<ArgumentException>(() => store.AcceptAsync(contradictory, maxActive: 8, maxActivePerPrincipal: 4)).ConfigureAwait(false);
             AssertEx.Equal(before, await CountsAsync(fixture).ConfigureAwait(false),
@@ -292,22 +346,22 @@ public sealed class IntegrationExecutionStoreTests
 
         var invocationId = Guid.NewGuid();
         AssertEx.True(await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(accept.ExecutionId,
-                          ExpectedVersion: 0,
-                          Accepted,
-                          IntegrationExecutionStatus.Running,
-                          StartedAtUtc: 5_500,
-                          InvocationId: invocationId,
-                          FailureSummary: "a first attempt"))
-                      .ConfigureAwait(false));
+                                     ExpectedVersion: 0,
+                                     Accepted,
+                                     IntegrationExecutionStatus.Running,
+                                     StartedAtUtc: 5_500,
+                                     InvocationId: invocationId,
+                                     FailureSummary: "a first attempt"))
+                                 .ConfigureAwait(false));
 
         // A command carrying no FailureSummary must leave the existing one intact: null means "leave alone", never
         // "clear it".
         AssertEx.True(await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(accept.ExecutionId,
-                          ExpectedVersion: 1,
-                          Running,
-                          IntegrationExecutionStatus.Running,
-                          StopRequestedAtUtc: 6_000))
-                      .ConfigureAwait(false));
+                                     ExpectedVersion: 1,
+                                     Running,
+                                     IntegrationExecutionStatus.Running,
+                                     StopRequestedAtUtc: 6_000))
+                                 .ConfigureAwait(false));
 
         var row = AssertEx.NotNull(await store.GetByIdAsync(accept.ExecutionId).ConfigureAwait(false));
         AssertEx.Equal(IntegrationExecutionStatus.Running, row.Status, "A { Running } to Running self-move is the cancel path's marker write.");
@@ -356,10 +410,10 @@ public sealed class IntegrationExecutionStoreTests
         var accept = NewAccept(seed);
         AssertEx.True(await store.AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4).ConfigureAwait(false));
         AssertEx.True(await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(accept.ExecutionId,
-                          ExpectedVersion: 0,
-                          Accepted,
-                          IntegrationExecutionStatus.Running))
-                      .ConfigureAwait(false));
+                                     ExpectedVersion: 0,
+                                     Accepted,
+                                     IntegrationExecutionStatus.Running))
+                                 .ConfigureAwait(false));
 
         // Occupy the sequence the terminal event is about to claim, so the insert violates
         // ux_integration_execution_events_execution_sequence inside the save.
@@ -456,23 +510,23 @@ public sealed class IntegrationExecutionStoreTests
         var accept = NewAccept(seed);
         AssertEx.True(await store.AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4).ConfigureAwait(false));
         AssertEx.True(await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(accept.ExecutionId,
-                          ExpectedVersion: 0,
-                          Accepted,
-                          IntegrationExecutionStatus.Running))
-                      .ConfigureAwait(false));
+                                     ExpectedVersion: 0,
+                                     Accepted,
+                                     IntegrationExecutionStatus.Running))
+                                 .ConfigureAwait(false));
         await store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), accept.ExecutionId, Sequence: 7, "tool.completed", """{"ok":true}""", OccurredAtUtc: 8_000))
                    .ConfigureAwait(false);
 
         AssertEx.True(await store.TryTerminalizeAsync(new IntegrationTerminalizeCommand(accept.ExecutionId,
-                          ExpectedVersion: 1,
-                          Running,
-                          IntegrationExecutionStatus.Failed,
-                          Sequence: 8,
-                          "execution.failed",
-                          EndedAtUtc: 9_100,
-                          "restart",
-                          "interrupted by a host restart"))
-                      .ConfigureAwait(false));
+                                     ExpectedVersion: 1,
+                                     Running,
+                                     IntegrationExecutionStatus.Failed,
+                                     Sequence: 8,
+                                     "execution.failed",
+                                     EndedAtUtc: 9_100,
+                                     "restart",
+                                     "interrupted by a host restart"))
+                                 .ConfigureAwait(false));
 
         await using var readContext = fixture.CreateContext();
         var readStore = new IntegrationExecutionStore(readContext);
@@ -506,22 +560,22 @@ public sealed class IntegrationExecutionStoreTests
         var accept = NewAccept(seed);
         AssertEx.True(await store.AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4).ConfigureAwait(false));
         AssertEx.True(await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(accept.ExecutionId,
-                          ExpectedVersion: 0,
-                          Accepted,
-                          IntegrationExecutionStatus.Running,
-                          FailureCategory: "capacity-rejected"))
-                      .ConfigureAwait(false));
+                                     ExpectedVersion: 0,
+                                     Accepted,
+                                     IntegrationExecutionStatus.Running,
+                                     FailureCategory: "capacity-rejected"))
+                                 .ConfigureAwait(false));
 
         AssertEx.True(await store.TryTerminalizeAsync(new IntegrationTerminalizeCommand(accept.ExecutionId,
-                          ExpectedVersion: 1,
-                          Running,
-                          IntegrationExecutionStatus.Completed,
-                          Sequence: 2,
-                          "execution.completed",
-                          EndedAtUtc: 9_200,
-                          FailureCategory: null,
-                          FailureSummary: null))
-                      .ConfigureAwait(false));
+                                     ExpectedVersion: 1,
+                                     Running,
+                                     IntegrationExecutionStatus.Completed,
+                                     Sequence: 2,
+                                     "execution.completed",
+                                     EndedAtUtc: 9_200,
+                                     FailureCategory: null,
+                                     FailureSummary: null))
+                                 .ConfigureAwait(false));
 
         var row = AssertEx.NotNull(await store.GetByIdAsync(accept.ExecutionId).ConfigureAwait(false));
         AssertEx.Null(row.FailureCategory, "Assigned, not merged: a terminal write is the final word on why a run ended.");
@@ -553,8 +607,7 @@ public sealed class IntegrationExecutionStoreTests
         AssertEx.Equal(expected: 4L, session.LastSequence,
             "Sequences restart per execution, so a MAX across a session would freeze at the deepest old stream; this is an activity indicator, not an ordering key.");
 
-        _ = await AssertEx.ThrowsAsync<DbUpdateException>(
-                              () => store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), accept.ExecutionId, Sequence: 9, "tool.started", null, 8_200)))
+        _ = await AssertEx.ThrowsAsync<DbUpdateException>(() => store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), accept.ExecutionId, Sequence: 9, "tool.started", null, 8_200)))
                           .ConfigureAwait(false);
     }
 
@@ -570,8 +623,7 @@ public sealed class IntegrationExecutionStoreTests
         AssertEx.True(await store.AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4).ConfigureAwait(false));
 
         // Sequence 1 is the accepted event's, so this violates ux_integration_execution_events_execution_sequence.
-        _ = await AssertEx.ThrowsAsync<DbUpdateException>(
-                              () => store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), accept.ExecutionId, Sequence: 1, "tool.started", null, 8_000)))
+        _ = await AssertEx.ThrowsAsync<DbUpdateException>(() => store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), accept.ExecutionId, Sequence: 1, "tool.started", null, 8_000)))
                           .ConfigureAwait(false);
 
         // The SAME store instance, i.e. the same scoped context. Without the tracker clear its next save replays the
@@ -598,13 +650,12 @@ public sealed class IntegrationExecutionStoreTests
                    .ConfigureAwait(false);
 
         var before = await fixture.RawTableCountAsync("integration_execution_events").ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<ArgumentException>(
-                              () => store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(),
-                                  accept.ExecutionId,
-                                  Sequence: 3,
-                                  "tool.completed",
-                                  new string('a', count: 4097),
-                                  OccurredAtUtc: 8_100)))
+        _ = await AssertEx.ThrowsAsync<ArgumentException>(() => store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(),
+                              accept.ExecutionId,
+                              Sequence: 3,
+                              "tool.completed",
+                              new string('a', count: 4097),
+                              OccurredAtUtc: 8_100)))
                           .ConfigureAwait(false);
         AssertEx.Equal(before, await fixture.RawTableCountAsync("integration_execution_events").ConfigureAwait(false));
 
@@ -656,10 +707,24 @@ public sealed class IntegrationExecutionStoreTests
         var store = new IntegrationExecutionStore(context);
 
         // Two rows sharing one millisecond stamp: without the Id tie-break these page non-deterministically.
-        var older = NewAccept(seed) with { ReceivedAtUtc = 1_000 };
-        var tieA = NewAccept(seed) with { ReceivedAtUtc = 2_000 };
-        var tieB = NewAccept(seed) with { ReceivedAtUtc = 2_000 };
-        foreach (var accept in new[] { older, tieA, tieB })
+        var older = NewAccept(seed) with
+        {
+            ReceivedAtUtc = 1_000
+        };
+        var tieA = NewAccept(seed) with
+        {
+            ReceivedAtUtc = 2_000
+        };
+        var tieB = NewAccept(seed) with
+        {
+            ReceivedAtUtc = 2_000
+        };
+        foreach (var accept in new[]
+                 {
+                     older,
+                     tieA,
+                     tieB
+                 })
         {
             AssertEx.True(await store.AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 8).ConfigureAwait(false));
         }
@@ -699,19 +764,33 @@ public sealed class IntegrationExecutionStoreTests
         await using var context = fixture.CreateContext();
         var store = new IntegrationExecutionStore(context);
 
-        var running = NewAccept(seed) with { ReceivedAtUtc = 3_000 };
-        var stillAccepted = NewAccept(seed) with { ReceivedAtUtc = 2_000 };
-        var oldest = NewAccept(seed) with { ReceivedAtUtc = 1_000 };
-        foreach (var accept in new[] { running, stillAccepted, oldest })
+        var running = NewAccept(seed) with
+        {
+            ReceivedAtUtc = 3_000
+        };
+        var stillAccepted = NewAccept(seed) with
+        {
+            ReceivedAtUtc = 2_000
+        };
+        var oldest = NewAccept(seed) with
+        {
+            ReceivedAtUtc = 1_000
+        };
+        foreach (var accept in new[]
+                 {
+                     running,
+                     stillAccepted,
+                     oldest
+                 })
         {
             AssertEx.True(await store.AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 8).ConfigureAwait(false));
         }
 
         AssertEx.True(await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(running.ExecutionId,
-                          ExpectedVersion: 0,
-                          Accepted,
-                          IntegrationExecutionStatus.Running))
-                      .ConfigureAwait(false));
+                                     ExpectedVersion: 0,
+                                     Accepted,
+                                     IntegrationExecutionStatus.Running))
+                                 .ConfigureAwait(false));
 
         var bothStatuses = new HashSet<IntegrationExecutionStatus>
         {
@@ -767,8 +846,7 @@ public sealed class IntegrationExecutionStoreTests
         var mine = IntegrationTestFixture.Session(seed.TriggerId, seed.PrincipalId);
         var other = IntegrationTestFixture.Session(seed.TriggerId, seed.PrincipalId);
         context.IntegrationSessions.AddRange(mine, other);
-        context.IntegrationExecutions.AddRange(
-            IntegrationTestFixture.Execution(seed.TriggerId, mine.Id, seed.PrincipalId, status: IntegrationExecutionStatus.Accepted),
+        context.IntegrationExecutions.AddRange(IntegrationTestFixture.Execution(seed.TriggerId, mine.Id, seed.PrincipalId, status: IntegrationExecutionStatus.Accepted),
             IntegrationTestFixture.Execution(seed.TriggerId, mine.Id, seed.PrincipalId, status: IntegrationExecutionStatus.Queued),
             IntegrationTestFixture.Execution(seed.TriggerId, mine.Id, seed.PrincipalId, status: IntegrationExecutionStatus.Running),
             IntegrationTestFixture.Execution(seed.TriggerId, mine.Id, seed.PrincipalId, status: IntegrationExecutionStatus.Completed),

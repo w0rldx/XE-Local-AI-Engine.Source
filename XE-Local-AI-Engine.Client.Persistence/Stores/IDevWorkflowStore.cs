@@ -551,7 +551,8 @@ public sealed record TransitionDevWorkflowNodeRunCommand(
 ///     attempt at a time is how a run overspends its budget by the width of its graph. <see langword="null" /> means no
 ///     budget applies.
 /// </param>
-public sealed record RouteDevWorkflowRetryCommand(AppendDevWorkflowEventCommand Route,
+public sealed record RouteDevWorkflowRetryCommand(
+    AppendDevWorkflowEventCommand Route,
     IReadOnlyList<TransitionDevWorkflowNodeRunCommand> Resets,
     int? MaxTotalAttempts = null);
 

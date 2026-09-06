@@ -378,7 +378,8 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<AllowedToolDto> GetIntegrationOutputOffer() => [_emitOutputOfferDto];
+    public IReadOnlyList<AllowedToolDto> GetIntegrationOutputOffer() =>
+        [_emitOutputOfferDto];
 
     public IReadOnlyList<AllowedToolDto> GetOfferedToolsForProfile(string? activeModelId, bool isCloudModel = false)
     {

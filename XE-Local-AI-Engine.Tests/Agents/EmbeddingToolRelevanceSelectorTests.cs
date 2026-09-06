@@ -107,11 +107,11 @@ public sealed class EmbeddingToolRelevanceSelectorTests
         var (selector, _) = BuildSelector(provider);
         var candidates = SampleCandidates();
         var edited = candidates.Select(static candidate => candidate.Name == "deploy_production_build"
-                                           ? candidate with
-                                           {
-                                               Description = "an entirely different description"
-                                           }
-                                           : candidate)
+                                   ? candidate with
+                                   {
+                                       Description = "an entirely different description"
+                                   }
+                                   : candidate)
                                .ToList();
 
         _ = await selector.SelectAsync(Query, candidates, Threshold, CancellationToken.None);
@@ -296,7 +296,13 @@ public sealed class EmbeddingToolRelevanceSelectorTests
         // The guard that matters most: without it a mid-run dimension change reaches TensorPrimitives.CosineSimilarity
         // as an ArgumentException, which is OUTSIDE this selector's catch set — so the turn would lose the filter
         // entirely at the hop's own catch instead of degrading to lexical here.
-        await AssertDegenerateVectorsFallToIndexOrderAsync(static _ => new float[] { 1f, 0f, 0f, 0f });
+        await AssertDegenerateVectorsFallToIndexOrderAsync(static _ => new float[]
+        {
+            1f,
+            0f,
+            0f,
+            0f
+        });
     }
 
     [Test]
@@ -316,11 +322,11 @@ public sealed class EmbeddingToolRelevanceSelectorTests
         var (selector, logger) = BuildSelector(provider);
         var candidates = SampleCandidates()
                          .Select(static candidate => candidate.Name == "deploy_production_build"
-                                     ? candidate with
-                                     {
-                                         Description = null
-                                     }
-                                     : candidate)
+                             ? candidate with
+                             {
+                                 Description = null
+                             }
+                             : candidate)
                          .ToList();
 
         var selection = await selector.SelectAsync(Query, candidates, Threshold, CancellationToken.None);
@@ -343,8 +349,7 @@ public sealed class EmbeddingToolRelevanceSelectorTests
 
         var selection = await selector.SelectAsync(Query, candidates, Threshold, CancellationToken.None);
 
-        AssertEx.True(
-            selection.OfferedNames.SequenceEqual(["core_tool", "deploy_production_build", "summarise_notes", "incident_runbook", "weather_forecast", "cooking_recipe"],
+        AssertEx.True(selection.OfferedNames.SequenceEqual(["core_tool", "deploy_production_build", "summarise_notes", "incident_runbook", "weather_forecast", "cooking_recipe"],
                 StringComparer.Ordinal),
             "A tie across every candidate resolves to the deterministic candidate order.");
         AssertEx.True(selection.HiddenNames.SequenceEqual(["translate_text", "play_music"], StringComparer.Ordinal));
@@ -370,8 +375,7 @@ public sealed class EmbeddingToolRelevanceSelectorTests
         }));
     }
 
-    private static (EmbeddingToolRelevanceSelector Selector, RecordingLogger<EmbeddingToolRelevanceSelector> Logger) BuildSelector(
-        FakeEmbeddingProvider provider,
+    private static (EmbeddingToolRelevanceSelector Selector, RecordingLogger<EmbeddingToolRelevanceSelector> Logger) BuildSelector(FakeEmbeddingProvider provider,
         string? embeddingModel = EmbeddingModel,
         string embeddingProviderName = FakeEmbeddingProvider.ProviderKey,
         TimeSpan? embeddingTimeout = null)

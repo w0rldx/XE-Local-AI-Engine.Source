@@ -135,7 +135,7 @@ public sealed class DevWorkflowRetryPolicyTests
         _ = store.TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static command => command.IncrementAttempt), Arg.Any<CancellationToken>())
                  .Returns<DevWorkflowMutationResult>(_ =>
                      throw new DevWorkflowRetryBudgetExceededException("This run has already spent or promised 50 re-attempts, which is as many "
-                                                                    + "re-attempts as this run allows, so it cannot be retried again."));
+                                                                       + "re-attempts as this run allows, so it cannot be retried again."));
         _ = store.TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static command => !command.IncrementAttempt), Arg.Any<CancellationToken>())
                  .Returns(new DevWorkflowMutationResult(RunId, Sequence: 7, Version: 3, DevWorkflowRunStatus.Running, GraphRevision: 0));
 
@@ -163,7 +163,7 @@ public sealed class DevWorkflowRetryPolicyTests
         _ = store.RouteRetryAsync(Arg.Any<RouteDevWorkflowRetryCommand>(), Arg.Any<CancellationToken>())
                  .Returns<DevWorkflowMutationResult>(_ =>
                      throw new DevWorkflowRetryBudgetExceededException("This run has already spent or promised 50 re-attempts, which is as many "
-                                                                    + "re-attempts as this run allows, so it cannot be retried again."));
+                                                                       + "re-attempts as this run allows, so it cannot be retried again."));
         _ = store.TransitionNodeRunAsync(Arg.Any<TransitionDevWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>())
                  .Returns(new DevWorkflowMutationResult(RunId, Sequence: 7, Version: 3, DevWorkflowRunStatus.Running, GraphRevision: 0));
 
@@ -205,7 +205,7 @@ public sealed class DevWorkflowRetryPolicyTests
                      if (slots == 0)
                      {
                          throw new DevWorkflowRetryBudgetExceededException("This run has already spent or promised 1 re-attempts, which is as many "
-                                                                        + "re-attempts as this run allows, so it cannot be retried again.");
+                                                                           + "re-attempts as this run allows, so it cannot be retried again.");
                      }
 
                      slots--;
@@ -242,9 +242,10 @@ public sealed class DevWorkflowRetryPolicyTests
                  .Returns<DevWorkflowMutationResult>(_ =>
                      throw new DevWorkflowInvalidTransitionException("Node run 'implement' is Succeeded and cannot move to Pending."));
 
-        var thrown = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(
-                                       () => SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running)))
-                                   .ConfigureAwait(false);
+        var thrown = await AssertEx
+                           .ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
+                               SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running)))
+                           .ConfigureAwait(false);
 
         AssertEx.False(thrown is DevWorkflowRetryBudgetExceededException, "An illegal move is not an accounting refusal.");
         AssertEx.Empty(Transitioned(store).Where(static command => command.TargetStatus == DevWorkflowNodeRunStatus.Blocked),

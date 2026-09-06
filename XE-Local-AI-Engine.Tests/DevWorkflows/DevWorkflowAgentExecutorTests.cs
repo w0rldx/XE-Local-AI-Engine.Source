@@ -1715,15 +1715,21 @@ public sealed class DevWorkflowAgentExecutorTests
 
     /// <summary>The four state tools as the offer really carries them: write/execute, and on every agent node.</summary>
     private static List<AllowedToolDto> SessionRowOffer() =>
-        [
-            .. new[] { "update_work_plan", "record_finding", "save_artifact", "complete_work_session" }.Select(static name => new AllowedToolDto
-            {
-                Id = Guid.NewGuid(),
-                Name = name,
-                Location = ToolLocation.ClientLocal,
-                Category = ToolCategory.WriteExecute
-            })
-        ];
+    [
+        .. new[]
+        {
+            "update_work_plan",
+            "record_finding",
+            "save_artifact",
+            "complete_work_session"
+        }.Select(static name => new AllowedToolDto
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Location = ToolLocation.ClientLocal,
+            Category = ToolCategory.WriteExecute
+        })
+    ];
 
     /// <summary>
     ///     FU2-3: what the operator typed when they retried the node reaches the objective the retried attempt runs on,

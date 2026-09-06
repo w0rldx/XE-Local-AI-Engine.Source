@@ -4,7 +4,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Tests.Endpoints.Integrations.V1;
@@ -192,7 +191,13 @@ public sealed class IntegrationApiRouteTests
             (HttpMethod.Post, IntegrationApiRoutes.Cancel(seeded.ExecutionUnderB)),
             (HttpMethod.Get, IntegrationApiRoutes.Session(seeded.SessionUnderB))
         };
-        var credentials = new[] { null, "xeint_notarealkey", seeded.NarrowKey, seeded.ForeignKey };
+        var credentials = new[]
+        {
+            null,
+            "xeint_notarealkey",
+            seeded.NarrowKey,
+            seeded.ForeignKey
+        };
 
         foreach (var (method, route) in routes)
         {
@@ -249,7 +254,12 @@ public sealed class IntegrationApiRouteTests
                 sessionId,
                 principalId,
                 Guid.NewGuid(),
-                new byte[] { 1, 2, 3 },
+                new byte[]
+                {
+                    1,
+                    2,
+                    3
+                },
                 keyPrefix,
                 DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 new IntegrationEventAppend(Guid.NewGuid(),
@@ -282,7 +292,8 @@ public sealed class IntegrationApiRouteTests
         return await client.SendAsync(request);
     }
 
-    private sealed record Seeded(string TriggerBName,
+    private sealed record Seeded(
+        string TriggerBName,
         Guid ExecutionUnderB,
         Guid SessionUnderB,
         string BroadKey,
@@ -290,7 +301,8 @@ public sealed class IntegrationApiRouteTests
         string ForeignKey,
         Guid BroadKeyId);
 
-    private sealed record StatusBody(Guid ExecutionId,
+    private sealed record StatusBody(
+        Guid ExecutionId,
         Guid SessionId,
         string Status,
         string? FailureCategory,

@@ -67,7 +67,10 @@ public sealed class IntegrationTriggerStoreTests
         // False rather than an exception: the caller maps it to 409, and a store that threw would make every admin PUT
         // a try/catch.
         AssertEx.False(await store.UpdateAsync(update).ConfigureAwait(false), "Replaying a spent version must lose.");
-        AssertEx.False(await store.UpdateAsync(update with { TriggerId = Guid.NewGuid() }).ConfigureAwait(false));
+        AssertEx.False(await store.UpdateAsync(update with
+        {
+            TriggerId = Guid.NewGuid()
+        }).ConfigureAwait(false));
 
         var read = AssertEx.NotNull(await store.GetByIdAsync(created.Id).ConfigureAwait(false));
         AssertEx.Equal("Renamed label", read.DisplayName);
@@ -109,6 +112,7 @@ public sealed class IntegrationTriggerStoreTests
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
-        public override DateTimeOffset GetUtcNow() => now;
+        public override DateTimeOffset GetUtcNow() =>
+            now;
     }
 }
