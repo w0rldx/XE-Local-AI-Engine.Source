@@ -26867,6 +26867,10 @@
             "type": "boolean",
             "nullable": true
           },
+          "toolRelevanceEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
           "toolCapableModels": {
             "type": "array",
             "nullable": true,
@@ -27135,6 +27139,10 @@
             "nullable": true
           },
           "customToolsEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "toolRelevanceEnabled": {
             "type": "boolean",
             "nullable": true
           },
@@ -27511,6 +27519,31 @@
           },
           "peakProcessRamBytes": {
             "type": "integer",
+            "nullable": true
+          },
+          "contextTokensHighWatermark": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "speculativeDraftTokens": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "speculativeAcceptedTokens": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "speculativeVerificationSteps": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "speculativeAcceptanceRate": {
+            "type": "number",
+            "format": "double",
             "nullable": true
           },
           "externalPressureDetected": {
@@ -28090,6 +28123,11 @@
           },
           "role": {
             "type": "string",
+            "nullable": true
+          },
+          "contextTokens": {
+            "type": "integer",
+            "format": "int32",
             "nullable": true
           }
         }

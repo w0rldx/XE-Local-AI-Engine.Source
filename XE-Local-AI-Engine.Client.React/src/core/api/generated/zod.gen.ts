@@ -1718,6 +1718,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 	defaultModelName: z.string().nullish(),
 	enableTools: z.boolean().nullish(),
 	customToolsEnabled: z.boolean().nullish(),
+	toolRelevanceEnabled: z.boolean().nullish(),
 	toolCapableModels: z.array(z.string()).nullish(),
 	ollamaEndpoint: z.string().nullish(),
 	huggingFaceDefaultQuant: z.string().nullish(),
@@ -1920,6 +1921,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 	defaultModelName: z.string().nullish(),
 	enableTools: z.boolean().nullish(),
 	customToolsEnabled: z.boolean().nullish(),
+	toolRelevanceEnabled: z.boolean().nullish(),
 	toolCapableModels: z.array(z.string()).nullish(),
 	ollamaEndpoint: z.string().nullish(),
 	huggingFaceDefaultQuant: z.string().nullish(),
@@ -2073,6 +2075,11 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsD
 	minimumGlobalFreeVramBytes: z.int().nullish(),
 	minimumProcessBudgetVramBytes: z.int().nullish(),
 	peakProcessRamBytes: z.int().nullish(),
+	contextTokensHighWatermark: z.number().nullish(),
+	speculativeDraftTokens: z.number().nullish(),
+	speculativeAcceptedTokens: z.number().nullish(),
+	speculativeVerificationSteps: z.number().nullish(),
+	speculativeAcceptanceRate: z.number().nullish(),
 	externalPressureDetected: z.boolean(),
 	runs: z
 		.int()
@@ -2262,6 +2269,11 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResp
 export const zXeLocalAiEngineClientEndpointsModelFitV1ExploreInferenceProfileRequest = z.object({
 	modelName: z.string(),
 	role: z.string().nullish(),
+	contextTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1FreezeInferenceProfileRequest = z.object({
