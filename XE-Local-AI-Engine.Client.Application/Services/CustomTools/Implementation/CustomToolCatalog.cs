@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.CustomTools.Implementation;
 
+using System.Collections.ObjectModel;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
@@ -11,8 +12,9 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Live-reading implementation of <see cref="ICustomToolCatalog" />. Reads the enabled, acknowledged custom tools
-///     from the node store on every call and builds each one's executable through the SAME wrapper stack the built-in
-///     and MCP tools use — arg-repair (strict, the schema fully enumerates inputs) under a result budget under a forced
+///     from the node store on every call — once per call, however many names one resolution requests — and builds each
+///     one's executable through the SAME wrapper stack the built-in and MCP tools use — arg-repair (strict, the schema
+///     fully enumerates inputs) under a result budget under a forced
 ///     <see cref="ApprovalRequiredAIFunction" />. The approval wrap is unconditional: it does not read a stored flag, so
 ///     no per-agent override can strip it and the sub-agent/scheduler filter always sees a gated tool.
 ///     <para>
@@ -78,38 +80,57 @@ internal sealed class CustomToolCatalog : ICustomToolCatalog
         return descriptors;
     }
 
-    public async Task<AITool?> TryResolveAsync(string name, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyDictionary<string, AITool>> TryResolveManyAsync(IReadOnlyCollection<string> names,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(names);
+
+        // Nothing requested: the caller already skips the call when an offer carries no custom name, so this is belt and
+        // braces — and it must cost neither a settings read nor a store read.
+        if (names.Count == 0)
+        {
+            return ReadOnlyDictionary<string, AITool>.Empty;
+        }
 
         // Belt-and-suspenders node kill-switch. When custom tools are disabled at the node level, refuse to resolve one
         // even if a stale offer somehow reached the resolver. The offer merge already withholds custom tools when off, so
-        // this is the second, execution-time gate.
+        // this is the second, execution-time gate. ONE check for the whole resolution instead of one per name.
         if (!await _runtimeSettings.GetCustomToolsEnabledAsync(cancellationToken).ConfigureAwait(false))
         {
-            return null;
+            return ReadOnlyDictionary<string, AITool>.Empty;
         }
 
+        var requested = new HashSet<string>(names, StringComparer.Ordinal);
+
+        // THE one read for the whole resolution operation, whatever the offer's custom-name count. Still a live read per
+        // operation — the batch bounds the reads inside one resolution and is not a cache across resolutions.
         var tools = await ListToolsAsync(cancellationToken).ConfigureAwait(false);
-        var tool = tools.FirstOrDefault(candidate => IsOfferable(candidate)
-                                                     && string.Equals(candidate.Name, name, StringComparison.Ordinal));
-        if (tool is null)
+
+        var resolved = new Dictionary<string, AITool>(StringComparer.Ordinal);
+        var claimed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var tool in tools)
         {
-            return null;
+            // claimed.Add carries the old FirstOrDefault(IsOfferable && name ==) semantic: the first offerable record for
+            // a name owns it in store order, so a later duplicate is never tried even when this one then fails its
+            // executor or schema check.
+            if (!requested.Contains(tool.Name) || !IsOfferable(tool) || !claimed.Add(tool.Name))
+            {
+                continue;
+            }
+
+            if (!_executors.TryGetValue(tool.Kind, out var executor))
+            {
+                _logger.LogWarning("Custom tool {ToolName} has no executor for kind {Kind}.", tool.Name, tool.Kind);
+                continue;
+            }
+
+            if (TryBuildSchema(tool, out var schema))
+            {
+                resolved[tool.Name] = BuildExecutable(tool, schema, executor);
+            }
         }
 
-        if (!_executors.TryGetValue(tool.Kind, out var executor))
-        {
-            _logger.LogWarning("Custom tool {ToolName} has no executor for kind {Kind}.", tool.Name, tool.Kind);
-            return null;
-        }
-
-        if (!TryBuildSchema(tool, out var schema))
-        {
-            return null;
-        }
-
-        return BuildExecutable(tool, schema, executor);
+        return resolved;
     }
 
     // Only an enabled AND server-acknowledged tool is ever offered or resolved — a disabled tool stays authored but dark,

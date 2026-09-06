@@ -1620,11 +1620,25 @@ public sealed class SubAgentSpawnServiceTests
             return Task.FromResult<IReadOnlyList<LocalChatToolDescriptor>>([]);
         }
 
-        public Task<AITool?> TryResolveAsync(string name, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyDictionary<string, AITool>> TryResolveManyAsync(IReadOnlyCollection<string> names,
+            CancellationToken cancellationToken = default)
         {
+            ArgumentNullException.ThrowIfNull(names);
             cancellationToken.ThrowIfCancellationRequested();
-            _calls[name] = ResolveCallCount(name) + 1;
-            return Task.FromResult(_tools.GetValueOrDefault(name));
+
+            // One batch call now covers every requested name, so the per-name counter is incremented once per REQUESTED
+            // name. ResolveCallCount(name) therefore keeps meaning "how many times was this name put to the catalog".
+            var resolved = new Dictionary<string, AITool>(StringComparer.Ordinal);
+            foreach (var name in names)
+            {
+                _calls[name] = ResolveCallCount(name) + 1;
+                if (_tools.TryGetValue(name, out var tool))
+                {
+                    resolved[name] = tool;
+                }
+            }
+
+            return Task.FromResult<IReadOnlyDictionary<string, AITool>>(resolved);
         }
 
         public void Set(string name, AITool tool)

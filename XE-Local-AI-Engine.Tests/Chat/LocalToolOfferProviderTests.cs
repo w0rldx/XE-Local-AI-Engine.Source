@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using System.Collections.ObjectModel;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -696,9 +697,10 @@ public sealed class LocalToolOfferProviderTests
             return Task.FromResult(descriptors);
         }
 
-        public Task<AITool?> TryResolveAsync(string name, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyDictionary<string, AITool>> TryResolveManyAsync(IReadOnlyCollection<string> names,
+            CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<AITool?>(null);
+            return Task.FromResult<IReadOnlyDictionary<string, AITool>>(ReadOnlyDictionary<string, AITool>.Empty);
         }
     }
 

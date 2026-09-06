@@ -6,6 +6,7 @@
 #pragma warning disable MEAI001 // ApprovalRequiredAIFunction is [Experimental]; adopted deliberately for the tool approval gate.
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation.Orchestration;
 
+using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -549,9 +550,10 @@ public sealed class OrchestrationAgentFactoryTests
             return Task.FromResult<IReadOnlyList<LocalChatToolDescriptor>>([]);
         }
 
-        public Task<AITool?> TryResolveAsync(string name, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyDictionary<string, AITool>> TryResolveManyAsync(IReadOnlyCollection<string> names,
+            CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<AITool?>(null);
+            return Task.FromResult<IReadOnlyDictionary<string, AITool>>(ReadOnlyDictionary<string, AITool>.Empty);
         }
     }
 

@@ -169,6 +169,66 @@ public sealed class InvocationToolResolverTests
         AssertEx.Equal(expected: 0, resolved.Count, "an unresolved custom offer must be dropped, not fabricated");
     }
 
+    [Test]
+    public async Task ResolveAsync_WithSeveralDistinctCustomNames_QueriesTheCatalogOnce()
+    {
+        // O1: k distinct custom__ names cost ONE catalog round trip, not k. The catalog reads the whole library once
+        // behind this seam, so batching here is what collapses a turn's store reads from k + 1 down to 2.
+        var catalog = new FakeCustomToolCatalog(("custom__weather", Wrapped("custom__weather")),
+            ("custom__stocks", Wrapped("custom__stocks")),
+            ("custom__notes", Wrapped("custom__notes")));
+        var offered = new[]
+        {
+            InvocationToolBridge.CreateOfferPlaceholder("custom__weather", requiresApproval: true),
+            InvocationToolBridge.CreateOfferPlaceholder("custom__stocks", requiresApproval: true),
+            InvocationToolBridge.CreateOfferPlaceholder("custom__notes", requiresApproval: true)
+        };
+
+        var resolved = await InvocationToolResolver.ResolveAsync(offered,
+            new FakeToolRegistry(),
+            new FakeClientLocalToolRegistry(),
+            new FakeMcpToolRegistry(),
+            catalog,
+            NullLogger.Instance);
+
+        AssertEx.Equal(expected: 1, catalog.BatchCallCount, "three offered custom names must cost exactly one catalog call");
+        AssertEx.Equal(expected: 3, catalog.LastRequestedNames.Count, "the single call must carry every distinct custom name");
+        AssertEx.Contains(catalog.LastRequestedNames, "custom__weather");
+        AssertEx.Contains(catalog.LastRequestedNames, "custom__stocks");
+        AssertEx.Contains(catalog.LastRequestedNames, "custom__notes");
+        AssertEx.Equal(expected: 3, resolved.Count, "every batched custom name must still resolve to an executable");
+    }
+
+    [Test]
+    public async Task ResolveAsync_WithNoCustomNames_NeverCallsTheCatalog()
+    {
+        // The custom__ prefix filter is what keeps an ordinary offer off the custom-tool store entirely: with no custom
+        // name in the offer the resolver must not open a batch call at all, so the common path pays no read.
+        var catalog = new FakeCustomToolCatalog();
+        var clientLocal = new FakeClientLocalToolRegistry(AIFunctionFactory.Create((string input) => input, "read_file"));
+        var offered = new[]
+        {
+            InvocationToolBridge.CreateOfferPlaceholder("read_file", requiresApproval: false)
+        };
+
+        var resolved = await InvocationToolResolver.ResolveAsync(offered,
+            new FakeToolRegistry(),
+            clientLocal,
+            new FakeMcpToolRegistry(),
+            catalog,
+            NullLogger.Instance);
+
+        AssertEx.Equal(expected: 0, catalog.BatchCallCount, "an offer with no custom__ name must never reach the catalog");
+        AssertEx.Equal(expected: 1, resolved.Count, "the non-custom offer must still resolve normally");
+    }
+
+    // The catalog's contract is that it hands back executables ALREADY wrapped in ApprovalRequiredAIFunction, so the
+    // fakes above must hand back the same shape production does.
+    private static AITool Wrapped(string name)
+    {
+        return new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string input) => input, name));
+    }
+
     private static IList<AITool> Resolve(IReadOnlyList<AITool> offered,
         FakeToolRegistry? toolRegistry = null,
         FakeClientLocalToolRegistry? clientLocalToolRegistry = null,
@@ -256,14 +316,34 @@ public sealed class InvocationToolResolverTests
             }
         }
 
+        /// <summary>How many batch round trips the resolver made — one per resolution, or zero when nothing is custom.</summary>
+        public int BatchCallCount { get; private set; }
+
+        /// <summary>The names the last batch call carried, so a test can prove they all travelled in one call.</summary>
+        public IReadOnlyList<string> LastRequestedNames { get; private set; } = [];
+
         public Task<IReadOnlyList<LocalChatToolDescriptor>> GetDescriptorsAsync(CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IReadOnlyList<LocalChatToolDescriptor>>([]);
         }
 
-        public Task<AITool?> TryResolveAsync(string name, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyDictionary<string, AITool>> TryResolveManyAsync(IReadOnlyCollection<string> names,
+            CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(_tools.TryGetValue(name, out var tool) ? tool : null);
+            ArgumentNullException.ThrowIfNull(names);
+            BatchCallCount++;
+            LastRequestedNames = [.. names];
+
+            var resolved = new Dictionary<string, AITool>(StringComparer.Ordinal);
+            foreach (var name in names)
+            {
+                if (_tools.TryGetValue(name, out var tool))
+                {
+                    resolved[name] = tool;
+                }
+            }
+
+            return Task.FromResult<IReadOnlyDictionary<string, AITool>>(resolved);
         }
     }
 }
