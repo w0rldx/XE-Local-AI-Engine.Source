@@ -109,6 +109,12 @@ public interface INodeRuntimeSettings
     /// </summary>
     Task<bool> GetCustomToolsEnabledAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Whether the per-turn tool-relevance offer may engage at all (stored &gt; off). Read per turn, so a save
+    ///     applies to the next turn without a restart. A per-agent opt-out still wins over this.
+    /// </summary>
+    Task<bool> GetToolRelevanceEnabledAsync(CancellationToken cancellationToken = default);
+
     // Synchronous twins for the composition/startup path (DI factory seeds + singleton constructors) and for
     // request-time call sites that are structurally synchronous. These read the stored settings synchronously to avoid
     // blocking on async file I/O during host startup, which starves the thread pool.

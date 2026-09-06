@@ -97,6 +97,13 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         return stored.CustomToolsEnabled ?? StoredNodeSettings.DefaultCustomToolsEnabled;
     }
 
+    public async Task<bool> GetToolRelevanceEnabledAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        // No appsettings seed: nothing sets Agent:ToolRelevance:Enabled, so the fallback IS the hardcoded off.
+        return stored.ToolRelevanceEnabled ?? StoredNodeSettings.DefaultToolRelevanceEnabled;
+    }
+
     public async Task<IReadOnlyList<string>> GetToolCapableModelsAsync(CancellationToken cancellationToken = default) =>
         ResolveToolCapableModels(await LoadAsync(cancellationToken).ConfigureAwait(false));
 

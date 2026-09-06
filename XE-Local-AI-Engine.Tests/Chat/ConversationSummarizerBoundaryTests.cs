@@ -198,6 +198,100 @@ public sealed class ConversationSummarizerBoundaryTests
             "A native-reasoning model must never be sent enable_thinking=false — the harmony template has no such kwarg.");
     }
 
+    [Test]
+    public async Task FoldAsync_WhenABatchContainsHanCharacters_SerializesThemWithoutEscaping()
+    {
+        // ConversationSummarizer.RequestFitsBudget measures the SERIALIZED request, so the JSON encoder decides what a
+        // Han character costs. The default encoder writes every non-ASCII rune as \uXXXX - six budget characters each -
+        // which makes a CJK running summary unaffordable now that the synopsis language is pinned to the conversation's.
+        const string han = "\u672c\u5730\u63a8\u7406\u8282\u70b9\u76d1\u7763 llama-server \u5b50\u8fdb\u7a0b";
+        using var client = new CapturingChatClient();
+        var summarizer = CreateSummarizer(client, requestBudget: 6000, maxSummaryChars: 300);
+
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
+            [new ConversationSummarizerMessage("user", han)],
+            "model")).ConfigureAwait(false);
+
+        AssertEx.NotNull(result);
+        AssertEx.NotEmpty(client.Requests);
+        var sent = client.Requests[0].Single(static message => message.Role == ChatRole.User).Text;
+        AssertEx.Contains(sent, han, StringComparison.Ordinal,
+            "A Han batch must reach the model as raw UTF-16, not as escapes that cost six budget characters per character.");
+        AssertEx.False(sent.Contains("\\u", StringComparison.Ordinal),
+            "A BMP rune escaped to \\uXXXX is what inflates the serialized budget cost; no fold request may carry one.");
+    }
+
+    [Test]
+    public async Task FoldAsync_SendsTheFidelityAndLanguageRulesInTheSystemPrompt()
+    {
+        using var client = new CapturingChatClient();
+        var summarizer = CreateSummarizer(client, requestBudget: 6000, maxSummaryChars: 300);
+
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
+            [new ConversationSummarizerMessage("user", "the node supervises llama-server")],
+            "model")).ConfigureAwait(false);
+
+        AssertEx.NotNull(result);
+        AssertEx.NotEmpty(client.Requests);
+        var systemPrompt = client.Requests[0].Single(static message => message.Role == ChatRole.System).Text;
+        AssertEx.Contains(systemPrompt, "from \"priorSummary\" and \"messages\"", StringComparison.Ordinal,
+            "The fidelity rule must bind the new messages too: fold 0 has no prior summary, so a priorSummary-only "
+            + "rule could not make an early fact survive its own fold.");
+        AssertEx.Contains(systemPrompt, "written as compressed notes", StringComparison.Ordinal,
+            "Fidelity without a compression demand is what drove the model to near-transcription, filling the cap "
+            + "within a few folds so the clamp cut the tail off every fold after.");
+        AssertEx.Contains(systemPrompt, "in the conversation's language", StringComparison.Ordinal,
+            "Nothing else in the pipeline detects or sets the synopsis language; the prompt is the only pin.");
+    }
+
+    [Test]
+    public async Task SummarizeAsync_WhenAHanBatchFitsOnlyUnderRelaxedEscaping_SendsItAsOneRequest()
+    {
+        // 200 Han characters, at this test's maxSummaryChars of 300 (so the prompt renders "under 150 characters" and
+        // is 1,399 chars, one shorter than the 1,400 of the 4,000-cap rendering). RequestFitsBudget charges the prompt
+        // plus the SERIALIZED request: a 63-char JSON frame plus the content. Relaxed, that is 1,399 + 63 + 200 =
+        // 1,662, which fits the 2,000 budget; under the default encoder each Han rune becomes a 6-char \uXXXX escape,
+        // so the same batch is 1,399 + 63 + 1,200 = 2,662 and does not, and one short message would be fragmented.
+        // The 63 here is this request's own frame, NOT the FrameOverhead constant: that one probes with an emoji, whose
+        // supplementary scalar the relaxed encoder still writes as two escapes, and it is charged only by
+        // GetMinimumRequestBudget. This pins that RequestFitsBudget measures the relaxed form the request carries.
+        const int requestBudget = 2000;
+        var content = new string('中', 200);
+        using var client = new CapturingChatClient();
+        var summarizer = CreateSummarizer(client, requestBudget, maxSummaryChars: 300);
+
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
+            [new ConversationSummarizerMessage("user", content)],
+            "model")).ConfigureAwait(false);
+
+        AssertEx.NotNull(result);
+        AssertEx.Equal(expected: 1, client.Requests.Count,
+            "A Han batch that fits the budget under relaxed escaping must be folded in a single pass, not fragmented.");
+        AssertEx.Equal(content, string.Concat(client.Requests.SelectMany(static request => PromptContents(request))));
+    }
+
+    [Test]
+    [Arguments(4000, "under 2000 characters")]
+    [Arguments(1000, "under 500 characters")]
+    public async Task SystemPrompt_StatesTheCeilingDerivedFromTheConfiguredCap(int maxSummaryChars, string expectedCeiling)
+    {
+        using var client = new CapturingChatClient();
+        var summarizer = CreateSummarizer(client, requestBudget: 6000, maxSummaryChars);
+
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
+            [new ConversationSummarizerMessage("user", "the node supervises llama-server")],
+            "model")).ConfigureAwait(false);
+
+        AssertEx.NotNull(result);
+        AssertEx.NotEmpty(client.Requests);
+        var systemPrompt = client.Requests[0].Single(static message => message.Role == ChatRole.System).Text;
+        AssertEx.Contains(systemPrompt, expectedCeiling, StringComparison.Ordinal,
+            "The stated ceiling must track the configured cap at half of it; a ceiling near the cap invites a synopsis "
+            + "the clamp then tail-cuts on every later fold.");
+        AssertEx.Equal(ConversationSummarizer.RenderSystemPrompt(maxSummaryChars).Length, systemPrompt.Length,
+            "Sending and budget validation must charge one rendering; a drift between them invalidates every budget decision.");
+    }
+
     private static ConversationSummarizer CreateSummarizer(CapturingChatClient client, int requestBudget, int maxSummaryChars)
     {
         var provider = Substitute.For<ILocalModelProvider>();

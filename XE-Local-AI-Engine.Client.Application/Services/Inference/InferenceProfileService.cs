@@ -95,7 +95,13 @@ public sealed class InferenceProfileService : IInferenceProfileService
     }
 
     /// <inheritdoc />
-    public async Task<ExploreResult> ExploreAsync(string modelName, ModelRole role, CancellationToken ct)
+    public Task<ExploreResult> ExploreAsync(string modelName, ModelRole role, CancellationToken ct)
+    {
+        return ExploreAsync(modelName, role, contextTokens: null, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<ExploreResult> ExploreAsync(string modelName, ModelRole role, int? contextTokens, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 
@@ -109,6 +115,16 @@ public sealed class InferenceProfileService : IInferenceProfileService
         var machineKey = await _machineKeyProvider.GetMachineKeyAsync(ct).ConfigureAwait(false);
         var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
         var backend = InferenceBackends.FromVariant(variant);
+
+        // GPU-only by construction: SpawnCoreAsync runs llama-fit-params only for a non-CPU variant, so a CPU explore
+        // returns a null draft and BuildExploreInputAsync falls back to the GGUF context length — the requested window
+        // would silently vanish from the profile. Refusing beats recording a number nobody asked for.
+        if (contextTokens is not null && variant == GpuVariant.Cpu)
+        {
+            return ExploreResult.Fail(
+                "A context-tokens override is supported on GPU variants only; llama-fit-params does not run on the CPU backend, so the requested window could not be recorded in the profile.");
+        }
+
         var installed = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
         var build = installed?.Tag is { } tag && !string.IsNullOrWhiteSpace(tag) ? tag : UnknownBuild;
         var metadata = await _ggufMetadataReader.ReadMetadataAsync(filePath, ct).ConfigureAwait(false);
@@ -118,7 +134,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
         {
             draft = await _supervisor.RunExclusiveProfilingAsync(modelName,
                 role,
-                ResolvedLaunchArguments.Explore(),
+                ResolvedLaunchArguments.Explore(contextTokens),
                 enableMetrics: false,
                 body: (context, _) => Task.FromResult(result: _fittedArgsParser.TryParseFittedArgs(context.FitParamsOutput,
                     context.StartupOutput,

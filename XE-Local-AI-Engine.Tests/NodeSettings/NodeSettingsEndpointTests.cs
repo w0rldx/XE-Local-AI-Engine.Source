@@ -207,6 +207,7 @@ public sealed class NodeSettingsEndpointTests
             MaxMessageRequestTimeoutSeconds = 300,
             EnableTools = false,
             CustomToolsEnabled = true,
+            ToolRelevanceEnabled = true,
             ToolCapableModels = ["qwen3:8b", "gemma3:12b"],
             OllamaEndpoint = "http://127.0.0.1:11500",
             HuggingFaceDefaultQuant = "Q5_K_M",
@@ -229,6 +230,7 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, getResponse.StatusCode);
         AssertEx.Equal(expected: false, settings.EnableTools);
         AssertEx.Equal(expected: true, settings.CustomToolsEnabled);
+        AssertEx.Equal(expected: true, settings.ToolRelevanceEnabled);
         AssertEx.Equal("http://127.0.0.1:11500", settings.OllamaEndpoint);
         AssertEx.Equal("Q5_K_M", settings.HuggingFaceDefaultQuant);
         AssertEx.Equal(expected: 5, settings.LlamaMaxLoadedProcesses);
@@ -257,7 +259,8 @@ public sealed class NodeSettingsEndpointTests
             OllamaEndpoint = "http://127.0.0.1:11434",
             KeepModelWarmEnabled = true,
             KeepModelWarmModelName = "keep-me-warm",
-            KeepModelWarmIntervalSeconds = 180
+            KeepModelWarmIntervalSeconds = 180,
+            ToolRelevanceEnabled = true
         };
         var nodeSettingsStore = NewSettingsStore(stored);
         await using var factory = CreateFactory(nodeSettingsStore);
@@ -277,7 +280,11 @@ public sealed class NodeSettingsEndpointTests
                 && Persisted(mutate, stored).OllamaEndpoint == "http://127.0.0.1:11434"
                 && Persisted(mutate, stored).KeepModelWarmEnabled == true
                 && Persisted(mutate, stored).KeepModelWarmModelName == "keep-me-warm"
-                && Persisted(mutate, stored).KeepModelWarmIntervalSeconds == 180),
+                && Persisted(mutate, stored).KeepModelWarmIntervalSeconds == 180
+                // A field missing from ToStoredSettings' hand-enumerated `new StoredNodeSettings { … }` is silently
+                // NULLed on EVERY put, and no reflection test guards that enumeration. A failure here is a data-loss
+                // bug, never a test to relax.
+                && Persisted(mutate, stored).ToolRelevanceEnabled == true),
             Arg.Any<CancellationToken>());
     }
 

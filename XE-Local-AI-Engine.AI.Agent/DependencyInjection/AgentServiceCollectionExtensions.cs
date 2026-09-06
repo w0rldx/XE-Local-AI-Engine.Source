@@ -76,8 +76,9 @@ public static class AgentServiceCollectionExtensions
                     .ValidateDataAnnotations()
                     .ValidateOnStart();
 
-        // Per-round tool-relevance offer. Off by default: with Enabled false the pipeline hop below is a
-        // reference-equality pass-through and list_tools is never appended, so the offer stays byte-identical.
+        // Per-round tool-relevance offer: thresholds and the embedding knobs only. Whether it engages at all is the
+        // node setting ToolRelevanceEnabled, read live per turn; off by default, in which case the pipeline hop below
+        // is a reference-equality pass-through and list_tools is never appended, so the offer stays byte-identical.
         _ = services.AddOptions<ToolRelevanceOptions>()
                     .Bind(configuration.GetSection(ToolRelevanceOptions.Section))
                     .ValidateDataAnnotations()

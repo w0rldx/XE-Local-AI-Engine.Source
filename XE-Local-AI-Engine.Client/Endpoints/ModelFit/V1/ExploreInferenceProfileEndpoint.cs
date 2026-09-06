@@ -9,7 +9,10 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 /// <summary>
 ///     FastEndpoints handler that explores a node-local GGUF model to draft its launch args (POST
 ///     model-fit/profiles/explore). Validates the model name (non-blank) and role
-///     (<c>chat|embedding|reranker</c>) before calling <see cref="IInferenceProfileService.ExploreAsync" />. A domain
+///     (<c>chat|embedding|reranker</c>) and the optional <c>contextTokens</c> override (a shape bound of 2048–1048576,
+///     read from <see cref="ExploreInferenceProfileRequest.MinExploreContextTokens" /> and
+///     <see cref="ExploreInferenceProfileRequest.MaxExploreContextTokens" />; the model's train ceiling is the
+///     resolver's job) before calling the service's explore overload. A domain
 ///     rejection — a cloud or missing model, or any
 ///     sanitized failure reason the service returns — is surfaced as a 400 via <c>AddError</c> + <c>Send.ErrorsAsync</c>,
 ///     not an exception. A SKIPPED result (the model was serving inference, so nothing ran and nothing was evicted) is
@@ -19,6 +22,11 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 public sealed class ExploreInferenceProfileEndpoint(IInferenceProfileService inferenceProfileService)
     : Endpoint<ExploreInferenceProfileRequest, InferenceProfileActionResponse>
 {
+    // The bounds live on the request DTO, next to the XML doc that publishes them, so the documented range and the
+    // range this endpoint enforces cannot drift apart. This check stays the enforcing path.
+    private const int MinExploreContextTokens = ExploreInferenceProfileRequest.MinExploreContextTokens;
+    private const int MaxExploreContextTokens = ExploreInferenceProfileRequest.MaxExploreContextTokens;
+
     private readonly IInferenceProfileService _inferenceProfileService = inferenceProfileService ?? throw new ArgumentNullException(nameof(inferenceProfileService));
 
     public override void Configure()
@@ -43,7 +51,14 @@ public sealed class ExploreInferenceProfileEndpoint(IInferenceProfileService inf
             return;
         }
 
-        var result = await _inferenceProfileService.ExploreAsync(req.ModelName.Trim(), role, ct).ConfigureAwait(false);
+        if (req.ContextTokens is { } contextTokens && contextTokens is < MinExploreContextTokens or > MaxExploreContextTokens)
+        {
+            AddError($"Context tokens must be between {MinExploreContextTokens} and {MaxExploreContextTokens}.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
+        var result = await _inferenceProfileService.ExploreAsync(req.ModelName.Trim(), role, req.ContextTokens, ct).ConfigureAwait(false);
 
         // A skip is not a failure: the model was busy, nothing was measured and nothing was evicted. It still returns
         // 400 (the response DTO carries no skip state), so the WORDING is what tells the operator to simply retry.

@@ -655,6 +655,146 @@ public sealed class InferenceProfileServiceTests
             LaunchPolicyFingerprint: profile.LaunchPolicyFingerprint);
     }
 
+    [Test]
+    public async Task Explore_WhenContextTokensSupplied_PassesOverrideToSupervisor()
+    {
+        var fixture = new ServiceFixture();
+        fixture.WithLocalModel();
+        fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 131072, ExpertCount: null, IsMoe: false));
+        fixture.WithExploreFitParamsOutput("-c 32768 -ngl 33");
+        fixture.EchoExploredUpsert();
+
+        var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, contextTokens: 32768, CancellationToken.None);
+
+        AssertEx.True(result.Success);
+        await fixture.Supervisor.Received(1)
+                     .RunExclusiveProfilingAsync(Model,
+                         ModelRole.Chat,
+                         Arg.Is<ResolvedLaunchArguments>(resolved => resolved.ExploreMode && resolved.ExploreContextTokensOverride == 32768),
+                         Arg.Any<bool>(),
+                         Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<ResolvedLaunchArguments?>>>(),
+                         Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Explore_WhenContextTokensOmitted_PassesNullOverride()
+    {
+        // Leak guard, part 1: both the three-argument overload and an omitted field must reach the supervisor with a
+        // null override, which is what makes the resolver reproduce its pre-override branch, window and cache key.
+        var fixture = new ServiceFixture();
+        fixture.WithLocalModel();
+        fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: null, IsMoe: false));
+        fixture.WithExploreFitParamsOutput("-c 8192 -ngl 33");
+        fixture.EchoExploredUpsert();
+        var service = fixture.CreateService();
+
+        AssertEx.True((await service.ExploreAsync(Model, ModelRole.Chat, CancellationToken.None)).Success);
+        AssertEx.True((await service.ExploreAsync(Model, ModelRole.Chat, contextTokens: null, CancellationToken.None)).Success);
+
+        await fixture.Supervisor.Received(2)
+                     .RunExclusiveProfilingAsync(Model,
+                         ModelRole.Chat,
+                         Arg.Is<ResolvedLaunchArguments>(resolved => resolved.ExploreMode && resolved.ExploreContextTokensOverride == null),
+                         Arg.Any<bool>(),
+                         Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<ResolvedLaunchArguments?>>>(),
+                         Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Explore_WhenOverrideUsed_DoesNotLeakIntoNodeSettingsOrTheNextExplore()
+    {
+        // Leak guard, part 2. The override is request-scoped, so the explore AFTER an overridden one must be
+        // indistinguishable from one issued before the feature existed.
+        var fixture = new ServiceFixture();
+        fixture.WithLocalModel();
+        fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 131072, ExpertCount: null, IsMoe: false));
+        fixture.WithExploreFitParamsOutput("-c 32768 -ngl 33");
+        fixture.EchoExploredUpsert();
+        var service = fixture.CreateService();
+
+        AssertEx.True((await service.ExploreAsync(Model, ModelRole.Chat, contextTokens: 32768, CancellationToken.None)).Success);
+        AssertEx.True((await service.ExploreAsync(Model, ModelRole.Chat, CancellationToken.None)).Success);
+
+        await fixture.Supervisor.Received(1)
+                     .RunExclusiveProfilingAsync(Model,
+                         ModelRole.Chat,
+                         Arg.Is<ResolvedLaunchArguments>(resolved => resolved.ExploreContextTokensOverride == 32768),
+                         Arg.Any<bool>(),
+                         Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<ResolvedLaunchArguments?>>>(),
+                         Arg.Any<CancellationToken>());
+        await fixture.Supervisor.Received(1)
+                     .RunExclusiveProfilingAsync(Model,
+                         ModelRole.Chat,
+                         Arg.Is<ResolvedLaunchArguments>(resolved => resolved.ExploreContextTokensOverride == null),
+                         Arg.Any<bool>(),
+                         Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<ResolvedLaunchArguments?>>>(),
+                         Arg.Any<CancellationToken>());
+
+        // The only writable homes a leak could reach are the node settings and the launch-policy options singleton.
+        // The service is constructed with neither, so no write path exists — and this goes red the day one is injected,
+        // rather than asserting nothing against an instance nothing could have touched.
+        var dependencies = typeof(InferenceProfileService).GetConstructors()[0].GetParameters();
+        AssertEx.Empty(dependencies.Where(parameter =>
+            parameter.ParameterType.FullName?.Contains("LlamaServerLaunchPolicyOptions", StringComparison.Ordinal) == true
+            || parameter.ParameterType.FullName?.Contains("NodeSettings", StringComparison.Ordinal) == true));
+    }
+
+    [Test]
+    public async Task Explore_WhenOverrideRequestedOnCpuVariant_IsRejected()
+    {
+        // Requested (32768) deliberately DIFFERS from the GGUF context length (8192): llama-fit-params never runs on
+        // CPU, so a silently accepted override would be replaced by the 8192 fallback and the profile would record a
+        // window nobody asked for. The pairing is what makes that substitution visible.
+        var fixture = new ServiceFixture();
+        fixture.WithLocalModel();
+        fixture.WithVariant(GpuVariant.Cpu);
+        fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: null, IsMoe: false));
+        fixture.WithExploreFitParamsOutput("-c 8192 -ngl -1");
+        fixture.EchoExploredUpsert();
+
+        var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, contextTokens: 32768, CancellationToken.None);
+
+        AssertEx.False(result.Success);
+        AssertEx.Null(result.Profile);
+        AssertEx.Contains(result.FailureReason, "GPU variants only", StringComparison.Ordinal);
+        await fixture.Supervisor.DidNotReceiveWithAnyArgs()
+                     .RunExclusiveProfilingAsync(Arg.Any<string>(),
+                         Arg.Any<ModelRole>(),
+                         Arg.Any<ResolvedLaunchArguments>(),
+                         Arg.Any<bool>(),
+                         Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<ResolvedLaunchArguments?>>>(),
+                         Arg.Any<CancellationToken>());
+        await fixture.ProfileStore.DidNotReceive()
+                     .CreateOrUpdateExploredAsync(Arg.Any<InferenceProfileInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Explore_WhenNoOverrideOnCpuVariant_BehavesAsBefore()
+    {
+        // The CPU null path is untouched by the guard: the spawn still runs and the profile still records the GGUF
+        // context, because a CPU profile does not replay GPU placement.
+        var fixture = new ServiceFixture();
+        fixture.WithLocalModel();
+        fixture.WithVariant(GpuVariant.Cpu);
+        fixture.WithMetadata(new GgufModelMetadata(ParamCount: 7_000_000_000, QuantType: "15", ContextLength: 8192, ExpertCount: null, IsMoe: false));
+        fixture.WithExploreFitParamsOutput("-c 8192 -ngl -1");
+        fixture.EchoExploredUpsert();
+
+        var result = await fixture.CreateService().ExploreAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(result.Success);
+        var profile = AssertEx.NotNull(result.Profile);
+        AssertEx.Equal(expected: 8192, profile.CtxSize);
+        AssertEx.Equal("cpu", profile.Backend);
+        await fixture.Supervisor.Received(1)
+                     .RunExclusiveProfilingAsync(Model,
+                         ModelRole.Chat,
+                         Arg.Is<ResolvedLaunchArguments>(resolved => resolved.ExploreContextTokensOverride == null),
+                         Arg.Any<bool>(),
+                         Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<ResolvedLaunchArguments?>>>(),
+                         Arg.Any<CancellationToken>());
+    }
+
     // Wires the substituted seams the orchestrator composes, with safe defaults, and exposes the doubles the tests assert on.
     private sealed class ServiceFixture
     {
@@ -729,6 +869,13 @@ public sealed class InferenceProfileServiceTests
                                                Arg.Any<string>(),
                                                Arg.Any<CancellationToken>())
                                            .Returns(Task.FromResult(true));
+        }
+
+        // The variant the explore/benchmark path resolves before spawning. Cuda by default; CPU is the variant the
+        // context-tokens override is refused on.
+        public void WithVariant(GpuVariant variant)
+        {
+            VariantSelector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(variant));
         }
 
         public void WithLocalModel()

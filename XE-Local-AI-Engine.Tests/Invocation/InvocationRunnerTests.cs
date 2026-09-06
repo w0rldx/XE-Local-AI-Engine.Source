@@ -3795,6 +3795,99 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WithTheNodeSettingUnset_LeavesTheRelevanceScopeInactiveAndNeverReadsTheCoreSet()
+    {
+        // The byte-identical pin for the shipped default. The settings read itself is unconditional (it is the LEFT
+        // operand of the &&), so a read-count assertion would be wrong; the CORE SET is what the runner touches only
+        // when the decision came out active, which makes it the honest negative observable.
+        var coreSet = Substitute.For<IToolRelevanceCoreSet>();
+        var runner = CreateRunner(new MockHubMessageSender(), toolRelevanceCoreSet: coreSet);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        coreSet.DidNotReceive().GetCoreToolNames();
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheNodeSettingIsOn_SeedsAnActiveRelevanceScopeFromTheStoredValue()
+    {
+        // The behaviour change this plan exists for: the decision now comes from the node setting, read per turn.
+        var coreSet = Substitute.For<IToolRelevanceCoreSet>();
+        coreSet.GetCoreToolNames().Returns(new HashSet<string>(StringComparer.Ordinal));
+        var runner = CreateRunner(new MockHubMessageSender(),
+            toolRelevanceRead: static _ => Task.FromResult(true),
+            toolRelevanceCoreSet: coreSet);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        coreSet.Received(1).GetCoreToolNames();
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheAgentOptsOut_KeepsTheScopeInactiveEvenWithTheNodeSettingOn()
+    {
+        // Guards the operand ORDER of `enabled && !package.DisableToolRelevanceFilter` against a later edit: the
+        // per-agent opt-out must still win over the global switch.
+        var coreSet = Substitute.For<IToolRelevanceCoreSet>();
+        var runner = CreateRunner(new MockHubMessageSender(),
+            toolRelevanceRead: static _ => Task.FromResult(true),
+            toolRelevanceCoreSet: coreSet);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build() with { DisableToolRelevanceFilter = true });
+
+        coreSet.DidNotReceive().GetCoreToolNames();
+    }
+
+    [Test]
+    public async Task RunAsync_WhenCancelledWhileReadingTheRelevanceSetting_EndsTheTurnCancelled()
+    {
+        // The read takes the INVOCATION token, not the caller's: an operator Cancel (or the whole-turn watchdog) trips
+        // that one. Reading on the caller token would leave a stalled settings read uncancellable, which is the failure
+        // this pins. Gates only, no sleeps.
+        var sender = new MockHubMessageSender();
+        var gateReached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var hold = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var package = RuntimePackageBuilder.Valid().Build();
+        var runner = CreateRunner(sender,
+            toolRelevanceRead: async cancellationToken =>
+            {
+                gateReached.TrySetResult();
+                return await hold.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            });
+
+        var runTask = RunAsync(runner, package);
+        // Bounded: if the runner ever stops reading the setting, this must fail fast rather than park the whole run.
+        await gateReached.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        runner.Cancel(package.InvocationId);
+        await runTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
+            failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Cancelled));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheStoredValueChangesBetweenTurns_ThePreviouslyBuiltRunnerPicksItUp()
+    {
+        // ONE runner, two turns. Two separately constructed runners would pass even if the value were captured at
+        // construction, which is exactly the no-restart bug this rules out.
+        var enabled = false;
+        var coreSet = Substitute.For<IToolRelevanceCoreSet>();
+        coreSet.GetCoreToolNames().Returns(new HashSet<string>(StringComparer.Ordinal));
+        var runner = CreateRunner(new MockHubMessageSender(),
+            // ReSharper disable once AccessToModifiedClosure - reading the CURRENT value per turn is the point.
+            toolRelevanceRead: _ => Task.FromResult(enabled),
+            toolRelevanceCoreSet: coreSet);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build());
+        coreSet.DidNotReceive().GetCoreToolNames();
+
+        enabled = true;
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build());
+
+        coreSet.Received(1).GetCoreToolNames();
+    }
+
+    [Test]
     public async Task RunAsync_WhenTheRelevanceHopHeldToolsBack_EmitsOneToolsFilteredNoticeAfterTheFirstAssistantText()
     {
         // The drain the hop cannot do itself: it leaves the pair on the ambient scope several awaited frames below the
@@ -3808,10 +3901,7 @@ public sealed class InvocationRunnerTests
         var runner = CreateRunner(sender,
             eventDispatcher: dispatcher,
             agentUpdates: ToolsFilteredUpdates(hidden: 5, total: 12, "Hello"),
-            toolRelevanceOptions: new ToolRelevanceOptions
-            {
-                Enabled = true
-            });
+            toolRelevanceRead: static _ => Task.FromResult(true));
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
@@ -3838,10 +3928,7 @@ public sealed class InvocationRunnerTests
         await RunAsync(CreateRunner(new MockHubMessageSender(),
                 eventDispatcher: nothingHiddenDispatcher,
                 agentUpdates: ToolsFilteredUpdates(hidden: 0, total: 12, "Hello"),
-                toolRelevanceOptions: new ToolRelevanceOptions
-                {
-                    Enabled = true
-                }),
+                toolRelevanceRead: static _ => Task.FromResult(true)),
             RuntimePackageBuilder.Valid().Build());
 
         foreach (var dispatcher in new[]
@@ -3872,10 +3959,7 @@ public sealed class InvocationRunnerTests
         var runner = CreateRunner(sender,
             factory,
             eventDispatcher: dispatcher,
-            toolRelevanceOptions: new ToolRelevanceOptions
-            {
-                Enabled = true
-            });
+            toolRelevanceRead: static _ => Task.FromResult(true));
         var package = RuntimePackageBuilder.Valid().WithAllowedTool("run_in_agent_home").Build();
 
         var runTask = RunAsync(runner, package);
@@ -4498,7 +4582,8 @@ public sealed class InvocationRunnerTests
         IToolApprovalAuditRecorder? approvalAuditRecorder = null,
         IToolApprovalPolicy? approvalPolicy = null,
         IInvocationAttachmentTracker? attachmentTracker = null,
-        ToolRelevanceOptions? toolRelevanceOptions = null,
+        Func<CancellationToken, Task<bool>>? toolRelevanceRead = null,
+        IToolRelevanceCoreSet? toolRelevanceCoreSet = null,
         Func<IServiceProvider, IReasoningEffortDispatcher>? reasoningEffortDispatcherFactory = null,
         IExternalProviderRegistry? externalProviderRegistry = null)
     {
@@ -4557,6 +4642,9 @@ public sealed class InvocationRunnerTests
         var runtimeSettings = StubNodeRuntimeSettings.Create()
                                                      .WithMaxResponseSizeMb(resolvedWorkerOptions.MaxResponseSizeMb)
                                                      .WithMaxPendingToolCallAgeMinutes(resolvedWorkerOptions.MaxPendingToolCallAgeMinutes)
+                                                     // Tool relevance stays OFF by default here: every existing assertion in this file is a
+                                                     // byte-identical-offer assertion. The notice-drain tests pass their own enabled read.
+                                                     .WithToolRelevanceEnabled(toolRelevanceRead ?? (static _ => Task.FromResult(false)))
                                                      .Build();
 
         // One registry instance shared by the runner and all three collaborators, exactly as the DI graph wires it: a
@@ -4579,10 +4667,7 @@ public sealed class InvocationRunnerTests
             Options.Create(new ProviderResilienceOptions()),
             Options.Create(new AgentToolPipelineOptions()),
             Options.Create(new ProviderCallBudgetOptions()),
-            // Tool relevance stays OFF by default here: every existing assertion in this file is a byte-identical-offer
-            // assertion. The notice-drain tests pass their own enabled options.
-            Options.Create(toolRelevanceOptions ?? new ToolRelevanceOptions()),
-            new FakeToolRelevanceCoreSet(),
+            toolRelevanceCoreSet ?? new FakeToolRelevanceCoreSet(),
             configuration,
             runtimeSettings,
             Options.Create(new SpawnOptions()),

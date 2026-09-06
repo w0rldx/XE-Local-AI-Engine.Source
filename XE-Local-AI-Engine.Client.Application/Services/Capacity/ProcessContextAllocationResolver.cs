@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
@@ -298,7 +299,7 @@ public sealed class ProcessContextAllocationResolver(
         {
             source = ProcessContextAllocationSource.FrozenProfile;
         }
-        else if (_options.DeterministicContextTokensOverride is > 0)
+        else if (ResolveDeterministicOverride(resolved) is > 0)
         {
             source = ProcessContextAllocationSource.DeterministicOverride;
         }
@@ -313,7 +314,7 @@ public sealed class ProcessContextAllocationResolver(
 
         if (source == ProcessContextAllocationSource.DeterministicOverride)
         {
-            var overridden = CapAndAlign(_options.DeterministicContextTokensOverride!.Value, trainCeiling);
+            var overridden = CapAndAlign(ResolveDeterministicOverride(resolved)!.Value, trainCeiling);
             return BuildAllocation(key, contentIdentity, overridden, trainCeiling, source, variant, profile, facts,
                 await ResolveProcessGpuBudgetAsync(variant, profile, ct).ConfigureAwait(false), kvCacheQuant);
         }
@@ -555,6 +556,17 @@ public sealed class ProcessContextAllocationResolver(
         return (int)Math.Min(ceiling, int.MaxValue);
     }
 
+    /// <summary>
+    ///     The deterministic context-window override in force for this resolution: the request-scoped explore override
+    ///     when one was supplied, otherwise the never-bound
+    ///     <see cref="LlamaServerLaunchPolicyOptions.DeterministicContextTokensOverride" />. The request wins, so an
+    ///     operator benchmark explore pins its own window without touching options that outlive the call.
+    /// </summary>
+    private int? ResolveDeterministicOverride(ResolvedLaunchArguments resolved)
+    {
+        return resolved.ExploreContextTokensOverride ?? _options.DeterministicContextTokensOverride;
+    }
+
     private static int CapAndAlign(int requested, int? trainCeiling)
     {
         var capped = trainCeiling is { } ceiling ? Math.Min(requested, ceiling) : requested;
@@ -591,6 +603,13 @@ public sealed class ProcessContextAllocationResolver(
         if (kvCacheQuant is not null)
         {
             canonical = $"{canonical}|kv:{kvCacheQuant}";
+        }
+
+        // Same conditional shape, same reason: an explore that named no override reproduces the pre-override key byte
+        // for byte, while two explores with different windows can never share one cached allocation.
+        if (resolved.ExploreContextTokensOverride is { } exploreOverride)
+        {
+            canonical = $"{canonical}|ctxo:{exploreOverride.ToString(CultureInfo.InvariantCulture)}";
         }
 
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));

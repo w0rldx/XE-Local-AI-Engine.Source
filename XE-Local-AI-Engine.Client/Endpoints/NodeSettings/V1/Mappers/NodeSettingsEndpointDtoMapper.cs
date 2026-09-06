@@ -16,6 +16,7 @@ internal static class NodeSettingsEndpointDtoMapper
             DefaultModelName = settings.DefaultModelName,
             EnableTools = settings.EnableTools,
             CustomToolsEnabled = settings.CustomToolsEnabled,
+            ToolRelevanceEnabled = settings.ToolRelevanceEnabled,
             ToolCapableModels = settings.ToolCapableModels,
             OllamaEndpoint = settings.OllamaEndpoint,
             HuggingFaceDefaultQuant = settings.HuggingFaceDefaultQuant,
@@ -90,6 +91,7 @@ internal static class NodeSettingsEndpointDtoMapper
                 : request.DefaultModelName.Trim(),
             EnableTools = request.EnableTools ?? currentSettings.EnableTools,
             CustomToolsEnabled = request.CustomToolsEnabled ?? currentSettings.CustomToolsEnabled,
+            ToolRelevanceEnabled = request.ToolRelevanceEnabled ?? currentSettings.ToolRelevanceEnabled,
             ToolCapableModels = request.ToolCapableModels ?? currentSettings.ToolCapableModels,
             OllamaEndpoint = request.OllamaEndpoint is null
                 ? currentSettings.OllamaEndpoint

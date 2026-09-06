@@ -794,6 +794,20 @@ Provider unload calls `EvictAllRolesAsync` over `Enum.GetValues<ModelRole>()`; i
 
 The four context values must stay separately named through APIs and DTOs: launched allocation (`-c`), request budget/limit, train-context maximum, and frozen replay override. A request can reduce but cannot enlarge an existing process. Frozen/deterministic allocation never silently mutates after failure; only automatic hardware selection may OOM down-tier, and only for classified startup OOM, at most twice per allocation identity.
 
+### llama-server node settings are captured once per boot — a `PUT` after that changes nothing until a restart
+
+**Rule:** the node settings that feed `llama-server` — `speculativeMode`, `chatCacheReuse`, `kvCacheType` — are captured
+when the `LlamaServerSupervisorOptions` singleton is **first resolved** (a lazy factory; the exact moment is not a
+reliable "first spawn" marker). A `PUT node-settings` issued after that point in a boot does not reach a later spawn. Restart with
+`scripts/dev-stop.sh` then `scripts/dev-start.sh`, and read the values back with a `GET` before measuring anything.
+
+**Failure prevented:** a live A/B that flips one of those knobs between cells inside a single boot, measures no
+difference, and concludes "the knob does nothing" — when the second cell ran the first cell's value. Equally: a boot
+that silently inherits the previous boot's value because it was never set explicitly.
+
+**Authority:** `BuildSeededLlamaServerSupervisorOptions` and its `AddSingleton(sp => Build…(sp))` lazy-factory
+registration in `AddNodeModelRuntimeExtensions`.
+
 ### Benchmark launch evidence (KV-cache type feature, 2026-08-16)
 
 - **`LlamaServerLaunchProjection` is the single argv projection**, and `From(...)` is the sole renderer of context/placement/thread argv and of the `ComputeIdentity()` input. Its member order and names are PERSISTED identity — do not change either without an intentional migration.
@@ -1353,7 +1367,7 @@ Auto-advance tracks an explicit armed state: reset on step change, arm only afte
 
 Do not assume these exist or “restore” retired designs.
 
-- **Context management is truncation, not summarization.** `ConversationContextBudgeter` (turn-level) plus `ProviderCallBudgetChatClient` (every provider round) excerpt/drop content. Protected reasoning stripping ships on; protected tool-result excerpting is opt-in. Rewrites preserve message metadata. No cross-turn LLM summary/prefix strategy exists.
+- **Turn-level budgeting and cross-turn compaction are two mechanisms; do not conflate them.** Turn-level and per-round budgeting (`ConversationContextBudgeter`, `ProviderCallBudgetChatClient`) excerpt/drop content; protected reasoning stripping ships on, protected tool-result excerpting is opt-in, rewrites preserve message metadata. Cross-turn LLM compaction is a separate mechanism (`ConversationSummarizer` + `ConversationCompactionService`), triggered manually via `POST chat/conversations/{id}/compact` (`LocalApiRoutes.CompactConversation`) and automatically by `ConversationStepContextBound` in work sessions; folds run on a node-local model only. Prevents an agent "restoring" a summarizer that already exists or routing a fold through the shared cloud-capable client. Authority: `ConversationSummarizerBoundaryTests`, `ConversationCompactionServiceTests`; wave-1 live evidence in `Plans/inference-agent-optimization-2026-09-05/progress/p2-live.md`.
 - **Restart reconciles but does not auto-resume.** Startup marks non-terminal chat rows Interrupted with durable envelopes and stale scheduled runs Failed. `InvocationResumeRegistry` is browser-reconnect memory only. Manual Regenerate is the recovery.
 - **No mid-stream retry.** Pre-first-token retry and circuit breaker exist.
 - **Approval/HITL and tighten-only policy are live.** MCP/default high-risk tools are structurally approval-required; node policy can only add approval. Category-wide loosening is not built. Decisions are audited.
@@ -1407,6 +1421,7 @@ These are intentionally terse. Follow the linked/current section for the active 
 | Stale belief | Current correction |
 |---|---|
 | Bash variable `GROUPS` is available. | Bash owns it; use `TEST_GROUPS` (§1). |
+| Context management is truncation only; no cross-turn LLM summary exists. | `ConversationSummarizer` + `ConversationCompactionService` fold older turns into a synopsis on a node-local model, manually via `POST chat/conversations/{id}/compact` and automatically in work sessions (§6). |
 | CI runs test projects sequentially. | Projects run concurrently with separate result directories; the main Tests module uses grouped batch runner (§1). |
 | Memory-safe runner defaults to `JOBS=4`; increase in-process width. | Default is `JOBS=10`; process batches, not width, provide the useful concurrency (§1). |
 | Coverage should use one process per namespace. | Coverage instrumentation makes that prohibitively expensive; group instead. A local run uses `TEST_GROUPS=$(nproc)`; CI uses `TEST_GROUPS=16` split across 4 `TEST_SHARD` legs (§1). |

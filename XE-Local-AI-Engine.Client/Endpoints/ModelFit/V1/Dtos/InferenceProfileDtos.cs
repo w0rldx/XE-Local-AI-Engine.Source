@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 
+using System.ComponentModel.DataAnnotations;
+
 /// <summary>
 ///     A node-local inference profile projected for transport (shared by the list, explore, freeze and invalidate
 ///     responses). It carries only the launch-arg facts and lifecycle metadata; the local-only machine key is
@@ -78,10 +80,57 @@ public sealed class ListInferenceProfilesResponse
 /// </summary>
 public sealed class ExploreInferenceProfileRequest
 {
+    /// <summary>
+    ///     Lowest accepted <see cref="ContextTokens" /> — the launch policy's smallest chat tier. A shape bound: the
+    ///     resolver itself has no minimum beyond its 256-token alignment unit. Lives on the DTO so the documented range,
+    ///     the <c>Range</c> annotation that publishes it in the OpenAPI schema, and the value
+    ///     <c>ExploreInferenceProfileEndpoint</c> enforces cannot drift apart.
+    /// </summary>
+    internal const int MinExploreContextTokens = 2048;
+
+    /// <summary>
+    ///     Highest accepted <see cref="ContextTokens" />. A shape bound only; the model-specific ceiling belongs to the
+    ///     resolver's cap-and-align step, which is why the endpoint must not try to guess it.
+    /// </summary>
+    internal const int MaxExploreContextTokens = 1_048_576;
+
     public required string ModelName { get; init; }
 
     /// <summary>Role to explore — <c>chat|embedding|reranker</c>. Defaults to <c>chat</c> when omitted.</summary>
     public string? Role { get; init; }
+
+    /// <summary>
+    ///     Optional operator benchmark knob: pins this explore spawn's context window (<c>-c</c>) for this call only.
+    ///     Omit it for the allocation resolver's hardware-tier choice, which is what every explore did before this
+    ///     field existed. Nothing about the value is persisted — it reaches one spawn and is never written to node
+    ///     settings or the launch policy.
+    ///     <para>
+    ///         Accepted range is <see cref="MinExploreContextTokens" />–<see cref="MaxExploreContextTokens" />
+    ///         (2048–1048576), enforced by <c>ExploreInferenceProfileEndpoint</c> from these same consts. The floor is
+    ///         the launch policy's LOWEST chat tier rather than a resolver-enforced minimum (the resolver's own floor is
+    ///         the 256-token alignment unit); the ceiling is a shape bound only. The model's train ceiling caps the
+    ///         value SILENTLY, so a request above it succeeds with a smaller window: read <c>ctxSize</c> on the
+    ///         returned profile for what was actually used.
+    ///     </para>
+    ///     <para>
+    ///         An override the box cannot fit FAILS the explore rather than being reduced: it routes the allocation
+    ///         down the deterministic-override branch, and <c>ProcessContextAllocationResolver.TryDownTierForAdmission</c>
+    ///         down-tiers hardware-tier allocations only. So the value is honoured verbatim or the spawn is rejected;
+    ///         an unoverridden explore, by contrast, steps down a tier instead of failing.
+    ///     </para>
+    ///     <para>
+    ///         GPU-only. A non-null value on a CPU-variant node is rejected with a 400, because
+    ///         <c>llama-fit-params</c> does not run on the CPU backend and the window could not be recorded in the
+    ///         profile. The provider-side fallback resolver
+    ///         (<c>DefaultProcessContextAllocationResolver</c>) ignores this field entirely; a host running that
+    ///         resolver exposes no explore endpoint.
+    ///     </para>
+    /// </summary>
+    // The annotation is documentation only: it publishes minimum/maximum into the OpenAPI schema and the generated
+    // client's Zod validators. FastEndpoints does not run DataAnnotations, so the endpoint's inline check stays the
+    // enforcing path — a hand-rolled request that skips the generated client still gets a 400.
+    [Range(MinExploreContextTokens, MaxExploreContextTokens)]
+    public int? ContextTokens { get; init; }
 }
 
 /// <summary>
@@ -208,6 +257,29 @@ public sealed class InferenceBenchmarkMetricsDto
 
     /// <summary>Highest sampled working set of the transient llama-server process.</summary>
     public long? PeakProcessRamBytes { get; init; }
+
+    /// <summary>
+    ///     Largest server-reported context-token watermark observed during the run. Workload/allocation evidence — it
+    ///     tracks the transcript the window created, so a larger number is not an improvement.
+    /// </summary>
+    public double? ContextTokensHighWatermark { get; init; }
+
+    /// <summary>Draft tokens proposed by speculative decoding during the measured pass; null when not measured.</summary>
+    public double? SpeculativeDraftTokens { get; init; }
+
+    /// <summary>Draft tokens accepted during the measured pass; null when not measured.</summary>
+    public double? SpeculativeAcceptedTokens { get; init; }
+
+    /// <summary>Speculative verification steps during the measured pass; null when not measured.</summary>
+    public double? SpeculativeVerificationSteps { get; init; }
+
+    /// <summary>
+    ///     Accepted/drafted token ratio. Null means the rate could not be computed, never a measured zero: the harness
+    ///     returns null when the drafted-token delta is zero or missing, or when the accepted-token counter is
+    ///     unavailable. Read <see cref="SpeculativeDraftTokens" /> and <see cref="SpeculativeAcceptedTokens" /> to tell
+    ///     "nothing was drafted" apart from "the counters never arrived".
+    /// </summary>
+    public double? SpeculativeAcceptanceRate { get; init; }
 
     /// <summary>Whether material process-budget/global-free divergence invalidated the benchmark as external pressure.</summary>
     public required bool ExternalPressureDetected { get; init; }

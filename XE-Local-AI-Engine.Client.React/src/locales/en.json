@@ -1837,6 +1837,10 @@
 					"label": "Enable custom tools",
 					"description": "Allows agents to run user-defined tools that execute host commands, launch programs, and make network requests. Off by default. Each call still requires your approval."
 				},
+				"toolRelevanceEnabled": {
+					"label": "Filter tools by relevance",
+					"description": "Send only the tools most relevant to each message when an agent has many. The assistant can still call list_tools to reach the rest. Off by default."
+				},
 				"toolCapableModels": {
 					"label": "Tool-capable models",
 					"description": "Model names that support tool calling. Press Enter to add each name. Changes take effect without restarting the node."

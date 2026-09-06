@@ -28,6 +28,13 @@ public sealed record NodeSettingsResponse
     /// </summary>
     public bool? CustomToolsEnabled { get; init; }
 
+    /// <summary>
+    ///     Node switch for the per-turn tool-relevance offer. <see langword="null" /> reads as off (default). When on,
+    ///     an agent carrying many tools is offered a relevance-ranked subset per turn and recovers the rest through
+    ///     <c>list_tools</c>; a per-agent opt-out still wins. A context budget, never an authorisation boundary.
+    /// </summary>
+    public bool? ToolRelevanceEnabled { get; init; }
+
     public IReadOnlyList<string>? ToolCapableModels { get; init; }
 
     public string? OllamaEndpoint { get; init; }
@@ -165,6 +172,12 @@ public sealed record SaveNodeSettingsRequest
     ///     per-agent allow-list and the forced per-call approval gate.
     /// </summary>
     public bool? CustomToolsEnabled { get; init; }
+
+    /// <summary>
+    ///     Node switch for the per-turn tool-relevance offer. <see langword="null" /> keeps the current stored value.
+    ///     Off by default; a per-agent opt-out still wins when it is on.
+    /// </summary>
+    public bool? ToolRelevanceEnabled { get; init; }
 
     public IReadOnlyList<string>? ToolCapableModels { get; init; }
 

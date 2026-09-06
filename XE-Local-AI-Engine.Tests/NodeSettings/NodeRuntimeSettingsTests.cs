@@ -166,6 +166,22 @@ public sealed class NodeRuntimeSettingsTests
     }
 
     [Test]
+    [Arguments(null, false)]
+    [Arguments(false, false)]
+    [Arguments(true, true)]
+    public async Task ToolRelevanceEnabled_ResolvesStoredValueOverTheHardcodedOff(bool? stored, bool expected)
+    {
+        // No appsettings seed exists for this switch, so the precedence is stored > hardcoded off and nothing else.
+        var sut = CreateSut(new StoredNodeSettings
+            {
+                ToolRelevanceEnabled = stored
+            },
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+
+        AssertEx.Equal(expected, await sut.GetToolRelevanceEnabledAsync());
+    }
+
+    [Test]
     public async Task SpeculativeAndCacheReuse_StoredValuesPresent_OverrideDefaults()
     {
         var sut = CreateSut(new StoredNodeSettings

@@ -150,6 +150,12 @@ public sealed partial record StoredNodeSettings
     /// </summary>
     public const bool DefaultCustomToolsEnabled = false;
 
+    /// <summary>
+    ///     Node switch for the per-turn tool-relevance offer. Default (absent) is OFF: the filter stays a
+    ///     pass-through, so every offer is byte-identical to the pre-toggle behaviour.
+    /// </summary>
+    public const bool DefaultToolRelevanceEnabled = false;
+
     /// <summary>Tag format gate: a llama.cpp release tag is a literal <c>b</c> followed by one or more digits.</summary>
     public const string RecommendedLlamaCppTagPattern = "^b[0-9]+$";
 
@@ -334,6 +340,13 @@ public sealed partial record StoredNodeSettings
     ///     passes it through untouched.
     /// </summary>
     public bool? CustomToolsEnabled { get; init; }
+
+    /// <summary>
+    ///     Node switch for the per-turn tool-relevance offer. <see langword="null" /> (absent) reads as
+    ///     <see cref="DefaultToolRelevanceEnabled" /> (off). A bool needs no clamping, so <c>NodeSettingsStore.Normalize</c>
+    ///     passes it through untouched.
+    /// </summary>
+    public bool? ToolRelevanceEnabled { get; init; }
 
     /// <summary>
     ///     Preferred browser voice identifier. Older values such as <c>af_heart</c> remain valid persisted data; when

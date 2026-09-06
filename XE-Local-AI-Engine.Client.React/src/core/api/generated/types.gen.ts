@@ -1484,6 +1484,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	defaultModelName?: string | null;
 	enableTools?: boolean | null;
 	customToolsEnabled?: boolean | null;
+	toolRelevanceEnabled?: boolean | null;
 	toolCapableModels?: Array<string> | null;
 	ollamaEndpoint?: string | null;
 	huggingFaceDefaultQuant?: string | null;
@@ -1553,6 +1554,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	defaultModelName?: string | null;
 	enableTools?: boolean | null;
 	customToolsEnabled?: boolean | null;
+	toolRelevanceEnabled?: boolean | null;
 	toolCapableModels?: Array<string> | null;
 	ollamaEndpoint?: string | null;
 	huggingFaceDefaultQuant?: string | null;
@@ -1646,6 +1648,11 @@ export type XeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto
 	minimumGlobalFreeVramBytes?: number | null;
 	minimumProcessBudgetVramBytes?: number | null;
 	peakProcessRamBytes?: number | null;
+	contextTokensHighWatermark?: number | null;
+	speculativeDraftTokens?: number | null;
+	speculativeAcceptedTokens?: number | null;
+	speculativeVerificationSteps?: number | null;
+	speculativeAcceptanceRate?: number | null;
 	externalPressureDetected: boolean;
 	runs: number;
 };
@@ -1808,6 +1815,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionRespon
 export type XeLocalAiEngineClientEndpointsModelFitV1ExploreInferenceProfileRequest = {
 	modelName: string;
 	role?: string | null;
+	contextTokens?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1FreezeInferenceProfileRequest = {

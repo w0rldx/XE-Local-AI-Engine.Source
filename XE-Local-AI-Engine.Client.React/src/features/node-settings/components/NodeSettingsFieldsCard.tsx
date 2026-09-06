@@ -117,6 +117,16 @@ export function NodeSettingsFieldsCard({
 						onChange={(event) => onChange("customToolsEnabled", event.currentTarget.checked)}
 						data-testid="node-settings-custom-tools-enabled"
 					/>
+					<Switch
+						label={t("pages.nodeSettings.fields.toolRelevanceEnabled.label", "Filter tools by relevance")}
+						description={t(
+							"pages.nodeSettings.fields.toolRelevanceEnabled.description",
+							"Send only the tools most relevant to each message when an agent has many. The assistant can still call list_tools to reach the rest. Off by default.",
+						)}
+						checked={form.toolRelevanceEnabled}
+						onChange={(event) => onChange("toolRelevanceEnabled", event.currentTarget.checked)}
+						data-testid="node-settings-tool-relevance-enabled"
+					/>
 					<TagsInput
 						label={t("pages.nodeSettings.fields.toolCapableModels.label", "Tool-capable models")}
 						description={t(

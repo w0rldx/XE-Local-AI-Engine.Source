@@ -176,6 +176,7 @@ export interface NodeSettingsFieldsForm {
 	defaultModelName: string;
 	enableTools: boolean;
 	customToolsEnabled: boolean;
+	toolRelevanceEnabled: boolean;
 	toolCapableModels: string[];
 	ollamaEndpoint: string;
 	huggingFaceDefaultQuant: string;
@@ -214,6 +215,7 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	defaultModelName: "",
 	enableTools: true,
 	customToolsEnabled: false,
+	toolRelevanceEnabled: false,
 	toolCapableModels: [],
 	ollamaEndpoint: "",
 	huggingFaceDefaultQuant: "",
@@ -256,6 +258,7 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 		defaultModelName: response.defaultModelName ?? "",
 		enableTools: response.enableTools ?? nodeSettingsFieldDefaults.enableTools,
 		customToolsEnabled: response.customToolsEnabled ?? nodeSettingsFieldDefaults.customToolsEnabled,
+		toolRelevanceEnabled: response.toolRelevanceEnabled ?? nodeSettingsFieldDefaults.toolRelevanceEnabled,
 		toolCapableModels: response.toolCapableModels ? [...response.toolCapableModels] : [],
 		ollamaEndpoint: response.ollamaEndpoint ?? "",
 		huggingFaceDefaultQuant: response.huggingFaceDefaultQuant ?? "",
@@ -403,7 +406,7 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 //   maxPendingToolCallAgeMinutes    — InvocationRunner ctor. PARTIAL: ToolCallCleanupService sweeps with a live read,
 //                                     but a running invocation's own approval-wait timer was fixed at process start.
 // Every other form field is read live on each call and must NOT be listed here: agentHome*, keepModelWarm*,
-// toolCapableModels, enableTools, customToolsEnabled, detachedGraceSeconds, usageRates, recommendedLlamaCppTag, and the
+// toolCapableModels, enableTools, customToolsEnabled, toolRelevanceEnabled, detachedGraceSeconds, usageRates, recommendedLlamaCppTag, and the
 // message-request timeout.
 export const restartGatedNodeSettingsFields: ReadonlySet<keyof NodeSettingsFieldsForm> = new Set<keyof NodeSettingsFieldsForm>([
 	"defaultModelName",
@@ -468,6 +471,10 @@ export function buildNodeSettingsRequest(
 
 	if (form.customToolsEnabled !== baseline.customToolsEnabled) {
 		body.customToolsEnabled = form.customToolsEnabled;
+	}
+
+	if (form.toolRelevanceEnabled !== baseline.toolRelevanceEnabled) {
+		body.toolRelevanceEnabled = form.toolRelevanceEnabled;
 	}
 
 	// toolCapableModels — list editor; cleaned + validated. Compared by JSON for a stable change check.
