@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 
+using System.Collections.ObjectModel;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -383,7 +384,8 @@ public sealed class ToolInvocationServiceTests
         public Task<IReadOnlyList<LocalChatToolDescriptor>> GetDescriptorsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<LocalChatToolDescriptor>>([descriptor]);
 
-        public Task<AITool?> TryResolveAsync(string name, CancellationToken cancellationToken = default) =>
-            Task.FromResult<AITool?>(null);
+        public Task<IReadOnlyDictionary<string, AITool>> TryResolveManyAsync(IReadOnlyCollection<string> names,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyDictionary<string, AITool>>(ReadOnlyDictionary<string, AITool>.Empty);
     }
 }
