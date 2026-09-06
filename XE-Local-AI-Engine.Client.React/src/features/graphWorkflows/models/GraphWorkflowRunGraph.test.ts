@@ -14,6 +14,7 @@ import {
 	graphWorkflowRun,
 	graphWorkflowRunSummary,
 	graphWorkflowTestGraphHash,
+	graphWorkflowTestGuid,
 	makeNodeRun,
 } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
 
@@ -109,7 +110,7 @@ describe("toGraphWorkflowRunCanvas when the graphs disagree", () => {
 
 	it("still renders a node run whose key is in no definition — the rows are the run", () => {
 		const canvas = canvasFor(
-			[...nodeRuns, makeNodeRun({ id: "nr-ghost", nodeKey: "ghost", kind: "Agent", status: "Succeeded" })],
+			[...nodeRuns, makeNodeRun({ id: graphWorkflowTestGuid(99), nodeKey: "ghost", kind: "Agent", status: "Succeeded" })],
 			{ graph: eightNodeGraph, graphHash: "sha256:someone-saved-since" },
 		);
 
@@ -140,7 +141,7 @@ describe("toGraphWorkflowRunCanvas when the graphs disagree", () => {
 
 	it("draws nothing past the cap on the nodes-only path either", () => {
 		const many = Array.from({ length: 201 }, (_, index) =>
-			makeNodeRun({ id: `nr-${index}`, nodeKey: `agent-${index}`, kind: "Agent" }),
+			makeNodeRun({ id: graphWorkflowTestGuid(index), nodeKey: `agent-${index}`, kind: "Agent" }),
 		);
 
 		const canvas = toGraphWorkflowRunCanvas({ run: run.run, nodeRuns: many });
