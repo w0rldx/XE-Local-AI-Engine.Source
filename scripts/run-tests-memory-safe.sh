@@ -395,13 +395,18 @@ if [[ -n "${TEST_GROUPS:-}" ]]; then
   shard_groups=()
   for ((g = 0; g < TEST_GROUPS; g++)); do
     [[ -z "${BIN_NS[g]}" ]] && continue
-    if [[ -n "$SHARD_COUNT" ]]; then
-      (( g % SHARD_COUNT == SHARD_INDEX )) || continue
-      shard_groups+=("$g")
+    mark="  "
+    if [[ -n "$SHARD_COUNT" ]] && (( g % SHARD_COUNT != SHARD_INDEX )); then
+      mark="  skip"
+    else
+      if [[ -n "$SHARD_COUNT" ]]; then shard_groups+=("$g"); fi
+      # Name the unit after its heaviest member so a FAILED line says something on its own.
+      UNITS+=("group${g}[${BIN_HEAD[g]}+$(( BIN_COUNT[g] - 1 ))]"$'\t'"/*/(${BIN_NS[g]})/*/*")
     fi
-    # Name the unit after its heaviest member so a FAILED line says something on its own.
-    UNITS+=("group${g}[${BIN_HEAD[g]}+$(( BIN_COUNT[g] - 1 ))]"$'\t'"/*/(${BIN_NS[g]})/*/*")
-    echo "   group$g: weight=${BIN_LOAD[g]}s count=${BIN_COUNT[g]} => ${BIN_NS[g]//|/ }"
+    # Log EVERY bin with its members, including the ones this shard skips. The strides only
+    # partition the module if all legs packed identically, and a leg that printed only its own bins
+    # could not show a divergent pack at all — the difference is in the members, not the indices.
+    echo "$mark group$g: weight=${BIN_LOAD[g]}s count=${BIN_COUNT[g]} => ${BIN_NS[g]//|/ }"
   done
   if [[ -n "$SHARD_COUNT" ]]; then
     echo ">> Shard $SHARD_INDEX/$SHARD_COUNT: running groups ${shard_groups[*]:-none} of $TEST_GROUPS."
