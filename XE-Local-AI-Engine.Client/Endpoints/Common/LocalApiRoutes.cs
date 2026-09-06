@@ -948,6 +948,13 @@ public static class LocalApiRoutes
         public const string DefinitionsValidate = "graph-workflows/definitions/validate";
 
         /// <summary>
+        ///     The Tool node's picker feed: every tool a Tool node may actually run, already filtered server-side to
+        ///     the D6 envelope by the same service the runtime invokes through, so the picker cannot offer a name the
+        ///     run would then refuse.
+        /// </summary>
+        public const string Tools = "graph-workflows/tools";
+
+        /// <summary>
         ///     Starts a run of one definition. 202 with the run id: the endpoint commits a durable intent and the
         ///     dispatcher advances it out of band, so the run legitimately reads <c>Pending</c> when the answer lands.
         ///     The caller's <c>requestId</c> is the idempotency key — the same one always answers with the same run.
