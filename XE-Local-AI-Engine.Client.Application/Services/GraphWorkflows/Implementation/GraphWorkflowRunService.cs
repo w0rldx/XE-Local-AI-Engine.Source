@@ -5,13 +5,16 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Tools;
 
 /// <summary>
 ///     The command surface over a graph workflow run. Everything it does is validate, commit, signal, and answer with
 ///     what the rows now say — the dispatcher does the rest on its own clock.
 /// </summary>
-internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store, IGraphWorkflowDispatcherSignal signal, IOptions<GraphWorkflowOptions> options)
-    : IGraphWorkflowRunService
+internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store,
+    IGraphWorkflowDispatcherSignal signal,
+    IToolInvocationService tools,
+    IOptions<GraphWorkflowOptions> options) : IGraphWorkflowRunService
 {
     /// <summary>
     ///     The longest comment an answer may carry, matching the development-workflow gate's own cap. It is free text
@@ -22,6 +25,7 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store, IGraphW
     private readonly GraphWorkflowOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
     private readonly IGraphWorkflowDispatcherSignal _signal = signal ?? throw new ArgumentNullException(nameof(signal));
     private readonly IGraphWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IToolInvocationService _tools = tools ?? throw new ArgumentNullException(nameof(tools));
 
     public async Task<GraphWorkflowRunDetail> StartAsync(Guid definitionId,
         Guid requestId,
@@ -62,7 +66,7 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store, IGraphW
         // Validated again HERE, not trusted from save time: an agent definition can be deleted between the two, and the
         // parse is the same one the dispatcher routes with.
         var graph = GraphWorkflowGraph.Parse(definition.GraphJson);
-        EnsureToolNodesAreRunnable(graph);
+        await EnsureToolNodesAreRunnableAsync(graph, cancellationToken).ConfigureAwait(false);
 
         if (graph.Nodes.Count > _options.MaxNodeRunsPerRun)
         {
@@ -404,18 +408,20 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store, IGraphW
     ///     Re-checks, at run start, that every <c>Tool</c> node of the pinned graph names a tool this node will actually
     ///     run — ruling D6's gate, as ONE mechanism in one place rather than a check the dispatcher repeats per kind.
     ///     <para>
-    ///         The body is empty because there is no tool catalog to ask yet: the tool executor and its catalog land in
-    ///         the pause-and-tool slice, which fills this in. Until then a bad tool name does not block run creation —
-    ///         the run starts and its <c>Tool</c> node fails at dispatch, because the dispatch switch has no arm for
-    ///         that kind. That is an absent case, and it is stated here so the consequence is not a surprise.
+    ///         Asked again here rather than trusted from save time: a definition saved when a tool was invocable must
+    ///         not start once the envelope has been tightened away from it. Failing the START rather than the node is
+    ///         what that buys — the operator learns immediately instead of three nodes in — so this runs BEFORE the run
+    ///         row is written and a refusal leaves nothing behind.
     ///     </para>
     /// </summary>
-    private static void EnsureToolNodesAreRunnable(GraphWorkflowGraph graph) =>
-
-        // No body beyond the guard: there is no tool catalog on this node yet, so there is nothing to check the
-        // graph's tool names against. The graph is taken NOW rather than added later, so the pause-and-tool slice
-        // fills this in without touching the call site.
-        ArgumentNullException.ThrowIfNull(graph);
+    private async Task EnsureToolNodesAreRunnableAsync(GraphWorkflowGraph graph, CancellationToken cancellationToken)
+    {
+        var errors = await GraphWorkflowToolGate.ErrorsAsync(graph, _tools, cancellationToken).ConfigureAwait(false);
+        if (errors.Count > 0)
+        {
+            throw new GraphWorkflowValidationException(GraphWorkflowValidationResult.Invalid(errors));
+        }
+    }
 
     /// <summary>
     ///     Signals AFTER the commit, which is the whole of this service's obligation to the dispatcher: without it a

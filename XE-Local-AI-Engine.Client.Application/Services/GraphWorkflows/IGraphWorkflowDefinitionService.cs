@@ -15,9 +15,14 @@ public interface IGraphWorkflowDefinitionService
     /// <summary>
     ///     Every complaint about <paramref name="graphJson" />, keyed by the node or edge it belongs to. NEVER throws:
     ///     the editor asks this question while a graph is still half-written, and a caller that has to catch to read
-    ///     an answer cannot append its own failures to the list — which is exactly what the tool gate does later.
+    ///     an answer cannot append its own failures to the list.
+    ///     <para>
+    ///         Asynchronous because the tool gate is: whether a <c>Tool</c> node's name is invocable is a question for
+    ///         the live tool catalog, and asking it here is what keeps the editor's report and the runtime's refusal
+    ///         the same answer.
+    ///     </para>
     /// </summary>
-    GraphWorkflowValidationResult Validate(string graphJson);
+    Task<GraphWorkflowValidationResult> ValidateAsync(string graphJson, CancellationToken cancellationToken = default);
 
     /// <summary>Validates and stores. Throws <see cref="GraphWorkflowValidationException" /> before reaching the store.</summary>
     Task<GraphWorkflowDefinitionSnapshot> CreateAsync(string name, string? description, string graphJson, CancellationToken cancellationToken = default);

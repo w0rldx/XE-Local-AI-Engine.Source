@@ -561,4 +561,44 @@ internal static class GraphWorkflowGraphs
                                                    ]
                                                  }
                                                  """;
+
+    /// <summary>
+    ///     Structurally sound and refused by the D6 tool gate alone: <c>run_python</c> parses as a tool name like any
+    ///     other, and only the catalog knows it is WriteExecute. One offending node, so the error keying is readable.
+    /// </summary>
+    public const string ToolValidationWriteExecuteTool = """
+                                                         {
+                                                           "schemaVersion": 1,
+                                                           "nodes": [
+                                                             { "key": "start", "kind": "Start" },
+                                                             { "key": "runner", "kind": "Tool", "config": { "toolName": "run_python" } },
+                                                             { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                           ],
+                                                           "edges": [
+                                                             { "key": "e1", "from": "start", "to": "runner" },
+                                                             { "key": "e2", "from": "runner", "to": "done" }
+                                                           ]
+                                                         }
+                                                         """;
+
+    /// <summary>
+    ///     Two Tool nodes outside the envelope for two different reasons — a write tool and an approval-gated one — so
+    ///     the gate has to report BOTH keys rather than stopping at the first.
+    /// </summary>
+    public const string ToolValidationTwoRefusedTools = """
+                                                        {
+                                                          "schemaVersion": 1,
+                                                          "nodes": [
+                                                            { "key": "start", "kind": "Start" },
+                                                            { "key": "runner", "kind": "Tool", "config": { "toolName": "run_python" } },
+                                                            { "key": "asker", "kind": "Tool", "config": { "toolName": "ask_user" } },
+                                                            { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                          ],
+                                                          "edges": [
+                                                            { "key": "e1", "from": "start", "to": "runner" },
+                                                            { "key": "e2", "from": "runner", "to": "asker" },
+                                                            { "key": "e3", "from": "asker", "to": "done" }
+                                                          ]
+                                                        }
+                                                        """;
 }
