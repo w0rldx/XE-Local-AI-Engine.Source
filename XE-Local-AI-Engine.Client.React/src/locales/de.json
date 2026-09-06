@@ -5640,7 +5640,8 @@
 			},
 			"form": {
 				"key": {
-					"invalid": "Erlaubt sind Buchstaben, Ziffern, Bindestriche und Unterstriche, höchstens 64 Zeichen."
+					"invalid": "Erlaubt sind Buchstaben, Ziffern, Bindestriche und Unterstriche, höchstens 64 Zeichen.",
+					"collision": "Dieser Schlüssel gehört bereits zu einem anderen Knoten oder einer anderen Kante."
 				},
 				"maxAttempts": {
 					"range": "Geben Sie eine ganze Zahl zwischen 1 und 10 ein."
@@ -5686,6 +5687,92 @@
 				},
 				"condition": {
 					"valueRequired": "Geben Sie einen Wert zum Vergleichen ein."
+				},
+				"name": {
+					"required": "Bitte einen Namen eingeben.",
+					"tooLong": "Höchstens 120 Zeichen verwenden."
+				}
+			},
+			"config": {
+				"key": "Schlüssel",
+				"keyHelp": "Buchstaben, Ziffern, Bindestriche und Unterstriche. Knoten und Kanten teilen sich einen Schlüsselraum.",
+				"label": "Beschriftung",
+				"labelPlaceholder": "Wird auf der Karte angezeigt",
+				"joinPolicy": "Wenn mehr als eine Kante ankommt",
+				"maxAttempts": "Maximale Versuche",
+				"timeoutSeconds": "Zeitlimit (Sekunden)",
+				"timeoutPlaceholder": "Kein Zeitlimit",
+				"remove": "Knoten löschen",
+				"removeTitle": "Diesen Knoten löschen?",
+				"removeDescription": "Seine Konfiguration und alle daran hängenden Kanten verschwinden mit ihm. Bereits gestartete Läufe bleiben unberührt.",
+				"removeConfirm": "Löschen",
+				"inputSchema": "Eingabeschema (JSON)",
+				"defaultInput": "Standardeingabe (JSON)",
+				"agent": "Agent",
+				"agentPlaceholder": "Der Standardagent dieses Knotens",
+				"instructions": "Anweisungen",
+				"model": "Modell",
+				"modelPlaceholder": "Das eigene Modell des Agenten",
+				"reasoningEffort": "Denkaufwand",
+				"reasoningEffortPlaceholder": "Standard des Anbieters",
+				"effort": {
+					"none": "Keiner",
+					"low": "Niedrig",
+					"medium": "Mittel",
+					"high": "Hoch"
+				},
+				"responseJsonSchema": "JSON-Schema der Antwort",
+				"includeUpstreamOutputs": "Ausgaben vorgelagerter Knoten mitgeben",
+				"includeUpstreamOutputsHelp": "Übergibt diesem Agenten zusätzlich zur Laufeingabe, was die Knoten davor erzeugt haben.",
+				"tool": "Werkzeug",
+				"toolPlaceholder": "Werkzeug auswählen",
+				"arguments": "Argumente (JSON)",
+				"argumentBindings": "Argumentbindungen",
+				"argumentBindingsHelp": "Ersetzt ein Argument durch einen Wert, der beim Lauf aus dem Dokument gelesen wird.",
+				"addBinding": "Bindung hinzufügen",
+				"removeBinding": "Bindung entfernen",
+				"noBindings": "Keine. Die Argumente oben werden unverändert gesendet.",
+				"bindingParameter": "Parameter",
+				"bindingPath": "Pfad",
+				"path": "Pfad",
+				"conditionPathHelp": "Ausgehende Kanten ohne eigenen Pfad vergleichen diesen.",
+				"prompt": "Frage",
+				"allowedDecisions": "Angebotene Entscheidungen",
+				"requireComment": "Ein Kommentar ist erforderlich",
+				"outcome": "Ergebnis",
+				"resultPath": "Ergebnispfad",
+				"resultPathPlaceholder": "Das gesamte Dokument",
+				"parallelHelp": "Ein Parallel-Knoten gibt seine Eingabe an jede ausgehende Kante weiter.",
+				"joinHelp": "Ein Join-Knoten sammelt seine eingehenden Zweige in einer Zuordnung nach Quellknoten."
+			},
+			"edge": {
+				"title": "Kante {{key}}",
+				"endpoints": "{{from}} → {{to}}",
+				"label": "Beschriftung",
+				"labelPlaceholder": "Wird auf der Arbeitsfläche angezeigt",
+				"conditional": "Dieser Kante nur folgen, wenn ein Vergleich zutrifft",
+				"path": "Pfad",
+				"pathInherited": "Erbt „{{path}}“ von {{node}}",
+				"operator": "Vergleich",
+				"value": "Wert",
+				"valueHelp": "Wird als JSON gelesen, wenn es sich parsen lässt, sonst als Text.",
+				"remove": "Kante löschen"
+			},
+			"definitions": {
+				"title": "Workflows",
+				"create": "Neuer Workflow",
+				"empty": "Noch keine Workflows. Erstellen Sie einen, um mit dem Entwurf zu beginnen.",
+				"loadFailed": "Die Workflow-Liste konnte nicht geladen werden.",
+				"deleteAria": "{{name}} löschen",
+				"nameLabel": "Name",
+				"namePlaceholder": "Nächtliche Sichtung",
+				"descriptionLabel": "Beschreibung",
+				"descriptionPlaceholder": "Wozu dieser Workflow dient.",
+				"columns": {
+					"name": "Name",
+					"nodes": "Knoten",
+					"version": "Version",
+					"updated": "Aktualisiert"
 				}
 			}
 		},

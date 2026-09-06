@@ -5640,7 +5640,8 @@
 			},
 			"form": {
 				"key": {
-					"invalid": "Use letters, digits, hyphens and underscores, up to 64 characters."
+					"invalid": "Use letters, digits, hyphens and underscores, up to 64 characters.",
+					"collision": "That key already belongs to another node or edge."
 				},
 				"maxAttempts": {
 					"range": "Enter a whole number between 1 and 10."
@@ -5686,6 +5687,92 @@
 				},
 				"condition": {
 					"valueRequired": "Enter a value to compare against."
+				},
+				"name": {
+					"required": "Enter a name.",
+					"tooLong": "Use at most 120 characters."
+				}
+			},
+			"config": {
+				"key": "Key",
+				"keyHelp": "Letters, digits, hyphens and underscores. Nodes and edges share one set of keys.",
+				"label": "Label",
+				"labelPlaceholder": "Shown on the card",
+				"joinPolicy": "When more than one edge arrives",
+				"maxAttempts": "Max attempts",
+				"timeoutSeconds": "Timeout (seconds)",
+				"timeoutPlaceholder": "No timeout",
+				"remove": "Delete node",
+				"removeTitle": "Delete this node?",
+				"removeDescription": "Its configuration and every edge attached to it go with it. Runs that already started are untouched.",
+				"removeConfirm": "Delete",
+				"inputSchema": "Input schema (JSON)",
+				"defaultInput": "Default input (JSON)",
+				"agent": "Agent",
+				"agentPlaceholder": "This node's default agent",
+				"instructions": "Instructions",
+				"model": "Model",
+				"modelPlaceholder": "The agent's own model",
+				"reasoningEffort": "Reasoning effort",
+				"reasoningEffortPlaceholder": "Provider default",
+				"effort": {
+					"none": "None",
+					"low": "Low",
+					"medium": "Medium",
+					"high": "High"
+				},
+				"responseJsonSchema": "Response JSON schema",
+				"includeUpstreamOutputs": "Include upstream outputs",
+				"includeUpstreamOutputsHelp": "Hands this agent what the nodes before it produced, on top of the run input.",
+				"tool": "Tool",
+				"toolPlaceholder": "Choose a tool",
+				"arguments": "Arguments (JSON)",
+				"argumentBindings": "Argument bindings",
+				"argumentBindingsHelp": "Replaces one argument with a value read from the run document at save time.",
+				"addBinding": "Add binding",
+				"removeBinding": "Remove binding",
+				"noBindings": "None. The arguments above are sent as they are.",
+				"bindingParameter": "Parameter",
+				"bindingPath": "Path",
+				"path": "Path",
+				"conditionPathHelp": "Outgoing edges with no path of their own compare this one.",
+				"prompt": "Question",
+				"allowedDecisions": "Offered decisions",
+				"requireComment": "A comment is required",
+				"outcome": "Outcome",
+				"resultPath": "Result path",
+				"resultPathPlaceholder": "The whole document",
+				"parallelHelp": "A Parallel node hands its input to every outgoing edge.",
+				"joinHelp": "A Join node collects its incoming branches into a map keyed by source node."
+			},
+			"edge": {
+				"title": "Edge {{key}}",
+				"endpoints": "{{from}} → {{to}}",
+				"label": "Label",
+				"labelPlaceholder": "Shown on the canvas",
+				"conditional": "Only follow this edge when a comparison holds",
+				"path": "Path",
+				"pathInherited": "Inherits “{{path}}” from {{node}}",
+				"operator": "Comparison",
+				"value": "Value",
+				"valueHelp": "Read as JSON when it parses, otherwise as text.",
+				"remove": "Delete edge"
+			},
+			"definitions": {
+				"title": "Workflows",
+				"create": "New workflow",
+				"empty": "No workflows yet. Create one to start authoring.",
+				"loadFailed": "Could not load the workflow list.",
+				"deleteAria": "Delete {{name}}",
+				"nameLabel": "Name",
+				"namePlaceholder": "Nightly triage",
+				"descriptionLabel": "Description",
+				"descriptionPlaceholder": "What this workflow is for.",
+				"columns": {
+					"name": "Name",
+					"nodes": "Nodes",
+					"version": "Version",
+					"updated": "Updated"
 				}
 			}
 		},
