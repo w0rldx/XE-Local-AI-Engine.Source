@@ -5561,7 +5561,19 @@
 			},
 			"decision": {
 				"Approve": "Freigeben",
-				"Reject": "Ablehnen"
+				"Reject": "Ablehnen",
+				"title": "Wartet auf Ihre Entscheidung",
+				"commentLabel": "Kommentar",
+				"commentRequired": "Dieser Knoten verlangt einen Kommentar zur Entscheidung.",
+				"commentOptional": "Optional. Er wird mit der Entscheidung aufgezeichnet.",
+				"commentCount": "{{used}} von {{max}} Zeichen",
+				"commentTooLong": "Halten Sie den Kommentar bei höchstens {{max}} Zeichen.",
+				"advanced": "Erweitert",
+				"payloadLabel": "Nutzdaten (JSON-Objekt)",
+				"payloadNotObject": "Geben Sie ein JSON-Objekt ein oder lassen Sie das Feld leer.",
+				"alreadyDecided": "Das wurde bereits mit „{{decision}}“ beantwortet.",
+				"runMovedOn": "Dieser Lauf ist weitergelaufen — er wartet nicht mehr auf diese Entscheidung.",
+				"failed": "Diese Entscheidung konnte nicht aufgezeichnet werden."
 			},
 			"joinPolicy": {
 				"All": "Auf jeden eingehenden Zweig warten",
@@ -5722,6 +5734,43 @@
 				"showDetail": "Details anzeigen",
 				"hideDetail": "Details ausblenden",
 				"loadMore": "Mehr laden"
+			},
+			"nodePanel": {
+				"close": "Schließen",
+				"loadFailed": "Dieser Knoten konnte nicht geladen werden.",
+				"attempt": "Versuch {{attempt}}",
+				"started": "gestartet {{when}}",
+				"completed": "beendet {{when}}",
+				"runMovedOn": "Der Lauf ist nach dem Fehlschlag dieses Knotens weitergelaufen — hier steht, was dieser Knoten getan hat, nicht wie der Lauf ausgegangen ist.",
+				"tabInput": "Eingabe",
+				"tabOutput": "Ausgabe",
+				"tabError": "Fehler",
+				"emptyDocument": "Die Laufzeit hat hier nichts aufgezeichnet.",
+				"pauseDecision": "Beantwortet mit {{decision}}",
+				"passThrough": "Ein Bedingungs- und ein Parallel-Knoten reichen die Ausgabe ihrer Eingabe unverändert weiter; eine Ausgabe, die dem vorherigen Knoten gleicht, ist also richtig.",
+				"joinOutput": "Ein Zusammenführungs-Knoten gibt eine Zuordnung aus, geschlüsselt nach dem Knoten, aus dem der jeweilige Zweig kam."
+			},
+			"startRun": {
+				"title": "Einen Lauf starten",
+				"runsVersion": "Führt Version {{version}} von {{name}} aus",
+				"inputLabel": "Eingabe (JSON)",
+				"byteCount": "{{used}} von {{max}} Bytes",
+				"tooLarge": "Diese Eingabe ist größer, als der Node annimmt. Entfernen Sie {{over}} Bytes.",
+				"invalidJson": "Geben Sie gültiges JSON ein oder lassen Sie das Feld leer.",
+				"saveFirst": "Speichern Sie den Graphen zuerst — ein Lauf führt die gespeicherte Definition aus, nicht die Zeichenfläche.",
+				"staleVersion": "Dieser Workflow wurde erneut gespeichert, seit Sie diesen Dialog geöffnet haben. Laden Sie ihn neu und starten Sie den Lauf dann.",
+				"failed": "Der Lauf konnte nicht gestartet werden.",
+				"start": "Lauf starten"
+			},
+			"toolbar": {
+				"version": "Definitionsversion {{version}}",
+				"started": "gestartet {{when}}",
+				"completed": "beendet {{when}}",
+				"back": "Zurück zum Editor",
+				"cancel": "Lauf abbrechen",
+				"cancelConfirmTitle": "Diesen Lauf abbrechen?",
+				"cancelConfirmBody": "Die bereits laufenden Knoten laufen zuerst aus, und es wird nichts Neues mehr gestartet.",
+				"cancelFailed": "Der Lauf konnte nicht abgebrochen werden."
 			}
 		},
 		"integrations": {
