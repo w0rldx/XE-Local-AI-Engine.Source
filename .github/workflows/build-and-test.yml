@@ -255,8 +255,9 @@ jobs:
               --results-directory "$COVERAGE_ROOT/$module" \
               2>&1 | tee "$COVERAGE_ROOT-$module.log" | sed "s/^/[$module] /"
             # Read dotnet test's own status, not the pipeline's: `sed` is last and always exits 0,
-            # so without this the gate would depend on `set -o pipefail` being in force 60 lines
-            # away. Capture it before anything else — the next command overwrites PIPESTATUS.
+            # so without this the gate would depend on the `set -euo pipefail` at the top of this
+            # step still being in force here. Capture it before anything else — the next command
+            # overwrites PIPESTATUS.
             local status="${PIPESTATUS[0]}"
             # Hollow-gate guard: MTP always emits a "Passed!" or "Failed!" summary per suite that
             # ran. A suite that enrolled nothing prints no summary and still exits 0 — this catches
