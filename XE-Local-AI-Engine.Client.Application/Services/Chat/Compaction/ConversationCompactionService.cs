@@ -128,11 +128,9 @@ internal sealed class ConversationCompactionService(
             return new ConversationCompactionResult(ConversationCompactionOutcome.SummarizerReturnedNothing);
         }
 
-        // Guard against a runaway synopsis larger than the span it replaces.
-        if (summary.Length > _options.MaxSummaryChars)
-        {
-            summary = summary[.._options.MaxSummaryChars];
-        }
+        // Guard against a runaway synopsis larger than the span it replaces. Shares the summarizer's rune-safe cut so this
+        // second clamp can never split a surrogate pair, whatever IConversationSummarizer implementation produced the text.
+        summary = ConversationSummarizer.TruncateAtRuneBoundary(summary, Math.Max(1, _options.MaxSummaryChars));
 
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         await _persistence

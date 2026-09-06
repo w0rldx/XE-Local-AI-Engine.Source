@@ -222,7 +222,7 @@ internal sealed class ConversationSummarizer(
         return best;
     }
 
-    private static string TruncateAtRuneBoundary(string value, int maximumChars)
+    internal static string TruncateAtRuneBoundary(string value, int maximumChars)
     {
         if (value.Length <= maximumChars)
         {
