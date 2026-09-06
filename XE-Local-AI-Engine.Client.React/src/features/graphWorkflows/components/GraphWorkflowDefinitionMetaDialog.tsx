@@ -9,13 +9,13 @@ import { z } from "zod";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 
-/** `GraphWorkflowDefinition.Name` is bounded server-side; the message is a full i18n key, like the graph schemas'. */
+/** `GraphWorkflowRequestLimits.MaxNameLength`, verbatim; the message is a full i18n key, like the graph schemas'. */
 const metaSchema = z.object({
 	name: z
 		.string()
 		.trim()
 		.min(1, { message: "pages.graphWorkflows.form.name.required" })
-		.max(120, { message: "pages.graphWorkflows.form.name.tooLong" }),
+		.max(200, { message: "pages.graphWorkflows.form.name.tooLong" }),
 	description: z.string(),
 });
 
@@ -88,7 +88,7 @@ export function GraphWorkflowDefinitionMetaDialog({
 					placeholder={t("pages.graphWorkflows.definitions.namePlaceholder", "Nightly triage")}
 					value={name}
 					required={true}
-					maxLength={120}
+					maxLength={200}
 					error={error}
 					onChange={(event) => setName(event.currentTarget.value)}
 					data-testid="gw-definition-meta-name"

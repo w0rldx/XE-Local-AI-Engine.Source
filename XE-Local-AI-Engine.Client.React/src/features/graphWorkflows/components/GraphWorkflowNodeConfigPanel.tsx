@@ -111,7 +111,8 @@ export function GraphWorkflowNodeConfigPanel({
 	const [touched, setTouched] = useState<readonly string[]>([]);
 	// A bounded Mantine NumberInput fires an `onChange` of its own on mount (agent-knowledge §5), which would turn an
 	// unset `maxAttempts` into the minimum before the operator has typed anything. Effects run child-first, so this is
-	// still false while that spurious change fires and true by the time a real edit can happen.
+	// still false while that spurious change fires and true by the time a real edit can happen. NOT covered by a test:
+	// Mantine does not fire that change under jsdom, so any test of it would pass with the guard deleted.
 	const ready = useRef(false);
 	useEffect(() => {
 		ready.current = true;
@@ -251,7 +252,10 @@ export function GraphWorkflowNodeConfigPanel({
 							label={t("pages.graphWorkflows.config.allowedDecisions", "Offered decisions")}
 							value={[...node.allowedDecisions]}
 							error={errorFor("allowedDecisions")}
-							onChange={(values) => onChange({ allowedDecisions: toGraphWorkflowDecisionKinds(values) })}
+							onChange={(values) => {
+								touch("allowedDecisions");
+								onChange({ allowedDecisions: toGraphWorkflowDecisionKinds(values) });
+							}}
 							data-testid="gw-node-config-decisions"
 						>
 							<Group gap="md" mt={6}>
@@ -398,7 +402,12 @@ export function GraphWorkflowNodeConfigPanel({
 					placeholder={String(graphWorkflowDefaultMaxAttempts(node.kind))}
 					value={node.maxAttempts ?? ""}
 					min={1}
-					max={10}
+					// The schema's own bound, and `clampBehavior="none"` so a stored value OUTSIDE it is never rewritten:
+					// Mantine clamps on blur by default, which would silently turn a stored 200 into the maximum and dirty
+					// the graph on a tab-through. The server has no upper bound at all, so the Zod message is what says the
+					// value is out of range — the field does not get to edit it.
+					max={100}
+					clampBehavior="none"
 					allowDecimal={false}
 					disabled={readOnly}
 					error={errorFor("maxAttempts")}

@@ -7,7 +7,7 @@
 
 import { Alert, Button, Group, Select, Stack, Switch, Text, TextInput } from "@mantine/core";
 import { IconAlertTriangle, IconTrash } from "@tabler/icons-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type {
@@ -49,6 +49,10 @@ export function GraphWorkflowEdgeConfigPanel({
 }: GraphWorkflowEdgeConfigPanelProps) {
 	const { t } = useTranslation();
 	const [touched, setTouched] = useState<readonly string[]>([]);
+	// Per-edge, like the node panel's: the page keeps this component mounted and swaps the `edge` prop, so without the
+	// reset a field blurred on one edge opens the next one already showing that edge's message.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the reset is keyed on edge identity, not on a value it reads.
+	useEffect(() => setTouched([]), [edge.id]);
 	const condition = edge.data?.condition;
 	const inheritedPath = sourceNode?.kind === "Condition" ? (sourceNode.path ?? "") : "";
 

@@ -113,7 +113,7 @@ describe("GraphWorkflowNodeConfigPanel", () => {
 		expect(screen.getByText("That key already belongs to another node or edge.")).toBeTruthy();
 	});
 
-	it("shows the kind's default max attempts and writes nothing on mount", () => {
+	it("shows the kind's default max attempts without writing it", () => {
 		const onChange = vi.fn();
 		renderPanel({ ...defaultNodeData("Agent", "agent-1"), maxAttempts: undefined } as GraphWorkflowCanvasNodeData, {
 			onChange,
@@ -123,11 +123,59 @@ describe("GraphWorkflowNodeConfigPanel", () => {
 		expect(attempts.value).toBe("");
 		// 3 for an Agent (F-1), shown as the placeholder because "unset" and "3" are different documents.
 		expect(attempts.placeholder).toBe("3");
-		expect(onChange).not.toHaveBeenCalled();
 
 		fireEvent.change(attempts, { target: { value: "5" } });
 
 		expect(onChange).toHaveBeenCalledWith({ maxAttempts: 5 });
+	});
+
+	it("leaves a stored max-attempts value above the field's bound untouched on blur", () => {
+		const onChange = vi.fn();
+		// Mantine's NumberInput clamps on blur by DEFAULT. A stored 200 tabbed through would come back as the maximum,
+		// dirtying the graph with an edit the operator never made — and the server has no upper bound to justify it.
+		renderPanel({ ...defaultNodeData("Agent", "agent-1"), maxAttempts: 200 } as GraphWorkflowCanvasNodeData, { onChange });
+
+		const attempts = screen.getByTestId("gw-node-config-attempts") as HTMLInputElement;
+		fireEvent.focus(attempts);
+		fireEvent.blur(attempts);
+
+		expect(attempts.value).toBe("200");
+		expect(onChange).not.toHaveBeenCalled();
+		expect(screen.getByText("Enter a whole number between 1 and 100.")).toBeTruthy();
+	});
+
+	it("reports an empty decision set once the operator has changed it", () => {
+		// A Pause offering nothing is the state the server refuses; the panel held the message and had no way to show it,
+		// because nothing marked the group touched. `onChange` is a spy here, so the set stays empty across the click.
+		const node = { ...defaultNodeData("Pause", "pause-1"), allowedDecisions: [] } as GraphWorkflowCanvasNodeData;
+		renderPanel(node);
+
+		expect(screen.queryByText("Offer at least one decision.")).toBeNull();
+
+		fireEvent.click(screen.getByTestId("gw-node-config-decision-Approve"));
+
+		expect(screen.getByText("Offer at least one decision.")).toBeTruthy();
+	});
+
+	it("reports a binding row with no path once the row has been left", () => {
+		const node = {
+			...defaultNodeData("Tool", "tool-1"),
+			toolName: "read_file",
+			argumentBindings: [{ parameter: "path", path: "" }],
+		} as GraphWorkflowCanvasNodeData;
+		renderPanel(node);
+
+		fireEvent.blur(screen.getByTestId("gw-node-config-binding-path-0"));
+
+		expect(screen.getByTestId("gw-node-config-bindings-error").textContent).toBe("Enter the path this argument reads from.");
+	});
+
+	it("keeps showing a configured tool that the node no longer offers", () => {
+		const node = { ...defaultNodeData("Tool", "tool-1"), toolName: "retired_tool" } as GraphWorkflowCanvasNodeData;
+		renderPanel(node);
+
+		// Blank would read as "no tool configured" while the graph still carries one.
+		expect((screen.getByTestId("gw-node-config-tool") as HTMLInputElement).value).toBe("retired_tool");
 	});
 
 	it("offers exactly the tools it was given", async () => {

@@ -5678,7 +5678,7 @@
 					"collision": "Dieser Schlüssel gehört bereits zu einem anderen Knoten oder einer anderen Kante."
 				},
 				"maxAttempts": {
-					"range": "Geben Sie eine ganze Zahl zwischen 1 und 10 ein."
+					"range": "Geben Sie eine ganze Zahl zwischen 1 und 100 ein."
 				},
 				"timeoutSeconds": {
 					"min": "Geben Sie eine ganze Anzahl Sekunden ein oder lassen Sie das Feld leer für kein Zeitlimit."
@@ -5724,7 +5724,7 @@
 				},
 				"name": {
 					"required": "Bitte einen Namen eingeben.",
-					"tooLong": "Höchstens 120 Zeichen verwenden."
+					"tooLong": "Höchstens 200 Zeichen verwenden."
 				}
 			},
 			"config": {

@@ -7,6 +7,7 @@ import { IconAlertTriangle, IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import type { GraphWorkflowDefinitionSummaryResponse } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 
@@ -107,7 +108,7 @@ export function GraphWorkflowDefinitionList({
 										<Table.Td>{definition.version ?? 1}</Table.Td>
 										<Table.Td>
 											<Text size="sm" c="dimmed">
-												{definition.updatedAtUtc ? new Date(definition.updatedAtUtc).toLocaleString() : "—"}
+												{formatTimestamp(definition.updatedAtUtc ?? null)}
 											</Text>
 										</Table.Td>
 										<Table.Td>

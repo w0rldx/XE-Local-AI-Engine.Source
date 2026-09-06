@@ -5,6 +5,7 @@
 // turned off that leaves the condition behind to keep branching on the next save.
 
 import { fireEvent, screen } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { GraphWorkflowEdgeConfigPanel } from "@/features/graphWorkflows/components/GraphWorkflowEdgeConfigPanel";
@@ -89,6 +90,34 @@ describe("GraphWorkflowEdgeConfigPanel", () => {
 		fireEvent.click(screen.getByTestId("gw-edge-config-conditional"));
 
 		expect(onChange).toHaveBeenCalledWith({ condition: undefined });
+	});
+
+	it("drops a field message when the page switches to another edge", () => {
+		// The page keeps this component mounted and swaps the `edge` prop, so the harness does the same rather than
+		// remounting — a remount would clear the touched state on its own and prove nothing.
+		function SwitchHarness() {
+			const [edge, setEdge] = useState(edgeWith({ path: "not a path!", op: "Eq", value: "true" }));
+			return (
+				<>
+					<button
+						type="button"
+						onClick={() => setEdge({ ...edgeWith({ path: "also bad!", op: "Eq", value: "true" }), id: "e2" })}
+						data-testid="switch-edge"
+					>
+						switch
+					</button>
+					<GraphWorkflowEdgeConfigPanel edge={edge} sourceNode={undefined} issues={[]} onChange={vi.fn()} onRemove={vi.fn()} />
+				</>
+			);
+		}
+		renderWithProviders(<SwitchHarness />);
+
+		fireEvent.blur(screen.getByTestId("gw-edge-config-path"));
+		expect(screen.getByText("Use a dot path such as output.json.status.")).toBeTruthy();
+
+		fireEvent.click(screen.getByTestId("switch-edge"));
+
+		expect(screen.queryByText("Use a dot path such as output.json.status.")).toBeNull();
 	});
 
 	it("seeds an Eq condition when the conditional switch is turned on", () => {
