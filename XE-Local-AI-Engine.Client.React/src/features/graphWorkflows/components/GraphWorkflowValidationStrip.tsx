@@ -31,14 +31,15 @@ export function GraphWorkflowValidationStrip({ issues, onSelectSubject }: GraphW
 		return null;
 	}
 
-	// De-duplicated by the rendered sentence: `noStart` raised by the client and again by the server is ONE problem, and
-	// two identical lines would read as two. It also makes the sentence a stable React key.
+	// De-duplicated: `noStart` raised by the client and again by the server is ONE problem, and two identical lines would
+	// read as two. A keyed issue is identified by WHAT it is about, not by how it reads — two server errors on different
+	// nodes can carry the same sentence, and collapsing those would hide one of the two bad cards.
 	const keyed = new Map<string, GraphWorkflowGraphIssue>();
 	const unkeyed = new Map<string, string>();
 	for (const issue of issues) {
 		const text = issueText(issue);
 		if (issue.subject !== undefined && issue.subject.length > 0) {
-			keyed.set(text, issue);
+			keyed.set(`${issue.subject}|${issue.rule}|${issue.message ?? ""}`, issue);
 		} else {
 			unkeyed.set(text, text);
 		}
@@ -63,16 +64,16 @@ export function GraphWorkflowValidationStrip({ issues, onSelectSubject }: GraphW
 			) : null}
 			{keyed.size > 0 ? (
 				<Group gap="xs" wrap="wrap">
-					{[...keyed.entries()].map(([text, issue]) => (
+					{[...keyed.entries()].map(([identity, issue]) => (
 						<Button
-							key={text}
+							key={identity}
 							size="compact-xs"
 							variant="light"
 							color="red"
 							onClick={() => onSelectSubject(issue.subject ?? "")}
 							data-testid={`graph-workflow-validation-issue-${issue.subject}`}
 						>
-							{text}
+							{issueText(issue)}
 						</Button>
 					))}
 				</Group>

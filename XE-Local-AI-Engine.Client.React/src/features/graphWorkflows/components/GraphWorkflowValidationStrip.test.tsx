@@ -50,6 +50,22 @@ describe("GraphWorkflowValidationStrip", () => {
 		expect(onSelectSubject).toHaveBeenCalledWith("e3");
 	});
 
+	it("keeps one chip per subject when two server errors read the same", () => {
+		// De-duplicating on the sentence would hide one of two bad cards behind the other.
+		renderWithProviders(
+			<GraphWorkflowValidationStrip
+				issues={[
+					{ rule: "serverRejected", subject: "analyze", message: "this node names a tool that is not allowed" },
+					{ rule: "serverRejected", subject: "lookup", message: "this node names a tool that is not allowed" },
+				]}
+				onSelectSubject={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByTestId("graph-workflow-validation-issue-analyze")).toBeTruthy();
+		expect(screen.getByTestId("graph-workflow-validation-issue-lookup")).toBeTruthy();
+	});
+
 	it("renders an unkeyed issue once above the keyed ones, and de-duplicates a repeat", () => {
 		renderWithProviders(
 			<GraphWorkflowValidationStrip

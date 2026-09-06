@@ -15,18 +15,22 @@ import {
 	graphWorkflowNodeTypeByKind,
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import type { GraphWorkflowNodeKind } from "@/features/graphWorkflows/models/GraphWorkflowModels";
+import en from "@/locales/en.json";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 interface HandleMockProps {
 	readonly type: string;
 	readonly id?: string;
 	readonly position: string;
+	readonly children?: React.ReactNode;
 }
 
 vi.mock("@xyflow/react", () => ({
 	Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
-	Handle: ({ type, id, position }: HandleMockProps) => (
-		<div data-testid={`handle-${type}-${id ?? "default"}`} data-position={position} />
+	Handle: ({ type, id, position, children }: HandleMockProps) => (
+		<div data-testid={`handle-${type}-${id ?? "default"}`} data-position={position}>
+			{children}
+		</div>
 	),
 }));
 
@@ -71,11 +75,30 @@ describe("GraphWorkflowNodeCard handles", () => {
 		expect(screen.getByTestId("handle-target-default")).toBeTruthy();
 	});
 
-	it("gives a Pause node one source handle per allowed decision", () => {
+	// `layoutGraphWorkflow` ranks left to right, so a target on the top or a source on the bottom draws every
+	// auto-arranged edge as a backwards loop.
+	it("puts targets on the left and every source on the right", () => {
+		renderCard(nodeData("Condition", "check"));
+
+		expect(screen.getByTestId("handle-target-default").getAttribute("data-position")).toBe("left");
+		expect(screen.getByTestId("handle-source-true").getAttribute("data-position")).toBe("right");
+		expect(screen.getByTestId("handle-source-false").getAttribute("data-position")).toBe("right");
+
+		cleanup();
+		renderCard(nodeData("Agent", "analyze"));
+		expect(screen.getByTestId("handle-target-default").getAttribute("data-position")).toBe("left");
+		expect(screen.getByTestId("handle-source-default").getAttribute("data-position")).toBe("right");
+	});
+
+	it("gives a Pause node one source handle per allowed decision, captioned with the decision's label", () => {
 		renderCard(nodeData("Pause", "review", { allowedDecisions: ["Approve"] }));
 
-		expect(screen.getByTestId("handle-source-Approve")).toBeTruthy();
+		const approve = screen.getByTestId("handle-source-Approve");
+		expect(approve).toBeTruthy();
 		expect(screen.queryByTestId("handle-source-Reject")).toBeNull();
+		// The handle id stays the wire token, because `onConnect` routes on it; the caption comes off the label map, so
+		// renaming the English word for a decision moves the caption and leaves the routing alone.
+		expect(approve.textContent).toBe(en.pages.graphWorkflows.decision.Approve);
 
 		cleanup();
 		renderCard(nodeData("Pause", "review"));

@@ -32,9 +32,11 @@ import {
 import { layoutGraphWorkflow } from "@/features/graphWorkflows/models/GraphWorkflowLayout";
 import {
 	GRAPH_WORKFLOW_MAX_NODES,
+	type GraphWorkflowDecisionKind,
 	type GraphWorkflowGraph,
 	type GraphWorkflowNodeKind,
 	asGraphWorkflowDecisionKind,
+	toGraphWorkflowDecisionKinds,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import {
 	type GraphWorkflowGraphIssue,
@@ -113,16 +115,48 @@ function connectionPrefill(
 	return {};
 }
 
-/** Where a palette click drops a node when nothing said where. Staggered so a run of clicks does not stack one card. */
-function nextFreePosition(count: number): XYPosition {
-	return { x: 320, y: 80 + count * 60 };
+/**
+ * The decisions a Pause node stops offering under this patch. Empty for every other edit.
+ *
+ * `patch` is a partial of a UNION, so `allowedDecisions` is only reachable through the index signature the node base
+ * carries; the narrowing back to real decision kinds is the model's.
+ */
+function droppedDecisions(
+	previous: GraphWorkflowCanvasNodeData | undefined,
+	patch: Partial<GraphWorkflowCanvasNodeData>,
+): readonly GraphWorkflowDecisionKind[] {
+	const next = patch["allowedDecisions"];
+	if (previous?.kind !== "Pause" || !Array.isArray(next)) {
+		return [];
+	}
+	const kept = toGraphWorkflowDecisionKinds(next.filter((entry): entry is string => typeof entry === "string"));
+	return previous.allowedDecisions.filter((decision) => !kept.includes(decision));
+}
+
+/** Which decision an out-edge of a Pause routes: its handle, or the condition value when no handle was stored. */
+function edgeDecision(edge: GraphWorkflowCanvasEdge): string {
+	return edge.sourceHandle ?? edge.data?.condition?.value ?? "";
+}
+
+/**
+ * Where a palette click drops a node when nothing said where: the first staggered slot no node already occupies.
+ * Staggering by the node COUNT would reuse a slot the moment anything was deleted, dropping the new card on top of one.
+ */
+function nextFreePosition(nodes: readonly GraphWorkflowCanvasNode[]): XYPosition {
+	for (let index = 0; ; index += 1) {
+		const candidate = { x: 320, y: 80 + index * 60 };
+		if (!nodes.some((node) => node.position.x === candidate.x && node.position.y === candidate.y)) {
+			return candidate;
+		}
+	}
 }
 
 export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined): GraphWorkflowEditorState {
 	// Lazy initialisers, not an effect on `initial`: the page loads a definition by calling `reset`, so a re-render
 	// with the same graph must never throw away the operator's in-progress edits.
-	const [nodes, setNodes] = useState<readonly GraphWorkflowCanvasNode[]>(() => graphToCanvas(initial).nodes);
-	const [edges, setEdges] = useState<readonly GraphWorkflowCanvasEdge[]>(() => graphToCanvas(initial).edges);
+	const [initialCanvas] = useState(() => graphToCanvas(initial));
+	const [nodes, setNodes] = useState<readonly GraphWorkflowCanvasNode[]>(initialCanvas.nodes);
+	const [edges, setEdges] = useState<readonly GraphWorkflowCanvasEdge[]>(initialCanvas.edges);
 	const [baseline, setBaseline] = useState<GraphWorkflowGraph | undefined>(initial);
 	const [lastRefusal, setLastRefusal] = useState<GraphWorkflowEditorRefusal | undefined>(undefined);
 	// Held in state, not derived: `graphToCanvas` has already dropped the unreadable `op` and narrowed the unknown kind
@@ -169,8 +203,8 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 				return;
 			}
 			const key = mintEdgeKey([...nodes.map((node) => node.id), ...edges.map((edge) => edge.id)]);
-			setEdges([
-				...edges,
+			setEdges((current) => [
+				...current,
 				{
 					id: key,
 					source,
@@ -195,13 +229,15 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 				refuse("tooManyNodes");
 				return undefined;
 			}
+			// The key is minted from the closure because it is this function's RETURN value; the write itself is functional,
+			// like every other mutator here.
 			const key = mintNodeKey(kind, [...nodes.map((node) => node.id), ...edges.map((edge) => edge.id)]);
-			setNodes([
-				...nodes,
+			setNodes((current) => [
+				...current,
 				{
 					id: key,
 					type: graphWorkflowNodeTypeByKind[kind],
-					position: position ?? nextFreePosition(nodes.length),
+					position: position ?? nextFreePosition(current),
 					data: defaultNodeData(kind, key),
 				},
 			]);
@@ -210,17 +246,32 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 		[edges, nodes, refuse],
 	);
 
-	const updateNodeData = useCallback((key: string, patch: Partial<GraphWorkflowCanvasNodeData>) => {
-		setNodes((current) =>
-			current.map((node) =>
-				node.id === key
-					? // `kind` and `key` are re-pinned AFTER the patch: a panel that spreads a whole data object in must not
-						// be able to turn an Agent card into an End one, and a rename has to go through the cascade in `renameNode`.
-						{ ...node, data: { ...node.data, ...patch, kind: node.data.kind, key: node.data.key } as GraphWorkflowCanvasNodeData }
-					: node,
-			),
-		);
-	}, []);
+	const updateNodeData = useCallback(
+		(key: string, patch: Partial<GraphWorkflowCanvasNodeData>) => {
+			setNodes((current) =>
+				current.map((node) =>
+					node.id === key
+						? // `kind` and `key` are re-pinned AFTER the patch: a panel that spreads a whole data object in must not
+							// be able to turn an Agent card into an End one, and a rename has to go through the cascade in `renameNode`.
+							{ ...node, data: { ...node.data, ...patch, kind: node.data.kind, key: node.data.key } as GraphWorkflowCanvasNodeData }
+						: node,
+				),
+			);
+			// Taking a decision away from a Pause orphans the out-edge that routed it: React Flow stops DRAWING an edge
+			// whose source handle no longer exists, but the edge stays in the graph, gets saved, and still routes at run
+			// time. Pruning here is what keeps the canvas and the saved document the same graph.
+			const dropped = droppedDecisions(
+				nodes.find((node) => node.id === key)?.data,
+				patch,
+			);
+			if (dropped.length > 0) {
+				setEdges((current) =>
+					current.filter((edge) => edge.source !== key || !dropped.some((decision) => decision === edgeDecision(edge))),
+				);
+			}
+		},
+		[nodes],
+	);
 
 	const renameNode = useCallback(
 		(from: string, to: string): GraphWorkflowRenameOutcome => {
