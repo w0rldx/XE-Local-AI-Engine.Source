@@ -5905,6 +5905,7 @@
 				"saveFirst": "Zuerst speichern — ein Lauf führt den gespeicherten Graphen aus, nicht die Arbeitsfläche.",
 				"saved": "Workflow gespeichert.",
 				"startRun": "Lauf starten",
+				"unsavedLayout": "Dieser Graph hatte kein gespeichertes Layout — speichern Sie, um das angezeigte zu behalten.",
 				"validate": "Prüfen",
 				"validationFailed": "Der Graph konnte nicht geprüft werden.",
 				"validationPassed": "Dieser Graph hat die Prüfung bestanden."

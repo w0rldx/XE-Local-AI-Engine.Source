@@ -5905,6 +5905,7 @@
 				"saveFirst": "Save first — a run executes the saved graph, not the canvas.",
 				"saved": "Workflow saved.",
 				"startRun": "Start run",
+				"unsavedLayout": "This graph had no saved layout — Save to keep the one on screen.",
 				"validate": "Check",
 				"validationFailed": "The graph could not be checked.",
 				"validationPassed": "This graph passed validation."

@@ -159,6 +159,27 @@ describe("GraphWorkflowsPage", () => {
 		await openAndDirty();
 	});
 
+	it("keeps Save disabled while the graph has a structural problem, however dirty the canvas is", async () => {
+		// No End node, and no stored positions. The missing positions are what make it dirty on open (ruling C4), so
+		// Save being disabled here can only be the structural rule — not "nothing has changed".
+		const noEndGraph: GraphWorkflowGraph = {
+			schemaVersion: 1,
+			nodes: [
+				{ key: "start", kind: "Start", label: "Start", config: { inputSchema: null, defaultInput: null } },
+				{ key: "work", kind: "Agent", label: "Work", config: {} },
+			],
+			edges: [{ key: "e1", from: "start", to: "work" }],
+		};
+		server.use(...editorRoutes(noEndGraph));
+
+		renderPage({ definitionId });
+
+		// The laid-out canvas is unsaved work, presented as a normal state rather than as a failure.
+		expect(await screen.findByTestId("gw-page-unsaved-layout")).toBeDefined();
+		expect(screen.getByTestId<HTMLButtonElement>("gw-page-save").disabled).toBe(true);
+		expect(screen.getByTestId("graph-workflow-validation-unkeyed").textContent).toMatch(/no End node/i);
+	});
+
 	it("refuses to start a run from a dirty canvas and says why", async () => {
 		server.use(...editorRoutes());
 

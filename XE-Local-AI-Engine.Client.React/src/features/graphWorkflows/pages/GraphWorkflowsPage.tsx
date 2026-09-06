@@ -172,6 +172,10 @@ function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow }: Mod
 		reset(loadedGraph);
 	}, [definitionId, loadedGraph, loadedKey, reset]);
 
+	// A stored node with no `position` is laid out on open, and that layout IS an edit (ruling C4) — so a graph nobody
+	// has touched opens dirty. Not an error and never auto-saved: the hint just says which kind of unsaved this is.
+	const layoutIsUnsaved = (loadedGraph?.nodes ?? []).some((node) => !node.position);
+
 	const serverIssues = validated?.graph === editor.graph ? validated.issues : NO_ISSUES;
 	const issues = useMemo(() => [...editor.issues, ...serverIssues], [editor.issues, serverIssues]);
 
@@ -414,9 +418,15 @@ function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow }: Mod
 				{t("pages.graphWorkflows.page.startRun", "Start run")}
 			</Button>
 			{editor.isDirty ? (
-				<Text size="xs" c="dimmed" data-testid="gw-page-save-first">
-					{t("pages.graphWorkflows.page.saveFirst", "Save first — a run executes the saved graph, not the canvas.")}
-				</Text>
+				layoutIsUnsaved ? (
+					<Text size="xs" c="dimmed" data-testid="gw-page-unsaved-layout">
+						{t("pages.graphWorkflows.page.unsavedLayout", "This graph had no saved layout — Save to keep the one on screen.")}
+					</Text>
+				) : (
+					<Text size="xs" c="dimmed" data-testid="gw-page-save-first">
+						{t("pages.graphWorkflows.page.saveFirst", "Save first — a run executes the saved graph, not the canvas.")}
+					</Text>
+				)
 			) : null}
 		</>
 	);
