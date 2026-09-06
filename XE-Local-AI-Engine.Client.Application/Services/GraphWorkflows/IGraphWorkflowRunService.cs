@@ -20,6 +20,16 @@ public sealed record GraphWorkflowRunDetail(GraphWorkflowRunSnapshot Run, IReadO
 public sealed record GraphWorkflowRunEventPage(IReadOnlyList<GraphWorkflowRunEventSnapshot> Events, long LastSeq, bool ReplayTruncated);
 
 /// <summary>
+///     What a decision left behind: the answer that now stands, and the CURRENT statuses of the run and of the pause it
+///     answered. Current, not predicted — what follows a decision is the dispatcher's work on its own clock, so a
+///     result promising <c>Running</c> would be describing a tick that has not happened.
+/// </summary>
+public sealed record GraphWorkflowDecisionResult(
+    GraphWorkflowDecisionKind Decision,
+    GraphWorkflowRunStatus RunStatus,
+    GraphWorkflowNodeRunStatus NodeRunStatus);
+
+/// <summary>
 ///     Both ways a run command can lose, under one type because from the client's side they are one story — you are
 ///     acting on a version of this run that no longer exists: a stale <c>definitionVersion</c> at start, and a cancel of
 ///     a run that has already finished. Maps to a 409 through <c>ConflictExceptionHandler</c>.
@@ -69,6 +79,30 @@ public interface IGraphWorkflowRunService
         CancellationToken cancellationToken = default);
 
     Task<GraphWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid runId, string nodeKey, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Answers the pause at <paramref name="nodeKey" />, signals, and reports what the rows now say.
+    ///     <para>
+    ///         <b>Idempotent on <paramref name="operationId" />.</b> The same id sent twice answers with the decision it
+    ///         already recorded rather than deciding again; the same id naming a different answer, a different person or
+    ///         a different pause of the same run is a caller bug and answers
+    ///         <see cref="GraphWorkflowGateAlreadyDecidedException" />. Comment and payload are deliberately not
+    ///         compared — they are the free text around the act rather than the act.
+    ///     </para>
+    ///     <para>
+    ///         BOTH answers succeed the node run. A rejection reaches the run through an out-edge that matches nothing,
+    ///         not through a node failure, and a rejection with nowhere to go strands the run as
+    ///         <c>Cancelled</c>/<c>GateRejected</c> — an honest outcome rather than an error to refuse here.
+    ///     </para>
+    /// </summary>
+    Task<GraphWorkflowDecisionResult> DecideAsync(Guid runId,
+        string nodeKey,
+        Guid operationId,
+        GraphWorkflowDecisionKind decision,
+        string? comment,
+        string? payloadJson,
+        string? decidedBySubject,
+        CancellationToken cancellationToken = default);
 
     /// <summary><paramref name="afterSeq" /> is an EXCLUSIVE lower bound; the page is capped at the configured replay limit.</summary>
     Task<GraphWorkflowRunEventPage> ListEventsAsync(Guid runId, long afterSeq, CancellationToken cancellationToken = default);

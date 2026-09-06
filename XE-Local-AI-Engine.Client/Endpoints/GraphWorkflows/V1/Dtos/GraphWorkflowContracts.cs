@@ -216,6 +216,30 @@ public sealed class GraphWorkflowNodeRunRequest
 }
 
 /// <summary>
+///     One answer to one pause. <see cref="OperationId" /> is the caller-minted idempotency key: the same one always
+///     answers with the decision it already recorded, and a different one on an answered pause is a second human act.
+///     <para>
+///         <see cref="Payload" /> rides as raw JSON because it is the operator's document rather than a shape this
+///         runtime declares; it must be a JSON object, and it is bounded well under the node output envelope.
+///     </para>
+/// </summary>
+public sealed class DecideGraphWorkflowNodeRunRequest
+{
+    public Guid RunId { get; init; }
+
+    public string NodeKey { get; init; } = string.Empty;
+
+    public Guid OperationId { get; init; }
+
+    /// <summary>A <c>GraphWorkflowDecisionKind</c> name. The validator refuses anything else, so the handler can parse it.</summary>
+    public string Decision { get; init; } = string.Empty;
+
+    public string? Comment { get; init; }
+
+    public JsonElement? Payload { get; init; }
+}
+
+/// <summary>
 ///     The event feed. <see cref="AfterSeq" /> is an EXCLUSIVE lower bound, so a client that stores the sequence it
 ///     last rendered replays nothing it already has; 0 asks for everything.
 /// </summary>
@@ -296,6 +320,13 @@ public sealed record GraphWorkflowNodeRunResponse(
 public sealed record GraphWorkflowRunEventResponse(Guid Id, long Seq, string EventType, string? NodeKey, JsonElement? Detail, long CreatedAtUtc);
 
 public sealed record ListGraphWorkflowRunsResponse(IReadOnlyList<GraphWorkflowRunSummaryResponse> Runs);
+
+/// <summary>
+///     What a decision answers with: the decision that now stands, and the CURRENT statuses of the run and of the pause
+///     it answered. Current rather than predicted — what follows a decision is the dispatcher's work on its own clock,
+///     so a run that legitimately still reads <c>WaitingForApproval</c> is reported as it is.
+/// </summary>
+public sealed record GraphWorkflowDecisionResultResponse(string Decision, string RunStatus, string NodeRunStatus);
 
 /// <summary>
 ///     One page of the event log. <see cref="ReplayTruncated" /> is observed, not inferred: the page is read one row

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 using System.Text;
 using System.Text.Json;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>One upstream node's full output document, keyed by the node it came from.</summary>
 internal sealed record GraphWorkflowUpstreamDocument(string NodeKey, string OutputDocumentJson);
@@ -128,6 +129,22 @@ internal static class GraphWorkflowDocuments
     }
 
     /// <summary>
+    ///     <c>Pause</c>: the answer a person gave, and the free text around it.
+    ///     <para>
+    ///         <c>decision</c> is the enum's NAME and nothing else, because that is the member every out-edge condition
+    ///         of a pause selects on and the exact member <see cref="GraphWorkflowStateMachine.PauseOutputJson" />
+    ///         writes for the definition-time pre-flight check. The two spellings must produce the same string or a
+    ///         graph that pre-flighted clean would route nowhere at run time.
+    ///     </para>
+    ///     <para>
+    ///         <c>comment</c> and <c>payload</c> ride beside it rather than above it: they are the operator's, not the
+    ///         router's, and a condition that could select on them would route on free text.
+    ///     </para>
+    /// </summary>
+    public static JsonElement PauseOutput(GraphWorkflowDecisionKind decision, string? comment, JsonElement? payload) =>
+        JsonSerializer.SerializeToElement(new PauseOutputPayload(decision.ToString(), comment, payload ?? NullValue), JsonOptions);
+
+    /// <summary>
     ///     <c>Join</c>: the per-source map over its satisfied inbound edges, so everything downstream of a join sees
     ///     every branch rather than whichever one the shortcut would have picked.
     /// </summary>
@@ -235,4 +252,6 @@ internal static class GraphWorkflowDocuments
     private sealed record StartOutputPayload(JsonElement Input);
 
     private sealed record EndOutputPayload(string Outcome, JsonElement Result);
+
+    private sealed record PauseOutputPayload(string Decision, string? Comment, JsonElement Payload);
 }

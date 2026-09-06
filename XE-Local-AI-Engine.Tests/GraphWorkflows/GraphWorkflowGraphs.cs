@@ -493,4 +493,72 @@ internal static class GraphWorkflowGraphs
                                         ]
                                       }
                                       """;
+
+    /// <summary>
+    ///     Two pauses in a row, each offering only <c>Approve</c> over an unconditional edge. The shape the run-wide
+    ///     operation-id scope needs: an id that answered the first pause must not be able to answer the second.
+    /// </summary>
+    public const string PauseTwoPausesInSequence = """
+                                                   {
+                                                     "schemaVersion": 1,
+                                                     "nodes": [
+                                                       { "key": "start", "kind": "Start" },
+                                                       { "key": "first", "kind": "Pause",
+                                                         "config": { "prompt": "First gate?", "allowedDecisions": ["Approve"], "requireComment": false } },
+                                                       { "key": "second", "kind": "Pause",
+                                                         "config": { "prompt": "Second gate?", "allowedDecisions": ["Approve"], "requireComment": false } },
+                                                       { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                     ],
+                                                     "edges": [
+                                                       { "key": "e1", "from": "start", "to": "first" },
+                                                       { "key": "e2", "from": "first", "to": "second" },
+                                                       { "key": "e3", "from": "second", "to": "done" }
+                                                     ]
+                                                   }
+                                                   """;
+
+    /// <summary>A pause that will not take an answer without a comment, over an unconditional out-edge.</summary>
+    public const string PauseRequiringComment = """
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [
+                                                    { "key": "start", "kind": "Start" },
+                                                    { "key": "review", "kind": "Pause",
+                                                      "config": { "prompt": "Why?", "allowedDecisions": ["Approve"], "requireComment": true } },
+                                                    { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                  ],
+                                                  "edges": [
+                                                    { "key": "e1", "from": "start", "to": "review" },
+                                                    { "key": "e2", "from": "review", "to": "done" }
+                                                  ]
+                                                }
+                                                """;
+
+    /// <summary>
+    ///     A rejection with somewhere to go and nowhere to arrive: the reject edge fires into a pass-through whose own
+    ///     out-edge only accepts an approval, so the run reaches no End. The definition-time pre-flight is satisfied —
+    ///     every answer HAS an edge — which is exactly why the runtime still has to record the stranding honestly.
+    /// </summary>
+    public const string PauseStrandedRejection = """
+                                                 {
+                                                   "schemaVersion": 1,
+                                                   "nodes": [
+                                                     { "key": "start", "kind": "Start" },
+                                                     { "key": "review", "kind": "Pause",
+                                                       "config": { "prompt": "Ship it?", "allowedDecisions": ["Approve", "Reject"], "requireComment": false } },
+                                                     { "key": "deadend", "kind": "Parallel", "config": {} },
+                                                     { "key": "shipped", "kind": "End", "config": { "outcome": "completed" } },
+                                                     { "key": "stranded", "kind": "End", "config": { "outcome": "completed" } }
+                                                   ],
+                                                   "edges": [
+                                                     { "key": "e1", "from": "start", "to": "review" },
+                                                     { "key": "e2", "from": "review", "to": "shipped",
+                                                       "condition": { "path": "output.decision", "op": "eq", "value": "Approve" } },
+                                                     { "key": "e3", "from": "review", "to": "deadend",
+                                                       "condition": { "path": "output.decision", "op": "eq", "value": "Reject" } },
+                                                     { "key": "e4", "from": "deadend", "to": "stranded",
+                                                       "condition": { "path": "output.decision", "op": "eq", "value": "Approve" } }
+                                                   ]
+                                                 }
+                                                 """;
 }

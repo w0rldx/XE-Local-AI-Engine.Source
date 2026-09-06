@@ -974,6 +974,13 @@ public static class LocalApiRoutes
         public const string RunNodeByKey = "graph-workflows/runs/{runId}/nodes/{nodeKey}";
 
         /// <summary>
+        ///     Answers the pause at <c>nodeKey</c>. The caller's <c>operationId</c> is the idempotency key — the same
+        ///     one always answers with the decision it already recorded, and a DIFFERENT one on an answered pause is a
+        ///     second human act, refused with the decision that stands on the body.
+        /// </summary>
+        public const string RunNodeDecide = "graph-workflows/runs/{runId}/nodes/{nodeKey}/decide";
+
+        /// <summary>
         ///     The run's event log, paged from an EXCLUSIVE watermark and capped at the configured replay limit, which
         ///     the response reports rather than leaving a client to infer from a full page.
         /// </summary>

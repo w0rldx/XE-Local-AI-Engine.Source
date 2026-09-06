@@ -131,5 +131,16 @@ public enum NodeConflictProblemType
     ///         and clients may have persisted its ordinal, so inserting above either one would shift both.
     ///     </para>
     /// </summary>
-    GraphWorkflowRunConflict
+    GraphWorkflowRunConflict,
+
+    /// <summary>
+    ///     A second human act on a graph-workflow pause that is already answered — a NEW operation id on a decided
+    ///     row, or an id that already decided a different pause of the same run. The body carries
+    ///     <c>standingDecision</c>, so the UI can say what was decided instead of only that the click failed.
+    ///     <para>
+    ///         APPENDED, like the two members above and for the same reason: this enum crosses the wire as the
+    ///         member's NAME and clients may have persisted its ordinal.
+    ///     </para>
+    /// </summary>
+    GraphWorkflowGateAlreadyDecided
 }
