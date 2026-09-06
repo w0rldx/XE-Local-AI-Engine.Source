@@ -376,10 +376,17 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 		server.use(...optionRoutes(), definitionRoute());
 		renderPanel();
 
-		expect((await screen.findAllByLabelText("Move node up")).length).toBe(6);
-		expect(screen.getAllByLabelText("Move node down").length).toBeGreaterThan(0);
-		expect(screen.getAllByLabelText("Remove node").length).toBe(6);
-		expect(screen.getAllByLabelText("Remove edge").length).toBe(5);
+		// Wait on the cheap testid the way every sibling does, THEN query once. `findAllByLabelText` re-ran the
+		// most expensive query in the library on every DOM mutation while this 1861-node form was still mounting:
+		// measured at 1.3s for the first label query alone against 0.09s for the same lookup by role, which is
+		// what timed the test out at 20s on a coverage-instrumented CI runner. Do not put the wait back inside it.
+		await screen.findByTestId("dev-workflow-definition-node-key-0");
+
+		// By role + name, so the assertion is against the accessible name the control actually exposes.
+		expect(screen.getAllByRole("button", { name: "Move node up" }).length).toBe(6);
+		expect(screen.getAllByRole("button", { name: "Move node down" }).length).toBeGreaterThan(0);
+		expect(screen.getAllByRole("button", { name: "Remove node" }).length).toBe(6);
+		expect(screen.getAllByRole("button", { name: "Remove edge" }).length).toBe(5);
 	});
 
 	it("keeps a boolean and a number scalar through the value cell, because the server compares by JSON kind", async () => {
