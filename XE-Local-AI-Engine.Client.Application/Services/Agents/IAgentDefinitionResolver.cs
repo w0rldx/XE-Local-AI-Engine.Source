@@ -49,6 +49,26 @@ public interface IAgentDefinitionResolver
     /// </param>
     Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true, bool honorModelProfile = true,
         bool activeModelIsCloud = false, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The same projection as the id overload, over a definition the caller has ALREADY read. It exists for callers
+    ///     that hold the record and would otherwise pay a second store read for the same row — and, more importantly, would
+    ///     assemble one runtime out of two reads that a concurrent edit can make disagree. Passing the snapshot makes the
+    ///     projection provably one version of the definition.
+    /// </summary>
+    /// <param name="definition">The already-read definition snapshot to project. Never <c>null</c>.</param>
+    /// <param name="activeModelId">The model the turn runs on; gates the tool offer (capability-aware).</param>
+    /// <param name="retrievalQuery">The incoming user-turn text used to relevance-gate playbook injection, exactly as on the id overload.</param>
+    /// <param name="supportsTools">Whether the active model advertises the Ollama <c>tools</c> capability, exactly as on the id overload.</param>
+    /// <param name="honorModelProfile">Whether the definition's pinned <c>ModelProfile</c> applies, exactly as on the id overload.</param>
+    /// <param name="activeModelIsCloud">Whether the turn's active model is cloud-hosted, exactly as on the id overload.</param>
+    /// <param name="cancellationToken">Cancels the projection's store reads.</param>
+    /// <returns>
+    ///     The runtime projection of <paramref name="definition" />. The return stays nullable so this overload is
+    ///     substitutable for the id overload at every seam; the real implementation never answers <c>null</c> here.
+    /// </returns>
+    Task<ResolvedAgentRuntime?> ResolveAsync(AgentDefinitionRecord definition, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true,
+        bool honorModelProfile = true, bool activeModelIsCloud = false, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation;
 
+using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -1364,9 +1365,10 @@ public sealed class InvocationAgentFactoryTests
             return Task.FromResult<IReadOnlyList<LocalChatToolDescriptor>>([]);
         }
 
-        public Task<AITool?> TryResolveAsync(string name, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyDictionary<string, AITool>> TryResolveManyAsync(IReadOnlyCollection<string> names,
+            CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<AITool?>(null);
+            return Task.FromResult<IReadOnlyDictionary<string, AITool>>(ReadOnlyDictionary<string, AITool>.Empty);
         }
     }
 

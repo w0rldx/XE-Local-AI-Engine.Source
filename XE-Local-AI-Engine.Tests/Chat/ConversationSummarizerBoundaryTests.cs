@@ -7,6 +7,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -103,6 +104,100 @@ public sealed class ConversationSummarizerBoundaryTests
         AssertEx.Equal(content, string.Concat(fragments));
     }
 
+    [Test]
+    public async Task FoldAsync_SetsMaxOutputTokensToTheConfiguredSummaryCap()
+    {
+        // Multi-fold on purpose: an unbounded fold is what stalls a reasoning model, so EVERY request must carry the cap,
+        // not just the first.
+        const int summaryCap = 300;
+        using var client = new CapturingChatClient();
+        var summarizer = CreateSummarizer(client, requestBudget: 1800, summaryCap);
+
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
+            [new ConversationSummarizerMessage("user", new string('a', 4000))],
+            "model")).ConfigureAwait(false);
+
+        AssertEx.NotNull(result);
+        AssertEx.True(client.Options.Count > 1, "The oversized message must be folded in more than one pass.");
+        AssertEx.True(client.Options.All(options => options?.MaxOutputTokens == summaryCap),
+            "Every fold request must cap generation at the configured synopsis size.");
+    }
+
+    [Test]
+    public async Task FoldAsync_KeepsTemperatureAtZero()
+    {
+        using var client = new CapturingChatClient();
+        var summarizer = CreateSummarizer(client, requestBudget: 1800, maxSummaryChars: 300);
+
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
+            [new ConversationSummarizerMessage("user", new string('a', 4000))],
+            "model")).ConfigureAwait(false);
+
+        AssertEx.NotNull(result);
+        AssertEx.NotEmpty(client.Options);
+        AssertEx.True(client.Options.All(options => options?.Temperature == 0f),
+            "A fold is a deterministic compression pass; the output cap must not disturb its temperature.");
+    }
+
+    [Test]
+    public async Task SummarizeAsync_WhenAFoldReturnsNothing_AbortsWithoutAdvancingCoverage()
+    {
+        // A blank fold response must fail the WHOLE summarization: returning the partial synopsis would let the caller
+        // advance the covered sequence past messages that were never summarized.
+        using var client = new CapturingChatClient(responseFactory: requestIndex => requestIndex == 1 ? string.Empty : "running summary");
+        var summarizer = CreateSummarizer(client, requestBudget: 1800, maxSummaryChars: 300);
+
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
+            [new ConversationSummarizerMessage("user", new string('a', 6000))],
+            "model")).ConfigureAwait(false);
+
+        AssertEx.Null(result, "A fold that yields no text must abort the summarization rather than return partial coverage.");
+        AssertEx.Equal(expected: 2, client.Requests.Count, "No further fold may be attempted once one returned nothing.");
+    }
+
+    [Test]
+    public async Task FoldAsync_WhenTheModelSupportsThinking_DisablesItOnEveryRequest()
+    {
+        using var client = new CapturingChatClient();
+        var summarizer = CreateSummarizer(client, requestBudget: 1800, maxSummaryChars: 300);
+
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
+            [new ConversationSummarizerMessage("user", new string('a', 4000))],
+            "model",
+            SupportsThinking: true)).ConfigureAwait(false);
+
+        AssertEx.NotNull(result);
+        AssertEx.True(client.Options.Count > 1, "The oversized message must be folded in more than one pass.");
+        AssertEx.True(client.Options.All(static options => options?.AdditionalProperties is { } properties
+                                                           && properties.ContainsKey("think")
+                                                           && properties["think"] is false),
+            "Every fold on a thinking-capable model must send the Ollama think:false field.");
+        AssertEx.True(client.Options.All(static options => options?.AdditionalProperties is { } properties
+                                                           && properties.ContainsKey(InvocationAgentFactory.LlamaDisableThinkingMarkerKey)
+                                                           && properties[InvocationAgentFactory.LlamaDisableThinkingMarkerKey] is true),
+            "llama.cpp ignores think:false, so every fold must also carry the disable-thinking template marker.");
+    }
+
+    [Test]
+    public async Task FoldAsync_WhenTheModelDoesNotSupportThinking_SendsNoThinkingFields()
+    {
+        // Mirrors InvocationAgentFactoryTests.CreateAsync_WhenNativeReasoningModel_OmitsThinkAndNeverDisablesTemplateThinking:
+        // Ollama rejects think on a non-thinking model, and a native-reasoning template has no enable_thinking kwarg.
+        using var client = new CapturingChatClient();
+        var summarizer = CreateSummarizer(client, requestBudget: 1800, maxSummaryChars: 300);
+
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
+            [new ConversationSummarizerMessage("user", new string('a', 4000))],
+            "model")).ConfigureAwait(false);
+
+        AssertEx.NotNull(result);
+        AssertEx.NotEmpty(client.Options);
+        AssertEx.True(client.Options.All(static options => options?.AdditionalProperties?.ContainsKey("think") != true),
+            "A non-thinking model must never be sent the think field.");
+        AssertEx.True(client.Options.All(static options => options?.AdditionalProperties?.ContainsKey(InvocationAgentFactory.LlamaDisableThinkingMarkerKey) != true),
+            "A native-reasoning model must never be sent enable_thinking=false — the harmony template has no such kwarg.");
+    }
+
     private static ConversationSummarizer CreateSummarizer(CapturingChatClient client, int requestBudget, int maxSummaryChars)
     {
         var provider = Substitute.For<ILocalModelProvider>();
@@ -135,11 +230,15 @@ public sealed class ConversationSummarizerBoundaryTests
 
         public List<IReadOnlyList<ChatMessage>> Requests { get; } = [];
 
+        /// <summary>The ChatOptions of each captured request, index-aligned with <see cref="Requests" />.</summary>
+        public List<ChatOptions?> Options { get; } = [];
+
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
             CancellationToken cancellationToken = default)
         {
             Requests.Add(messages.ToList());
+            Options.Add(options);
             return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, _responseFactory(Requests.Count - 1))));
         }
 

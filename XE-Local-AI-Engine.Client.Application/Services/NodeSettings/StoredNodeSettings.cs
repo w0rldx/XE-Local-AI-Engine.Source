@@ -146,7 +146,7 @@ public sealed partial record StoredNodeSettings
     ///     Node kill-switch for the user-defined custom tools feature. Default (absent) is OFF: custom tools execute host
     ///     processes / outbound fetches, so the whole feature is opt-in at the node level (the per-agent allow-list and the
     ///     forced per-call approval remain the second and third gates). When off, no custom tool is OFFERED to any model and
-    ///     <c>ICustomToolCatalog.TryResolveAsync</c> refuses to resolve one.
+    ///     <c>ICustomToolCatalog.TryResolveManyAsync</c> refuses to resolve one.
     /// </summary>
     public const bool DefaultCustomToolsEnabled = false;
 

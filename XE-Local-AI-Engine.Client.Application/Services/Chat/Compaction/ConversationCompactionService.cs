@@ -13,6 +13,7 @@ internal sealed class ConversationCompactionService(
     INodeChatPersistenceService persistence,
     IConversationSummarizer summarizer,
     ILocalDefaultChatModelResolver localDefaultChatModelResolver,
+    IModelCapabilityResolver modelCapabilityResolver,
     INodeSettingsStore nodeSettingsStore,
     IOptions<ConversationCompactionOptions> options,
     TimeProvider timeProvider,
@@ -23,6 +24,9 @@ internal sealed class ConversationCompactionService(
 
     private readonly ILocalDefaultChatModelResolver _localDefaultChatModelResolver =
         localDefaultChatModelResolver ?? throw new ArgumentNullException(nameof(localDefaultChatModelResolver));
+
+    private readonly IModelCapabilityResolver _modelCapabilityResolver =
+        modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
 
     private readonly INodeSettingsStore _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
     private readonly ConversationCompactionOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
@@ -109,19 +113,24 @@ internal sealed class ConversationCompactionService(
         // ran on a node-local model instead. The UI surfaces this so the on-device downgrade is never silent.
         var usedFallbackModel = !string.IsNullOrWhiteSpace(requestedModel) && !string.Equals(model, requestedModel, StringComparison.OrdinalIgnoreCase);
 
+        // The SAME provider-routed capability resolution the chat turn uses, on the model the fold will actually run on.
+        // A miss resolves NOT-capable, which sends no thinking fields — the safe direction. Resolved here rather than
+        // inside the summarizer because IModelCapabilityResolver is scoped and the summarizer is a singleton, so
+        // injecting it there would capture a scoped dependency.
+        var capabilities = await _modelCapabilityResolver.ResolveAsync(model, cancellationToken).ConfigureAwait(false);
+
         var summary = await _summarizer
-                            .SummarizeAsync(new ConversationSummarizerInput(conversation.CompactionSummary, toFold, model), cancellationToken)
+                            .SummarizeAsync(new ConversationSummarizerInput(conversation.CompactionSummary, toFold, model, capabilities.SupportsThinking),
+                                cancellationToken)
                             .ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(summary))
         {
             return new ConversationCompactionResult(ConversationCompactionOutcome.SummarizerReturnedNothing);
         }
 
-        // Guard against a runaway synopsis larger than the span it replaces.
-        if (summary.Length > _options.MaxSummaryChars)
-        {
-            summary = summary[.._options.MaxSummaryChars];
-        }
+        // Guard against a runaway synopsis larger than the span it replaces. Shares the summarizer's rune-safe cut so this
+        // second clamp can never split a surrogate pair, whatever IConversationSummarizer implementation produced the text.
+        summary = ConversationSummarizer.TruncateAtRuneBoundary(summary, Math.Max(1, _options.MaxSummaryChars));
 
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         await _persistence

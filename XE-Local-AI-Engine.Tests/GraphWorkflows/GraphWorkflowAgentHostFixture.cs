@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -230,6 +231,20 @@ internal sealed class FakeGraphWorkflowAgentRuntime : IAgentDefinitionResolver
             Guid.Empty,
             "Fake Agent",
             []));
+    }
+
+    // The record overload, which the graph-workflow executor does not use: delegate to the id overload so a caller that
+    // ever adopts it is recorded in Calls exactly like an id resolve, rather than silently getting a different answer.
+    public Task<ResolvedAgentRuntime?> ResolveAsync(AgentDefinitionRecord definition,
+        string? activeModelId,
+        string? retrievalQuery = null,
+        bool supportsTools = true,
+        bool honorModelProfile = true,
+        bool activeModelIsCloud = false,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        return ResolveAsync(definition.Id, activeModelId, retrievalQuery, supportsTools, honorModelProfile, activeModelIsCloud, cancellationToken);
     }
 
     private static AllowedToolDto Tool(string name, bool requiresApproval) =>

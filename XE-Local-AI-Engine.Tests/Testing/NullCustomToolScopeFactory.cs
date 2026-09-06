@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Testing;
 
+using System.Collections.ObjectModel;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -25,9 +26,10 @@ internal static class NullCustomToolScopeFactory
             return Task.FromResult<IReadOnlyList<LocalChatToolDescriptor>>([]);
         }
 
-        public Task<AITool?> TryResolveAsync(string name, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyDictionary<string, AITool>> TryResolveManyAsync(IReadOnlyCollection<string> names,
+            CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<AITool?>(null);
+            return Task.FromResult<IReadOnlyDictionary<string, AITool>>(ReadOnlyDictionary<string, AITool>.Empty);
         }
     }
 }

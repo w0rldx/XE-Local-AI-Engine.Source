@@ -888,6 +888,53 @@ public sealed class AgentDefinitionResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_FromARecord_MatchesTheIdOverload()
+    {
+        // The record overload is the SAME projection, over a snapshot the caller already holds instead of one this
+        // resolver fetches. Field by field rather than record equality: ResolvedAgentRuntime is a record whose list
+        // members compare by REFERENCE (EqualityComparer<IReadOnlyList<>>.Default), and the two calls build separate
+        // list instances, so record equality would be false however identical the projections are.
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), OfferTool("Calculate"));
+        var definition = CreateDefinition("Twin",
+            "same either way",
+            allowedTools: ["GetCurrentTime", "Calculate"],
+            version: 5,
+            modelProfile: ToolCapableModel,
+            reasoningEffort: "high");
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var byId = AssertEx.NotNull(await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false));
+        var byRecord = AssertEx.NotNull(await resolver.ResolveAsync(definition, ToolCapableModel).ConfigureAwait(false));
+
+        AssertEx.Equal(byId.ResolvedSystemPrompt, byRecord.ResolvedSystemPrompt);
+        AssertEx.Equal<string?>(byId.ModelProfile, byRecord.ModelProfile);
+        AssertEx.Equal<string?>(byId.ReasoningEffort, byRecord.ReasoningEffort);
+        AssertEx.Equal(byId.AgentDefinitionVersion, byRecord.AgentDefinitionVersion);
+        AssertEx.Equal(byId.AgentDefinitionId, byRecord.AgentDefinitionId);
+        AssertEx.Equal(byId.AgentName, byRecord.AgentName);
+        AssertEx.Equal(byId.PlaybookEnabled, byRecord.PlaybookEnabled);
+        AssertEx.Equal(byId.MemoryExtractionEnabled, byRecord.MemoryExtractionEnabled);
+        AssertEx.Equal(byId.EffectiveModelIsCloud, byRecord.EffectiveModelIsCloud);
+        AssertEx.Equal(byId.Kind, byRecord.Kind);
+        AssertEx.Equal(byId.DisableToolRelevanceFilter, byRecord.DisableToolRelevanceFilter);
+        AssertEx.True(byId.AllowedTools.SequenceEqual(byRecord.AllowedTools), "Both overloads must project the same offer, in the same order.");
+        AssertEx.True((byId.Skills ?? []).SequenceEqual(byRecord.Skills ?? []), "Both overloads must project the same skills, in the same order.");
+        AssertEx.True((byId.CustomTools ?? []).SequenceEqual(byRecord.CustomTools ?? []), "Both overloads must project the same custom tools, in the same order.");
+
+        // ONE store read for TWO resolutions: the id overload fetches, the record overload projects the snapshot it was
+        // handed. This is the hand-off contract the spawn seam depends on — a record overload that secretly re-read by
+        // id would make that spawn cost two reads again, and no assertion above would notice.
+        await store.Received(1).GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+
+        // The config hash is the contract the runtime package is keyed on, so prove the two projections hash alike
+        // through the real builder rather than trusting the field walk above to be exhaustive.
+        var builder = new LocalChatRuntimePackageBuilder();
+        var idHash = await ResolveAndHashAsync(resolver, store, builder, definition).ConfigureAwait(false);
+        var recordHash = await ResolveAndHashAsync(resolver, store, builder, definition, throughTheRecordOverload: true).ConfigureAwait(false);
+        AssertEx.Equal(idHash, recordHash);
+    }
+
+    [Test]
     public async Task ResolveAsync_WhenPlaybookDisabled_KeepsInstructionsByteIdenticalAndSkipsQuery()
     {
         var resolver = CreateResolverWithPlaybook(out var store, out var playbookStore, OfferTool("GetCurrentTime"));
@@ -1253,10 +1300,15 @@ public sealed class AgentDefinitionResolverTests
     private static async Task<string> ResolveAndHashAsync(IAgentDefinitionResolver resolver,
         IAgentDefinitionStore store,
         LocalChatRuntimePackageBuilder builder,
-        AgentDefinitionRecord definition)
+        AgentDefinitionRecord definition,
+        bool throughTheRecordOverload = false)
     {
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+
+        // Either seam, one hash: the overload under test must not move a config-hash input.
+        var resolved = throughTheRecordOverload
+            ? await resolver.ResolveAsync(definition, "qwen3:8b").ConfigureAwait(false)
+            : await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
         AssertEx.NotNull(resolved);
 
         var package = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),

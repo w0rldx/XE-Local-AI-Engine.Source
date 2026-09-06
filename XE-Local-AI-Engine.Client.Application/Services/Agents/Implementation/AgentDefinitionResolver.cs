@@ -73,6 +73,14 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             return null;
         }
 
+        return await ResolveAsync(definition, activeModelId, retrievalQuery, supportsTools, honorModelProfile, activeModelIsCloud, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<ResolvedAgentRuntime?> ResolveAsync(AgentDefinitionRecord definition, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true,
+        bool honorModelProfile = true, bool activeModelIsCloud = false, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+
         // The definition's pinned ModelProfile (when set) is normally the model the turn actually runs on, so gate the
         // tool offer by it — not the caller's active model — to keep capability gating and the runtime model consistent.
         // When the user explicitly picked a concrete model in the chat dropdown the caller passes honorModelProfile=false:

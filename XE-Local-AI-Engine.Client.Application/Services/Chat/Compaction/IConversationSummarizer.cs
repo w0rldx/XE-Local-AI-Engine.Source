@@ -4,7 +4,15 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 public sealed record ConversationSummarizerMessage(string Role, string Content);
 
 /// <summary>Input for one summarization pass: an optional prior synopsis to fold in, plus the newer older-history span.</summary>
-public sealed record ConversationSummarizerInput(string? PriorSummary, IReadOnlyList<ConversationSummarizerMessage> Messages, string ModelName);
+/// <param name="SupportsThinking">
+///     Whether <paramref name="ModelName" /> advertises graded thinking, as resolved by
+///     <c>IModelCapabilityResolver</c>. False — the safe default, matching that resolver's own miss behaviour — means
+///     the fold sends no thinking fields at all.
+/// </param>
+public sealed record ConversationSummarizerInput(string? PriorSummary,
+    IReadOnlyList<ConversationSummarizerMessage> Messages,
+    string ModelName,
+    bool SupportsThinking = false);
 
 /// <summary>
 ///     Produces a compact, prose synopsis of an older conversation span using a NODE-LOCAL model only (never the shared

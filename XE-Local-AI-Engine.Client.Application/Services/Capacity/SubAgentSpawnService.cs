@@ -164,6 +164,14 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
             return ReasonParentOutsideTrustBoundary;
         }
 
+        // Per-root fan-out cap: the lease releases its slot on dispose; the using-declaration releases it on every
+        // return path below. A missing ambient context means "no spawn context was seeded" → reject conservatively.
+        using var fanOutLease = context?.TryEnterFanOut();
+        if (context is null || fanOutLease is null)
+        {
+            return ReasonFanOutExceeded;
+        }
+
         // A sub-agent always runs a chat/tool loop, so it competes for a Chat-role process.
         const ModelRole role = ModelRole.Chat;
 
@@ -171,14 +179,6 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         if (binding is null)
         {
             return ReasonSubAgentUnresolved;
-        }
-
-        // Per-root fan-out cap: the lease releases its slot on dispose; the using-declaration releases it on every
-        // return path below. A missing ambient context means "no spawn context was seeded" → reject conservatively.
-        using var fanOutLease = context?.TryEnterFanOut();
-        if (context is null || fanOutLease is null)
-        {
-            return ReasonFanOutExceeded;
         }
 
         var decision = await _capacityService.DecideAsync(binding.ModelName, role, ct).ConfigureAwait(false);

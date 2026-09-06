@@ -301,13 +301,15 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     /// </summary>
     internal static ChatOptions? ApplyThinkingSwitch(ChatOptions? options)
     {
-        // Gating note: the marker is set upstream (InvocationAgentFactory) whenever reasoning is OFF on a
-        // thinking-capable model — i.e. gated on the model's thinking capability, NOT on the finer "template advertises
-        // the enable_thinking switch" signal. That is a deliberate, safe SUPERSET: injecting
+        // Gating note: the marker is set upstream whenever reasoning is OFF on a thinking-capable model — by
+        // InvocationAgentFactory for a turn, and by ConversationSummarizer.FoldAsync for a compaction fold, which is a
+        // second producer resting on this same safety argument. That is gating on the model's thinking capability, NOT
+        // on the finer "template advertises the enable_thinking switch" signal. That is a deliberate, safe SUPERSET: injecting
         // chat_template_kwargs.enable_thinking=false is a no-op for any chat template that does not read that variable
         // (an unknown kwarg is simply ignored by the jinja renderer), and only reasoning models are thinking-capable, so
         // at worst the field is inert. The finer gate would require a new capability threaded through the (cross-lane)
-        // classification/resolver chain; if that lands, tighten the factory's marker condition — this site needs no change.
+        // classification/resolver chain; if that lands, tighten the marker condition at BOTH producers — this site
+        // needs no change.
         if (options?.AdditionalProperties is not { } properties
             || !properties.TryGetValue(DisableThinkingMarkerKey, out var raw)
             || raw is not true)

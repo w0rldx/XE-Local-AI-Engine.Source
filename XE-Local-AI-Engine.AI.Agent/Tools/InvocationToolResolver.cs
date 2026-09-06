@@ -75,24 +75,22 @@ internal static class InvocationToolResolver
             return [];
         }
 
-        // Pre-resolve only the offered custom__ names, once each, via the async catalog. A disabled node kill-switch or an
-        // unknown name yields null and the name simply stays unresolved (the core then skips + warns it, like any other
-        // unmatched offer).
+        // Pre-resolve the offered custom__ names via the async catalog. A disabled node kill-switch or an unknown name
+        // leaves the name out of the returned dictionary and it simply stays unresolved (the core then skips + warns it,
+        // like any other unmatched offer).
         var customNames = offeredTools
                           .Select(static offer => offer.Name)
                           .Where(static name => !string.IsNullOrWhiteSpace(name)
                                                 && name.StartsWith(CustomToolNamePrefix, StringComparison.Ordinal))
-                          .Distinct(StringComparer.Ordinal);
+                          .Distinct(StringComparer.Ordinal)
+                          .ToArray();
 
-        Dictionary<string, AITool>? preResolvedCustom = null;
-        foreach (var name in customNames)
-        {
-            var executable = await customToolCatalog.TryResolveAsync(name, cancellationToken).ConfigureAwait(false);
-            if (executable is not null)
-            {
-                (preResolvedCustom ??= new Dictionary<string, AITool>(StringComparer.Ordinal))[name] = executable;
-            }
-        }
+        // ONE catalog round trip for the whole offer: the catalog reads the store once and matches every requested name
+        // against that single snapshot. Still a live read per resolution — no cache. Passing null when the offer carries
+        // no custom name keeps the common path free of both a catalog call and an empty-dictionary allocation.
+        var preResolvedCustom = customNames.Length == 0
+            ? null
+            : await customToolCatalog.TryResolveManyAsync(customNames, cancellationToken).ConfigureAwait(false);
 
         return ResolveCore(offeredTools, toolRegistry, clientLocalToolRegistry, mcpToolRegistry, preResolvedCustom, logger);
     }

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
@@ -95,7 +96,7 @@ internal sealed class ConversationSummarizer(
 
                 if (batch.Count > 0)
                 {
-                    running = await FoldAsync(chatClient, running, batch, cancellationToken).ConfigureAwait(false);
+                    running = await FoldAsync(chatClient, running, batch, input.SupportsThinking, cancellationToken).ConfigureAwait(false);
                     if (running is null)
                     {
                         return null;
@@ -117,7 +118,7 @@ internal sealed class ConversationSummarizer(
 
                 // A fragment was necessary, so flush it before considering the rest. The returned synopsis becomes
                 // the prior summary of the next request and is included in that request's budget calculation.
-                running = await FoldAsync(chatClient, running, batch, cancellationToken).ConfigureAwait(false);
+                running = await FoldAsync(chatClient, running, batch, input.SupportsThinking, cancellationToken).ConfigureAwait(false);
                 if (running is null)
                 {
                     return null;
@@ -129,7 +130,7 @@ internal sealed class ConversationSummarizer(
 
         if (batch.Count > 0)
         {
-            running = await FoldAsync(chatClient, running, batch, cancellationToken).ConfigureAwait(false);
+            running = await FoldAsync(chatClient, running, batch, input.SupportsThinking, cancellationToken).ConfigureAwait(false);
         }
 
         return string.IsNullOrWhiteSpace(running) ? null : running;
@@ -137,7 +138,11 @@ internal sealed class ConversationSummarizer(
 
     // One fold pass: (prior summary + one batch) -> updated summary. Returns null when the model yields nothing, so the
     // caller aborts the whole summarization rather than advancing coverage over a batch that was never summarized.
-    private async Task<string?> FoldAsync(IChatClient chatClient, string? priorSummary, IReadOnlyList<ConversationSummarizerMessage> batch, CancellationToken cancellationToken)
+    private async Task<string?> FoldAsync(IChatClient chatClient,
+        string? priorSummary,
+        IReadOnlyList<ConversationSummarizerMessage> batch,
+        bool supportsThinking,
+        CancellationToken cancellationToken)
     {
         List<ChatMessage> messages =
         [
@@ -147,8 +152,34 @@ internal sealed class ConversationSummarizer(
 
         var chatOptions = new ChatOptions
         {
-            Temperature = 0f
+            Temperature = 0f,
+
+            // A token cap numerically equal to the CHARACTER cap below. At least one character per token holds for Latin
+            // and for CJK — where a Qwen3-class tokenizer runs about 1.3 characters per token — so on those scripts the
+            // cap sits above the character backstop and cannot bind first. It is NOT a universal property: byte-fallback
+            // BPE spends several tokens per character for any character outside its merge table (Georgian, Burmese,
+            // Devanagari, rare CJK, most emoji), and for a synopsis in such a script the token cap CAN bind before the
+            // character backstop. TruncateAtRuneBoundary below therefore stays the only guarantee on synopsis length.
+            // Deliberately LOOSE: the cap's job is to stop a reasoning model spending a 64k window on one fold, not to
+            // size the synopsis. Same Math.Max(1, ...) guard the character truncation already uses, so a pathological
+            // configured value cannot produce a non-positive cap.
+            MaxOutputTokens = Math.Max(1, _options.MaxSummaryChars)
         };
+
+        // Reasoning OFF for a fold: a synopsis needs no scratchpad, and an unbounded reasoning block would spend the
+        // MaxOutputTokens cap above and return no synopsis at all. Written exactly as InvocationAgentFactory.CreateAsync
+        // writes it — the Ollama `think` field AND the llama.cpp template marker together, because the two runtimes read
+        // different halves. GATED on the model's thinking capability for the two reasons that factory records: Ollama
+        // rejects `think` on a non-thinking model, and a NATIVE-reasoning template (gpt-oss harmony) has no
+        // enable_thinking kwarg and must never be sent one.
+        if (supportsThinking)
+        {
+            chatOptions.AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                ["think"] = false,
+                [InvocationAgentFactory.LlamaDisableThinkingMarkerKey] = true
+            };
+        }
 
         var response = await chatClient.GetResponseAsync(messages, chatOptions, cancellationToken).ConfigureAwait(false);
         var text = response.Text?.Trim();
@@ -194,7 +225,7 @@ internal sealed class ConversationSummarizer(
         return best;
     }
 
-    private static string TruncateAtRuneBoundary(string value, int maximumChars)
+    internal static string TruncateAtRuneBoundary(string value, int maximumChars)
     {
         if (value.Length <= maximumChars)
         {
