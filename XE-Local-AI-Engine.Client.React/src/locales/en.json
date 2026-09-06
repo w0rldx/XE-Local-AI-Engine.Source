@@ -5518,6 +5518,24 @@
 			}
 		},
 		"graphWorkflows": {
+			"editor": {
+				"autoArrange": "Auto-arrange",
+				"deleteHint": "Drag a node onto the canvas, or click one in the palette. Select a node or a connection and press Delete to remove it.",
+				"refusal": {
+					"dismiss": "Dismiss",
+					"parallelEdgesBothUnconditional": "These two nodes are already joined by a connection without a condition. Give the new one a condition first.",
+					"tooManyNodes": "This graph already has as many nodes as a run accepts."
+				},
+				"validation": {
+					"title": "This graph cannot be saved yet"
+				}
+			},
+			"node": {
+				"joinAny": "First branch wins"
+			},
+			"palette": {
+				"title": "Add a node"
+			},
 			"title": "Graph Workflows",
 			"subtitle": "Author a workflow graph and watch a run of it node by node.",
 			"empty": {

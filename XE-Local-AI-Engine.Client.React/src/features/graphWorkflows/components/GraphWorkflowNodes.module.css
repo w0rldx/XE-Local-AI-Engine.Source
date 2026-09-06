@@ -1,0 +1,55 @@
+.node {
+	min-width: 180px;
+	max-width: 260px;
+	border-radius: var(--mantine-radius-md);
+	border: 1px solid var(--mantine-color-default-border);
+	background: var(--mantine-color-body);
+	padding: var(--mantine-spacing-xs);
+	box-shadow: var(--mantine-shadow-xs);
+}
+
+/* An outline, not a box-shadow: the issue ring below is a box-shadow, and a selected card that also has a problem
+   has to keep looking selected rather than losing the cascade to it. */
+
+.node-selected {
+	outline: 2px solid var(--mantine-color-blue-5);
+	outline-offset: 1px;
+}
+
+/* A validation issue keyed to this node. The whole point of the hybrid error shape is that a save refused over one
+   card does not leave the operator scanning eight of them. */
+
+.node-issue {
+	border-color: var(--mantine-color-red-6);
+	box-shadow: 0 0 0 1px var(--mantine-color-red-6);
+}
+
+.node-title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 600;
+	min-width: 0;
+}
+
+/* Condition and Pause carry more than one source handle, so each needs a caption saying which branch leaves it.
+   Rendered as the handle's own child, because React Flow positions the handle and nothing else knows where it put it. */
+
+.handle-caption {
+	position: absolute;
+	top: 8px;
+	left: 50%;
+	transform: translateX(-50%);
+	font-size: 10px;
+	line-height: 1;
+	color: var(--mantine-color-dimmed);
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+/* An edge whose key a validation issue names, drawn on React Flow's own edge path. */
+
+.edge-issue {
+	stroke: var(--mantine-color-red-6);
+	stroke-width: 2;
+}

@@ -5518,6 +5518,24 @@
 			}
 		},
 		"graphWorkflows": {
+			"editor": {
+				"autoArrange": "Automatisch anordnen",
+				"deleteHint": "Ziehen Sie einen Knoten auf die Arbeitsfläche oder klicken Sie ihn in der Palette an. Markieren Sie einen Knoten oder eine Verbindung und drücken Sie Entf, um ihn zu entfernen.",
+				"refusal": {
+					"dismiss": "Ausblenden",
+					"parallelEdgesBothUnconditional": "Diese beiden Knoten sind bereits durch eine Verbindung ohne Bedingung verbunden. Geben Sie der neuen Verbindung zuerst eine Bedingung.",
+					"tooManyNodes": "Dieser Graph hat bereits so viele Knoten, wie ein Lauf zulässt."
+				},
+				"validation": {
+					"title": "Dieser Graph kann noch nicht gespeichert werden"
+				}
+			},
+			"node": {
+				"joinAny": "Erster Zweig gewinnt"
+			},
+			"palette": {
+				"title": "Knoten hinzufügen"
+			},
 			"title": "Graph-Workflows",
 			"subtitle": "Einen Workflow-Graphen erstellen und einen Lauf davon Knoten für Knoten verfolgen.",
 			"empty": {
