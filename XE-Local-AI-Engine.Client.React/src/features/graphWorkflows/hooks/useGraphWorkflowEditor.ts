@@ -38,6 +38,7 @@ import {
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import {
 	type GraphWorkflowGraphIssue,
+	loadedGraphIssues,
 	validateGraphWorkflowGraph,
 } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 
@@ -60,7 +61,10 @@ export interface GraphWorkflowEditorState {
 	readonly edges: readonly GraphWorkflowCanvasEdge[];
 	/** `canvasToGraph(nodes, edges).graph`, memoised — what a save would send. */
 	readonly graph: GraphWorkflowGraph;
-	/** The conversion's own issues plus the structural rules. Client-side only; the server's are merged in by the page. */
+	/**
+	 * What the LOADED graph carried that the canvas cannot round-trip, plus the conversion's own issues, plus the
+	 * structural rules. Client-side only; the server's own errors are merged in by the page.
+	 */
 	readonly issues: readonly GraphWorkflowGraphIssue[];
 	readonly isDirty: boolean;
 	readonly canAddNode: boolean;
@@ -121,15 +125,20 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 	const [edges, setEdges] = useState<readonly GraphWorkflowCanvasEdge[]>(() => graphToCanvas(initial).edges);
 	const [baseline, setBaseline] = useState<GraphWorkflowGraph | undefined>(initial);
 	const [lastRefusal, setLastRefusal] = useState<GraphWorkflowEditorRefusal | undefined>(undefined);
+	// Held in state, not derived: `graphToCanvas` has already dropped the unreadable `op` and narrowed the unknown kind
+	// by the time anything downstream can look, so the wire document it was read from is the only place this is visible.
+	const [loadedIssues, setLoadedIssues] = useState<readonly GraphWorkflowGraphIssue[]>(() => loadedGraphIssues(initial));
 
 	const refuse = useCallback((rule: GraphWorkflowEditorRefusal["rule"]) => {
 		setLastRefusal((previous) => ({ rule, seq: (previous?.seq ?? 0) + 1 }));
 	}, []);
 
 	const conversion = useMemo(() => canvasToGraph(nodes, edges), [nodes, edges]);
+	// The loaded-graph issues outlive every edit: moving a node does not make an unreadable operator token readable, and
+	// Save has to stay refused until the graph is loaded again or written over.
 	const issues = useMemo(
-		() => [...conversion.issues, ...validateGraphWorkflowGraph(conversion.graph)],
-		[conversion.graph, conversion.issues],
+		() => [...loadedIssues, ...conversion.issues, ...validateGraphWorkflowGraph(conversion.graph)],
+		[conversion.graph, conversion.issues, loadedIssues],
 	);
 
 	const onNodesChange = useCallback<OnNodesChange<GraphWorkflowCanvasNode>>((changes) => {
@@ -271,11 +280,15 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 		setNodes(canvas.nodes);
 		setEdges(canvas.edges);
 		setBaseline(graph);
+		setLoadedIssues(loadedGraphIssues(graph));
 		setLastRefusal(undefined);
 	}, []);
 
 	const markSaved = useCallback((graph: GraphWorkflowGraph) => {
 		setBaseline(graph);
+		// The save wrote what the canvas holds, so whatever the server had stored that the canvas could not represent went
+		// with it.
+		setLoadedIssues([]);
 	}, []);
 
 	const dismissRefusal = useCallback(() => {
