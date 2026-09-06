@@ -227,6 +227,7 @@ function GraphWorkflowEditorCanvasInner({
 			</Group>
 			{refusalMessage === undefined ? null : (
 				<Alert
+					role="alert"
 					color="orange"
 					variant="light"
 					withCloseButton={true}

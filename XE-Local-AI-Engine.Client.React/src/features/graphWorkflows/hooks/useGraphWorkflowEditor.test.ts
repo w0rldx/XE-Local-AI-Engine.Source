@@ -42,6 +42,27 @@ describe("useGraphWorkflowEditor palette", () => {
 		expect(result.current.nodes[0]?.data.maxAttempts).toBe(3);
 	});
 
+	it("drops a palette node into the first free slot rather than on top of an existing card", () => {
+		const { result } = renderHook(() => useGraphWorkflowEditor(undefined));
+
+		for (const _unused of [0, 1, 2]) {
+			act(() => {
+				result.current.addNode("Agent");
+			});
+		}
+		expect(result.current.nodes.map((node) => node.position.y)).toEqual([80, 140, 200]);
+
+		// Staggering by the node COUNT would put the next card back on 200, on top of the one already there.
+		act(() => {
+			result.current.removeNode("agent-2");
+		});
+		act(() => {
+			result.current.addNode("Agent");
+		});
+
+		expect(result.current.nodes.map((node) => node.position.y).toSorted((left, right) => left - right)).toEqual([80, 140, 200]);
+	});
+
 	it("refuses a node past the cap, returns no key and reports the refusal", () => {
 		const full: GraphWorkflowGraph = {
 			schemaVersion: 1,
@@ -160,6 +181,38 @@ describe("useGraphWorkflowEditor mutations", () => {
 		expect(node?.data.label).toBe("Renamed");
 		expect(node?.data.kind).toBe("Agent");
 		expect(node?.data.key).toBe("analyze");
+	});
+
+	it("prunes a Pause out-edge when its decision stops being offered", () => {
+		// React Flow stops DRAWING an edge whose source handle is gone, but the edge stays in the graph and still routes at
+		// run time — so an operator who unticks `Reject` would save a branch they can no longer see.
+		const { result } = renderHook(() => useGraphWorkflowEditor(eightNodeGraph));
+
+		expect(result.current.edges.some((edge) => edge.id === "e9")).toBe(true);
+
+		act(() => {
+			result.current.updateNodeData("review", { allowedDecisions: ["Approve"] });
+		});
+
+		// `e9` is the Reject branch; `e5`, the Approve one, is untouched.
+		expect(result.current.edges.some((edge) => edge.id === "e9")).toBe(false);
+		expect(result.current.edges.some((edge) => edge.id === "e5")).toBe(true);
+		expect(result.current.issues).not.toContainEqual({ rule: "pauseDecisionUnroutable", subject: "review" });
+	});
+
+	it("leaves every edge alone when a Pause patch does not shrink its decisions", () => {
+		const { result } = renderHook(() => useGraphWorkflowEditor(eightNodeGraph));
+		const before = result.current.edges.length;
+
+		act(() => {
+			result.current.updateNodeData("review", { prompt: "Ship it?" });
+		});
+		expect(result.current.edges).toHaveLength(before);
+
+		act(() => {
+			result.current.updateNodeData("review", { allowedDecisions: ["Approve", "Reject"] });
+		});
+		expect(result.current.edges).toHaveLength(before);
 	});
 
 	it("cascades a rename into the edges and refuses a collision or a bad charset", () => {

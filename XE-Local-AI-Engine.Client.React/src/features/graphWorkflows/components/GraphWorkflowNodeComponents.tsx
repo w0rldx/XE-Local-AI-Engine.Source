@@ -60,10 +60,13 @@ function cx(...values: Array<string | false | undefined>): string {
 	return values.filter(Boolean).join(" ");
 }
 
-/** A source handle plus the caption that says which branch leaves it. `left` spreads several along one edge of a card. */
-function BranchHandle({ id, left, caption }: { readonly id: string; readonly left: string; readonly caption: string }) {
+/**
+ * A source handle plus the caption naming the branch that leaves it. `top` spreads several down the card's right edge,
+ * because `layoutGraphWorkflow` ranks left to right — a source on the bottom would draw every laid-out edge as a loop.
+ */
+function BranchHandle({ id, top, caption }: { readonly id: string; readonly top: string; readonly caption: string }) {
 	return (
-		<Handle type="source" position={Position.Bottom} id={id} style={{ left }} data-testid={`graph-workflow-handle-source-${id}`}>
+		<Handle type="source" position={Position.Right} id={id} style={{ top }} data-testid={`graph-workflow-handle-source-${id}`}>
 			<span className={classes["handle-caption"]}>{caption}</span>
 		</Handle>
 	);
@@ -71,6 +74,7 @@ function BranchHandle({ id, left, caption }: { readonly id: string; readonly lef
 
 /** The source handles for one kind. Condition and Pause are the two that carry meaning; everything else has one. */
 function SourceHandles({ data }: { readonly data: GraphWorkflowCanvasNodeData }) {
+	const { t } = useTranslation();
 	if (data.kind === "End") {
 		// An End node has no successor: offering a handle would let an operator author an edge the validator refuses.
 		return null;
@@ -78,8 +82,8 @@ function SourceHandles({ data }: { readonly data: GraphWorkflowCanvasNodeData })
 	if (data.kind === "Condition") {
 		return (
 			<>
-				<BranchHandle id="true" left="30%" caption="true" />
-				<BranchHandle id="false" left="70%" caption="false" />
+				<BranchHandle id="true" top="30%" caption="true" />
+				<BranchHandle id="false" top="70%" caption="false" />
 			</>
 		);
 	}
@@ -92,15 +96,16 @@ function SourceHandles({ data }: { readonly data: GraphWorkflowCanvasNodeData })
 				{decisions.map((decision, index) => (
 					<BranchHandle
 						key={decision}
+						// The id stays the wire token — `onConnect` reads it — while the caption is the operator's word for it.
 						id={decision}
-						left={`${Math.round(((index + 1) / (decisions.length + 1)) * 100)}%`}
-						caption={decision}
+						top={`${Math.round(((index + 1) / (decisions.length + 1)) * 100)}%`}
+						caption={t(`pages.graphWorkflows.decision.${decision}`, decision)}
 					/>
 				))}
 			</>
 		);
 	}
-	return <Handle type="source" position={Position.Bottom} data-testid="graph-workflow-handle-source-default" />;
+	return <Handle type="source" position={Position.Right} data-testid="graph-workflow-handle-source-default" />;
 }
 
 export function GraphWorkflowNodeCard({ data, selected }: NodeProps<GraphWorkflowCanvasNode>) {
@@ -120,7 +125,7 @@ export function GraphWorkflowNodeCard({ data, selected }: NodeProps<GraphWorkflo
 		>
 			{/* A Start node has no predecessor, so it gets no target handle — same reason End gets no source. */}
 			{data.kind === "Start" ? null : (
-				<Handle type="target" position={Position.Top} data-testid="graph-workflow-handle-target" />
+				<Handle type="target" position={Position.Left} data-testid="graph-workflow-handle-target" />
 			)}
 			<Stack gap={4}>
 				<div className={classes["node-title"]}>
