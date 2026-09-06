@@ -124,7 +124,6 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store,
         return await SignalAndComposeAsync(runId, cancellationToken).ConfigureAwait(false);
     }
 
-
     public async Task<GraphWorkflowDecisionResult> DecideAsync(Guid runId,
         string nodeKey,
         Guid operationId,
@@ -204,16 +203,31 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store,
             throw new GraphWorkflowValidationException(exception.Message);
         }
 
-        // 7. ONE conditional write: the status move, the decision columns, the output and the gate.decided event.
-        if (await _store.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand(runId,
-                               nodeRun.Id,
-                               GraphWorkflowVersions.Any,
-                               operationId,
-                               decision,
-                               decidedBySubject,
-                               document),
-                           cancellationToken)
-                       .ConfigureAwait(false) is null)
+        // 7. ONE conditional write: the status move, the decision columns, the output and the gate.decided event. It
+        // can lose in TWO ways, and both are the same story to the caller. A null answer means the compare-and-set
+        // matched no row. An exception means the run row's own concurrency token lost, or the store converted the
+        // unique index, which is what two operators answering at once with different operation ids produce. Letting
+        // the second escape would reach the client as a bare run conflict with no standing decision, in exactly the
+        // case the standing decision exists to describe.
+        GraphWorkflowMutationResult? written;
+        try
+        {
+            written = await _store.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand(runId,
+                                       nodeRun.Id,
+                                       GraphWorkflowVersions.Any,
+                                       operationId,
+                                       decision,
+                                       decidedBySubject,
+                                       document),
+                                   cancellationToken)
+                                  .ConfigureAwait(false);
+        }
+        catch (GraphWorkflowInvalidTransitionException)
+        {
+            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (written is null)
         {
             return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken).ConfigureAwait(false);
         }
@@ -248,7 +262,6 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store,
         var page = events.Take(_options.EventReplayLimit).ToList();
         return new GraphWorkflowRunEventPage(page, page.Count == 0 ? afterSeq : page[^1].Seq, events.Count > _options.EventReplayLimit);
     }
-
 
     /// <summary>
     ///     The same act arriving twice. It IS the same act only if it names the same pause, the same answer and the
@@ -300,11 +313,17 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store,
 
     /// <summary>
     ///     The refusal a row that is not open to a decision earns: one that NAMES the answer that stands where the row
-    ///     carries one, so the second person to click is told what was decided rather than only that their click
-    ///     failed, and S1's generic run conflict where it does not.
+    ///     was actually answered, so the second person to click is told what was decided rather than only that their
+    ///     click failed, and S1's generic run conflict where it was not.
+    ///     <para>
+    ///         Gated on <c>DecisionOperationId</c>, the column an answered gate writes — NOT on the output document
+    ///         carrying an <c>output.decision</c>. A <c>Condition</c> or <c>Parallel</c> node downstream of an answered
+    ///         pause passes that predecessor's output through verbatim, so reading the document alone would report a
+    ///         standing decision for a node nobody ever decided.
+    ///     </para>
     /// </summary>
     private static Exception StandingConflict(GraphWorkflowNodeRunSnapshot nodeRun, string message) =>
-        GraphWorkflowStateMachine.DecisionOf(nodeRun.OutputJson) is { } standing
+        nodeRun.DecisionOperationId is not null && GraphWorkflowStateMachine.DecisionOf(nodeRun.OutputJson) is { } standing
             ? new GraphWorkflowGateAlreadyDecidedException($"{message} It was answered {standing}.", standing)
             : new GraphWorkflowRunConflictException(message);
 

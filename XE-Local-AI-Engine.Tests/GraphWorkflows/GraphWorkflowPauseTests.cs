@@ -132,6 +132,30 @@ public sealed class GraphWorkflowPauseTests
         AssertEx.Equal(GraphWorkflowDecisionKind.Approve, refusal.StandingDecision);
     }
 
+    /// <summary>
+    ///     The same id under a different person is not a replay either. Without this an operation id leaked between two
+    ///     accounts would record the second one's click as the first one's decision, which is the one thing an audit
+    ///     trail exists to make impossible.
+    /// </summary>
+    [Test]
+    public async Task TheSameOperationIdUnderADifferentSubject_IsRefusedWithTheStandingAnswer()
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await ParkedRunAsync(harness, GraphWorkflowGraphs.PauseTwoDecisions, "review").ConfigureAwait(false);
+        var operationId = Guid.NewGuid();
+        _ = await harness.DecideAsync(runId, "review", operationId, GraphWorkflowDecisionKind.Approve, decidedBySubject: "alice").ConfigureAwait(false);
+
+        var refusal = await AssertEx
+                            .ThrowsAsync<GraphWorkflowGateAlreadyDecidedException>(() =>
+                                harness.DecideAsync(runId, "review", operationId, GraphWorkflowDecisionKind.Approve, decidedBySubject: "bob"))
+                            .ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowDecisionKind.Approve, refusal.StandingDecision);
+        AssertEx.Equal("alice",
+            (await harness.ReadNodeRunAsync(runId, "review").ConfigureAwait(false)).DecidedBySubject,
+            "the row still records who actually answered it.");
+    }
+
     /// <summary>A DIFFERENT id on an answered pause is a second human act, refused with what stands rather than replayed.</summary>
     [Test]
     public async Task ADifferentOperationIdOnAnAnsweredPause_IsRefusedWithTheStandingAnswer()
