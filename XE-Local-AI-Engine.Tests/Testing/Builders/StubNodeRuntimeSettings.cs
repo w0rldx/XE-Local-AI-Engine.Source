@@ -37,6 +37,7 @@ public sealed class StubNodeRuntimeSettings
     private int? _speculativeDraftGpuLayers;
     private string? _rerankerModelName;
     private bool _customToolsEnabled = StoredNodeSettings.DefaultCustomToolsEnabled;
+    private Func<CancellationToken, Task<bool>> _toolRelevanceRead = static _ => Task.FromResult(StoredNodeSettings.DefaultToolRelevanceEnabled);
 
     public static StubNodeRuntimeSettings Create()
     {
@@ -66,6 +67,17 @@ public sealed class StubNodeRuntimeSettings
     public StubNodeRuntimeSettings WithCustomToolsEnabled(bool customToolsEnabled)
     {
         _customToolsEnabled = customToolsEnabled;
+        return this;
+    }
+
+    /// <summary>
+    ///     A DELEGATE, not a bool: the tool-relevance read is live per turn, so a test has to be able to express a value
+    ///     that changes between two turns of the SAME consumer, and a read that is still pending when the turn is cancelled.
+    /// </summary>
+    public StubNodeRuntimeSettings WithToolRelevanceEnabled(Func<CancellationToken, Task<bool>> read)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        _toolRelevanceRead = read;
         return this;
     }
 
@@ -227,6 +239,7 @@ public sealed class StubNodeRuntimeSettings
         settings.GetSpeculativeDraftGpuLayersAsync(Arg.Any<CancellationToken>()).Returns(_speculativeDraftGpuLayers);
         settings.GetRerankerModelNameAsync(Arg.Any<CancellationToken>()).Returns(_rerankerModelName);
         settings.GetCustomToolsEnabledAsync(Arg.Any<CancellationToken>()).Returns(_customToolsEnabled);
+        settings.GetToolRelevanceEnabledAsync(Arg.Any<CancellationToken>()).Returns(call => _toolRelevanceRead(call.Arg<CancellationToken>()));
 
         // Synchronous twins (composition/ctor path) must mirror the async values so consumers repointed onto the sync
         // getters (e.g. InvocationRunner, the DI factory seeds) observe the same configured knobs.

@@ -101,7 +101,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly SpawnOptions _spawnOptions;
     private readonly AgentToolPipelineOptions _toolPipelineOptions;
     private readonly IToolRelevanceCoreSet _toolRelevanceCoreSet;
-    private readonly ToolRelevanceOptions _toolRelevanceOptions;
+
+    // STORED, never read at construction: the tool-relevance switch is read live per turn so an operator save applies
+    // to the next turn without a restart (INodeRuntimeSettings' own doc forbids capturing a migrated value in a field).
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
     public InvocationRunner(Lazy<IHubMessageSender> hubSender,
         Lazy<IWorkerEventDispatcher> eventDispatcher,
@@ -119,7 +122,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IOptions<ProviderResilienceOptions> resilienceOptions,
         IOptions<AgentToolPipelineOptions> toolPipelineOptions,
         IOptions<ProviderCallBudgetOptions> providerCallBudgetOptions,
-        IOptions<ToolRelevanceOptions> toolRelevanceOptions,
         IToolRelevanceCoreSet toolRelevanceCoreSet,
         IConfiguration configuration,
         INodeRuntimeSettings runtimeSettings,
@@ -157,11 +159,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _toolPipelineOptions = toolPipelineOptions.Value;
         ArgumentNullException.ThrowIfNull(providerCallBudgetOptions);
         _providerCallBudgetOptions = providerCallBudgetOptions.Value;
-        ArgumentNullException.ThrowIfNull(toolRelevanceOptions);
-        _toolRelevanceOptions = toolRelevanceOptions.Value;
         _toolRelevanceCoreSet = toolRelevanceCoreSet ?? throw new ArgumentNullException(nameof(toolRelevanceCoreSet));
         ArgumentNullException.ThrowIfNull(configuration);
-        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         ArgumentNullException.ThrowIfNull(spawnOptions);
         _spawnOptions = spawnOptions.Value;
         _externalProviderRegistry = externalProviderRegistry ?? throw new ArgumentNullException(nameof(externalProviderRegistry));
@@ -274,21 +274,31 @@ public sealed partial class InvocationRunner : IInvocationRunner
             }
         }
 
-        // Seeded in the SAME place and for the same reason as the provider budget: the send-time relevance hop runs
-        // several awaited frames below this method, an AsyncLocal write in a callee never reaches its caller, and the
-        // scope has to exist before the agent is built. Inactive by default, in which case the hop is a
-        // reference-equality pass-through and list_tools is never appended.
-        // The core set is read only when it will be USED: GetCoreToolNames reads the MCP registry live and, with any
-        // server connected, allocates a fresh catalog list plus a set per turn. On the shipped default that work would
-        // build a set nothing reads, on the hot path of every chat turn.
-        var toolRelevanceActive = _toolRelevanceOptions.Enabled && !package.DisableToolRelevanceFilter;
-        using var toolRelevanceScope = ToolRelevanceScope.BeginScope(toolRelevanceActive,
-            toolRelevanceActive ? _toolRelevanceCoreSet.GetCoreToolNames() : FrozenSet<string>.Empty);
         string? invocationOutcome = null;
 
         try
         {
             var invocationToken = _lifecycleTracker.GetInvocationCancellationToken();
+            // Seeded in the SAME place and for the same reason as the provider budget: the send-time relevance hop runs
+            // several awaited frames below this method, an AsyncLocal write in a callee never reaches its caller, and
+            // the scope has to exist before the agent is built. Inactive by default, in which case the hop is a
+            // reference-equality pass-through and list_tools is never appended.
+            // The core set is read only when it will be USED: GetCoreToolNames reads the MCP registry live and, with
+            // any server connected, allocates a fresh catalog list plus a set per turn. On the shipped default that
+            // work would build a set nothing reads, on the hot path of every chat turn.
+            // Read LIVE per turn through the cached store, never captured in a field: an operator save must apply to the
+            // next turn without a restart. INSIDE the try because this read, unlike the options read it replaces, can
+            // throw — above the try a throw would fail the turn with no failure ever reported. On invocationToken
+            // because an operator Cancel or the turn watchdog cancels THAT one, not the caller's.
+            var toolRelevanceActive = await _runtimeSettings.GetToolRelevanceEnabledAsync(invocationToken).ConfigureAwait(false)
+                                      && !package.DisableToolRelevanceFilter;
+            using var toolRelevanceScope = ToolRelevanceScope.BeginScope(toolRelevanceActive,
+                toolRelevanceActive ? _toolRelevanceCoreSet.GetCoreToolNames() : FrozenSet<string>.Empty);
+            if (toolRelevanceActive)
+            {
+                _logger.LogDebug("Tool-relevance filtering is ACTIVE for invocation {InvocationId}.", package.InvocationId);
+            }
+
             ModelResolution modelResolution;
             using (NodeActivitySource.Source.StartActivity("chat.invocation.resolve_model"))
             {

@@ -7,7 +7,8 @@ using System.ComponentModel.DataAnnotations;
 ///     send-time pipeline hop narrows the <c>tools</c> array it hands the provider to an always-on core plus a
 ///     relevance-ranked fill, and the model recovers anything held back by calling <c>list_tools</c>.
 ///     <para>
-///         <b>Off by default.</b> With <see cref="Enabled" /> false the hop is a reference-equality pass-through and
+///         <b>Off by default.</b> With the node setting <c>ToolRelevanceEnabled</c> off the hop is a
+///         reference-equality pass-through and
 ///         <c>list_tools</c> is never appended, so every prompt, tool offer and runtime config hash is byte-identical
 ///         to the pre-feature behavior. The filter is a context-budget optimisation and never an authorisation
 ///         boundary: hiding a tool neither widens nor narrows what the agent is allowed to call.
@@ -16,9 +17,6 @@ using System.ComponentModel.DataAnnotations;
 public sealed class ToolRelevanceOptions
 {
     public const string Section = "Agent:ToolRelevance";
-
-    /// <summary>Node kill-switch. <see langword="false" /> is the shipped default, which keeps the offer byte-identical.</summary>
-    public bool Enabled { get; set; }
 
     /// <summary>
     ///     Filtering engages for an agent carrying more than this many RESOLVED tools, counted over every tool the

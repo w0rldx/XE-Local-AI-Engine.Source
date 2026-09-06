@@ -113,6 +113,11 @@ agentic-scope root inbound run is the deliberate exception: it may invoke an app
 only through ADR 0006's strict metadata-only audit-before-auto-approval path. Spawned children do not
 inherit that elevation.
 
+The node setting `ToolRelevanceEnabled` (default `false`, read live per turn) narrows a large tool offer to an
+always-on core plus a relevance-ranked fill, and the model recovers anything held back by calling `list_tools`; the
+per-agent `DisableToolRelevanceFilter` opts a single agent out even when the node switch is on. It is a context
+budget, never an authorisation boundary: hiding a tool neither widens nor narrows what an agent may call.
+
 The same policy is applied to the seeded Default Assistant, bound agents, orchestration participants,
 and regeneration. Approval decisions are recorded through `IToolApprovalAuditRecorder` as
 content-free operational metadata; arguments and tool results do not enter that audit record.
