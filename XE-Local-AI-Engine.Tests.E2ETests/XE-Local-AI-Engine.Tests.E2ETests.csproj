@@ -46,6 +46,13 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Client.Testing\XE-Local-AI-Engine.Client.Testing.csproj"/>
   </ItemGroup>
 
+  <!-- Shared loopback-port helper: one definition of "a released :0 port is a candidate, not a
+       reservation" for both the unit tests and this project. Linked rather than moved into
+       Client.Testing so the rule lives next to the tests it serves. -->
+  <ItemGroup>
+    <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\LoopbackPort.cs" Link="Testing\LoopbackPort.cs"/>
+  </ItemGroup>
+
   <ItemGroup>
     <Using Include="XE_Local_AI_Engine.AI.Contracts.Enums"/>
     <Using Include="XE_Local_AI_Engine.AI.Contracts.Events"/>
