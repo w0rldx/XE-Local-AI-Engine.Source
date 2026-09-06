@@ -82,25 +82,23 @@ describe("validateGraphWorkflowGraph accepts what the server accepts", () => {
 		expect(validateGraphWorkflowGraph(liveGraph())).toEqual([]);
 	});
 
-	it("reports only the unrouted Reject on the brief's eight-node graph, and nothing once it is wired", () => {
-		// The brief's §3.1 example — which `eightNodeGraph` copies verbatim — offers `Reject` on its Pause node and wires
-		// only `Approve`, so it breaks the Pause pre-flight rule the SAME section states. The live body above wires both,
-		// which is why it is the "accepts what the server accepts" anchor. Recorded here rather than papered over: the
-		// fixture is another lane's file, and this assertion is what will fail the day it is corrected.
-		expect(validateGraphWorkflowGraph(eightNodeGraph)).toEqual([{ rule: "pauseDecisionUnroutable", subject: "review" }]);
+	it("reports nothing for the shared eight-node fixture", () => {
+		expect(validateGraphWorkflowGraph(eightNodeGraph)).toEqual([]);
+	});
 
-		const wired = graph(eightNodeGraph.nodes ?? [], [
-			...(eightNodeGraph.edges ?? []),
-			{
-				key: "e9",
-				from: "review",
-				to: "fanout",
-				label: "rejected",
-				sourceHandle: "Reject",
-				condition: { path: "output.decision", op: "Eq", value: "Reject" },
-			},
+	it("reports the unrouted decision the moment the Pause node's Reject edge is taken away", () => {
+		// The brief's §3.1 listing draws only the Approve edge, which is why the fixture had to add the other one: the
+		// server refuses a Pause whose allowed decision no out-edge routes, and this is that rule's client mirror.
+		const unwired = graph(
+			eightNodeGraph.nodes ?? [],
+			(eightNodeGraph.edges ?? []).filter((edge) => edge.key !== "e9"),
+		);
+
+		// Dropping it also leaves the reconverging End with one inbound edge, which its `Any` join no longer needs.
+		expect(validateGraphWorkflowGraph(unwired)).toEqual([
+			{ rule: "pauseDecisionUnroutable", subject: "review" },
+			{ rule: "joinAnyNeedsTwoInbound", subject: "done" },
 		]);
-		expect(validateGraphWorkflowGraph(wired)).toEqual([]);
 	});
 
 	it("reports nothing for the smallest legal graph, and nothing at all when no graph is loaded", () => {

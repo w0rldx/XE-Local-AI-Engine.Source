@@ -77,7 +77,7 @@ describe("graphToCanvas / canvasToGraph round trip", () => {
 		expect(issues).toEqual([]);
 		expect(graphWorkflowsEqual(result, eightNodeGraph)).toBe(true);
 		expect(result.nodes).toHaveLength(8);
-		expect(result.edges).toHaveLength(8);
+		expect(result.edges).toHaveLength(9);
 	});
 
 	it("keeps the node key as the React Flow id and the edge key as the edge id", () => {
@@ -93,7 +93,7 @@ describe("graphToCanvas / canvasToGraph round trip", () => {
 			"merge",
 			"done",
 		]);
-		expect(canvas.edges.map((edge) => edge.id)).toEqual(["e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8"]);
+		expect(canvas.edges.map((edge) => edge.id)).toEqual(["e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8", "e9"]);
 		expect(canvas.nodes.map((node) => node.type)).toEqual([
 			"start",
 			"agent",
@@ -112,6 +112,7 @@ describe("graphToCanvas / canvasToGraph round trip", () => {
 		expect(canvas.nodes.find((node) => node.id === "review")?.position).toEqual({ x: -120, y: 360 });
 		expect(edgeOf(canvas, "e3").sourceHandle).toBe("true");
 		expect(edgeOf(canvas, "e5").sourceHandle).toBe("Approve");
+		expect(edgeOf(canvas, "e9").sourceHandle).toBe("Reject");
 		expect(edgeOf(canvas, "e5").data?.label).toBe("approved");
 		expect(edgeOf(canvas, "e5").label).toBe("approved");
 		expect(edgeOf(canvas, "e1").sourceHandle).toBeUndefined();

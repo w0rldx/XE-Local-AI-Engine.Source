@@ -34,7 +34,7 @@ describe("toGraphWorkflowRunCanvas with a matching graph hash", () => {
 
 		expect(canvas.graphMismatch).toBe(false);
 		expect(canvas.nodes).toHaveLength(8);
-		expect(canvas.edges).toHaveLength(8);
+		expect(canvas.edges).toHaveLength(9);
 		expect(canvas.nodeCount).toBe(8);
 		expect(canvas.isOverCap).toBe(false);
 		expect(canvas.nodes.find((node) => node.id === "review")?.position).toEqual({ x: -120, y: 360 });
