@@ -50,6 +50,30 @@ describe("GraphWorkflowRunList", () => {
 		expect(onSelectRun).toHaveBeenCalledWith(older.id);
 	});
 
+	it("selects a run from the keyboard, which is the only way this list can be driven without a mouse", () => {
+		const onSelectRun = vi.fn();
+		renderWithProviders(<GraphWorkflowRunList runs={[older, newer]} onSelectRun={onSelectRun} />);
+
+		const row = screen.getByTestId(`graph-workflow-run-card-${newer.id}`);
+		// A real <button> is what makes Enter and Space work at all: the platform turns them into the click below, and
+		// jsdom does not, so the tag and the focus are what this can honestly assert.
+		expect(row.tagName).toBe("BUTTON");
+		expect(row.hasAttribute("disabled")).toBe(false);
+
+		row.focus();
+		expect(document.activeElement).toBe(row);
+
+		fireEvent.click(row);
+		expect(onSelectRun).toHaveBeenCalledWith(newer.id);
+	});
+
+	it("says which run is the selected one, not only which is tinted", () => {
+		renderWithProviders(<GraphWorkflowRunList runs={[older, newer]} selectedRunId={older.id} onSelectRun={vi.fn()} />);
+
+		expect(screen.getByTestId(`graph-workflow-run-card-${older.id}`).getAttribute("aria-pressed")).toBe("true");
+		expect(screen.getByTestId(`graph-workflow-run-card-${newer.id}`).getAttribute("aria-pressed")).toBe("false");
+	});
+
 	it("shows the loading, error and empty states instead of a list", () => {
 		const loading = renderWithProviders(<GraphWorkflowRunList runs={[]} isLoading={true} onSelectRun={vi.fn()} />);
 		expect(screen.getByTestId("graph-workflow-run-list-loading")).toBeDefined();

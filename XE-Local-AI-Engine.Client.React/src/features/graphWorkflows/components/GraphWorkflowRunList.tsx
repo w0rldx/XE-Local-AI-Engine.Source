@@ -57,12 +57,19 @@ export function GraphWorkflowRunList({ runs, isLoading, error, selectedRunId, on
 				const runId = run.id ?? "";
 				const failureClass = narrowGraphWorkflowFailureClass(run.failureClass);
 				return (
+					// The card IS the control, rather than a div with an onClick: switching runs is the only thing this
+					// list does, and a keyboard has no other way to do it. One button per row, so nothing nests.
 					<Card
 						key={runId}
+						component="button"
+						type="button"
 						withBorder={true}
 						padding="xs"
+						ta="left"
+						w="100%"
 						onClick={() => onSelectRun(runId)}
 						bg={runId === selectedRunId ? "var(--mantine-color-default-hover)" : undefined}
+						aria-pressed={runId === selectedRunId}
 						style={{ cursor: "pointer" }}
 						data-testid={`graph-workflow-run-card-${runId}`}
 					>
