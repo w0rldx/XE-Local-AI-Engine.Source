@@ -487,7 +487,7 @@ public sealed class GraphWorkflowRunStoreTests
         await MoveAsync(store, run.Id, "start", GraphWorkflowNodeRunStatus.Running).ConfigureAwait(false);
         if (staged == GraphWorkflowNodeRunStatus.WaitingForApproval)
         {
-            // Waiting, but already answered: the second half of the predicate is what has to refuse this one.
+            // Answered, so Succeeded AND carrying a decision: both halves of the predicate refuse this one.
             await MoveAsync(store, run.Id, "start", GraphWorkflowNodeRunStatus.WaitingForApproval).ConfigureAwait(false);
             _ = await DecideAsync(store, run.Id, Guid.NewGuid()).ConfigureAwait(false);
         }

@@ -162,11 +162,13 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store,
         }
 
         // 3. The run must be live. A drain is already settling this row, and a terminal run has no tick left to route
-        // the answer with.
+        // the answer with — but the SAME resolution as step 2, replay lookup first: this caller's own answer can have
+        // committed under its own id and the run stopped between the row read and here, and refusing then would 409 a
+        // decision that did land.
         var run = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
         if (run.Status is GraphWorkflowRunStatus.Cancelling || GraphWorkflowStateMachine.IsTerminal(run.Status))
         {
-            throw new GraphWorkflowRunConflictException($"This run is {run.Status}, so the pause '{nodeKey}' can no longer be answered.");
+            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken).ConfigureAwait(false);
         }
 
         // 4. The answer must be one the PINNED graph offers. A graph that does not offer it is wrong, not the request.

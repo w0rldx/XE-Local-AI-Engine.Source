@@ -260,12 +260,40 @@ public sealed class GraphWorkflowRunServiceTests
             "one act, one audited decision, however many times it was sent.");
     }
 
+    /// <summary>
+    ///     The last interleaving of the same act arriving twice: this caller's own answer commits under its own
+    ///     operation id AND the run stops being live, both after the row was read waiting and before the run-liveness
+    ///     check reads the run. Refusing on the run's status alone would 409 a decision that did land, for a caller
+    ///     that did exactly the right thing — so the liveness refusal resolves the replay first, like the row one.
+    /// </summary>
+    [Test]
+    public async Task DecideAsync_WhenAnIdenticalRequestCommitsAndTheRunThenStops_ReplaysItRatherThanRefusing()
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoDecisions).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var operationId = Guid.NewGuid();
+
+        await using var scope = Host.Factory.Services.CreateAsyncScope();
+        var runs = Service(scope, GraphWorkflowDecisionKind.Approve, GraphWorkflowRace.IdenticalAnswerThenRunStops, harness, operationId);
+
+        var result = await runs.DecideAsync(runId, "review", operationId, GraphWorkflowDecisionKind.Approve, comment: null, payloadJson: null, "operator")
+                               .ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowDecisionKind.Approve, result.Decision);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, result.NodeRunStatus, "the answer that committed is this caller's answer too.");
+        AssertEx.Equal(expected: 1,
+            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == GraphWorkflowEventTypes.GateDecided),
+            "one act, one audited decision, whatever the run did afterwards.");
+    }
+
     /// <summary>The run service over a store whose decide loses the named race, and everything else real.</summary>
     private static GraphWorkflowRunService Service(AsyncServiceScope scope,
         GraphWorkflowDecisionKind winningDecision,
         GraphWorkflowRace race,
-        GraphWorkflowHarness harness) =>
-        new(new RacingGraphWorkflowStore(scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>(), winningDecision, race),
+        GraphWorkflowHarness harness,
+        Guid callerOperationId = default) =>
+        new(new RacingGraphWorkflowStore(scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>(), winningDecision, race, callerOperationId),
             new RecordingGraphWorkflowDispatcherSignal(),
             Substitute.For<IToolInvocationService>(),
             Options.Create(harness.CurrentOptions()));
@@ -538,9 +566,14 @@ public sealed class GraphWorkflowRunServiceTests
 ///     compare-and-set matching no row. Everything else forwards, so every check the service made before the write is
 ///     the real one.
 /// </summary>
-internal sealed class RacingGraphWorkflowStore(IGraphWorkflowStore inner, GraphWorkflowDecisionKind winningDecision, GraphWorkflowRace race) : IGraphWorkflowStore
+internal sealed class RacingGraphWorkflowStore(IGraphWorkflowStore inner,
+    GraphWorkflowDecisionKind winningDecision,
+    GraphWorkflowRace race,
+    Guid callerOperationId = default) : IGraphWorkflowStore
 {
     private int _operationLookups;
+
+    private int _runReads;
 
     /// <summary>
     ///     The lookup a decide resolves its idempotency with — and, for <see cref="GraphWorkflowRace.IdenticalAnswer" />,
@@ -554,18 +587,46 @@ internal sealed class RacingGraphWorkflowStore(IGraphWorkflowStore inner, GraphW
             return await inner.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken).ConfigureAwait(false);
         }
 
-        // The same act, from a request that got there first: same id, same answer, same person.
+        await CommitIdenticalAnswerAsync(runId, cancellationToken, operationId).ConfigureAwait(false);
+        return null;
+    }
+
+    /// <summary>
+    ///     The same act, from a request that got there first: same id, same answer, same person. The id is the one this
+    ///     caller is using, which is what makes what follows a replay rather than a second human act.
+    /// </summary>
+    private async Task CommitIdenticalAnswerAsync(Guid runId, CancellationToken cancellationToken, Guid? operationId = null)
+    {
         var waiting = await inner.GetNodeRunAsync(runId, "review", cancellationToken).ConfigureAwait(false);
         _ = await inner.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand(runId,
                            waiting.Id,
                            GraphWorkflowVersions.Any,
-                           operationId,
+                           operationId ?? callerOperationId,
                            winningDecision,
                            "operator",
                            GraphWorkflowStateMachine.PauseOutputJson(winningDecision)),
                        cancellationToken)
                        .ConfigureAwait(false);
-        return null;
+    }
+
+    /// <summary>
+    ///     The run read step 3 performs — and, for <see cref="GraphWorkflowRace.IdenticalAnswerThenRunStops" />, the
+    ///     moment the other request's identical answer commits AND the run stops being live. First call only, so the
+    ///     replay this caller then resolves reads the real rows.
+    /// </summary>
+    public async Task<GraphWorkflowRunSnapshot> GetRunAsync(Guid runId, CancellationToken cancellationToken = default)
+    {
+        if (race != GraphWorkflowRace.IdenticalAnswerThenRunStops || Interlocked.Increment(ref _runReads) != 1)
+        {
+            return await inner.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        }
+
+        // The answer lands BEFORE the cancel: the store refuses a decision on a run that has stopped, so the other
+        // request only wins if it got there first — which is exactly the interleaving this reproduces.
+        await CommitIdenticalAnswerAsync(runId, cancellationToken).ConfigureAwait(false);
+        _ = await inner.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(runId, GraphWorkflowVersions.Any, GraphWorkflowRunStatus.Cancelling), cancellationToken)
+                       .ConfigureAwait(false);
+        return await inner.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<GraphWorkflowMutationResult?> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default)
@@ -617,9 +678,6 @@ internal sealed class RacingGraphWorkflowStore(IGraphWorkflowStore inner, GraphW
     public Task<GraphWorkflowRunSnapshot?> FindRunByRequestAsync(Guid requestId, CancellationToken cancellationToken = default) =>
         inner.FindRunByRequestAsync(requestId, cancellationToken);
 
-    public Task<GraphWorkflowRunSnapshot> GetRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
-        inner.GetRunAsync(runId, cancellationToken);
-
     public Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status = null,
         int limit = 50,
         CancellationToken cancellationToken = default) =>
@@ -670,6 +728,9 @@ public enum GraphWorkflowRace
 
     /// <summary>A cancel lands, and the store's in-transaction re-read refuses a decision the run can no longer route.</summary>
     CancelledMidWrite,
+
+    /// <summary>This caller's OWN answer lands and the run then stops, both before the run-liveness check reads it.</summary>
+    IdenticalAnswerThenRunStops,
 
     /// <summary>This caller's OWN answer lands from a second identical request, before the replay lookup can see it.</summary>
     IdenticalAnswer
