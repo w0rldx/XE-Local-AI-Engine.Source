@@ -155,8 +155,8 @@ internal static class GraphWorkflowDocuments
     /// </summary>
     public static JsonElement ToolOutput(string? result) =>
         JsonSerializer.SerializeToElement(new ToolOutputPayload(Read(result) is { ValueKind: JsonValueKind.Object or JsonValueKind.Array } structured
-            ? structured
-            : JsonSerializer.SerializeToElement(result ?? string.Empty, JsonOptions)),
+                ? structured
+                : JsonSerializer.SerializeToElement(result ?? string.Empty, JsonOptions)),
             JsonOptions);
 
     /// <summary>

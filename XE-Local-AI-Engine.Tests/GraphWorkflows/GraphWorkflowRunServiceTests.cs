@@ -566,7 +566,8 @@ public sealed class GraphWorkflowRunServiceTests
 ///     compare-and-set matching no row. Everything else forwards, so every check the service made before the write is
 ///     the real one.
 /// </summary>
-internal sealed class RacingGraphWorkflowStore(IGraphWorkflowStore inner,
+internal sealed class RacingGraphWorkflowStore(
+    IGraphWorkflowStore inner,
     GraphWorkflowDecisionKind winningDecision,
     GraphWorkflowRace race,
     Guid callerOperationId = default) : IGraphWorkflowStore
@@ -599,13 +600,13 @@ internal sealed class RacingGraphWorkflowStore(IGraphWorkflowStore inner,
     {
         var waiting = await inner.GetNodeRunAsync(runId, "review", cancellationToken).ConfigureAwait(false);
         _ = await inner.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand(runId,
-                           waiting.Id,
-                           GraphWorkflowVersions.Any,
-                           operationId ?? callerOperationId,
-                           winningDecision,
-                           "operator",
-                           GraphWorkflowStateMachine.PauseOutputJson(winningDecision)),
-                       cancellationToken)
+                               waiting.Id,
+                               GraphWorkflowVersions.Any,
+                               operationId ?? callerOperationId,
+                               winningDecision,
+                               "operator",
+                               GraphWorkflowStateMachine.PauseOutputJson(winningDecision)),
+                           cancellationToken)
                        .ConfigureAwait(false);
     }
 
@@ -644,12 +645,12 @@ internal sealed class RacingGraphWorkflowStore(IGraphWorkflowStore inner,
         // The winner, committed for real between this caller's checks and its own write — with its own operation id,
         // its own answer and its own output, which is what makes it a second human act rather than a replay.
         _ = await inner.DecideNodeRunAsync(command with
-                       {
-                           OperationId = Guid.NewGuid(),
-                           Decision = winningDecision,
-                           OutputJson = GraphWorkflowStateMachine.PauseOutputJson(winningDecision)
-                       },
-                       cancellationToken)
+                           {
+                               OperationId = Guid.NewGuid(),
+                               Decision = winningDecision,
+                               OutputJson = GraphWorkflowStateMachine.PauseOutputJson(winningDecision)
+                           },
+                           cancellationToken)
                        .ConfigureAwait(false);
 
         return race == GraphWorkflowRace.ConcurrencyToken

@@ -187,18 +187,18 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
     private async Task<Guid> StartRunAsync()
     {
         using var created = await SendAsync("POST",
-                                $"{Root}/definitions",
-                                $$"""{"name":"Pause then tool {{Guid.NewGuid():N}}","description":"The slice gate.","graph":{{GraphWorkflowGraphs.PauseThenToolEndToEnd}}}""")
-                                .ConfigureAwait(false);
+                $"{Root}/definitions",
+                $$"""{"name":"Pause then tool {{Guid.NewGuid():N}}","description":"The slice gate.","graph":{{GraphWorkflowGraphs.PauseThenToolEndToEnd}}}""")
+            .ConfigureAwait(false);
         var createdBody = await created.Content.ReadAsStringAsync().ConfigureAwait(false);
         AssertEx.Equal(HttpStatusCode.Created, created.StatusCode, createdBody);
         using var definition = JsonDocument.Parse(createdBody);
         var definitionId = definition.RootElement.GetProperty("id").GetGuid();
 
         using var started = await SendAsync("POST",
-                                $"{Root}/definitions/{definitionId}/runs",
-                                $$"""{"requestId":"{{Guid.NewGuid()}}"}""")
-                                .ConfigureAwait(false);
+                $"{Root}/definitions/{definitionId}/runs",
+                $$"""{"requestId":"{{Guid.NewGuid()}}"}""")
+            .ConfigureAwait(false);
         var startedBody = await started.Content.ReadAsStringAsync().ConfigureAwait(false);
         AssertEx.Equal(HttpStatusCode.Accepted, started.StatusCode, startedBody);
         using var run = JsonDocument.Parse(startedBody);
@@ -240,7 +240,7 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
         run.RootElement.GetProperty("nodeRuns")
            .EnumerateArray()
            .SingleOrDefault(nodeRun => string.Equals(nodeRun.GetProperty("nodeKey").GetString(), nodeKey, StringComparison.Ordinal))
-           is { ValueKind: JsonValueKind.Object } summary
+            is { ValueKind: JsonValueKind.Object } summary
             ? summary
             : throw new AssertionException($"The run carries no node run for '{nodeKey}'.");
 

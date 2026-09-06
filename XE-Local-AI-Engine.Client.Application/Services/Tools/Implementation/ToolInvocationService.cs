@@ -89,7 +89,7 @@ internal sealed class ToolInvocationService(
             // capability gate would silently withhold six of the eight invocable tools.
             var catalog = await _offerProvider.GetKnownToolsAsync(budget.Token).ConfigureAwait(false);
             var entry = catalog.FirstOrDefault(candidate => string.Equals(candidate.Name, toolName, StringComparison.Ordinal)
-                                                           && string.Equals(candidate.Source, BuiltinSource, StringComparison.Ordinal));
+                                                            && string.Equals(candidate.Source, BuiltinSource, StringComparison.Ordinal));
             if (entry is null)
             {
                 return new ToolInvocationOutcome(ToolInvocationOutcomeKind.UnknownTool, null, $"'{toolName}' is not a built-in tool on this node.");

@@ -185,7 +185,7 @@ public sealed class GraphWorkflowDispatcherTests
         await using var harness = GraphWorkflowHarness.PrivateHost(static services =>
         {
             var toolLane = services.Single(descriptor => descriptor.ServiceType == typeof(IGraphWorkflowNodeExecutor)
-                                                        && descriptor.ImplementationType == typeof(GraphWorkflowToolExecutor));
+                                                         && descriptor.ImplementationType == typeof(GraphWorkflowToolExecutor));
             _ = services.Remove(toolLane);
         });
         var runId = await harness.StartRunAsync(GraphWorkflowGraphs.ToolNode).ConfigureAwait(false);

@@ -9,7 +9,8 @@ public sealed record ConversationSummarizerMessage(string Role, string Content);
 ///     <c>IModelCapabilityResolver</c>. False — the safe default, matching that resolver's own miss behaviour — means
 ///     the fold sends no thinking fields at all.
 /// </param>
-public sealed record ConversationSummarizerInput(string? PriorSummary,
+public sealed record ConversationSummarizerInput(
+    string? PriorSummary,
     IReadOnlyList<ConversationSummarizerMessage> Messages,
     string ModelName,
     bool SupportsThinking = false);

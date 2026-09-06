@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Endpoints.ModelFit.V1;
 
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -67,7 +68,7 @@ public sealed class ModelFitMapperMetricsTests
         // the diagnostics blob, so their absence proves nothing carried them onto the wire — a property rename or an
         // added passthrough would put them back. A quoted sentinel would never match: a leaked string property is
         // serialized with its inner quotes escaped.
-        var json = System.Text.Json.JsonSerializer.Serialize(dto);
+        var json = JsonSerializer.Serialize(dto);
         AssertEx.False(json.Contains("llamacpp:n_tokens_max", StringComparison.Ordinal));
         AssertEx.False(json.Contains("speculative_draft_sentinel_900", StringComparison.Ordinal));
     }

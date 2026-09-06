@@ -56,7 +56,7 @@ public sealed class ConversationCompactionOptionsTests
             + "left ~600 characters per fold, which multiplied the folds and the loss.");
         AssertEx.Empty(Validate(options).Select(static result => result.ErrorMessage));
         AssertEx.True(options.MaxInputCharsPerSummarizationCall
-                      - ConversationSummarizer.GetMinimumRequestBudget(options.MaxSummaryChars) >= 6_000,
+            - ConversationSummarizer.GetMinimumRequestBudget(options.MaxSummaryChars) >= 6_000,
             "The defaults must leave several thousand characters of source room per fold even with the running "
             + "summary at its cap; that margin is the reason the default was raised.");
     }

@@ -572,7 +572,11 @@ public sealed class GraphWorkflowRunStoreTests
         var store = GraphWorkflowTestFixture.StoreFor(context);
         var run = await StartAsync(store).ConfigureAwait(false);
         var operationId = Guid.NewGuid();
-        foreach (var nodeKey in new[] { "start", "done" })
+        foreach (var nodeKey in new[]
+                 {
+                     "start",
+                     "done"
+                 })
         {
             await ParkAsync(store, run.Id, nodeKey).ConfigureAwait(false);
         }

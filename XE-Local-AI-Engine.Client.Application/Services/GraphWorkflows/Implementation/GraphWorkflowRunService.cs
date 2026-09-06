@@ -11,7 +11,8 @@ using XE_Local_AI_Engine.Client.Services.Tools;
 ///     The command surface over a graph workflow run. Everything it does is validate, commit, signal, and answer with
 ///     what the rows now say — the dispatcher does the rest on its own clock.
 /// </summary>
-internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store,
+internal sealed class GraphWorkflowRunService(
+    IGraphWorkflowStore store,
     IGraphWorkflowDispatcherSignal signal,
     IToolInvocationService tools,
     IOptions<GraphWorkflowOptions> options) : IGraphWorkflowRunService
@@ -217,13 +218,13 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store,
         try
         {
             written = await _store.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand(runId,
-                                       nodeRun.Id,
-                                       GraphWorkflowVersions.Any,
-                                       operationId,
-                                       decision,
-                                       decidedBySubject,
-                                       document),
-                                   cancellationToken)
+                                          nodeRun.Id,
+                                          GraphWorkflowVersions.Any,
+                                          operationId,
+                                          decision,
+                                          decidedBySubject,
+                                          document),
+                                      cancellationToken)
                                   .ConfigureAwait(false);
         }
         catch (GraphWorkflowInvalidTransitionException)

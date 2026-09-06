@@ -3833,7 +3833,10 @@ public sealed class InvocationRunnerTests
             toolRelevanceRead: static _ => Task.FromResult(true),
             toolRelevanceCoreSet: coreSet);
 
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build() with { DisableToolRelevanceFilter = true });
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build() with
+        {
+            DisableToolRelevanceFilter = true
+        });
 
         coreSet.DidNotReceive().GetCoreToolNames();
     }

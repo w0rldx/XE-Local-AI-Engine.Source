@@ -39,26 +39,26 @@ internal sealed class ConversationSummarizer(
     // clamp in FoldAsync then cut the tail off EVERY later fold, which is the exact fidelity loss this prompt exists
     // to remove. Half leaves the model room to keep merging instead of hitting the clamp.
     private const string SystemPromptTemplate = """
-                                        You compress an ongoing chat conversation into a single compact synopsis so the assistant can keep going
-                                        after the older turns are dropped from its context window.
+                                                You compress an ongoing chat conversation into a single compact synopsis so the assistant can keep going
+                                                after the older turns are dropped from its context window.
 
-                                        You are given a JSON object with an optional "priorSummary" (a synopsis of even older turns) and "messages"
-                                        (the newer turns to fold in, oldest first). Produce ONE updated synopsis that merges the prior summary with
-                                        the new messages.
+                                                You are given a JSON object with an optional "priorSummary" (a synopsis of even older turns) and "messages"
+                                                (the newer turns to fold in, oldest first). Produce ONE updated synopsis that merges the prior summary with
+                                                the new messages.
 
-                                        Rules:
-                                        - Preserve everything the assistant must remember to continue: facts established, decisions made, the user's
-                                          stated goals and preferences, named entities/files/values, and any open questions or unfinished tasks.
-                                        - Keep every fact, decision, named entity, file path, value and open item from "priorSummary" and "messages",
-                                          written as compressed notes: the synopsis must be far shorter than the messages it replaces.
-                                        - Hard limit: keep the synopsis under {0} characters. If it would not fit, merge related items and shorten
-                                          wording; keep the facts.
-                                        - Write the synopsis in the conversation's language: the most recent user turn's if they mix, or the language of
-                                          "priorSummary" if this input has no user turn.
-                                        - Write terse third-person notes, not a transcript. Drop pleasantries, restated questions, and filler.
-                                        - Do NOT answer or continue the conversation, and do NOT add information that is not in the input.
-                                        - Output ONLY the synopsis text — no preamble, no headings, no code fences.
-                                        """;
+                                                Rules:
+                                                - Preserve everything the assistant must remember to continue: facts established, decisions made, the user's
+                                                  stated goals and preferences, named entities/files/values, and any open questions or unfinished tasks.
+                                                - Keep every fact, decision, named entity, file path, value and open item from "priorSummary" and "messages",
+                                                  written as compressed notes: the synopsis must be far shorter than the messages it replaces.
+                                                - Hard limit: keep the synopsis under {0} characters. If it would not fit, merge related items and shorten
+                                                  wording; keep the facts.
+                                                - Write the synopsis in the conversation's language: the most recent user turn's if they mix, or the language of
+                                                  "priorSummary" if this input has no user turn.
+                                                - Write terse third-person notes, not a transcript. Drop pleasantries, restated questions, and filler.
+                                                - Do NOT answer or continue the conversation, and do NOT add information that is not in the input.
+                                                - Output ONLY the synopsis text — no preamble, no headings, no code fences.
+                                                """;
 
     // CA1863: the template is formatted on every construction and on every options validation, so parse it once.
     private static readonly CompositeFormat SystemPromptFormat = CompositeFormat.Parse(SystemPromptTemplate);
