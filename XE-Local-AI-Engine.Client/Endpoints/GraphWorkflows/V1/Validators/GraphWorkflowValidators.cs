@@ -128,6 +128,33 @@ public sealed class GraphWorkflowRunEventFeedRequestValidator : Validator<GraphW
     }
 }
 
+/// <summary>
+///     Shape validation only. Whether THIS pause can take the named answer — whether it is still waiting, whether its
+///     graph offers that decision, whether its comment is required — is the runtime's answer, and a conflict rather
+///     than a bad request. What is refused here is a token that is not a member name at all, so the handler can
+///     <c>Enum.Parse</c> rather than throw its way to a 500.
+/// </summary>
+public sealed class DecideGraphWorkflowNodeRunRequestValidator : Validator<DecideGraphWorkflowNodeRunRequest>
+{
+    private static readonly string[] DecisionNames = Enum.GetNames<GraphWorkflowDecisionKind>();
+
+    private static readonly string DecisionNameList = string.Join(", ", DecisionNames);
+
+    public DecideGraphWorkflowNodeRunRequestValidator()
+    {
+        RuleFor(static request => request.RunId).NotEmpty();
+        RuleFor(static request => request.NodeKey).NotEmpty().WithMessage("A decision names the pause it answers by node key.");
+
+        // The empty Guid is not an idempotency key: every caller that forgot to mint one would send the same one, and
+        // the second answer would replay the first caller's decision.
+        RuleFor(static request => request.OperationId).NotEmpty().WithMessage("A graph workflow decision needs a caller-minted operation id.");
+
+        RuleFor(static request => request.Decision)
+            .Must(static decision => DecisionNames.Contains(decision, StringComparer.OrdinalIgnoreCase))
+            .WithMessage($"decision must be one of {DecisionNameList}.");
+    }
+}
+
 internal static class GraphWorkflowRequestLimits
 {
     public const int MaxNameLength = 200;

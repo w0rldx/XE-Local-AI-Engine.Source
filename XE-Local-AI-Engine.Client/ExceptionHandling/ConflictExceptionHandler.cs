@@ -52,6 +52,7 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
             DevWorkflowConcurrencyException => NodeConflictProblemType.DevWorkflowVersionConflict,
             GraphWorkflowDefinitionConflictException => NodeConflictProblemType.GraphWorkflowDefinitionConflict,
             GraphWorkflowRunConflictException => NodeConflictProblemType.GraphWorkflowRunConflict,
+            GraphWorkflowGateAlreadyDecidedException => NodeConflictProblemType.GraphWorkflowGateAlreadyDecided,
 
             // The store's own rejection channel, under the same member: a stale ExpectedVersion, a lost concurrency
             // race and a request id reused on another definition all reach a client as "re-read the run", and giving
@@ -112,6 +113,9 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
                 break;
             case DevWorkflowGateAlreadyDecidedException alreadyDecided:
                 problemDetails.StandingDecision = alreadyDecided.StandingDecision.ToString();
+                break;
+            case GraphWorkflowGateAlreadyDecidedException graphGateDecided:
+                problemDetails.StandingDecision = graphGateDecided.StandingDecision.ToString();
                 break;
             default:
                 break;
