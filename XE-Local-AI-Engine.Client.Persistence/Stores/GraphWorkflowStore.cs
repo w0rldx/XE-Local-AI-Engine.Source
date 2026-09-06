@@ -487,6 +487,16 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
                     command.ExpectedVersion,
                     async run =>
                     {
+                        // Re-checked INSIDE the transaction, against the run row this mutation has already taken: a
+                        // cancel committing between the caller's read and this write would otherwise land a decision on
+                        // a run that has no tick left to route it, and the drain would then overwrite the decided row
+                        // while keeping its decision columns. Declined the same way a lost compare-and-set is, because
+                        // to the caller it is the same instruction: re-read the run.
+                        if (run.Status is not (GraphWorkflowRunStatus.Running or GraphWorkflowRunStatus.WaitingForApproval))
+                        {
+                            return null;
+                        }
+
                         // The compare-and-set, expressed as the predicate the row is LOADED by: a row that is no longer
                         // waiting, or already carries a decision, simply is not found, and the mutation writes nothing.
                         var nodeRun = await _dbContext.GraphWorkflowNodeRuns

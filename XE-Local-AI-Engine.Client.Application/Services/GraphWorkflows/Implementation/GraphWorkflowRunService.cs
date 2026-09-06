@@ -152,11 +152,13 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store,
             return await ReplayAsync(runId, nodeKey, operationId, decision, decidedBySubject, recorded, cancellationToken).ConfigureAwait(false);
         }
 
-        // 2. The row must be waiting. Unknown run or node key answers not-found from here.
+        // 2. The row must be waiting — and a row that is not gets the SAME resolution a lost write does, replay
+        // lookup first. Two identical requests both miss step 1, one commits, and the other reads a Succeeded row: it
+        // is this caller's own answer arriving twice, so refusing it here would 409 a decision that did land.
         var nodeRun = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken).ConfigureAwait(false);
         if (nodeRun.Status != GraphWorkflowNodeRunStatus.WaitingForApproval)
         {
-            throw StandingConflict(nodeRun, $"Node run '{nodeKey}' is {nodeRun.Status}, so there is nothing to decide on it.");
+            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken).ConfigureAwait(false);
         }
 
         // 3. The run must be live. A drain is already settling this row, and a terminal run has no tick left to route
@@ -291,9 +293,10 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store,
     }
 
     /// <summary>
-    ///     What a conditional write that matched no row means: a concurrent decide won between the read and the write.
-    ///     Answered off what the row NOW says rather than by retrying — either this same operation id committed it,
-    ///     which is a replay, or another one did, which is the second human act that gets refused.
+    ///     What a decide write that wrote nothing means, and what a row that was no longer waiting when it was read
+    ///     means: something committed between this caller's checks and its write. Answered off what the rows NOW say
+    ///     rather than by retrying — this same operation id committed it, which is a replay; the run stopped being
+    ///     live, which is a run conflict; or another operation id answered the pause, which is the second human act.
     /// </summary>
     private async Task<GraphWorkflowDecisionResult> LostTheRaceAsync(Guid runId,
         string nodeKey,
@@ -305,6 +308,15 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store,
         if (await _store.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken).ConfigureAwait(false) is { } settled)
         {
             return await ReplayAsync(runId, nodeKey, operationId, decision, decidedBySubject, settled, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Before the row: the store also declines once the RUN stops being live, and answering that with a node-status
+        // refusal would name the pause when the cancel is the reason — or, worse, name a standing decision on a row the
+        // drain has since cancelled.
+        var run = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        if (run.Status is GraphWorkflowRunStatus.Cancelling || GraphWorkflowStateMachine.IsTerminal(run.Status))
+        {
+            throw new GraphWorkflowRunConflictException($"This run is {run.Status}, so the pause '{nodeKey}' can no longer be answered.");
         }
 
         var current = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken).ConfigureAwait(false);
