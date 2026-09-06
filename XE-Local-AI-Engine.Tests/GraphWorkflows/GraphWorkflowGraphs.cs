@@ -654,4 +654,30 @@ internal static class GraphWorkflowGraphs
                                        ]
                                      }
                                      """;
+
+    /// <summary>
+    ///     The slice's whole shape in one graph: a <c>Pause</c> a person answers, and on the approving branch alone a
+    ///     <c>Tool</c> node that really invokes a built-in. Both of the pause's allowed decisions route somewhere, which
+    ///     is what the definition-time pre-flight requires, and the two branches reconverge on an <c>Any</c> End.
+    /// </summary>
+    public const string PauseThenToolEndToEnd = """
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [
+                                                    { "key": "start", "kind": "Start" },
+                                                    { "key": "review", "kind": "Pause",
+                                                      "config": { "prompt": "Look up the time?", "allowedDecisions": ["Approve", "Reject"], "requireComment": false } },
+                                                    { "key": "lookup", "kind": "Tool", "config": { "toolName": "GetCurrentTime", "arguments": {} } },
+                                                    { "key": "done", "kind": "End", "joinPolicy": "Any", "config": { "outcome": "completed" } }
+                                                  ],
+                                                  "edges": [
+                                                    { "key": "e1", "from": "start", "to": "review" },
+                                                    { "key": "e2", "from": "review", "to": "lookup", "label": "approved",
+                                                      "condition": { "path": "output.decision", "op": "eq", "value": "Approve" } },
+                                                    { "key": "e3", "from": "review", "to": "done", "label": "rejected",
+                                                      "condition": { "path": "output.decision", "op": "eq", "value": "Reject" } },
+                                                    { "key": "e4", "from": "lookup", "to": "done" }
+                                                  ]
+                                                }
+                                                """;
 }
