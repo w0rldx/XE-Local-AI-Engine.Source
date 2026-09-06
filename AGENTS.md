@@ -102,11 +102,13 @@ project, run `python3 scripts/docs-inventory-check.py` and name it in the wiki p
 Release scripts (`publish/**`, `scripts/release/**`): `scripts/lint-release-scripts.sh` (shellcheck ≥ 0.10,
 PSScriptAnalyzer, Pester; a missing tool fails, never skips).
 
-CI runs `.github/workflows/build-and-test.yml` on PRs and pushes to `develop` (four jobs: `python-quality`,
-`release-contracts`, `build-and-test`, `client-react`); `release.yml` re-runs it before packaging. CI deliberately
-runs backend test projects concurrently, each with its own `--results-directory` (MTP resolves `--coverage-output`
-relative to it, so shared directories overwrite each other's Cobertura report); the commands above are the local
-gate. Shape and rationale: `docs/wiki/13-testing-and-validation.md`, `docs/agent-knowledge.md` §1.
+CI runs `.github/workflows/build-and-test.yml` on PRs and pushes to `develop` (five jobs: `python-quality`,
+`release-contracts`, `backend-tests`, `build-and-test`, `client-react`); `release.yml` re-runs it before packaging.
+`backend-tests` is a five-leg matrix — the sibling projects on one runner, four `TEST_SHARD` quarters of
+`XE-Local-AI-Engine.Tests` on four more — and `build-and-test` cross-checks and merges their coverage under the job
+name branch protection requires. Within a leg, projects run concurrently, each with its own `--results-directory`
+(MTP resolves `--coverage-output` relative to it, so shared directories overwrite each other's Cobertura report);
+the commands above are the local gate. Shape and rationale: `docs/wiki/13-testing-and-validation.md`, `docs/agent-knowledge.md` §1.
 
 Opt-in live runners (nothing invokes them; ask before running, run before a tester RC):
 
