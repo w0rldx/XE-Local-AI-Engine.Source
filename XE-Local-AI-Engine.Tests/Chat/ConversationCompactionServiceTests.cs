@@ -182,7 +182,14 @@ public sealed class ConversationCompactionServiceTests
         {
             MaxSummaryChars = 5
         });
-        var service = new ConversationCompactionService(persistence, summarizer, resolver, CreateNodeSettingsStore(), options, TimeProvider.System, NullLogger<ConversationCompactionService>.Instance);
+        var service = new ConversationCompactionService(persistence,
+            summarizer,
+            resolver,
+            CreateCapabilityResolver(supportsThinking: false),
+            CreateNodeSettingsStore(),
+            options,
+            TimeProvider.System,
+            NullLogger<ConversationCompactionService>.Instance);
 
         var result = await service.CompactAsync(ConversationId);
 
@@ -388,16 +395,55 @@ public sealed class ConversationCompactionServiceTests
         AssertEx.Equal(expected: 3, result.CoversToSequence);
     }
 
-    private static ConversationCompactionService CreateService(INodeChatPersistenceService persistence, IConversationSummarizer summarizer, ILocalDefaultChatModelResolver? resolver = null)
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task CompactAsync_WhenTheModelSupportsThinking_PassesTheCapabilityToTheSummarizer(bool supportsThinking)
+    {
+        // The summarizer is a singleton and the capability resolver is scoped, so the capability has to be resolved HERE
+        // and ride down on the input record. Resolved against the model the fold will actually run on, not the request.
+        var messages = CompletedMessages(count: 12);
+        var conversation = Conversation(messages);
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
+        var summarizer = Substitute.For<IConversationSummarizer>();
+        summarizer.SummarizeAsync(Arg.Any<ConversationSummarizerInput>(), Arg.Any<CancellationToken>()).Returns("SYNOPSIS");
+        var capabilityResolver = CreateCapabilityResolver(supportsThinking);
+        var service = CreateService(persistence, summarizer, resolver, capabilityResolver);
+
+        var result = await service.CompactAsync(ConversationId);
+
+        AssertEx.Equal(ConversationCompactionOutcome.Compacted, result.Outcome);
+        await capabilityResolver.Received(1).ResolveAsync("local-model", Arg.Any<CancellationToken>());
+        await summarizer.Received(1)
+                        .SummarizeAsync(Arg.Is<ConversationSummarizerInput>(input => input.SupportsThinking == supportsThinking), Arg.Any<CancellationToken>());
+    }
+
+    private static ConversationCompactionService CreateService(INodeChatPersistenceService persistence,
+        IConversationSummarizer summarizer,
+        ILocalDefaultChatModelResolver? resolver = null,
+        IModelCapabilityResolver? capabilityResolver = null)
     {
         resolver ??= Substitute.For<ILocalDefaultChatModelResolver>();
         return new ConversationCompactionService(persistence,
             summarizer,
             resolver,
+            capabilityResolver ?? CreateCapabilityResolver(supportsThinking: false),
             CreateNodeSettingsStore(),
             Options.Create(new ConversationCompactionOptions()),
             TimeProvider.System,
             NullLogger<ConversationCompactionService>.Instance);
+    }
+
+    private static IModelCapabilityResolver CreateCapabilityResolver(bool supportsThinking)
+    {
+        var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        capabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                          .Returns(new ModelCapabilitySnapshot(supportsThinking, SupportsTools: false, IsCloud: false));
+        return capabilityResolver;
     }
 
     private static INodeSettingsStore CreateNodeSettingsStore()
