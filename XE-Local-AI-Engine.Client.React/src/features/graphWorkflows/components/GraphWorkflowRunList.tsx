@@ -3,6 +3,7 @@ import { IconAlertTriangle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { GraphWorkflowRunStatusBadge } from "@/features/graphWorkflows/components/GraphWorkflowStatusBadge";
 import {
@@ -20,8 +21,7 @@ export interface GraphWorkflowRunListProps {
 
 /** The runs of one definition, newest first — the run an operator came to look at is the one they just started. */
 export function GraphWorkflowRunList({ runs, isLoading, error, selectedRunId, onSelectRun }: GraphWorkflowRunListProps) {
-	// The UI language, not the browser's: a German UI must not print US dates.
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 
 	if (isLoading === true) {
 		return (
@@ -89,14 +89,14 @@ export function GraphWorkflowRunList({ runs, isLoading, error, selectedRunId, on
 							<Text size="xs" c="dimmed" data-testid={`graph-workflow-run-times-${runId}`}>
 								{run.completedAtUtc != null
 									? t("pages.graphWorkflows.runs.completedAt", "Finished {{time}}", {
-											time: new Date(run.completedAtUtc).toLocaleString(i18n.language),
+											time: formatTimestamp(run.completedAtUtc),
 										})
 									: run.startedAtUtc != null
 										? t("pages.graphWorkflows.runs.startedAt", "Started {{time}}", {
-												time: new Date(run.startedAtUtc).toLocaleString(i18n.language),
+												time: formatTimestamp(run.startedAtUtc),
 											})
 										: t("pages.graphWorkflows.runs.createdAt", "Created {{time}}", {
-												time: new Date(run.createdAtUtc ?? 0).toLocaleString(i18n.language),
+												time: formatTimestamp(run.createdAtUtc ?? null),
 											})}
 							</Text>
 						</Stack>
