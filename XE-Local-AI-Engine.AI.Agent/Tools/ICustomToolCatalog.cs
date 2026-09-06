@@ -36,10 +36,9 @@ internal interface ICustomToolCatalog
     ///     The returned ordinal-keyed dictionary is never <see langword="null" />; a name no enabled, acknowledged custom
     ///     tool satisfies is simply ABSENT from it, which the resolver treats exactly as it treated a null before. An
     ///     empty <paramref name="names" />, or a node-level kill switch that is off, yields an empty dictionary without
-    ///     reading the store. Blank entries are tolerated and match nothing, but a <see langword="null" /> ENTRY is not:
-    ///     the batch keys the requested names into an ordinal <see cref="HashSet{T}" />, so a null element throws
-    ///     <see cref="ArgumentNullException" /> exactly as a null collection does. Every caller filters on the
-    ///     <c>custom__</c> prefix, so no production path can supply one.
+    ///     reading the store. Blank or <see langword="null" /> entries are tolerated and match nothing (no stored tool
+    ///     carries an invalid or empty name, and every caller filters on the <c>custom__</c> prefix anyway). Throws
+    ///     <see cref="ArgumentNullException" /> only when <paramref name="names" /> itself is <see langword="null" />.
     /// </summary>
     Task<IReadOnlyDictionary<string, AITool>> TryResolveManyAsync(IReadOnlyCollection<string> names,
         CancellationToken cancellationToken = default);
