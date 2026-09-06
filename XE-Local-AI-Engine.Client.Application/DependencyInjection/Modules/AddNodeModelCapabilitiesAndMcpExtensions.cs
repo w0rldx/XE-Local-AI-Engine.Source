@@ -17,6 +17,8 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Proxy;
 using XE_Local_AI_Engine.Client.Services.Proxy.Implementation;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
+using XE_Local_AI_Engine.Client.Services.Tools;
+using XE_Local_AI_Engine.Client.Services.Tools.Implementation;
 
 internal static class AddNodeModelCapabilitiesAndMcpExtensions
 {
@@ -55,6 +57,10 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
                 sp.GetRequiredService<IModelTrustResolver>(),
                 knowledgeOptions.AllowCloudModelAccess);
         });
+        // The single-named-tool invocation seam, next to the catalog it reads. Registration is UNCONDITIONAL: a
+        // feature flag gates behaviour, never registration, and this service is feature-neutral — a later caller must
+        // not have to reason about whether some other module's flag was on. Singleton, like every seam it composes.
+        builder.Services.AddSingleton<IToolInvocationService, ToolInvocationService>();
         // The always-on tool names a relevance filter may never hide: the work-session state tools plus every
         // approval-bearing built-in from the catalog above. Composed here because both inputs are node-side; the agent
         // assembly only ever consumes the resulting name set.
