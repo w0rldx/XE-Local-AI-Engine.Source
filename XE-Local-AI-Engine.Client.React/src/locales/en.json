@@ -5561,7 +5561,19 @@
 			},
 			"decision": {
 				"Approve": "Approve",
-				"Reject": "Reject"
+				"Reject": "Reject",
+				"title": "Awaiting your decision",
+				"commentLabel": "Comment",
+				"commentRequired": "This node requires a comment with the decision.",
+				"commentOptional": "Optional. It is recorded with the decision.",
+				"commentCount": "{{used}} of {{max}} characters",
+				"commentTooLong": "Keep the comment to {{max}} characters or fewer.",
+				"advanced": "Advanced",
+				"payloadLabel": "Payload (JSON object)",
+				"payloadNotObject": "Enter a JSON object, or leave it empty.",
+				"alreadyDecided": "This was already answered with “{{decision}}”.",
+				"runMovedOn": "This run has moved on — it is no longer waiting for this decision.",
+				"failed": "That decision could not be recorded."
 			},
 			"joinPolicy": {
 				"All": "Wait for every incoming branch",
@@ -5687,6 +5699,43 @@
 				"condition": {
 					"valueRequired": "Enter a value to compare against."
 				}
+			},
+			"nodePanel": {
+				"close": "Close",
+				"loadFailed": "This node could not be loaded.",
+				"attempt": "attempt {{attempt}}",
+				"started": "started {{when}}",
+				"completed": "finished {{when}}",
+				"runMovedOn": "The run carried on after this node failed — this is what this node did, not what the run ended up doing.",
+				"tabInput": "Input",
+				"tabOutput": "Output",
+				"tabError": "Error",
+				"emptyDocument": "The runtime recorded nothing here.",
+				"pauseDecision": "Answered {{decision}}",
+				"passThrough": "A Condition and a Parallel node hand their input's output on unchanged, so an output that matches the node before it is correct.",
+				"joinOutput": "A Join node emits one map, keyed by the node each incoming branch came from."
+			},
+			"startRun": {
+				"title": "Start a run",
+				"runsVersion": "Runs version {{version}} of {{name}}",
+				"inputLabel": "Input (JSON)",
+				"byteCount": "{{used}} of {{max}} bytes",
+				"tooLarge": "This input is larger than the node accepts. Remove {{over}} bytes.",
+				"invalidJson": "Enter valid JSON, or leave it empty.",
+				"saveFirst": "Save the graph first — a run executes the saved definition, not the canvas.",
+				"staleVersion": "This workflow was saved again since you opened this dialog. Reload it, then start the run.",
+				"failed": "The run could not be started.",
+				"start": "Start run"
+			},
+			"toolbar": {
+				"version": "definition version {{version}}",
+				"started": "started {{when}}",
+				"completed": "finished {{when}}",
+				"back": "Back to editor",
+				"cancel": "Cancel run",
+				"cancelConfirmTitle": "Cancel this run?",
+				"cancelConfirmBody": "The nodes that are already running wind down first, and nothing new is dispatched.",
+				"cancelFailed": "The run could not be cancelled."
 			}
 		},
 		"integrations": {
