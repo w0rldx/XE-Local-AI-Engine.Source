@@ -82,9 +82,11 @@ public sealed class InferenceProfileEndpointTests
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-        // The role is rejected at the transport boundary — the service must never be reached.
+        // The role is rejected at the transport boundary — the service must never be reached. Targeted at the
+        // four-argument overload the endpoint actually calls: asserting against the three-argument one would pass
+        // vacuously and stop verifying anything.
         await service.DidNotReceiveWithAnyArgs()
-                     .ExploreAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>());
+                     .ExploreAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<int?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -116,7 +118,7 @@ public sealed class InferenceProfileEndpointTests
         const string skipText =
             "Skipped: some/model-GGUF (Chat) is serving 1 in-flight request(s); profiling did not run and nothing was evicted. Retry when the model is idle.";
         var service = Substitute.For<IInferenceProfileService>();
-        service.ExploreAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
+        service.ExploreAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<int?>(), Arg.Any<CancellationToken>())
                .Returns(ExploreResult.SkippedInUse(skipText));
 
         await using var factory = CreateFactory(service);
@@ -219,6 +221,114 @@ public sealed class InferenceProfileEndpointTests
         // The local-only machine key must NEVER leave the box.
         AssertEx.False(json.Contains("machineKey", StringComparison.OrdinalIgnoreCase), "Profiles response must not expose the machine key.");
         AssertEx.False(json.Contains("machine_key", StringComparison.OrdinalIgnoreCase), "Profiles response must not expose the machine key.");
+    }
+
+    [Test]
+    [Arguments(511)]
+    [Arguments(2047)]
+    public async Task Explore_WhenContextTokensBelowMinimum_Returns400(int contextTokens)
+    {
+        var service = Substitute.For<IInferenceProfileService>();
+        await using var factory = CreateFactory(service);
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, ExploreRoute())
+        {
+            Content = JsonContent.Create(new
+            {
+                modelName = "some/model-GGUF",
+                role = "chat",
+                contextTokens
+            })
+        };
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await service.DidNotReceiveWithAnyArgs()
+                     .ExploreAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<int?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Explore_WhenContextTokensAboveMaximum_Returns400()
+    {
+        var service = Substitute.For<IInferenceProfileService>();
+        await using var factory = CreateFactory(service);
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, ExploreRoute())
+        {
+            Content = JsonContent.Create(new
+            {
+                modelName = "some/model-GGUF",
+                role = "chat",
+                contextTokens = 2_000_000
+            })
+        };
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await service.DidNotReceiveWithAnyArgs()
+                     .ExploreAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<int?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Explore_WhenContextTokensSupplied_FlowsToServiceOverload()
+    {
+        var profileId = Guid.NewGuid();
+        var service = Substitute.For<IInferenceProfileService>();
+        service.ExploreAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<int?>(), Arg.Any<CancellationToken>())
+               .Returns(ExploreResult.Ok(ExploredProfile(profileId, ctxSize: 32768)));
+
+        await using var factory = CreateFactory(service);
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, ExploreRoute())
+        {
+            Content = JsonContent.Create(new
+            {
+                modelName = "some/model-GGUF",
+                role = "chat",
+                contextTokens = 32768
+            })
+        };
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+        var profile = doc.RootElement.GetProperty("profile");
+        AssertEx.Equal(profileId.ToString(), profile.GetProperty("id").GetString());
+
+        // The effective window is read off the projected profile — the endpoint does not echo the request value.
+        AssertEx.Equal(expected: 32768, profile.GetProperty("ctxSize").GetInt32());
+        await service.Received(1).ExploreAsync("some/model-GGUF", ModelRole.Chat, 32768, Arg.Any<CancellationToken>());
+    }
+
+    private static InferenceProfileView ExploredProfile(Guid profileId, int ctxSize)
+    {
+        return new InferenceProfileView(profileId,
+            ModelName: "some/model-GGUF",
+            Role: 0,
+            Backend: "cuda",
+            LlamacppBuild: "b10201",
+            Quant: "Q4_K_M",
+            CtxSize: ctxSize,
+            NGpuLayers: 33,
+            TensorSplit: null,
+            OverrideTensor: null,
+            KvTypeK: null,
+            KvTypeV: null,
+            FlashAttn: false,
+            NParams: 27_000_000_000,
+            IsMoe: false,
+            ExpertCount: null,
+            Status: "Explored",
+            BenchmarkSnapshotId: null,
+            CreatedAtUtc: 1,
+            UpdatedAtUtc: 2);
     }
 
     private static TestServerWebAppFactory CreateFactory(IInferenceProfileService inferenceProfileService)

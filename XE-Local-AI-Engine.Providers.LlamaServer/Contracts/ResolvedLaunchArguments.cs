@@ -35,6 +35,14 @@ public sealed record ResolvedLaunchArguments
     /// <summary>Frozen context size (<c>-c</c>). Replay mode only.</summary>
     public int CtxSize { get; private init; }
 
+    /// <summary>
+    ///     Explore mode: an optional request-scoped context-window override that pins this explore spawn's <c>-c</c>.
+    ///     <see langword="null" /> (the default, and always the case for a replay) leaves the allocation resolver's
+    ///     hardware-tier choice untouched, so a null carries exactly the behaviour that existed before this field.
+    ///     Never persisted and never bound from configuration; it lives for the one spawn it was passed to.
+    /// </summary>
+    public int? ExploreContextTokensOverride { get; private init; }
+
     /// <summary>Frozen GPU layer count (<c>--n-gpu-layers</c>); <see langword="null" /> leaves it unset. Replay only.</summary>
     public int? NGpuLayers { get; private init; }
 
@@ -58,11 +66,17 @@ public sealed record ResolvedLaunchArguments
     ///     obtains the fitted replay arguments separately from <c>llama-fit-params</c>. The default a self-satisfying
     ///     resolver returns when no profile exists.
     /// </summary>
-    public static ResolvedLaunchArguments Explore()
+    /// <param name="contextTokensOverride">
+    ///     An optional operator-supplied context window for this explore only (see
+    ///     <see cref="ExploreContextTokensOverride" />). Omitted/<see langword="null" /> is the default hardware-tier
+    ///     behaviour.
+    /// </param>
+    public static ResolvedLaunchArguments Explore(int? contextTokensOverride = null)
     {
         return new ResolvedLaunchArguments
         {
-            ExploreMode = true
+            ExploreMode = true,
+            ExploreContextTokensOverride = contextTokensOverride
         };
     }
 

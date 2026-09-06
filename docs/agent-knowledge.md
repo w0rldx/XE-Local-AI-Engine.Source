@@ -793,6 +793,20 @@ Provider unload calls `EvictAllRolesAsync` over `Enum.GetValues<ModelRole>()`; i
 
 The four context values must stay separately named through APIs and DTOs: launched allocation (`-c`), request budget/limit, train-context maximum, and frozen replay override. A request can reduce but cannot enlarge an existing process. Frozen/deterministic allocation never silently mutates after failure; only automatic hardware selection may OOM down-tier, and only for classified startup OOM, at most twice per allocation identity.
 
+### llama-server node settings are captured once per boot — a `PUT` after that changes nothing until a restart
+
+**Rule:** the node settings that feed `llama-server` — `speculativeMode`, `chatCacheReuse`, `kvCacheType` — are captured
+when the `LlamaServerSupervisorOptions` singleton is **first resolved** (a lazy factory; the exact moment is not a
+reliable "first spawn" marker). A `PUT node-settings` issued after that point in a boot does not reach a later spawn. Restart with
+`scripts/dev-stop.sh` then `scripts/dev-start.sh`, and read the values back with a `GET` before measuring anything.
+
+**Failure prevented:** a live A/B that flips one of those knobs between cells inside a single boot, measures no
+difference, and concludes "the knob does nothing" — when the second cell ran the first cell's value. Equally: a boot
+that silently inherits the previous boot's value because it was never set explicitly.
+
+**Authority:** `BuildSeededLlamaServerSupervisorOptions` and its `AddSingleton(sp => Build…(sp))` lazy-factory
+registration in `AddNodeModelRuntimeExtensions`.
+
 ### Benchmark launch evidence (KV-cache type feature, 2026-08-16)
 
 - **`LlamaServerLaunchProjection` is the single argv projection**, and `From(...)` is the sole renderer of context/placement/thread argv and of the `ComputeIdentity()` input. Its member order and names are PERSISTED identity — do not change either without an intentional migration.

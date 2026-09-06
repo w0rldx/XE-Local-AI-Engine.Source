@@ -20,6 +20,16 @@ public interface IInferenceProfileService
     Task<ExploreResult> ExploreAsync(string modelName, ModelRole role, CancellationToken ct);
 
     /// <summary>
+    ///     Explores with an optional request-scoped context-window override that pins the explore spawn's <c>-c</c> for
+    ///     this call only. <paramref name="contextTokens" /> is <see langword="null" /> for the default hardware-tier
+    ///     behaviour; a value is silently capped by the model's train ceiling, so the returned profile's
+    ///     <see cref="InferenceProfileView.CtxSize" /> is the effective window. The override is GPU-only: a non-null
+    ///     value on a CPU-variant node is rejected without spawning, because <c>llama-fit-params</c> does not run there
+    ///     and the requested window could not be recorded in the profile. Nothing about it is persisted.
+    /// </summary>
+    Task<ExploreResult> ExploreAsync(string modelName, ModelRole role, int? contextTokens, CancellationToken ct);
+
+    /// <summary>
     ///     Benchmarks the drafted profile <paramref name="profileId" />: replays its args under a metrics-enabled spawn,
     ///     runs the golden transcript, persists a benchmark snapshot + row, and marks the snapshot Succeeded/Failed. Does
     ///     NOT freeze.

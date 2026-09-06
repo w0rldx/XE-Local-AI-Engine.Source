@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -11,6 +13,36 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class LlamaServerLaunchArgumentComposerTests
 {
+    [Test]
+    public void Composer_WhenAllocationCarriesOverride_EmitsExplicitContextFlag()
+    {
+        // The request-scoped context override reaches the composer as the launch-policy plan's requested context. An
+        // explore spawn must still hand placement to auto-fit AND pin the window, in that order: --fit adjusts only
+        // UNSET arguments, so an explicit -c emitted after it is respected rather than overwritten. Without this the
+        // override would never reach llama-server or the co-invoked llama-fit-params helper.
+        var plan = new LlamaServerLaunchPlan(RequestedContextTokens: 16384,
+            UseKvCacheQuantization: false,
+            LlamaServerKvCacheTypes.F16,
+            CpuThreads: null,
+            CpuThreadsBatch: null);
+
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(new LlamaServerProcessSupervisor.ProcessKey("qwen3", ModelRole.Chat),
+            "/fake/bin/llama-server",
+            "/fake/models/model.gguf",
+            port: 8080,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(contextTokensOverride: 16384),
+            chatCacheReuse: 256,
+            plan: plan,
+            chatCacheRamMiB: 512);
+
+        var fitIndex = spec.Arguments.ToList().IndexOf("--fit");
+        AssertEx.True(fitIndex >= 0, "a GPU explore must emit --fit.");
+        AssertEx.Equal("on", spec.Arguments[fitIndex + 1]);
+        AssertEx.Equal("-c", spec.Arguments[fitIndex + 2]);
+        AssertEx.Equal("16384", spec.Arguments[fitIndex + 3]);
+    }
+
     [Test]
     [Arguments("-v")]
     [Arguments("--verbose")]

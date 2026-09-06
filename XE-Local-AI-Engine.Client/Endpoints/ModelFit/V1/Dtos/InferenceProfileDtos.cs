@@ -82,6 +82,27 @@ public sealed class ExploreInferenceProfileRequest
 
     /// <summary>Role to explore — <c>chat|embedding|reranker</c>. Defaults to <c>chat</c> when omitted.</summary>
     public string? Role { get; init; }
+
+    /// <summary>
+    ///     Optional operator benchmark knob: pins this explore spawn's context window (<c>-c</c>) for this call only.
+    ///     Omit it for the allocation resolver's hardware-tier choice, which is what every explore did before this
+    ///     field existed. Nothing about the value is persisted — it reaches one spawn and is never written to node
+    ///     settings or the launch policy.
+    ///     <para>
+    ///         Accepted range is 2048–1048576. The floor is the launch policy's LOWEST chat tier rather than a
+    ///         resolver-enforced minimum (the resolver's own floor is the 256-token alignment unit); the ceiling is a
+    ///         shape bound only. The model's train ceiling caps the value SILENTLY, so a request above it succeeds with
+    ///         a smaller window: read <c>ctxSize</c> on the returned profile for what was actually used.
+    ///     </para>
+    ///     <para>
+    ///         GPU-only. A non-null value on a CPU-variant node is rejected with a 400, because
+    ///         <c>llama-fit-params</c> does not run on the CPU backend and the window could not be recorded in the
+    ///         profile. The provider-side fallback resolver
+    ///         (<c>DefaultProcessContextAllocationResolver</c>) ignores this field entirely; a host running that
+    ///         resolver exposes no explore endpoint.
+    ///     </para>
+    /// </summary>
+    public int? ContextTokens { get; init; }
 }
 
 /// <summary>
@@ -208,6 +229,27 @@ public sealed class InferenceBenchmarkMetricsDto
 
     /// <summary>Highest sampled working set of the transient llama-server process.</summary>
     public long? PeakProcessRamBytes { get; init; }
+
+    /// <summary>
+    ///     Largest server-reported context-token watermark observed during the run. Workload/allocation evidence — it
+    ///     tracks the transcript the window created, so a larger number is not an improvement.
+    /// </summary>
+    public double? ContextTokensHighWatermark { get; init; }
+
+    /// <summary>Draft tokens proposed by speculative decoding during the measured pass; null when not measured.</summary>
+    public double? SpeculativeDraftTokens { get; init; }
+
+    /// <summary>Draft tokens accepted during the measured pass; null when not measured.</summary>
+    public double? SpeculativeAcceptedTokens { get; init; }
+
+    /// <summary>Speculative verification steps during the measured pass; null when not measured.</summary>
+    public double? SpeculativeVerificationSteps { get; init; }
+
+    /// <summary>
+    ///     Accepted/drafted token ratio. Null when no tokens were drafted — read a null as "counters unavailable",
+    ///     never as a measured zero.
+    /// </summary>
+    public double? SpeculativeAcceptanceRate { get; init; }
 
     /// <summary>Whether material process-budget/global-free divergence invalidated the benchmark as external pressure.</summary>
     public required bool ExternalPressureDetected { get; init; }

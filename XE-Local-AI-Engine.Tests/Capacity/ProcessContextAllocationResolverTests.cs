@@ -680,6 +680,125 @@ public sealed class ProcessContextAllocationResolverTests
         AssertEx.False(frozenResolver.TryDownTierForAdmission(auxiliary, out _));
     }
 
+    [Test]
+    public async Task ResolveCore_WhenNoOverride_KeepsHardwareTierAllocation()
+    {
+        // Null-is-byte-identical, part 1: an explore that names no context-tokens override must take the same
+        // hardware-tier branch, with the same window, as every explore issued before the override existed.
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
+
+        var allocation = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(contextTokensOverride: null),
+            CancellationToken.None));
+
+        AssertEx.Equal(ProcessContextAllocationSource.HardwareTier, allocation.Source);
+        AssertEx.Equal(expected: 65536, allocation.ProcessContextTokens);
+    }
+
+    [Test]
+    public async Task BuildCacheKey_WhenNoOverride_MatchesPreOverrideKey()
+    {
+        // Null-is-byte-identical, part 2. The literal below was CAPTURED from the unchanged BuildCacheKey before the
+        // override term was added, on exactly this input. Comparing two post-change resolutions would only prove they
+        // agree with each other; comparing against the pre-change hash proves the canonical string is unchanged —
+        // which is also what proves no `ctxo:` segment was appended, since any extra segment changes the hash.
+        const string PreOverrideCacheKey = "666c411c933d5d79f1e5cf39abfd6f3f65ee9bbb315561e9b42bc462835968fb";
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
+
+        var allocation = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            CancellationToken.None));
+
+        AssertEx.Equal(PreOverrideCacheKey, allocation.CacheKey);
+    }
+
+    [Test]
+    public async Task ResolveCore_WhenRequestOverride_UsesDeterministicSourceAndValue()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
+
+        var allocation = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(contextTokensOverride: 32768),
+            CancellationToken.None));
+
+        AssertEx.Equal(ProcessContextAllocationSource.DeterministicOverride, allocation.Source);
+        AssertEx.Equal(expected: 32768, allocation.ProcessContextTokens);
+
+        // The tier walk was never entered, so no hardware allocation context exists for this key and the window cannot
+        // be quietly reduced later — an overridden explore is honoured exactly or it fails.
+        AssertEx.False(resolver.TryDownTierForAdmission(allocation, out _),
+            "an overridden allocation must not be down-tiered: the tier walk never ran for it.");
+    }
+
+    [Test]
+    public async Task ResolveCore_WhenRequestOverrideExceedsTrainCeiling_CapsAndAligns()
+    {
+        // 10000 trained tokens minus the 256-token safety margin is a 9744 ceiling, floor-aligned to 9728. The clamp is
+        // SILENT, which is why the operator round records the requested and the effective window separately.
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true),
+            processBudget: 32 * Gb,
+            facts: Facts(contextLength: 10000));
+
+        var allocation = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(contextTokensOverride: 65536),
+            CancellationToken.None));
+
+        AssertEx.Equal(ProcessContextAllocationSource.DeterministicOverride, allocation.Source);
+        AssertEx.Equal(expected: 9728, allocation.ProcessContextTokens);
+        AssertEx.Equal(expected: 9744, allocation.ModelTrainContextTokens);
+    }
+
+    [Test]
+    public async Task ResolveCore_WhenRequestAndOptionsOverrideDiffer_RequestWins()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true),
+            processBudget: 32 * Gb,
+            options: new LlamaServerLaunchPolicyOptions
+            {
+                DeterministicContextTokensOverride = 65536
+            });
+
+        var allocation = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(contextTokensOverride: 16384),
+            CancellationToken.None));
+
+        AssertEx.Equal(ProcessContextAllocationSource.DeterministicOverride, allocation.Source);
+        AssertEx.Equal(expected: 16384, allocation.ProcessContextTokens);
+    }
+
+    [Test]
+    public async Task BuildCacheKey_WhenOverridesDiffer_ProducesDifferentKeys()
+    {
+        // The override participates in the cache key rather than bypassing it, so two explores of the same model at
+        // two windows can never collapse onto one cached allocation.
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
+
+        var smaller = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(contextTokensOverride: 16384),
+            CancellationToken.None));
+        var larger = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(contextTokensOverride: 32768),
+            CancellationToken.None));
+
+        AssertEx.NotEqual(smaller.CacheKey, larger.CacheKey);
+        AssertEx.Equal(expected: 16384, smaller.ProcessContextTokens);
+        AssertEx.Equal(expected: 32768, larger.ProcessContextTokens);
+    }
+
     private static ProcessContextAllocationResolver BuildResolver(HardwareProfile profile,
         long? processBudget = null,
         GgufModelFootprintFacts? facts = null,
