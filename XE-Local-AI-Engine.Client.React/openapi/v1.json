@@ -28128,6 +28128,8 @@
           "contextTokens": {
             "type": "integer",
             "format": "int32",
+            "maximum": 1048576,
+            "minimum": 2048,
             "nullable": true
           }
         }

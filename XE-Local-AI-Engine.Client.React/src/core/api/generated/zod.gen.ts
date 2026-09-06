@@ -2269,11 +2269,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResp
 export const zXeLocalAiEngineClientEndpointsModelFitV1ExploreInferenceProfileRequest = z.object({
 	modelName: z.string(),
 	role: z.string().nullish(),
-	contextTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
+	contextTokens: z.int().gte(2048).lte(1048576).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1FreezeInferenceProfileRequest = z.object({

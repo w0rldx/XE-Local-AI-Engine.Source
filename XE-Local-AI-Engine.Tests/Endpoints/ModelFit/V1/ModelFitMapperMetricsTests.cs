@@ -59,12 +59,15 @@ public sealed class ModelFitMapperMetricsTests
 
         var dto = metrics.ToDto();
 
-        // Read the source values back, so the populated setup is load-bearing: without this the test would pass
-        // identically on an empty record, proving the DTO lacks the properties but not that there was anything to leak.
-        AssertEx.NotNull(metrics.RawJson);
-        AssertEx.NotNull(metrics.DiagnosticsJson);
         var properties = dto.GetType().GetProperties().Select(property => property.Name).ToArray();
         AssertEx.Empty(properties.Where(name => name is "RawJson" or "DiagnosticsJson"));
+
+        // Serialize the way the endpoint does, so the populated setup is load-bearing: the sentinels are unique to the
+        // raw scrape and the diagnostics blob, so their absence proves nothing carried them onto the wire — a property
+        // rename or an added passthrough would put them back.
+        var json = System.Text.Json.JsonSerializer.Serialize(dto);
+        AssertEx.False(json.Contains("llamacpp:n_tokens_max", StringComparison.Ordinal));
+        AssertEx.False(json.Contains("\"speculative\"", StringComparison.Ordinal));
     }
 
     private static InferenceBenchmarkMetrics Metrics()

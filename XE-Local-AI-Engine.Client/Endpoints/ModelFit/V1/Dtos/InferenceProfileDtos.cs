@@ -80,9 +80,9 @@ public sealed class ExploreInferenceProfileRequest
 {
     /// <summary>
     ///     Lowest accepted <see cref="ContextTokens" /> — the launch policy's smallest chat tier. A shape bound: the
-    ///     resolver itself has no minimum beyond its 256-token alignment unit. Lives on the DTO so the documented range
-    ///     and the value <c>ExploreInferenceProfileEndpoint</c> enforces cannot drift apart. Not a data annotation: no
-    ///     request DTO under <c>V1/Dtos</c> uses one, and adding one here would change the generated OpenAPI schema.
+    ///     resolver itself has no minimum beyond its 256-token alignment unit. Lives on the DTO so the documented range,
+    ///     the <c>Range</c> annotation that publishes it in the OpenAPI schema, and the value
+    ///     <c>ExploreInferenceProfileEndpoint</c> enforces cannot drift apart.
     /// </summary>
     internal const int MinExploreContextTokens = 2048;
 
@@ -124,6 +124,10 @@ public sealed class ExploreInferenceProfileRequest
     ///         resolver exposes no explore endpoint.
     ///     </para>
     /// </summary>
+    // The annotation is documentation only: it publishes minimum/maximum into the OpenAPI schema and the generated
+    // client's Zod validators. FastEndpoints does not run DataAnnotations, so the endpoint's inline check stays the
+    // enforcing path — a hand-rolled request that skips the generated client still gets a 400.
+    [System.ComponentModel.DataAnnotations.Range(MinExploreContextTokens, MaxExploreContextTokens)]
     public int? ContextTokens { get; init; }
 }
 
@@ -268,8 +272,10 @@ public sealed class InferenceBenchmarkMetricsDto
     public double? SpeculativeVerificationSteps { get; init; }
 
     /// <summary>
-    ///     Accepted/drafted token ratio. Null when no tokens were drafted — read a null as "counters unavailable",
-    ///     never as a measured zero.
+    ///     Accepted/drafted token ratio. Null means the rate could not be computed, never a measured zero: the harness
+    ///     returns null when the drafted-token delta is zero or missing, or when the accepted-token counter is
+    ///     unavailable. Read <see cref="SpeculativeDraftTokens" /> and <see cref="SpeculativeAcceptedTokens" /> to tell
+    ///     "nothing was drafted" apart from "the counters never arrived".
     /// </summary>
     public double? SpeculativeAcceptanceRate { get; init; }
 
