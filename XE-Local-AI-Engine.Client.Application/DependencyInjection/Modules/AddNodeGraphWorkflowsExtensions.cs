@@ -60,6 +60,10 @@ internal static class AddNodeGraphWorkflowsExtensions
         // lane is a registration and nothing else: the tick's dispatch switch has no per-kind arm to grow.
         builder.Services.AddSingleton<IGraphWorkflowNodeExecutor, GraphWorkflowAgentExecutor>();
 
+        // The Pause lane. A lane that drives nothing: it parks the row on a person and the answer arrives through
+        // DecideAsync, which is precisely what an inline kind never does.
+        builder.Services.AddSingleton<IGraphWorkflowNodeExecutor, GraphWorkflowPauseExecutor>();
+
         // BEFORE the dispatcher: hosted services start in registration order, and the dispatcher's pumps must not begin
         // admitting node runs a restart has not judged yet.
         builder.Services.AddHostedService<GraphWorkflowStartupReconciler>();

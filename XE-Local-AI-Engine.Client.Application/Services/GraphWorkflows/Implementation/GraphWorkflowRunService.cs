@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -12,6 +13,12 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store, IGraphWorkflowDispatcherSignal signal, IOptions<GraphWorkflowOptions> options)
     : IGraphWorkflowRunService
 {
+    /// <summary>
+    ///     The longest comment an answer may carry, matching the development-workflow gate's own cap. It is free text
+    ///     beside the act rather than part of it, and an unbounded one would ride inside the node's output envelope.
+    /// </summary>
+    private const int MaxDecisionComment = 500;
+
     private readonly GraphWorkflowOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
     private readonly IGraphWorkflowDispatcherSignal _signal = signal ?? throw new ArgumentNullException(nameof(signal));
     private readonly IGraphWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -113,6 +120,107 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store, IGraphW
         return await SignalAndComposeAsync(runId, cancellationToken).ConfigureAwait(false);
     }
 
+
+    public async Task<GraphWorkflowDecisionResult> DecideAsync(Guid runId,
+        string nodeKey,
+        Guid operationId,
+        GraphWorkflowDecisionKind decision,
+        string? comment,
+        string? payloadJson,
+        string? decidedBySubject,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(nodeKey))
+        {
+            throw new GraphWorkflowValidationException("A graph workflow decision names the pause it answers by node key.");
+        }
+
+        if (operationId == Guid.Empty)
+        {
+            throw new GraphWorkflowValidationException("A graph workflow decision needs a caller-minted operation id.");
+        }
+
+        // 1. REPLAY FIRST, and run-wide — the scope the store's filtered unique index enforces. Looked up before the
+        // (run, node key) row is read at all: without this, one id reused across two pauses of a run passes every check
+        // below and then violates that index inside the write, as a database error rather than the conflict this API
+        // promises.
+        if (await _store.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken).ConfigureAwait(false) is { } recorded)
+        {
+            return await ReplayAsync(runId, nodeKey, operationId, decision, decidedBySubject, recorded, cancellationToken).ConfigureAwait(false);
+        }
+
+        // 2. The row must be waiting. Unknown run or node key answers not-found from here.
+        var nodeRun = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken).ConfigureAwait(false);
+        if (nodeRun.Status != GraphWorkflowNodeRunStatus.WaitingForApproval)
+        {
+            throw StandingConflict(nodeRun, $"Node run '{nodeKey}' is {nodeRun.Status}, so there is nothing to decide on it.");
+        }
+
+        // 3. The run must be live. A drain is already settling this row, and a terminal run has no tick left to route
+        // the answer with.
+        var run = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        if (run.Status is GraphWorkflowRunStatus.Cancelling || GraphWorkflowStateMachine.IsTerminal(run.Status))
+        {
+            throw new GraphWorkflowRunConflictException($"This run is {run.Status}, so the pause '{nodeKey}' can no longer be answered.");
+        }
+
+        // 4. The answer must be one the PINNED graph offers. A graph that does not offer it is wrong, not the request.
+        var graph = GraphWorkflowGraph.Parse(run.GraphJson);
+        if (!graph.Nodes.TryGetValue(nodeKey, out var node) || node.Config is not GraphWorkflowPauseConfig pause)
+        {
+            throw new GraphWorkflowRunConflictException($"The run's pinned graph no longer declares '{nodeKey}' as a Pause node.");
+        }
+
+        if (!pause.AllowedDecisions.Contains(decision))
+        {
+            throw new GraphWorkflowRunConflictException($"The pause '{nodeKey}' offers {string.Join(", ", pause.AllowedDecisions)}, so it cannot be answered {decision}.");
+        }
+
+        // 5. Body rules. Everything here is about the REQUEST rather than about the run, which is what makes them 400s.
+        var payload = ValidateBody(nodeKey, pause, comment, payloadJson);
+
+        // 6. Composed through the one document writer, so a pause row gets the same envelope, the same branch
+        // derivation and the same size check as every other kind — and the same `output.decision` spelling the
+        // definition-time pre-flight evaluated.
+        string document;
+        try
+        {
+            document = GraphWorkflowDocuments.Compose(graph,
+                node,
+                nodeRun.Attempt,
+                GraphWorkflowNodeOutputStatuses.Succeeded,
+                GraphWorkflowDocuments.PauseOutput(decision, comment, payload),
+                _options.MaxOutputJsonBytes);
+        }
+        catch (GraphWorkflowOutputTooLargeException exception)
+        {
+            // Unreachable while the payload cap stays strictly under the envelope budget, and kept because that is a
+            // relation between two options rather than a fact: an operator's oversized answer is their 400 to fix, not
+            // a node failure they cannot see the cause of.
+            throw new GraphWorkflowValidationException(exception.Message);
+        }
+
+        // 7. ONE conditional write: the status move, the decision columns, the output and the gate.decided event.
+        if (await _store.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand(runId,
+                               nodeRun.Id,
+                               GraphWorkflowVersions.Any,
+                               operationId,
+                               decision,
+                               decidedBySubject,
+                               document),
+                           cancellationToken)
+                       .ConfigureAwait(false) is null)
+        {
+            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken).ConfigureAwait(false);
+        }
+
+        // 8. The run follows its rows, written against the version this read saw; then the dispatcher is told, AFTER
+        // the commit, so the downstream nodes are admitted on its own clock rather than inside this request.
+        await RecomputeRunStatusAsync(runId, graph, cancellationToken).ConfigureAwait(false);
+        _signal.Signal(runId);
+        return await ComposeDecisionAsync(runId, nodeKey, decision, cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<GraphWorkflowRunDetail> GetRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
         await ComposeAsync(await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
 
@@ -135,6 +243,149 @@ internal sealed class GraphWorkflowRunService(IGraphWorkflowStore store, IGraphW
         var events = await _store.ListEventsAsync(runId, afterSeq, _options.EventReplayLimit + 1, cancellationToken).ConfigureAwait(false);
         var page = events.Take(_options.EventReplayLimit).ToList();
         return new GraphWorkflowRunEventPage(page, page.Count == 0 ? afterSeq : page[^1].Seq, events.Count > _options.EventReplayLimit);
+    }
+
+
+    /// <summary>
+    ///     The same act arriving twice. It IS the same act only if it names the same pause, the same answer and the
+    ///     same person — a reused id naming any of those differently would read as success for a decision nobody took.
+    ///     Comment and payload are deliberately not compared: free text around the act, not the act.
+    /// </summary>
+    private async Task<GraphWorkflowDecisionResult> ReplayAsync(Guid runId,
+        string nodeKey,
+        Guid operationId,
+        GraphWorkflowDecisionKind decision,
+        string? decidedBySubject,
+        GraphWorkflowNodeRunSnapshot recorded,
+        CancellationToken cancellationToken)
+    {
+        if (!string.Equals(recorded.NodeKey, nodeKey, StringComparison.Ordinal))
+        {
+            throw StandingConflict(recorded, $"Operation '{operationId}' already decided the pause '{recorded.NodeKey}' of this run.");
+        }
+
+        if (GraphWorkflowStateMachine.DecisionOf(recorded.OutputJson) != decision
+            || !string.Equals(recorded.DecidedBySubject, decidedBySubject, StringComparison.Ordinal))
+        {
+            throw StandingConflict(recorded, $"Operation '{operationId}' already recorded a different decision on the pause '{nodeKey}'.");
+        }
+
+        return await ComposeDecisionAsync(runId, nodeKey, decision, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     What a conditional write that matched no row means: a concurrent decide won between the read and the write.
+    ///     Answered off what the row NOW says rather than by retrying — either this same operation id committed it,
+    ///     which is a replay, or another one did, which is the second human act that gets refused.
+    /// </summary>
+    private async Task<GraphWorkflowDecisionResult> LostTheRaceAsync(Guid runId,
+        string nodeKey,
+        Guid operationId,
+        GraphWorkflowDecisionKind decision,
+        string? decidedBySubject,
+        CancellationToken cancellationToken)
+    {
+        if (await _store.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken).ConfigureAwait(false) is { } settled)
+        {
+            return await ReplayAsync(runId, nodeKey, operationId, decision, decidedBySubject, settled, cancellationToken).ConfigureAwait(false);
+        }
+
+        var current = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken).ConfigureAwait(false);
+        throw StandingConflict(current, $"Node run '{nodeKey}' is {current.Status}, so there is nothing to decide on it.");
+    }
+
+    /// <summary>
+    ///     The refusal a row that is not open to a decision earns: one that NAMES the answer that stands where the row
+    ///     carries one, so the second person to click is told what was decided rather than only that their click
+    ///     failed, and S1's generic run conflict where it does not.
+    /// </summary>
+    private static Exception StandingConflict(GraphWorkflowNodeRunSnapshot nodeRun, string message) =>
+        GraphWorkflowStateMachine.DecisionOf(nodeRun.OutputJson) is { } standing
+            ? new GraphWorkflowGateAlreadyDecidedException($"{message} It was answered {standing}.", standing)
+            : new GraphWorkflowRunConflictException(message);
+
+    /// <summary>
+    ///     The request-shaped rules, and the parsed payload they admit. All 400s: they are about what was sent rather
+    ///     than about what the run is.
+    /// </summary>
+    private JsonElement? ValidateBody(string nodeKey, GraphWorkflowPauseConfig pause, string? comment, string? payloadJson)
+    {
+        if (pause.RequireComment && string.IsNullOrWhiteSpace(comment))
+        {
+            throw new GraphWorkflowValidationException($"The pause '{nodeKey}' requires a comment with its answer.");
+        }
+
+        if (comment is { Length: > MaxDecisionComment })
+        {
+            throw new GraphWorkflowValidationException($"A decision comment is longer than the {MaxDecisionComment}-character limit.");
+        }
+
+        if (payloadJson is null)
+        {
+            return null;
+        }
+
+        // Strictly under the envelope budget rather than equal to it: an at-cap payload would pass here and then
+        // overflow the document it is embedded in, turning an operator's 400 into a node failure.
+        var maxPayloadBytes = _options.MaxOutputJsonBytes / 2;
+        if (Encoding.UTF8.GetByteCount(payloadJson) > maxPayloadBytes)
+        {
+            throw new GraphWorkflowValidationException($"The decision payload is larger than the {maxPayloadBytes} bytes an answer may carry.");
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(payloadJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                ? document.RootElement.Clone()
+                : throw new GraphWorkflowValidationException("A decision payload is a JSON object.");
+        }
+        catch (JsonException)
+        {
+            throw new GraphWorkflowValidationException("A decision payload is a JSON object.");
+        }
+    }
+
+    /// <summary>
+    ///     The run status that follows its rows, written against the version it was read at.
+    ///     <para>
+    ///         Deliberately NON-terminal only: terminalization carries the run's own result off the End node that
+    ///         succeeded, and that is the dispatcher's write in the tick this decision has just signalled. The one move
+    ///         this owns is <c>WaitingForApproval → Running</c>, which is what makes the answer this method returns
+    ///         honest instead of a status the caller would have to re-read to disbelieve.
+    ///     </para>
+    /// </summary>
+    private async Task RecomputeRunStatusAsync(Guid runId, GraphWorkflowGraph graph, CancellationToken cancellationToken)
+    {
+        var current = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        var nodeRuns = await _store.ListNodeRunsAsync(runId, cancellationToken).ConfigureAwait(false);
+        var outcome = GraphWorkflowStateMachine.Recompute(current.Status, graph, nodeRuns);
+        if (outcome.Status == current.Status
+            || GraphWorkflowStateMachine.IsTerminal(outcome.Status)
+            || !GraphWorkflowStateMachine.IsLegal(current.Status, outcome.Status))
+        {
+            return;
+        }
+
+        try
+        {
+            _ = await _store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(runId, current.Version, outcome.Status), cancellationToken).ConfigureAwait(false);
+        }
+        catch (GraphWorkflowInvalidTransitionException)
+        {
+            // A concurrent writer moved the run between the read and this write. The decision itself is committed, and
+            // the tick this call is about to signal recomputes the same answer from the same rows.
+        }
+    }
+
+    private async Task<GraphWorkflowDecisionResult> ComposeDecisionAsync(Guid runId,
+        string nodeKey,
+        GraphWorkflowDecisionKind decision,
+        CancellationToken cancellationToken)
+    {
+        var run = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        var nodeRun = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken).ConfigureAwait(false);
+        return new GraphWorkflowDecisionResult(decision, run.Status, nodeRun.Status);
     }
 
     /// <summary>

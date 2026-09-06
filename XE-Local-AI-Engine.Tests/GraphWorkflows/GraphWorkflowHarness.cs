@@ -215,6 +215,21 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
         _ = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>().CancelAsync(runId).ConfigureAwait(false);
     }
 
+    /// <summary>Answers a pause through the real command surface, which is where every rule about a decision lives.</summary>
+    public async Task<GraphWorkflowDecisionResult> DecideAsync(Guid runId,
+        string nodeKey,
+        Guid operationId,
+        GraphWorkflowDecisionKind decision,
+        string? comment = null,
+        string? payloadJson = null,
+        string? decidedBySubject = "operator")
+    {
+        await using var scope = Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>()
+                          .DecideAsync(runId, nodeKey, operationId, decision, comment, payloadJson, decidedBySubject)
+                          .ConfigureAwait(false);
+    }
+
     public async Task<GraphWorkflowRunSnapshot> ReadRunAsync(Guid runId)
     {
         await using var scope = Services.CreateAsyncScope();

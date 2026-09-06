@@ -477,6 +477,71 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
             cancellationToken);
     }
 
+    public async Task<GraphWorkflowMutationResult?> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        try
+        {
+            return await TryExecuteMutationAsync(command.RunId,
+                    command.ExpectedVersion,
+                    async run =>
+                    {
+                        // The compare-and-set, expressed as the predicate the row is LOADED by: a row that is no longer
+                        // waiting, or already carries a decision, simply is not found, and the mutation writes nothing.
+                        var nodeRun = await _dbContext.GraphWorkflowNodeRuns
+                                                      .SingleOrDefaultAsync(entity => entity.Id == command.NodeRunId
+                                                                                      && entity.RunId == run.Id
+                                                                                      && entity.Status == GraphWorkflowNodeRunStatus.WaitingForApproval
+                                                                                      && entity.DecisionOperationId == null,
+                                                          cancellationToken)
+                                                      .ConfigureAwait(false);
+                        if (nodeRun is null)
+                        {
+                            return null;
+                        }
+
+                        var now = Now();
+
+                        // BOTH answers succeed the pause. Which way the run then goes is the edges' business, read off
+                        // the decision inside the output document this write stores.
+                        nodeRun.Status = GraphWorkflowNodeRunStatus.Succeeded;
+                        nodeRun.PendingDecisionKind = null;
+                        nodeRun.DecisionOperationId = command.OperationId;
+                        nodeRun.DecidedBySubject = Utf8OrNull(command.DecidedBySubject);
+                        nodeRun.OutputJson = Utf8(command.OutputJson);
+                        nodeRun.CompletedAtUtc = now;
+                        nodeRun.UpdatedAtUtc = now;
+
+                        // gate.decided rather than the node.completed the status alone would derive: an answered pause
+                        // is a human act, and a reader following the log has to be able to find it as one.
+                        return new MutationOutcome(GraphWorkflowEventTypes.GateDecided,
+                            nodeRun.NodeKey,
+                            Utf8(JsonSerializer.Serialize(new GateDecidedDetailPayload(nodeRun.NodeKey, command.Decision.ToString()), JsonOptions)));
+                    },
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
+        {
+            // The run-wide operation lookup is what normally catches a reused id; this is the same id arriving on two
+            // pauses of one run CONCURRENTLY, where both passed that lookup. It is the same story to the caller.
+            throw new GraphWorkflowInvalidTransitionException($"Operation '{command.OperationId}' has already decided another node run of graph workflow run "
+                                                              + $"'{command.RunId}'.",
+                exception);
+        }
+    }
+
+    public async Task<GraphWorkflowNodeRunSnapshot?> FindNodeRunByDecisionOperationAsync(Guid runId,
+        Guid operationId,
+        CancellationToken cancellationToken = default)
+    {
+        var nodeRun = await _dbContext.GraphWorkflowNodeRuns.AsNoTracking()
+                                      .SingleOrDefaultAsync(entity => entity.RunId == runId && entity.DecisionOperationId == operationId, cancellationToken)
+                                      .ConfigureAwait(false);
+        return nodeRun is null ? null : NodeRunSnapshot(nodeRun);
+    }
+
     public Task<GraphWorkflowMutationResult> AppendEventAsync(AppendGraphWorkflowEventCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -642,6 +707,19 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
     private async Task<GraphWorkflowMutationResult> ExecuteMutationAsync(Guid runId,
         long expectedVersion,
         Func<GraphWorkflowRun, Task<MutationOutcome>> mutate,
+        CancellationToken cancellationToken) =>
+
+        // Never null: this overload's mutate always decides. The nullable core is the conditional-write path.
+        (await TryExecuteMutationAsync(runId, expectedVersion, async run => await mutate(run).ConfigureAwait(false), cancellationToken).ConfigureAwait(false))!;
+
+    /// <summary>
+    ///     The same one-decision-one-event-one-transaction shape, for a mutation that may decline to write: a
+    ///     <see langword="null" /> outcome rolls the transaction back untouched and answers <see langword="null" />,
+    ///     which is how a compare-and-set reports that it matched no row without raising.
+    /// </summary>
+    private async Task<GraphWorkflowMutationResult?> TryExecuteMutationAsync(Guid runId,
+        long expectedVersion,
+        Func<GraphWorkflowRun, Task<MutationOutcome?>> mutate,
         CancellationToken cancellationToken)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
@@ -651,7 +729,11 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
                       ?? throw new GraphWorkflowNotFoundException($"Graph workflow run '{runId}' was not found.");
             EnsureVersion(run, expectedVersion);
 
-            var outcome = await mutate(run).ConfigureAwait(false);
+            if (await mutate(run).ConfigureAwait(false) is not { } outcome)
+            {
+                await RollbackAsync(transaction).ConfigureAwait(false);
+                return null;
+            }
 
             // A mutation that records no event keeps the watermark it found: nothing was appended, so there is no new
             // sequence to hand back, and answering with one would tell a subscriber to page for a row that is not there.
@@ -925,6 +1007,9 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
     private sealed record MutationOutcome(string? EventType, string? NodeKey, byte[]? DetailJson);
 
     private sealed record ReasonDetailPayload(string Reason);
+
+    /// <summary>The gate.decided detail: which pause, and what was answered. Read by name, so camelCase like every other.</summary>
+    private sealed record GateDecidedDetailPayload(string NodeKey, string Decision);
 
     private async Task<GraphWorkflowDefinition> LoadAsync(Guid definitionId, CancellationToken cancellationToken) =>
         await _dbContext.GraphWorkflowDefinitions.SingleOrDefaultAsync(entity => entity.Id == definitionId, cancellationToken).ConfigureAwait(false)

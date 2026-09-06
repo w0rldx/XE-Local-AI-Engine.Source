@@ -360,23 +360,35 @@ internal static class GraphWorkflowStateMachine
 
     /// <summary>
     ///     Which answer a pause was REFUSED with, or <see langword="null" /> when this node run is not a refused pause.
+    ///     The answer itself is read by <see cref="DecisionOf" />; this only says whether it was one that refuses.
+    /// </summary>
+    private static GraphWorkflowDecisionKind? Refusal(GraphWorkflowNodeRunSnapshot nodeRun)
+    {
+        if (nodeRun is not { Kind: GraphWorkflowNodeKind.Pause, Status: GraphWorkflowNodeRunStatus.Succeeded } || DecisionOf(nodeRun.OutputJson) is not { } answered)
+        {
+            return null;
+        }
+
+        return Array.IndexOf(PauseRefusals, answered) >= 0 ? answered : null;
+    }
+
+    /// <summary>
+    ///     Which answer a stored output document records, or <see langword="null" /> when it records none.
     ///     <para>
     ///         Read STRUCTURALLY, off <c>output.decision</c>, rather than by comparing the stored text against
     ///         <see cref="PauseOutputJson" />: that method writes the minimal routing document a pre-flight check
     ///         evaluates, while the composed document a real run stores carries <c>attempt</c>, <c>branch</c>, and the
     ///         answer's own <c>comment</c> and <c>payload</c> beside the decision. A byte comparison would recognise
-    ///         the first and silently miss every one of the second, and the run's reason would then say nothing about
-    ///         the rejection that stopped it.
+    ///         the first and silently miss every one of the second.
     ///     </para>
     ///     <para>
-    ///         The decision is matched case-sensitively against the enum NAME, which is what the writer serializes.
-    ///         Output that does not parse, or that carries no decision, is not a refusal.
+    ///         Matched case-sensitively against the enum NAME, which is what the writer serializes. Output that does
+    ///         not parse, or that carries no decision, is not an answer.
     ///     </para>
     /// </summary>
-    private static GraphWorkflowDecisionKind? Refusal(GraphWorkflowNodeRunSnapshot nodeRun)
+    public static GraphWorkflowDecisionKind? DecisionOf(string? outputJson)
     {
-        if (nodeRun is not { Kind: GraphWorkflowNodeKind.Pause, Status: GraphWorkflowNodeRunStatus.Succeeded }
-            || ParseOutput(nodeRun.OutputJson) is not { ValueKind: JsonValueKind.Object } document
+        if (ParseOutput(outputJson) is not { ValueKind: JsonValueKind.Object } document
             || !document.TryGetProperty("output", out var output)
             || output.ValueKind != JsonValueKind.Object
             || !output.TryGetProperty("decision", out var decision)
@@ -386,11 +398,11 @@ internal static class GraphWorkflowStateMachine
         }
 
         var answered = decision.GetString();
-        foreach (var refusal in PauseRefusals)
+        foreach (var candidate in Enum.GetValues<GraphWorkflowDecisionKind>())
         {
-            if (string.Equals(answered, refusal.ToString(), StringComparison.Ordinal))
+            if (string.Equals(answered, candidate.ToString(), StringComparison.Ordinal))
             {
-                return refusal;
+                return candidate;
             }
         }
 

@@ -191,6 +191,30 @@ public sealed record TransitionGraphWorkflowNodeRunCommand(
     bool IncrementAttempt = false,
     string? EventType = null);
 
+/// <summary>
+///     A pause's answer, as ONE conditional write. Keyed by the node run rather than by the node key because the
+///     Application layer has already read the row it validated the answer against.
+///     <para>
+///         The store applies it only while the row is still <c>WaitingForApproval</c> with no decision on it — the
+///         compare-and-set that makes two concurrent decides settle as one. A caller whose write finds no such row is
+///         told so by a <see langword="null" /> result rather than by an exception, because losing that race is an
+///         ordinary outcome the caller answers by re-reading, not a failure.
+///     </para>
+///     <para>
+///         <see cref="OutputJson" /> arrives composed. The Application layer owns the one document composer, and a
+///         second spelling of a pause's routing document here is how a pre-flight check and a real run come to
+///         disagree about which out-edge fires.
+///     </para>
+/// </summary>
+public sealed record DecideGraphWorkflowNodeRunCommand(
+    Guid RunId,
+    Guid NodeRunId,
+    long ExpectedVersion,
+    Guid OperationId,
+    GraphWorkflowDecisionKind Decision,
+    string? DecidedBySubject,
+    string OutputJson);
+
 public sealed record AppendGraphWorkflowEventCommand(
     Guid RunId,
     long ExpectedVersion,
@@ -341,6 +365,24 @@ public interface IGraphWorkflowStore
     Task<GraphWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid runId, string nodeKey, CancellationToken cancellationToken = default);
 
     Task<GraphWorkflowMutationResult> TransitionNodeRunAsync(TransitionGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Answers a pause: the node run moves <c>WaitingForApproval → Succeeded</c> carrying its decision columns and
+    ///     its composed output, and a <c>gate.decided</c> event is appended, in one transaction.
+    ///     <para>
+    ///         <see langword="null" /> means the conditional write matched no row — the pause was decided or moved
+    ///         between the caller's read and this write. Re-read and answer from what the row now says; it is not an
+    ///         error, which is why it is not an exception.
+    ///     </para>
+    /// </summary>
+    Task<GraphWorkflowMutationResult?> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The node run one operation id already decided on this run, or <see langword="null" />. Run-WIDE, which is the
+    ///     scope the filtered unique index enforces: an id reused on a second pause of the same run has to be seen as
+    ///     the conflict it is, before a write turns it into a unique-index violation instead.
+    /// </summary>
+    Task<GraphWorkflowNodeRunSnapshot?> FindNodeRunByDecisionOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default);
 
     Task<GraphWorkflowMutationResult> AppendEventAsync(AppendGraphWorkflowEventCommand command, CancellationToken cancellationToken = default);
 

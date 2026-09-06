@@ -99,6 +99,22 @@ public sealed class PublishingGraphWorkflowStoreTests
     }
 
     /// <summary>
+    ///     A conditional write that matched no row committed nothing, so there is nothing to announce — and announcing
+    ///     it anyway would tell every watching client to re-read a run that has not changed.
+    /// </summary>
+    [Test]
+    public async Task ADecisionThatMatchedNoRow_AnnouncesNothing()
+    {
+        var inner = Substitute.For<IGraphWorkflowStore>();
+        inner.DecideNodeRunAsync(Arg.Any<DecideGraphWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>()).Returns((GraphWorkflowMutationResult?)null);
+        var publisher = Substitute.For<IGraphWorkflowEventPublisher>();
+        var store = new PublishingGraphWorkflowStore(inner, publisher, NullLogger<PublishingGraphWorkflowStore>.Instance);
+
+        AssertEx.Null(await store.DecideNodeRunAsync(Decision()).ConfigureAwait(false), "the decline travels to the caller untouched.");
+        AssertEx.Empty(publisher.ReceivedCalls());
+    }
+
+    /// <summary>
     ///     The write is already committed when the announcement is attempted, so failing the caller over a notification
     ///     would turn a late repaint into a lost transition.
     /// </summary>
@@ -130,7 +146,11 @@ public sealed class PublishingGraphWorkflowStoreTests
             store => store.TransitionNodeRunAsync(NodeRunTransition(GraphWorkflowNodeRunStatus.Running))),
         new(nameof(IGraphWorkflowStore.TransitionNodeRunAsync),
             GraphWorkflowChangeKind.Gate,
-            store => store.TransitionNodeRunAsync(NodeRunTransition(GraphWorkflowNodeRunStatus.WaitingForApproval)))
+            store => store.TransitionNodeRunAsync(NodeRunTransition(GraphWorkflowNodeRunStatus.WaitingForApproval))),
+
+        // An answered pause is the change a watching client most needs told: it is what removes the badge asking for
+        // a person, so it announces a gate rather than an ordinary node repaint.
+        new(nameof(IGraphWorkflowStore.DecideNodeRunAsync), GraphWorkflowChangeKind.Gate, store => store.DecideNodeRunAsync(Decision()))
     ];
 
     private static IReadOnlyList<Func<IGraphWorkflowStore, Task>> Reads() =>
@@ -144,7 +164,8 @@ public sealed class PublishingGraphWorkflowStoreTests
         store => store.ListNodeRunsAsync(RunId),
         store => store.GetNodeRunAsync(RunId, "draft"),
         store => store.ListEventsAsync(RunId),
-        store => store.ListInterruptedNodeRunsAsync()
+        store => store.ListInterruptedNodeRunsAsync(),
+        store => store.FindNodeRunByDecisionOperationAsync(RunId, Guid.NewGuid())
     ];
 
     private static IReadOnlyList<Func<IGraphWorkflowStore, Task>> SilentWrites() =>
@@ -166,6 +187,15 @@ public sealed class PublishingGraphWorkflowStoreTests
     private static TransitionGraphWorkflowNodeRunCommand NodeRunTransition(GraphWorkflowNodeRunStatus target) =>
         new(RunId, NodeRunId, GraphWorkflowVersions.Any, target);
 
+    private static DecideGraphWorkflowNodeRunCommand Decision() =>
+        new(RunId,
+            NodeRunId,
+            GraphWorkflowVersions.Any,
+            Guid.NewGuid(),
+            GraphWorkflowDecisionKind.Approve,
+            "operator@localhost",
+            """{"status":"succeeded","output":{"decision":"Approve"}}""");
+
     private static (IGraphWorkflowStore Store, IGraphWorkflowEventPublisher Publisher, IGraphWorkflowStore Inner) Create()
     {
         var inner = Substitute.For<IGraphWorkflowStore>();
@@ -173,6 +203,7 @@ public sealed class PublishingGraphWorkflowStoreTests
         inner.TransitionRunAsync(Arg.Any<TransitionGraphWorkflowRunCommand>(), Arg.Any<CancellationToken>()).Returns(result);
         inner.TransitionNodeRunAsync(Arg.Any<TransitionGraphWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>()).Returns(result);
         inner.AppendEventAsync(Arg.Any<AppendGraphWorkflowEventCommand>(), Arg.Any<CancellationToken>()).Returns(result);
+        inner.DecideNodeRunAsync(Arg.Any<DecideGraphWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>()).Returns(result);
 
         var publisher = Substitute.For<IGraphWorkflowEventPublisher>();
         var store = new PublishingGraphWorkflowStore(inner, publisher, NullLogger<PublishingGraphWorkflowStore>.Instance);
