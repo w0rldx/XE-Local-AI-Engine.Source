@@ -5539,9 +5539,7 @@
 			"title": "Graph-Workflows",
 			"subtitle": "Einen Workflow-Graphen erstellen und einen Lauf davon Knoten für Knoten verfolgen.",
 			"empty": {
-				"editor": "Es ist kein Workflow geöffnet. Der Graph-Editor ist noch nicht gebaut.",
-				"run": "Die Laufansicht ist noch nicht gebaut.",
-				"clear": "Auswahl aufheben"
+				"editor": "Kein Workflow ist geöffnet. Wählen Sie einen aus der Liste oder legen Sie einen neuen an."
 			},
 			"tab": {
 				"editor": "Editor",
@@ -5882,6 +5880,34 @@
 				"cancelConfirmTitle": "Diesen Lauf abbrechen?",
 				"cancelConfirmBody": "Die bereits laufenden Knoten laufen zuerst aus, und es wird nichts Neues mehr gestartet.",
 				"cancelFailed": "Der Lauf konnte nicht abgebrochen werden."
+			},
+			"page": {
+				"backToEditor": "Zurück zum Editor",
+				"configTitle": "Konfiguration",
+				"conflictBody": "Jemand hat diesen Workflow gespeichert, während Sie ihn bearbeitet haben. Laden Sie neu, um dessen Fassung zu sehen — Ihre Änderungen auf dieser Arbeitsfläche gehen dabei verloren.",
+				"conflictTitle": "Anderswo gespeichert",
+				"create": "Anlegen",
+				"createTitle": "Neuer Workflow",
+				"deleteBlocked": "Ein laufender Lauf verwendet diesen Workflow noch. Brechen Sie diesen Lauf zuerst ab.",
+				"deleteBody": "Die Definition wird entfernt. Läufe behalten ihre eigene Kopie des Graphen und bleiben lesbar.",
+				"deleteFailed": "Der Workflow konnte nicht gelöscht werden.",
+				"deleteTitle": "Diesen Workflow löschen?",
+				"loadFailed": "Dieser Workflow konnte nicht geladen werden.",
+				"nodeTitle": "Knoten",
+				"reload": "Neu laden",
+				"rename": "Umbenennen",
+				"renameTitle": "Diesen Workflow umbenennen",
+				"runLoadFailed": "Dieser Lauf konnte nicht geladen werden.",
+				"save": "Speichern",
+				"saveAs": "Speichern unter…",
+				"saveAsTitle": "Als neuen Workflow speichern",
+				"saveFailed": "Der Workflow konnte nicht gespeichert werden.",
+				"saveFirst": "Zuerst speichern — ein Lauf führt den gespeicherten Graphen aus, nicht die Arbeitsfläche.",
+				"saved": "Workflow gespeichert.",
+				"startRun": "Lauf starten",
+				"validate": "Prüfen",
+				"validationFailed": "Der Graph konnte nicht geprüft werden.",
+				"validationPassed": "Dieser Graph hat die Prüfung bestanden."
 			}
 		},
 		"integrations": {

@@ -5539,9 +5539,7 @@
 			"title": "Graph Workflows",
 			"subtitle": "Author a workflow graph and watch a run of it node by node.",
 			"empty": {
-				"editor": "No workflow is open. The graph editor is not built yet.",
-				"run": "The run view is not built yet.",
-				"clear": "Clear the selection"
+				"editor": "No workflow is open. Pick one from the list, or create a new one."
 			},
 			"tab": {
 				"editor": "Editor",
@@ -5882,6 +5880,34 @@
 				"cancelConfirmTitle": "Cancel this run?",
 				"cancelConfirmBody": "The nodes that are already running wind down first, and nothing new is dispatched.",
 				"cancelFailed": "The run could not be cancelled."
+			},
+			"page": {
+				"backToEditor": "Back to the editor",
+				"configTitle": "Configuration",
+				"conflictBody": "Someone saved this workflow while you were editing it. Reload to see their version — your edits on this canvas are dropped.",
+				"conflictTitle": "Saved elsewhere",
+				"create": "Create",
+				"createTitle": "New workflow",
+				"deleteBlocked": "A live run still uses this workflow. Cancel that run first.",
+				"deleteBody": "The definition is removed. Runs of it keep their own copy of the graph and stay readable.",
+				"deleteFailed": "The workflow could not be deleted.",
+				"deleteTitle": "Delete this workflow?",
+				"loadFailed": "This workflow could not be loaded.",
+				"nodeTitle": "Node",
+				"reload": "Reload",
+				"rename": "Rename",
+				"renameTitle": "Rename this workflow",
+				"runLoadFailed": "This run could not be loaded.",
+				"save": "Save",
+				"saveAs": "Save as…",
+				"saveAsTitle": "Save as a new workflow",
+				"saveFailed": "The workflow could not be saved.",
+				"saveFirst": "Save first — a run executes the saved graph, not the canvas.",
+				"saved": "Workflow saved.",
+				"startRun": "Start run",
+				"validate": "Check",
+				"validationFailed": "The graph could not be checked.",
+				"validationPassed": "This graph passed validation."
 			}
 		},
 		"integrations": {
