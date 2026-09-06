@@ -288,6 +288,25 @@ describe("navigationLinks", () => {
 		]);
 	});
 
+	// Graph Workflows ships GATED OFF (S4 flips it), so it is the one Preview child that is absent by default.
+	it("hides the Graph Workflows child by default and shows it under Preview once the capability is on", async () => {
+		const preview = navigationLinks.find((link) => link.id === "preview");
+		expect(preview?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.graphWorkflows)).toBe(false);
+
+		const { navigationLinks: gatedLinks } = await mockCapabilities({ graphWorkflows: true });
+		const gatedPreview = gatedLinks.find((link) => link.id === "preview");
+
+		expect(gatedPreview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.preview,
+			nodeRoutePaths.images,
+			nodeRoutePaths.development,
+			nodeRoutePaths.devWorkflows,
+			nodeRoutePaths.graphWorkflows,
+		]);
+		// It must not appear as a top-level entry either.
+		expect(gatedLinks.some((link) => link.id === "graphWorkflows")).toBe(false);
+	});
+
 	it("drops the Preview group entirely when every one of its children's capabilities is off", async () => {
 		const { navigationLinks: gatedLinks } = await mockCapabilities({
 			preview: false,

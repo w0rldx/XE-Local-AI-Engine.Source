@@ -39,6 +39,7 @@ type NavigationCapabilityKey =
 	| "training"
 	| "workSessions"
 	| "devWorkflows"
+	| "graphWorkflows"
 	| "integrations";
 
 interface INavigationNestedLink {
@@ -170,6 +171,9 @@ const allNavigationLinks: INavigationLink[] = [
 			// Labelled "Workflow Runs", not "Development Workflows" (C42): sitting next to "Development" the module name
 			// reads as its sibling, and the two are not siblings — this one lists work items, their runs and their nodes.
 			{ translationKey: "navigation.devWorkflows", to: nodeRoutePaths.devWorkflows, capability: "devWorkflows" },
+			// Graph Workflows ships gated OFF (S4 flips it), so this child is filtered out of the default menu — it is
+			// declared here now so the flip is a one-line capability change rather than a nav edit.
+			{ translationKey: "navigation.graphWorkflows", to: nodeRoutePaths.graphWorkflows, capability: "graphWorkflows" },
 		],
 	},
 	{

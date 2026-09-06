@@ -23,6 +23,7 @@ import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
 import { Route as LayoutDevelopmentRouteImport } from './routes/_layout/development'
 import { Route as LayoutDiagnosticsRouteImport } from './routes/_layout/diagnostics'
 import { Route as LayoutExternalProvidersRouteImport } from './routes/_layout/external-providers'
+import { Route as LayoutGraphWorkflowsRouteImport } from './routes/_layout/graph-workflows'
 import { Route as LayoutImagesRouteImport } from './routes/_layout/images'
 import { Route as LayoutInvocationsRouteImport } from './routes/_layout/invocations'
 import { Route as LayoutKnowledgeBaseRouteImport } from './routes/_layout/knowledge-base'
@@ -117,6 +118,11 @@ const LayoutDiagnosticsRoute = LayoutDiagnosticsRouteImport.update({
 const LayoutExternalProvidersRoute = LayoutExternalProvidersRouteImport.update({
   id: '/external-providers',
   path: '/external-providers',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutGraphWorkflowsRoute = LayoutGraphWorkflowsRouteImport.update({
+  id: '/graph-workflows',
+  path: '/graph-workflows',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutImagesRoute = LayoutImagesRouteImport.update({
@@ -272,6 +278,7 @@ export interface FileRoutesByFullPath {
   '/development': typeof LayoutDevelopmentRoute
   '/diagnostics': typeof LayoutDiagnosticsRoute
   '/external-providers': typeof LayoutExternalProvidersRoute
+  '/graph-workflows': typeof LayoutGraphWorkflowsRoute
   '/images': typeof LayoutImagesRoute
   '/invocations': typeof LayoutInvocationsRoute
   '/knowledge-base': typeof LayoutKnowledgeBaseRoute
@@ -312,6 +319,7 @@ export interface FileRoutesByTo {
   '/development': typeof LayoutDevelopmentRoute
   '/diagnostics': typeof LayoutDiagnosticsRoute
   '/external-providers': typeof LayoutExternalProvidersRoute
+  '/graph-workflows': typeof LayoutGraphWorkflowsRoute
   '/images': typeof LayoutImagesRoute
   '/invocations': typeof LayoutInvocationsRoute
   '/knowledge-base': typeof LayoutKnowledgeBaseRoute
@@ -355,6 +363,7 @@ export interface FileRoutesById {
   '/_layout/development': typeof LayoutDevelopmentRoute
   '/_layout/diagnostics': typeof LayoutDiagnosticsRoute
   '/_layout/external-providers': typeof LayoutExternalProvidersRoute
+  '/_layout/graph-workflows': typeof LayoutGraphWorkflowsRoute
   '/_layout/images': typeof LayoutImagesRoute
   '/_layout/invocations': typeof LayoutInvocationsRoute
   '/_layout/knowledge-base': typeof LayoutKnowledgeBaseRoute
@@ -399,6 +408,7 @@ export interface FileRouteTypes {
     | '/development'
     | '/diagnostics'
     | '/external-providers'
+    | '/graph-workflows'
     | '/images'
     | '/invocations'
     | '/knowledge-base'
@@ -439,6 +449,7 @@ export interface FileRouteTypes {
     | '/development'
     | '/diagnostics'
     | '/external-providers'
+    | '/graph-workflows'
     | '/images'
     | '/invocations'
     | '/knowledge-base'
@@ -481,6 +492,7 @@ export interface FileRouteTypes {
     | '/_layout/development'
     | '/_layout/diagnostics'
     | '/_layout/external-providers'
+    | '/_layout/graph-workflows'
     | '/_layout/images'
     | '/_layout/invocations'
     | '/_layout/knowledge-base'
@@ -614,6 +626,13 @@ declare module '@tanstack/react-router' {
       path: '/external-providers'
       fullPath: '/external-providers'
       preLoaderRoute: typeof LayoutExternalProvidersRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/graph-workflows': {
+      id: '/_layout/graph-workflows'
+      path: '/graph-workflows'
+      fullPath: '/graph-workflows'
+      preLoaderRoute: typeof LayoutGraphWorkflowsRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/images': {
@@ -812,6 +831,7 @@ interface LayoutRouteChildren {
   LayoutDevelopmentRoute: typeof LayoutDevelopmentRoute
   LayoutDiagnosticsRoute: typeof LayoutDiagnosticsRoute
   LayoutExternalProvidersRoute: typeof LayoutExternalProvidersRoute
+  LayoutGraphWorkflowsRoute: typeof LayoutGraphWorkflowsRoute
   LayoutImagesRoute: typeof LayoutImagesRoute
   LayoutInvocationsRoute: typeof LayoutInvocationsRoute
   LayoutKnowledgeBaseRoute: typeof LayoutKnowledgeBaseRoute
@@ -852,6 +872,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutDevelopmentRoute: LayoutDevelopmentRoute,
   LayoutDiagnosticsRoute: LayoutDiagnosticsRoute,
   LayoutExternalProvidersRoute: LayoutExternalProvidersRoute,
+  LayoutGraphWorkflowsRoute: LayoutGraphWorkflowsRoute,
   LayoutImagesRoute: LayoutImagesRoute,
   LayoutInvocationsRoute: LayoutInvocationsRoute,
   LayoutKnowledgeBaseRoute: LayoutKnowledgeBaseRoute,

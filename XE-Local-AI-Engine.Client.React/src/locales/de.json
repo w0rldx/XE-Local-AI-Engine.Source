@@ -137,6 +137,7 @@
 		"trainingComparisons": "Vergleiche",
 		"workSessions": "Arbeitssitzungen",
 		"devWorkflows": "Workflow-Läufe",
+		"graphWorkflows": "Graph-Workflows",
 		"integrationsGroup": "Integrationen",
 		"integrationTriggers": "Trigger",
 		"integrationSessions": "Sitzungen",
@@ -5514,6 +5515,99 @@
 				"runs": "Läufe",
 				"ruleSets": "Regelsätze",
 				"templates": "Vorlagen"
+			}
+		},
+		"graphWorkflows": {
+			"title": "Graph-Workflows",
+			"subtitle": "Einen Workflow-Graphen erstellen und einen Lauf davon Knoten für Knoten verfolgen.",
+			"empty": {
+				"editor": "Es ist kein Workflow geöffnet. Der Graph-Editor ist noch nicht gebaut.",
+				"run": "Die Laufansicht ist noch nicht gebaut.",
+				"clear": "Auswahl aufheben"
+			},
+			"tab": {
+				"editor": "Editor",
+				"runs": "Läufe",
+				"events": "Ereignisse"
+			},
+			"nodeKind": {
+				"Start": "Start",
+				"Agent": "Agent",
+				"Tool": "Werkzeug",
+				"Condition": "Bedingung",
+				"Parallel": "Verzweigung",
+				"Join": "Zusammenführung",
+				"Pause": "Pause",
+				"End": "Ende"
+			},
+			"nodeStatus": {
+				"Pending": "Nicht gestartet",
+				"Queued": "In Warteschlange",
+				"Running": "Läuft",
+				"WaitingForApproval": "Wartet auf eine Entscheidung",
+				"Succeeded": "Erfolgreich",
+				"Failed": "Fehlgeschlagen",
+				"Skipped": "Übersprungen",
+				"Cancelled": "Abgebrochen"
+			},
+			"runStatus": {
+				"Pending": "Nicht gestartet",
+				"Running": "Läuft",
+				"WaitingForApproval": "Wartet auf eine Entscheidung",
+				"Cancelling": "Bricht ab…",
+				"Completed": "Abgeschlossen",
+				"Failed": "Fehlgeschlagen",
+				"Cancelled": "Abgebrochen"
+			},
+			"decision": {
+				"Approve": "Freigeben",
+				"Reject": "Ablehnen"
+			},
+			"joinPolicy": {
+				"All": "Auf jeden eingehenden Zweig warten",
+				"Any": "Beim ersten eingehenden Zweig weitermachen"
+			},
+			"conditionOperator": {
+				"Eq": "ist gleich",
+				"Ne": "ist ungleich",
+				"Gt": "ist größer als",
+				"Gte": "ist größer oder gleich",
+				"Lt": "ist kleiner als",
+				"Lte": "ist kleiner oder gleich",
+				"Exists": "ist vorhanden",
+				"NotExists": "fehlt"
+			},
+			"failureClass": {
+				"None": "Kein Fehler",
+				"NodeFailed": "Der Knoten ist fehlgeschlagen",
+				"Timeout": "Zeitüberschreitung",
+				"AttemptsExhausted": "Keine Versuche mehr übrig",
+				"OutputTooLarge": "Die Ausgabe war zu groß",
+				"GateRejected": "An einer Pause abgelehnt",
+				"ValidationFailed": "Der Graph wurde abgelehnt",
+				"Cancelled": "Abgebrochen",
+				"Interrupted": "Durch einen Neustart unterbrochen"
+			},
+			"eventType": {
+				"run_created": "Lauf angelegt",
+				"run_started": "Lauf gestartet",
+				"run_waiting": "Lauf wartet auf eine Entscheidung",
+				"run_paused": "Lauf pausiert",
+				"run_resumed": "Lauf fortgesetzt",
+				"run_completed": "Lauf abgeschlossen",
+				"run_failed": "Lauf fehlgeschlagen",
+				"run_cancelled": "Lauf abgebrochen",
+				"node_materialized": "Knoten angelegt",
+				"node_queued": "Knoten in die Warteschlange gestellt",
+				"node_started": "Knoten gestartet",
+				"node_completed": "Knoten abgeschlossen",
+				"node_failed": "Knoten fehlgeschlagen",
+				"node_retried": "Knoten erneut versucht",
+				"node_skipped": "Knoten übersprungen",
+				"node_cancelled": "Knoten abgebrochen",
+				"node_interrupted": "Knoten durch einen Neustart unterbrochen",
+				"gate_requested": "Eine Entscheidung wurde angefordert",
+				"gate_decided": "Eine Entscheidung wurde getroffen"
 			}
 		},
 		"integrations": {

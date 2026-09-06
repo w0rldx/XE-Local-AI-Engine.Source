@@ -137,6 +137,7 @@
 		"trainingComparisons": "Comparisons",
 		"workSessions": "Work Sessions",
 		"devWorkflows": "Workflow Runs",
+		"graphWorkflows": "Graph Workflows",
 		"integrationsGroup": "Integrations",
 		"integrationTriggers": "Triggers",
 		"integrationSessions": "Sessions",
@@ -5514,6 +5515,99 @@
 				"runs": "Runs",
 				"ruleSets": "Rule sets",
 				"templates": "Templates"
+			}
+		},
+		"graphWorkflows": {
+			"title": "Graph Workflows",
+			"subtitle": "Author a workflow graph and watch a run of it node by node.",
+			"empty": {
+				"editor": "No workflow is open. The graph editor is not built yet.",
+				"run": "The run view is not built yet.",
+				"clear": "Clear the selection"
+			},
+			"tab": {
+				"editor": "Editor",
+				"runs": "Runs",
+				"events": "Events"
+			},
+			"nodeKind": {
+				"Start": "Start",
+				"Agent": "Agent",
+				"Tool": "Tool",
+				"Condition": "Condition",
+				"Parallel": "Parallel",
+				"Join": "Join",
+				"Pause": "Pause",
+				"End": "End"
+			},
+			"nodeStatus": {
+				"Pending": "Not started",
+				"Queued": "Queued",
+				"Running": "Running",
+				"WaitingForApproval": "Waiting for a decision",
+				"Succeeded": "Succeeded",
+				"Failed": "Failed",
+				"Skipped": "Skipped",
+				"Cancelled": "Cancelled"
+			},
+			"runStatus": {
+				"Pending": "Not started",
+				"Running": "Running",
+				"WaitingForApproval": "Waiting for a decision",
+				"Cancelling": "Cancelling…",
+				"Completed": "Completed",
+				"Failed": "Failed",
+				"Cancelled": "Cancelled"
+			},
+			"decision": {
+				"Approve": "Approve",
+				"Reject": "Reject"
+			},
+			"joinPolicy": {
+				"All": "Wait for every incoming branch",
+				"Any": "Continue on the first incoming branch"
+			},
+			"conditionOperator": {
+				"Eq": "equals",
+				"Ne": "does not equal",
+				"Gt": "is greater than",
+				"Gte": "is greater than or equal to",
+				"Lt": "is less than",
+				"Lte": "is less than or equal to",
+				"Exists": "is present",
+				"NotExists": "is missing"
+			},
+			"failureClass": {
+				"None": "No failure",
+				"NodeFailed": "The node failed",
+				"Timeout": "Timed out",
+				"AttemptsExhausted": "Out of attempts",
+				"OutputTooLarge": "The output was too large",
+				"GateRejected": "Rejected at a pause",
+				"ValidationFailed": "The graph was refused",
+				"Cancelled": "Cancelled",
+				"Interrupted": "Interrupted by a restart"
+			},
+			"eventType": {
+				"run_created": "Run created",
+				"run_started": "Run started",
+				"run_waiting": "Run is waiting for a decision",
+				"run_paused": "Run paused",
+				"run_resumed": "Run resumed",
+				"run_completed": "Run completed",
+				"run_failed": "Run failed",
+				"run_cancelled": "Run cancelled",
+				"node_materialized": "Node created",
+				"node_queued": "Node queued",
+				"node_started": "Node started",
+				"node_completed": "Node completed",
+				"node_failed": "Node failed",
+				"node_retried": "Node retried",
+				"node_skipped": "Node skipped",
+				"node_cancelled": "Node cancelled",
+				"node_interrupted": "Node interrupted by a restart",
+				"gate_requested": "A decision was requested",
+				"gate_decided": "A decision was made"
 			}
 		},
 		"integrations": {
