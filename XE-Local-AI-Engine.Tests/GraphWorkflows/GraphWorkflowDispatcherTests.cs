@@ -7,9 +7,13 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The tick, over the real store and a real database. Nothing is faked: the only reason a run stops short here is
-///     that this build ships no <c>Tool</c> lane, so a Tool node has no executor — which is itself one of the
-///     assertions. The Agent lane it does ship is exercised by <c>GraphWorkflowAgentExecutorTests</c>.
+///     The tick, over the real store and a real database. Nothing is faked, and every graph here is inline throughout,
+///     so what these tests observe is the dispatcher's own ordering rather than any lane's. The lanes have suites of
+///     their own: <c>GraphWorkflowAgentExecutorTests</c> and <c>GraphWorkflowToolExecutorTests</c>.
+///     <para>
+///         The one exception is the absent-executor case below, which now needs a host that deliberately leaves a lane
+///         out — every kind this runtime declares has one.
+///     </para>
 /// </summary>
 public sealed class GraphWorkflowDispatcherTests
 {
@@ -165,14 +169,25 @@ public sealed class GraphWorkflowDispatcherTests
     }
 
     /// <summary>
-    ///     The absent case, asserted rather than assumed: this build registers no <c>Tool</c> lane, so the dispatch
-    ///     switch has no arm for one and the node run says so instead of queueing behind a lane that never arrives.
-    ///     A failed node run is what makes the RUN fail.
+    ///     The absent case, asserted rather than assumed: a kind no registered executor owns has no arm on the dispatch
+    ///     path, and the node run says so instead of queueing behind a lane that never arrives. A failed node run is
+    ///     what makes the RUN fail.
+    ///     <para>
+    ///         The rule outlived its original subject. It was pinned with a <c>Tool</c> node on the shipped container
+    ///         while no Tool lane existed; now one does, so the case is staged on a host that deliberately leaves that
+    ///         registration out. Registering a lane is what removes the case for a kind — and it removes it without
+    ///         touching the dispatcher, which is the half worth keeping a test on.
+    ///     </para>
     /// </summary>
     [Test]
     public async Task ANodeKindWithNoExecutorInThisBuild_FailsValidationFailedAndFailsTheRun()
     {
-        await using var harness = new GraphWorkflowHarness(Host);
+        await using var harness = GraphWorkflowHarness.PrivateHost(static services =>
+        {
+            var toolLane = services.Single(descriptor => descriptor.ServiceType == typeof(IGraphWorkflowNodeExecutor)
+                                                        && descriptor.ImplementationType == typeof(GraphWorkflowToolExecutor));
+            _ = services.Remove(toolLane);
+        });
         var runId = await harness.StartRunAsync(GraphWorkflowGraphs.ToolNode).ConfigureAwait(false);
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);

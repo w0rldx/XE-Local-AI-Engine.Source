@@ -128,6 +128,29 @@ internal static class GraphWorkflowDocuments
     }
 
     /// <summary>
+    ///     <c>Tool</c>: the invocation's answer under <c>result</c>.
+    ///     <para>
+    ///         Embedded as JSON when the tool answered with an object or an array, and as a string otherwise. That one
+    ///         try-parse is what lets a downstream <c>Condition</c> — which passes its predecessor's output through
+    ///         verbatim — dot-path into a structured answer. Ceiling, stated rather than hidden: plain text that
+    ///         happens to be a JSON object is embedded as JSON, and the tools that do that mean it.
+    ///     </para>
+    /// </summary>
+    public static JsonElement ToolOutput(string? result) =>
+        JsonSerializer.SerializeToElement(new ToolOutputPayload(Read(result) is { ValueKind: JsonValueKind.Object or JsonValueKind.Array } structured
+            ? structured
+            : JsonSerializer.SerializeToElement(result ?? string.Empty, JsonOptions)),
+            JsonOptions);
+
+    /// <summary>
+    ///     A dot path resolved against a stored document, or <see langword="null" /> when the document does not carry
+    ///     it. Shared with the <c>Tool</c> lane's argument bindings, so a binding's path grammar is the one this
+    ///     module already has rather than a second walk that could come to disagree with it.
+    /// </summary>
+    public static JsonElement? Resolve(string? documentJson, string path) =>
+        Resolve(Read(documentJson), path);
+
+    /// <summary>
     ///     <c>Join</c>: the per-source map over its satisfied inbound edges, so everything downstream of a join sees
     ///     every branch rather than whichever one the shortcut would have picked.
     /// </summary>
@@ -233,6 +256,8 @@ internal static class GraphWorkflowDocuments
     private sealed record RunInput(JsonElement Input);
 
     private sealed record StartOutputPayload(JsonElement Input);
+
+    private sealed record ToolOutputPayload(JsonElement Result);
 
     private sealed record EndOutputPayload(string Outcome, JsonElement Result);
 }

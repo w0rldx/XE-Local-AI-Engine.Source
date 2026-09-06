@@ -60,6 +60,10 @@ internal static class AddNodeGraphWorkflowsExtensions
         // lane is a registration and nothing else: the tick's dispatch switch has no per-kind arm to grow.
         builder.Services.AddSingleton<IGraphWorkflowNodeExecutor, GraphWorkflowAgentExecutor>();
 
+        // The Tool lane, on a bounded in-flight lane of its own. Registration order carries no meaning — the
+        // dispatcher asks each executor which kind it owns, and exactly one owns any kind.
+        builder.Services.AddSingleton<IGraphWorkflowNodeExecutor, GraphWorkflowToolExecutor>();
+
         // BEFORE the dispatcher: hosted services start in registration order, and the dispatcher's pumps must not begin
         // admitting node runs a restart has not judged yet.
         builder.Services.AddHostedService<GraphWorkflowStartupReconciler>();
