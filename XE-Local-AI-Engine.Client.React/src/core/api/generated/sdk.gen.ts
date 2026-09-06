@@ -240,6 +240,9 @@ import type {
 	DecideDevWorkflowNodeRunData,
 	DecideDevWorkflowNodeRunErrors,
 	DecideDevWorkflowNodeRunResponses,
+	DecideGraphWorkflowNodeRunData,
+	DecideGraphWorkflowNodeRunErrors,
+	DecideGraphWorkflowNodeRunResponses,
 	DecideTrainingArtifactQualityData,
 	DecideTrainingArtifactQualityErrors,
 	DecideTrainingArtifactQualityResponses,
@@ -813,6 +816,9 @@ import type {
 	ListGraphWorkflowRunsData,
 	ListGraphWorkflowRunsErrors,
 	ListGraphWorkflowRunsResponses,
+	ListGraphWorkflowToolsData,
+	ListGraphWorkflowToolsErrors,
+	ListGraphWorkflowToolsResponses,
 	ListImageJobsData,
 	ListImageJobsErrors,
 	ListImageJobsResponses,
@@ -1406,6 +1412,9 @@ import {
 	zDecideDevWorkflowNodeRunBody,
 	zDecideDevWorkflowNodeRunPath,
 	zDecideDevWorkflowNodeRunResponse,
+	zDecideGraphWorkflowNodeRunBody,
+	zDecideGraphWorkflowNodeRunPath,
+	zDecideGraphWorkflowNodeRunResponse,
 	zDecideTrainingArtifactQualityBody,
 	zDecideTrainingArtifactQualityPath,
 	zDecideTrainingArtifactQualityResponse,
@@ -1763,6 +1772,7 @@ import {
 	zListGraphWorkflowRunEventsResponse,
 	zListGraphWorkflowRunsQuery,
 	zListGraphWorkflowRunsResponse,
+	zListGraphWorkflowToolsResponse,
 	zListImageJobsResponse,
 	zListImageModelDownloadsResponse,
 	zListImageModelsResponse,
@@ -9993,6 +10003,40 @@ export const createGraphWorkflowDefinition = <ThrowOnError extends boolean = fal
 		},
 	});
 
+export const decideGraphWorkflowNodeRun = <ThrowOnError extends boolean = false>(
+	options: Options<DecideGraphWorkflowNodeRunData, ThrowOnError>,
+): RequestResult<DecideGraphWorkflowNodeRunResponses, DecideGraphWorkflowNodeRunErrors, ThrowOnError> =>
+	(options.client ?? client).post<DecideGraphWorkflowNodeRunResponses, DecideGraphWorkflowNodeRunErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zDecideGraphWorkflowNodeRunBody,
+					path: zDecideGraphWorkflowNodeRunPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zDecideGraphWorkflowNodeRunResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/runs/{runId}/nodes/{nodeKey}/decide",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const deleteGraphWorkflowDefinition = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteGraphWorkflowDefinitionData, ThrowOnError>,
 ): RequestResult<DeleteGraphWorkflowDefinitionResponses, DeleteGraphWorkflowDefinitionErrors, ThrowOnError> =>
@@ -10203,6 +10247,36 @@ export const listGraphWorkflowRuns = <ThrowOnError extends boolean = false>(
 			},
 		],
 		url: "/api/local/v1/graph-workflows/runs",
+		...options,
+	});
+
+export const listGraphWorkflowTools = <ThrowOnError extends boolean = false>(
+	options?: Options<ListGraphWorkflowToolsData, ThrowOnError>,
+): RequestResult<ListGraphWorkflowToolsResponses, ListGraphWorkflowToolsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListGraphWorkflowToolsResponses, ListGraphWorkflowToolsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListGraphWorkflowToolsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/tools",
 		...options,
 	});
 
