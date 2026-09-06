@@ -5608,6 +5608,85 @@
 				"node_interrupted": "Knoten durch einen Neustart unterbrochen",
 				"gate_requested": "Eine Entscheidung wurde angefordert",
 				"gate_decided": "Eine Entscheidung wurde getroffen"
+			},
+			"definition": {
+				"issues": {
+					"duplicateNodeKey": "Zwei Knoten verwenden den Schlüssel „{{subject}}“. Jeder Knoten- und Kantenschlüssel muss eindeutig sein.",
+					"missingNodeKey": "Ein Knoten hat keinen Schlüssel. Vergeben Sie einen, bevor Sie speichern.",
+					"invalidNodeKey": "„{{subject}}“ ist kein gültiger Schlüssel. Erlaubt sind Buchstaben, Ziffern, Bindestriche und Unterstriche, höchstens 64 Zeichen.",
+					"unknownEdgeEndpoint": "Die Kante „{{subject}}“ verweist auf einen Knoten, der nicht in diesem Graphen liegt.",
+					"duplicateEdgeKey": "Der Schlüssel „{{subject}}“ ist bereits vergeben. Knoten und Kanten teilen sich einen Schlüsselraum.",
+					"parallelEdgesBothUnconditional": "Die Kante „{{subject}}“ ist eine zweite bedingungslose Kante zwischen denselben Knoten. Geben Sie einer der beiden eine Bedingung.",
+					"conditionEdgeHasNoPath": "Die Kante „{{subject}}“ hat eine Bedingung, aber keinen Pfad, und ihr Quellknoten hat keinen zum Erben.",
+					"noStart": "Der Graph hat keinen Start-Knoten.",
+					"multipleStarts": "„{{subject}}“ ist ein zweiter Start-Knoten. Ein Graph hat genau einen.",
+					"noEnd": "Der Graph hat keinen End-Knoten.",
+					"cycle": "Der Graph führt auf sich selbst zurück. Ein Graph-Workflow darf nur vorwärts laufen.",
+					"unreachable": "„{{subject}}“ ist vom Start-Knoten aus nicht erreichbar.",
+					"danglingNonEnd": "„{{subject}}“ hat keine ausgehende Kante. Nur ein End-Knoten darf eine Sackgasse sein.",
+					"endHasOutbound": "„{{subject}}“ ist ein End-Knoten und darf keine ausgehenden Kanten haben.",
+					"startHasInbound": "„{{subject}}“ ist der Start-Knoten und darf keine eingehenden Kanten haben.",
+					"joinAnyNeedsTwoInbound": "„{{subject}}“ setzt beim ersten eingehenden Zweig fort, hat aber weniger als zwei davon.",
+					"conditionNeedsTwoOutbound": "„{{subject}}“ ist ein Bedingungsknoten und braucht mindestens zwei ausgehende Kanten.",
+					"conditionMultipleDefaults": "„{{subject}}“ hat mehr als eine bedingungslose ausgehende Kante. Höchstens eine darf der Standardweg sein.",
+					"tooManyNodes": "Der Graph hat mehr Knoten, als dieser Node annimmt.",
+					"invalidJson": "Ein JSON-Feld an „{{subject}}“ ist kein gültiges JSON-Objekt.",
+					"pauseDecisionUnroutable": "„{{subject}}“ bietet eine Entscheidung an, die keine ausgehende Kante weiterleitet.",
+					"unknownNodeKind": "„{{subject}}“ hat einen Knotentyp, den diese Version nicht kennt.",
+					"unknownConditionOperator": "Die Kante „{{subject}}“ verwendet einen Vergleich, den diese Version nicht kennt.",
+					"toolNameMissing": "„{{subject}}“ ist ein Werkzeugknoten ohne ausgewähltes Werkzeug.",
+					"serverRejected": "Der Node hat diesen Graphen abgelehnt."
+				}
+			},
+			"form": {
+				"key": {
+					"invalid": "Erlaubt sind Buchstaben, Ziffern, Bindestriche und Unterstriche, höchstens 64 Zeichen."
+				},
+				"maxAttempts": {
+					"range": "Geben Sie eine ganze Zahl zwischen 1 und 10 ein."
+				},
+				"timeoutSeconds": {
+					"min": "Geben Sie eine ganze Anzahl Sekunden ein oder lassen Sie das Feld leer für kein Zeitlimit."
+				},
+				"inputSchema": {
+					"notObject": "Geben Sie ein JSON-Objekt ein oder lassen Sie das Feld leer."
+				},
+				"defaultInput": {
+					"invalidJson": "Geben Sie gültiges JSON ein oder lassen Sie das Feld leer."
+				},
+				"instructions": {
+					"required": "Geben Sie die Anweisungen ein, mit denen dieser Agent läuft."
+				},
+				"responseJsonSchema": {
+					"notObject": "Geben Sie ein JSON-Objektschema ein oder lassen Sie das Feld leer."
+				},
+				"toolName": {
+					"required": "Wählen Sie ein Werkzeug."
+				},
+				"argumentsJson": {
+					"notObject": "Geben Sie ein JSON-Objekt mit Argumenten ein oder lassen Sie das Feld leer."
+				},
+				"argumentBindings": {
+					"pathRequired": "Geben Sie den Pfad an, aus dem dieses Argument gelesen wird."
+				},
+				"path": {
+					"invalid": "Verwenden Sie einen Punktpfad wie output.json.status."
+				},
+				"resultPath": {
+					"invalid": "Verwenden Sie einen Punktpfad wie output.json.status."
+				},
+				"prompt": {
+					"required": "Geben Sie die Frage ein, die der Bediener beantwortet."
+				},
+				"allowedDecisions": {
+					"required": "Bieten Sie mindestens eine Entscheidung an."
+				},
+				"outcome": {
+					"required": "Geben Sie einen Ergebnisnamen ein."
+				},
+				"condition": {
+					"valueRequired": "Geben Sie einen Wert zum Vergleichen ein."
+				}
 			}
 		},
 		"integrations": {

@@ -2,7 +2,7 @@
 // per feature, so this area owns its own file the way devWorkflows and work sessions do. Not jsdom-scoped: it operates
 // purely on the JSON locale files.
 //
-// This lands with the FIRST keys rather than as polish. Nine closed vocabularies are looked up by their narrowed value,
+// This lands with the FIRST keys rather than as polish. Ten closed vocabularies are looked up by their narrowed value,
 // so a missing German string is a `MissingKey` render rather than a compile error — cheap to hold at 70 keys, miserable
 // to retrofit at 300.
 
@@ -20,6 +20,7 @@ import {
 	graphWorkflowRunStatuses,
 	graphWorkflowTabs,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
+import { graphWorkflowGraphRules } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 import en from "@/locales/en.json";
 import { nonEnglishLocales } from "@/test/Locales";
 
@@ -75,8 +76,6 @@ describe.each(sections)("$name i18n key parity (en ↔ every locale)", ({ name, 
 
 // The enum label maps are the half that fails silently: an un-narrowed or newly added member renders the key itself.
 // Asserting the maps whole here is what makes "the label map is complete" a test rather than a habit.
-//
-// A later lane adds `definition.issues` (one member per validation rule) to this list when it lands the rule array.
 describe("graph-workflow enum label maps are complete", () => {
 	const vocabularies = [
 		{ section: "nodeKind", members: graphWorkflowNodeKinds },
@@ -87,6 +86,9 @@ describe("graph-workflow enum label maps are complete", () => {
 		{ section: "joinPolicy", members: graphWorkflowJoinPolicies },
 		{ section: "conditionOperator", members: graphWorkflowConditionOperators },
 		{ section: "tab", members: graphWorkflowTabs },
+		// The rule name IS the key suffix, so a rule added without a message fails here rather than rendering its own name
+		// into the validation strip.
+		{ section: "definition.issues", members: graphWorkflowGraphRules },
 	] as const;
 
 	it.each(vocabularies)("$section has a label for every member in en.json", ({ section, members }) => {
