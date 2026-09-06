@@ -79,6 +79,7 @@
 #   JOBS=1 PAR=1 scripts/run-tests-memory-safe.sh   # old behavior: batches and tests fully serialized
 #   PAR=4 scripts/run-tests-memory-safe.sh          # allow N parallel tests per batch (faster, may reintroduce flakes)
 #   COVERAGE_DIR=/tmp/cov scripts/run-tests-memory-safe.sh   # also emit per-batch Cobertura + TRX
+#   TEST_GROUPS=16 TEST_SHARD=2/4 scripts/run-tests-memory-safe.sh   # run only groups 2, 6, 10, 14
 #
 # Env knobs:
 #   JOBS            how many namespace batch PROCESSES run concurrently (default 10; 1 = sequential)
@@ -95,6 +96,16 @@
 #                   COVERAGE_DIR reports land under <COVERAGE_DIR>/<group>/ rather than
 #                   <COVERAGE_DIR>/<namespace>/. Either way COVERAGE_DIR/units.txt lists the units scheduled (written
 #                   before they run; the per-unit report check + the workflow count cover the rest), and a unit that produced no usable report is reported FAILED.
+#   TEST_SHARD      "i/N": run only the groups whose index g satisfies g % N == i (0 <= i < N).
+#                   Requires TEST_GROUPS — the per-namespace shape has no group index to slice, and
+#                   silently ignoring the knob there would ship a "shard" that ran the whole module.
+#                   WHY it exists: CI gives each shard its OWN runner. One 4-vCPU runner covering
+#                   the whole batched module grew past the job timeout (2026-09-06), so the workflow
+#                   runs TEST_GROUPS=16 four times with TEST_SHARD=0/4 … 3/4. Striding by modulo
+#                   rather than slicing a contiguous range spreads the LPT packer's heavy leading
+#                   bins across the shards instead of piling them into shard 0. units.txt lists only
+#                   this shard's units, so the workflow's one-report-per-unit check still holds per
+#                   leg. Unset (the default) changes nothing for any other caller.
 #   COVERAGE_DIR    when set, every batch additionally writes
 #                   <COVERAGE_DIR>/<namespace>/coverage.cobertura.xml plus a TRX report. The reports
 #                   are per-batch by construction (MTP resolves --coverage-output relative to
@@ -130,6 +141,28 @@ PAR_EXPLICIT="${PAR:+1}"
 PAR="${PAR:-1}"
 JOBS="${JOBS:-10}"
 AVAIL_FLOOR="${AVAIL_FLOOR:-800}"
+
+# Parsed here rather than next to the packer so a malformed value fails before the Release build
+# instead of after it. SHARD_COUNT stays empty when the knob is unset, and that emptiness is what
+# every later shard check keys on.
+SHARD_INDEX=""
+SHARD_COUNT=""
+if [[ -n "${TEST_SHARD:-}" ]]; then
+  if [[ -z "${TEST_GROUPS:-}" ]]; then
+    echo "ERROR: TEST_SHARD='${TEST_SHARD}' needs TEST_GROUPS — without groups there is nothing to shard." >&2
+    exit 1
+  fi
+  if [[ ! "$TEST_SHARD" =~ ^(0|[1-9][0-9]*)/[1-9][0-9]*$ ]]; then
+    echo "ERROR: TEST_SHARD must be 'i/N' (N >= 1, 0 <= i < N), got '$TEST_SHARD'." >&2
+    exit 1
+  fi
+  SHARD_INDEX="${TEST_SHARD%%/*}"
+  SHARD_COUNT="${TEST_SHARD##*/}"
+  if (( SHARD_INDEX >= SHARD_COUNT )); then
+    echo "ERROR: TEST_SHARD index must be below the shard count, got '$TEST_SHARD'." >&2
+    exit 1
+  fi
+fi
 
 # The module has a CONFLICTING env premise (docs/agent-knowledge.md §1): some tests require XE_NODE_SQLITE_KEY UNSET,
 # one requires it SET. Never export it here — host tests inject it via in-memory config, and namespace batching keeps
@@ -356,12 +389,23 @@ if [[ -n "${TEST_GROUPS:-}" ]]; then
     # First in wins: ORDERED is longest-first, so the first namespace a bin gets is its heaviest.
     [[ -z "${BIN_HEAD[light]}" ]] && BIN_HEAD[light]="${ns#XE_Local_AI_Engine.Tests.}"
   done
+  # Every shard packs the SAME bins from the same weights — the pack is deterministic — and then
+  # keeps only its own stride. That is why the shards partition the module exactly once with no
+  # cross-runner coordination.
+  shard_groups=()
   for ((g = 0; g < TEST_GROUPS; g++)); do
     [[ -z "${BIN_NS[g]}" ]] && continue
+    if [[ -n "$SHARD_COUNT" ]]; then
+      (( g % SHARD_COUNT == SHARD_INDEX )) || continue
+      shard_groups+=("$g")
+    fi
     # Name the unit after its heaviest member so a FAILED line says something on its own.
     UNITS+=("group${g}[${BIN_HEAD[g]}+$(( BIN_COUNT[g] - 1 ))]"$'\t'"/*/(${BIN_NS[g]})/*/*")
     echo "   group$g: weight=${BIN_LOAD[g]}s count=${BIN_COUNT[g]} => ${BIN_NS[g]//|/ }"
   done
+  if [[ -n "$SHARD_COUNT" ]]; then
+    echo ">> Shard $SHARD_INDEX/$SHARD_COUNT: running groups ${shard_groups[*]:-none} of $TEST_GROUPS."
+  fi
   echo ">> Running ${#UNITS[@]} namespace groups (JOBS=$JOBS${COVERAGE_DIR:+, coverage+TRX -> $COVERAGE_DIR/<group>})…"
 else
   for ns in "${ORDERED[@]}"; do UNITS+=("$ns"$'\t'"/*/${ns}/*/*"); done
@@ -369,7 +413,8 @@ else
 fi
 # A run that enrolled nothing must never reach the green summary — see the TEST_GROUPS note above.
 if [[ ${#UNITS[@]} -eq 0 ]]; then
-  echo "ERROR: no test units to run (TEST_GROUPS=${TEST_GROUPS:-unset} produced no groups)." >&2
+  echo "ERROR: no test units to run (TEST_GROUPS=${TEST_GROUPS:-unset}" \
+       "TEST_SHARD=${TEST_SHARD:-unset} selected no groups)." >&2
   exit 1
 fi
 
