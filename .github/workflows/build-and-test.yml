@@ -103,9 +103,36 @@ jobs:
       - name: Lint release-critical scripts
         run: scripts/lint-release-scripts.sh --no-behavior --bootstrap
 
-  build-and-test:
+  # The backend gate, split across runners. WHY split (measured 2026-09-06): one 4-vCPU runner ran
+  # all three test projects concurrently and grew from 24 min (2026-08-29) to 42 min (2026-09-03).
+  # Runs 33915501238 and 34001259915 were cancelled at the 45-minute job timeout with the test step
+  # alone at 38 min, and Client.Persistence.Tests alone was 19.4 min of wall at width 2. Each leg now
+  # gets a dedicated runner: `siblings` runs every enrolled test project EXCEPT the batched module,
+  # and tests-0…tests-3 each run one quarter of the batched module via TEST_SHARD. The split costs
+  # four extra checkouts, restores and Release builds; passing the build output between legs as an
+  # artifact would cost more than it saves (the test output tree alone is over 1 GB).
+  #
+  # Each leg only produces reports. The `build-and-test` job below cross-checks and merges them.
+  backend-tests:
     runs-on: ubuntu-latest
+    # Expected 15-20 min per leg. Left at 45 so a leg that regresses the way the single job did is
+    # still visible as a timeout instead of quietly becoming the new normal.
     timeout-minutes: 45
+    strategy:
+      # One red leg must not cancel the others: a cancelled leg is indistinguishable from a broken
+      # one in the artifacts, and the cross-check job's job is to say which leg actually failed.
+      fail-fast: false
+      matrix:
+        include:
+          - leg: siblings
+          - leg: tests-0
+            shard: 0
+          - leg: tests-1
+            shard: 1
+          - leg: tests-2
+            shard: 2
+          - leg: tests-3
+            shard: 3
 
     steps:
       - name: Checkout
@@ -118,7 +145,8 @@ jobs:
 
       # No packages.lock.json in this repo, so the key hashes the version manifest plus every
       # project file — the two things that decide what restore pulls. actions/setup-dotnet's own
-      # `cache` input is not usable here: it requires lock files.
+      # `cache` input is not usable here: it requires lock files. Every leg reads the same key, so
+      # the first leg to finish populates the cache the reruns of the others hit.
       - name: Cache NuGet packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -132,13 +160,17 @@ jobs:
       - name: Build solution
         run: dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
 
+      # The live OpenAPI check needs a built host and a pnpm workspace, not the test results, so it
+      # rides on exactly one leg rather than being paid five times.
       - name: Setup pnpm for live OpenAPI verification
+        if: matrix.leg == 'siblings'
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           # pnpm version is pinned via `packageManager` in the React subdir, not the (absent) repo-root package.json.
           package_json_file: XE-Local-AI-Engine.Client.React/package.json
 
       - name: Setup Node.js for live OpenAPI verification
+        if: matrix.leg == 'siblings'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
@@ -146,11 +178,26 @@ jobs:
           cache-dependency-path: XE-Local-AI-Engine.Client.React/pnpm-lock.yaml
 
       - name: Install frontend dependencies for live OpenAPI verification
+        if: matrix.leg == 'siblings'
         working-directory: XE-Local-AI-Engine.Client.React
         run: pnpm install --frozen-lockfile
 
       - name: Compare live backend OpenAPI with committed frontend contract
+        if: matrix.leg == 'siblings'
         run: scripts/openapi-live-check.sh
+
+      # Pre-pull the one image DockerSandboxRealDaemonTests uses, pinned by digest. Doing it here
+      # means a registry blip fails THIS step as the infrastructure problem it is, instead of
+      # surfacing as 22 test failures; the in-test pull then degrades to a local inspect.
+      # Only on the shard legs: those tests live in the batched module, so the siblings leg needs
+      # neither the image nor XE_REQUIRE_DOCKER_TESTS (it would be a no-op there).
+      # TRADE-OFF, deliberate and operator-visible: this makes Docker Hub reachability a hard
+      # dependency of the PR gate. It buys a clear failure and a verified sandbox contract; it costs
+      # a red gate when the registry is down or rate-limits. Drop this step (and
+      # XE_REQUIRE_DOCKER_TESTS below) to trade back.
+      - name: Pre-pull the pinned sandbox test image
+        if: matrix.leg != 'siblings'
+        run: docker pull alpine@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
 
       # Auto-enrolling backend test run: the project list is read from the solution file, so a new
       # test suite is picked up without editing this workflow. E2E is excluded here (it needs
@@ -159,53 +206,24 @@ jobs:
       # One `dotnet test` per project rather than one over the solution, because MTP resolves
       # --coverage-output relative to --results-directory: a single shared directory would let
       # parallel modules overwrite each other's Cobertura report. Each project therefore gets its
-      # own results directory, and every report is merged afterwards.
+      # own results directory, and every report is merged by the `build-and-test` job.
       #
       # Those per-project results directories are also why the projects can run CONCURRENTLY: the
       # report collision was the only reason this loop was ever serial. Each project's output is
       # prefixed with its module name so interleaved logs stay attributable, and every background
       # PID is waited on individually so a failure in any project fails the step.
       #
-      # XE-Local-AI-Engine.Tests is the exception: it does not run as one `dotnet test`, it runs
-      # through scripts/run-tests-memory-safe.sh as TEST_GROUPS processes, each covering a packed set of
-      # test namespaces. WHY neither obvious shape: one process barely uses the cores (per-test host
-      # builds serialize behind the static HostStartupLock), and one process PER NAMESPACE pays the
-      # code-coverage static-instrumentation start-up ~98 times. Measured 2026-08-23, coverage on,
-      # JOBS=4, in CPU-seconds — which predicts a slow 4-vCPU runner far better than local wall:
-      #   98 batches            1991 CPU-s   7:07 wall   868 MB/proc
-      #   TEST_GROUPS=8          830 CPU-s   3:12 wall  1557 MB/proc
-      #   TEST_GROUPS=4          684 CPU-s   2:43 wall  1532 MB/proc
-      #   one process, width 4   677 CPU-s   7:44 wall  7719 MB (single process)
-      # TEST_GROUPS=nproc costs the CPU of a single process while getting 4.2x parallelism against 1.46x,
-      # and its peak RSS per process leaves room for the sibling projects. The per-namespace shape
-      # was tried in CI (run 32609813981): green, but 25.5 min against the 22.5 min it replaced, and
-      # the extra load pushed Client.Persistence.Tests past its build timeout. Do not go back to it.
-      #
-      # --maximum-parallel-tests caps the width of the remaining projects (TUnit's default is
-      # ProcessorCount*4, which times out on shared runners). It is 2: the batched module is using
-      # the cores, and width 4 measured slower for the siblings under that load. TZ=Europe/Berlin
-      # exposes non-UTC time-zone bugs (e.g. CapabilityReporterTests). global.json pins the
-      # Microsoft.Testing.Platform runner.
-
-      # Pre-pull the one image DockerSandboxRealDaemonTests uses, pinned by digest. Doing it here
-      # means a registry blip fails THIS step as the infrastructure problem it is, instead of
-      # surfacing as 22 test failures; the in-test pull then degrades to a local inspect.
-      # TRADE-OFF, deliberate and operator-visible: this makes Docker Hub reachability a hard
-      # dependency of the PR gate. It buys a clear failure and a verified sandbox contract; it costs
-      # a red gate when the registry is down or rate-limits. Drop this step (and
-      # XE_REQUIRE_DOCKER_TESTS below) to trade back.
-      - name: Pre-pull the pinned sandbox test image
-        run: docker pull alpine@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
-
-      - name: Run backend tests with coverage (auto-enrolled)
+      # --maximum-parallel-tests caps the width of these projects (TUnit's default is
+      # ProcessorCount*4, which times out on shared runners). It is 4 rather than the 2 this ran at
+      # before the split: the 2 was chosen because the batched module was using the cores on the
+      # same runner, and that load is gone — this leg now has the runner to itself.
+      # TZ=Europe/Berlin exposes non-UTC time-zone bugs (e.g. CapabilityReporterTests).
+      # global.json pins the Microsoft.Testing.Platform runner.
+      - name: Run sibling backend test projects with coverage (auto-enrolled)
+        if: matrix.leg == 'siblings'
         env:
           TZ: Europe/Berlin
           COVERAGE_ROOT: ${{ runner.temp }}/backend-coverage
-          # Turns "no daemon / no image" from a silent skip into a failure, so the sandbox
-          # hardening contract is actually verified by this gate. Deliberately no DOCKER_HOST:
-          # ubuntu-latest's default rootful /var/run/docker.sock is the correct endpoint, and
-          # setting it would send DockerDaemonEndpointResolver somewhere else.
-          XE_REQUIRE_DOCKER_TESTS: "1"
         run: |
           set -euo pipefail
           mapfile -t test_projects < <(
@@ -220,7 +238,7 @@ jobs:
           fi
           printf 'Enrolled test project: %s\n' "${test_projects[@]}"
 
-          parallel_tests=2
+          parallel_tests=4
 
           run_project() {
             local project="$1" module="$2"
@@ -231,7 +249,7 @@ jobs:
               --results-directory "$COVERAGE_ROOT/$module" \
               2>&1 | tee "$COVERAGE_ROOT-$module.log" | sed "s/^/[$module] /"
             # Read dotnet test's own status, not the pipeline's: `sed` is last and always exits 0,
-            # so without this the gate would depend on `set -o pipefail` being in force 130 lines
+            # so without this the gate would depend on `set -o pipefail` being in force 60 lines
             # away. Capture it before anything else — the next command overwrites PIPESTATUS.
             local status="${PIPESTATUS[0]}"
             # Hollow-gate guard: MTP always emits a "Passed!" or "Failed!" summary per suite that
@@ -245,48 +263,28 @@ jobs:
             return "$status"
           }
 
-          # The namespace-batched module. The script reports a batch that produced no MTP run
-          # summary as red, so the per-module `Passed!|Failed!` grep above is replaced by "the
-          # script exited 0 AND it emitted batch reports" (asserted after the wait). That is the
-          # same zero-enrolled check, NOT a stronger one: an all-SKIPPED batch prints `Passed!`
-          # (total 22, succeeded 0, skipped 22) and reads green in both designs. The compensating
-          # control for the suite where that actually matters is XE_REQUIRE_DOCKER_TESTS=1 above,
-          # which turns DockerSandboxRealDaemonTests' skip into a failure.
-          # NO_BUILD: the solution was already built in Release above.
-          #
-          # Disk it needs, measured 2026-08-23 for TEST_GROUPS=4: ~224 MB of Cobertura + TRX (a report
-          # is ~40 MB because it lists every source line of every loaded assembly — which is why the
-          # 98-batch shape produced 3.9 GB) plus one ~240 MB clone of the test output tree per JOBS
-          # slot, because coverage instrumentation rewrites assemblies in place and concurrent
-          # processes cannot share one tree. At nproc=4 that is ~1.2 GB in total. Dynamic
-          # instrumentation would remove the clones but collects nothing for this host (evidence in
-          # the script header); do not swap it in without re-measuring a non-empty report.
-          run_batched() {
-            local module="$1"
-            NO_BUILD=1 JOBS="$(nproc)" TEST_GROUPS="$(nproc)" COVERAGE_DIR="$COVERAGE_ROOT/$module" \
-              scripts/run-tests-memory-safe.sh 2>&1 | sed "s/^/[$module] /"
-            # See run_project: `sed` masks the real status unless PIPESTATUS is read explicitly.
-            return "${PIPESTATUS[0]}"
-          }
-
+          # This leg is defined as "everything except the batched module", so a batched module that
+          # fell out of the solution must be loud here: otherwise it would silently run as one more
+          # plain `dotnet test` in this loop while the tests-* legs sharded a project nothing
+          # enrolled. Rename batched_module here if the project moved.
           batched_module=XE-Local-AI-Engine.Tests
           declare -A module_projects=()
           for project in "${test_projects[@]}"; do
             module_projects["$(basename "$project" .csproj)"]="$project"
           done
           if [[ -z "${module_projects[$batched_module]:-}" ]]; then
-            echo "ERROR: $batched_module is not enrolled from the solution, so the namespace-batched" \
-                 "path would silently never run. Rename batched_module here if the project moved." >&2
+            echo "ERROR: $batched_module is not enrolled from the solution." >&2
+            exit 1
+          fi
+          unset 'module_projects[$batched_module]'
+          if [[ "${#module_projects[@]}" -eq 0 ]]; then
+            echo "ERROR: no sibling test projects left after excluding $batched_module." >&2
             exit 1
           fi
 
           declare -A test_pids=()
           for module in "${!module_projects[@]}"; do
-            if [[ "$module" == "$batched_module" ]]; then
-              run_batched "$module" &
-            else
-              run_project "${module_projects[$module]}" "$module" &
-            fi
+            run_project "${module_projects[$module]}" "$module" &
             test_pids["$module"]=$!
           done
 
@@ -301,54 +299,192 @@ jobs:
             exit 1
           fi
 
-          # Two depths, both bounded. A plain `dotnet test` project writes one report at
-          # $COVERAGE_ROOT/<module>/coverage.cobertura.xml (depth 2); the batched module writes one
-          # per namespace at $COVERAGE_ROOT/<module>/<namespace>/coverage.cobertura.xml (depth 3).
-          # --report-trx also copies each report as a TRX attachment under
-          # …/_<machine>_<timestamp>/In/<machine>/ (depth 5 for a sibling, 6 for a batch), so the
-          # maxdepth bound is what stops those byte-identical copies being counted a second time.
-          # merge-cobertura.py unions by (filename, line), so N reports merge exactly as two do.
-          mapfile -t sibling_reports < <(find "$COVERAGE_ROOT" -mindepth 2 -maxdepth 2 -type f -name 'coverage.cobertura.xml' | sort)
-          mapfile -t batch_reports < <(find "$COVERAGE_ROOT/$batched_module" -mindepth 2 -maxdepth 2 -type f -name 'coverage.cobertura.xml' | sort)
-          expected_siblings=$(( ${#module_projects[@]} - 1 ))
-          if [[ "${#sibling_reports[@]}" -ne "$expected_siblings" ]]; then
-            echo "ERROR: expected $expected_siblings sibling Cobertura reports, found ${#sibling_reports[@]}." >&2
-            exit 1
-          fi
-          # One report per unit the script actually ran — not merely "at least one". A unit whose
-          # collector emitted nothing would otherwise be merged as silently incomplete coverage.
-          # The script asserts this per unit too (it fails the unit); this is the cross-check.
-          batch_units="$COVERAGE_ROOT/$batched_module/units.txt"
-          if [[ ! -s "$batch_units" ]]; then
-            echo "ERROR: $batched_module wrote no units.txt — the batched run enrolled nothing." >&2
-            exit 1
-          fi
-          expected_batches="$(wc -l <"$batch_units")"
-          if [[ "${#batch_reports[@]}" -ne "$expected_batches" ]]; then
-            echo "ERROR: $batched_module ran $expected_batches unit(s) but produced" \
-                 "${#batch_reports[@]} Cobertura report(s)." >&2
-            exit 1
-          fi
-          echo "Merging ${#sibling_reports[@]} whole-module + ${#batch_reports[@]} batch Cobertura report(s)."
-          python3 scripts/merge-cobertura.py \
-            --minimum-file scripts/backend-coverage-baseline.txt \
-            "${sibling_reports[@]}" "${batch_reports[@]}"
+      # XE-Local-AI-Engine.Tests does not run as one `dotnet test`: it runs through
+      # scripts/run-tests-memory-safe.sh as TEST_GROUPS processes, each covering a packed set of test
+      # namespaces. WHY neither obvious shape: one process barely uses the cores (per-test host builds
+      # serialize behind the static HostStartupLock), and one process PER NAMESPACE pays the
+      # code-coverage static-instrumentation start-up ~98 times. Measured 2026-08-23, coverage on,
+      # JOBS=4, in CPU-seconds — which predicts a slow 4-vCPU runner far better than local wall.
+      # This is the measurement that chose TEST_GROUPS=nproc for a single-runner job:
+      #   98 batches            1991 CPU-s   7:07 wall   868 MB/proc
+      #   TEST_GROUPS=8          830 CPU-s   3:12 wall  1557 MB/proc
+      #   TEST_GROUPS=4          684 CPU-s   2:43 wall  1532 MB/proc
+      #   one process, width 4   677 CPU-s   7:44 wall  7719 MB (single process)
+      # The per-namespace shape was tried in CI (run 32609813981): green, but 25.5 min against the
+      # 22.5 min it replaced. Do not go back to it.
+      #
+      # Sharding does not change that trade-off, it divides it: TEST_GROUPS=16 packs the same
+      # namespaces into 16 bins by the same longest-processing-time weights on every leg (the pack is
+      # deterministic), and TEST_SHARD=i/4 keeps the bins where g % 4 == i. Four bins per leg is still
+      # JOBS=4 processes wide on a 4-vCPU runner, so the per-process cost above is unchanged; only the
+      # count of bins per runner drops. Striding by modulo rather than by contiguous range spreads the
+      # packer's heavy leading bins across the legs instead of piling them into shard 0.
+      #
+      # The script reports a batch that produced no MTP run summary as red, so this leg's hollow-gate
+      # control is "the script exited 0 AND it emitted one report per unit" — the latter asserted by
+      # the `build-and-test` job. That is the same zero-enrolled check as the siblings' grep, NOT a
+      # stronger one: an all-SKIPPED batch prints `Passed!` (total 22, succeeded 0, skipped 22) and
+      # reads green in both designs. The compensating control for the suite where that actually
+      # matters is XE_REQUIRE_DOCKER_TESTS=1 below, which turns DockerSandboxRealDaemonTests' skip
+      # into a failure.
+      # NO_BUILD: the solution was already built in Release above.
+      #
+      # Disk it needs, measured 2026-08-23 for TEST_GROUPS=4: ~224 MB of Cobertura + TRX (a report
+      # is ~40 MB because it lists every source line of every loaded assembly — which is why the
+      # 98-batch shape produced 3.9 GB) plus one ~240 MB clone of the test output tree per JOBS
+      # slot, because coverage instrumentation rewrites assemblies in place and concurrent
+      # processes cannot share one tree. At JOBS=4 that is ~1.2 GB in total, per leg. Dynamic
+      # instrumentation would remove the clones but collects nothing for this host (evidence in
+      # the script header); do not swap it in without re-measuring a non-empty report.
+      - name: Run one shard of the namespace-batched module with coverage
+        if: matrix.leg != 'siblings'
+        env:
+          TZ: Europe/Berlin
+          COVERAGE_ROOT: ${{ runner.temp }}/backend-coverage
+          # Turns "no daemon / no image" from a silent skip into a failure, so the sandbox
+          # hardening contract is actually verified by this gate. Deliberately no DOCKER_HOST:
+          # ubuntu-latest's default rootful /var/run/docker.sock is the correct endpoint, and
+          # setting it would send DockerDaemonEndpointResolver somewhere else.
+          XE_REQUIRE_DOCKER_TESTS: "1"
+          # The denominator must match the number of tests-* legs in the matrix above.
+          TEST_SHARD: ${{ matrix.shard }}/4
+        run: |
+          set -euo pipefail
+          NO_BUILD=1 JOBS=4 TEST_GROUPS=16 \
+            COVERAGE_DIR="$COVERAGE_ROOT/XE-Local-AI-Engine.Tests" \
+            scripts/run-tests-memory-safe.sh
 
       - name: Upload backend coverage and test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: backend-test-results
+          name: backend-test-results-${{ matrix.leg }}
           # `**` spans any number of segments, so the TRX files are picked up at both depths: one
           # per whole-module project, and one per namespace batch a level deeper (~13 MB in total).
-          # Everything fits now that the batched module emits one report per GROUP rather than per
-          # namespace: ~224 MB against the 3.9 GB the 98-batch shape produced.
+          # units.txt is what the `build-and-test` job counts the shard's reports against, so it has
+          # to travel with them — the *.xml glob does not match it.
           path: |
             ${{ runner.temp }}/backend-coverage/**/*.xml
             ${{ runner.temp }}/backend-coverage/**/*.trx
+            ${{ runner.temp }}/backend-coverage/**/units.txt
           # warn, not error: a run that died before the first suite finished has nothing to upload,
           # and the test step already failed — a second red here would only add noise.
           if-no-files-found: warn
+
+  # The merge gate over every backend-tests leg. It must keep the job id `build-and-test`: that
+  # string is the required status check configured on develop's branch protection, and a matrix job
+  # reports as `backend-tests (siblings)` and friends, so no leg above can ever satisfy it.
+  build-and-test:
+    needs: backend-tests
+    # always(), so a failed leg reaches the explicit result check below instead of leaving the
+    # required check skipped — a skipped required check never resolves.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Require every backend test leg to have passed
+        if: needs.backend-tests.result != 'success'
+        run: |
+          echo "ERROR: backend-tests finished as '${{ needs.backend-tests.result }}', not 'success'." >&2
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # merge-multiple: false keeps one directory per leg, which is what lets the checks below
+      # attribute a missing report to the leg that owed it and detect a group run by two legs.
+      - name: Download backend test results from every leg
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: backend-test-results-*
+          merge-multiple: false
+          path: ${{ runner.temp }}/backend-coverage
+
+      - name: Cross-check the legs and merge coverage
+        env:
+          COVERAGE_ROOT: ${{ runner.temp }}/backend-coverage
+        run: |
+          set -euo pipefail
+          # Re-derived from the solution rather than hard-coded, the same way the test step enrolls
+          # them, so adding a test project cannot leave this count silently stale.
+          mapfile -t test_projects < <(
+            grep -oE 'Project Path="[^"]*"' XE-Local-AI-Engine.slnx \
+              | sed -E 's/Project Path="([^"]*)"/\1/' \
+              | grep -E '\.Tests(\.[A-Za-z0-9]+)*\.csproj$' \
+              | grep -v 'E2ETests' \
+              | sort)
+          if [[ "${#test_projects[@]}" -eq 0 ]]; then
+            echo "ERROR: zero test projects discovered in XE-Local-AI-Engine.slnx." >&2
+            exit 1
+          fi
+          batched_module=XE-Local-AI-Engine.Tests
+          if ! printf '%s\n' "${test_projects[@]}" | grep -q "/$batched_module\.csproj$"; then
+            echo "ERROR: $batched_module is not enrolled from the solution." >&2
+            exit 1
+          fi
+
+          # Two depths, both bounded. A plain `dotnet test` project writes one report at
+          # <leg>/<module>/coverage.cobertura.xml (depth 2); the batched module writes one per group
+          # at <leg>/<module>/<group>/coverage.cobertura.xml (depth 3). --report-trx also copies each
+          # report as a TRX attachment under …/_<machine>_<timestamp>/In/<machine>/ (depth 5 for a
+          # sibling, 6 for a batch), so the maxdepth bound is what stops those byte-identical copies
+          # being counted a second time. merge-cobertura.py unions by (filename, line), so N reports
+          # merge exactly as two do.
+          siblings_root="$COVERAGE_ROOT/backend-test-results-siblings"
+          mapfile -t sibling_reports < <(find "$siblings_root" -mindepth 2 -maxdepth 2 -type f -name 'coverage.cobertura.xml' | sort)
+          expected_siblings=$(( ${#test_projects[@]} - 1 ))
+          if [[ "${#sibling_reports[@]}" -ne "$expected_siblings" ]]; then
+            echo "ERROR: expected $expected_siblings sibling Cobertura report(s), found ${#sibling_reports[@]}." >&2
+            exit 1
+          fi
+
+          # Keep in sync with the tests-* legs in the backend-tests matrix. Checked because
+          # if-no-files-found: warn lets a leg go green having uploaded nothing.
+          expected_shard_legs=4
+          mapfile -t shard_legs < <(find "$COVERAGE_ROOT" -mindepth 1 -maxdepth 1 -type d -name 'backend-test-results-tests-*' | sort)
+          if [[ "${#shard_legs[@]}" -ne "$expected_shard_legs" ]]; then
+            echo "ERROR: expected $expected_shard_legs shard leg artifact(s), found ${#shard_legs[@]}." >&2
+            exit 1
+          fi
+
+          # One report per unit the leg actually ran — not merely "at least one". A unit whose
+          # collector emitted nothing would otherwise be merged as silently incomplete coverage.
+          # The script asserts this per unit too (it fails the unit); this is the cross-check.
+          batch_reports=()
+          all_units=()
+          for leg in "${shard_legs[@]}"; do
+            leg_name="$(basename "$leg")"
+            leg_units="$leg/$batched_module/units.txt"
+            if [[ ! -s "$leg_units" ]]; then
+              echo "ERROR: $leg_name wrote no units.txt — that shard enrolled nothing." >&2
+              exit 1
+            fi
+            mapfile -t leg_unit_names <"$leg_units"
+            mapfile -t leg_reports < <(find "$leg/$batched_module" -mindepth 2 -maxdepth 2 -type f -name 'coverage.cobertura.xml' | sort)
+            if [[ "${#leg_reports[@]}" -ne "${#leg_unit_names[@]}" ]]; then
+              echo "ERROR: $leg_name ran ${#leg_unit_names[@]} unit(s) but produced" \
+                   "${#leg_reports[@]} Cobertura report(s)." >&2
+              exit 1
+            fi
+            all_units+=("${leg_unit_names[@]}")
+            batch_reports+=("${leg_reports[@]}")
+          done
+          # The shards must PARTITION the module. A duplicate unit name means two legs ran the same
+          # group — the shard stride broke — and the merged percentage would look fine anyway,
+          # because merge-cobertura.py unions by (filename, line) and cannot see the overlap.
+          unique_units="$(printf '%s\n' "${all_units[@]}" | sort -u | wc -l)"
+          if [[ "$unique_units" -ne "${#all_units[@]}" ]]; then
+            echo "ERROR: the shard legs ran ${#all_units[@]} unit(s) but only $unique_units distinct" \
+                 "name(s) — the shards overlap." >&2
+            exit 1
+          fi
+
+          echo "Merging ${#sibling_reports[@]} whole-module + ${#batch_reports[@]} batch Cobertura report(s)" \
+               "from ${#shard_legs[@]} shard leg(s)."
+          python3 scripts/merge-cobertura.py \
+            --minimum-file scripts/backend-coverage-baseline.txt \
+            "${sibling_reports[@]}" "${batch_reports[@]}"
 
   client-react:
     runs-on: ubuntu-latest
