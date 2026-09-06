@@ -5687,6 +5687,41 @@
 				"condition": {
 					"valueRequired": "Enter a value to compare against."
 				}
+			},
+			"run": {
+				"label": "Run graph",
+				"attempt": "attempt {{attempt}}",
+				"empty": "This run has no nodes yet.",
+				"overCap": "This run has {{count}} nodes — more than the graph draws. Use the node table to work through them.",
+				"graphMismatch": "The definition changed after this run started, so the connections it ran on are unknown. Showing its nodes only."
+			},
+			"runs": {
+				"empty": "This workflow has not been run yet.",
+				"loadFailed": "Could not load the runs of this workflow.",
+				"version": "Version {{version}}",
+				"createdAt": "Created {{time}}",
+				"startedAt": "Started {{time}}",
+				"completedAt": "Finished {{time}}"
+			},
+			"nodeTable": {
+				"empty": "This run has no nodes yet.",
+				"columnNode": "Node",
+				"columnKind": "Kind",
+				"columnStatus": "Status",
+				"columnAttempt": "Attempt",
+				"columnStarted": "Started",
+				"columnDuration": "Duration",
+				"decisionPending": "needs your decision"
+			},
+			"events": {
+				"empty": "Nothing has happened in this run yet.",
+				"loadFailed": "Could not load this run's events.",
+				"retry": "Retry",
+				"truncated": "This run has more events than one page holds; these start at the beginning of the log. Load more to reach the latest.",
+				"meta": "#{{seq}}",
+				"showDetail": "Show detail",
+				"hideDetail": "Hide detail",
+				"loadMore": "Load more"
 			}
 		},
 		"integrations": {

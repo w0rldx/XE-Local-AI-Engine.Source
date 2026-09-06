@@ -5687,6 +5687,41 @@
 				"condition": {
 					"valueRequired": "Geben Sie einen Wert zum Vergleichen ein."
 				}
+			},
+			"run": {
+				"label": "Ablaufgraph",
+				"attempt": "Versuch {{attempt}}",
+				"empty": "Dieser Lauf hat noch keine Knoten.",
+				"overCap": "Dieser Lauf hat {{count}} Knoten — mehr, als der Graph zeichnet. Arbeiten Sie die Knotentabelle durch.",
+				"graphMismatch": "Die Definition wurde nach dem Start dieses Laufs geändert; die tatsächlichen Verbindungen sind daher unbekannt. Es werden nur die Knoten angezeigt."
+			},
+			"runs": {
+				"empty": "Dieser Arbeitsablauf wurde noch nie ausgeführt.",
+				"loadFailed": "Die Läufe dieses Arbeitsablaufs konnten nicht geladen werden.",
+				"version": "Version {{version}}",
+				"createdAt": "Erstellt {{time}}",
+				"startedAt": "Gestartet {{time}}",
+				"completedAt": "Beendet {{time}}"
+			},
+			"nodeTable": {
+				"empty": "Dieser Lauf hat noch keine Knoten.",
+				"columnNode": "Knoten",
+				"columnKind": "Art",
+				"columnStatus": "Status",
+				"columnAttempt": "Versuch",
+				"columnStarted": "Gestartet",
+				"columnDuration": "Dauer",
+				"decisionPending": "wartet auf Ihre Entscheidung"
+			},
+			"events": {
+				"empty": "In diesem Lauf ist noch nichts passiert.",
+				"loadFailed": "Die Ereignisse dieses Laufs konnten nicht geladen werden.",
+				"retry": "Erneut versuchen",
+				"truncated": "Dieser Lauf hat mehr Ereignisse, als auf eine Seite passen; diese beginnen am Anfang des Protokolls. Laden Sie mehr, um die neuesten zu sehen.",
+				"meta": "#{{seq}}",
+				"showDetail": "Details anzeigen",
+				"hideDetail": "Details ausblenden",
+				"loadMore": "Mehr laden"
 			}
 		},
 		"integrations": {

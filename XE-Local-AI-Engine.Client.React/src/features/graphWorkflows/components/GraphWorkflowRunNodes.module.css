@@ -1,0 +1,46 @@
+/* The RUN view's cards only. The editor's cards are Lane D1's `GraphWorkflowNodes.module.css`: nothing here can be
+   dragged, connected or deleted, so these styles carry no affordance the read-only canvas cannot honour. */
+
+.node {
+	min-width: 170px;
+	max-width: 240px;
+	border-radius: var(--mantine-radius-md);
+	border: 1px solid var(--mantine-color-default-border);
+	background: var(--mantine-color-body);
+	padding: var(--mantine-spacing-xs);
+	box-shadow: var(--mantine-shadow-xs);
+}
+
+/* An outline, not a box-shadow: selection has to survive every status class below, and a status border would otherwise
+   win the cascade and leave the selected card looking like every other one. */
+
+.node-selected {
+	outline: 2px solid var(--mantine-color-blue-5);
+	outline-offset: 1px;
+}
+
+.node-running {
+	border-color: var(--mantine-color-blue-6);
+}
+
+/* The run is parked here until a human answers, which is the loudest thing a card on this canvas can say. */
+
+.node-waiting {
+	border-color: var(--mantine-color-orange-6);
+}
+
+.node-succeeded {
+	border-color: var(--mantine-color-teal-6);
+}
+
+.node-failed {
+	border-color: var(--mantine-color-red-6);
+}
+
+.node-title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 600;
+	min-width: 0;
+}
