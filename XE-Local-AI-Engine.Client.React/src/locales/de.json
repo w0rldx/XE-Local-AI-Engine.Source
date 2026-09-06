@@ -5646,6 +5646,8 @@
 					"invalidNodeKey": "„{{subject}}“ ist kein gültiger Schlüssel. Erlaubt sind Buchstaben, Ziffern, Bindestriche und Unterstriche, höchstens 64 Zeichen.",
 					"unknownEdgeEndpoint": "Die Kante „{{subject}}“ verweist auf einen Knoten, der nicht in diesem Graphen liegt.",
 					"duplicateEdgeKey": "Der Schlüssel „{{subject}}“ ist bereits vergeben. Knoten und Kanten teilen sich einen Schlüsselraum.",
+					"missingEdgeKey": "Eine Kante hat keinen Schlüssel. Jede Kante braucht einen, bevor Sie speichern.",
+					"invalidEdgeKey": "„{{subject}}“ ist kein gültiger Kantenschlüssel. Erlaubt sind Buchstaben, Ziffern, Bindestriche und Unterstriche, höchstens 64 Zeichen.",
 					"parallelEdgesBothUnconditional": "Die Kante „{{subject}}“ ist eine zweite bedingungslose Kante zwischen denselben Knoten. Geben Sie einer der beiden eine Bedingung.",
 					"conditionEdgeHasNoPath": "Die Kante „{{subject}}“ hat eine Bedingung, aber keinen Pfad, und ihr Quellknoten hat keinen zum Erben.",
 					"noStart": "Der Graph hat keinen Start-Knoten.",
@@ -5665,6 +5667,10 @@
 					"unknownNodeKind": "„{{subject}}“ hat einen Knotentyp, den diese Version nicht kennt.",
 					"unknownConditionOperator": "Die Kante „{{subject}}“ verwendet einen Vergleich, den diese Version nicht kennt.",
 					"toolNameMissing": "„{{subject}}“ ist ein Werkzeugknoten ohne ausgewähltes Werkzeug.",
+					"agentInstructionsMissing": "„{{subject}}“ ist ein Agentenknoten ohne Anweisungen.",
+					"pausePromptMissing": "„{{subject}}“ ist ein Pausenknoten ohne Frage.",
+					"pauseNoDecisions": "„{{subject}}“ ist ein Pausenknoten, der keine Entscheidung anbietet.",
+					"endOutcomeMissing": "„{{subject}}“ ist ein End-Knoten ohne Ergebnisnamen.",
 					"serverRejected": "Der Node hat diesen Graphen abgelehnt."
 				}
 			},

@@ -17,6 +17,7 @@ import {
 	endConfigSchema,
 	type GraphWorkflowGraphRule,
 	graphWorkflowGraphRules,
+	loadedGraphIssues,
 	nodeCommonSchema,
 	pauseConfigSchema,
 	serverErrorsToIssues,
@@ -175,6 +176,11 @@ describe("validateGraphWorkflowGraph reports one failing case per rule", () => {
 		expect(rulesOf(minimal([], [{ key: "start", from: "start", to: "done" }]))).toContain("duplicateEdgeKey");
 	});
 
+	it("missingEdgeKey and invalidEdgeKey", () => {
+		expect(rulesOf(minimal([], [{ from: "start", to: "done" }]))).toContain("missingEdgeKey");
+		expect(rulesOf(minimal([], [{ key: "not an edge", from: "start", to: "done" }]))).toContain("invalidEdgeKey");
+	});
+
 	it("parallelEdgesBothUnconditional", () => {
 		expect(rulesOf(minimal([], [{ key: "e2", from: "start", to: "done" }]))).toContain("parallelEdgesBothUnconditional");
 	});
@@ -322,6 +328,28 @@ describe("validateGraphWorkflowGraph reports one failing case per rule", () => {
 		expect(rulesOf(nonsense)).toContain("unknownConditionOperator");
 	});
 
+	it("agentInstructionsMissing", () => {
+		expect(rulesOf(minimal([{ key: "a", kind: "Agent", config: { instructions: "  " } }]))).toContain("agentInstructionsMissing");
+	});
+
+	it("pausePromptMissing and pauseNoDecisions", () => {
+		const bare = rulesOf(minimal([{ key: "review", kind: "Pause", config: { prompt: "", allowedDecisions: [] } }]));
+
+		expect(bare).toContain("pausePromptMissing");
+		expect(bare).toContain("pauseNoDecisions");
+	});
+
+	it("endOutcomeMissing", () => {
+		expect(
+			rulesOf(
+				graph([
+					{ key: "start", kind: "Start", config: {} },
+					{ key: "done", kind: "End", config: {} },
+				]),
+			),
+		).toContain("endOutcomeMissing");
+	});
+
 	it("toolNameMissing", () => {
 		const nameless = minimal(
 			[{ key: "lookup", kind: "Tool", config: { arguments: {} } }],
@@ -332,6 +360,34 @@ describe("validateGraphWorkflowGraph reports one failing case per rule", () => {
 		);
 
 		expect(rulesOf(nameless)).toContain("toolNameMissing");
+	});
+});
+
+describe("loadedGraphIssues", () => {
+	it("keeps only what the canvas cannot round-trip, and nothing else the graph is guilty of", () => {
+		const lossy = graph(
+			[
+				{ key: "start", kind: "Start", config: {} },
+				{ key: "mystery", kind: "Transform", config: {} },
+				{ key: "done", kind: "End", config: { outcome: "completed" } },
+			],
+			[
+				{ key: "e1", from: "start", to: "done", condition: { path: "a", op: "approximately", value: 1 } },
+				{ key: "e2", from: "mystery", to: "done" },
+			],
+		);
+
+		expect(loadedGraphIssues(lossy)).toEqual([
+			{ rule: "unknownNodeKind", subject: "mystery" },
+			{ rule: "unknownConditionOperator", subject: "e1" },
+		]);
+		// The same graph is guilty of plenty more; only the two lossy ones are held open against the loaded document.
+		expect(rulesOf(lossy).length).toBeGreaterThan(2);
+	});
+
+	it("finds nothing in a graph this client can write back faithfully", () => {
+		expect(loadedGraphIssues(eightNodeGraph)).toEqual([]);
+		expect(loadedGraphIssues(undefined)).toEqual([]);
 	});
 });
 
@@ -379,6 +435,9 @@ describe("config form schemas", () => {
 		).toBe(true);
 		expect(toolConfigSchema.safeParse({ toolName: "read_file", argumentsJson: "", argumentBindings: [] }).success).toBe(true);
 		expect(conditionConfigSchema.safeParse({ path: "output.json.requiresReview" }).success).toBe(true);
+		// The server's `IsDotPath` accepts any segment without whitespace or wildcard punctuation, and a JSON property
+		// really can be hyphenated — refusing one it accepts would block a save the node would have taken.
+		expect(conditionConfigSchema.safeParse({ path: "output.json.requires-review" }).success).toBe(true);
 		expect(
 			pauseConfigSchema.safeParse({ prompt: "Approve?", allowedDecisions: ["Approve"], requireComment: false }).success,
 		).toBe(true);
@@ -391,7 +450,7 @@ describe("config form schemas", () => {
 	it("answers an i18n KEY, not a sentence, for every field it refuses", () => {
 		const cases = [
 			[nodeCommonSchema, { key: "not a key", label: "" }, "pages.graphWorkflows.form.key.invalid"],
-			[nodeCommonSchema, { key: "a", label: "", maxAttempts: 11 }, "pages.graphWorkflows.form.maxAttempts.range"],
+			[nodeCommonSchema, { key: "a", label: "", maxAttempts: 101 }, "pages.graphWorkflows.form.maxAttempts.range"],
 			[nodeCommonSchema, { key: "a", label: "", timeoutSeconds: 0 }, "pages.graphWorkflows.form.timeoutSeconds.min"],
 			[startConfigSchema, { inputSchema: "[1]", defaultInput: null }, "pages.graphWorkflows.form.inputSchema.notObject"],
 			[startConfigSchema, { inputSchema: null, defaultInput: "{ half" }, "pages.graphWorkflows.form.defaultInput.invalidJson"],
@@ -434,7 +493,7 @@ describe("config form schemas", () => {
 				{ toolName: "read_file", argumentsJson: "", argumentBindings: [{ parameter: "path", path: " " }] },
 				"pages.graphWorkflows.form.argumentBindings.pathRequired",
 			],
-			[conditionConfigSchema, { path: "output..json" }, "pages.graphWorkflows.form.path.invalid"],
+			[conditionConfigSchema, { path: "output[0].json" }, "pages.graphWorkflows.form.path.invalid"],
 			[
 				pauseConfigSchema,
 				{ prompt: "?", allowedDecisions: [], requireComment: false },

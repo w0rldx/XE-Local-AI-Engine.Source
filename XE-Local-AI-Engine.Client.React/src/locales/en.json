@@ -5646,6 +5646,8 @@
 					"invalidNodeKey": "“{{subject}}” is not a valid key. Use letters, digits, hyphens and underscores, up to 64 characters.",
 					"unknownEdgeEndpoint": "Edge “{{subject}}” points at a node that is not in this graph.",
 					"duplicateEdgeKey": "The key “{{subject}}” is already taken. Nodes and edges share one set of keys.",
+					"missingEdgeKey": "An edge has no key. Every edge needs one before saving.",
+					"invalidEdgeKey": "“{{subject}}” is not a valid edge key. Use letters, digits, hyphens and underscores, up to 64 characters.",
 					"parallelEdgesBothUnconditional": "Edge “{{subject}}” is a second unconditional edge between the same two nodes. Give one of them a condition.",
 					"conditionEdgeHasNoPath": "Edge “{{subject}}” has a condition but no path, and its source node has none to inherit.",
 					"noStart": "The graph has no Start node.",
@@ -5665,6 +5667,10 @@
 					"unknownNodeKind": "“{{subject}}” has a node type this version does not know.",
 					"unknownConditionOperator": "Edge “{{subject}}” uses a comparison this version does not know.",
 					"toolNameMissing": "“{{subject}}” is a Tool node with no tool selected.",
+					"agentInstructionsMissing": "“{{subject}}” is an Agent node with no instructions.",
+					"pausePromptMissing": "“{{subject}}” is a Pause node with no question to ask.",
+					"pauseNoDecisions": "“{{subject}}” is a Pause node that offers no decision.",
+					"endOutcomeMissing": "“{{subject}}” is an End node with no outcome name.",
 					"serverRejected": "The node refused this graph."
 				}
 			},

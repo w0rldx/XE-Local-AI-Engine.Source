@@ -226,7 +226,8 @@ function nodeDataFromWire(node: GraphWorkflowGraphNode): GraphWorkflowCanvasNode
 				requireComment: booleanOr(config["requireComment"], false),
 			};
 		// `default` IS the End case: `narrowGraphWorkflowNodeKind` answers one of the eight members and the seven above
-		// are handled, so TypeScript narrows `node` here exactly as a `case "End"` would.
+		// are handled, so TypeScript narrows `node` here exactly as a `case "End"` would. It also catches an UNKNOWN
+		// kind, which the narrowing turns into `End` — lossy, and `loadedGraphIssues` is what keeps that visible.
 		default:
 			return {
 				...base,
@@ -253,9 +254,10 @@ function conditionFromWire(edge: GraphWorkflowGraphEdge): GraphWorkflowCanvasEdg
 	const op = normalizeGraphWorkflowConditionOperator(condition.op);
 	if (op === undefined) {
 		// An absent or unknown `op` DROPS the condition on the canvas — the edge stays, unconditional — rather than
-		// guessing `Eq` and silently rewriting the branch on the next save. The operator is told through
-		// `validateGraphWorkflowGraph`'s `unknownConditionOperator` issue over the loaded WIRE graph, where the token is
-		// still readable. The server's parser is the authority on what the token meant.
+		// guessing `Eq` and silently rewriting the branch on the next save. That makes the canvas LOSSY, so the loader
+		// runs `loadedGraphIssues` over the wire graph it just read and holds the resulting
+		// `unknownConditionOperator` issue open until a different graph is loaded, blocking Save on a document this
+		// client cannot faithfully write back. The server's parser is the authority on what the token meant.
 		return undefined;
 	}
 	const path = stringOrEmpty(condition.path);
@@ -307,15 +309,20 @@ export function graphToCanvas(
 	const kindByKey = new Map<string, GraphWorkflowNodeKind>(
 		wireNodes.map((node) => [node.key ?? "", narrowGraphWorkflowNodeKind(node.kind)]),
 	);
-	const layout = layoutGraphWorkflow(
-		wireNodes.map((node) => ({ key: node.key ?? "" })),
-		wireEdges.map((edge) => ({ from: edge.from ?? "", to: edge.to ?? "" })),
-	);
+	// Only laid out when something actually needs a position: the common case is a definition this editor saved, where
+	// every node carries one and the ranking would be thrown away.
+	const layout =
+		options?.relayout === true || wireNodes.some((node) => !node.position)
+			? layoutGraphWorkflow(
+					wireNodes.map((node) => ({ key: node.key ?? "" })),
+					wireEdges.map((edge) => ({ from: edge.from ?? "", to: edge.to ?? "" })),
+				)
+			: undefined;
 
 	const nodes = wireNodes.map((node): GraphWorkflowCanvasNode => {
 		const data = nodeDataFromWire(node);
 		const stored = node.position;
-		const placed = layout.positions.get(data.key);
+		const placed = layout?.positions.get(data.key);
 		const position =
 			stored && options?.relayout !== true ? { x: stored.x ?? 0, y: stored.y ?? 0 } : { x: placed?.x ?? 0, y: placed?.y ?? 0 };
 		return { id: data.key, type: graphWorkflowNodeTypeByKind[data.kind], position, data };
@@ -571,21 +578,14 @@ export function renameNodeKey(
 	if (to !== from && (nodes.some((node) => node.id === to) || edges.some((edge) => edge.id === to))) {
 		return { error: "collision" };
 	}
-	const pauseKeys = new Set(nodes.filter((node) => node.data.kind === "Pause").map((node) => node.id));
 	const renamedNodes = nodes.map((node) => (node.id === from ? { ...node, id: to, data: { ...node.data, key: to } } : node));
-	const renamedEdges = edges.map((edge) => {
-		const condition = edge.data?.condition;
-		// The plan's cascade: a Pause out-edge whose condition value NAMED the node follows the rename. It is a no-op on
-		// a well-formed graph, where that value is a decision — and exactly the corruption nobody would find by hand on
-		// one that is not.
-		const renameValue = condition !== undefined && pauseKeys.has(edge.source) && condition.value === from;
-		return {
-			...edge,
-			source: edge.source === from ? to : edge.source,
-			target: edge.target === from ? to : edge.target,
-			...(renameValue && condition ? { data: { ...edge.data, condition: { ...condition, value: to } } } : {}),
-		};
-	});
+	// Endpoints only. An edge condition is never rewritten: a Pause out-edge's `condition.value` is a DECISION name, so
+	// following a rename into it could only corrupt the routing of a node someone happened to key `Approve`.
+	const renamedEdges = edges.map((edge) => ({
+		...edge,
+		source: edge.source === from ? to : edge.source,
+		target: edge.target === from ? to : edge.target,
+	}));
 	return { nodes: renamedNodes, edges: renamedEdges };
 }
 

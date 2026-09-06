@@ -28,6 +28,15 @@ export const graphWorkflowTestIds = {
 	request: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
 } as const;
 
+/**
+ * A readable GUID for a fixture row: `graphWorkflowTestGuid(3)` → `00000000-0000-4000-8000-000000000003`. Every
+ * id-shaped member of these DTOs is `z.guid()` in the generated RESPONSE validators, so a friendly `nr-start` fails
+ * `withResponseValidation` the moment a fixture is served over MSW rather than read straight out of this file.
+ */
+export function graphWorkflowTestGuid(index: number): string {
+	return `00000000-0000-4000-8000-${index.toString().padStart(12, "0")}`;
+}
+
 export const graphWorkflowTestGraphHash = "sha256:0f2a9c1d4e6b8a70";
 
 /**
@@ -95,9 +104,11 @@ export const eightNodeGraph: GraphWorkflowGraph = {
 				argumentBindings: { path: "output.json.path" },
 			},
 		},
-		{ key: "fanout", kind: "Parallel", label: "Both", position: { x: 0, y: 480 }, config: {} },
+		// `Any`, like `done`: the Condition's two branches are exclusive, so under the default `All` join this node would
+		// wait forever for the branch that was never taken and the run could never reach an End.
+		{ key: "fanout", kind: "Parallel", label: "Both", position: { x: 0, y: 480 }, joinPolicy: "Any", config: {} },
 		{ key: "merge", kind: "Join", label: "Merge", position: { x: 0, y: 600 }, joinPolicy: "All", config: {} },
-			{
+		{
 			key: "done",
 			kind: "End",
 			label: "Done",
@@ -133,11 +144,13 @@ export const eightNodeGraph: GraphWorkflowGraph = {
 	],
 };
 
-export function graphWorkflowDefinition(overrides: Partial<GraphWorkflowDefinitionResponse> = {}): GraphWorkflowDefinitionResponse {
+export function graphWorkflowDefinition(
+	overrides: Partial<GraphWorkflowDefinitionResponse> = {},
+): GraphWorkflowDefinitionResponse {
 	return {
 		id: graphWorkflowTestIds.definition,
 		name: "Analyze → review → read",
-		description: "The S2 live graph: an agent decides, a human approves, a tool reads.",
+		description: "An agent decides, a human approves, a tool reads.",
 		graph: eightNodeGraph,
 		graphHash: graphWorkflowTestGraphHash,
 		nodeCount: 8,
@@ -155,7 +168,7 @@ export function graphWorkflowDefinitionSummary(
 	return {
 		id: graphWorkflowTestIds.definition,
 		name: "Analyze → review → read",
-		description: "The S2 live graph: an agent decides, a human approves, a tool reads.",
+		description: "An agent decides, a human approves, a tool reads.",
 		graphHash: graphWorkflowTestGraphHash,
 		nodeCount: 8,
 		schemaVersion: 1,
@@ -166,7 +179,9 @@ export function graphWorkflowDefinitionSummary(
 	};
 }
 
-export function graphWorkflowRunSummary(overrides: Partial<GraphWorkflowRunSummaryResponse> = {}): GraphWorkflowRunSummaryResponse {
+export function graphWorkflowRunSummary(
+	overrides: Partial<GraphWorkflowRunSummaryResponse> = {},
+): GraphWorkflowRunSummaryResponse {
 	return {
 		id: graphWorkflowTestIds.run,
 		requestId: graphWorkflowTestIds.request,
@@ -212,9 +227,9 @@ export function graphWorkflowRun(overrides: Partial<GraphWorkflowRunResponse> = 
 	return {
 		run: graphWorkflowRunSummary(),
 		nodeRuns: [
-			makeNodeRun({ id: "nr-start", nodeKey: "start", kind: "Start", status: "Succeeded" }),
-			makeNodeRun({ id: "nr-analyze", nodeKey: "analyze", kind: "Agent", status: "Succeeded" }),
-			makeNodeRun({ id: "nr-check", nodeKey: "check", kind: "Condition", status: "Succeeded" }),
+			makeNodeRun({ id: graphWorkflowTestGuid(1), nodeKey: "start", kind: "Start", status: "Succeeded" }),
+			makeNodeRun({ id: graphWorkflowTestGuid(2), nodeKey: "analyze", kind: "Agent", status: "Succeeded" }),
+			makeNodeRun({ id: graphWorkflowTestGuid(3), nodeKey: "check", kind: "Condition", status: "Succeeded" }),
 			makeNodeRun({
 				id: graphWorkflowTestIds.nodeRun,
 				nodeKey: "review",
@@ -224,16 +239,30 @@ export function graphWorkflowRun(overrides: Partial<GraphWorkflowRunResponse> = 
 				completedAtUtc: null,
 			}),
 			makeNodeRun({
-				id: "nr-lookup",
+				id: graphWorkflowTestGuid(5),
 				nodeKey: "lookup",
 				kind: "Tool",
 				status: "Failed",
 				attempt: 3,
 				failureClass: "AttemptsExhausted",
 			}),
-			makeNodeRun({ id: "nr-fanout", nodeKey: "fanout", kind: "Parallel", status: "Pending", startedAtUtc: null, completedAtUtc: null }),
-			makeNodeRun({ id: "nr-merge", nodeKey: "merge", kind: "Join", status: "Skipped", startedAtUtc: null }),
-			makeNodeRun({ id: "nr-done", nodeKey: "done", kind: "End", status: "Pending", startedAtUtc: null, completedAtUtc: null }),
+			makeNodeRun({
+				id: graphWorkflowTestGuid(6),
+				nodeKey: "fanout",
+				kind: "Parallel",
+				status: "Pending",
+				startedAtUtc: null,
+				completedAtUtc: null,
+			}),
+			makeNodeRun({ id: graphWorkflowTestGuid(7), nodeKey: "merge", kind: "Join", status: "Skipped", startedAtUtc: null }),
+			makeNodeRun({
+				id: graphWorkflowTestGuid(8),
+				nodeKey: "done",
+				kind: "End",
+				status: "Pending",
+				startedAtUtc: null,
+				completedAtUtc: null,
+			}),
 		],
 		output: undefined,
 		...overrides,
@@ -269,7 +298,7 @@ export function pendingPauseNodeRun(overrides: Partial<GraphWorkflowNodeRunRespo
 /** The Agent node's detail, with the envelope every node-run output carries: `{ status, attempt, branch?, output }`. */
 export function agentNodeRunDetail(overrides: Partial<GraphWorkflowNodeRunResponse> = {}): GraphWorkflowNodeRunResponse {
 	return {
-		id: "nr-analyze",
+		id: graphWorkflowTestGuid(2),
 		runId: graphWorkflowTestIds.run,
 		nodeKey: "analyze",
 		kind: "Agent",
@@ -284,7 +313,7 @@ export function agentNodeRunDetail(overrides: Partial<GraphWorkflowNodeRunRespon
 			attempt: 1,
 			output: { text: "The release removes two endpoints, so a human should confirm.", json: { requiresReview: true } },
 		},
-		invocationId: "inv-analyze",
+		invocationId: graphWorkflowTestGuid(20),
 		startedAtUtc: 1_700_000_200_000,
 		completedAtUtc: 1_700_000_210_000,
 		updatedAtUtc: 1_700_000_210_000,
@@ -294,7 +323,7 @@ export function agentNodeRunDetail(overrides: Partial<GraphWorkflowNodeRunRespon
 
 export function graphWorkflowRunEvent(overrides: Partial<GraphWorkflowRunEventResponse> = {}): GraphWorkflowRunEventResponse {
 	return {
-		id: "ev-1",
+		id: graphWorkflowTestGuid(31),
 		seq: 1,
 		eventType: "run.created",
 		nodeKey: null,
@@ -305,23 +334,25 @@ export function graphWorkflowRunEvent(overrides: Partial<GraphWorkflowRunEventRe
 }
 
 /** A trail covering the run above, including the two S2 event types and a `node.retried` with its detail document. */
-export function graphWorkflowEvents(overrides: Partial<ListGraphWorkflowRunEventsResponse> = {}): ListGraphWorkflowRunEventsResponse {
+export function graphWorkflowEvents(
+	overrides: Partial<ListGraphWorkflowRunEventsResponse> = {},
+): ListGraphWorkflowRunEventsResponse {
 	return {
 		events: [
-			graphWorkflowRunEvent({ id: "ev-1", seq: 1, eventType: "run.created" }),
-			graphWorkflowRunEvent({ id: "ev-2", seq: 2, eventType: "run.started" }),
-			graphWorkflowRunEvent({ id: "ev-3", seq: 3, eventType: "node.completed", nodeKey: "analyze" }),
-			graphWorkflowRunEvent({ id: "ev-4", seq: 4, eventType: "node.started", nodeKey: "lookup" }),
+			graphWorkflowRunEvent({ id: graphWorkflowTestGuid(31), seq: 1, eventType: "run.created" }),
+			graphWorkflowRunEvent({ id: graphWorkflowTestGuid(32), seq: 2, eventType: "run.started" }),
+			graphWorkflowRunEvent({ id: graphWorkflowTestGuid(33), seq: 3, eventType: "node.completed", nodeKey: "analyze" }),
+			graphWorkflowRunEvent({ id: graphWorkflowTestGuid(34), seq: 4, eventType: "node.started", nodeKey: "lookup" }),
 			graphWorkflowRunEvent({
-				id: "ev-5",
+				id: graphWorkflowTestGuid(35),
 				seq: 5,
 				eventType: "node.retried",
 				nodeKey: "lookup",
 				detail: { failureClass: "Timeout", attempt: 1, reason: "The tool did not answer within the node timeout." },
 			}),
-			graphWorkflowRunEvent({ id: "ev-6", seq: 6, eventType: "node.failed", nodeKey: "lookup" }),
-			graphWorkflowRunEvent({ id: "ev-7", seq: 7, eventType: "gate.requested", nodeKey: "review" }),
-			graphWorkflowRunEvent({ id: "ev-8", seq: 8, eventType: "run.waiting" }),
+			graphWorkflowRunEvent({ id: graphWorkflowTestGuid(36), seq: 6, eventType: "node.failed", nodeKey: "lookup" }),
+			graphWorkflowRunEvent({ id: graphWorkflowTestGuid(37), seq: 7, eventType: "gate.requested", nodeKey: "review" }),
+			graphWorkflowRunEvent({ id: graphWorkflowTestGuid(38), seq: 8, eventType: "run.waiting" }),
 		],
 		lastSeq: 8,
 		replayTruncated: false,
@@ -337,7 +368,11 @@ export function graphWorkflowEvents(overrides: Partial<ListGraphWorkflowRunEvent
 export function graphWorkflowTools(overrides: Partial<ListGraphWorkflowToolsResponse> = {}): ListGraphWorkflowToolsResponse {
 	return {
 		tools: [
-			{ name: "GetCurrentTime", description: "The current time on this node.", parameterSchema: '{"type":"object","properties":{}}' },
+			{
+				name: "GetCurrentTime",
+				description: "The current time on this node.",
+				parameterSchema: '{"type":"object","properties":{}}',
+			},
 			{
 				name: "Calculate",
 				description: "Evaluates an arithmetic expression.",
