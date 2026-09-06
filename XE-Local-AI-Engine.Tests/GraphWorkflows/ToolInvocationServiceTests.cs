@@ -175,11 +175,15 @@ public sealed class ToolInvocationServiceTests
     [Test]
     public async Task Invoke_WhenTheCatalogReadItselfOutlastsTheBudget_IsTimeout()
     {
+        // The fake parks on the token it is HANDED, so a service that stopped passing one would park forever. Its own
+        // release source is what keeps that a failure rather than a hang, and the outer wait bounds it either way.
+        using var release = new CancellationTokenSource();
         var offers = Substitute.For<ILocalToolOfferProvider>();
         _ = offers.GetKnownToolsAsync(Arg.Any<CancellationToken>())
                   .Returns(async call =>
                   {
-                      await Task.Delay(Timeout.Infinite, call.Arg<CancellationToken>()).ConfigureAwait(false);
+                      using var parked = CancellationTokenSource.CreateLinkedTokenSource(call.Arg<CancellationToken>(), release.Token);
+                      await Task.Delay(Timeout.Infinite, parked.Token).ConfigureAwait(false);
                       return (IReadOnlyList<LocalToolCatalogEntry>)[];
                   });
         await using var factory = new TestServerWebAppFactory
@@ -191,11 +195,37 @@ public sealed class ToolInvocationServiceTests
             }
         };
 
-        // real-timer: the budget IS the subject, and the catalog waits on the token rather than on a clock of its own,
-        // so the outcome is decided by the deadline firing and not by a race between two timers.
-        var outcome = await ServiceOf(factory).InvokeAsync("GetCurrentTime", "{}", Context(TimeSpan.FromMilliseconds(200))).ConfigureAwait(false);
+        ToolInvocationOutcome outcome;
+        try
+        {
+            // real-timer: the budget IS the subject, and the catalog waits on the token rather than on a clock of its
+            // own, so the outcome is decided by the deadline firing and not by a race between two timers. The outer
+            // wait is the backstop for the case this test exists to catch — a budget that never reaches the catalog.
+            outcome = await ServiceOf(factory).InvokeAsync("GetCurrentTime", "{}", Context(TimeSpan.FromMilliseconds(200)))
+                                              .WaitAsync(TestBudgets.Contended)
+                                              .ConfigureAwait(false);
+        }
+        finally
+        {
+            await release.CancelAsync().ConfigureAwait(false);
+        }
 
         AssertEx.Equal(ToolInvocationOutcomeKind.Timeout, outcome.Kind, "no caller token fired, so the spent budget is a timeout.");
+        AssertEx.Null(outcome.Result);
+    }
+
+    /// <summary>
+    ///     A budget no timer can hold is still an OUTCOME. <c>timeoutSeconds</c> is floored at one and capped nowhere
+    ///     but by <c>int</c>, so a node may declare a span past the ~49.7 days <c>CancelAfter</c> accepts
+    ///     (<c>Timer.MaxSupportedTimeout</c>) — and a service whose contract is "never throws for a bad call" must not
+    ///     make that the one exception. Sixty days is plainly over that ceiling and well inside what a node may write.
+    /// </summary>
+    [Test]
+    public async Task Invoke_WithABudgetTooLargeToArm_IsFaultedRatherThanThrown()
+    {
+        var outcome = await ServiceOf(Factory).InvokeAsync("GetCurrentTime", "{}", Context(TimeSpan.FromDays(60))).ConfigureAwait(false);
+
+        AssertEx.Equal(ToolInvocationOutcomeKind.Faulted, outcome.Kind, "the refusal is an outcome, not an ArgumentOutOfRangeException out of the call.");
         AssertEx.Null(outcome.Result);
     }
 

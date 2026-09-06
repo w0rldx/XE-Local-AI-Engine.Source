@@ -27,6 +27,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 internal sealed class GraphWorkflowHarness : IAsyncDisposable
 {
+    /// <summary>How long <see cref="AdvanceUntilAsync" /> stands aside between ticks. See the comment at its use.</summary>
+    private static readonly TimeSpan PollPause = TimeSpan.FromMilliseconds(5);
+
     private readonly TestServerWebAppFactory _factory;
 
     /// <summary>Whether this harness built the host and so has to tear it down; false for the class's shared one.</summary>
@@ -221,6 +224,12 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
             }
 
             _ = await AdvanceAsync(runId).ConfigureAwait(false);
+
+            // real-timer: NOT a wait for the event — the loop polls a real condition and is bounded by tick count.
+            // This hands the thread pool back between ticks, because what these ticks are waiting for is a lane's
+            // detached work, and a loop that spins through sixty database round trips without yielding starves the
+            // very continuation it is asking about.
+            await Task.Delay(PollPause).ConfigureAwait(false);
         }
 
         throw new AssertionException($"{message} (after {maxTicks} ticks of run {runId})");

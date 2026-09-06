@@ -66,21 +66,25 @@ internal sealed class ToolInvocationService(
         // read spends it like anything else. Armed after the lookup, a node could wait its budget out on the catalog
         // and then hand the tool a second, full one. A budget already spent is cancelled synchronously, so an expired
         // deadline never depends on timer resolution.
+        // Only the DECLARATION is out here, where the catch can still read it. The arming is inside the try, because
+        // CancelAfter refuses a span past int.MaxValue milliseconds and a node may declare one: this method's contract
+        // is that a bad call is an OUTCOME, so a budget it cannot arm has to fault like anything else.
         using var deadline = new CancellationTokenSource();
-        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
-        if (context.Timeout <= TimeSpan.Zero)
-        {
-            await deadline.CancelAsync().ConfigureAwait(false);
-        }
-        else
-        {
-            deadline.CancelAfter(context.Timeout);
-        }
 
         // Everything from here is inside one try: the contract is that no bad call throws, and a caller's token can
         // fire inside the catalog read just as easily as inside the tool.
         try
         {
+            using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+            if (context.Timeout <= TimeSpan.Zero)
+            {
+                await deadline.CancelAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                deadline.CancelAfter(context.Timeout);
+            }
+
             // Step 1b. The model-agnostic CATALOG, not the offer: a workflow node has no active model, so the offer's
             // capability gate would silently withhold six of the eight invocable tools.
             var catalog = await _offerProvider.GetKnownToolsAsync(budget.Token).ConfigureAwait(false);
