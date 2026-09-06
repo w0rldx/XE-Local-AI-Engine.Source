@@ -295,7 +295,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     ///     every refusal, timeout, cancellation and fault with an outcome, which is what lets the poll settle a landed
     ///     call without ever rethrowing.
     /// </summary>
-    private Task<ToolInvocationOutcome> InvokeAsync(Guid runId,
+    private async Task<ToolInvocationOutcome> InvokeAsync(Guid runId,
         Guid nodeRunId,
         GraphWorkflowGraphNode node,
         string toolName,
@@ -303,6 +303,12 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         StrongBox<bool> leaseAcquired,
         CancellationToken cancellationToken)
     {
+        // OFF the tick, before anything else happens. The lane starts this delegate INLINE, so every statement before
+        // the first yield runs inside the dispatcher's advance gate — and a read tool does real synchronous work
+        // before its first await (a filesystem scan, an expression parse), which would hold every other run and the
+        // cancel drain for the whole of it. The agent lane never noticed because its runner awaits immediately.
+        await Task.Yield();
+
         // Flipped immediately, and honestly: the lane slot this body already holds is the only thing a tool call ever
         // waits for, so there is no second gate for the box to report on the way the agent lane's lease is.
         leaseAcquired.Value = true;
@@ -310,7 +316,8 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         // The graph author's own budget, which the service enforces as a hard deadline over the whole call — argument
         // validation included — so the dispatcher's expiry stage stays a backstop rather than a race with the answer.
         var timeout = TimeSpan.FromSeconds(node.TimeoutSeconds ?? _options.DefaultNodeTimeoutSeconds);
-        return _tools.InvokeAsync(toolName, argumentsJson, new ToolInvocationContext(runId, nodeRunId, node.NodeKey, timeout), cancellationToken);
+        return await _tools.InvokeAsync(toolName, argumentsJson, new ToolInvocationContext(runId, nodeRunId, node.NodeKey, timeout), cancellationToken)
+                           .ConfigureAwait(false);
     }
 
     /// <summary>

@@ -72,6 +72,35 @@ public sealed class GraphWorkflowToolLaneTests
     }
 
     /// <summary>
+    ///     A tool that does its work SYNCHRONOUSLY does it off the tick. The lane starts a work delegate inline, and
+    ///     the dispatcher advances one run at a time behind a process-wide gate, so a read tool scanning a filesystem
+    ///     before its first await would hold every other run — and the cancel drain — for the whole scan.
+    /// </summary>
+    [Test]
+    public async Task ASynchronouslyBlockingCall_DoesNotRunInsideTheTick()
+    {
+        const string blocking = "probe_blocking";
+        const string quick = "probe_unblocked";
+        await using var harness = GraphWorkflowHarness.PrivateToolHost();
+        harness.Tools.Script(blocking, new GraphWorkflowScriptedTool(Blocks: true));
+        harness.Tools.Declare(quick);
+
+        // The dispatch tick RETURNING is the assertion: with the call started inline, this never comes back until the
+        // block is released. The harness releases every block on disposal, so a failure here cannot hang the suite.
+        var blocked = await DispatchedToolRunAsync(harness, blocking).ConfigureAwait(false);
+
+        var other = await harness.StartRunAsync(Graph(quick)).ConfigureAwait(false);
+        await harness.AdvanceUntilAsync(other,
+                async () => (await harness.ReadRunAsync(other).ConfigureAwait(false)).Status == GraphWorkflowRunStatus.Completed,
+                "a second run could not advance while a synchronous tool call was in flight.")
+            .ConfigureAwait(false);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Running,
+            (await harness.ReadNodeRunAsync(blocked, "call").ConfigureAwait(false)).Status,
+            "and the blocking call was still blocked throughout, so the second run really did overtake it.");
+    }
+
+    /// <summary>
     ///     The entry outlives the work until a poll has seen it land, and is given up only once the settling write has
     ///     COMMITTED. Consuming it first would spend the answer on a write that may throw, and the next poll would then
     ///     find no entry and report "the host stopped" about a call that finished perfectly.

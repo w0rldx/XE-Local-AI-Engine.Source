@@ -61,7 +61,21 @@ internal sealed class ToolInvocationService(
         // The deadline is its OWN source rather than a CancelAfter on the linked budget, and the catch below is why:
         // classifying off the CALLER's token would report a terminal Cancelled for a retryable Timeout whenever that
         // token happens to fire between the budget expiring and the catch reading it.
+        //
+        // Armed HERE, before the catalog is even read: the caller's budget covers the WHOLE call, so a slow catalog
+        // read spends it like anything else. Armed after the lookup, a node could wait its budget out on the catalog
+        // and then hand the tool a second, full one. A budget already spent is cancelled synchronously, so an expired
+        // deadline never depends on timer resolution.
         using var deadline = new CancellationTokenSource();
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        if (context.Timeout <= TimeSpan.Zero)
+        {
+            await deadline.CancelAsync().ConfigureAwait(false);
+        }
+        else
+        {
+            deadline.CancelAfter(context.Timeout);
+        }
 
         // Everything from here is inside one try: the contract is that no bad call throws, and a caller's token can
         // fire inside the catalog read just as easily as inside the tool.
@@ -69,7 +83,7 @@ internal sealed class ToolInvocationService(
         {
             // Step 1b. The model-agnostic CATALOG, not the offer: a workflow node has no active model, so the offer's
             // capability gate would silently withhold six of the eight invocable tools.
-            var catalog = await _offerProvider.GetKnownToolsAsync(cancellationToken).ConfigureAwait(false);
+            var catalog = await _offerProvider.GetKnownToolsAsync(budget.Token).ConfigureAwait(false);
             var entry = catalog.FirstOrDefault(candidate => string.Equals(candidate.Name, toolName, StringComparison.Ordinal)
                                                            && string.Equals(candidate.Source, BuiltinSource, StringComparison.Ordinal));
             if (entry is null)
@@ -98,18 +112,8 @@ internal sealed class ToolInvocationService(
                 return new ToolInvocationOutcome(ToolInvocationOutcomeKind.InvalidArguments, null, validation.Reason ?? $"The arguments for '{entry.Name}' are invalid.");
             }
 
-            // Step 8. The caller owns the budget; this service has no default of its own. A budget already spent is
-            // cancelled synchronously so an expired deadline never depends on timer resolution.
-            using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
-            if (context.Timeout <= TimeSpan.Zero)
-            {
-                await deadline.CancelAsync().ConfigureAwait(false);
-            }
-            else
-            {
-                deadline.CancelAfter(context.Timeout);
-            }
-
+            // Step 8. Whatever is left of the budget armed above — the validation this call has already done came out
+            // of the same one.
             budget.Token.ThrowIfCancellationRequested();
             var result = Stringify(await executable.InvokeAsync(arguments!, budget.Token).ConfigureAwait(false));
 

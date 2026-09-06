@@ -16,13 +16,19 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         <paramref name="Throws" /> is that contract BROKEN, so a lane that quietly depended on it can be shown not
 ///         to.
 ///     </para>
+///     <para>
+///         <paramref name="Blocks" /> holds the CALLING THREAD rather than a task, which <paramref name="Parks" />
+///         cannot: a tool that scans a filesystem does its work before its first await, and a lane that started it
+///         inline would do that scanning inside the dispatcher's tick.
+///     </para>
 /// </summary>
 internal sealed record GraphWorkflowScriptedTool(
     ToolInvocationOutcomeKind Kind = ToolInvocationOutcomeKind.Executed,
     string? Result = "the fake tool answered",
     string Reason = "read-local",
     bool Parks = false,
-    bool Throws = false);
+    bool Throws = false,
+    bool Blocks = false);
 
 /// <summary>
 ///     The tool-invocation seam, scripted per tool name. The ONE thing
@@ -41,8 +47,13 @@ internal sealed record GraphWorkflowScriptedTool(
 ///         node-wide.
 ///     </para>
 /// </summary>
-internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService
+internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService, IDisposable
 {
+    /// <summary>How long a synchronous block waits before giving up, so a failed assertion cannot hang the suite.</summary>
+    private static readonly TimeSpan BlockCeiling = TimeSpan.FromSeconds(30);
+
+    private readonly ManualResetEventSlim _unblocked = new(initialState: false);
+
     private readonly ConcurrentQueue<GraphWorkflowToolCall> _calls = new();
     private readonly ConcurrentBag<TaskCompletionSource> _parked = [];
     private readonly ConcurrentDictionary<string, GraphWorkflowScriptedTool> _scripts = new(StringComparer.Ordinal);
@@ -87,11 +98,15 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService
     public void ReleaseAll()
     {
         _ = Interlocked.Exchange(ref _open, value: 1);
+        _unblocked.Set();
         foreach (var parked in _parked)
         {
             _ = parked.TrySetResult();
         }
     }
+
+    public void Dispose() =>
+        _unblocked.Dispose();
 
     public async Task<ToolInvocationOutcome> InvokeAsync(string toolName,
         string argumentsJson,
@@ -109,6 +124,13 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService
         if (script.Throws)
         {
             throw new InvalidOperationException("the fake tool service could not answer");
+        }
+
+        // Blocking the THREAD, on purpose, and bounded so a failed assertion cannot hang the suite. real-timer: the
+        // ceiling is a backstop, never the path a passing test takes — ReleaseAll is.
+        if (script.Blocks && Volatile.Read(ref _open) == 0)
+        {
+            _ = _unblocked.Wait(BlockCeiling, cancellationToken);
         }
 
         if (script.Parks && Volatile.Read(ref _open) == 0)

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -165,6 +166,37 @@ public sealed class ToolInvocationServiceTests
         var outcome = await ServiceOf(Factory).InvokeAsync("GetCurrentTime", "{}", Context(TimeSpan.Zero)).ConfigureAwait(false);
 
         AssertEx.Equal(ToolInvocationOutcomeKind.Timeout, outcome.Kind, "no caller token fired, so a spent budget is a timeout.");
+    }
+
+    /// <summary>
+    ///     The budget covers the WHOLE call, catalog read included. Armed after the lookup instead, a node could spend
+    ///     its entire budget waiting for the catalog and then hand the tool a second, full one.
+    /// </summary>
+    [Test]
+    public async Task Invoke_WhenTheCatalogReadItselfOutlastsTheBudget_IsTimeout()
+    {
+        var offers = Substitute.For<ILocalToolOfferProvider>();
+        _ = offers.GetKnownToolsAsync(Arg.Any<CancellationToken>())
+                  .Returns(async call =>
+                  {
+                      await Task.Delay(Timeout.Infinite, call.Arg<CancellationToken>()).ConfigureAwait(false);
+                      return (IReadOnlyList<LocalToolCatalogEntry>)[];
+                  });
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<ILocalToolOfferProvider>();
+                services.AddSingleton(offers);
+            }
+        };
+
+        // real-timer: the budget IS the subject, and the catalog waits on the token rather than on a clock of its own,
+        // so the outcome is decided by the deadline firing and not by a race between two timers.
+        var outcome = await ServiceOf(factory).InvokeAsync("GetCurrentTime", "{}", Context(TimeSpan.FromMilliseconds(200))).ConfigureAwait(false);
+
+        AssertEx.Equal(ToolInvocationOutcomeKind.Timeout, outcome.Kind, "no caller token fired, so the spent budget is a timeout.");
+        AssertEx.Null(outcome.Result);
     }
 
     /// <summary>
