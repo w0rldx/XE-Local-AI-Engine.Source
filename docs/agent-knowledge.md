@@ -327,6 +327,7 @@ The MVID-keyed `/tmp/xe-local-ai-engine-tests-template-*.sqlite` cache intention
 - React REST uses `src/core/api/generated/`; never hand-edit it.
 - `pnpm openapi:check` only checks against checked-in `openapi/v1.json`; it cannot discover a new endpoint/field. For contract changes, fetch a live desktop spec, ensure no paths disappeared, update the spec, then regenerate.
 - **Use `XE_LAUNCH_MODE=desktop`** or every `IDesktopOnlyEndpoint` disappears. Ports are random; set `OPENAPI_SPEC_URL=<host>/openapi/local/v1/v1.json`.
+- A Release-built host started by hand defaults to the `Production` environment, and `Program` maps the OpenAPI document only when `!IsProduction()`, so the regen fetch answers 404 on every path. Set `ASPNETCORE_ENVIRONMENT=Development` on the throwaway regen host (the Aspire dev host already does). Authority: S2 regen 2026-09-06, one wasted host start.
 - For mise-managed toolchains:
 
   ```bash
