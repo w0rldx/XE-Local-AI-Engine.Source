@@ -132,6 +132,37 @@ public sealed class GraphWorkflowToolLaneTests
     }
 
     /// <summary>
+    ///     A work task that FAULTED rather than answering is settled, not rethrown. The invocation service promises to
+    ///     answer every fault with an outcome; this lane does not depend on that promise, because a rethrow would reach
+    ///     the dispatcher, which logs it and moves on WITHOUT the entry being consumed — leaving the row to rethrow on
+    ///     every sweep forever, past its own deadline, with nothing able to settle it.
+    /// </summary>
+    [Test]
+    public async Task ACallThatFaultsInsteadOfAnswering_IsSettledRatherThanRethrownForever()
+    {
+        const string tool = "probe_faulting";
+        await using var harness = GraphWorkflowHarness.PrivateToolHost();
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool(Throws: true));
+        var runId = await harness.StartRunAsync(Graph(tool)).ConfigureAwait(false);
+
+        // Every tick here goes through AdvanceOnceAsync, which does NOT swallow: a rethrowing row fails this outright
+        // rather than spinning.
+        await harness.AdvanceUntilAsync(runId,
+                async () => (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status == GraphWorkflowRunStatus.Failed,
+                "the faulted call never settled its run.")
+            .ConfigureAwait(false);
+
+        var retried = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).First(static entry => entry.EventType == "node.retried");
+        AssertEx.Contains(retried.DetailJson, "NodeFailed", message: "a fault is the retryable class, settled at the failing write like any other.");
+
+        var call = await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, call.Status);
+        AssertEx.Equal(expected: 3, harness.Tools.CallCountFor(tool), "each attempt faulted and each was settled, rather than one fault being re-read forever.");
+        AssertEx.False(Executor(harness).IsInFlight(call.Id), "the entry was consumed, so no later poll re-reads the fault.");
+        AssertEx.Equal(expected: 0, await harness.AdvanceAsync(runId).ConfigureAwait(false), "and a further tick neither writes nor throws.");
+    }
+
+    /// <summary>
     ///     An entry whose row has moved on is dropped before anything is polled. Without it the registry would claim to
     ///     be driving a row a retry has already re-attempted, and settle one attempt off another's answer.
     /// </summary>

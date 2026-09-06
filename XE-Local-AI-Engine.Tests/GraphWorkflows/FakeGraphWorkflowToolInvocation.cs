@@ -12,12 +12,17 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         and it ends <c>Cancelled</c> when the token fires — which is exactly what the real service does, because it
 ///         answers a cancellation with an outcome rather than by throwing.
 ///     </para>
+///     <para>
+///         <paramref name="Throws" /> is that contract BROKEN, so a lane that quietly depended on it can be shown not
+///         to.
+///     </para>
 /// </summary>
 internal sealed record GraphWorkflowScriptedTool(
     ToolInvocationOutcomeKind Kind = ToolInvocationOutcomeKind.Executed,
     string? Result = "the fake tool answered",
     string Reason = "read-local",
-    bool Parks = false);
+    bool Parks = false,
+    bool Throws = false);
 
 /// <summary>
 ///     The tool-invocation seam, scripted per tool name. The ONE thing
@@ -98,6 +103,13 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService
         _calls.Enqueue(new GraphWorkflowToolCall(toolName, argumentsJson, context));
         var script = _scripts.TryGetValue(toolName, out var scripted) ? scripted : new GraphWorkflowScriptedTool();
         _ = Started(toolName).TrySetResult();
+
+        // The one thing the real service promises never to do. Scripted anyway, because the lane must not depend on
+        // that promise being kept — a faulted task it awaited would rethrow into the dispatcher forever.
+        if (script.Throws)
+        {
+            throw new InvalidOperationException("the fake tool service could not answer");
+        }
 
         if (script.Parks && Volatile.Read(ref _open) == 0)
         {

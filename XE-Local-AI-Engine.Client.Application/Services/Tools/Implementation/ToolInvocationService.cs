@@ -58,6 +58,11 @@ internal sealed class ToolInvocationService(
             return new ToolInvocationOutcome(ToolInvocationOutcomeKind.UnknownTool, null, "The node names no tool.");
         }
 
+        // The deadline is its OWN source rather than a CancelAfter on the linked budget, and the catch below is why:
+        // classifying off the CALLER's token would report a terminal Cancelled for a retryable Timeout whenever that
+        // token happens to fire between the budget expiring and the catch reading it.
+        using var deadline = new CancellationTokenSource();
+
         // Everything from here is inside one try: the contract is that no bad call throws, and a caller's token can
         // fire inside the catalog read just as easily as inside the tool.
         try
@@ -95,14 +100,14 @@ internal sealed class ToolInvocationService(
 
             // Step 8. The caller owns the budget; this service has no default of its own. A budget already spent is
             // cancelled synchronously so an expired deadline never depends on timer resolution.
-            using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
             if (context.Timeout <= TimeSpan.Zero)
             {
-                await budget.CancelAsync().ConfigureAwait(false);
+                await deadline.CancelAsync().ConfigureAwait(false);
             }
             else
             {
-                budget.CancelAfter(context.Timeout);
+                deadline.CancelAfter(context.Timeout);
             }
 
             budget.Token.ThrowIfCancellationRequested();
@@ -119,10 +124,12 @@ internal sealed class ToolInvocationService(
         }
         catch (OperationCanceledException)
         {
-            // Step 11a. Whose deadline fired: the caller's cancellation, or the budget this service imposed.
-            return cancellationToken.IsCancellationRequested
-                ? new ToolInvocationOutcome(ToolInvocationOutcomeKind.Cancelled, null, $"The invocation of '{toolName}' was cancelled.")
-                : new ToolInvocationOutcome(ToolInvocationOutcomeKind.Timeout, null, $"'{toolName}' exceeded the node's time budget.");
+            // Step 11a. Whose deadline fired. The budget this service imposed is asked FIRST and by its own source:
+            // a spent budget is a timeout however many other tokens have fired since, and the two answers are not
+            // interchangeable — a timeout is re-attempted and a cancellation is not.
+            return deadline.IsCancellationRequested
+                ? new ToolInvocationOutcome(ToolInvocationOutcomeKind.Timeout, null, $"'{toolName}' exceeded the node's time budget.")
+                : new ToolInvocationOutcome(ToolInvocationOutcomeKind.Cancelled, null, $"The invocation of '{toolName}' was cancelled.");
         }
         catch (Exception exception)
         {
@@ -203,8 +210,9 @@ internal sealed class ToolInvocationService(
         return null;
     }
 
-    // Copied verbatim from HeadlessToolExecutor.TryParseArguments (minus the element it does not need): the arguments
-    // are cloned property-by-property into an ordinal bag, which is what both the validator and AIFunction read.
+    // From HeadlessToolExecutor.TryParseArguments (minus the element it does not need): the arguments are cloned
+    // property-by-property into an ordinal bag, which is what both the validator and AIFunction read. The parser's own
+    // message is the one deliberate departure — see the catch.
     private static bool TryParseArguments(string argumentsJson, out AIFunctionArguments? arguments, out string error)
     {
         arguments = null;
@@ -229,9 +237,11 @@ internal sealed class ToolInvocationService(
             arguments = bag;
             return true;
         }
-        catch (JsonException exception)
+        catch (JsonException)
         {
-            error = $"The tool arguments are not valid JSON: {exception.Message}";
+            // The parser's message names the offending characters and their position, which is argument CONTENT. A
+            // reason is read off an operator surface, and this one promises to stay structural.
+            error = "The tool arguments are not valid JSON.";
             return false;
         }
     }

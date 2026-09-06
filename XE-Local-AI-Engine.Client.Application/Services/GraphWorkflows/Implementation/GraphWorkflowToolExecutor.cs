@@ -50,12 +50,14 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly GraphWorkflowInFlightLane<ToolInvocationOutcome> _lane;
+    private readonly ILogger<GraphWorkflowToolExecutor> _logger;
     private readonly GraphWorkflowOptions _options;
     private readonly IToolInvocationService _tools;
 
-    public GraphWorkflowToolExecutor(IToolInvocationService tools, IOptions<GraphWorkflowOptions> options)
+    public GraphWorkflowToolExecutor(IToolInvocationService tools, IOptions<GraphWorkflowOptions> options, ILogger<GraphWorkflowToolExecutor> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         // Injected as the singleton it is registered as. Unlike the agent lane there is nothing scoped behind it: the
         // service opens whatever scope its own catalog read needs, per call and on purpose.
@@ -222,6 +224,28 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             // instead of throwing. Checked anyway, and BEFORE the await, because awaiting a cancelled task would
             // rethrow, the dispatcher would swallow it, and the row would rethrow again on every tick forever.
             written = await SettleCancelledAsync(store, run, nodeRun, CancelledInFlight, cancellationToken).ConfigureAwait(false);
+        }
+        else if (flight.Work.IsFaulted)
+        {
+            // The invocation service contracts never to throw, and this lane must not DEPEND on it keeping that
+            // promise. Awaiting a faulted task would rethrow into the dispatcher, which logs and moves on without
+            // consuming the entry — so the row would rethrow on every sweep forever and never reach its deadline
+            // either. Reading the exception here is also what observes it.
+            _logger.LogWarning(flight.Work.Exception,
+                "Graph workflow run {RunId} node run {NodeRunId} ('{NodeKey}') had its tool call end in a fault rather than an outcome.",
+                run.Id,
+                nodeRun.Id,
+                node.NodeKey);
+            written = await FailAsync(store,
+                    graph,
+                    run,
+                    node,
+                    nodeRun,
+                    GraphWorkflowFailures.Classify(GraphWorkflowFailureClass.NodeFailed, nodeRun.Attempt, node.MaxAttempts),
+                    "This node run's tool call did not complete. See the node logs for details.",
+                    eventType: null,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         else
         {

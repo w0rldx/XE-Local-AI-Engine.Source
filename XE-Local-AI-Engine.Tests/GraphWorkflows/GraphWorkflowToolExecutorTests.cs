@@ -156,6 +156,14 @@ public sealed class GraphWorkflowToolExecutorTests
         AssertEx.Equal(status, call.Status);
         AssertEx.Equal(failureClass, call.FailureClass);
         AssertEx.Equal(reason, call.Error, "the service's own reason is repeated verbatim: it is structural by contract.");
+
+        // "Never re-attempted" is the half a first-terminal read cannot see, so it is asserted rather than implied: one
+        // more tick leaves the row exactly where the lane put it, on the attempt it was put there with.
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        var later = await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false);
+        AssertEx.Equal(status, later.Status);
+        AssertEx.Equal(expected: 1, later.Attempt);
+        AssertEx.Equal(expected: 1, harness.Tools.CallCountFor(tool), "and the tool was asked once, whatever it answered.");
     }
 
     /// <summary>
