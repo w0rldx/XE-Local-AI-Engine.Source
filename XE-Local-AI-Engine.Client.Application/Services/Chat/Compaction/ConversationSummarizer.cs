@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
+using System.Globalization;
+using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -25,7 +28,14 @@ internal sealed class ConversationSummarizer(
 {
     private readonly ConversationCompactionOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
 
-    private const string SystemPrompt = """
+    // The string SENT as the system message and the string budget validation CHARGES must come from one rendering;
+    // a drift between them silently invalidates every budget decision.
+    private readonly string _systemPrompt = RenderSystemPrompt(options.Value.MaxSummaryChars);
+
+    // The synopsis ceiling is rendered from the configured cap, never hard-coded: at a MaxSummaryChars below the
+    // 4,000 default a prompt that still promised 3,500 characters would invite a synopsis the rune-safe clamp in
+    // FoldAsync then cuts from the tail, which is the exact fidelity loss this prompt exists to remove.
+    private const string SystemPromptTemplate = """
                                         You compress an ongoing chat conversation into a single compact synopsis so the assistant can keep going
                                         after the older turns are dropped from its context window.
 
@@ -36,16 +46,33 @@ internal sealed class ConversationSummarizer(
                                         Rules:
                                         - Preserve everything the assistant must remember to continue: facts established, decisions made, the user's
                                           stated goals and preferences, named entities/files/values, and any open questions or unfinished tasks.
+                                        - Carry EVERY fact, entity, file path, value, decision and open item in "priorSummary" and in "messages" into the
+                                          output. When space is tight, shorten wording, not coverage; drop a fact only when a later message supersedes it.
+                                        - Keep the synopsis under {0} characters. If it would exceed that, merge and compress items; delete none.
+                                        - Write the synopsis in the conversation's language: the most recent user turn's if they mix, or the language of
+                                          "priorSummary" if this input has no user turn.
                                         - Write terse third-person notes, not a transcript. Drop pleasantries, restated questions, and filler.
                                         - Do NOT answer or continue the conversation, and do NOT add information that is not in the input.
                                         - Output ONLY the synopsis text — no preamble, no headings, no code fences.
                                         """;
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    // CA1863: the template is formatted on every construction and on every options validation, so parse it once.
+    private static readonly CompositeFormat SystemPromptFormat = CompositeFormat.Parse(SystemPromptTemplate);
 
-    private static readonly int MinimumRequestOverhead = SystemPrompt.Length
-                                                         + JsonSerializer.Serialize(ToPromptModel(string.Empty,
-                                                             [new ConversationSummarizerMessage("user", "😀")]), SerializerOptions).Length;
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        // Budget accounting is in characters and RequestFitsBudget measures the SERIALIZED form. The default encoder
+        // escapes every non-ASCII rune to \uXXXX, so a Han character costs 6 budget characters - pinning the synopsis
+        // language would make a CJK running summary unaffordable and abort compaction. Relaxed escaping is safe here:
+        // this JSON is a node-local model request body, never rendered as HTML, never embedded in a script or an
+        // attribute, never persisted, and it stays valid JSON. It frees BMP runes only; supplementary scalars (emoji)
+        // are still written as two escapes, so the probe frame below is unchanged. Keep these options private to this
+        // class - any reuse on a rendered surface breaks that argument.
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
+    private static readonly int FrameOverhead = JsonSerializer.Serialize(ToPromptModel(string.Empty,
+        [new ConversationSummarizerMessage("user", "😀")]), SerializerOptions).Length;
 
     private readonly ILogger<ConversationSummarizer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
@@ -146,7 +173,7 @@ internal sealed class ConversationSummarizer(
     {
         List<ChatMessage> messages =
         [
-            new(ChatRole.System, SystemPrompt),
+            new(ChatRole.System, _systemPrompt),
             new(ChatRole.User, JsonSerializer.Serialize(ToPromptModel(priorSummary, batch), SerializerOptions))
         ];
 
@@ -189,13 +216,21 @@ internal sealed class ConversationSummarizer(
             return null;
         }
 
-        return TruncateAtRuneBoundary(text, Math.Max(1, _options.MaxSummaryChars));
+        var clamped = TruncateAtRuneBoundary(text, Math.Max(1, _options.MaxSummaryChars));
+
+        // One line per fold: how close the synopsis came to the rendered ceiling, and - because only the summarizer
+        // emits it - how many folds a compaction ran. Debug, so it costs nothing outside a diagnostic round.
+        _logger.LogDebug("Conversation summarizer fold produced a {Length}-character synopsis.", clamped.Length);
+        return clamped;
     }
 
-    internal static long GetMinimumRequestBudget(int maxSummaryChars) =>
-        MinimumRequestOverhead + (long)Math.Max(0, maxSummaryChars);
+    internal static string RenderSystemPrompt(int maxSummaryChars) =>
+        string.Format(CultureInfo.InvariantCulture, SystemPromptFormat, (Math.Max(1, maxSummaryChars) * 7) / 8);
 
-    private static int FindLargestFittingPrefix(string role, string content, string? priorSummary, int budget)
+    internal static long GetMinimumRequestBudget(int maxSummaryChars) =>
+        RenderSystemPrompt(maxSummaryChars).Length + FrameOverhead + (long)Math.Max(0, maxSummaryChars);
+
+    private int FindLargestFittingPrefix(string role, string content, string? priorSummary, int budget)
     {
         var low = 1;
         var high = content.Length;
@@ -245,10 +280,10 @@ internal sealed class ConversationSummarizer(
             : index;
     }
 
-    private static bool RequestFitsBudget(string? priorSummary, IReadOnlyList<ConversationSummarizerMessage> batch, int budget)
+    private bool RequestFitsBudget(string? priorSummary, IReadOnlyList<ConversationSummarizerMessage> batch, int budget)
     {
         var serializedPrompt = JsonSerializer.Serialize(ToPromptModel(priorSummary, batch), SerializerOptions);
-        return SystemPrompt.Length + serializedPrompt.Length <= budget;
+        return _systemPrompt.Length + serializedPrompt.Length <= budget;
     }
 
     private static object ToPromptModel(string? priorSummary, IReadOnlyList<ConversationSummarizerMessage> messages)
