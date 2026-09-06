@@ -51,6 +51,14 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService
     public void Script(string toolName, GraphWorkflowScriptedTool call) =>
         _scripts[toolName] = call;
 
+    /// <summary>
+    ///     Advertises <paramref name="toolName" /> on the happy path, for a graph that names a tool but does not care
+    ///     how it answers. It is not decoration: the save-time and run-start gates refuse a Tool node naming anything
+    ///     <see cref="ListInvocableToolsAsync" /> does not list, so a graph's tools have to exist before it is seeded.
+    /// </summary>
+    public void Declare(string toolName) =>
+        Script(toolName, new GraphWorkflowScriptedTool());
+
     /// <summary>The first call made to <paramref name="toolName" />, which is where its arguments are asserted.</summary>
     public GraphWorkflowToolCall CallFor(string toolName) =>
         _calls.FirstOrDefault(call => string.Equals(call.ToolName, toolName, StringComparison.Ordinal))

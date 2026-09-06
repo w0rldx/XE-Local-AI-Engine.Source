@@ -41,6 +41,7 @@ public sealed class GraphWorkflowToolExecutorTests
     {
         const string tool = "probe_merge";
         await using var harness = new GraphWorkflowHarness(ScriptedHost);
+        harness.Tools.Declare(tool);
         var runId = await harness.StartRunAsync(Graph(tool,
                                      """
                                      , "arguments": { "path": "typed-by-the-author.md", "limit": 1, "recursive": true }
@@ -66,6 +67,7 @@ public sealed class GraphWorkflowToolExecutorTests
     {
         const string tool = "probe_unbound";
         await using var harness = new GraphWorkflowHarness(ScriptedHost);
+        harness.Tools.Declare(tool);
         var runId = await harness.StartRunAsync(Graph(tool, """, "argumentBindings": { "path": "run.input.absent" }"""),
                                  """{"secret":"never-repeat-this"}""")
                                  .ConfigureAwait(false);
