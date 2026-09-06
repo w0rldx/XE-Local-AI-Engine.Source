@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
+using XE_Local_AI_Engine.Client.Services.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -149,7 +150,10 @@ public sealed class GraphWorkflowRunServiceTests
                      CreatedAtUtc: 0));
 
         var signals = new RecordingGraphWorkflowDispatcherSignal();
-        var runs = new GraphWorkflowRunService(store, signals, Options.Create(new GraphWorkflowOptions()));
+
+        // The graph carries no Tool node, so the tool gate never reads the catalog: the substitute is here to satisfy
+        // the constructor, and a call on it would be a bug this test would rather fail on than hide.
+        var runs = new GraphWorkflowRunService(store, signals, Substitute.For<IToolInvocationService>(), Options.Create(new GraphWorkflowOptions()));
 
         _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() =>
                               runs.StartAsync(definitionId, requestId, inputJson: null, definitionVersion: null))
@@ -203,12 +207,11 @@ public sealed class GraphWorkflowRunServiceTests
     }
 
     /// <summary>
-    ///     A <c>Tool</c> node's name is deliberately NOT checked at start in this slice: there is no tool catalog to ask
-    ///     yet. The run is created and its Tool node fails at dispatch instead, which is the stated consequence rather
-    ///     than an oversight.
+    ///     The run-start tool gate, from its passing side: both tools this graph names are inside the D6 envelope, so
+    ///     the start is not the thing that refuses it. The refusals live in <c>GraphWorkflowToolValidationTests</c>.
     /// </summary>
     [Test]
-    public async Task StartAsync_WithAToolNode_CreatesTheRunBecauseTheToolGateIsNotWiredYet()
+    public async Task StartAsync_WithAToolNodeNamingInvocableTools_CreatesTheRun()
     {
         var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.ToolNode).ConfigureAwait(false);
 

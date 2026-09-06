@@ -160,6 +160,49 @@ public sealed class GraphWorkflowDefinitionEndpointTests
     }
 
     /// <summary>
+    ///     The D6 tool gate over the wire. Nothing structural refuses <c>run_python</c> — it is a well-formed tool
+    ///     name — so a 201 here would mean a definition the runtime can never start was stored anyway.
+    /// </summary>
+    [Test]
+    public async Task CreateDefinition_WithAToolOutsideTheEnvelope_Returns400NamingTheNodeAndNeverReachesTheStore()
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.ToolValidationWriteExecuteTool)).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, $"a tool this node may not run is an error, never a warning: {body}");
+        using var document = JsonDocument.Parse(body);
+        var error = document.RootElement.GetProperty("errors").EnumerateArray().Single();
+        AssertEx.Equal("runner", error.GetProperty("name").GetString(), $"keyed by the node that named the tool, so the editor draws it there: {body}");
+        AssertEx.Contains(error.GetProperty("reason").GetString(), "run_python", message: $"and names the tool: {body}");
+        await store.DidNotReceive().CreateDefinitionAsync(Arg.Any<CreateGraphWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     The same complaint through the probe, which is a 200 report rather than a failed request — the editor draws
+    ///     the tool refusal on the canvas exactly as it draws a structural one.
+    /// </summary>
+    [Test]
+    public async Task ValidateDefinition_WithAToolOutsideTheEnvelope_Returns200WithTheSameError()
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "POST", Validate, ValidateBody(GraphWorkflowGraphs.ToolValidationWriteExecuteTool)).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.False(document.RootElement.GetProperty("valid").GetBoolean(), $"a graph naming a tool it may not run does not validate: {body}");
+        var error = document.RootElement.GetProperty("errors").EnumerateArray().Single();
+        AssertEx.Equal("runner", error.GetProperty("key").GetString(), $"the probe keys the error the same way the save does: {body}");
+        AssertEx.Contains(error.GetProperty("message").GetString(), "run_python", message: $"and names the same tool: {body}");
+        AssertEx.Empty(store.ReceivedCalls());
+    }
+
+    /// <summary>
     ///     A boolean condition value must survive the round trip as a boolean. Stringified, it would compare against a
     ///     real boolean as a type mismatch, the evaluator would fail closed, and the edge would silently never fire —
     ///     with nothing in the log to say why.
@@ -558,6 +601,9 @@ public sealed class GraphWorkflowDefinitionEndpointTests
 
     private static string CreateBody(string graph) =>
         $$"""{"name":"Triage","description":"The one that triages.","graph":{{graph}}}""";
+
+    private static string ValidateBody(string graph) =>
+        $$"""{"graph":{{graph}}}""";
 
     private static IGraphWorkflowStore Store()
     {
