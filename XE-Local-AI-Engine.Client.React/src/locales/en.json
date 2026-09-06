@@ -137,6 +137,7 @@
 		"trainingComparisons": "Comparisons",
 		"workSessions": "Work Sessions",
 		"devWorkflows": "Workflow Runs",
+		"graphWorkflows": "Graph Workflows",
 		"integrationsGroup": "Integrations",
 		"integrationTriggers": "Triggers",
 		"integrationSessions": "Sessions",
@@ -5514,6 +5515,400 @@
 				"runs": "Runs",
 				"ruleSets": "Rule sets",
 				"templates": "Templates"
+			}
+		},
+		"graphWorkflows": {
+			"editor": {
+				"autoArrange": "Auto-arrange",
+				"deleteHint": "Drag a node onto the canvas, or click one in the palette. Select a node or a connection and press Delete to remove it.",
+				"refusal": {
+					"dismiss": "Dismiss",
+					"parallelEdgesBothUnconditional": "These two nodes are already joined by a connection without a condition. Give the new one a condition first.",
+					"tooManyNodes": "This graph already has as many nodes as a run accepts."
+				},
+				"validation": {
+					"title": "This graph cannot be saved yet"
+				}
+			},
+			"node": {
+				"joinAny": "First branch wins"
+			},
+			"palette": {
+				"title": "Add a node"
+			},
+			"title": "Graph Workflows",
+			"subtitle": "Author a workflow graph and watch a run of it node by node.",
+			"empty": {
+				"editor": "No workflow is open. Pick one from the list, or create a new one."
+			},
+			"tab": {
+				"editor": "Editor",
+				"runs": "Runs",
+				"events": "Events"
+			},
+			"nodeKind": {
+				"Start": "Start",
+				"Agent": "Agent",
+				"Tool": "Tool",
+				"Condition": "Condition",
+				"Parallel": "Parallel",
+				"Join": "Join",
+				"Pause": "Pause",
+				"End": "End"
+			},
+			"nodeStatus": {
+				"Pending": "Not started",
+				"Queued": "Queued",
+				"Running": "Running",
+				"WaitingForApproval": "Waiting for a decision",
+				"Succeeded": "Succeeded",
+				"Failed": "Failed",
+				"Skipped": "Skipped",
+				"Cancelled": "Cancelled"
+			},
+			"runStatus": {
+				"Pending": "Not started",
+				"Running": "Running",
+				"WaitingForApproval": "Waiting for a decision",
+				"Cancelling": "Cancelling…",
+				"Completed": "Completed",
+				"Failed": "Failed",
+				"Cancelled": "Cancelled"
+			},
+			"decision": {
+				"Approve": "Approve",
+				"Reject": "Reject",
+				"title": "Awaiting your decision",
+				"commentLabel": "Comment",
+				"commentRequired": "This node requires a comment with the decision.",
+				"commentOptional": "Optional. It is recorded with the decision.",
+				"commentCount": "{{used}} of {{max}} characters",
+				"commentTooLong": "Keep the comment to {{max}} characters or fewer.",
+				"advanced": "Advanced",
+				"payloadLabel": "Payload (JSON object)",
+				"payloadNotObject": "Enter a JSON object, or leave it empty.",
+				"alreadyDecided": "This was already answered with “{{decision}}”.",
+				"runMovedOn": "This run has moved on — it is no longer waiting for this decision.",
+				"failed": "That decision could not be recorded."
+			},
+			"joinPolicy": {
+				"All": "Wait for every incoming branch",
+				"Any": "Continue on the first incoming branch"
+			},
+			"conditionOperator": {
+				"Eq": "equals",
+				"Ne": "does not equal",
+				"Gt": "is greater than",
+				"Gte": "is greater than or equal to",
+				"Lt": "is less than",
+				"Lte": "is less than or equal to",
+				"Exists": "is present",
+				"NotExists": "is missing"
+			},
+			"failureClass": {
+				"None": "No failure",
+				"NodeFailed": "The node failed",
+				"Timeout": "Timed out",
+				"AttemptsExhausted": "Out of attempts",
+				"OutputTooLarge": "The output was too large",
+				"GateRejected": "Rejected at a pause",
+				"ValidationFailed": "The graph was refused",
+				"Cancelled": "Cancelled",
+				"Interrupted": "Interrupted by a restart"
+			},
+			"eventType": {
+				"run_created": "Run created",
+				"run_started": "Run started",
+				"run_waiting": "Run is waiting for a decision",
+				"run_paused": "Run paused",
+				"run_resumed": "Run resumed",
+				"run_completed": "Run completed",
+				"run_failed": "Run failed",
+				"run_cancelled": "Run cancelled",
+				"node_materialized": "Node created",
+				"node_queued": "Node queued",
+				"node_started": "Node started",
+				"node_completed": "Node completed",
+				"node_failed": "Node failed",
+				"node_retried": "Node retried",
+				"node_skipped": "Node skipped",
+				"node_cancelled": "Node cancelled",
+				"node_interrupted": "Node interrupted by a restart",
+				"gate_requested": "A decision was requested",
+				"gate_decided": "A decision was made"
+			},
+			"definition": {
+				"issues": {
+					"duplicateNodeKey": "Two nodes share the key “{{subject}}”. Every node and edge key must be unique.",
+					"missingNodeKey": "A node has no key. Give it one before saving.",
+					"invalidNodeKey": "“{{subject}}” is not a valid key. Use letters, digits, hyphens and underscores, up to 64 characters.",
+					"unknownEdgeEndpoint": "Edge “{{subject}}” points at a node that is not in this graph.",
+					"duplicateEdgeKey": "The key “{{subject}}” is already taken. Nodes and edges share one set of keys.",
+					"missingEdgeKey": "An edge has no key. Every edge needs one before saving.",
+					"invalidEdgeKey": "“{{subject}}” is not a valid edge key. Use letters, digits, hyphens and underscores, up to 64 characters.",
+					"parallelEdgesBothUnconditional": "Edge “{{subject}}” is a second unconditional edge between the same two nodes. Give one of them a condition.",
+					"conditionEdgeHasNoPath": "Edge “{{subject}}” has a condition but no path, and its source node has none to inherit.",
+					"noStart": "The graph has no Start node.",
+					"multipleStarts": "“{{subject}}” is a second Start node. A graph has exactly one.",
+					"noEnd": "The graph has no End node.",
+					"cycle": "The graph loops back on itself. A graph workflow must run forward only.",
+					"unreachable": "“{{subject}}” cannot be reached from the Start node.",
+					"danglingNonEnd": "“{{subject}}” has no outgoing edge. Only an End node may be a dead end.",
+					"endHasOutbound": "“{{subject}}” is an End node and cannot have outgoing edges.",
+					"startHasInbound": "“{{subject}}” is the Start node and cannot have incoming edges.",
+					"joinAnyNeedsTwoInbound": "“{{subject}}” continues on the first incoming branch but has fewer than two of them.",
+					"conditionNeedsTwoOutbound": "“{{subject}}” is a Condition node and needs at least two outgoing edges.",
+					"conditionMultipleDefaults": "“{{subject}}” has more than one unconditional outgoing edge. At most one may be the default.",
+					"tooManyNodes": "The graph has more nodes than this node accepts.",
+					"invalidJson": "A JSON field on “{{subject}}” is not a valid JSON object.",
+					"pauseDecisionUnroutable": "“{{subject}}” offers a decision that no outgoing edge routes.",
+					"unknownNodeKind": "“{{subject}}” has a node type this version does not know.",
+					"unknownConditionOperator": "Edge “{{subject}}” uses a comparison this version does not know.",
+					"toolNameMissing": "“{{subject}}” is a Tool node with no tool selected.",
+					"agentInstructionsMissing": "“{{subject}}” is an Agent node with no instructions.",
+					"pausePromptMissing": "“{{subject}}” is a Pause node with no question to ask.",
+					"pauseNoDecisions": "“{{subject}}” is a Pause node that offers no decision.",
+					"endOutcomeMissing": "“{{subject}}” is an End node with no outcome name.",
+					"serverRejected": "The node refused this graph."
+				}
+			},
+			"form": {
+				"key": {
+					"invalid": "Use letters, digits, hyphens and underscores, up to 64 characters.",
+					"collision": "That key already belongs to another node or edge."
+				},
+				"maxAttempts": {
+					"range": "Enter a whole number between 1 and 100."
+				},
+				"timeoutSeconds": {
+					"min": "Enter a whole number of seconds, or leave it empty for no timeout."
+				},
+				"inputSchema": {
+					"notObject": "Enter a JSON object, or leave it empty."
+				},
+				"defaultInput": {
+					"invalidJson": "Enter valid JSON, or leave it empty."
+				},
+				"instructions": {
+					"required": "Enter the instructions this agent runs on."
+				},
+				"responseJsonSchema": {
+					"notObject": "Enter a JSON object schema, or leave it empty."
+				},
+				"toolName": {
+					"required": "Choose a tool."
+				},
+				"argumentsJson": {
+					"notObject": "Enter a JSON object of arguments, or leave it empty."
+				},
+				"argumentBindings": {
+					"pathRequired": "Enter the path this argument reads from."
+				},
+				"path": {
+					"invalid": "Use a dot path such as output.json.status."
+				},
+				"resultPath": {
+					"invalid": "Use a dot path such as output.json.status."
+				},
+				"prompt": {
+					"required": "Enter the question the operator answers."
+				},
+				"allowedDecisions": {
+					"required": "Offer at least one decision."
+				},
+				"outcome": {
+					"required": "Enter an outcome name."
+				},
+				"condition": {
+					"valueRequired": "Enter a value to compare against."
+				},
+				"name": {
+					"required": "Enter a name.",
+					"tooLong": "Use at most 200 characters."
+				}
+			},
+			"config": {
+				"key": "Key",
+				"keyHelp": "Letters, digits, hyphens and underscores. Nodes and edges share one set of keys.",
+				"label": "Label",
+				"labelPlaceholder": "Shown on the card",
+				"joinPolicy": "When more than one edge arrives",
+				"maxAttempts": "Max attempts",
+				"timeoutSeconds": "Timeout (seconds)",
+				"timeoutPlaceholder": "No timeout",
+				"remove": "Delete node",
+				"removeTitle": "Delete this node?",
+				"removeDescription": "Its configuration and every edge attached to it go with it. Runs that already started are untouched.",
+				"removeConfirm": "Delete",
+				"inputSchema": "Input schema (JSON)",
+				"defaultInput": "Default input (JSON)",
+				"agent": "Agent",
+				"agentPlaceholder": "This node's default agent",
+				"instructions": "Instructions",
+				"model": "Model",
+				"modelPlaceholder": "The agent's own model",
+				"reasoningEffort": "Reasoning effort",
+				"reasoningEffortPlaceholder": "Provider default",
+				"effort": {
+					"none": "None",
+					"low": "Low",
+					"medium": "Medium",
+					"high": "High"
+				},
+				"responseJsonSchema": "Response JSON schema",
+				"includeUpstreamOutputs": "Include upstream outputs",
+				"includeUpstreamOutputsHelp": "Hands this agent what the nodes before it produced, on top of the run input.",
+				"tool": "Tool",
+				"toolPlaceholder": "Choose a tool",
+				"arguments": "Arguments (JSON)",
+				"argumentBindings": "Argument bindings",
+				"argumentBindingsHelp": "Replaces one argument with a value read from the run document at save time.",
+				"addBinding": "Add binding",
+				"removeBinding": "Remove binding",
+				"noBindings": "None. The arguments above are sent as they are.",
+				"bindingParameter": "Parameter",
+				"bindingPath": "Path",
+				"path": "Path",
+				"conditionPathHelp": "Outgoing edges with no path of their own compare this one.",
+				"prompt": "Question",
+				"allowedDecisions": "Offered decisions",
+				"requireComment": "A comment is required",
+				"outcome": "Outcome",
+				"resultPath": "Result path",
+				"resultPathPlaceholder": "The whole document",
+				"parallelHelp": "A Parallel node hands its input to every outgoing edge.",
+				"joinHelp": "A Join node collects its incoming branches into a map keyed by source node."
+			},
+			"edge": {
+				"title": "Edge {{key}}",
+				"endpoints": "{{from}} → {{to}}",
+				"label": "Label",
+				"labelPlaceholder": "Shown on the canvas",
+				"conditional": "Only follow this edge when a comparison holds",
+				"path": "Path",
+				"pathInherited": "Inherits “{{path}}” from {{node}}",
+				"operator": "Comparison",
+				"value": "Value",
+				"valueHelp": "Read as JSON when it parses, otherwise as text.",
+				"remove": "Delete edge"
+			},
+			"definitions": {
+				"title": "Workflows",
+				"create": "New workflow",
+				"empty": "No workflows yet. Create one to start authoring.",
+				"loadFailed": "Could not load the workflow list.",
+				"deleteAria": "Delete {{name}}",
+				"nameLabel": "Name",
+				"namePlaceholder": "Nightly triage",
+				"descriptionLabel": "Description",
+				"descriptionPlaceholder": "What this workflow is for.",
+				"columns": {
+					"name": "Name",
+					"nodes": "Nodes",
+					"version": "Version",
+					"updated": "Updated"
+				}
+			},
+			"run": {
+				"label": "Run graph",
+				"attempt": "attempt {{attempt}}",
+				"empty": "This run has no nodes yet.",
+				"overCap": "This run has {{nodeCount}} nodes — more than the graph draws. Use the node table to work through them.",
+				"graphMismatch": "The definition changed after this run started, so the connections it ran on are unknown. Showing its nodes only."
+			},
+			"runs": {
+				"empty": "This workflow has not been run yet.",
+				"loadFailed": "Could not load the runs of this workflow.",
+				"version": "Version {{version}}",
+				"createdAt": "Created {{time}}",
+				"startedAt": "Started {{time}}",
+				"completedAt": "Finished {{time}}"
+			},
+			"nodeTable": {
+				"empty": "This run has no nodes yet.",
+				"columnNode": "Node",
+				"columnKind": "Kind",
+				"columnStatus": "Status",
+				"columnAttempt": "Attempt",
+				"columnStarted": "Started",
+				"columnDuration": "Duration",
+				"decisionPending": "needs your decision"
+			},
+			"events": {
+				"empty": "Nothing has happened in this run yet.",
+				"loadFailed": "Could not load this run's events.",
+				"retry": "Retry",
+				"truncated": "This run has more events than one page holds; these start at the beginning of the log. Load more to reach the latest.",
+				"meta": "#{{seq}}",
+				"showDetail": "Show detail",
+				"hideDetail": "Hide detail",
+				"loadMore": "Load more"
+			},
+			"nodePanel": {
+				"close": "Close",
+				"loadFailed": "This node could not be loaded.",
+				"attempt": "attempt {{attempt}}",
+				"started": "started {{when}}",
+				"completed": "finished {{when}}",
+				"runMovedOn": "The run carried on after this node failed — this is what this node did, not what the run ended up doing.",
+				"tabInput": "Input",
+				"tabOutput": "Output",
+				"tabError": "Error",
+				"emptyDocument": "The runtime recorded nothing here.",
+				"pauseDecision": "Answered {{decision}}",
+				"passThrough": "A Condition and a Parallel node hand their input's output on unchanged, so an output that matches the node before it is correct.",
+				"joinOutput": "A Join node emits one map, keyed by the node each incoming branch came from."
+			},
+			"startRun": {
+				"title": "Start a run",
+				"runsVersion": "Runs version {{version}} of {{name}}",
+				"inputLabel": "Input (JSON)",
+				"byteCount": "{{used}} of {{max}} bytes",
+				"tooLarge": "This input is larger than the node accepts. Remove {{over}} bytes.",
+				"invalidJson": "Enter valid JSON, or leave it empty.",
+				"saveFirst": "Save the graph first — a run executes the saved definition, not the canvas.",
+				"staleVersion": "This workflow was saved again since you opened this dialog. Reload it, then start the run.",
+				"failed": "The run could not be started.",
+				"start": "Start run"
+			},
+			"toolbar": {
+				"version": "definition version {{version}}",
+				"started": "started {{when}}",
+				"completed": "finished {{when}}",
+				"back": "Back to editor",
+				"cancel": "Cancel run",
+				"cancelConfirmTitle": "Cancel this run?",
+				"cancelConfirmBody": "The nodes that are already running wind down first, and nothing new is dispatched.",
+				"cancelFailed": "The run could not be cancelled."
+			},
+			"page": {
+				"backToEditor": "Back to the editor",
+				"configTitle": "Configuration",
+				"conflictBody": "Someone saved this workflow while you were editing it. Reload to see their version — your edits on this canvas are dropped.",
+				"conflictTitle": "Saved elsewhere",
+				"create": "Create",
+				"createTitle": "New workflow",
+				"deleteBlocked": "A live run still uses this workflow. Cancel that run first.",
+				"deleteBody": "The definition is removed. Runs of it keep their own copy of the graph and stay readable.",
+				"deleteFailed": "The workflow could not be deleted.",
+				"deleteTitle": "Delete this workflow?",
+				"loadFailed": "This workflow could not be loaded.",
+				"nodeTitle": "Node",
+				"reload": "Reload",
+				"rename": "Rename",
+				"renameTitle": "Rename this workflow",
+				"runLoadFailed": "This run could not be loaded.",
+				"save": "Save",
+				"saveAs": "Save as…",
+				"saveAsTitle": "Save as a new workflow",
+				"saveFailed": "The workflow could not be saved.",
+				"saveFirst": "Save first — a run executes the saved graph, not the canvas.",
+				"saved": "Workflow saved.",
+				"startRun": "Start run",
+				"unsavedLayout": "This graph had no saved layout — Save to keep the one on screen.",
+				"validate": "Check",
+				"validationFailed": "The graph could not be checked.",
+				"validationPassed": "This graph passed validation."
 			}
 		},
 		"integrations": {

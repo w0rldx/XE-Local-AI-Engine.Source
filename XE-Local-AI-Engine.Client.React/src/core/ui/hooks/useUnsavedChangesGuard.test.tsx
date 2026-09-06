@@ -116,6 +116,25 @@ describe("useUnsavedChangesGuard", () => {
 		expect(screen.queryByRole("dialog")).toBeNull();
 	});
 
+	// A page that keeps its selection in search params navigates on every click. Without the opt-in those same-route
+	// moves are blocked like a real departure, and the operator is asked to discard work to select something.
+	it("with allowSameRoute, blocks a pathname change but not a search-param change", () => {
+		renderHook(() => useUnsavedChangesGuard({ isDirty: true, allowSameRoute: true }), { wrapper: makeWrapper() });
+
+		const opts = blockerMock.mock.calls.at(-1)?.[0] as { shouldBlockFn: (args: unknown) => boolean };
+
+		expect(opts.shouldBlockFn({ current: { pathname: "/graph-workflows" }, next: { pathname: "/graph-workflows" } })).toBe(false);
+		expect(opts.shouldBlockFn({ current: { pathname: "/graph-workflows" }, next: { pathname: "/chat" } })).toBe(true);
+	});
+
+	it("without allowSameRoute, blocks a same-route move too — the default is unchanged", () => {
+		renderHook(() => useUnsavedChangesGuard({ isDirty: true }), { wrapper: makeWrapper() });
+
+		const opts = blockerMock.mock.calls.at(-1)?.[0] as { shouldBlockFn: (args: unknown) => boolean };
+
+		expect(opts.shouldBlockFn({ current: { pathname: "/agents" }, next: { pathname: "/agents" } })).toBe(true);
+	});
+
 	it("shows the confirm dialog when a blocked transition occurs", async () => {
 		setBlockerState(blockedState);
 		renderHook(() => useUnsavedChangesGuard({ isDirty: true }), { wrapper: makeWrapper() });

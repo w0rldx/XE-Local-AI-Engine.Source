@@ -67,6 +67,12 @@ describe("nodeCapabilities", () => {
 		expect(nodeCapabilities.integrations).toBe(true);
 	});
 
+	// The ONE surface that ships gated off: S4 flips it after the editor and run view are verified end to end. A commit
+	// that flips it early is a commit that offers an unverified surface, so the default is asserted rather than assumed.
+	it("ships the Graph Workflows surface gated off", () => {
+		expect(nodeCapabilities.graphWorkflows).toBe(false);
+	});
+
 	it("defines the route paths targeted by the node shell", () => {
 		expect(nodeRoutePaths).toEqual({
 			home: "/",
@@ -102,6 +108,7 @@ describe("nodeCapabilities", () => {
 			integrationSessions: "/integrations/sessions",
 			integrationExecutions: "/integrations/executions",
 			integrationKeys: "/integrations/keys",
+			graphWorkflows: "/graph-workflows",
 			diagnostics: "/diagnostics",
 		});
 	});
