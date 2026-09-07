@@ -655,8 +655,9 @@ Every route is Operator-gated.
 
 Four routes cap the request body at **1 MiB** (`GraphWorkflowRequestSizeLimit`): create, update and validate, which
 carry a graph, and start-run, which carries an input document. Without it they would inherit Kestrel's 30 MB default
-and a body that size would be parsed, walked and hashed before the node cap could refuse it. A name is capped at 200
-characters, a description at 1024.
+and a body that size would be parsed, walked and hashed before the node cap could refuse it. Kestrel enforces the cap
+as it reads, inside model binding, so the 413 comes from `RequestBodyTooLargeExceptionHandler` rather than from the
+endpoint. A name is capped at 200 characters, a description at 1024.
 
 **The run detail carries the run's own graph.** `GraphWorkflowRunResponse` is `(Run, NodeRuns, Output, Graph)`.
 `Graph` is the copy this run **pinned when it started**, not the definition's current one, in the same wire shape
