@@ -237,11 +237,15 @@ internal sealed class GraphWorkflowGraph
     ///     graph nobody can walk; every per-node and per-edge failure ACCUMULATES, keyed by the element it belongs to,
     ///     so an author fixing a canvas gets every complaint at once.
     ///     <para>
-    ///         The node cap is deliberately NOT enforced here — it is an option, and this stays testable without a
-    ///         container. <c>GraphWorkflowGraphContract.ValidateAndCountNodes</c> checks it after the parse.
+    ///         <paramref name="maxNodes" /> is the caller's node cap, checked against the declared array BEFORE any
+    ///         node is read or any edge walked — the cap is what bounds the work this parse does, so enforcing it
+    ///         afterwards would bound nothing. It is passed as a number rather than read from options, so this stays
+    ///         testable without a container. A caller that omits it parses a graph that was already capped when it was
+    ///         saved: the run engine and the dispatcher re-parse stored graphs, and a cap lowered since would make a
+    ///         live run unroutable rather than merely unsaveable.
     ///     </para>
     /// </summary>
-    public static GraphWorkflowGraph Parse(string graphJson)
+    public static GraphWorkflowGraph Parse(string graphJson, int maxNodes = int.MaxValue)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(graphJson);
 
@@ -263,7 +267,7 @@ internal sealed class GraphWorkflowGraph
         // ONE namespace for node and edge keys: an edge key colliding with a node key makes an element lookup
         // ambiguous in the editor for no gain.
         var keys = new HashSet<string>(StringComparer.Ordinal);
-        var nodes = ParseNodes(root, keys, errors);
+        var nodes = ParseNodes(root, maxNodes, keys, errors);
         var edges = ParseEdges(root, nodes, keys, errors);
         var graph = new GraphWorkflowGraph(nodes, edges);
         graph.Validate(errors);
@@ -315,12 +319,22 @@ internal sealed class GraphWorkflowGraph
     }
 
     private static Dictionary<string, GraphWorkflowGraphNode> ParseNodes(JsonElement root,
+        int maxNodes,
         HashSet<string> keys,
         List<GraphWorkflowValidationError> errors)
     {
         if (!root.TryGetProperty("nodes", out var nodesElement) || nodesElement.ValueKind != JsonValueKind.Array)
         {
             throw new GraphWorkflowValidationException("A graph workflow definition needs a 'nodes' array.");
+        }
+
+        // The cap bites on the DECLARED length, before a single node is read: everything after this walks the graph,
+        // and only the body size would otherwise bound how far. Duplicate keys are refused below, so this length and
+        // the parsed node count are the same number wherever the parse survives.
+        var declared = nodesElement.GetArrayLength();
+        if (declared > maxNodes)
+        {
+            throw new GraphWorkflowValidationException($"The graph declares {declared} nodes, more than the {maxNodes} one definition may carry.");
         }
 
         var nodes = new Dictionary<string, GraphWorkflowGraphNode>(StringComparer.Ordinal);
@@ -827,35 +841,56 @@ internal sealed class GraphWorkflowGraph
         return resolved;
     }
 
-    /// <summary>Depth-first colouring: white unvisited, grey on the current path, black finished. A grey hit is the cycle.</summary>
+    /// <summary>
+    ///     Depth-first colouring: white unvisited, grey on the current path, black finished. A grey hit is the cycle.
+    ///     <para>
+    ///         Walked on an EXPLICIT stack rather than by recursion, so a long chain costs heap rather than one stack
+    ///         frame per node — a stack overflow is a process kill nothing can catch, and this parse runs on a
+    ///         thread-pool thread. The frame is the node plus how far through its out-edges the walk has got.
+    ///     </para>
+    /// </summary>
     private void EnsureAcyclic()
     {
         var onPath = new HashSet<string>(StringComparer.Ordinal);
+        var path = new List<string>();
         var finished = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var nodeKey in Nodes.Keys)
+        var pending = new Stack<(string NodeKey, int EdgeIndex)>();
+        foreach (var root in Nodes.Keys.Where(key => !finished.Contains(key)))
         {
-            Walk(nodeKey);
-        }
-
-        void Walk(string nodeKey)
-        {
-            if (finished.Contains(nodeKey))
+            _ = onPath.Add(root);
+            path.Add(root);
+            pending.Push((root, 0));
+            while (pending.Count > 0)
             {
-                return;
-            }
+                var (nodeKey, edgeIndex) = pending.Pop();
+                var outbound = OutboundEdges(nodeKey);
+                if (edgeIndex == outbound.Count)
+                {
+                    _ = onPath.Remove(nodeKey);
+                    path.RemoveAt(path.Count - 1);
+                    _ = finished.Add(nodeKey);
+                    continue;
+                }
 
-            if (!onPath.Add(nodeKey))
-            {
-                throw new GraphWorkflowValidationException($"The graph workflow definition has a cycle through node '{nodeKey}'. Graph workflows are acyclic.");
-            }
+                pending.Push((nodeKey, edgeIndex + 1));
+                var next = outbound[edgeIndex].To;
+                if (finished.Contains(next))
+                {
+                    continue;
+                }
 
-            foreach (var edge in OutboundEdges(nodeKey))
-            {
-                Walk(edge.To);
-            }
+                if (!onPath.Add(next))
+                {
+                    // The path from the repeated key onwards IS the cycle, which is what lets the message name every
+                    // node that made it rather than the one node the walk happened to come back to.
+                    var cycle = string.Join(" -> ", path[path.IndexOf(next)..].Append(next));
+                    throw new GraphWorkflowValidationException($"The graph workflow definition has a cycle through node '{next}': {cycle}. "
+                                                               + "Graph workflows are acyclic.");
+                }
 
-            _ = onPath.Remove(nodeKey);
-            _ = finished.Add(nodeKey);
+                path.Add(next);
+                pending.Push((next, 0));
+            }
         }
     }
 
