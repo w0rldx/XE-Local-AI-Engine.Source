@@ -531,8 +531,10 @@ Pause writes. The validator raises the non-blocking warning of §2.4 on Y. And t
 when an author **connects** an edge into or out of a Pause, `pauseContextEdges` returns the unconditional edges
 labelled `context` from the pause's nearest non-`Pause` ancestor to its successors, the canvas adds them, and a notice
 says one appeared. It is the same rule as the Open Canvas importer's `CanvasWorkflowImport.AddPauseContextEdges`
-(§9.2) — walking back through consecutive pauses, skipping a pair something already wires, skipping a self-loop —
-plus three guards the importer never meets. A `Condition` ancestor is skipped, because the added edge carries no
+(§9.2) — walking back through consecutive pauses, skipping a self-loop — judged per **successor** exactly as the
+validator judges it: only a successor whose every inbound edge leaves a Pause is starved (one something else already
+feeds is not, so it gets nothing and no warning), and the ancestor is the union of the nearest non-`Pause` ancestors
+of every pause feeding it. Three further guards the importer never meets: A `Condition` ancestor is skipped, because the added edge carries no
 `sourceHandle` and would save as that Condition's second unconditional out-edge, which §2.4 refuses. A pause whose
 nearest non-`Pause` ancestor is **not unique** (mutually exclusive branches feeding it) gets nothing, because wiring
 both ancestors into an `All` successor would skip it the moment the untaken branch is dead. And a successor with
