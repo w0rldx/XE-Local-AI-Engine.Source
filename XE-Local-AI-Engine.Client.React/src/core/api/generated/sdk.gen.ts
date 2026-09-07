@@ -45,9 +45,6 @@ import type {
 	BrowseImageRepositoriesData,
 	BrowseImageRepositoriesErrors,
 	BrowseImageRepositoriesResponses,
-	CancelAllPreviewRunsData,
-	CancelAllPreviewRunsErrors,
-	CancelAllPreviewRunsResponses,
 	CancelBaseArtifactData,
 	CancelBaseArtifactErrors,
 	CancelBaseArtifactResponses,
@@ -93,9 +90,6 @@ import type {
 	CancelNodeChatMessageData,
 	CancelNodeChatMessageErrors,
 	CancelNodeChatMessageResponses,
-	CancelPreviewRunData,
-	CancelPreviewRunErrors,
-	CancelPreviewRunResponses,
 	CancelScheduledJobRunData,
 	CancelScheduledJobRunErrors,
 	CancelScheduledJobRunResponses,
@@ -144,9 +138,6 @@ import type {
 	ConnectConnectionData,
 	ConnectConnectionErrors,
 	ConnectConnectionResponses,
-	ContinuePreviewRunData,
-	ContinuePreviewRunErrors,
-	ContinuePreviewRunResponses,
 	CreateAgentDefinitionData,
 	CreateAgentDefinitionErrors,
 	CreateAgentDefinitionResponses,
@@ -210,9 +201,6 @@ import type {
 	CreatePlaybookActionData,
 	CreatePlaybookActionErrors,
 	CreatePlaybookActionResponses,
-	CreatePreviewWorkflowData,
-	CreatePreviewWorkflowErrors,
-	CreatePreviewWorkflowResponses,
 	CreateScheduledJobData,
 	CreateScheduledJobErrors,
 	CreateScheduledJobResponses,
@@ -318,9 +306,6 @@ import type {
 	DeletePlaybookActionData,
 	DeletePlaybookActionErrors,
 	DeletePlaybookActionResponses,
-	DeletePreviewWorkflowData,
-	DeletePreviewWorkflowErrors,
-	DeletePreviewWorkflowResponses,
 	DeleteScheduledJobData,
 	DeleteScheduledJobErrors,
 	DeleteScheduledJobResponses,
@@ -402,12 +387,6 @@ import type {
 	EntraDeviceCodeStatusData,
 	EntraDeviceCodeStatusErrors,
 	EntraDeviceCodeStatusResponses,
-	ExecuteSavedPreviewWorkflowData,
-	ExecuteSavedPreviewWorkflowErrors,
-	ExecuteSavedPreviewWorkflowResponses,
-	ExecuteUnsavedPreviewWorkflowData,
-	ExecuteUnsavedPreviewWorkflowErrors,
-	ExecuteUnsavedPreviewWorkflowResponses,
 	ExploreInferenceProfileData,
 	ExploreInferenceProfileErrors,
 	ExploreInferenceProfileResponses,
@@ -627,12 +606,6 @@ import type {
 	GetNodeSettingsData,
 	GetNodeSettingsErrors,
 	GetNodeSettingsResponses,
-	GetPreviewRunData,
-	GetPreviewRunErrors,
-	GetPreviewRunResponses,
-	GetPreviewWorkflowData,
-	GetPreviewWorkflowErrors,
-	GetPreviewWorkflowResponses,
 	GetRunningLocalModelsData,
 	GetRunningLocalModelsErrors,
 	GetRunningLocalModelsResponses,
@@ -858,12 +831,6 @@ import type {
 	ListNodeChatMessageRevisionsData,
 	ListNodeChatMessageRevisionsErrors,
 	ListNodeChatMessageRevisionsResponses,
-	ListPreviewRunsData,
-	ListPreviewRunsErrors,
-	ListPreviewRunsResponses,
-	ListPreviewWorkflowsData,
-	ListPreviewWorkflowsErrors,
-	ListPreviewWorkflowsResponses,
 	ListRunEnvelopesData,
 	ListRunEnvelopesErrors,
 	ListRunEnvelopesResponses,
@@ -1213,9 +1180,6 @@ import type {
 	UpdatePlaybookActionData,
 	UpdatePlaybookActionErrors,
 	UpdatePlaybookActionResponses,
-	UpdatePreviewWorkflowData,
-	UpdatePreviewWorkflowErrors,
-	UpdatePreviewWorkflowResponses,
 	UpdateScheduledJobData,
 	UpdateScheduledJobErrors,
 	UpdateScheduledJobResponses,
@@ -1282,7 +1246,6 @@ import {
 	zBrowseGgufRepositoriesResponse,
 	zBrowseImageRepositoriesQuery,
 	zBrowseImageRepositoriesResponse,
-	zCancelAllPreviewRunsResponse,
 	zCancelBaseArtifactPath,
 	zCancelBaseArtifactResponse,
 	zCancelBenchmarkRunBody,
@@ -1311,8 +1274,6 @@ import {
 	zCancelNodeBindingResponse,
 	zCancelNodeChatMessageBody,
 	zCancelNodeChatMessageResponse,
-	zCancelPreviewRunPath,
-	zCancelPreviewRunResponse,
 	zCancelScheduledJobRunPath,
 	zCancelScheduledJobRunResponse,
 	zCancelStableDiffusionCppSourceBuildBody,
@@ -1343,8 +1304,6 @@ import {
 	zConfirmDevelopmentContainerRuntimeBody,
 	zConfirmDevelopmentContainerRuntimeResponse,
 	zConnectConnectionResponse,
-	zContinuePreviewRunPath,
-	zContinuePreviewRunResponse,
 	zCreateAgentDefinitionBody,
 	zCreateAgentDefinitionResponse,
 	zCreateBaseArtifactBody,
@@ -1391,8 +1350,6 @@ import {
 	zCreatePlaybookActionBody,
 	zCreatePlaybookActionPath,
 	zCreatePlaybookActionResponse,
-	zCreatePreviewWorkflowBody,
-	zCreatePreviewWorkflowResponse,
 	zCreateScheduledJobBody,
 	zCreateScheduledJobResponse,
 	zCreateSkillBody,
@@ -1473,8 +1430,6 @@ import {
 	zDeleteNodeChatConversationResponse,
 	zDeletePlaybookActionPath,
 	zDeletePlaybookActionResponse,
-	zDeletePreviewWorkflowPath,
-	zDeletePreviewWorkflowResponse,
 	zDeleteScheduledJobPath,
 	zDeleteScheduledJobResponse,
 	zDeleteSkillPath,
@@ -1525,10 +1480,6 @@ import {
 	zEntraAuthCodeStatusResponse,
 	zEntraDeviceCodeSignInResponse,
 	zEntraDeviceCodeStatusResponse,
-	zExecuteSavedPreviewWorkflowPath,
-	zExecuteSavedPreviewWorkflowResponse,
-	zExecuteUnsavedPreviewWorkflowBody,
-	zExecuteUnsavedPreviewWorkflowResponse,
 	zExploreInferenceProfileBody,
 	zExploreInferenceProfileResponse,
 	zExportBenchmarkProjectCsvPath,
@@ -1660,10 +1611,6 @@ import {
 	zGetNodeChatMessageFeedbackPath,
 	zGetNodeChatMessageFeedbackResponse,
 	zGetNodeSettingsResponse,
-	zGetPreviewRunPath,
-	zGetPreviewRunResponse,
-	zGetPreviewWorkflowPath,
-	zGetPreviewWorkflowResponse,
 	zGetRunningLocalModelsResponse,
 	zGetRuntimeAcquisitionStatusResponse,
 	zGetScheduledJobPath,
@@ -1791,8 +1738,6 @@ import {
 	zListNodeChatConversationsResponse,
 	zListNodeChatMessageRevisionsPath,
 	zListNodeChatMessageRevisionsResponse,
-	zListPreviewRunsResponse,
-	zListPreviewWorkflowsResponse,
 	zListRunEnvelopesQuery,
 	zListRunEnvelopesResponse,
 	zListRunningModelsResponse,
@@ -2049,9 +1994,6 @@ import {
 	zUpdatePlaybookActionBody,
 	zUpdatePlaybookActionPath,
 	zUpdatePlaybookActionResponse,
-	zUpdatePreviewWorkflowBody,
-	zUpdatePreviewWorkflowPath,
-	zUpdatePreviewWorkflowResponse,
 	zUpdateScheduledJobBody,
 	zUpdateScheduledJobPath,
 	zUpdateScheduledJobResponse,
@@ -5266,375 +5208,6 @@ export const generateLocalModelProxyApiKey = <ThrowOnError extends boolean = fal
 			},
 		],
 		url: "/api/local/v1/proxy/key",
-		...options,
-	});
-
-export const cancelAllPreviewRuns = <ThrowOnError extends boolean = false>(
-	options?: Options<CancelAllPreviewRunsData, ThrowOnError>,
-): RequestResult<CancelAllPreviewRunsResponses, CancelAllPreviewRunsErrors, ThrowOnError> =>
-	(options?.client ?? client).post<CancelAllPreviewRunsResponses, CancelAllPreviewRunsErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zCancelAllPreviewRunsResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/preview/runs/cancel-all",
-		...options,
-	});
-
-export const cancelPreviewRun = <ThrowOnError extends boolean = false>(
-	options: Options<CancelPreviewRunData, ThrowOnError>,
-): RequestResult<CancelPreviewRunResponses, CancelPreviewRunErrors, ThrowOnError> =>
-	(options.client ?? client).post<CancelPreviewRunResponses, CancelPreviewRunErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: zCancelPreviewRunPath,
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseValidator: async (data) => await zCancelPreviewRunResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/preview/runs/{runId}/cancel",
-		...options,
-	});
-
-export const continuePreviewRun = <ThrowOnError extends boolean = false>(
-	options: Options<ContinuePreviewRunData, ThrowOnError>,
-): RequestResult<ContinuePreviewRunResponses, ContinuePreviewRunErrors, ThrowOnError> =>
-	(options.client ?? client).post<ContinuePreviewRunResponses, ContinuePreviewRunErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: zContinuePreviewRunPath,
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseValidator: async (data) => await zContinuePreviewRunResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/preview/runs/{runId}/continue",
-		...options,
-	});
-
-export const listPreviewWorkflows = <ThrowOnError extends boolean = false>(
-	options?: Options<ListPreviewWorkflowsData, ThrowOnError>,
-): RequestResult<ListPreviewWorkflowsResponses, ListPreviewWorkflowsErrors, ThrowOnError> =>
-	(options?.client ?? client).get<ListPreviewWorkflowsResponses, ListPreviewWorkflowsErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zListPreviewWorkflowsResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/preview/workflows",
-		...options,
-	});
-
-export const createPreviewWorkflow = <ThrowOnError extends boolean = false>(
-	options: Options<CreatePreviewWorkflowData, ThrowOnError>,
-): RequestResult<CreatePreviewWorkflowResponses, CreatePreviewWorkflowErrors, ThrowOnError> =>
-	(options.client ?? client).post<CreatePreviewWorkflowResponses, CreatePreviewWorkflowErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: zCreatePreviewWorkflowBody,
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zCreatePreviewWorkflowResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/preview/workflows",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const deletePreviewWorkflow = <ThrowOnError extends boolean = false>(
-	options: Options<DeletePreviewWorkflowData, ThrowOnError>,
-): RequestResult<DeletePreviewWorkflowResponses, DeletePreviewWorkflowErrors, ThrowOnError> =>
-	(options.client ?? client).delete<DeletePreviewWorkflowResponses, DeletePreviewWorkflowErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: zDeletePreviewWorkflowPath,
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseValidator: async (data) => await zDeletePreviewWorkflowResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/preview/workflows/{workflowId}",
-		...options,
-	});
-
-export const getPreviewWorkflow = <ThrowOnError extends boolean = false>(
-	options: Options<GetPreviewWorkflowData, ThrowOnError>,
-): RequestResult<GetPreviewWorkflowResponses, GetPreviewWorkflowErrors, ThrowOnError> =>
-	(options.client ?? client).get<GetPreviewWorkflowResponses, GetPreviewWorkflowErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: zGetPreviewWorkflowPath,
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zGetPreviewWorkflowResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/preview/workflows/{workflowId}",
-		...options,
-	});
-
-export const updatePreviewWorkflow = <ThrowOnError extends boolean = false>(
-	options: Options<UpdatePreviewWorkflowData, ThrowOnError>,
-): RequestResult<UpdatePreviewWorkflowResponses, UpdatePreviewWorkflowErrors, ThrowOnError> =>
-	(options.client ?? client).put<UpdatePreviewWorkflowResponses, UpdatePreviewWorkflowErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: zUpdatePreviewWorkflowBody,
-					path: zUpdatePreviewWorkflowPath,
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zUpdatePreviewWorkflowResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/preview/workflows/{workflowId}",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const executeSavedPreviewWorkflow = <ThrowOnError extends boolean = false>(
-	options: Options<ExecuteSavedPreviewWorkflowData, ThrowOnError>,
-): RequestResult<ExecuteSavedPreviewWorkflowResponses, ExecuteSavedPreviewWorkflowErrors, ThrowOnError> =>
-	(options.client ?? client).post<ExecuteSavedPreviewWorkflowResponses, ExecuteSavedPreviewWorkflowErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: zExecuteSavedPreviewWorkflowPath,
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zExecuteSavedPreviewWorkflowResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/preview/workflows/{workflowId}/execute",
-		...options,
-	});
-
-export const executeUnsavedPreviewWorkflow = <ThrowOnError extends boolean = false>(
-	options: Options<ExecuteUnsavedPreviewWorkflowData, ThrowOnError>,
-): RequestResult<ExecuteUnsavedPreviewWorkflowResponses, ExecuteUnsavedPreviewWorkflowErrors, ThrowOnError> =>
-	(options.client ?? client).post<ExecuteUnsavedPreviewWorkflowResponses, ExecuteUnsavedPreviewWorkflowErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: zExecuteUnsavedPreviewWorkflowBody,
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zExecuteUnsavedPreviewWorkflowResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/preview/runs/execute",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const getPreviewRun = <ThrowOnError extends boolean = false>(
-	options: Options<GetPreviewRunData, ThrowOnError>,
-): RequestResult<GetPreviewRunResponses, GetPreviewRunErrors, ThrowOnError> =>
-	(options.client ?? client).get<GetPreviewRunResponses, GetPreviewRunErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: zGetPreviewRunPath,
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zGetPreviewRunResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/preview/runs/{runId}",
-		...options,
-	});
-
-export const listPreviewRuns = <ThrowOnError extends boolean = false>(
-	options?: Options<ListPreviewRunsData, ThrowOnError>,
-): RequestResult<ListPreviewRunsResponses, ListPreviewRunsErrors, ThrowOnError> =>
-	(options?.client ?? client).get<ListPreviewRunsResponses, ListPreviewRunsErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zListPreviewRunsResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/preview/runs",
 		...options,
 	});
 

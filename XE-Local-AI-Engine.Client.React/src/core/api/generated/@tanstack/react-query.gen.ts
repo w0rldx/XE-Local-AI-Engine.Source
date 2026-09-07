@@ -22,7 +22,6 @@ import {
 	branchNodeChatConversation,
 	browseGgufRepositories,
 	browseImageRepositories,
-	cancelAllPreviewRuns,
 	cancelBaseArtifact,
 	cancelBenchmarkRun,
 	cancelCudaBuild,
@@ -38,7 +37,6 @@ import {
 	cancelLlamaCppSourceBuild,
 	cancelNodeBinding,
 	cancelNodeChatMessage,
-	cancelPreviewRun,
 	cancelScheduledJobRun,
 	cancelStableDiffusionCppSourceBuild,
 	cancelTrainingDataset,
@@ -55,7 +53,6 @@ import {
 	compareBenchmarkCells,
 	confirmDevelopmentContainerRuntime,
 	connectConnection,
-	continuePreviewRun,
 	createAgentDefinition,
 	createBaseArtifact,
 	createBenchmarkFromComparison,
@@ -77,7 +74,6 @@ import {
 	createNodeChatConversation,
 	createNodeChatMessageRevision,
 	createPlaybookAction,
-	createPreviewWorkflow,
 	createScheduledJob,
 	createSkill,
 	createSlashCommand,
@@ -113,7 +109,6 @@ import {
 	deleteModelLaunchArguments,
 	deleteNodeChatConversation,
 	deletePlaybookAction,
-	deletePreviewWorkflow,
 	deleteScheduledJob,
 	deleteSkill,
 	deleteSlashCommand,
@@ -141,8 +136,6 @@ import {
 	entraAuthCodeStatus,
 	entraDeviceCodeSignIn,
 	entraDeviceCodeStatus,
-	executeSavedPreviewWorkflow,
-	executeUnsavedPreviewWorkflow,
 	exploreInferenceProfile,
 	exportBenchmarkProject,
 	exportBenchmarkProjectCsv,
@@ -216,8 +209,6 @@ import {
 	getNodeChatConversation,
 	getNodeChatMessageFeedback,
 	getNodeSettings,
-	getPreviewRun,
-	getPreviewWorkflow,
 	getRunningLocalModels,
 	getRuntimeAcquisitionStatus,
 	getScheduledJob,
@@ -293,8 +284,6 @@ import {
 	listMcpServers,
 	listNodeChatConversations,
 	listNodeChatMessageRevisions,
-	listPreviewRuns,
-	listPreviewWorkflows,
 	listRunEnvelopes,
 	listRunningModels,
 	listScheduledJobRuns,
@@ -413,7 +402,6 @@ import {
 	updateLlamaCppRuntime,
 	updateMcpServer,
 	updatePlaybookAction,
-	updatePreviewWorkflow,
 	updateScheduledJob,
 	updateSkill,
 	updateSlashCommand,
@@ -455,8 +443,6 @@ import type {
 	BrowseGgufRepositoriesResponse,
 	BrowseImageRepositoriesData,
 	BrowseImageRepositoriesResponse,
-	CancelAllPreviewRunsData,
-	CancelAllPreviewRunsResponse,
 	CancelBaseArtifactData,
 	CancelBaseArtifactError,
 	CancelBaseArtifactResponse,
@@ -492,8 +478,6 @@ import type {
 	CancelNodeChatMessageData,
 	CancelNodeChatMessageError,
 	CancelNodeChatMessageResponse,
-	CancelPreviewRunData,
-	CancelPreviewRunResponse,
 	CancelScheduledJobRunData,
 	CancelScheduledJobRunError,
 	CancelScheduledJobRunResponse,
@@ -533,9 +517,6 @@ import type {
 	ConnectConnectionData,
 	ConnectConnectionError,
 	ConnectConnectionResponse,
-	ContinuePreviewRunData,
-	ContinuePreviewRunError,
-	ContinuePreviewRunResponse,
 	CreateAgentDefinitionData,
 	CreateAgentDefinitionResponse,
 	CreateBaseArtifactData,
@@ -594,8 +575,6 @@ import type {
 	CreateNodeChatMessageRevisionResponse,
 	CreatePlaybookActionData,
 	CreatePlaybookActionResponse,
-	CreatePreviewWorkflowData,
-	CreatePreviewWorkflowResponse,
 	CreateScheduledJobData,
 	CreateScheduledJobResponse,
 	CreateSkillData,
@@ -685,8 +664,6 @@ import type {
 	DeleteNodeChatConversationResponse,
 	DeletePlaybookActionData,
 	DeletePlaybookActionResponse,
-	DeletePreviewWorkflowData,
-	DeletePreviewWorkflowResponse,
 	DeleteScheduledJobData,
 	DeleteScheduledJobResponse,
 	DeleteSkillData,
@@ -751,12 +728,6 @@ import type {
 	EntraDeviceCodeSignInResponse,
 	EntraDeviceCodeStatusData,
 	EntraDeviceCodeStatusResponse,
-	ExecuteSavedPreviewWorkflowData,
-	ExecuteSavedPreviewWorkflowError,
-	ExecuteSavedPreviewWorkflowResponse,
-	ExecuteUnsavedPreviewWorkflowData,
-	ExecuteUnsavedPreviewWorkflowError,
-	ExecuteUnsavedPreviewWorkflowResponse,
 	ExploreInferenceProfileData,
 	ExploreInferenceProfileResponse,
 	ExportBenchmarkProjectCsvData,
@@ -919,10 +890,6 @@ import type {
 	GetNodeChatMessageFeedbackResponse,
 	GetNodeSettingsData,
 	GetNodeSettingsResponse,
-	GetPreviewRunData,
-	GetPreviewRunResponse,
-	GetPreviewWorkflowData,
-	GetPreviewWorkflowResponse,
 	GetRunningLocalModelsData,
 	GetRunningLocalModelsResponse,
 	GetRuntimeAcquisitionStatusData,
@@ -1093,10 +1060,6 @@ import type {
 	ListNodeChatConversationsResponse,
 	ListNodeChatMessageRevisionsData,
 	ListNodeChatMessageRevisionsResponse,
-	ListPreviewRunsData,
-	ListPreviewRunsResponse,
-	ListPreviewWorkflowsData,
-	ListPreviewWorkflowsResponse,
 	ListRunEnvelopesData,
 	ListRunEnvelopesResponse,
 	ListRunningModelsData,
@@ -1395,9 +1358,6 @@ import type {
 	UpdateMcpServerResponse,
 	UpdatePlaybookActionData,
 	UpdatePlaybookActionResponse,
-	UpdatePreviewWorkflowData,
-	UpdatePreviewWorkflowError,
-	UpdatePreviewWorkflowResponse,
 	UpdateScheduledJobData,
 	UpdateScheduledJobResponse,
 	UpdateSkillData,
@@ -3645,255 +3605,6 @@ export const generateLocalModelProxyApiKeyMutation = (
 	};
 	return mutationOptions;
 };
-
-export const cancelAllPreviewRunsMutation = (
-	options?: Partial<Options<CancelAllPreviewRunsData>>,
-): UseMutationOptions<CancelAllPreviewRunsResponse, AxiosError<DefaultError>, Options<CancelAllPreviewRunsData>> => {
-	const mutationOptions: UseMutationOptions<
-		CancelAllPreviewRunsResponse,
-		AxiosError<DefaultError>,
-		Options<CancelAllPreviewRunsData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await cancelAllPreviewRuns({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const cancelPreviewRunMutation = (
-	options?: Partial<Options<CancelPreviewRunData>>,
-): UseMutationOptions<CancelPreviewRunResponse, AxiosError<DefaultError>, Options<CancelPreviewRunData>> => {
-	const mutationOptions: UseMutationOptions<CancelPreviewRunResponse, AxiosError<DefaultError>, Options<CancelPreviewRunData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await cancelPreviewRun({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const continuePreviewRunMutation = (
-	options?: Partial<Options<ContinuePreviewRunData>>,
-): UseMutationOptions<ContinuePreviewRunResponse, AxiosError<ContinuePreviewRunError>, Options<ContinuePreviewRunData>> => {
-	const mutationOptions: UseMutationOptions<
-		ContinuePreviewRunResponse,
-		AxiosError<ContinuePreviewRunError>,
-		Options<ContinuePreviewRunData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await continuePreviewRun({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const listPreviewWorkflowsQueryKey = (options?: Options<ListPreviewWorkflowsData>) =>
-	createQueryKey("listPreviewWorkflows", options);
-
-export const listPreviewWorkflowsOptions = (options?: Options<ListPreviewWorkflowsData>) =>
-	queryOptions<
-		ListPreviewWorkflowsResponse,
-		AxiosError<DefaultError>,
-		ListPreviewWorkflowsResponse,
-		ReturnType<typeof listPreviewWorkflowsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listPreviewWorkflows({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listPreviewWorkflowsQueryKey(options),
-	});
-
-export const createPreviewWorkflowMutation = (
-	options?: Partial<Options<CreatePreviewWorkflowData>>,
-): UseMutationOptions<CreatePreviewWorkflowResponse, AxiosError<DefaultError>, Options<CreatePreviewWorkflowData>> => {
-	const mutationOptions: UseMutationOptions<
-		CreatePreviewWorkflowResponse,
-		AxiosError<DefaultError>,
-		Options<CreatePreviewWorkflowData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await createPreviewWorkflow({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const deletePreviewWorkflowMutation = (
-	options?: Partial<Options<DeletePreviewWorkflowData>>,
-): UseMutationOptions<DeletePreviewWorkflowResponse, AxiosError<DefaultError>, Options<DeletePreviewWorkflowData>> => {
-	const mutationOptions: UseMutationOptions<
-		DeletePreviewWorkflowResponse,
-		AxiosError<DefaultError>,
-		Options<DeletePreviewWorkflowData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await deletePreviewWorkflow({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getPreviewWorkflowQueryKey = (options: Options<GetPreviewWorkflowData>) =>
-	createQueryKey("getPreviewWorkflow", options);
-
-export const getPreviewWorkflowOptions = (options: Options<GetPreviewWorkflowData>) =>
-	queryOptions<
-		GetPreviewWorkflowResponse,
-		AxiosError<DefaultError>,
-		GetPreviewWorkflowResponse,
-		ReturnType<typeof getPreviewWorkflowQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getPreviewWorkflow({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getPreviewWorkflowQueryKey(options),
-	});
-
-export const updatePreviewWorkflowMutation = (
-	options?: Partial<Options<UpdatePreviewWorkflowData>>,
-): UseMutationOptions<
-	UpdatePreviewWorkflowResponse,
-	AxiosError<UpdatePreviewWorkflowError>,
-	Options<UpdatePreviewWorkflowData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		UpdatePreviewWorkflowResponse,
-		AxiosError<UpdatePreviewWorkflowError>,
-		Options<UpdatePreviewWorkflowData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await updatePreviewWorkflow({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const executeSavedPreviewWorkflowMutation = (
-	options?: Partial<Options<ExecuteSavedPreviewWorkflowData>>,
-): UseMutationOptions<
-	ExecuteSavedPreviewWorkflowResponse,
-	AxiosError<ExecuteSavedPreviewWorkflowError>,
-	Options<ExecuteSavedPreviewWorkflowData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		ExecuteSavedPreviewWorkflowResponse,
-		AxiosError<ExecuteSavedPreviewWorkflowError>,
-		Options<ExecuteSavedPreviewWorkflowData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await executeSavedPreviewWorkflow({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const executeUnsavedPreviewWorkflowMutation = (
-	options?: Partial<Options<ExecuteUnsavedPreviewWorkflowData>>,
-): UseMutationOptions<
-	ExecuteUnsavedPreviewWorkflowResponse,
-	AxiosError<ExecuteUnsavedPreviewWorkflowError>,
-	Options<ExecuteUnsavedPreviewWorkflowData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		ExecuteUnsavedPreviewWorkflowResponse,
-		AxiosError<ExecuteUnsavedPreviewWorkflowError>,
-		Options<ExecuteUnsavedPreviewWorkflowData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await executeUnsavedPreviewWorkflow({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getPreviewRunQueryKey = (options: Options<GetPreviewRunData>) => createQueryKey("getPreviewRun", options);
-
-export const getPreviewRunOptions = (options: Options<GetPreviewRunData>) =>
-	queryOptions<GetPreviewRunResponse, AxiosError<DefaultError>, GetPreviewRunResponse, ReturnType<typeof getPreviewRunQueryKey>>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getPreviewRun({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getPreviewRunQueryKey(options),
-	});
-
-export const listPreviewRunsQueryKey = (options?: Options<ListPreviewRunsData>) => createQueryKey("listPreviewRuns", options);
-
-export const listPreviewRunsOptions = (options?: Options<ListPreviewRunsData>) =>
-	queryOptions<
-		ListPreviewRunsResponse,
-		AxiosError<DefaultError>,
-		ListPreviewRunsResponse,
-		ReturnType<typeof listPreviewRunsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listPreviewRuns({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listPreviewRunsQueryKey(options),
-	});
 
 export const getNodeSettingsQueryKey = (options?: Options<GetNodeSettingsData>) => createQueryKey("getNodeSettings", options);
 
