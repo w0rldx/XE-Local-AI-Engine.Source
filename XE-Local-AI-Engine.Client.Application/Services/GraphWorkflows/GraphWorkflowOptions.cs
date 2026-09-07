@@ -7,7 +7,8 @@ using System.ComponentModel.DataAnnotations;
 ///     <para>
 ///         <see cref="Enabled" /> gates <em>behaviour</em>, never registration — the same posture development
 ///         workflows and work sessions hold: a disabled node has to answer legibly rather than 500 out of an empty
-///         container. The request-path gate in <c>Program</c> is what turns the switch into a 404.
+///         container. The request-path gate in <c>Program</c> is what turns the switch into a 404. It defaults ON;
+///         only an operator who names it <see langword="false" /> gets that 404.
 ///     </para>
 ///     <para>
 ///         The ranges here are sanity bounds the binder can see. The semantic floors and the one cross-option
@@ -18,7 +19,13 @@ public sealed class GraphWorkflowOptions
 {
     public const string Section = "GraphWorkflows";
 
-    public bool Enabled { get; init; }
+    /// <summary>
+    ///     Whether the graph-workflow surface answers. On since S4 (ruling D9): the editor, the run engine and the run
+    ///     view are verified end to end, so a node ships with them offered. The switch did not go away — an operator who
+    ///     sets it to <see langword="false" /> still gets a 404 for the whole prefix from the request-path gate in
+    ///     <c>Program</c>, and that gate's own default moved with this one.
+    /// </summary>
+    public bool Enabled { get; init; } = true;
 
     /// <summary>The cap on one definition's nodes, enforced when a definition is validated rather than when it runs.</summary>
     [Range(1, 10_000)]

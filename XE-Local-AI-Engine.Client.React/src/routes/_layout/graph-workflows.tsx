@@ -17,7 +17,7 @@ const graphWorkflowsSearchSchema = z.object({
 });
 
 export const Route = createFileRoute("/_layout/graph-workflows")({
-	// Capability gate: Graph Workflows ships OFF (S4 flips it), so navigating here redirects home, matching the nav
+	// Capability gate: Graph Workflows ships ON since S4; a build that turns it off redirects here to home, matching the nav
 	// child being filtered out of NavigationMenuData.
 	beforeLoad: () => {
 		if (!nodeCapabilities.graphWorkflows) {

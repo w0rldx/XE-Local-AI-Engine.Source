@@ -46,9 +46,6 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                 definition.GenerationMetadataJson =
                     DecryptIfPresent(definition.GenerationMetadataJson, context.NodeEncryptionKey.Span, Guid.Empty, definition.Id, "generation_metadata_json");
                 break;
-            case CanvasWorkflow canvas:
-                canvas.GraphJson = NodePayloadProtector.Decrypt(canvas.GraphJson, context.NodeEncryptionKey.Span, Guid.Empty, canvas.Id, "graph_json");
-                break;
             case AgentSkill skill:
                 skill.Description = NodePayloadProtector.Decrypt(skill.Description, context.NodeEncryptionKey.Span, Guid.Empty, skill.Id, "description");
                 skill.Body = NodePayloadProtector.Decrypt(skill.Body, context.NodeEncryptionKey.Span, Guid.Empty, skill.Id, "body");

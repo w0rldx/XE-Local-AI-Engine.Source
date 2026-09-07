@@ -447,16 +447,18 @@ Plain `aspire stop` cleaned the tested stacks in later measurements, but the ori
 
 A user-secret key and `.data/node.key` can disagree. `dev-start.sh` always supplies the file, so data written under the old user secret fails later protected reads without naming the cause. Prefer `XE_NODE_OPERATOR_SECRET_FILE` pointing to the correct historical key; deleting `.data/node-sqlite/`, `dp-keys/`, and encrypted credential files is destructive fallback. `dev_ensure_node_operator_secret` warns when it mints a key beside existing data.
 
-### The Dev-workflow and Graph-workflow surfaces answer 404 unless their flags are set at `dev-start` time
+### The Dev-workflow surface answers 404 unless its flag is set at `dev-start` time
 
-- Start an isolated host that actually serves them by putting the flags in the shell environment of the start script:
+- Start an isolated host that actually serves it by putting the flags in the shell environment of the start script:
 
   ```bash
-  DevWorkflows__Enabled=true GraphWorkflows__Enabled=true WorkSessions__Enabled=true scripts/dev-start.sh
+  DevWorkflows__Enabled=true WorkSessions__Enabled=true scripts/dev-start.sh
   ```
 
+- **Graph Workflows no longer need a flag**: `GraphWorkflowOptions.Enabled` and the `Program.cs` middleware default both ship `true`. Setting `GraphWorkflows__Enabled=false` still turns the whole prefix into a 404, and a live round that wants it off must set that explicitly.
+
 - `AppHost.cs` forwards no such variable to the `app` resource; the flags reach the Client process as inherited process environment through `aspire` and DCP. They must therefore be on the `dev-start.sh` invocation itself, and they are read once at startup (`Program.cs`, `areDevWorkflowsEnabled`/`areGraphWorkflowsEnabled`), so changing one needs a restart.
-- `DevWorkflowOptions.Section` and `GraphWorkflowOptions.Section` default to disabled; only `WorkSessions:Enabled` ships `true` in `appsettings.json`. One pair is enforced at startup: `DevWorkflowOptionsValidator` fails the host when DevWorkflows is on with WorkSessions off, because every workflow agent node runs as a work session. GraphWorkflows carries no such coupling — `GraphWorkflowOptionsValidator` checks only its own budgets — so it starts on its own.
+- `DevWorkflowOptions.Section` defaults to disabled and `GraphWorkflowOptions.Section` defaults to ENABLED; only `WorkSessions:Enabled` ships `true` in `appsettings.json`, and no `GraphWorkflows` section exists in any `appsettings*.json` (it binds to the property defaults). One pair is enforced at startup: `DevWorkflowOptionsValidator` fails the host when DevWorkflows is on with WorkSessions off, because every workflow agent node runs as a work session. GraphWorkflows carries no such coupling — `GraphWorkflowOptionsValidator` checks only its own budgets — so it starts on its own.
 - Prevents burning a live round on a "wrong route": each gate is a request-path middleware registered ahead of `LocalApiSecurityMiddleware` in `Program.cs`, deliberately so the switch cannot be probed by status code — which also means a disabled feature and a mistyped path are indistinguishable from the response alone.
 
 ### Locked runtime decisions — do not "helpfully" reintroduce
@@ -603,6 +605,8 @@ Gate 4 is read live through `CachedNodeSettingsStore`; do not capture it at DI c
 llama-server compiles the whole tools array to GBNF and has a combined repetition ceiling. `LlamaGrammarToolSchemaCompatibility` sanitizes only the llama.cpp wire; handler validation and other providers retain full schemas. Do not weaken domain constants to fit the grammar.
 
 Use `scripts/run-tool-grammar-smoke-local.sh` with a **non-reasoning, tool-capable** GGUF. The sanitized offer must return 200 and the unsanitized negative control must still return the grammar 400. If the control returns 200, the smoke is inert (reasoning model) or llama.cpp changed its limit; re-measure `MaxGrammarRepetitionBound`. FakeOllama E2E cannot validate this.
+
+A Graph Workflow Agent node's `responseJsonSchema` goes down the same grammar path, so keep it flat — the response-schema case is **untested** as of this slice.
 
 
 `LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound` is empirical for the **whole production offer**, not an upstream constant or per-field limit. Third-party MCP schemas make this an open boundary. If sanitization still fails, translate it to `FailureCategory.ModelCapabilityUnsupported`; do not surface the raw sampler error as a model defect. The live smoke's unsanitized negative control is load-bearing: a 200 means either a reasoning template skipped GBNF or upstream changed the limit.
@@ -1261,6 +1265,34 @@ Bubblewrap's filesystem capability and non-isolated `unshare` capability are dis
 
 ---
 
+### Graph Workflows: `Parallel` and `Join` are labels, not semantics
+
+**Rule:** fan-out is any node with more than one satisfied outbound edge, and fan-in is the `joinPolicy` carried by **every** node. A `Parallel` or `Join` node is cosmetic — it is an inline kind that writes two rows, which is what makes the timing of a fan-out visible in the event log, and nothing more. **Prevents:** wiring a "real" parallel executor, or assuming a `Join` node is what makes a join happen — and its mirror image, giving an ordinary node two inbound edges and being surprised it waits for both. **Authority:** `GraphWorkflowStateMachine.Admission` reads `node.JoinPolicy` whatever the kind; `GraphWorkflowGraph.ValidateNode` refuses `Any` on any node with fewer than two inbound edges; `DevWorkflowStateMachine` holds the same rule.
+
+`All` over ZERO inbound edges is vacuously satisfied, and that is load-bearing rather than pedantic: it is how the `Start` node becomes eligible at all. `Pending` outranks `Dead` under both policies, so a dead branch never skips a node in front of a sibling branch the run has not finished.
+
+### Graph Workflows: an edge condition reads the SOURCE node's output, never the target's input
+
+**Rule:** `{ path, op, value }` on an edge is evaluated against the source node's stored output document, so a path is written relative to that envelope (`output.…`, `status`, `attempt`, `branch`). **Prevents:** writing a condition against the merged upstream document the target will be handed and getting a silent `false` — evaluation **fails closed**, so a path the output does not carry answers false for every operator except `NotExists`, and the run hangs with nothing in the log to explain it. **Authority:** `GraphWorkflowStateMachine.EdgeState` → `GraphWorkflowCondition.Evaluate`; `GraphWorkflowDocuments.Compose` is the single writer of the envelope being read.
+
+This is also why `Condition` and `Parallel` nodes pass their predecessor's `output` through verbatim (`GraphWorkflowDocuments.PassThroughOutput`): without it a Condition's own out-edges would inspect `{}` and never fire.
+
+### Graph Workflows: `Pause` parks a node run in `WaitingForApproval`, and there is no `Blocked` state in v1
+
+**Rule:** a `Pause` node run sits in `WaitingForApproval` until a person answers through `DecideAsync`. Both `Approve` and `Reject` **succeed** the node run — the answer is its output, and routing on it is the edges' job — so a rejection reaches the run through an out-edge, never through a node failure. **Prevents:** copying the Dev Workflow module's retries-exhausted `Blocked` state, which has no meaning without retry routing, and expecting a rejection to fail the node. **Authority:** `GraphWorkflowNodeRunStatus` (no `Blocked` member), `GraphWorkflowStateMachine.TargetFor` and `IsLegal`, `docs/wiki/21-graph-workflows.md` §4.6.
+
+`WaitingForApproval → Skipped` is deliberately not a legal transition: skipping an open pause would be an operator walking past a decision instead of giving one. The startup reconciler leaves `WaitingForApproval` rows alone for the same reason — a durable human wait is not in-flight work, and taking it would destroy every pause on the node on every boot.
+
+### Graph Workflows: a `Tool` node passes TWO gates, and the run-start check is the one that wins
+
+**Rule:** a Tool node may run only a **built-in** tool that is `ToolCategory.ReadLocal` **and** whose composed effective approval is `false`. Both are asked of the same catalog when the definition is saved AND again when a run starts. **Prevents:** a tool that was read-only when the graph was saved executing unattended after a node policy tightened — and the mirror error of treating an out-of-envelope tool as a warning, when it is an error keyed to the offending node. **Authority:** `ToolInvocationService.TryAdmit` (gate 1 risk class, gate 2 `IToolApprovalPolicy.RequiresApproval`, plus the structural `ApprovalRequiredAIFunction` floor), `GraphWorkflowToolGate.ErrorsAsync`, `GraphWorkflowRunService.EnsureToolNodesAreRunnableAsync`; ADR 0006.
+
+`graph-workflows/tools` is filtered server-side through the same `TryAdmit`, so the picker cannot offer a name the run would refuse. A graph with no Tool node never reads the catalog at all.
+
+### Graph Workflows: a node's `input` is its ONE satisfied predecessor's output, so a node inserted mid-chain REPLACES the content
+
+**Rule:** `input` is the single satisfied predecessor's output document, and becomes the `upstream` map only when several predecessors are satisfied. A `Pause` writes its own document (`{decision, comment, payload}`), so `A → Pause → B` hands B the approval metadata and never A's answer, even with `includeUpstreamOutputs: true`; a `Pause` before `End` loses the result the same way. Only `Condition` and `Parallel` pass their input through. To carry content past a node that does not forward it, wire a second edge from the content's source to the consumer — the consumer's default `All` join still waits for the approval and its `input` becomes the `upstream` map with both. **Prevents:** authoring or importing a chain whose downstream Agent silently works on the wrong document (the S4 live round watched agent-2 spend three chat and three embedding calls hunting for a haiku that was never in its input). **Authority:** `GraphWorkflowDocuments.ComposeInput`, `GraphWorkflowInlineExecutor.Upstream`, `GraphWorkflowDocuments.PauseOutput`; the Open Canvas importer's `CanvasWorkflowImport.AddPauseContextEdges` is the worked example, pinned by `CanvasWorkflowImportRunTests`.
+
 ## 5. Frontend, chat UX, API boundary
 
 ### Chat rendering contract
@@ -1288,6 +1320,12 @@ The Axios interceptor replaces the original Axios error. Components therefore us
 
 OpenAPI int64 normalization belongs at spec materialization. Ordinary timestamps/durations/counts become Zod numbers; seeds remain strings because they can exceed JavaScript's safe integer. Correct the endpoint/spec seam and regenerate—editing `zod.gen.ts` yields a type/runtime mismatch on the next generation.
 
+### An EF unmapped-type raw SQL query must ALIAS every column, or it binds nothing
+
+**Rule:** `SqlQueryRaw<T>` on a type EF does not map matches result columns to PROPERTY names, so a snake_case column never binds to a PascalCase property. Write `SELECT graph_json AS GraphJson, created_at_utc AS CreatedAtUtc …`, one alias per projected column, every time. **Prevents:** a read that throws at run time rather than at compile time — and, where the caller swallows the exception so a failed read cannot block startup, a silent zero-row answer that looks exactly like "there was nothing to read". The one-shot Open Canvas import is the case that made this expensive: the read runs immediately before `DropCanvasWorkflows`, so an unaliased column would have destroyed every canvas behind one log line. **Authority:** `CanvasWorkflowImport.ReadAsync` and the older `NodeChatTitleEncryptionBackfillService`, which aliases every column for the same reason.
+
+Corollary for any swallowing caller: log a read failure at **Error** with the exception type. "The read threw" and "there were no rows" must never look alike in the log.
+
 ### Endpoint exception handling is mature — don't mass-remove catches
 
 Most endpoint catches map domain status or deliberate poll degradation. Before removing one, wire the global handler and declared schema. An operator 401 may log them out; worker-token conflict is 409.
@@ -1311,9 +1349,9 @@ There are three problem schemas and one status may need the permissive one:
 
 `WriteAsJsonAsync(value, ct)` overwrites Content-Type with `application/json`; use the overload that preserves `application/problem+json`. Over SignalR, encode the conflict type at the start of `HubException.Message` because that string is the only detail forwarded.
 
-### Seven validation exceptions are mapped globally to 400 — don't re-add per-endpoint catches
+### Single-message validation exceptions are mapped globally to 400 — don't re-add per-endpoint catches
 
-`DomainValidationExceptionHandler` maps ScheduledJob, CustomTool, McpServer, SlashCommand, PlaybookAction, AgentDefinition, and AgentSkill validation exceptions to the FastEndpoints 400 shape. Add new single-message validation there. Keep multi-error `PreviewWorkflowValidationException`, aggregate `SelectedFolderValidationException`, and conflict exceptions local.
+`DomainValidationExceptionHandler` maps the ScheduledJob, CustomTool, McpServer, SlashCommand, PlaybookAction, AgentDefinition, AgentSkill, WorkSession and DevWorkflow validation exceptions to the FastEndpoints 400 shape; the type list in its own `is not (…)` pattern is the current inventory, never a count quoted from here. Add new single-message validation there. Keep multi-error `GraphWorkflowValidationException`, aggregate `SelectedFolderValidationException`, and conflict exceptions local.
 
 ### `DevelopmentWorkspaceSecurityException`: 400 where the request carried the value, 409 where persisted state blocks it
 
@@ -1327,7 +1365,7 @@ Caller-fixable bound/unavailable failures use `KnowledgeRepositoryImportRejected
 `DevelopmentRepositoryStateConflictException` derives from `DevelopmentWorkspaceSecurityException` so availability probes, summary degradation, and attempt reason handling keep their base catches. Reconnect is the mixed endpoint: a bad newly selected folder is 400, while stale persisted trust/repository identity is 409. Status follows the request surface, not the shared guard throw site.
 
 
-`DomainValidationExceptionHandler` emits the same FastEndpoints error shape as the removed local catches: `errors[{name:"generalErrors",reason}]`, matching detail, request path, and trace ID. `PreviewWorkflowValidationException` remains local because it contains multiple errors; `SelectedFolderValidationException` mixes 400/404/409 and must be split before global mapping. `SlashCommandConflictException` stays 409.
+`DomainValidationExceptionHandler` emits the same FastEndpoints error shape as the removed local catches: `errors[{name:"generalErrors",reason}]`, matching detail, request path, and trace ID. `GraphWorkflowValidationException` remains local because it carries a `GraphWorkflowValidationResult` — a LIST of `(key, message)` pairs, keyed to the node or edge each failure belongs to (null for a whole-document failure) — and the four Graph Workflow endpoints replay them one by one so the editor can draw each on its own element; collapsing them into the global handler's single sentence would lose the keys the canvas renders. `SelectedFolderValidationException` mixes 400/404/409 and must be split before global mapping. `SlashCommandConflictException` stays 409.
 
 ### Client conventions
 
@@ -1341,6 +1379,12 @@ Monaco stays behind shared `CodeEditor`: import `editor.api` and chosen Monarch 
 
 
 A bounded Mantine `NumberInput`/`Slider` that distinguishes “unset” from override needs a post-mount `ready` guard before persistence. Mantine can emit min/default on mount and overwrite a deliberate null. Capability flags for file/image chat input remain static client constants; do not wait for a backend capabilities endpoint that is not part of this contract.
+
+### A workflow hub's `kind` is LOWERCASE on the wire and is asserted literally on both sides
+
+**Rule:** `graphWorkflowChanged` carries `kind` as one of the literals `run`, `node`, `gate`, written out by hand in `GraphWorkflowEventPublisher.ToWireKind` rather than derived from the enum name, and matched against the same literals in `useGraphWorkflowRunHub`. **Prevents:** a casing slip that silently stops every query invalidation — the client's `switch` matches no arm, nothing refetches, and there is no error anywhere. **Authority:** `GraphWorkflowEventPublisher.ToWireKind`, the `[Arguments(GraphWorkflowChangeKind.Run, "run")]` cases in `GraphWorkflowEventPublisherTests`, and the literal array in `useGraphWorkflowRunHub.test.tsx`. Same trap as `DevWorkflowEventPublisher`.
+
+Renaming an enum member must not be able to change a wire contract by accident, which is exactly why the mapping is written out. The payload is otherwise content-free — `(runId, seq, kind)` — so the client re-reads the named feed from its own watermark and a dropped push degrades to a late read.
 
 ### hey-api's generated `queryFn` builds its request from `queryKey[0]`, not from the options it closed over
 
@@ -1376,7 +1420,8 @@ Do not assume these exist or “restore” retired designs.
 - **Playbook retrieval defaults to embeddings**, with lexical fallback. Adaptive memory is per-agent; no node-wide/cross-agent sharing.
 - **No RAG over chat attachments.** V1 uses file tools or capped inline text; no image/OCR ingestion.
 - **No STT.** TTS uses browser Web Speech; Kokoro is not shipped.
-- Desktop-only ThemeConfigurator/Open Canvas are outside the mobile-responsive scope.
+- Desktop-only ThemeConfigurator is outside the mobile-responsive scope. Open Canvas used to carry the same exclusion and is gone — see the stale-beliefs table.
+- **Open Canvas (Preview) is removed and is not coming back.** Graph Workflows replaced it; saved canvases were converted once at startup. Do not "restore" `PreviewWorkflow*`, `features/preview/`, the `preview/*` routes or the `canvas_workflows` table. Prevents: re-adding a retired surface while chasing a dangling reference. Authority: `docs/wiki/21-graph-workflows.md` §9.
 
 
 The outer budgeter protects system messages plus recent turns, then excerpts old tool results, drops old whole turns/approval groups, and—only if still over—may strip reasoning inside the protected window; protected tool-result excerpting is opt-in. It never mutates the last message. The inner budgeter repeats protection for every provider/tool-loop/participant round. Rebuilt messages preserve ID, author, creation time, raw representation, and additional properties; role+content reconstruction loses resume/provider identity.
@@ -1421,6 +1466,9 @@ These are intentionally terse. Follow the linked/current section for the active 
 | Stale belief | Current correction |
 |---|---|
 | Bash variable `GROUPS` is available. | Bash owns it; use `TEST_GROUPS` (§1). |
+| Open Canvas / Preview is the visual workflow builder. | Removed in favour of Graph Workflows; saved canvases were imported once at startup (§4). |
+| `nodeCapabilities.preview` gates a route. | The flag, the route and the feature are gone; `graphWorkflows` is the successor and is on by default (§5). |
+| Desktop-only ThemeConfigurator/Open Canvas are outside the mobile-responsive scope. | Open Canvas is gone; only ThemeConfigurator carries that exclusion (§6). |
 | Context management is truncation only; no cross-turn LLM summary exists. | `ConversationSummarizer` + `ConversationCompactionService` fold older turns into a synopsis on a node-local model, manually via `POST chat/conversations/{id}/compact` and automatically in work sessions (§6). |
 | CI runs test projects sequentially. | Projects run concurrently with separate result directories; the main Tests module uses grouped batch runner (§1). |
 | Memory-safe runner defaults to `JOBS=4`; increase in-process width. | Default is `JOBS=10`; process batches, not width, provide the useful concurrency (§1). |

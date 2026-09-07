@@ -1,7 +1,8 @@
 // Wire ↔ canvas mapping for the graph editor. Pure: no React, and only React Flow's `Node`/`Edge` TYPES.
 //
-// Preview's `PreviewCanvasNodeData` is a flat interface with optional agent fields; with eight kinds and four of them
-// carrying real config that becomes an untyped grab-bag, so the node data here is a DISCRIMINATED UNION on `kind`.
+// Node data is a DISCRIMINATED UNION on `kind`. With eight kinds and four of them carrying real config, the flat
+// alternative — one interface holding every agent, tool, pause and condition field as optional — is an untyped
+// grab-bag that no reader can narrow and no compiler can check a card against.
 //
 // Three JSON-shaped fields (`defaultInput`, `responseJsonSchema`, `argumentsJson`) and every edge condition `value` are
 // held on the canvas as STRINGS, not parsed objects. A half-typed JSON object is not representable as an object, and

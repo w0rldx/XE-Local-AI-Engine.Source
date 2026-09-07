@@ -590,6 +590,40 @@ public sealed class GraphWorkflowRunStoreTests
             "the refused write left the second row exactly as it found it.");
     }
 
+    /// <summary>
+    ///     The settle from <c>Cancelling</c> to <c>Cancelled</c> is the one run move that writes no event, and it used
+    ///     to publish the sequence its predecessor had already published. A hub client that dedupes on the watermark
+    ///     cannot tell that from the ping it has already handled, so the run would sit at <c>Cancelling</c> on screen
+    ///     until something else moved. The watermark is therefore allocated per commit, not per event row — and the
+    ///     events feed still carries exactly one <c>run.cancelled</c>, because a skipped number is a number no row has.
+    /// </summary>
+    [Test]
+    public async Task TransitionRun_WithNoEventOfItsOwn_StillTakesAFreshWatermark()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = GraphWorkflowTestFixture.StoreFor(context);
+        var run = await StartAsync(store).ConfigureAwait(false);
+        await StartRunningAsync(store, run.Id).ConfigureAwait(false);
+
+        var cancelling = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(run.Id,
+                                        GraphWorkflowVersions.Any,
+                                        GraphWorkflowRunStatus.Cancelling))
+                                    .ConfigureAwait(false);
+        var cancelled = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(run.Id,
+                                       GraphWorkflowVersions.Any,
+                                       GraphWorkflowRunStatus.Cancelled))
+                                   .ConfigureAwait(false);
+
+        AssertEx.True(cancelled.Sequence > cancelling.Sequence,
+            $"the settle published {cancelled.Sequence} after {cancelling.Sequence}; a repeated watermark is a change no subscriber can see.");
+
+        var events = await store.ListEventsAsync(run.Id).ConfigureAwait(false);
+        AssertEx.Equal("run.created, run.started, run.cancelled", string.Join(", ", events.Select(static entry => entry.EventType)),
+            "the settle is the run row's business: the log carries exactly one run.cancelled per cancel.");
+        AssertEx.Equal(cancelling.Sequence, events[^1].Seq, "and the event feed still ends on the sequence the cancel announcement took.");
+    }
+
     private static async Task<GraphWorkflowMutationResult?> DecideAsync(GraphWorkflowStore store, Guid runId, Guid operationId, string nodeKey = "start")
     {
         var nodeRun = await store.GetNodeRunAsync(runId, nodeKey).ConfigureAwait(false);

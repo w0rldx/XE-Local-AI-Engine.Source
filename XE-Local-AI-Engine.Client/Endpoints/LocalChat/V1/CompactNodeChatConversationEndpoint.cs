@@ -25,7 +25,7 @@ public sealed class CompactNodeChatConversationEndpoint(
         // Route-only POST: the conversation id comes from the route, so the generated client sends no body — and
         // therefore no Content-Type. The default POST "Accepts" metadata only allows application/json, which
         // FastEndpoints answers with 415 when the header is absent. Overriding Accepts lets the body-less request
-        // through (the id still binds from the route). Mirrors CancelPreviewRunEndpoint.
+        // through (the id still binds from the route).
         // 409 = the read-only (Origin=Remote) rejection written by the global ConflictExceptionHandler
         // (conflictType = ReadOnlyConversation); the guard exception is never caught here.
         Description(x => x.Accepts<CompactNodeChatConversationRequest>()

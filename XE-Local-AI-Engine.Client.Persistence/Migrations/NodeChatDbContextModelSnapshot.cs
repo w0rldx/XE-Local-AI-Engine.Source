@@ -2108,42 +2108,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         });
                 });
 
-            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.CanvasWorkflow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("id");
-
-                    b.Property<long>("CreatedAtUtc")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<byte[]>("GraphJson")
-                        .IsRequired()
-                        .HasColumnType("BLOB")
-                        .HasColumnName("graph_json");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("name");
-
-                    b.Property<long>("UpdatedAtUtc")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("updated_at_utc");
-
-                    b.Property<int>("Version")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("version");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Name");
-
-                    b.ToTable("canvas_workflows", (string)null);
-                });
-
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ChatMaintenanceState", b =>
                 {
                     b.Property<string>("Name")

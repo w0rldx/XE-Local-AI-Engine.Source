@@ -32,19 +32,6 @@ public enum NodeConflictProblemType
     WorkspaceRevocationBusy,
 
     /// <summary>
-    ///     A preview run could not be started because the concurrent-run cap is already reached. The body carries
-    ///     <c>maxConcurrentRuns</c> as a problem-details extension.
-    /// </summary>
-    PreviewWorkflowCapReached,
-
-    /// <summary>
-    ///     A preview run could not be started because the graph needs more distinct node-local model processes than the
-    ///     loaded-process cap allows. The body carries <c>distinctModelCount</c> and <c>maxLoadedProcesses</c> as
-    ///     problem-details extensions.
-    /// </summary>
-    PreviewWorkflowModelCapExceeded,
-
-    /// <summary>
     ///     An installed base model could not be deleted because installed LoRA adapters launch against it. Retryable
     ///     once the dependent adapters are removed.
     /// </summary>

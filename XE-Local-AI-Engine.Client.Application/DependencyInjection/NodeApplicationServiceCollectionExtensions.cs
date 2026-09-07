@@ -37,7 +37,6 @@ public static class NodeApplicationServiceCollectionExtensions
         // Sandboxed run_python compute tool. After AddNodeAgentHome, which registers the agent-role sandbox provider
         // and the owner/node identity its jail is keyed on.
         builder.AddNodeCompute(configuration);
-        builder.AddNodePreviewWorkflows(configuration);
         builder.AddNodeDocumentIngestion(configuration);
         builder.AddNodeKnowledgeBase(configuration);
         builder.AddNodeChat(configuration);

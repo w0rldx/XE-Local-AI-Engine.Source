@@ -1,6 +1,6 @@
-// Wire ↔ canvas mapping for the run graph (P4 §2.3.1). The analogue of `features/preview/models/PreviewCanvasModels`,
-// and deliberately not a reuse of it (O3): the preview canvas is an editor whose nodes carry authoring fields and
-// client-generated ids, while this one is a read-only render of a run whose node identity is the server's node-run id.
+// Wire ↔ canvas mapping for the run graph (P4 §2.3.1). The analogue of the Graph Workflows editor's canvas models,
+// and deliberately not a reuse of them (O3): an editor canvas carries authoring fields and client-generated ids,
+// while this one is a read-only render of a run whose node identity is the server's node-run id.
 //
 // Two id spaces meet here. The pinned graph's edges carry NODE KEYS (`from`/`to` name definition nodes); the node-run
 // rows carry ids. The join is `nodes[].nodeKey`, and an edge whose endpoint has no node-run row is dropped.

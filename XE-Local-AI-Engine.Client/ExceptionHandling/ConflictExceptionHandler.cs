@@ -10,7 +10,6 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.Models;
-using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
@@ -38,8 +37,6 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
             WorkerNotPairedException => NodeConflictProblemType.WorkerNotPaired,
             WorkerTokenExpiredException => NodeConflictProblemType.WorkerTokenExpired,
             WorkspaceRevocationBusyException => NodeConflictProblemType.WorkspaceRevocationBusy,
-            PreviewWorkflowCapReachedException => NodeConflictProblemType.PreviewWorkflowCapReached,
-            PreviewWorkflowModelCapExceededException => NodeConflictProblemType.PreviewWorkflowModelCapExceeded,
             InstalledModelDependentAdaptersException => NodeConflictProblemType.InstalledModelHasDependentAdapters,
             InstalledModelProviderConflictException => NodeConflictProblemType.InstalledModelProviderConflict,
             InstalledModelProviderMapSupersededException => NodeConflictProblemType.InstalledModelProviderMapSuperseded,
@@ -86,7 +83,7 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
             Detail = exception.Message ?? "Conflict"
         }.WithTraceId(httpContext);
 
-        SetCapMembers(problemDetails, exception);
+        SetStandingDecision(problemDetails, exception);
 
         // The content type MUST be passed here: WriteAsJsonAsync overwrites Response.ContentType with
         // application/json when it is not, which silently demoted this problem+json body.
@@ -96,21 +93,14 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
     }
 
     /// <summary>
-    ///     Carries the detail an operator needs to act on the refusal — the cap that was hit, or the decision that
-    ///     already stands. They are typed members of the one conflict envelope (omitted when null) so the OpenAPI
-    ///     schema names them; the wire body is the same as when they were problem-details extensions.
+    ///     Carries the detail an operator needs to act on the refusal — the decision that already stands. It is a
+    ///     typed member of the one conflict envelope (omitted when null) so the OpenAPI schema names it; the wire body
+    ///     is the same as when it was a problem-details extension.
     /// </summary>
-    private static void SetCapMembers(ConflictProblemDetails problemDetails, Exception exception)
+    private static void SetStandingDecision(ConflictProblemDetails problemDetails, Exception exception)
     {
         switch (exception)
         {
-            case PreviewWorkflowCapReachedException capReached:
-                problemDetails.MaxConcurrentRuns = capReached.MaxConcurrentRuns;
-                break;
-            case PreviewWorkflowModelCapExceededException modelCap:
-                problemDetails.DistinctModelCount = modelCap.DistinctModelCount;
-                problemDetails.MaxLoadedProcesses = modelCap.MaxLoadedProcesses;
-                break;
             case DevWorkflowGateAlreadyDecidedException alreadyDecided:
                 problemDetails.StandingDecision = alreadyDecided.StandingDecision.ToString();
                 break;

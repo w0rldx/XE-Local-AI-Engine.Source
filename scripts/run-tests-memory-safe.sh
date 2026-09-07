@@ -319,7 +319,6 @@ HEAVY=(
   XE_Local_AI_Engine.Tests.NodeSettings                 # 28s
   XE_Local_AI_Engine.Tests.ApiFoundation                # 27s
   XE_Local_AI_Engine.Tests.Automation                   # 27s
-  XE_Local_AI_Engine.Tests.PreviewWorkflows             # 26s
   XE_Local_AI_Engine.Tests.Endpoints.LocalChat          # 25s
   XE_Local_AI_Engine.Tests.Endpoints.ExternalProviders  # 24s
   XE_Local_AI_Engine.Tests.Endpoints.NodeBinding.V1     # 24s

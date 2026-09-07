@@ -321,7 +321,7 @@ namespace XE_Local_AI_Engine.Client
             var isDevelopmentModeEnabled = builder.Configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true);
             var areWorkSessionsEnabled = builder.Configuration.GetValue($"{WorkSessionOptions.Section}:Enabled", defaultValue: false);
             var areDevWorkflowsEnabled = builder.Configuration.GetValue($"{DevWorkflowOptions.Section}:Enabled", defaultValue: false);
-            var areGraphWorkflowsEnabled = builder.Configuration.GetValue($"{GraphWorkflowOptions.Section}:Enabled", defaultValue: false);
+            var areGraphWorkflowsEnabled = builder.Configuration.GetValue($"{GraphWorkflowOptions.Section}:Enabled", defaultValue: true);
             builder.AddServices(builder.Configuration);
 
             // App self-update (Velopack + anonymous public GitHub releases). Desktop-mode only: off the flag this registers nothing and the
@@ -385,8 +385,16 @@ namespace XE_Local_AI_Engine.Client
 
             try
             {
+                // Split around the migration pass on purpose: DropCanvasWorkflows removes the table the saved Open
+                // Canvas workflows live in, and no migration can decrypt their graph blob. Read first, write after —
+                // and write IMMEDIATELY after the node-chat pass: the identity pass runs against a different database,
+                // and a throw there would otherwise crash startup with the canvases already dropped and not yet
+                // written, which the next start could never recover (the table's absence is the one-shot marker).
+                var pendingCanvasWorkflows = await ReadPendingCanvasWorkflowsAsync(app.Services).ConfigureAwait(false);
+
                 commandContext?.SetStage(OneShotCommandStage.Migrations);
                 await ApplyNodeChatMigrationsAsync(app.Services).ConfigureAwait(false);
+                await ImportCanvasWorkflowsAsync(app.Services, pendingCanvasWorkflows).ConfigureAwait(false);
                 await ApplyNodeIdentityMigrationsAsync(app.Services).ConfigureAwait(false);
                 Log.Information("Database migrations applied.");
             }
@@ -644,8 +652,6 @@ namespace XE_Local_AI_Engine.Client
             app.MapHub<LocalChatHub>(LocalApiRoutes.LocalChat.Hub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             app.MapHub<SchedulerHub>(LocalApiRoutes.Scheduler.Hub)
-               .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-            app.MapHub<PreviewWorkflowHub>(LocalApiRoutes.Preview.Hub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             app.MapHub<BenchmarkRunHub>(LocalApiRoutes.Benchmarks.Hub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);

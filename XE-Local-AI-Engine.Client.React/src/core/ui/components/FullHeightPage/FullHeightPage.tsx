@@ -19,9 +19,9 @@ interface FullHeightPageProps {
 // `overflow-y: auto` rather than a flat `hidden`: containing the overflow HERE is what removes the outer bar (the
 // Layout container can no longer be overflowed), and every page that already resolves its own scrolling — chat's
 // message ScrollArea, the work-session plan/side panels, the canvas — never reaches this fallback, so they still show
-// exactly one bar in the region that should have it. A page that has not adopted that pattern (PreviewPage's workflow
-// list is the one left) then scrolls inside its own frame instead of having its tail silently clipped, which is the
-// failure mode a flat `hidden` would introduce.
+// exactly one bar in the region that should have it. The fallback is what a page that has NOT adopted that pattern
+// gets: it scrolls inside its own frame instead of having its tail silently clipped, which is the failure mode a flat
+// `hidden` would introduce.
 //
 // The X axis IS clipped: nothing full-height should pan the whole page sideways — wide content carries its own
 // horizontal scroller (Table.ScrollContainer), and letting the frame scroll horizontally would drag the page chrome

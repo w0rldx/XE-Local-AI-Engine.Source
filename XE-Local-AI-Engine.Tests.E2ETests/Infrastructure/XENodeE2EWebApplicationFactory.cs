@@ -25,8 +25,10 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Models;
@@ -400,7 +402,10 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
                 ["KnowledgeBase:EmbeddingProviderName"] = "ollama",
                 ["KnowledgeBase:EmbeddingModelName"] = "qwen3-embedding:0.6b",
                 ["NodeData:Directory"] = Path.Combine(_fixtureDataRoot, "node-data"),
-                ["Development:Enabled"] = "true"
+                ["Development:Enabled"] = "true",
+                // Stated rather than inherited: the shipped default is ON since S4 (ruling D9), and a fixture that
+                // relied on that default would go quietly dark the day an operator-facing default moved again.
+                ["GraphWorkflows:Enabled"] = "true"
             });
         });
 
@@ -421,6 +426,24 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             // The execution supervisor itself survives RemoveAll<IHostedService> (it is also registered as a plain
             // singleton and its StartAsync is a no-op), so a session started from the UI still runs here.
             services.AddHostedService<WorkSessionAgentSeeder>();
+
+            // A graph-workflow run is advanced ENTIRELY by the dispatcher's hosted loop: the start endpoint answers 202
+            // and writes nothing else, so with these removed a run would sit Pending forever and the run view would
+            // assert against a graph that never moved. The reconciler goes back first for the same reason production
+            // registers it first — hosted services start in order, and the dispatcher must not admit a node run the
+            // restart judgement has not seen yet (on this fresh-database fixture it finds nothing to judge).
+            services.AddHostedService<GraphWorkflowStartupReconciler>();
+            services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<GraphWorkflowDispatcher>());
+
+            // Admission, which this host cannot answer truthfully: the graph-workflow Agent lane runs the real capacity
+            // gate, and that gate sizes a model against an installed GGUF. There is none here — every model is served by
+            // FakeOllama — so the footprint reads as unknown and the gate refuses the turn with "the model's memory
+            // footprint could not be determined" before a single provider call is made. The same five seams are
+            // replaced for the same reason in the unit-side GraphWorkflowAgentHostFixture; this is the one of them the
+            // browser suite needs, because everything else on the path is real here. What capacity ACTUALLY decides is
+            // covered by CapacityServiceTests, not by a browser.
+            services.RemoveAll<ICapacityService>();
+            services.AddSingleton<ICapacityService, E2EAlwaysAdmitCapacityService>();
 
             services.Configure<CentralPlatformOptions>(options =>
             {

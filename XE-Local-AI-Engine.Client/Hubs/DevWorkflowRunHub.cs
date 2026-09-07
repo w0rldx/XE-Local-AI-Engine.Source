@@ -37,7 +37,7 @@ public sealed record DevWorkflowRunSubscriptionSnapshot(
 /// <summary>
 ///     Operator-only live notifications for one development workflow run.
 ///     <para>
-///         Modelled on <see cref="WorkSessionHub" /> and explicitly NOT on <c>PreviewWorkflowHub</c>: there is no
+///         Modelled on <see cref="WorkSessionHub" /> and explicitly NOT on a per-run subscription hub: there is no
 ///         in-memory buffer, because run events are persisted append-only with a monotonic sequence and the store IS
 ///         the replay authority. Nor does a disconnect cancel anything — a workflow run is durable and outlives both
 ///         the browser tab and the engine, which is the property this module exists to prove.
