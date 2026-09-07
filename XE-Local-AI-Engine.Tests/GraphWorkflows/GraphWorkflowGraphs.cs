@@ -830,4 +830,29 @@ internal static class GraphWorkflowGraphs
                                                   ]
                                                 }
                                                 """;
+
+    /// <summary>
+    ///     One Start, one End and <paramref name="nodeCount" /> nodes in a single chain — the deepest legal graph of
+    ///     its size, so a walk over it is as long as a walk over a graph of that many nodes can be. Minimal on purpose:
+    ///     the point of this shape is its DEPTH, and a chain of thousands still fits the request body cap.
+    /// </summary>
+    public static string Chain(int nodeCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(nodeCount, other: 2);
+
+        var keys = new List<string> { "start" };
+        keys.AddRange(Enumerable.Range(1, nodeCount - 2).Select(static index => $"n{index}"));
+        keys.Add("done");
+
+        var nodes = keys.Select(static (key, index) => index switch
+        {
+            0 => """{ "key": "start", "kind": "Start" }""",
+            _ => key == "done"
+                ? """{ "key": "done", "kind": "End", "config": { "outcome": "completed" } }"""
+                : $$"""{ "key": "{{key}}", "kind": "Agent", "config": { "instructions": "Step." } }"""
+        });
+        var edges = keys.Zip(keys.Skip(1), static (from, to) => $$"""{ "key": "e_{{from}}", "from": "{{from}}", "to": "{{to}}" }""");
+
+        return $$"""{ "schemaVersion": 1, "nodes": [{{string.Join(", ", nodes)}}], "edges": [{{string.Join(", ", edges)}}] }""";
+    }
 }

@@ -58,7 +58,8 @@ public sealed class GraphWorkflowGraphContractTests
     }
 
     /// <summary>
-    ///     The cap is an option, so it lives here rather than in the parser — which stays testable without a container.
+    ///     The cap is an option, so it is READ here rather than in the parser — which stays testable without a
+    ///     container.
     /// </summary>
     [Test]
     public void ValidateAndCountNodes_OverTheNodeCap_IsRefused()
@@ -68,6 +69,24 @@ public sealed class GraphWorkflowGraphContractTests
 
         AssertEx.Contains(refusal.Message, "more than the 2 one definition may carry");
         AssertEx.Equal(expected: 3, GraphWorkflowGraphContract.ValidateAndCountNodes(GraphWorkflowGraphs.StartAgentEnd, maxNodes: 3), "the cap is inclusive.");
+    }
+
+    /// <summary>
+    ///     The cap has to bite BEFORE the graph is walked, which is the whole of what it buys. A chain of thousands of
+    ///     minimal nodes fits the 1 MiB request body, and a walk one frame per node deep over it would overflow the
+    ///     thread's stack — a process kill no <c>catch</c> ever sees. So reaching the assertion at all is this test's
+    ///     evidence: the refusal is what a run of it can produce, and a crash is what a walk-first parse would.
+    /// </summary>
+    [Test]
+    public void ValidateAndCountNodes_FarOverTheNodeCap_IsRefusedBeforeTheGraphIsWalked()
+    {
+        var refusal = AssertEx.Throws<GraphWorkflowValidationException>(() =>
+            GraphWorkflowGraphContract.ValidateAndCountNodes(GraphWorkflowGraphs.Chain(nodeCount: 9_000), maxNodes: 200));
+
+        AssertEx.Contains(refusal.Message, "more than the 200 one definition may carry");
+        AssertEx.Equal(expected: 200,
+            GraphWorkflowGraphContract.ValidateAndCountNodes(GraphWorkflowGraphs.Chain(nodeCount: 200), maxNodes: 200),
+            "a chain as deep as the cap allows is still a graph that validates — the cap refuses size, not depth.");
     }
 
     [Test]

@@ -203,6 +203,40 @@ public sealed class GraphWorkflowGraphTests
         AssertEx.Contains(AssertEx.Throws<GraphWorkflowValidationException>(() => GraphWorkflowGraph.Parse(Cyclic)).Message, "cycle");
     }
 
+    /// <summary>
+    ///     The refusal names every node on the cycle, in the order the walk took them, starting and ending at the node
+    ///     it came back to. Naming only that one node leaves an author with a canvas of edges and a single key, and the
+    ///     back edge is the one thing they have to find.
+    /// </summary>
+    [Test]
+    public void Parse_WithACycle_NamesEveryNodeOnIt()
+    {
+        const string ThreeNodeLoop = """
+                                     { "schemaVersion": 1,
+                                       "nodes": [{ "key": "start", "kind": "Start" },
+                                                 { "key": "a", "kind": "Agent", "config": { "instructions": "a" } },
+                                                 { "key": "b", "kind": "Agent", "config": { "instructions": "b" } },
+                                                 { "key": "c", "kind": "Agent", "config": { "instructions": "c" } },
+                                                 { "key": "done", "kind": "End", "config": { "outcome": "x" } }],
+                                       "edges": [{ "key": "e1", "from": "start", "to": "a" }, { "key": "e2", "from": "a", "to": "b" },
+                                                 { "key": "e3", "from": "b", "to": "c" }, { "key": "e4", "from": "c", "to": "a" },
+                                                 { "key": "e5", "from": "c", "to": "done" }] }
+                                     """;
+
+        AssertEx.Contains(AssertEx.Throws<GraphWorkflowValidationException>(() => GraphWorkflowGraph.Parse(ThreeNodeLoop)).Message,
+            "cycle through node 'a': a -> b -> c -> a");
+    }
+
+    /// <summary>
+    ///     A stored graph is re-parsed by the run engine and the dispatcher without a cap — it was capped when it was
+    ///     saved, and a cap lowered since would make a live run unroutable rather than merely unsaveable. So the walk
+    ///     itself must not be bounded by a stack: this chain is far deeper than a frame-per-node walk could carry, and
+    ///     reaching the assertion is the evidence.
+    /// </summary>
+    [Test]
+    public void Parse_WithAChainDeeperThanTheStackWouldCarry_IsWalkedWithoutRecursion() =>
+        AssertEx.Equal(expected: 10_000, GraphWorkflowGraph.Parse(GraphWorkflowGraphs.Chain(nodeCount: 10_000)).Nodes.Count);
+
     [Test]
     public void Parse_WithAnUnreachableNode_IsRejected()
     {

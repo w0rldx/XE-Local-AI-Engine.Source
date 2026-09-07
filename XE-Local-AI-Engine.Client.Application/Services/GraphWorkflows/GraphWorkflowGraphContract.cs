@@ -20,8 +20,9 @@ public static class GraphWorkflowGraphContract
     ///     definition list reads instead of parsing. Throws <see cref="GraphWorkflowValidationException" /> for
     ///     anything the dispatcher could not route, and for a graph over the configured node cap.
     ///     <para>
-    ///         The cap lives here rather than in the parser because it is an option: the parser stays option-free and
-    ///         testable without a container, and this is the one place a save and a run both come through.
+    ///         The cap is READ here, because it is an option and the parser stays option-free, but it is ENFORCED
+    ///         inside the parse: everything the parse does after counting the nodes is proportional to how many there
+    ///         are, so a cap applied to the finished graph would bound none of it.
     ///     </para>
     /// </summary>
     public static int ValidateAndCountNodes(string graphJson, int maxNodes) =>
@@ -32,13 +33,8 @@ public static class GraphWorkflowGraphContract
     ///     refused tool, and the deduplicated <see cref="GraphWorkflowGraph.ToolNodeNames" /> carries no keys, so it
     ///     walks the nodes — over this graph rather than over a second parse of the same document.
     /// </summary>
-    internal static GraphWorkflowGraph ValidateAndParse(string graphJson, int maxNodes)
-    {
-        var graph = GraphWorkflowGraph.Parse(graphJson);
-        return graph.Nodes.Count <= maxNodes
-            ? graph
-            : throw new GraphWorkflowValidationException($"The graph declares {graph.Nodes.Count} nodes, more than the {maxNodes} one definition may carry.");
-    }
+    internal static GraphWorkflowGraph ValidateAndParse(string graphJson, int maxNodes) =>
+        GraphWorkflowGraph.Parse(graphJson, maxNodes);
 
     /// <summary>
     ///     Which decisions a node run in <paramref name="status" /> can take: a pause's two answers from
