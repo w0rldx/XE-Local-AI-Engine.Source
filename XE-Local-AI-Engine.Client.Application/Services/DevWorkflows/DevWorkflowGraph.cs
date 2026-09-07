@@ -358,8 +358,16 @@ internal sealed class DevWorkflowGraph
     ///         author-time 400 rather than a failed run — and re-validating at run start stays necessary either way,
     ///         because an agent definition can be deleted between the save and the start.
     ///     </para>
+    ///     <para>
+    ///         <paramref name="maxNodes" /> is the caller's node cap, checked against the declared array BEFORE any
+    ///         node is read or any edge walked — the cap is what bounds the work this parse does, so enforcing it
+    ///         afterwards would bound nothing. It is passed as a number rather than read from options, so this stays
+    ///         testable without a container. A caller that omits it parses a graph that was already capped when it was
+    ///         saved: the graph cache and run start re-parse stored graphs, and a cap lowered since would make a live
+    ///         run unroutable rather than merely unsaveable.
+    ///     </para>
     /// </summary>
-    public static DevWorkflowGraph Parse(string graphJson)
+    public static DevWorkflowGraph Parse(string graphJson, int maxNodes = int.MaxValue)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(graphJson);
 
@@ -376,7 +384,7 @@ internal sealed class DevWorkflowGraph
             throw new DevWorkflowValidationException($"This node understands workflow graph schema version {SupportedSchemaVersion} only.");
         }
 
-        var nodes = ParseNodes(root);
+        var nodes = ParseNodes(root, maxNodes);
         var edges = ParseEdges(root, nodes);
         var graph = new DevWorkflowGraph(nodes, edges, OptionalFlag(root, "allowUngatedWrites"));
         graph.Validate();
@@ -395,11 +403,20 @@ internal sealed class DevWorkflowGraph
         }
     }
 
-    private static Dictionary<string, DevWorkflowGraphNode> ParseNodes(JsonElement root)
+    private static Dictionary<string, DevWorkflowGraphNode> ParseNodes(JsonElement root, int maxNodes)
     {
         if (!root.TryGetProperty("nodes", out var nodesElement) || nodesElement.ValueKind != JsonValueKind.Array)
         {
             throw new DevWorkflowValidationException("A workflow graph needs a 'nodes' array.");
+        }
+
+        // The cap bites on the DECLARED length, before a single node is read: everything after this walks the graph,
+        // and only the body size would otherwise bound how far. Duplicate keys are refused below, so this length and
+        // the parsed node count are the same number wherever the parse survives.
+        var declared = nodesElement.GetArrayLength();
+        if (declared > maxNodes)
+        {
+            throw new DevWorkflowValidationException($"The workflow graph declares {declared} nodes, more than the {maxNodes} one definition may carry.");
         }
 
         var nodes = new Dictionary<string, DevWorkflowGraphNode>(StringComparer.Ordinal);

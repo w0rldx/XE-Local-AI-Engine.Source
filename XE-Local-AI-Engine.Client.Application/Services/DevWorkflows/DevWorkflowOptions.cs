@@ -15,6 +15,14 @@ public sealed class DevWorkflowOptions
 
     public bool Enabled { get; init; }
 
+    /// <summary>
+    ///     The cap on one definition's nodes, enforced when a definition is validated rather than when it runs. Twice
+    ///     the graph-workflow cap because a development workflow decomposes: one materialization expands a template
+    ///     subtree up to twenty times, so a definition carries shapes a hand-drawn graph does not.
+    /// </summary>
+    [Range(1, 10_000)]
+    public int MaxNodesPerDefinition { get; init; } = 500;
+
     /// <summary>The cap on one workflow artifact's bytes, enforced by the blob store.</summary>
     [Range(1, 64 * 1024 * 1024)]
     public int MaxArtifactBytes { get; init; } = 1024 * 1024;

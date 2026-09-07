@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1;
 
 using FastEndpoints;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -37,14 +38,18 @@ public sealed class ListDevWorkflowDefinitionsEndpoint(IDevWorkflowStore store)
 ///         every other domain refusal produces.
 ///     </para>
 /// </summary>
-public sealed class CreateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store) : Endpoint<CreateDevWorkflowDefinitionRequest, DevWorkflowDefinitionResponse>
+public sealed class CreateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store, IOptions<DevWorkflowOptions> options)
+    : Endpoint<CreateDevWorkflowDefinitionRequest, DevWorkflowDefinitionResponse>
 {
     private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+
+    private readonly DevWorkflowOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
 
     public override void Configure()
     {
         Post(LocalApiRoutes.DevelopmentWorkflows.Definitions);
         Policies(NodeAuthorizationPolicies.Operator);
+        Options(static builder => builder.WithMetadata(new DevWorkflowRequestSizeLimit()));
         // 201 is what the success path actually sends, so it is declared: the generated client narrows the create
         // response off this, and a route documented as 400-only would type no success body at all.
         Description(static builder => builder.Produces<DevWorkflowDefinitionResponse>(StatusCodes.Status201Created)
@@ -55,8 +60,14 @@ public sealed class CreateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store)
     {
         ArgumentNullException.ThrowIfNull(req);
 
+        if (DevWorkflowRequestSizeLimit.RefuseIfOversized(HttpContext.Request, this))
+        {
+            await Send.ErrorsAsync(StatusCodes.Status413PayloadTooLarge, ct).ConfigureAwait(false);
+            return;
+        }
+
         var graphJson = DevWorkflowContractMapper.ToGraphJson(req.Graph);
-        var nodeCount = DevWorkflowGraphContract.ValidateAndCountNodes(graphJson);
+        var nodeCount = DevWorkflowGraphContract.ValidateAndCountNodes(graphJson, _options.MaxNodesPerDefinition);
         var created = await _store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), req.Name, graphJson, nodeCount), ct)
                                   .ConfigureAwait(false);
         await Send.CreatedAtAsync<GetDevWorkflowDefinitionEndpoint>(new
@@ -88,14 +99,18 @@ public sealed class GetDevWorkflowDefinitionEndpoint(IDevWorkflowStore store) : 
     }
 }
 
-public sealed class UpdateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store) : Endpoint<UpdateDevWorkflowDefinitionRequest, DevWorkflowDefinitionResponse>
+public sealed class UpdateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store, IOptions<DevWorkflowOptions> options)
+    : Endpoint<UpdateDevWorkflowDefinitionRequest, DevWorkflowDefinitionResponse>
 {
     private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+
+    private readonly DevWorkflowOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
 
     public override void Configure()
     {
         Put(LocalApiRoutes.DevelopmentWorkflows.DefinitionById);
         Policies(NodeAuthorizationPolicies.Operator);
+        Options(static builder => builder.WithMetadata(new DevWorkflowRequestSizeLimit()));
         Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                       .Produces(StatusCodes.Status404NotFound)
                                       .ProducesConflictProblemDetails());
@@ -105,6 +120,12 @@ public sealed class UpdateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store)
     {
         ArgumentNullException.ThrowIfNull(req);
 
+        if (DevWorkflowRequestSizeLimit.RefuseIfOversized(HttpContext.Request, this))
+        {
+            await Send.ErrorsAsync(StatusCodes.Status413PayloadTooLarge, ct).ConfigureAwait(false);
+            return;
+        }
+
         // A null graph leaves the stored one alone — a rename must not have to echo a graph back to keep it. Runs that
         // already pinned this definition are unaffected either way: they carry their own snapshot.
         string? graphJson = null;
@@ -112,7 +133,7 @@ public sealed class UpdateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store)
         if (req.Graph is { } graph)
         {
             graphJson = DevWorkflowContractMapper.ToGraphJson(graph);
-            nodeCount = DevWorkflowGraphContract.ValidateAndCountNodes(graphJson);
+            nodeCount = DevWorkflowGraphContract.ValidateAndCountNodes(graphJson, _options.MaxNodesPerDefinition);
         }
 
         var updated = await _store.UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(req.DefinitionId, req.Version, req.Name, graphJson, nodeCount), ct)
