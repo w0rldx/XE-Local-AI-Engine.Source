@@ -698,11 +698,8 @@ of the compiled grammar. And the XE Debug log never shows the grammar at any Ser
 `Serilog__MinimumLevel__Default=Debug` greps **zero** hits for `grammar`, `json_schema`, `response_format` or `gbnf`.
 What prints both the compiled GBNF and the schema llama-server actually received is llama-server's own `--verbose`,
 set through `PUT models/{modelName}/launch-args` (`rawArguments`) followed by `POST models/{modelName}/unload`.
-**No host restart.** Since S7 that route resolves the model's provider first: a llama-server model gets a graceful
-supervisor eject of every role — idempotent, a role that is not running counts as unloaded — and the next request
-respawns the process with the new arguments, while every other provider keeps the Ollama `keep_alive=0` call. The old
-behaviour, and the S6-era note that recorded it, was a 500 with a connection refused to 11434 for a
-llama.cpp-provider model. Authority: operator ruling S7-E, 2026-09-07.
+**No host restart**, and no 500 — the S6-era note recording a connection refused to 11434 for a llama.cpp-provider
+model is retired. See the entry below for what that route now does.
 
 
 `LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound` is empirical for the **whole production offer**, not an upstream constant or per-field limit. Third-party MCP schemas make this an open boundary. If sanitization still fails, translate it to `FailureCategory.ModelCapabilityUnsupported`; do not surface the raw sampler error as a model defect. The live smoke's unsanitized negative control is load-bearing: a 200 means either a reasoning template skipped GBNF or upstream changed the limit.
@@ -719,6 +716,14 @@ it sent. Always go through `OpenAICompatibleRequestBody.Chain`. **Prevents:** `c
 vanishing from the wire on exactly the Constrained-mode teacher turn that needs both. **Authority:**
 `DeferredLlamaServerStructuredOutputTests.ResponseFormatAndThinkingSwitch_BothReachWire`, which captures one body
 carrying both.
+
+### Unloading a model asks BOTH local runtimes, because residency is not the provider map
+
+**Rule:** unloading evicts a model from wherever it is resident, and both local runtimes are asked because the node cannot know which one holds it. The llama-server supervisor is asked first, gracefully and per `ModelRole`, so an in-flight turn drains rather than being killed; stopping the child process is both what frees its VRAM and how edited launch arguments take effect, since the next request respawns it. The Ollama daemon is asked second whenever the optional runtime is enabled (`OllamaRuntimeGate.RuntimeEnabledConfigurationKey`), and an unreachable daemon (`HttpRequestException`, logged Debug) or a model it has never heard of (`OllamaModelUnloader` absorbs the 404 `OllamaException` whose message contains "not found") both count as success. **Prevents:** consulting the per-model provider map, which records where a model would be *served*, not where a process currently holds it — routing on it sent an Ollama-resident, unmapped model to three no-op llama-server ejects and left it loaded. `Unloaded` is false only when a llama-server role reported `TimedOutStillBusy`. **Authority:** `UnloadLocalModelEndpoint.HandleAsync` / `EjectEveryRoleAsync` / `UnloadFromOllamaAsync`, `OllamaModelUnloader.UnloadAsync`, and `LoadedModelsPageE2ETests`, which caught the regression.
+
+### `IModelCapabilityClient` has ONE registration, and the Ollama gate skips it — open finding
+
+**Rule:** a node started with `XE_OLLAMA_RUNTIME_ENABLED=false` cannot activate `ModelCapabilityProber`, because the interface's only registration lives inside `AddOllamaLocalModelProvider` and the same gate skips that call. The service provider fails to build. A test that disables the gate must substitute the client itself. **Prevents:** reading a host that will not start as a bug in the test's own arrangement, and shipping a runtime combination nobody can boot. Not fixed in S7. **Authority:** the single `AddSingleton<IModelCapabilityClient, OllamaModelCapabilityClient>()` in `OllamaLocalModelProviderServiceCollectionExtensions`, the gate in `AddNodeModelRuntimeExtensions`, and the `Substitute.For<IModelCapabilityClient>()` registration `RunningLocalModelEndpointTests` needs.
 
 ### A work session is chat turns in a loop, and it takes the node's only invocation slot
 
