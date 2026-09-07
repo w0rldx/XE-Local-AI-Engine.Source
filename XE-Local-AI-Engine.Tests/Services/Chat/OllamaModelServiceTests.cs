@@ -1,6 +1,10 @@
 namespace XE_Local_AI_Engine.Tests.Services.Chat;
 
+using System.Runtime.CompilerServices;
+using NSubstitute;
 using OllamaSharp;
+using OllamaSharp.Models;
+using OllamaSharp.Models.Exceptions;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -37,6 +41,49 @@ public sealed class OllamaModelServiceTests
 
         AssertEx.ContainsSingle(context.Server.RecordedRequests,
             request => request.Path == "/api/generate" && request.ModelName == "not-loaded:latest");
+    }
+
+    [Test]
+    public async Task UnloadModelAsync_WhenOllamaHasNeverHeardOfTheModel_IsIdempotentNoOp()
+    {
+        // Ollama answers /api/generate for an UNKNOWN model with 404 "model '<name>' not found, try pulling it first",
+        // which OllamaSharp raises as an OllamaException carrying that text. The fake answers for any name and so cannot
+        // produce it, hence the substituted client. Eject is documented idempotent on both surfaces that share
+        // OllamaModelUnloader, and a model this runtime does not know is already in the requested state, so the call
+        // must complete rather than throw. Anything else still propagates — see the next test.
+        var client = Substitute.For<IOllamaApiClient>();
+        client.GenerateAsync(Arg.Any<GenerateRequest>(), Arg.Any<CancellationToken>())
+              .Returns(FailingStream(new OllamaException("model \"ghost:latest\" not found, try pulling it first")));
+        using var service = new OllamaModelService(client);
+
+        await service.UnloadModelAsync("ghost:latest").ConfigureAwait(false);
+
+        _ = client.Received(1).GenerateAsync(Arg.Is<GenerateRequest>(request => request.Model == "ghost:latest"), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UnloadModelAsync_WhenOllamaFailsForAnyOtherReason_Propagates()
+    {
+        // The not-found absorption must not become a blanket catch: a genuine runtime failure has to reach the caller.
+        var client = Substitute.For<IOllamaApiClient>();
+        client.GenerateAsync(Arg.Any<GenerateRequest>(), Arg.Any<CancellationToken>())
+              .Returns(FailingStream(new OllamaException("server error")));
+        using var service = new OllamaModelService(client);
+
+        await AssertEx.ThrowsAsync<OllamaException>(() => service.UnloadModelAsync("qwen3:8b")).ConfigureAwait(false);
+    }
+
+    /// <summary>An <c>/api/generate</c> stream that fails on first move, the way a non-200 response surfaces.</summary>
+    private static async IAsyncEnumerable<GenerateResponseStream?> FailingStream(Exception failure,
+        [EnumeratorCancellation]
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        await Task.CompletedTask.ConfigureAwait(false);
+        throw failure;
+#pragma warning disable CS0162 // Unreachable: the compiler needs a yield to make this an iterator.
+        yield break;
+#pragma warning restore CS0162
     }
 
     private static async Task<ServiceTestContext> CreateContextAsync(params string[] models)

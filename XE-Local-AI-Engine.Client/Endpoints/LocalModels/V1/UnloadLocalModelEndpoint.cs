@@ -4,26 +4,32 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Gracefully unloads a model from the runtime's memory. The route is dispatched by the provider that serves the
-///     model, resolved through <see cref="ILocalModelProviderResolver" /> — unloading is a runtime operation and the
-///     Ollama daemon is an optional secondary runtime, so sending every unload to it made ejecting a llama.cpp model a
-///     connection-refused 500 on a node that runs no Ollama.
+///     Gracefully evicts a model from the local runtimes' memory, wherever it is resident. BOTH runtimes are asked,
+///     because the node cannot know which one holds the model: residency is a property of a running process, and the
+///     per-model provider map only records where a model would be <em>served</em>. A model pulled into Ollama has no map
+///     row at all, so routing this action by that map ejected nothing and reported success while Ollama still held the
+///     weights.
 ///     <list type="bullet">
 ///         <item>
 ///             <description>
-///                 <c>llamacpp</c>: <see cref="ILlamaServerProcessSupervisor.EjectAsync" /> per
-///                 <see cref="ModelRole" />, never forced. Stopping the child process is what frees its VRAM, and it is
-///                 also how edited launch arguments take effect: the next request for the model respawns it.
+///                 First <see cref="ILlamaServerProcessSupervisor.EjectAsync" /> per <see cref="ModelRole" />, never
+///                 forced. This costs no I/O when nothing is running, and stopping the child process is both what frees
+///                 its VRAM and how edited launch arguments take effect: the next request respawns it.
 ///             </description>
 ///         </item>
 ///         <item>
-///             <description>Any other provider: the Ollama <c>keep_alive=0</c> eviction.</description>
+///             <description>
+///                 Then the Ollama <c>keep_alive=0</c> eviction, when the optional Ollama runtime is enabled
+///                 (<see cref="OllamaRuntimeGate.RuntimeEnabledConfigurationKey" />, the same gate
+///                 <see cref="GetRunningLocalModelsEndpoint" /> reads). An unreachable daemon means nothing is resident
+///                 there, which is not an error.
+///             </description>
 ///         </item>
 ///     </list>
 ///     Both paths let an in-flight generation complete before the model is evicted, so unload never interrupts a running
@@ -34,13 +40,15 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 public sealed class UnloadLocalModelEndpoint(
     IOllamaModelService modelService,
-    ILocalModelProviderResolver providerResolver,
     ILlamaServerProcessSupervisor supervisor,
-    ModelNameValidator modelNameValidator) : Endpoint<UnloadLocalModelRequest, UnloadLocalModelResponse>
+    IConfiguration configuration,
+    ModelNameValidator modelNameValidator,
+    ILogger<UnloadLocalModelEndpoint> logger) : Endpoint<UnloadLocalModelRequest, UnloadLocalModelResponse>
 {
+    private readonly IConfiguration _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+    private readonly ILogger<UnloadLocalModelEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
     private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
-    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
     private readonly ILlamaServerProcessSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
 
     public override void Configure()
@@ -65,10 +73,14 @@ public sealed class UnloadLocalModelEndpoint(
         }
 
         var modelName = decodedModelName!.Trim();
-        var providerName = await _providerResolver.ResolveProviderNameForModelAsync(modelName, ct).ConfigureAwait(false);
-        var unloaded = string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase)
-            ? await EjectEveryRoleAsync(modelName, ct).ConfigureAwait(false)
-            : await UnloadFromOllamaAsync(modelName, ct).ConfigureAwait(false);
+        var unloaded = await EjectEveryRoleAsync(modelName, ct).ConfigureAwait(false);
+
+        // The SAME gate AddOllamaRuntime uses to decide whether to register the Ollama provider (enabled unless
+        // explicitly false). A node with the runtime switched off has no daemon to ask.
+        if (_configuration.GetValue(OllamaRuntimeGate.RuntimeEnabledConfigurationKey, defaultValue: true))
+        {
+            await UnloadFromOllamaAsync(modelName, ct).ConfigureAwait(false);
+        }
 
         await Send.OkAsync(new UnloadLocalModelResponse
         {
@@ -96,10 +108,19 @@ public sealed class UnloadLocalModelEndpoint(
         return unloaded;
     }
 
-    private async Task<bool> UnloadFromOllamaAsync(string modelName, CancellationToken ct)
+    private async Task UnloadFromOllamaAsync(string modelName, CancellationToken ct)
     {
-        await _modelService.UnloadModelAsync(modelName, ct).ConfigureAwait(false);
-        return true;
+        try
+        {
+            await _modelService.UnloadModelAsync(modelName, ct).ConfigureAwait(false);
+        }
+        catch (HttpRequestException exception)
+        {
+            // Desktop mode runs no Ollama daemon, so the connection is refused. Nothing of this model is resident there,
+            // which is the outcome the caller asked for — not a failure. Debug, mirroring GetRunningLocalModelsEndpoint,
+            // because the operator ejects from a page that polls that endpoint against the same absent daemon.
+            _logger.LogDebug(exception, "Ollama not reachable while unloading a model; nothing was resident there.");
+        }
     }
 
     private async Task<bool> ValidateModelNameAsync(string? modelName, CancellationToken ct)
