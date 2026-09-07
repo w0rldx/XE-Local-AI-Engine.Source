@@ -143,12 +143,22 @@ internal sealed class ToolInvocationService(
         {
             // Step 11b. The reason names the tool and nothing else: an exception message can carry a path or an
             // argument value, so it goes to a Debug log an operator surface never renders.
-            _logger.LogDebug(exception,
-                "Tool {ToolName} threw for node {NodeKey} (node run {NodeRunId}) of graph-workflow run {RunId}.",
-                toolName,
-                context.NodeKey,
-                context.NodeRunId,
-                context.RunId);
+            // Not every caller is a graph-workflow node: the training dataset generator invokes through this seam
+            // with no run of its own and identifies itself in NodeKey alone. Naming a run of all zeroes there would
+            // read as a real run to anyone filtering the log by one.
+            if (context.RunId == Guid.Empty)
+            {
+                _logger.LogDebug(exception, "Tool {ToolName} threw for {NodeKey}.", toolName, context.NodeKey);
+            }
+            else
+            {
+                _logger.LogDebug(exception,
+                    "Tool {ToolName} threw for node {NodeKey} (node run {NodeRunId}) of graph-workflow run {RunId}.",
+                    toolName,
+                    context.NodeKey,
+                    context.NodeRunId,
+                    context.RunId);
+            }
             return new ToolInvocationOutcome(ToolInvocationOutcomeKind.Faulted, null, $"'{toolName}' threw during invocation.");
         }
     }
