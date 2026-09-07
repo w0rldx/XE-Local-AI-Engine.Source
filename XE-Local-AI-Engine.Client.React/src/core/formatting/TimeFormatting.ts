@@ -19,7 +19,16 @@ export function formatTimestamp(value: number | null): string {
 		return "—";
 	}
 	const date = new Date(value);
-	return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString(i18next.resolvedLanguage ?? i18next.language);
+	if (Number.isNaN(date.getTime())) {
+		return "—";
+	}
+	try {
+		return date.toLocaleString(i18next.resolvedLanguage ?? i18next.language);
+	} catch {
+		// A malformed stored tag — `en_US` left in `i18nextLng` by hand — is a RangeError, and it would throw once per
+		// table ROW. The environment's own default is a worse date, not a broken page.
+		return date.toLocaleString();
+	}
 }
 
 /** Formats a millisecond duration as a compact seconds string, or a dash when absent. */

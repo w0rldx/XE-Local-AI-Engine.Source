@@ -225,6 +225,32 @@ describe("GraphWorkflowEditorCanvas connecting", () => {
 		expect(issueText()).not.toContain("pauseDecisionUnroutable:review");
 	});
 
+	it("announces the context edge it adds when a Pause is wired", () => {
+		// Not the eight-node fixture: its Pause hangs off a Condition, and a Condition ancestor is deliberately skipped.
+		const graph: GraphWorkflowGraph = {
+			schemaVersion: 1,
+			nodes: [
+				{ key: "start", kind: "Start", position: { x: 0, y: 0 }, config: {} },
+				{ key: "analyze", kind: "Agent", position: { x: 0, y: 80 }, config: { instructions: "Answer it." } },
+				{ key: "hold", kind: "Pause", position: { x: 0, y: 160 }, config: { prompt: "Ship?", allowedDecisions: ["Approve"] } },
+				{ key: "done", kind: "End", position: { x: 0, y: 240 }, config: { outcome: "completed" } },
+			],
+			edges: [
+				{ key: "e1", from: "start", to: "analyze" },
+				{ key: "e2", from: "analyze", to: "hold" },
+			],
+		};
+		renderWithProviders(<Harness initial={graph} />);
+
+		act(() => {
+			flowProps().onConnect?.({ source: "hold", target: "done", sourceHandle: "Approve", targetHandle: null });
+		});
+
+		const context = flowEdges().find((edge) => edge.source === "analyze" && edge.target === "done");
+		expect(context?.label).toBe("context");
+		expect(screen.getByTestId("graph-workflow-editor-notice").textContent).toContain("carries the earlier node");
+	});
+
 	it("refuses a second unconditional edge over one pair and accepts a second conditional one", () => {
 		renderWithProviders(<Harness initial={eightNodeGraph} />);
 

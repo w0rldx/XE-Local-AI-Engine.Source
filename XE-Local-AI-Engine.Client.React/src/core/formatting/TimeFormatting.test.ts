@@ -26,6 +26,15 @@ describe("formatTimestamp", () => {
 		expect(formatTimestamp(Number.NaN)).toBe("—");
 	});
 
+	it("falls back to the environment default when the stored language tag is malformed", async () => {
+		await i18next.changeLanguage("en_US");
+
+		// The premise, pinned: without the guard this exact call is what throws once per table row.
+		expect(i18next.language).toBe("en_US");
+		expect(() => new Date(instant).toLocaleString("en_US")).toThrow(RangeError);
+		expect(formatTimestamp(instant)).toMatch(/^\d{1,2}\/\d{1,2}\/\d{4}/);
+	});
+
 	it("formats in the active UI language, not the machine's regional format", async () => {
 		expect(formatTimestamp(instant)).toMatch(/^\d{1,2}\/\d{1,2}\/\d{4}/);
 

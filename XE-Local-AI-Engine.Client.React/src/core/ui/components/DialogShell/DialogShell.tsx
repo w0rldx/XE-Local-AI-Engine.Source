@@ -139,7 +139,7 @@ export function DialogShell({
 			transitionProps={effectiveFullScreen ? { transition: "fade" } : transitionProps}
 			closeOnClickOutside={confirmCloseWhen ? false : closeOnClickOutside}
 			closeOnEscape={confirmCloseWhen ? false : closeOnEscape}
-			{...(raised ? { zIndex: RAISED_DIALOG_Z_INDEX } : {})}
+			zIndex={raised ? RAISED_DIALOG_Z_INDEX : undefined}
 			overlayProps={{
 				backgroundOpacity: 0.55,
 				blur: 3,
