@@ -4,6 +4,7 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import {
 	devWorkflowTestIds,
 	devWorkflowWorkItem,
@@ -248,5 +249,22 @@ describe("DevWorkflowsPage", () => {
 
 		expect(await screen.findByTestId("dev-workflows-definition-picker")).toBeDefined();
 		expect(screen.getByTestId("dev-workflow-definition-form-empty")).toBeDefined();
+	});
+
+	// A work item whose `updatedAtUtc` never arrived used to render "updated 1/1/1970", which reads as a real (and
+	// alarming) date on a card whose whole job is to say how fresh the run is.
+	it("shows the dash, not a 1970 date, for a card with no updated timestamp", async () => {
+		server.use(
+			jsonRoute("get", "development-workflows/work-items", {
+				items: [devWorkflowWorkItemSummary({ updatedAtUtc: undefined })],
+			}),
+			definitionsRoute(),
+			projectsRoute(),
+		);
+		renderWithProviders(<DevWorkflowsPage />);
+
+		const card = await screen.findByTestId(`dev-workflow-card-${workItemId}`);
+		expect(card.textContent).toContain(`updated ${formatTimestamp(undefined)}`);
+		expect(card.textContent).not.toContain("1970");
 	});
 });

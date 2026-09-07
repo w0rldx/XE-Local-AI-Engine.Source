@@ -10,6 +10,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { formatTime } from "@/core/formatting/TimeFormatting";
 import { DevWorkflowEventsTab } from "@/features/devWorkflows/components/DevWorkflowEventsTab";
 import type { DevWorkflowEventsAnchor } from "@/features/devWorkflows/queries/useDevWorkflows";
 import { devWorkflowRunEvent } from "@/features/devWorkflows/test/DevWorkflowFixtures";
@@ -158,5 +159,15 @@ describe("DevWorkflowEventsTab", () => {
 		fireEvent.click(screen.getByTestId("dev-workflow-events-jump-oldest"));
 
 		expect(screen.queryByTestId("dev-workflow-events-reanchored")).toBeNull();
+	});
+
+	// The 1970 fallback is gone from this feed: an event whose stamp never arrived used to read as a real
+	// midnight-in-1970 clock, which is indistinguishable from an event that genuinely happened.
+	it("shows the dash, not a 1970 clock, for an event with no timestamp", () => {
+		renderTab({ events: [devWorkflowRunEvent({ id: "no-stamp", occurredAtUtc: undefined })] });
+
+		const row = screen.getByTestId("dev-workflow-event-no-stamp");
+		expect(row.textContent).toContain(formatTime(undefined));
+		expect(row.textContent).not.toMatch(/\d{1,2}:\d{2}/);
 	});
 });

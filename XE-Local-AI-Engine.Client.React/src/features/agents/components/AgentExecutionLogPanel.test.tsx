@@ -25,6 +25,7 @@ const { hookMock } = vi.hoisted(() => ({
 
 vi.mock("@/features/agents/queries/useAgentExecutionLogs", () => hookMock);
 
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { AgentExecutionLogPanel } from "@/features/agents/components/AgentExecutionLogPanel";
 import type { AgentExecutionLog } from "@/features/agents/models/AgentExecutionLogModels";
 
@@ -123,5 +124,21 @@ describe("AgentExecutionLogPanel", () => {
 		renderPanel(<AgentExecutionLogPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
 
 		expect(screen.getByTestId("agent-execution-log-empty")).toBeTruthy();
+	});
+
+	// The panel maps a zero `createdAtUtc` to an absent instant on purpose: the row is a diagnostic, and dating a run
+	// to 1/1/1970 is worse than admitting the stamp is missing. Asserted on the "When" CELL rather than the row text,
+	// because the model and error-class cells render a dash of their own.
+	it("shows the dash, not a 1970 date, when the run carries no created timestamp", () => {
+		hookMock.useAgentExecutionLogs.mockReturnValue({
+			data: [makeLog({ id: "log-3", createdAtUtc: 0 })],
+			isLoading: false,
+			error: null,
+		});
+
+		renderPanel(<AgentExecutionLogPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		const cells = screen.getByTestId("agent-execution-log-row-log-3").querySelectorAll("td");
+		expect(cells[1]?.textContent).toBe(formatTimestamp(undefined));
 	});
 });
