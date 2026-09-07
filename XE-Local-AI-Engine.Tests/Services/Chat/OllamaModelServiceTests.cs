@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Services.Chat;
 
+using System.Net;
 using System.Runtime.CompilerServices;
 using NSubstitute;
 using OllamaSharp;
@@ -46,14 +47,15 @@ public sealed class OllamaModelServiceTests
     [Test]
     public async Task UnloadModelAsync_WhenOllamaHasNeverHeardOfTheModel_IsIdempotentNoOp()
     {
-        // Ollama answers /api/generate for an UNKNOWN model with 404 "model '<name>' not found, try pulling it first",
-        // which OllamaSharp raises as an OllamaException carrying that text. The fake answers for any name and so cannot
-        // produce it, hence the substituted client. Eject is documented idempotent on both surfaces that share
-        // OllamaModelUnloader, and a model this runtime does not know is already in the requested state, so the call
-        // must complete rather than throw. Anything else still propagates — see the next test.
+        // Ollama answers /api/generate for an UNKNOWN model with 404 "model '<name>' not found, try pulling it first".
+        // That reaches the caller as a bare HttpRequestException carrying the status, NOT an OllamaException: OllamaSharp
+        // 5.4.30's EnsureSuccessStatusCodeAsync parses the body only for HTTP 400 and lets every other status fall
+        // through to HttpResponseMessage.EnsureSuccessStatusCode(). Eject is documented idempotent on both surfaces that
+        // share OllamaModelUnloader, and a model this runtime does not know is already in the requested state, so the
+        // call must complete. The fake answers for any name and cannot produce a 404, hence the substituted client.
         var client = Substitute.For<IOllamaApiClient>();
         client.GenerateAsync(Arg.Any<GenerateRequest>(), Arg.Any<CancellationToken>())
-              .Returns(FailingStream(new OllamaException("model \"ghost:latest\" not found, try pulling it first")));
+              .Returns(FailingStream(new HttpRequestException("Not Found", inner: null, HttpStatusCode.NotFound)));
         using var service = new OllamaModelService(client);
 
         await service.UnloadModelAsync("ghost:latest").ConfigureAwait(false);
@@ -62,12 +64,28 @@ public sealed class OllamaModelServiceTests
     }
 
     [Test]
-    public async Task UnloadModelAsync_WhenOllamaFailsForAnyOtherReason_Propagates()
+    public async Task UnloadModelAsync_WhenOllamaAnswersWithAServerError_Propagates()
     {
-        // The not-found absorption must not become a blanket catch: a genuine runtime failure has to reach the caller.
+        // The 404 absorption is keyed on that ONE status, so a daemon that answers 500 is still a real fault. Absorbing
+        // it would report a freed model while Ollama kept holding it.
         var client = Substitute.For<IOllamaApiClient>();
         client.GenerateAsync(Arg.Any<GenerateRequest>(), Arg.Any<CancellationToken>())
-              .Returns(FailingStream(new OllamaException("server error")));
+              .Returns(FailingStream(new HttpRequestException("Server Error", inner: null, HttpStatusCode.InternalServerError)));
+        using var service = new OllamaModelService(client);
+
+        var thrown = await AssertEx.ThrowsAsync<HttpRequestException>(() => service.UnloadModelAsync("qwen3:8b")).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.InternalServerError, thrown.StatusCode);
+    }
+
+    [Test]
+    public async Task UnloadModelAsync_WhenOllamaRejectsTheRequest_Propagates()
+    {
+        // HTTP 400 is the one status OllamaSharp parses into an OllamaException. It is a genuine rejection, not an
+        // already-satisfied eject, so it must reach the caller rather than be mistaken for the not-found case.
+        var client = Substitute.For<IOllamaApiClient>();
+        client.GenerateAsync(Arg.Any<GenerateRequest>(), Arg.Any<CancellationToken>())
+              .Returns(FailingStream(new OllamaException("model is currently loading")));
         using var service = new OllamaModelService(client);
 
         await AssertEx.ThrowsAsync<OllamaException>(() => service.UnloadModelAsync("qwen3:8b")).ConfigureAwait(false);
