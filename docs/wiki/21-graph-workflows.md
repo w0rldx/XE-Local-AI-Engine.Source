@@ -535,9 +535,11 @@ says one appeared. It is the same rule as the Open Canvas importer's `CanvasWork
 plus three guards the importer never meets. A `Condition` ancestor is skipped, because the added edge carries no
 `sourceHandle` and would save as that Condition's second unconditional out-edge, which §2.4 refuses. A pause whose
 nearest non-`Pause` ancestor is **not unique** (mutually exclusive branches feeding it) gets nothing, because wiring
-both ancestors into an `All` successor would skip it the moment the untaken branch is dead. And a successor that is a
-`Join` with `joinPolicy: "Any"` gets nothing, because an unconditional content edge would admit it while every
-approval was rejected. Everywhere else Y keeps its default `All` join policy, so it is admitted only once **both**
+both ancestors into an `All` successor would skip it the moment the untaken branch is dead. And a successor with
+`joinPolicy: "Any"` — of **any** kind, since the policy is a property of every node (§2.3) — gets nothing, because an
+unconditional content edge would admit it while every approval was rejected. Wiring into a pause visits each pause
+reachable forward through consecutive pauses with its own ancestry, so `A → P1 → P2 → B` plus `X → P2` adds nothing
+for `B` (its ancestors through `P2` are `{A, X}`). Everywhere else Y keeps its default `All` join policy, so it is admitted only once **both**
 the content and the approval have arrived, and its `input` is the `upstream` map carrying both.
 
 The pass runs on the **connect gesture and nowhere else** — never on render, never on validate — so an edge the
@@ -610,9 +612,10 @@ Validation errors are keyed. `GraphWorkflowValidationException` carries a `Graph
 the endpoints replay them one by one instead of collapsing them into a sentence. It is therefore **kept out of**
 `DomainValidationExceptionHandler`, which maps single-message validation exceptions globally.
 
-Warnings travel on the validate response as a second list of the same `(key, message)` shape and are **never** part of
-`GraphWorkflowValidationResult` (§2.4), so nothing that refuses on the errors has to remember to filter them out
-first, and a client that ignores the member behaves exactly as it did before it existed.
+Warnings travel on the validate response as a second list of the same `(key, message)` shape. They are a separate
+`Warnings` member on `GraphWorkflowValidationResult` — never mixed into `Errors`, which is what the exception path and
+`valid` read — so nothing that refuses on the errors has to filter them out, and a client that ignores the member
+behaves exactly as it did before it existed.
 
 ### The hub
 
@@ -666,10 +669,10 @@ component is a thin adapter; `GraphWorkflowsPage` itself is router-free and is r
 **The editor** mirrors the server's rules rather than inventing its own, and the mirror is a mirror on purpose: the
 authoritative answer comes from `graph-workflows/definitions/validate`, which runs the parser a run would run, and
 `serverErrorsToIssues` maps its keyed errors back onto the canvas elements. The page flow is Validate → Save (server
-validate first; a 409 reloads) → Start. The server's **warnings** arrive through the same shape carrying
-`severity: "warning"` and render in their own alert below the errors, in a different colour and under a title that
-asks rather than refuses; they never join the list the save gate, the red chips and the config panels read, because a
-warning is not a reason to save less. Every client rule mirrors a rule that REFUSES a save, so the client raises none
+validate first; a 409 reloads) → Start. The server's **warnings** arrive through `serverWarningsToIssues` as
+issues with the rule `serverWarned` and reach the strip through its own `warnings` prop; they render in their own alert
+below the errors, in a different colour and under a title that asks rather than refuses, and never join the list the
+save gate, the red chips and the config panels read, because a warning is not a reason to save less. Every client rule mirrors a rule that REFUSES a save, so the client raises none
 of them.
 
 Two round-trip rules the editor has to hold because the server does. Every JSON-shaped config field is written back as
@@ -855,7 +858,7 @@ already wires — a second unconditional edge over one pair is a validation erro
 the `Start` node, whose output is the run's own input, which is exactly the content the pause interrupted.
 
 The editor offers the same edge to an **author**, on the connect gesture (§4.6). It carries three guards the importer
-never needs — a `Condition` ancestor, a non-unique ancestor and an `Any`-join successor are all skipped, for the
+never needs — a `Condition` ancestor, a non-unique ancestor and an `Any`-policy successor of any kind are all skipped, for the
 reasons §4.6 gives — and it runs only on that gesture, so an author who deletes the edge keeps it deleted.
 
 `maxAttempts: 1` on an imported Agent is deliberately below the default of 3. An import is conservative: re-running
