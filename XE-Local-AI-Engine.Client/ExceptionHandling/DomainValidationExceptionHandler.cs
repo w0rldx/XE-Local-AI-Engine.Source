@@ -18,7 +18,7 @@ using ProblemDetails = FastEndpoints.ProblemDetails;
 ///     FastEndpoints <see cref="ProblemDetails" /> DTO, built the way <c>ErrorOptions.ResponseBuilder</c> builds it
 ///     (instance = request path, traceId = <see cref="HttpContext.TraceIdentifier" />), serialized with the same
 ///     options and content type. New single-message validation exceptions belong in the switch below rather than in a
-///     per-endpoint catch. Multi-error types (<c>PreviewWorkflowValidationException</c>) and aggregate ones
+///     per-endpoint catch. Multi-error types (<c>GraphWorkflowValidationException</c>) and aggregate ones
 ///     (<c>SelectedFolderValidationException</c>) are deliberately out of scope — they do not map to one failure.
 /// </summary>
 public sealed class DomainValidationExceptionHandler(ILogger<DomainValidationExceptionHandler> logger) : IExceptionHandler

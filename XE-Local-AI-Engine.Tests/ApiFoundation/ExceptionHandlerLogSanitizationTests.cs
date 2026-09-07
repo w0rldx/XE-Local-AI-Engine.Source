@@ -14,7 +14,7 @@ using Serilog.Events;
 using Serilog.Extensions.Hosting;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
-using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -104,7 +104,9 @@ public sealed class ExceptionHandlerLogSanitizationTests
         var handler = new ConflictExceptionHandler(logger);
         var context = CreateContext();
 
-        var handled = await handler.TryHandleAsync(context, new PreviewWorkflowCapReachedException(maxConcurrentRuns: 3), CancellationToken.None)
+        var handled = await handler.TryHandleAsync(context,
+                                       new WorkSessionInvalidTransitionException("A work session cannot be deleted mid-step."),
+                                       CancellationToken.None)
                                    .ConfigureAwait(false);
 
         AssertSanitizedRequestProperties(handled, logger);

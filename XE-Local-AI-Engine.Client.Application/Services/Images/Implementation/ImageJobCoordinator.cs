@@ -75,8 +75,8 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     private readonly ConcurrentDictionary<Guid, JobEventLog> _eventLogs = new();
 
     // Periodic eviction so terminal replay logs are released even when no further job ever starts. Without it the
-    // eviction in EnqueueAsync was the ONLY trigger, so the last jobs' logs lingered on an idle node indefinitely
-    // (parity with PreviewWorkflowIdleSweeper's cadence-driven sweep).
+    // eviction in EnqueueAsync was the ONLY trigger, so the last jobs' logs lingered on an idle node indefinitely.
+    // A cadence-driven sweep does not depend on another job arriving to reclaim what the previous ones left.
     private readonly ITimer _evictionTimer;
 
     public ImageJobCoordinator(IImageRuntime runtime,

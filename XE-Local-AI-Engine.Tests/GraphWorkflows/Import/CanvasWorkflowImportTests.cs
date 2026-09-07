@@ -1,107 +1,27 @@
 namespace XE_Local_AI_Engine.Tests.GraphWorkflows.Import;
 
 using System.Text;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Import;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Both halves of the one-shot Open Canvas import against a real database: the pre-migration read that decrypts
-///     <c>canvas_workflows</c> by hand, and the post-migration write that turns each canvas into a definition.
+///     The post-migration write half of the one-shot Open Canvas import against a real database: turning each decrypted
+///     canvas into a Graph Workflow definition.
 ///     <para>
-///         Every test builds a host of its own. The read is deliberately unfiltered — it takes EVERY row, because a cap
-///         plus an unconditional drop migration destroys everything past the cap as its normal outcome — so a shared
-///         database would let a sibling's rows into this one's count, and the count is the assertion that catches a
-///         column silently failing to bind.
+///         The pre-migration read half is in <c>CanvasWorkflowImportReadTests</c> over in the persistence project,
+///         because the table it reads no longer exists at head: seeding it means migrating to the migration before the
+///         drop and writing raw rows, which is that project's migration-probe seam rather than this one's host.
+///     </para>
+///     <para>
+///         Every test builds a host of its own, so an absolute count here is never a sibling's row.
 ///     </para>
 /// </summary>
 public sealed class CanvasWorkflowImportTests
 {
-    /// <summary>
-    ///     The encrypted-fixture case. Rows are seeded through the real store so the real save interceptor encrypts
-    ///     them under AAD <c>graph_json</c>, then read back through the raw aliased-column path — which is the only
-    ///     thing that proves the aliases bind. A count that came back short would mean a column reached its property as
-    ///     a default and the drop migration was about to run anyway.
-    /// </summary>
-    [Test]
-    public async Task ReadAsync_OverEncryptedRows_AnswersEveryCanvasInPlaintext()
-    {
-        await using var factory = NewHost();
-        var first = await SeedCanvasAsync(factory, "Release notes", CanvasGraphs.Linear).ConfigureAwait(false);
-        var second = await SeedCanvasAsync(factory, "Sign off", CanvasGraphs.WithPause).ConfigureAwait(false);
-
-        var (snapshot, logger) = await ReadAsync(factory).ConfigureAwait(false);
-
-        AssertEx.Equal(expected: 2, snapshot.Candidates.Count, "the candidate count is what catches a column that silently failed to bind.");
-        AssertEx.Equal(expected: 0, snapshot.FailedCount);
-        AssertEx.Equal("Release notes, Sign off", string.Join(", ", snapshot.Candidates.Select(static candidate => candidate.Name)),
-            "ordered by creation, so ids and ordering stay natural.");
-        AssertEx.Equal(first, snapshot.Candidates[0].Id);
-        AssertEx.Equal(second, snapshot.Candidates[1].Id);
-        AssertEx.Contains(snapshot.Candidates[0].GraphJson, "Summarize it.", message: "the graph comes back decrypted, not as the stored ciphertext.");
-        AssertEx.True(logger.HasEntry(LogLevel.Information, "2 saved workflow(s) read before migrations"));
-    }
-
-    /// <summary>
-    ///     The idempotency mechanism, stated as a test: on every start after the first the table is gone, so the read
-    ///     is a permanent no-op. No marker table, no flag column, nothing to keep honest.
-    /// </summary>
-    [Test]
-    public async Task ReadAsync_WithNoCanvasWorkflowsTable_AnswersAnEmptySnapshotWithoutThrowing()
-    {
-        await using var factory = NewHost();
-        _ = await SeedCanvasAsync(factory, "Gone after the drop", CanvasGraphs.Linear).ConfigureAwait(false);
-        await ExecuteAsync(factory, "DROP TABLE canvas_workflows").ConfigureAwait(false);
-
-        var (snapshot, _) = await ReadAsync(factory).ConfigureAwait(false);
-
-        AssertEx.Empty(snapshot.Candidates);
-        AssertEx.Equal(expected: 0, snapshot.FailedCount);
-    }
-
-    /// <summary>
-    ///     A blob that will not decrypt is the one thing this import genuinely loses, and it should be impossible: a
-    ///     row written by the canvas endpoint decrypts under its own AAD. So it is counted and its id is named at
-    ///     Error — the operator's only route back to it is the pre-migration snapshot — and the read carries on.
-    /// </summary>
-    [Test]
-    public async Task ReadAsync_WithARowThatWillNotDecrypt_CountsItAndStillReturnsTheOthers()
-    {
-        await using var factory = NewHost();
-        var damaged = await SeedCanvasAsync(factory, "Damaged", CanvasGraphs.Linear).ConfigureAwait(false);
-        _ = await SeedCanvasAsync(factory, "Intact", CanvasGraphs.WithPause).ConfigureAwait(false);
-        await ExecuteAsync(factory, "UPDATE canvas_workflows SET graph_json = {0} WHERE id = {1}", new byte[] { 0x00, 0x01, 0x02 }, damaged).ConfigureAwait(false);
-
-        var (snapshot, logger) = await ReadAsync(factory).ConfigureAwait(false);
-
-        AssertEx.Equal(expected: 1, snapshot.FailedCount);
-        AssertEx.Equal("Intact", string.Join(", ", snapshot.Candidates.Select(static candidate => candidate.Name)), "one damaged row never costs the operator the rest.");
-        AssertEx.True(logger.HasEntry(LogLevel.Error, damaged.ToString()), "the id is named, because it is what an operator pulls from the backup.");
-    }
-
-    /// <summary>
-    ///     No cap and no option. A limit here would destroy every canvas past it as the import's NORMAL outcome, since
-    ///     the drop migration runs in the same build whether the read took the row or not.
-    /// </summary>
-    [Test]
-    public async Task ReadAsync_WithMoreRowsThanAnyReasonableCap_ReadsEveryOne()
-    {
-        await using var factory = NewHost();
-        for (var index = 0; index < 60; index++)
-        {
-            _ = await SeedCanvasAsync(factory, $"Canvas {index}", CanvasGraphs.Linear).ConfigureAwait(false);
-        }
-
-        var (snapshot, _) = await ReadAsync(factory).ConfigureAwait(false);
-
-        AssertEx.Equal(expected: 60, snapshot.Candidates.Count);
-    }
-
     /// <summary>A fresh install has nothing to import and must say nothing about it.</summary>
     [Test]
     public async Task ImportAsync_WithAnEmptySnapshot_WritesNothingAndAnnouncesNothing()
@@ -214,20 +134,9 @@ public sealed class CanvasWorkflowImportTests
         AssertEx.Equal("Imported while off", (await ListDefinitionsAsync(factory).ConfigureAwait(false)).Single().Name);
     }
 
-    /// <summary>
-    ///     A host of this test's own, because <see cref="CanvasWorkflowImport.ReadAsync" /> reads EVERY row of a
-    ///     database and every count here is an absolute one.
-    /// </summary>
+    /// <summary>A host of this test's own, because every definition count here is an absolute one.</summary>
     private static TestServerWebAppFactory NewHost() =>
         GraphWorkflowHostFixture.NewFactory();
-
-    private static async Task<(CanvasWorkflowImportSnapshot Snapshot, RecordingLogger<CanvasWorkflowImportTests> Logger)> ReadAsync(TestServerWebAppFactory factory)
-    {
-        var logger = new RecordingLogger<CanvasWorkflowImportTests>();
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        return (await CanvasWorkflowImport.ReadAsync(dbContext, logger).ConfigureAwait(false), logger);
-    }
 
     private static async Task ImportAsync(TestServerWebAppFactory factory, CanvasWorkflowImportSnapshot snapshot, ILogger logger)
     {
@@ -237,24 +146,6 @@ public sealed class CanvasWorkflowImportTests
                                       snapshot,
                                       logger)
                                   .ConfigureAwait(false);
-    }
-
-    /// <summary>
-    ///     Seeded through the real canvas store, so the row is encrypted by the real save interceptor under the AAD the
-    ///     reader decrypts with. A hand-built ciphertext would prove only that the test and the reader agree.
-    /// </summary>
-    private static async Task<Guid> SeedCanvasAsync(TestServerWebAppFactory factory, string name, string graphJson)
-    {
-        await using var scope = factory.Services.CreateAsyncScope();
-        var store = scope.ServiceProvider.GetRequiredService<ICanvasWorkflowStore>();
-        return (await store.AddAsync(new CanvasWorkflowInput(name, graphJson)).ConfigureAwait(false)).Id;
-    }
-
-    private static async Task ExecuteAsync(TestServerWebAppFactory factory, string sql, params object[] parameters)
-    {
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        _ = await dbContext.Database.ExecuteSqlRawAsync(sql, parameters).ConfigureAwait(false);
     }
 
     private static async Task<IReadOnlyList<GraphWorkflowDefinitionSummary>> ListDefinitionsAsync(TestServerWebAppFactory factory)

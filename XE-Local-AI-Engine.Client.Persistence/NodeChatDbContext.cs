@@ -29,8 +29,6 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<AgentDefinition> AgentDefinitions => Set<AgentDefinition>();
 
-    internal DbSet<CanvasWorkflow> CanvasWorkflows => Set<CanvasWorkflow>();
-
     internal DbSet<AgentSkill> AgentSkills => Set<AgentSkill>();
 
     internal DbSet<AgentSkillResource> AgentSkillResources => Set<AgentSkillResource>();
@@ -404,7 +402,6 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new NodeMessageFeedbackConfiguration());
         modelBuilder.ApplyConfiguration(new NodeSelectedFolderConfiguration());
         modelBuilder.ApplyConfiguration(new AgentDefinitionConfiguration());
-        modelBuilder.ApplyConfiguration(new CanvasWorkflowConfiguration());
         modelBuilder.ApplyConfiguration(new AgentSkillConfiguration());
         modelBuilder.ApplyConfiguration(new AgentSkillResourceConfiguration());
         modelBuilder.ApplyConfiguration(new CustomToolConfiguration());
