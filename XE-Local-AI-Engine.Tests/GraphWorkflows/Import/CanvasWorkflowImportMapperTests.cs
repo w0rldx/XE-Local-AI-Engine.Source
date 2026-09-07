@@ -29,6 +29,8 @@ public sealed class CanvasWorkflowImportMapperTests
     [Arguments(CanvasGraphs.AwkwardIds)]
     [Arguments(CanvasGraphs.DuplicateIds)]
     [Arguments(CanvasGraphs.DebugWithNoSuccessor)]
+    [Arguments(CanvasGraphs.DebugPointingAtItself)]
+    [Arguments(CanvasGraphs.NullEntries)]
     [Arguments(CanvasGraphs.UnknownKind)]
     [Arguments(CanvasGraphs.BareFields)]
     [Arguments(CanvasGraphs.DanglingEdge)]
@@ -112,6 +114,36 @@ public sealed class CanvasWorkflowImportMapperTests
         AssertEx.Contains(string.Join(" ", mapped.Reasons), "had nothing after it");
         _ = AssertEx.Throws<GraphWorkflowValidationException>(() => GraphWorkflowGraphContract.ValidateAndCountNodes(mapped.Document.ToJsonString(), maxNodes: 200),
             "which is the point: the row is preserved as a definition that cannot run until it is edited.");
+    }
+
+    /// <summary>
+    ///     A Debug node pointing only at itself resolves to no target at all: the walk stops on its own seen-set, so
+    ///     neither the elision nor the missing-successor branch notices, and the edge into it would otherwise vanish
+    ///     with nothing said.
+    /// </summary>
+    [Test]
+    public void MapGraph_WithADebugNodeThatOnlyPointsAtItself_KeepsTheGraphAndSaysWhatItLost()
+    {
+        var mapped = CanvasWorkflowImport.MapGraph(CanvasGraphs.DebugPointingAtItself);
+
+        AssertEx.Equal("start->agent-1", Wiring(mapped.Document), "the edge into the tap had nowhere to be rewired to.");
+        AssertEx.Contains(string.Join(" ", mapped.Reasons), "led only back into itself");
+    }
+
+    /// <summary>
+    ///     A JSON null inside <c>nodes</c> or <c>edges</c> is valid JSON, so the reader's parse succeeds and every walk
+    ///     downstream would dereference it. The entries are dropped with a reason and the rest of the canvas survives.
+    /// </summary>
+    [Test]
+    public void MapGraph_WithNullEntriesAmongTheNodesAndEdges_DropsThemAndKeepsTheRest()
+    {
+        var mapped = CanvasWorkflowImport.MapGraph(CanvasGraphs.NullEntries);
+
+        AssertEx.Equal("start, agent-1, end", Keys(mapped.Document, "nodes"), "a null entry names nothing and cannot be carried across.");
+        AssertEx.Equal("start->agent-1, agent-1->end", Wiring(mapped.Document));
+        AssertEx.Contains(string.Join(" ", mapped.Reasons), "empty node or edge entries");
+        AssertEx.Equal(expected: 3, GraphWorkflowGraphContract.ValidateAndCountNodes(mapped.Document.ToJsonString(), maxNodes: 200),
+            "what remained is a graph the runtime's own parser still accepts.");
     }
 
     /// <summary>

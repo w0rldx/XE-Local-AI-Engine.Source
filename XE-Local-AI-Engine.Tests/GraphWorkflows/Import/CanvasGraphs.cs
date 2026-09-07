@@ -200,6 +200,48 @@ internal static class CanvasGraphs
                                        }
                                        """;
 
+    /// <summary>
+    ///     A Debug node whose only outgoing edge points at itself. Impossible under the old validator, and the walk
+    ///     that elides Debug nodes stops on its own seen-set rather than on a missing successor.
+    /// </summary>
+    public const string DebugPointingAtItself = """
+                                                {
+                                                  "startText": "Go.",
+                                                  "nodes": [
+                                                    { "id": "start", "kind": "Start" },
+                                                    { "id": "agent-1", "kind": "Agent", "instructions": "Go.", "model": "qwen3:8b" },
+                                                    { "id": "debug-1", "kind": "Debug" },
+                                                    { "id": "end", "kind": "End" }
+                                                  ],
+                                                  "edges": [
+                                                    { "sourceId": "start", "targetId": "agent-1" },
+                                                    { "sourceId": "agent-1", "targetId": "debug-1" },
+                                                    { "sourceId": "debug-1", "targetId": "debug-1" }
+                                                  ]
+                                                }
+                                                """;
+
+    /// <summary>
+    ///     A JSON null sitting inside <c>nodes</c> and another inside <c>edges</c>. Valid JSON, so nothing upstream
+    ///     rejects it, and it deserializes to null ELEMENTS the mapper would otherwise dereference.
+    /// </summary>
+    public const string NullEntries = """
+                                      {
+                                        "startText": "Go.",
+                                        "nodes": [
+                                          { "id": "start", "kind": "Start" },
+                                          null,
+                                          { "id": "agent-1", "kind": "Agent", "instructions": "Go.", "model": "qwen3:8b" },
+                                          { "id": "end", "kind": "End" }
+                                        ],
+                                        "edges": [
+                                          { "sourceId": "start", "targetId": "agent-1" },
+                                          null,
+                                          { "sourceId": "agent-1", "targetId": "end" }
+                                        ]
+                                      }
+                                      """;
+
     /// <summary>Valid JSON that is not a canvas graph at all. The reader lets it through; the mapper must not throw.</summary>
     public const string NotAGraph = """[1, 2, 3]""";
 

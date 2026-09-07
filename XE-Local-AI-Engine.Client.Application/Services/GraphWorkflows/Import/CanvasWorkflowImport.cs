@@ -36,6 +36,11 @@ public sealed record CanvasWorkflowImportSnapshot(IReadOnlyList<CanvasWorkflowIm
 ///         Nothing here may depend on a Preview type: the read parses the stored blob into private records of its own
 ///         so the Preview namespace can be deleted out from under it in the same slice.
 ///     </para>
+///     <para>
+///         It also runs under <c>--reset-admin-password</c>: that branch of <c>Program</c> returns only AFTER the
+///         migration pass, so the read, the migrations and this write all happen first. The knowledge-downgrade
+///         commands are the one launch path that returns before migrations and therefore before the import.
+///     </para>
 /// </summary>
 public static class CanvasWorkflowImport
 {
@@ -79,7 +84,7 @@ public static class CanvasWorkflowImport
 
         var rows = await dbContext.Database
                                   .SqlQueryRaw<CanvasWorkflowRow>("SELECT id AS Id, name AS Name, graph_json AS GraphJson, created_at_utc AS CreatedAtUtc "
-                                                                  + "FROM canvas_workflows ORDER BY created_at_utc ASC")
+                                                                  + "FROM canvas_workflows ORDER BY created_at_utc ASC, id ASC")
                                   .ToListAsync(cancellationToken)
                                   .ConfigureAwait(false);
 
@@ -186,8 +191,15 @@ public static class CanvasWorkflowImport
         var reasons = new List<string>();
         var canvas = ReadCanvas(graphJson, reasons);
 
-        var nodes = canvas.Nodes ?? [];
-        var edges = canvas.Edges ?? [];
+        // A JSON null sitting among the node or edge members deserializes to a null ELEMENT. It is valid JSON, so
+        // ReadCanvas never sees an exception, and every walk below would dereference it. Dropped so the mapper stays
+        // total.
+        var nodes = (canvas.Nodes ?? []).OfType<CanvasNode>().ToList();
+        var edges = (canvas.Edges ?? []).OfType<CanvasEdge>().ToList();
+        if (nodes.Count != (canvas.Nodes?.Count ?? 0) || edges.Count != (canvas.Edges?.Count ?? 0))
+        {
+            reasons.Add("The stored canvas graph carried empty node or edge entries, which could name nothing and were dropped.");
+        }
 
         // Debug nodes forward their input unchanged (they were a side-event tap), so eliding one and rewiring
         // X -> Debug -> Y into X -> Y preserves the run's meaning exactly.
@@ -257,10 +269,26 @@ public static class CanvasWorkflowImport
         ILogger logger,
         CancellationToken cancellationToken)
     {
-        var map = MapGraph(candidate.GraphJson);
-        var graphJson = map.Document.ToJsonString();
-        var name = DefinitionName(candidate.Name);
-        var provenance = $"Imported from Open Canvas (canvas workflow {candidate.Id}).";
+        ImportMapResult map;
+        string graphJson;
+        string name;
+        string provenance;
+        try
+        {
+            // Inside the guard, not before it: this method is the only thing standing between a row that throws while
+            // being mapped and every LATER canvas plus the summary line, and the source table is already dropped.
+            map = MapGraph(candidate.GraphJson);
+            graphJson = map.Document.ToJsonString();
+            name = DefinitionName(candidate.Name);
+            provenance = $"Imported from Open Canvas (canvas workflow {candidate.Id}).";
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogError("Open Canvas workflow {CanvasWorkflowId} could not be translated and is lost. [{ErrorType}]",
+                candidate.Id,
+                exception.GetType().Name);
+            return ImportOutcome.Failed;
+        }
 
         try
         {
@@ -467,6 +495,7 @@ public static class CanvasWorkflowImport
         var mapped = new JsonArray();
         var pairs = new HashSet<(string From, string To)>();
         var strandedDebug = new HashSet<string>(StringComparer.Ordinal);
+        var circularDebug = new HashSet<string>(StringComparer.Ordinal);
         var index = 0;
         foreach (var edge in edges)
         {
@@ -483,7 +512,7 @@ public static class CanvasWorkflowImport
                 continue;
             }
 
-            foreach (var targetId in ResolveTargets(edge.TargetId ?? string.Empty, elided, successors, strandedDebug))
+            foreach (var targetId in ResolveTargets(edge.TargetId ?? string.Empty, elided, successors, strandedDebug, circularDebug))
             {
                 if (!keyByCanvasId.TryGetValue(targetId, out var to))
                 {
@@ -525,22 +554,31 @@ public static class CanvasWorkflowImport
             reasons.Add($"A canvas Debug node ('{Sanitize(stranded)}') had nothing after it, so the path into it now ends nowhere.");
         }
 
+        foreach (var circular in circularDebug.Order(StringComparer.Ordinal))
+        {
+            reasons.Add($"A canvas Debug node ('{Sanitize(circular)}') led only back into itself, so the path into it now ends nowhere.");
+        }
+
         return mapped;
     }
 
     /// <summary>
     ///     Where an edge into <paramref name="targetId" /> really lands: itself, or — when it is an elided Debug node —
-    ///     whatever that node pointed at, transitively. A Debug node with no successor is recorded rather than
-    ///     silently swallowing the edge.
+    ///     whatever that node pointed at, transitively. A Debug node with no successor is recorded in
+    ///     <paramref name="stranded" /> rather than silently swallowing the edge; one whose successors only lead back
+    ///     to Debug nodes the walk already passed through resolves to nothing for the same reason and is recorded in
+    ///     <paramref name="circular" />, because the seen-set stops the walk without either list ever growing.
     /// </summary>
     private static List<string> ResolveTargets(string targetId,
         HashSet<string> elided,
         Dictionary<string, List<string>> successors,
-        HashSet<string> stranded)
+        HashSet<string> stranded,
+        HashSet<string> circular)
     {
         var resolved = new List<string>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var pending = new Stack<string>();
+        var recordedStranded = false;
         pending.Push(targetId);
         while (pending.Count > 0)
         {
@@ -559,6 +597,7 @@ public static class CanvasWorkflowImport
             if (!successors.TryGetValue(current, out var next) || next.Count == 0)
             {
                 _ = stranded.Add(current);
+                recordedStranded = true;
                 continue;
             }
 
@@ -566,6 +605,11 @@ public static class CanvasWorkflowImport
             {
                 pending.Push(successor);
             }
+        }
+
+        if (resolved.Count == 0 && !recordedStranded)
+        {
+            _ = circular.Add(targetId);
         }
 
         return resolved;
@@ -664,7 +708,7 @@ public static class CanvasWorkflowImport
     /// <summary>The raw row, with every column aliased to the property that binds it.</summary>
     private sealed record CanvasWorkflowRow(Guid Id, string? Name, byte[] GraphJson, long CreatedAtUtc);
 
-    private sealed record CanvasGraph(string? StartText, IReadOnlyList<CanvasNode>? Nodes, IReadOnlyList<CanvasEdge>? Edges);
+    private sealed record CanvasGraph(string? StartText, IReadOnlyList<CanvasNode?>? Nodes, IReadOnlyList<CanvasEdge?>? Edges);
 
     private sealed record CanvasNode(string? Id, string? Kind, string? Label, string? Instructions, string? Model, string? ModelProfile, string? ReasoningEffort);
 
