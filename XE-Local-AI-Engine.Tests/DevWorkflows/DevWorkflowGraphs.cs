@@ -727,7 +727,13 @@ internal static class DevWorkflowGraphs
     ///         no authored edge — which is what makes the augmented edge set differ from the authored one, and so what
     ///         makes the second acyclicity walk run at all. <paramref name="gatedApply" /> ends the chain with a
     ///         validation, a human gate and an apply, adding THREE nodes: that is what makes the gate and apply
-    ///         invariants — and the topological order they are computed over — run over the whole depth.
+    ///         invariants — and the topological order they are computed over — run at all.
+    ///     </para>
+    ///     <para>
+    ///         That tail also DECLARES the nodes back to front, which is the half that makes the ancestor walk deep.
+    ///         The order the walk takes its roots in is the declared order, so a forward declaration hands it every
+    ///         predecessor already placed and it never descends past one node — the depth is in the EDGES, and only a
+    ///         root at the far end of them reaches it. The edges stay forward, so the graph is the same graph.
     ///     </para>
     /// </summary>
     public static string Chain(int nodeCount, bool materialized = false, bool gatedApply = false)
@@ -758,6 +764,11 @@ internal static class DevWorkflowGraphs
         // gate, so an unconditional edge into an apply would carry a rejection through as well.
         var edges = keys.Zip(keys.Skip(1),
             static (from, to) => $$"""{ "from": "{{from}}", "to": "{{to}}"{{(string.Equals(to, "apply", StringComparison.Ordinal) ? """, "condition": { "path": "decision", "op": "eq", "value": "Approve" }""" : "")}} }""");
+
+        if (gatedApply)
+        {
+            nodes.Reverse();
+        }
 
         return $$"""{ "schemaVersion": 1, "nodes": [{{string.Join(", ", nodes)}}], "edges": [{{string.Join(", ", edges)}}] }""";
     }

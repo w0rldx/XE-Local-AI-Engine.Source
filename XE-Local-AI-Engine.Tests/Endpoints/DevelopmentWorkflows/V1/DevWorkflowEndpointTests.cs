@@ -864,6 +864,47 @@ public sealed class DevWorkflowEndpointTests
             UpdatedAtUtc: 2);
 
     /// <summary>
+    ///     The node cap is the OPTION's, not a constant the endpoint carries: with it configured to one, the two-node
+    ///     graph every other test here saves is refused. An endpoint that read its own number, or passed
+    ///     <c>int.MaxValue</c>, would store this graph and never reach the message.
+    /// </summary>
+    [Test]
+    [Arguments("POST", Definitions)]
+    [Arguments("PUT", Definition)]
+    public async Task DefinitionRoute_WithMoreNodesThanTheConfiguredCap_ReturnsBadRequestAndNeverReachesTheStore(string method, string route)
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store, runs: null, ("DevWorkflows:MaxNodesPerDefinition", "1"));
+
+        using var response = await SendAsync(factory, method, route, CappableDefinitionBody()).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, $"{method} {route} must refuse a graph over the configured cap.");
+        AssertEx.Contains(body, "declares 2 nodes, more than the 1 one definition may carry", StringComparison.Ordinal);
+        AssertEx.Empty(store.ReceivedCalls());
+    }
+
+    /// <summary>
+    ///     The same body under the SHIPPED cap, so the row above is about the cap rather than about the graph: nothing
+    ///     here is refused, and both routes reach the store.
+    /// </summary>
+    [Test]
+    [Arguments("POST", Definitions)]
+    [Arguments("PUT", Definition)]
+    public async Task DefinitionRoute_UnderTheConfiguredCap_ReachesTheStore(string method, string route)
+    {
+        var store = Store();
+        store.CreateDefinitionAsync(Arg.Any<CreateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>()).Returns(DefinitionSnapshot());
+        store.UpdateDefinitionAsync(Arg.Any<UpdateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>()).Returns(DefinitionSnapshot());
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, method, route, CappableDefinitionBody()).ConfigureAwait(false);
+
+        AssertEx.True(response.IsSuccessStatusCode, $"{method} {route} must save a two-node graph under the shipped cap of 500; it answered {response.StatusCode}.");
+        AssertEx.NotEmpty(store.ReceivedCalls());
+    }
+
+    /// <summary>
     ///     The graph-carrying routes cap their body. Without one they inherit the host's 30 MB default, and a body that
     ///     size is bound and walked by the runtime's own parser before the node cap could refuse it.
     /// </summary>
@@ -932,6 +973,13 @@ public sealed class DevWorkflowEndpointTests
 
     private static string CreateDefinitionBody(string graph) =>
         $$"""{"name":"Research → Plan → Approval","graph":{{graph}}}""";
+
+    /// <summary>
+    ///     The two-node sample carried by both definition routes: the create route ignores the definitionId and the
+    ///     version, and the update route needs them, so one body serves both.
+    /// </summary>
+    private static string CappableDefinitionBody() =>
+        $$"""{"definitionId":"22222222-2222-2222-2222-222222222222","version":4,"name":"Triage","graph":{{SampleGraph}}}""";
 
     /// <summary>
     ///     A body whose bulk is in the GRAPH rather than in a bounded field: the name has its own length rule, so an
@@ -1052,13 +1100,16 @@ public sealed class DevWorkflowEndpointTests
         return request;
     }
 
-    private static TestServerWebAppFactory EnabledFactory(IDevWorkflowStore store, IDevWorkflowRunService? runs = null) =>
+    private static TestServerWebAppFactory EnabledFactory(IDevWorkflowStore store,
+        IDevWorkflowRunService? runs = null,
+        params (string Key, string Value)[] configuration) =>
         new()
         {
             AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["DevWorkflows:Enabled"] = "true"
-            },
+            }.Concat(configuration.Select(static entry => new KeyValuePair<string, string?>(entry.Key, entry.Value)))
+             .ToDictionary(StringComparer.Ordinal),
             ConfigureAdditionalTestServices = services =>
             {
                 services.RemoveAll<IDevWorkflowStore>();
