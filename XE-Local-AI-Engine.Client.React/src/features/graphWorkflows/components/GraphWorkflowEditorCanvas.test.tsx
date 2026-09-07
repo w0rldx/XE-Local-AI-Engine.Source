@@ -180,12 +180,12 @@ describe("GraphWorkflowEditorCanvas palette", () => {
 		transfer.setData("application/xe-graph-workflow", JSON.stringify({ kind: "Agent" }));
 		fireEvent.drop(screen.getByTestId("react-flow"), { dataTransfer: transfer });
 
-		expect(screen.getByTestId("graph-workflow-editor-refusal").textContent).toContain("as many nodes as a run accepts");
+		expect(screen.getByTestId("graph-workflow-editor-notice").textContent).toContain("as many nodes as a run accepts");
 		expect(flowNodes()).toHaveLength(GRAPH_WORKFLOW_MAX_NODES);
 		expect((screen.getByTestId("graph-workflow-palette-agent") as HTMLButtonElement).disabled).toBe(true);
 
 		fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
-		expect(screen.queryByTestId("graph-workflow-editor-refusal")).toBeNull();
+		expect(screen.queryByTestId("graph-workflow-editor-notice")).toBeNull();
 	});
 });
 
@@ -233,7 +233,7 @@ describe("GraphWorkflowEditorCanvas connecting", () => {
 		});
 
 		expect(flowEdges().filter((edge) => edge.source === "lookup" && edge.target === "fanout")).toHaveLength(1);
-		expect(screen.getByTestId("graph-workflow-editor-refusal").textContent).toContain("without a condition");
+		expect(screen.getByTestId("graph-workflow-editor-notice").textContent).toContain("without a condition");
 
 		act(() => {
 			flowProps().onConnect?.({ source: "review", target: "done", sourceHandle: "Approve", targetHandle: null });

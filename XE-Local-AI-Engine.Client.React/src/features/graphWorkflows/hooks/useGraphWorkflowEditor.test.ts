@@ -20,6 +20,64 @@ function connection(source: string, target: string, sourceHandle?: string) {
 	return { source, target, sourceHandle: sourceHandle ?? null, targetHandle: null };
 }
 
+/** `Start → a → Pause → b → End`, with the Pause's out-edge missing so a test can wire it. */
+const pauseChain: GraphWorkflowGraph = {
+	schemaVersion: 1,
+	nodes: [
+		{ key: "start", kind: "Start", position: { x: 0, y: 0 }, config: {} },
+		{ key: "a", kind: "Agent", position: { x: 0, y: 80 }, config: { instructions: "Answer the question." } },
+		{ key: "hold", kind: "Pause", position: { x: 0, y: 160 }, config: { prompt: "Ship it?", allowedDecisions: ["Approve"] } },
+		{ key: "b", kind: "Agent", position: { x: 0, y: 240 }, config: { instructions: "Use the answer." } },
+		{ key: "done", kind: "End", position: { x: 0, y: 320 }, config: { outcome: "completed" } },
+	],
+	edges: [
+		{ key: "e1", from: "start", to: "a" },
+		{ key: "e2", from: "a", to: "hold" },
+		{ key: "e3", from: "b", to: "done" },
+	],
+};
+
+describe("useGraphWorkflowEditor Pause context edges", () => {
+	it("carries the answer around a Pause the author wires, and says so", () => {
+		const { result } = renderHook(() => useGraphWorkflowEditor(pauseChain));
+
+		act(() => {
+			result.current.onConnect(connection("hold", "b", "Approve"));
+		});
+
+		// Without this edge `b` would read `{decision, comment, payload}` and never `a`'s answer.
+		const context = result.current.edges.find((edge) => edge.source === "a" && edge.target === "b");
+		expect(context?.label).toBe("context");
+		expect(context?.data?.condition).toBeUndefined();
+		expect(result.current.lastNotice?.rule).toBe("pauseContextEdgeAdded");
+	});
+
+	it("leaves a deleted context edge deleted until the Pause is wired again", () => {
+		const { result } = renderHook(() => useGraphWorkflowEditor(pauseChain));
+
+		act(() => {
+			result.current.onConnect(connection("hold", "b", "Approve"));
+		});
+		const added = result.current.edges.find((edge) => edge.source === "a" && edge.target === "b");
+		act(() => {
+			result.current.removeEdge(added?.id ?? "");
+		});
+		// A connect somewhere else must not argue with the operator about an edge they just removed.
+		act(() => {
+			result.current.onConnect(connection("start", "done"));
+		});
+
+		expect(result.current.edges.some((edge) => edge.source === "a" && edge.target === "b")).toBe(false);
+
+		// Wiring the Pause again is the gesture that offers it once more.
+		act(() => {
+			result.current.onConnect(connection("hold", "done", "Approve"));
+		});
+
+		expect(result.current.edges.some((edge) => edge.source === "a" && edge.target === "b")).toBe(true);
+	});
+});
+
 describe("useGraphWorkflowEditor palette", () => {
 	it("mints kind-slugged keys in sequence and returns the new one", () => {
 		const { result } = renderHook(() => useGraphWorkflowEditor(undefined));
@@ -85,18 +143,18 @@ describe("useGraphWorkflowEditor palette", () => {
 
 		expect(key).toBeUndefined();
 		expect(result.current.nodes).toHaveLength(GRAPH_WORKFLOW_MAX_NODES);
-		expect(result.current.lastRefusal?.rule).toBe("tooManyNodes");
+		expect(result.current.lastNotice?.rule).toBe("tooManyNodes");
 
 		act(() => {
-			result.current.dismissRefusal();
+			result.current.dismissNotice();
 		});
-		expect(result.current.lastRefusal).toBeUndefined();
+		expect(result.current.lastNotice).toBeUndefined();
 
 		// The same refusal a second time has to be visible again, which is what the sequence number is for.
 		act(() => {
 			result.current.addNode("Agent");
 		});
-		expect(result.current.lastRefusal?.rule).toBe("tooManyNodes");
+		expect(result.current.lastNotice?.rule).toBe("tooManyNodes");
 	});
 });
 
@@ -141,7 +199,7 @@ describe("useGraphWorkflowEditor onConnect", () => {
 		});
 
 		expect(result.current.edges.filter((edge) => edge.source === "lookup" && edge.target === "fanout")).toHaveLength(1);
-		expect(result.current.lastRefusal?.rule).toBe("parallelEdgesBothUnconditional");
+		expect(result.current.lastNotice?.rule).toBe("parallelEdgesBothUnconditional");
 
 		// `review` → `done` is conditional (`e9`), so a second conditional edge over that pair is the legal shape.
 		act(() => {
@@ -340,6 +398,6 @@ describe("useGraphWorkflowEditor dirty state", () => {
 
 		expect(result.current.isDirty).toBe(false);
 		expect(result.current.nodes).toHaveLength(8);
-		expect(result.current.lastRefusal).toBeUndefined();
+		expect(result.current.lastNotice).toBeUndefined();
 	});
 });

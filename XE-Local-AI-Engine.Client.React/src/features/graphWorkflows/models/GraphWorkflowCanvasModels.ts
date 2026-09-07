@@ -555,6 +555,103 @@ export function mintEdgeKey(existingKeys: Iterable<string>): string {
 	return mintKey("e", existingKeys);
 }
 
+/** One directed pair of node keys, which is all the two walks below read off an edge. */
+interface GraphWorkflowWire {
+	readonly from: string;
+	readonly to: string;
+}
+
+/**
+ * The nodes a Pause's content really comes from: its predecessors, walking THROUGH consecutive Pause nodes, because a
+ * Pause's own output is the approval and not the answer. The seen-set stops a damaged graph that loops a Pause back
+ * into itself. `Start` is a fine answer — its output is the run's input, which is exactly what a node behind the Pause
+ * would otherwise have read. Mirrors `CanvasWorkflowImport.NonPauseAncestors`.
+ */
+function nonPauseAncestors(pause: string, pauseKeys: ReadonlySet<string>, wiring: readonly GraphWorkflowWire[]): string[] {
+	const resolved: string[] = [];
+	const seen = new Set<string>([pause]);
+	const pending = [pause];
+	while (pending.length > 0) {
+		const current = pending.pop() ?? "";
+		for (const predecessor of wiring.filter((pair) => pair.to === current).map((pair) => pair.from)) {
+			// `Set.add` answers the SET, not "was it new" — the check has to be `has`, or a Pause wired back into itself
+			// re-enters the walk forever.
+			if (seen.has(predecessor)) {
+				continue;
+			}
+			seen.add(predecessor);
+			if (pauseKeys.has(predecessor)) {
+				pending.push(predecessor);
+			} else {
+				resolved.push(predecessor);
+			}
+		}
+	}
+	return resolved.toSorted((left, right) => left.localeCompare(right));
+}
+
+/**
+ * The `context` edges this graph is missing around its Pause nodes — the authoring half of the affordance S4 gave the
+ * importer (`CanvasWorkflowImport.AddPauseContextEdges`, wiki page 21 §5).
+ *
+ * A Pause writes `{decision, comment, payload}` and a node's `input` is its ONE satisfied predecessor's output, so an
+ * authored `X → Pause → Y` hands Y the approval and never X's answer. One unconditional edge from the Pause's nearest
+ * NON-Pause ancestor to each of its successors fixes that: with two satisfied predecessors and the default `All` join
+ * policy, Y is admitted only once both the content and the approval have arrived, and its `input` is the `upstream`
+ * map carrying both.
+ *
+ * Returns only the edges to ADD, so the caller can tell the operator that something appeared on the canvas. A
+ * successor a non-Pause node already feeds is left alone: it has its content, and a second unconditional edge over one
+ * pair is a validation error. PURE — the editor runs it on the connect gesture and nowhere else, so an edge the
+ * operator deletes stays deleted until they wire the Pause again.
+ */
+export function pauseContextEdges(
+	nodes: readonly GraphWorkflowCanvasNode[],
+	edges: readonly GraphWorkflowCanvasEdge[],
+): readonly GraphWorkflowCanvasEdge[] {
+	const pauseKeys = new Set(nodes.filter((node) => node.data.kind === "Pause").map((node) => node.id));
+	if (pauseKeys.size === 0) {
+		return [];
+	}
+	// A snapshot: every walk reads the graph as the operator wired it, never the edges this pass adds to it.
+	const wiring: readonly GraphWorkflowWire[] = edges.map((edge) => ({ from: edge.source, to: edge.target }));
+	const fed = new Set(wiring.filter((pair) => !pauseKeys.has(pair.from)).map((pair) => pair.to));
+	const pairs = new Set(wiring.map((pair) => `${pair.from}>${pair.to}`));
+	const taken = new Set([...nodes.map((node) => node.id), ...edges.map((edge) => edge.id)]);
+	const added: GraphWorkflowCanvasEdge[] = [];
+
+	for (const pause of [...pauseKeys].toSorted((left, right) => left.localeCompare(right))) {
+		const successors = wiring
+			.filter((pair) => pair.from === pause)
+			.map((pair) => pair.to)
+			.toSorted((left, right) => left.localeCompare(right));
+		for (const successor of successors) {
+			if (fed.has(successor)) {
+				continue;
+			}
+			for (const ancestor of nonPauseAncestors(pause, pauseKeys, wiring)) {
+				const pair = `${ancestor}>${successor}`;
+				// A self-loop would be a cycle, and a pair something already wires needs no second edge.
+				if (ancestor === successor || pairs.has(pair)) {
+					continue;
+				}
+				pairs.add(pair);
+				const key = mintEdgeKey(taken);
+				taken.add(key);
+				// Both labels, for the same reason `graphToCanvas` writes both: React Flow renders the top-level one.
+				added.push({
+					id: key,
+					source: ancestor,
+					target: successor,
+					label: "context",
+					data: { label: "context" },
+				});
+			}
+		}
+	}
+	return added;
+}
+
 export type GraphWorkflowRenameResult = GraphWorkflowCanvas | { readonly error: "collision" | "invalid" };
 
 /**

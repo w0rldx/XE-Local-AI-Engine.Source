@@ -171,15 +171,21 @@ function GraphWorkflowEditorCanvasInner({
 		[editor, screenToFlowPosition],
 	);
 
-	const refusalMessage =
-		editor.lastRefusal === undefined
+	const notice = editor.lastNotice;
+	const noticeMessage =
+		notice === undefined
 			? undefined
-			: editor.lastRefusal.rule === "tooManyNodes"
-				? t("pages.graphWorkflows.editor.refusal.tooManyNodes", "This graph already has as many nodes as a run accepts.")
-				: t(
-						"pages.graphWorkflows.editor.refusal.parallelEdgesBothUnconditional",
-						"These two nodes are already joined by an unconditional edge. Give the new one a condition first.",
-					);
+			: notice.rule === "tooManyNodes"
+				? t("pages.graphWorkflows.editor.notice.tooManyNodes", "This graph already has as many nodes as a run accepts.")
+				: notice.rule === "parallelEdgesBothUnconditional"
+					? t(
+							"pages.graphWorkflows.editor.notice.parallelEdgesBothUnconditional",
+							"These two nodes are already joined by an unconditional edge. Give the new one a condition first.",
+						)
+					: t(
+							"pages.graphWorkflows.editor.notice.pauseContextEdgeAdded",
+							"A Pause passes on only its decision, so a connection labelled “context” now carries the earlier node’s answer around it. Delete that connection if you do not want it.",
+						);
 
 	return (
 		// `minHeight: 0` lets this column actually shrink inside the page's height-constrained pane. Without it the canvas
@@ -227,17 +233,19 @@ function GraphWorkflowEditorCanvasInner({
 					{toolbar}
 				</Group>
 			</Group>
-			{refusalMessage === undefined ? null : (
+			{noticeMessage === undefined ? null : (
 				<Alert
 					role="alert"
-					color="orange"
+					// Orange for the two refusals, blue for the one that reports something the editor DID: the operator
+					// has to be able to tell "your gesture was declined" from "your gesture also added an edge".
+					color={notice?.rule === "pauseContextEdgeAdded" ? "blue" : "orange"}
 					variant="light"
 					withCloseButton={true}
-					closeButtonLabel={t("pages.graphWorkflows.editor.refusal.dismiss", "Dismiss")}
-					onClose={editor.dismissRefusal}
-					data-testid="graph-workflow-editor-refusal"
+					closeButtonLabel={t("pages.graphWorkflows.editor.notice.dismiss", "Dismiss")}
+					onClose={editor.dismissNotice}
+					data-testid="graph-workflow-editor-notice"
 				>
-					{refusalMessage}
+					{noticeMessage}
 				</Alert>
 			)}
 			<Text size="xs" c="dimmed" data-testid="graph-workflow-editor-hint">
