@@ -162,12 +162,18 @@ public sealed class WorkSessionAgentSeeder : IHostedService
             return;
         }
 
-        // Indexer rather than ToDictionary: a row carrying BOTH spellings would throw on the duplicate key, and the
-        // surviving value is the one the correct name already had.
+        // Every key but the legacy one, copied as it stands; the legacy one then supplies a value only if the correct
+        // name has none. A row carrying BOTH spellings would otherwise let enumeration order pick the winner, and the
+        // live name's value is the one an operator configured.
         var approvals = new Dictionary<string, bool>(StringComparer.Ordinal);
-        foreach (var (name, requiresApproval) in existing.ToolApprovals)
+        foreach (var (name, requiresApproval) in existing.ToolApprovals.Where(static pair => !IsLegacyClockToolName(pair.Key)))
         {
-            approvals[Rename(name)] = requiresApproval;
+            approvals[name] = requiresApproval;
+        }
+
+        if (existing.ToolApprovals.TryGetValue(LegacyClockToolName, out var legacyApproval))
+        {
+            _ = approvals.TryAdd(ClockToolName, legacyApproval);
         }
 
         var repaired = new AgentDefinitionInput(existing.Name,
@@ -191,8 +197,11 @@ public sealed class WorkSessionAgentSeeder : IHostedService
         _logger.LogInformation("Repaired the clock tool name on the seeded agent definition {AgentDefinitionId} (slug {SeedSlug}).", existing.Id, slug);
     }
 
+    private static bool IsLegacyClockToolName(string toolName) =>
+        string.Equals(toolName, LegacyClockToolName, StringComparison.Ordinal);
+
     private static string Rename(string toolName) =>
-        string.Equals(toolName, LegacyClockToolName, StringComparison.Ordinal) ? ClockToolName : toolName;
+        IsLegacyClockToolName(toolName) ? ClockToolName : toolName;
 
     private static IReadOnlyDictionary<string, bool> BuildApprovals(IReadOnlyList<string> allowedToolNames)
     {

@@ -746,11 +746,12 @@ internal sealed class GraphWorkflowGraph
     ///         should draw the badge on. One warning per Y however many pauses reach it.
     ///     </para>
     ///     <para>
-    ///         An <c>Any</c> <c>Join</c> is EXEMPT, and that is a correctness rule rather than a taste one. The advised
-    ///         edge is unconditional, so it stays satisfied when every approval is rejected — an <c>Any</c> join would
-    ///         then fire on the content edge alone and run the branch the rejections were meant to stop. Collecting the
-    ///         decision documents is what such a join is FOR, so there is nothing to warn about. An <c>All</c> join
-    ///         waits for the approval edge too, so it keeps both the warning and the advice.
+    ///         A successor whose <c>joinPolicy</c> is <c>Any</c> is EXEMPT, whatever its KIND, and that is a
+    ///         correctness rule rather than a taste one. The advised edge is unconditional, so it stays satisfied when
+    ///         every approval is rejected — an <c>Any</c> node would then be admitted on the content edge alone and run
+    ///         the branch the rejections were meant to stop. Collecting the decision documents is what such a node is
+    ///         FOR, so there is nothing to warn about. An <c>All</c> successor waits for the approval edges too, so it
+    ///         keeps both the warning and the advice.
     ///     </para>
     ///     <para>
     ///         The ancestor is NAMED only when it is unique AND not a <c>Condition</c>. Two candidates means the pause
@@ -766,7 +767,7 @@ internal sealed class GraphWorkflowGraph
         foreach (var successor in Nodes.Keys
                                        .Where(key => InboundEdges(key).Count > 0
                                                      && InboundEdges(key).All(edge => Nodes[edge.From].Kind == GraphWorkflowNodeKind.Pause)
-                                                     && !IsAnyJoin(key))
+                                                     && !FiresOnOneBranch(key))
                                        .Order(StringComparer.Ordinal))
         {
             var pauses = InboundEdges(successor).Select(static edge => edge.From).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
@@ -784,11 +785,18 @@ internal sealed class GraphWorkflowGraph
     }
 
     /// <summary>
-    ///     A join that fires on its FIRST satisfied inbound edge. The one successor kind the pause-context advice must
-    ///     not be given for: an unconditional content edge would satisfy it on its own, ahead of any approval.
+    ///     A node that fires on its FIRST satisfied inbound edge — the one successor the pause-context advice must not
+    ///     be given for, because an unconditional content edge would admit it on its own, ahead of any approval.
+    ///     <para>
+    ///         Read off <c>joinPolicy</c> ALONE and never off the kind. A join policy is a property of every node
+    ///         (<c>GraphWorkflowStateMachine.Admission</c> reads <c>node.JoinPolicy</c> with no kind check, and the
+    ///         wiki's own example puts <c>Any</c> on an <c>End</c>), so testing for a <c>Join</c> node here would have
+    ///         missed an <c>Agent</c> or <c>End</c> that declared the same policy — which is the documented trap about
+    ///         reading a join policy off the Join kind.
+    ///     </para>
     /// </summary>
-    private bool IsAnyJoin(string nodeKey) =>
-        Nodes[nodeKey] is { Kind: GraphWorkflowNodeKind.Join, JoinPolicy: GraphWorkflowJoinPolicy.Any };
+    private bool FiresOnOneBranch(string nodeKey) =>
+        Nodes[nodeKey].JoinPolicy == GraphWorkflowJoinPolicy.Any;
 
     /// <summary>
     ///     Where a pause's content really comes from: its predecessors, walking THROUGH consecutive pauses, because a
