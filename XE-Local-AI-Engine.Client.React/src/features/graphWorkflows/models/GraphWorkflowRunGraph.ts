@@ -11,6 +11,7 @@
 
 import {
 	defaultNodeData,
+	type GraphWorkflowCanvas,
 	type GraphWorkflowCanvasEdge,
 	type GraphWorkflowCanvasNode,
 	type GraphWorkflowCanvasRunState,
@@ -64,6 +65,27 @@ export interface GraphWorkflowRunCanvas {
 	readonly graphNotice?: GraphWorkflowRunGraphNotice;
 }
 
+/**
+ * `graphToCanvas` parses the whole document and, when a node carries no stored position, LAYS IT OUT — and the run
+ * hub invalidates the run detail on every event, so a single node transition would otherwise re-parse and re-rank up
+ * to a MiB of graph just to redraw one badge. Its result is a pure function of the graph, and TanStack's structural
+ * sharing hands back the SAME `graph` object while its JSON is unchanged, so object identity is a sound key.
+ *
+ * A `WeakMap`, so an entry dies with the graph that keyed it and nothing has to be evicted. Callers must treat the
+ * result as frozen: `toGraphWorkflowRunCanvas` copies every node and edge it returns rather than annotating these.
+ */
+const canvasByGraph = new WeakMap<GraphWorkflowGraph, GraphWorkflowCanvas>();
+
+function cachedGraphToCanvas(graph: GraphWorkflowGraph): GraphWorkflowCanvas {
+	const cached = canvasByGraph.get(graph);
+	if (cached !== undefined) {
+		return cached;
+	}
+	const canvas = graphToCanvas(graph);
+	canvasByGraph.set(graph, canvas);
+	return canvas;
+}
+
 function runStateOf(nodeRun: GraphWorkflowNodeRunSummaryResponse): GraphWorkflowCanvasRunState {
 	const pending = asGraphWorkflowDecisionKind(nodeRun.pendingDecisionKind);
 	return {
@@ -90,7 +112,7 @@ export function toGraphWorkflowRunCanvas(source: GraphWorkflowRunCanvasSource): 
 
 	if (graph !== undefined) {
 		const notice = drifted ? ("definitionChanged" as const) : undefined;
-		const canvas = graphToCanvas(graph);
+		const canvas = cachedGraphToCanvas(graph);
 		const structuralKey = buildStructuralKey(
 			canvas.nodes.map((node) => node.id),
 			canvas.edges.map((edge) => edge.id),
