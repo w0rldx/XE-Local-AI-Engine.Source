@@ -23,6 +23,24 @@ assert_status() {
   [[ "$command_status" -eq "$expected" ]] || fail "expected exit $expected, got $command_status: $command_output"
 }
 
+# The isolated HOME below hides a mise trust store and every mise tool install, so on a mise-managed box each
+# shim on PATH (python3 among them) aborts and the installer reports a skills-tree problem for a toolchain
+# failure. Forward the caller's values, else the real user paths when they exist. A box without mise has
+# neither, and nothing is exported. See docs/agent-knowledge.md section 1.
+mise_trusted_config_paths="${MISE_TRUSTED_CONFIG_PATHS:-}"
+mise_data_dir="${MISE_DATA_DIR:-}"
+if [[ -z "$mise_trusted_config_paths" && -f "${HOME:-}/.config/mise/config.toml" ]]; then
+  mise_trusted_config_paths="${HOME:-}/.config/mise/config.toml"
+fi
+if [[ -z "$mise_data_dir" && -d "${HOME:-}/.local/share/mise" ]]; then
+  mise_data_dir="${HOME:-}/.local/share/mise"
+fi
+# -u first: env inherits this shell's environment, so a MISE_* variable exported EMPTY would reach the
+# installer as an empty trust list / data directory. Dropped, then re-added only when it has a value.
+mise_env=(env -u MISE_TRUSTED_CONFIG_PATHS -u MISE_DATA_DIR)
+[[ -z "$mise_trusted_config_paths" ]] || mise_env+=("MISE_TRUSTED_CONFIG_PATHS=$mise_trusted_config_paths")
+[[ -z "$mise_data_dir" ]] || mise_env+=("MISE_DATA_DIR=$mise_data_dir")
+
 fixture="$temp_dir/fixture"
 mkdir -p "$fixture/assets" "$fixture/repos/w0rldx/XE-Local-AI-Engine.Source/releases/tags"
 
@@ -692,17 +710,17 @@ with zipfile.ZipFile(out,'w') as archive:
 PY
 skill_home="$temp_dir/skill-home"
 mkdir -p "$skill_home"
-HOME="$skill_home" "$installer" "${common[@]}" --install-skill --install-dir "$stable_dir" >/dev/null
+"${mise_env[@]}" HOME="$skill_home" "$installer" "${common[@]}" --install-skill --install-dir "$stable_dir" >/dev/null
 [[ -f "$skill_home/.claude/skills/xe-local-ai-engine/SKILL.md" ]] || fail 'Claude skill destination missing'
 [[ -f "$skill_home/.agents/skills/xe-local-ai-engine/references/client.md" ]] || fail 'agent skill destination missing'
 printf 'stale\n' >"$skill_home/.claude/skills/xe-local-ai-engine/stale.txt"
-HOME="$skill_home" "$installer" "${common[@]}" --install-skill --install-dir "$stable_dir" >/dev/null
+"${mise_env[@]}" HOME="$skill_home" "$installer" "${common[@]}" --install-skill --install-dir "$stable_dir" >/dev/null
 [[ ! -e "$skill_home/.claude/skills/xe-local-ai-engine/stale.txt" ]] || fail 'skill replacement retained stale files'
 assert_contains "$(cat "$request_log")" '/zipball/v1.0.0'
 
 printf 'old-claude\n' >"$skill_home/.claude/skills/xe-local-ai-engine/SKILL.md"
 printf 'old-agent\n' >"$skill_home/.agents/skills/xe-local-ai-engine/SKILL.md"
-assert_status 13 env HOME="$skill_home" XE_TEST_FAIL_SKILL_SECOND_SWAP=1 \
+assert_status 13 "${mise_env[@]}" HOME="$skill_home" XE_TEST_FAIL_SKILL_SECOND_SWAP=1 \
   "$installer" "${common[@]}" --install-skill --install-dir "$stable_dir"
 assert_contains "$command_output" 'Prior skill destinations were restored'
 [[ "$(cat "$skill_home/.claude/skills/xe-local-ai-engine/SKILL.md")" == old-claude ]] \
@@ -713,7 +731,7 @@ if find "$skill_home" -name '.xe-skill-staging.*' -o -name '.xe-skill-backup.*' 
   fail 'successful skill rollback left staging or backup residue'
 fi
 
-assert_status 13 env HOME="$skill_home" XE_TEST_FAIL_SKILL_SECOND_SWAP=1 XE_TEST_FAIL_SKILL_RESTORE=1 \
+assert_status 13 "${mise_env[@]}" HOME="$skill_home" XE_TEST_FAIL_SKILL_SECOND_SWAP=1 XE_TEST_FAIL_SKILL_RESTORE=1 \
   "$installer" "${common[@]}" --install-skill --install-dir "$stable_dir"
 assert_contains "$command_output" 'Rollback failed; retained backup:'
 retained_backup="$(sed -n 's/.*retained backup: //p' <<<"$command_output" | tail -n1)"
@@ -729,7 +747,7 @@ with zipfile.ZipFile(out,'w') as archive:
  archive.writestr('prefix/skills/xe-local-ai-engine/SKILL.md','# skill')
  archive.writestr('prefix/skills/xe-local-ai-engine/../../escape.txt','unsafe')
 PY
-assert_status 13 env HOME="$skill_home" "$installer" "${common[@]}" --install-skill --install-dir "$stable_dir"
+assert_status 13 "${mise_env[@]}" HOME="$skill_home" "$installer" "${common[@]}" --install-skill --install-dir "$stable_dir"
 assert_contains "$command_output" 'one safe skills/xe-local-ai-engine tree'
 [[ ! -e "$skill_home/escape.txt" ]] || fail 'skill traversal escaped its staging root'
 
@@ -741,7 +759,7 @@ with zipfile.ZipFile(sys.argv[1],'w') as archive:
  link.create_system=3; link.external_attr=(stat.S_IFLNK | 0o777) << 16
  archive.writestr(link,'../../outside')
 PY
-assert_status 13 env HOME="$skill_home" "$installer" "${common[@]}" --install-skill --install-dir "$stable_dir"
+assert_status 13 "${mise_env[@]}" HOME="$skill_home" "$installer" "${common[@]}" --install-skill --install-dir "$stable_dir"
 assert_contains "$command_output" 'one safe skills/xe-local-ai-engine tree'
 
 stale_data="$temp_dir/stale-data"
@@ -756,7 +774,7 @@ assert_status 1 env XE_INSTALLER_LIBRARY_ONLY=1 XE_DATA_DIR="$temp_dir/fuse-star
 assert_contains "$command_output" 'FUSE launch failed; retrying with APPIMAGE_EXTRACT_AND_RUN=1'
 
 dry_actions="$temp_dir/dry-actions"
-HOME="$dry_actions" XE_ADMIN_EMAIL=admin@localhost.test XE_ADMIN_PASSWORD=secret XE_AUTOSTART=1 \
+"${mise_env[@]}" HOME="$dry_actions" XE_ADMIN_EMAIL=admin@localhost.test XE_ADMIN_PASSWORD=secret XE_AUTOSTART=1 \
   XE_INSTALL_SKILL=1 XE_START=1 "$installer" "${common[@]}" --setup --dry-run --install-dir "$temp_dir/dry-actions-install" >/dev/null
 [[ ! -e "$dry_actions" && ! -e "$temp_dir/dry-actions-install" ]] || fail 'dry-run post-install flags mutated files'
 
