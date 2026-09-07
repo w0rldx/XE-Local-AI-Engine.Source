@@ -743,11 +743,21 @@ internal sealed class GraphWorkflowGraph
     ///     </para>
     ///     <para>
     ///         Keyed on Y, not on the pause, because Y is the node that loses the content and so the node an editor
-    ///         should draw the badge on. One warning per Y however many pauses reach it. The ancestor is NAMED only
-    ///         when it is unique AND not a <c>Condition</c>: with two candidates the advice would have to pick one,
-    ///         and a Condition cannot be named because the edge it advises would be that node's second unconditional
-    ///         out-edge, which <see cref="ValidateCondition" /> refuses — advice that turns a warning into an error is
-    ///         worse than the generic sentence.
+    ///         should draw the badge on. One warning per Y however many pauses reach it.
+    ///     </para>
+    ///     <para>
+    ///         An <c>Any</c> <c>Join</c> is EXEMPT, and that is a correctness rule rather than a taste one. The advised
+    ///         edge is unconditional, so it stays satisfied when every approval is rejected — an <c>Any</c> join would
+    ///         then fire on the content edge alone and run the branch the rejections were meant to stop. Collecting the
+    ///         decision documents is what such a join is FOR, so there is nothing to warn about. An <c>All</c> join
+    ///         waits for the approval edge too, so it keeps both the warning and the advice.
+    ///     </para>
+    ///     <para>
+    ///         The ancestor is NAMED only when it is unique AND not a <c>Condition</c>. Two candidates means the pause
+    ///         is fed by mutually exclusive branches, and edges from both would leave an <c>All</c> successor waiting
+    ///         on the branch that was never taken. A Condition cannot be named because the edge would be that node's
+    ///         second unconditional out-edge, which <see cref="ValidateCondition" /> refuses. Either way the generic
+    ///         sentence stands: advice that turns a warning into a hang or an error is worse than no advice.
     ///     </para>
     /// </summary>
     private IReadOnlyList<GraphWorkflowValidationError> PauseContextWarnings()
@@ -755,7 +765,8 @@ internal sealed class GraphWorkflowGraph
         var warnings = new List<GraphWorkflowValidationError>();
         foreach (var successor in Nodes.Keys
                                        .Where(key => InboundEdges(key).Count > 0
-                                                     && InboundEdges(key).All(edge => Nodes[edge.From].Kind == GraphWorkflowNodeKind.Pause))
+                                                     && InboundEdges(key).All(edge => Nodes[edge.From].Kind == GraphWorkflowNodeKind.Pause)
+                                                     && !IsAnyJoin(key))
                                        .Order(StringComparer.Ordinal))
         {
             var pauses = InboundEdges(successor).Select(static edge => edge.From).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
@@ -771,6 +782,13 @@ internal sealed class GraphWorkflowGraph
 
         return warnings;
     }
+
+    /// <summary>
+    ///     A join that fires on its FIRST satisfied inbound edge. The one successor kind the pause-context advice must
+    ///     not be given for: an unconditional content edge would satisfy it on its own, ahead of any approval.
+    /// </summary>
+    private bool IsAnyJoin(string nodeKey) =>
+        Nodes[nodeKey] is { Kind: GraphWorkflowNodeKind.Join, JoinPolicy: GraphWorkflowJoinPolicy.Any };
 
     /// <summary>
     ///     Where a pause's content really comes from: its predecessors, walking THROUGH consecutive pauses, because a

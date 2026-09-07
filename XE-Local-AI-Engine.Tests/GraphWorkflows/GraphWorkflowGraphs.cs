@@ -595,6 +595,64 @@ internal static class GraphWorkflowGraphs
                                                 }
                                                 """;
 
+    /// <summary>
+    ///     Two pauses fanning into one <c>Join</c> whose policy is <paramref name="joinPolicy" />. The join is reached
+    ///     only through pauses either way, so it is the pause-context rule's decisive case: under <c>Any</c> a content
+    ///     edge would satisfy it ahead of every approval, under <c>All</c> it still waits for them.
+    /// </summary>
+    public static string PauseFanInToJoin(string joinPolicy) =>
+        $$"""
+          {
+            "schemaVersion": 1,
+            "nodes": [
+              { "key": "start", "kind": "Start" },
+              { "key": "analyze", "kind": "Agent", "config": { "instructions": "Analyze the input." } },
+              { "key": "reviewA", "kind": "Pause",
+                "config": { "prompt": "Approve A?", "allowedDecisions": ["Approve"], "requireComment": false } },
+              { "key": "reviewB", "kind": "Pause",
+                "config": { "prompt": "Approve B?", "allowedDecisions": ["Approve"], "requireComment": false } },
+              { "key": "merge", "kind": "Join", "joinPolicy": "{{joinPolicy}}", "config": {} },
+              { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+            ],
+            "edges": [
+              { "key": "e1", "from": "start", "to": "analyze" },
+              { "key": "e2", "from": "analyze", "to": "reviewA" },
+              { "key": "e3", "from": "analyze", "to": "reviewB" },
+              { "key": "e4", "from": "reviewA", "to": "merge" },
+              { "key": "e5", "from": "reviewB", "to": "merge" },
+              { "key": "e6", "from": "merge", "to": "done" }
+            ]
+          }
+          """;
+
+    /// <summary>
+    ///     A pause fed by two MUTUALLY EXCLUSIVE branches of a Condition. Its content has two nearest non-Pause
+    ///     ancestors, so no single edge is the right advice: one of the two branches is always dead, and an edge from
+    ///     it would leave the successor's <c>All</c> join waiting on a branch that was never taken.
+    /// </summary>
+    public const string PauseBehindTwoExclusiveBranches = """
+                                                          {
+                                                            "schemaVersion": 1,
+                                                            "nodes": [
+                                                              { "key": "start", "kind": "Start" },
+                                                              { "key": "check", "kind": "Condition", "config": { "path": "output.json.urgent" } },
+                                                              { "key": "fast", "kind": "Agent", "config": { "instructions": "Fast path." } },
+                                                              { "key": "slow", "kind": "Agent", "config": { "instructions": "Slow path." } },
+                                                              { "key": "review", "kind": "Pause", "joinPolicy": "Any",
+                                                                "config": { "prompt": "Approve?", "allowedDecisions": ["Approve"], "requireComment": false } },
+                                                              { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                            ],
+                                                            "edges": [
+                                                              { "key": "e1", "from": "start", "to": "check" },
+                                                              { "key": "e2", "from": "check", "to": "fast", "condition": { "op": "eq", "value": true } },
+                                                              { "key": "e3", "from": "check", "to": "slow" },
+                                                              { "key": "e4", "from": "fast", "to": "review" },
+                                                              { "key": "e5", "from": "slow", "to": "review" },
+                                                              { "key": "e6", "from": "review", "to": "done" }
+                                                            ]
+                                                          }
+                                                          """;
+
     /// <summary>A pause that will not take an answer without a comment, over an unconditional out-edge.</summary>
     public const string PauseRequiringComment = """
                                                 {

@@ -773,6 +773,44 @@ public sealed class GraphWorkflowGraphTests
         AssertEx.False(graph.Warnings[0].Message.Contains("'check'", StringComparison.Ordinal), "naming the Condition would advise an edge the validator refuses.");
     }
 
+    /// <summary>
+    ///     An <c>Any</c> join over pauses is exempt, and not as a matter of taste: the advised edge is unconditional,
+    ///     so it would satisfy the join on its own and run the branch that every rejection was meant to stop.
+    /// </summary>
+    [Test]
+    public void Warnings_ForAnAnyJoinFedOnlyByPauses_AreEmpty()
+    {
+        AssertEx.Empty(GraphWorkflowGraph.Parse(GraphWorkflowGraphs.PauseFanInToJoin("Any")).Warnings,
+            "advising a content edge into an Any join would let it fire without any approval at all.");
+    }
+
+    /// <summary>The same graph under <c>All</c> still waits for both approvals, so the advice is safe and stands.</summary>
+    [Test]
+    public void Warnings_ForAnAllJoinFedOnlyByPauses_NameTheAncestor()
+    {
+        var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.PauseFanInToJoin("All"));
+
+        AssertEx.Equal(expected: 1, graph.Warnings.Count);
+        AssertEx.Equal("merge", graph.Warnings[0].Key);
+        AssertEx.Contains(graph.Warnings[0].Message, "Add an edge from 'analyze' to 'merge'", message: "an All join still waits for the approvals, so the content edge is safe.");
+    }
+
+    /// <summary>
+    ///     Two nearest non-Pause ancestors means the pause is fed by mutually exclusive branches. One of them is always
+    ///     dead, so naming either would advise an edge that leaves the successor waiting on a branch never taken.
+    /// </summary>
+    [Test]
+    public void Warnings_WithTwoExclusiveAncestors_GiveOnlyTheGenericAdvice()
+    {
+        var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.PauseBehindTwoExclusiveBranches);
+
+        AssertEx.Equal(expected: 1, graph.Warnings.Count);
+        AssertEx.Equal("done", graph.Warnings[0].Key);
+        AssertEx.Contains(graph.Warnings[0].Message, "Add an edge from a node before the pause");
+        AssertEx.False(graph.Warnings[0].Message.Contains("'fast'", StringComparison.Ordinal) || graph.Warnings[0].Message.Contains("'slow'", StringComparison.Ordinal),
+            "either branch may be the dead one, so neither can be advised.");
+    }
+
     /// <summary>A graph with nothing to say about it says nothing — the warning list is not a place things accumulate.</summary>
     [Test]
     public void Warnings_OnAGraphWithNoPause_AreEmpty()
