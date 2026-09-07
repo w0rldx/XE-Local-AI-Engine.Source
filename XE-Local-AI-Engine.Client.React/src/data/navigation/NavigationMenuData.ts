@@ -173,7 +173,7 @@ const allNavigationLinks: INavigationLink[] = [
 		],
 	},
 	// Graph Workflows is a TOP-LEVEL entry, not a Preview child: it is the successor to the retired Open Canvas and
-	// carries its own capability, which still ships off — the flip is what makes this entry render.
+	// carries its own capability, which ships ON since S4 — an operator build that turns it off drops this entry.
 	{
 		id: "graphWorkflows",
 		icon: IconSitemap,

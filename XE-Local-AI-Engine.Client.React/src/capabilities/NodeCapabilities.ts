@@ -74,10 +74,10 @@ export interface NodeCapabilityConfig {
 	// integration-api family is authenticated by its own xeint_ key scheme regardless of this flag.
 	readonly integrations: boolean;
 	// Graph Workflows: operator-authored DAGs of the eight v1 node kinds (Start, Agent, Tool, Condition, Parallel,
-	// Join, Pause, End) with a canvas editor and a live run view. Ships GATED OFF — S4 flips it once the surface is
-	// verified end to end. Its nav entry is a top-level link (promoted out of the Preview group when Open Canvas was
-	// removed). The node ALSO has its own `GraphWorkflows:Enabled` switch, which 404s the API — this flag only
-	// decides whether the surface is offered.
+	// Join, Pause, End) with a canvas editor and a live run view. Ships ON since S4 verified the editor, the run
+	// engine and the run view end to end. Its nav entry is a top-level link (promoted out of the Preview group when
+	// Open Canvas was removed). The node ALSO has its own `GraphWorkflows:Enabled` switch, which 404s the API — this
+	// flag only decides whether the surface is offered.
 	readonly graphWorkflows: boolean;
 }
 
@@ -161,8 +161,8 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	workSessions: true,
 	devWorkflows: true,
 	integrations: true,
-	// Off until S4: the editor and run view ship in the build but are not offered yet.
-	graphWorkflows: false,
+	// On since S4: the editor and the run view are verified end to end, so the surface is offered by default.
+	graphWorkflows: true,
 };
 
 export const nodeRoutePaths = {
@@ -209,7 +209,7 @@ export const nodeRoutePaths = {
 	integrationSessions: "/integrations/sessions",
 	integrationExecutions: "/integrations/executions",
 	integrationKeys: "/integrations/keys",
-	// Graph Workflows editor + run view — gated on nodeCapabilities.graphWorkflows (off by default). One route; the
+	// Graph Workflows editor + run view — gated on nodeCapabilities.graphWorkflows (on by default). One route; the
 	// definition, run, node and tab selections live in its search params.
 	graphWorkflows: "/graph-workflows",
 	// Local-only diagnostics panel (frontend error snapshots) — always available.

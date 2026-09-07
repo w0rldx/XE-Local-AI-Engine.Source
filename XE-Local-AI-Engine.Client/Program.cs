@@ -321,7 +321,7 @@ namespace XE_Local_AI_Engine.Client
             var isDevelopmentModeEnabled = builder.Configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true);
             var areWorkSessionsEnabled = builder.Configuration.GetValue($"{WorkSessionOptions.Section}:Enabled", defaultValue: false);
             var areDevWorkflowsEnabled = builder.Configuration.GetValue($"{DevWorkflowOptions.Section}:Enabled", defaultValue: false);
-            var areGraphWorkflowsEnabled = builder.Configuration.GetValue($"{GraphWorkflowOptions.Section}:Enabled", defaultValue: false);
+            var areGraphWorkflowsEnabled = builder.Configuration.GetValue($"{GraphWorkflowOptions.Section}:Enabled", defaultValue: true);
             builder.AddServices(builder.Configuration);
 
             // App self-update (Velopack + anonymous public GitHub releases). Desktop-mode only: off the flag this registers nothing and the

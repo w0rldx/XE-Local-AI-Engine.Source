@@ -34,6 +34,7 @@ describe("navigationLinks", () => {
 			"automation",
 			"integrations",
 			"preview",
+			"graphWorkflows",
 			"benchmarks",
 			"training",
 			"invocations",
@@ -59,6 +60,7 @@ describe("navigationLinks", () => {
 			"automation",
 			"integrations",
 			"preview",
+			"graphWorkflows",
 			"benchmarks",
 			"training",
 			"invocations",
@@ -272,23 +274,24 @@ describe("navigationLinks", () => {
 		]);
 	});
 
-	// Graph Workflows ships GATED OFF (S4 flips it) and is a TOP-LEVEL entry, not a Preview child (R3): it replaced
-	// Open Canvas, and a later refactor must not push it back into the group.
-	it("hides Graph Workflows by default and shows it as a top-level entry once the capability is on", async () => {
-		expect(navigationLinks.some((link) => link.id === "graphWorkflows")).toBe(false);
+	// Graph Workflows ships ON since S4 and is a TOP-LEVEL entry, not a Preview child (R3): it replaced Open Canvas,
+	// and a later refactor must not push it back into the group. The capability-off case is kept: the gate is still
+	// the thing that decides, only its default moved.
+	it("shows Graph Workflows by default as a top-level entry and drops it when the capability is off", async () => {
+		const { navigationLinks: offLinks } = await mockCapabilities({ graphWorkflows: false });
+		expect(offLinks.some((link) => link.id === "graphWorkflows")).toBe(false);
 
-		const { navigationLinks: gatedLinks } = await mockCapabilities({ graphWorkflows: true });
-		const graphWorkflows = gatedLinks.find((link) => link.id === "graphWorkflows");
-		const gatedPreview = gatedLinks.find((link) => link.id === "preview");
+		const graphWorkflows = navigationLinks.find((link) => link.id === "graphWorkflows");
+		const preview = navigationLinks.find((link) => link.id === "preview");
 
 		// A top-level link with its own route, placed directly after the Preview group.
 		expect(graphWorkflows?.to).toBe(nodeRoutePaths.graphWorkflows);
 		expect(graphWorkflows?.links).toBeUndefined();
-		expect(gatedLinks.map((link) => link.id).indexOf("graphWorkflows")).toBe(
-			gatedLinks.map((link) => link.id).indexOf("preview") + 1,
+		expect(navigationLinks.map((link) => link.id).indexOf("graphWorkflows")).toBe(
+			navigationLinks.map((link) => link.id).indexOf("preview") + 1,
 		);
 		// ...and NOT a child of the Preview group, which keeps exactly its three remaining children.
-		expect(gatedPreview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.images,
 			nodeRoutePaths.development,
 			nodeRoutePaths.devWorkflows,
