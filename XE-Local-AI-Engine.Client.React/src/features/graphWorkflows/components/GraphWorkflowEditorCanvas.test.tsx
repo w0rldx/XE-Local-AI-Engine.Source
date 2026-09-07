@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 // React Flow renders into a measured container and jsdom reports 0×0, so a real `<ReactFlow>` paints no viewport and
-// no card — the same note `features/devWorkflows/components/DevWorkflowGraphView.test.tsx` carries. The mock below keeps
-// everything else real (the layout helpers, `applyNodeChanges`, the editor hook) and captures the props the canvas
+// no card. This is the origin of that note; `features/devWorkflows/components/DevWorkflowGraphView.test.tsx` cites it
+// rather than restating it. The mock below keeps everything else real (the layout helpers, `applyNodeChanges`, the editor hook) and captures the props the canvas
 // hands React Flow, which is where the units under test actually land: the node and edge arrays, and the callbacks a
 // pointer would otherwise have to reach.
 

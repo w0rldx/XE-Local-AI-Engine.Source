@@ -103,12 +103,14 @@ export function useGraphWorkflowRunHub(runId: string | undefined): GraphWorkflow
 			invalidate(graphWorkflowInvalidationKey(graphWorkflowQueryIds.events, { runId }));
 		};
 
-		// The sequence is the dedupe — a separate seen-set would only grow for the hook's life — but the gate is
-		// `seq < watermark`, NOT `<=`. A transition that writes no event reports the run's CURRENT sequence rather than
-		// a new one (`GraphWorkflowStore.ApplyOutcome`), and `Cancelling → Cancelled` is exactly that: `run.cancelled`
-		// is written when the cancel is requested, so the terminal ping repeats the watermark. Dropping it left the run
-		// badge on `Cancelling` while the REST read already said `Cancelled`, until something else happened to refetch.
-		// The ping is content-free, so a repeated one costs an invalidation and can never paint anything wrong.
+		// The sequence is the dedupe — a separate seen-set would only grow for the hook's life. The gate is
+		// `seq < watermark`, NOT `<=`, and it stays that way as DEFENCE rather than as a requirement: the store now
+		// allocates a sequence per COMMIT, so an event-less transition carries a fresh, increasing number of its own
+		// (`GraphWorkflowStore.TryExecuteMutationAsync` bumps `run.Seq` when the mutation records no event row).
+		// `Cancelling → Cancelled` is that transition — `run.cancelled` is written when the cancel is requested — and
+		// it used to repeat the watermark, which left the run badge on `Cancelling` while the REST read already said
+		// `Cancelled`. The ping is content-free, so admitting one that repeats the watermark costs an invalidation and
+		// can never paint anything wrong.
 		const apply = (change: GraphWorkflowChanged): void => {
 			if (change.runId !== runId || change.seq < watermark) {
 				return;
@@ -180,8 +182,8 @@ export function useGraphWorkflowRunHub(runId: string | undefined): GraphWorkflow
 					invalidateEveryFeed();
 				}
 				snapshotResolved = true;
-				// One gate, in `apply`: a buffered ping that repeats the snapshot's `lastSeq` is the same event-less
-				// transition and must survive the replay too.
+				// One gate, in `apply`: a buffered ping goes through the same rule the live path uses, so a ping that
+				// arrived while the snapshot was in flight cannot be lost to a second, stricter test here.
 				for (const change of buffered.toSorted((left, right) => left.seq - right.seq)) {
 					apply(change);
 				}

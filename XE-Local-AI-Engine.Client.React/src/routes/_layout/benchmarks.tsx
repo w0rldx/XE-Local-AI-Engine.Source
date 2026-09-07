@@ -15,8 +15,8 @@ export const Route = createFileRoute("/_layout/benchmarks")({
 	component: BenchmarksRoute,
 });
 
-// Thin router adapter: BenchmarksPage stays router-free (it is rendered directly in unit tests), matching the preview
-// route's split.
+// Thin router adapter: BenchmarksPage stays router-free (it is rendered directly in unit tests), the same split
+// `routes/_layout/graph-workflows.tsx` uses.
 function BenchmarksRoute() {
 	const { base, tuned } = Route.useSearch();
 	return <BenchmarksPage baseModelName={base} tunedModelName={tuned} />;
