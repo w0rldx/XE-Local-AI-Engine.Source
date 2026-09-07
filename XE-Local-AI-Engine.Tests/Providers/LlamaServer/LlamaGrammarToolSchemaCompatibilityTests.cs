@@ -214,6 +214,28 @@ public sealed class LlamaGrammarToolSchemaCompatibilityTests
         AssertEx.Null(DeferredLlamaServerChatClient.ApplyToolSchemaCompatibility(null));
     }
 
+    /// <summary>
+    ///     The response-schema passthrough shares this pass, and shares its byte-identity promise: a turn that asks for
+    ///     no JSON schema — no response format at all, or the schema-less <c>json_object</c> variant — must come back as
+    ///     the very same options instance, so nothing about a plain chat request moves.
+    /// </summary>
+    [Test]
+    public void ApplyResponseSchemaPassthrough_WithoutAJsonSchema_ReturnsTheSameOptionsInstance()
+    {
+        var none = new ChatOptions();
+        AssertEx.True(ReferenceEquals(none, DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough(none)),
+            "no ResponseFormat means nothing to write, so the options must be returned unchanged.");
+
+        var jsonObject = new ChatOptions
+        {
+            ResponseFormat = ChatResponseFormat.Json
+        };
+        AssertEx.True(ReferenceEquals(jsonObject, DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough(jsonObject)),
+            "the schema-less json_object variant carries no schema to protect, so the adapter's own mapping is left to do it.");
+
+        AssertEx.Null(DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough(null));
+    }
+
     [Test]
     public void ApplyToolSchemaCompatibility_SwapsOnlyTheOffendingTool_AndNeverMutatesTheCallersList()
     {
