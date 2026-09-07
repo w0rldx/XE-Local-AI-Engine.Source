@@ -300,11 +300,20 @@ public sealed record GraphWorkflowNodeRunSummaryResponse(
 /// <summary>
 ///     One run in full. <see cref="Output" /> is the result the succeeded <c>End</c> node resolved, written once at
 ///     terminalization and null until then.
+///     <para>
+///         <see cref="Graph" /> is the run's OWN graph — the copy pinned when it started, not the definition's current
+///         one — in the same shape <see cref="GraphWorkflowDefinitionResponse.Graph" /> carries, so a client parses
+///         both with one piece of code. It is here rather than on the run SUMMARY because a list must not carry one
+///         graph per row: a definition may hold up to a mebibyte of them. Without it a run view drawing the definition
+///         it names renders the wrong graph for every run started before an edit — which is the whole reason the run
+///         pins a copy at all.
+///     </para>
 /// </summary>
 public sealed record GraphWorkflowRunResponse(
     GraphWorkflowRunSummaryResponse Run,
     IReadOnlyList<GraphWorkflowNodeRunSummaryResponse> NodeRuns,
-    JsonElement? Output);
+    JsonElement? Output,
+    GraphWorkflowGraph Graph);
 
 /// <summary>
 ///     One node run with its documents. Both ride as raw JSON: they are author- and model-shaped, and a typed mirror of

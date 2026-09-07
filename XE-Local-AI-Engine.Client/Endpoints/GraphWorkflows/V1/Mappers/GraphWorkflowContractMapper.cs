@@ -36,16 +36,35 @@ internal static class GraphWorkflowContractMapper
     ///     The stored graph document as the wire shape. Only two things are normalized: an absent
     ///     <c>schemaVersion</c> reads as 1, and an absent node or edge list reads as empty rather than null. Everything
     ///     else — labels, positions, per-kind config, condition values — is handed over exactly as it was stored.
+    ///     <para>
+    ///         Unreadable text answers the EMPTY graph rather than throwing, for the reason
+    ///         <see cref="ToDocument" /> answers null: a definition's graph was parsed before it was stored, so a blob
+    ///         that will not deserialize is a bug upstream — and 500-ing a run read would take away the one page an
+    ///         operator would diagnose it from. The run's <c>graphHash</c> travels beside this member and no legal
+    ///         graph is empty (the parser demands a <c>Start</c> and an <c>End</c>), so an empty one here reads as
+    ///         "unreadable" rather than as a graph.
+    ///     </para>
     /// </summary>
     public static GraphWorkflowGraph ToWireGraph(string graphJson)
     {
-        var graph = JsonSerializer.Deserialize<GraphWorkflowGraph>(graphJson, GraphOptions) ?? GraphWorkflowGraph.Empty;
-        return graph with
+        GraphWorkflowGraph? graph;
+        try
         {
-            SchemaVersion = graph.SchemaVersion ?? 1,
-            Nodes = graph.Nodes ?? [],
-            Edges = graph.Edges ?? []
-        };
+            graph = JsonSerializer.Deserialize<GraphWorkflowGraph>(graphJson, GraphOptions);
+        }
+        catch (JsonException)
+        {
+            return GraphWorkflowGraph.Empty;
+        }
+
+        return graph is null
+            ? GraphWorkflowGraph.Empty
+            : graph with
+            {
+                SchemaVersion = graph.SchemaVersion ?? 1,
+                Nodes = graph.Nodes ?? [],
+                Edges = graph.Edges ?? []
+            };
     }
 
     /// <summary>
@@ -120,7 +139,11 @@ internal static class GraphWorkflowContractMapper
         ArgumentNullException.ThrowIfNull(value);
         return new GraphWorkflowRunResponse(value.Run.ToResponse(),
             [.. value.NodeRuns.Select(ToSummaryResponse)],
-            ToDocument(value.Run.OutputJson));
+            ToDocument(value.Run.OutputJson),
+
+            // The run's PINNED blob, through the same projection a definition read uses: the definition it names may
+            // have been edited, or deleted, since — and the node runs below belong to this graph, not to that one.
+            ToWireGraph(value.Run.GraphJson));
     }
 
     public static GraphWorkflowNodeRunSummaryResponse ToSummaryResponse(this GraphWorkflowNodeRunSnapshot value)
