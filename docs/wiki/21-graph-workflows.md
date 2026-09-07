@@ -166,8 +166,10 @@ Accumulated, per element:
 
 **Warnings are a second list, and they never refuse.** `GraphWorkflowGraph.Warnings` is computed on the first ask
 rather than during the parse — only the validate endpoint asks, and every dispatcher tick parses — and nothing in it
-reaches `GraphWorkflowValidationException`. A graph that warns **saves, validates as `valid`, and runs**. There is one
-warning in v1: a node whose inbound edges **all** leave a `Pause` receives the decision document rather than the
+reaches `GraphWorkflowValidationException`. A graph that warns **saves, validates as `valid`, and runs**. There are
+two warning kinds in v1, and `Warnings` is their concatenation.
+
+The first: a node whose inbound edges **all** leave a `Pause` receives the decision document rather than the
 content that was approved (§4.6). It is keyed on that node rather than on the pause, because that is the node which
 loses the content and so the node an editor draws the badge on, and one warning is raised however many pauses reach
 it. The sentence **names** the pause's nearest non-`Pause` ancestor only when that ancestor is unique and is not a
@@ -175,9 +177,36 @@ it. The sentence **names** the pause's nearest non-`Pause` ancestor only when th
 it would ask for is that node's second unconditional out-edge, which the parser refuses — advice that turns a warning
 into an error is worse than the generic sentence.
 
-The node cap is deliberately **not** in the parser: `MaxNodesPerDefinition` is an option, and
-`GraphWorkflowGraphContract.ValidateAndCountNodes` applies it after the parse so the parser stays testable without a
-container.
+The second, on an **Agent node** whose `responseJsonSchema` asks for something the grammar will not enforce
+(`GraphWorkflowGraph.ResponseSchemaWarnings`). It fires on three things: a keyword the adapter relocates into
+`description`, a declared property missing from `required`, and an object that declares `properties` and **omits**
+`additionalProperties` — an object that sets that key explicitly, `true` included, is silent. One warning per node
+carries whichever of the three apply, and each list names at most three before counting the rest, because this is a
+sentence and not an inventory:
+
+```
+Node 'agent' declares a response schema the runtime rewrites before it becomes a grammar: it drops 'maxLength'
+rather than enforcing it, requires every declared property ('summary', 'notes' are optional here) and forbids
+additional properties.
+```
+
+The schema is walked breadth-first over exactly the members the transform itself descends — `properties`,
+`additionalProperties`, `items`, `anyOf`, `oneOf`, `allOf` — so a constraint under `items` is found and one parked in
+a `$defs` or `definitions` pool is correctly ignored, since the transform never reaches it either. A `Start` node's
+`inputSchema` never warns: nothing compiles it into a grammar. Like every warning it is non-blocking, and the
+editor's validation strip renders it through the same generic channel as the first kind, so neither the DTO nor the
+SPA needed a new shape for it. What it is warning about is §4.2.
+
+The node cap runs **first of all**, ahead of every rule above. `MaxNodesPerDefinition` reaches the parser as an
+argument rather than a dependency (`GraphWorkflowGraph.Parse(graphJson, maxNodes)`, defaulted to no cap so the parser
+stays testable without a container; `GraphWorkflowGraphContract.ValidateAndCountNodes` passes the option through), and
+it is checked against the **declared length of the `nodes` array** before a single node is read or an edge walked. A
+cap applied after the parse would bound nothing about the parse that produced it: only the 1 MiB body limit stood
+between a request and a chain of thousands of minimal nodes, and the acyclicity walk used to spend one stack frame per
+node, so a deep enough chain overflowed the thread-pool thread's stack — a process kill, not a 400. That walk is now
+iterative over an explicit stack, which is also what keeps the deliberately **uncapped** re-parses of a stored graph
+safe (§3.4). The refusal for a cycle names every node on it in walk order (`a -> b -> c -> a`), starting and ending at
+the node the walk came back to.
 
 ### 2.5 A complete example
 
@@ -436,6 +465,22 @@ Output: `{ "text": …, "json": … | null, "usage": { inputTokens, outputTokens
 durationMs, finishReason, model } }`. Every usage member is nullable: the runner reports what its provider gave it,
 and no provider reports all of them.
 
+**What a response schema actually enforces.** llama-server compiles it into a real GBNF grammar and applies that
+grammar from the first output token, so the **structure** is guaranteed: the object shape, the declared types, an
+`enum`'s member list, the required keys. The compiled `root` rule leaves the model's `<think>` block optional and
+unconstrained and forces the schema only on what follows, so a reasoning model is not fighting the grammar. What is
+**not** enforced is every value bound — `minLength`, `maxLength`, `pattern`, `format`, the numeric minimum and
+maximum, the item counts, the content encoding and sixteen more. Those never reach llama.cpp at all: the
+`Microsoft.Extensions.AI.OpenAI` strict-schema transform relocates all twenty-two of them into the schema's
+`description` string on the way out of the .NET process, where they are advice to the model rather than a constraint
+(a `maxLength: 3` produced a 1302-character field in the S6 live round). The same pass marks every declared property
+`required`, so a property the author left optional is not optional in practice, and closes an object that has
+`properties` and omits `additionalProperties` — an object that sets that key explicitly is left as written. Validate
+a value bound downstream, in an edge condition or the consuming node, and never in the schema alone. You do not have to
+notice any of this unaided: saving or validating a graph raises the non-blocking warning of §2.4 on an Agent node
+whose schema asks for it, naming what was dropped. See `docs/agent-knowledge.md` §3 for the evidence and the
+`--verbose` recipe that shows the compiled grammar.
+
 A node declaring a response schema must come back a JSON **object**. A parse failure fails `NodeFailed` — the
 retryable class, since a re-ask under the same grammar can land where one attempt did not — naming the finish reason,
 because a truncated answer is still `Completed` and `length` is the common cause. There is deliberately no salvage
@@ -534,7 +579,8 @@ says one appeared. It descends from the Open Canvas importer's `CanvasWorkflowIm
 (§9.2) — walking back through consecutive pauses, skipping a self-loop — judged per **successor** exactly as the
 validator judges it: only a successor whose every inbound edge leaves a Pause is starved (one something else already
 feeds is not, so it gets nothing and no warning), and the ancestor is the union of the nearest non-`Pause` ancestors
-of every pause feeding it. The importer has neither that starvation test nor the uniqueness test (it adds one edge per ancestor per successor), and three further guards it never meets: A `Condition` ancestor is skipped, because the added edge carries no
+of every pause feeding it. The importer applies the same rule and the same guards (§9.2), so the three halves cannot
+advise different edges. A `Condition` ancestor is skipped, because the added edge carries no
 `sourceHandle` and would save as that Condition's second unconditional out-edge, which §2.4 refuses. A pause whose
 nearest non-`Pause` ancestor is **not unique** (mutually exclusive branches feeding it) gets nothing, because wiring
 both ancestors into an `All` successor would skip it the moment the untaken branch is dead. And a successor with
@@ -758,7 +804,7 @@ environment variable such as `GraphWorkflows__MaxConcurrentRuns`.
 | Option | Default | What it bounds |
 |---|---|---|
 | `Enabled` | `true` | The whole surface. False makes every route and the hub answer 404 through the request-path middleware, while registration stays intact so a disabled node answers legibly instead of 500-ing out of an empty container. |
-| `MaxNodesPerDefinition` | 200 | Nodes in one definition, enforced when it is **validated** rather than when it runs. |
+| `MaxNodesPerDefinition` | 200 | Nodes in one definition, enforced when it is **validated** rather than when it runs, and checked against the declared node count **before** the graph is parsed (§2.4). A run that re-parses an already-stored graph is deliberately uncapped. |
 | `MaxNodeRunsPerRun` | 200 | Node runs one run may instantiate. Never below `MaxNodesPerDefinition` — a run that could not instantiate the definition it started from would fail halfway through a graph the operator was allowed to save. |
 | `MaxTotalAttempts` | 50 | Every attempt one run may spend across all its nodes. The guard against a retry storm. |
 | `DefaultNodeTimeoutSeconds` | 600 | One node run's attempt, when its node names no `timeoutSeconds`. Unlike Dev Workflows, a node that declares nothing still has a deadline. |
@@ -778,7 +824,9 @@ routes that carry one (create, update, validate and start-run), and the 200-row 
 
 One ceiling that lives outside this module: an `Agent` node's `responseJsonSchema` goes down the same llama.cpp GBNF
 path as a tool schema, which has an empirical combined repetition bound
-(`LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound`). Keep a response schema flat. See
+(`LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound`). Keep a response schema flat. A value bound written
+into that schema is not a limit either — see §4.2. Note that the sanitiser named there covers only **tool** schemas; a
+response schema has no equivalent pass. See
 [Local Runtime & Providers](03-local-runtime-and-providers.md) and `docs/agent-knowledge.md` §3.
 
 ---
@@ -823,7 +871,7 @@ in the same build would destroy everything past it as its *normal* outcome.
 | `Start` | `Start`, with the canvas `StartText` as `config.defaultInput = { "text": <StartText> }` (null when empty) — an object, because the editor renders a stored default as JSON text and a bare string would never re-parse. |
 | `Agent` | `Agent` with `maxAttempts: 1`, `instructions` / `model` / `reasoningEffort` carried over, `agentDefinitionId: null`, `responseJsonSchema: null`, `includeUpstreamOutputs: true`. |
 | `Debug` | **Elided.** Every `X → Debug` and `Debug → Y` collapses to `X → Y`. A Debug node was a side-event tap that forwarded its input unchanged, so removing it preserves the run's meaning exactly. |
-| `Pause` | `Pause` with `prompt: "Approve and continue?"`, `allowedDecisions: ["Approve"]`, `requireComment: false`; its single out-edge gains `label: "approved"` and `condition: { "path": "output.decision", "op": "Eq", "value": "Approve" }`. Open Canvas's `Continue` was a resume rather than a decision, so `Approve` alone is the faithful translation — and one allowed decision with one matching out-edge satisfies the Pause pre-flight rule of §2.4. **Plus one context edge `X → Y`**, unconditional and labelled `context`, where `X` is the pause's nearest non-`Pause` ancestor along the (Debug-elided) chain and `Y` each of its successors — see below. |
+| `Pause` | `Pause` with `prompt: "Approve and continue?"`, `allowedDecisions: ["Approve"]`, `requireComment: false`; its single out-edge gains `label: "approved"` and `condition: { "path": "output.decision", "op": "Eq", "value": "Approve" }`. Open Canvas's `Continue` was a resume rather than a decision, so `Approve` alone is the faithful translation — and one allowed decision with one matching out-edge satisfies the Pause pre-flight rule of §2.4. **Plus one context edge `X → Y`**, unconditional and labelled `context`, where `X` is the pause's unique nearest non-`Pause` ancestor along the (Debug-elided) chain and `Y` each **starved** successor of it — see below. |
 | `End` | `End` with `outcome: "completed"`, `resultPath: null`. |
 | `ModelProfile` (on an Agent) | **Dropped.** An Agent node's config has no profile member. A non-null value records a reason naming the canvas id and the **node key**, never the value. That reason reaches the log as a per-change Warning only when the definition imported cleanly; on the needs-attention path it is folded into the description instead (§9.3). |
 
@@ -849,19 +897,35 @@ the `upstream` map only when there are several (§3.2). Mapped one-for-one, `Age
 hands B the approval metadata and never A's answer, and a `Pause` before an `End` loses the result the same way.
 That was observed live in the S4 round, not reasoned about.
 
-So the importer emits one extra unconditional edge from the pause's nearest non-`Pause` ancestor `X` to each of its
-successors `Y`. `Y` keeps the default `All` join policy, so it is admitted only once **both** the content edge and
-the pause's own `approved` edge are satisfied — never ahead of the approval — and with two satisfied predecessors
-its `input` is the `upstream` map `{ "<X>": …, "<P>": … }`. An imported Agent carries `includeUpstreamOutputs: true`
-and so sees `X`'s text; an imported End carries `resultPath: null` and so keeps both documents. The rule applies to
-every pause and walks back through consecutive ones, so `A → P1 → P2 → B` gains both `A → P2` and `A → B`. Three
-cases add nothing: a pause with no successor (already an `IMPORT NEEDS ATTENTION:` graph, §9.3), a pair the canvas
-already wires — a second unconditional edge over one pair is a validation error (§2.4) — and a self-loop. `X` may be
-the `Start` node, whose output is the run's own input, which is exactly the content the pause interrupted.
+So the importer emits one extra unconditional edge from the pause's nearest non-`Pause` ancestor `X` to each
+**starved** successor `Y`. `Y` keeps the default `All` join policy, so it is admitted only once **both** the content
+edge and the pause's own `approved` edge are satisfied — never ahead of the approval — and with two satisfied
+predecessors its `input` is the `upstream` map `{ "<X>": …, "<P>": … }`. An imported Agent carries
+`includeUpstreamOutputs: true` and so sees `X`'s text; an imported End carries `resultPath: null` and so keeps both
+documents. The rule applies to every pause and walks back through consecutive ones, so `A → P1 → P2 → B` gains both
+`A → P2` and `A → B`; a successor several pauses reach is judged **once**, over the union of what all of them are fed
+by. `X` may be the `Start` node, whose output is the run's own input, which is exactly the content the pause
+interrupted.
 
-The editor offers the same edge to an **author**, on the connect gesture (§4.6). It is stricter than the importer
-— only a successor every one of whose inbound edges leaves a Pause is starved, and a `Condition` ancestor, a non-unique
-ancestor and an `Any`-policy successor of any kind are all skipped, for the reasons §4.6 gives — and it runs only on that gesture, so an author who deletes the edge keeps it deleted.
+The decision is keyed on the **successor**, and the guards are the validator's own
+(`GraphWorkflowGraph.PauseContextWarnings`), read off the mapped node's `joinPolicy` and kind rather than off a canvas
+kind — an importer that advised an edge the validator refuses would produce a definition nobody can save again. A
+successor is owed an edge only when it is starved (every one of its inbound edges leaves a Pause; one something else
+already feeds loses nothing), its `joinPolicy` is not `Any` (of any kind — an unconditional content edge would admit
+an `Any` node ahead of every approval, including when all of them were rejected), and its pauses' nearest non-`Pause`
+ancestor is **unique** and is not a `Condition` (two candidates are mutually exclusive branches, and an edge from each
+would hang an `All` successor on the branch never taken; a `Condition` would gain a second unconditional out-edge,
+which §2.4 refuses). Three more cases add nothing: a pause with no successor (already an `IMPORT NEEDS ATTENTION:`
+graph, §9.3), a pair the canvas already wires — a second unconditional edge over one pair is a validation error
+(§2.4) — and a self-loop.
+
+Every guard but the starvation test is **unreachable for a real import**: an Open Canvas graph carries no `Condition`,
+no `Join` and no join policy, and every stored shape is linear. They are stated in code anyway because the rule, not
+today's canvas vocabulary, is what the next node kind has to keep holding.
+
+The editor offers the same edge to an **author**, on the connect gesture (§4.6), under the same three guards. The one
+difference is when it runs: the editor runs only on that gesture, so an author who deletes the edge keeps it deleted,
+while the importer runs once over a whole canvas.
 
 `maxAttempts: 1` on an imported Agent is deliberately below the default of 3. An import is conservative: re-running
 somebody's agent turn twice more, on a graph they have not looked at since it changed shape, is not a decision this
