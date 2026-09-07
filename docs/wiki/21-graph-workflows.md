@@ -166,14 +166,36 @@ Accumulated, per element:
 
 **Warnings are a second list, and they never refuse.** `GraphWorkflowGraph.Warnings` is computed on the first ask
 rather than during the parse — only the validate endpoint asks, and every dispatcher tick parses — and nothing in it
-reaches `GraphWorkflowValidationException`. A graph that warns **saves, validates as `valid`, and runs**. There is one
-warning in v1: a node whose inbound edges **all** leave a `Pause` receives the decision document rather than the
+reaches `GraphWorkflowValidationException`. A graph that warns **saves, validates as `valid`, and runs**. There are
+two warning kinds in v1, and `Warnings` is their concatenation.
+
+The first: a node whose inbound edges **all** leave a `Pause` receives the decision document rather than the
 content that was approved (§4.6). It is keyed on that node rather than on the pause, because that is the node which
 loses the content and so the node an editor draws the badge on, and one warning is raised however many pauses reach
 it. The sentence **names** the pause's nearest non-`Pause` ancestor only when that ancestor is unique and is not a
 `Condition`: with two candidates the advice would have to pick one, and a `Condition` cannot be named because the edge
 it would ask for is that node's second unconditional out-edge, which the parser refuses — advice that turns a warning
 into an error is worse than the generic sentence.
+
+The second, on an **Agent node** whose `responseJsonSchema` asks for something the grammar will not enforce
+(`GraphWorkflowGraph.ResponseSchemaWarnings`). It fires on three things: a keyword the adapter relocates into
+`description`, a declared property missing from `required`, and an object that declares `properties` and **omits**
+`additionalProperties` — an object that sets that key explicitly, `true` included, is silent. One warning per node
+carries whichever of the three apply, and each list names at most three before counting the rest, because this is a
+sentence and not an inventory:
+
+```
+Node 'agent' declares a response schema the runtime rewrites before it becomes a grammar: it drops 'maxLength'
+rather than enforcing it, requires every declared property ('summary', 'notes' are optional here) and forbids
+additional properties.
+```
+
+The schema is walked breadth-first over exactly the members the transform itself descends — `properties`,
+`additionalProperties`, `items`, `anyOf`, `oneOf`, `allOf` — so a constraint under `items` is found and one parked in
+a `$defs` or `definitions` pool is correctly ignored, since the transform never reaches it either. A `Start` node's
+`inputSchema` never warns: nothing compiles it into a grammar. Like every warning it is non-blocking, and the
+editor's validation strip renders it through the same generic channel as the first kind, so neither the DTO nor the
+SPA needed a new shape for it. What it is warning about is §4.2.
 
 The node cap runs **first of all**, ahead of every rule above. `MaxNodesPerDefinition` reaches the parser as an
 argument rather than a dependency (`GraphWorkflowGraph.Parse(graphJson, maxNodes)`, defaulted to no cap so the parser
@@ -454,8 +476,10 @@ maximum, the item counts, the content encoding and sixteen more. Those never rea
 (a `maxLength: 3` produced a 1302-character field in the S6 live round). The same pass marks every declared property
 `required`, so a property the author left optional is not optional in practice, and closes an object that has
 `properties` and omits `additionalProperties` — an object that sets that key explicitly is left as written. Validate
-a value bound downstream, in an edge condition or the consuming node, and never in the schema alone. See
-`docs/agent-knowledge.md` §3 for the evidence and the `--verbose` recipe that shows the compiled grammar.
+a value bound downstream, in an edge condition or the consuming node, and never in the schema alone. You do not have to
+notice any of this unaided: saving or validating a graph raises the non-blocking warning of §2.4 on an Agent node
+whose schema asks for it, naming what was dropped. See `docs/agent-knowledge.md` §3 for the evidence and the
+`--verbose` recipe that shows the compiled grammar.
 
 A node declaring a response schema must come back a JSON **object**. A parse failure fails `NodeFailed` — the
 retryable class, since a re-ask under the same grammar can land where one attempt did not — naming the finish reason,
