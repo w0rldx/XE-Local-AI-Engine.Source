@@ -5684,7 +5684,7 @@
 				"pathInherited": "Inherits “{{path}}” from {{node}}",
 				"operator": "Comparison",
 				"value": "Value",
-				"valueHelp": "Read as JSON when it parses, otherwise as text.",
+				"valueHelp": "JSON — a string is quoted, like “Approve”. Anything that is not JSON is saved as text.",
 				"remove": "Delete edge"
 			},
 			"definitions": {

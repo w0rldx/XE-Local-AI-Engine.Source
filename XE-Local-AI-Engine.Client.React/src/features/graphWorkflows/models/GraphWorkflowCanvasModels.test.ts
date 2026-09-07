@@ -318,11 +318,50 @@ describe("node config conversion", () => {
 });
 
 describe("edge conditions", () => {
-	it("keeps a string value as itself and a non-string value as its JSON text", () => {
+	/** One Condition node fanning out to one End, with a conditional edge per operand: `e1`, `e2`, … in order. */
+	function conditionGraph(conditions: readonly NonNullable<GraphWorkflowGraphEdge["condition"]>[]): GraphWorkflowGraph {
+		return graph(
+			[
+				{ key: "check", kind: "Condition", position: { x: 0, y: 0 }, config: { path: "output.json.status" } },
+				{ key: "done", kind: "End", position: { x: 0, y: 120 }, config: { outcome: "completed", resultPath: null } },
+			],
+			conditions.map((condition, index) => ({ key: `e${index + 1}`, from: "check", to: "done", condition })),
+		);
+	}
+
+	it("renders every value as its JSON text, so a string is quoted", () => {
 		const canvas = graphToCanvas(eightNodeGraph);
 
-		expect(edgeOf(canvas, "e5").data?.condition).toEqual({ path: "output.decision", op: "Eq", value: "Approve" });
+		expect(edgeOf(canvas, "e5").data?.condition).toEqual({ path: "output.decision", op: "Eq", value: '"Approve"' });
 		expect(edgeOf(canvas, "e3").data?.condition).toEqual({ op: "Eq", value: "true" });
+	});
+
+	// The bug the quoting exists for: the field renders, the operator saves, and the operand has changed TYPE — which
+	// silently changes which branch the stored condition matches on the next run.
+	it("round-trips a string operand that reads as another JSON type", () => {
+		const operands = ["true", "123", "null", "Approve"];
+		const source = conditionGraph(operands.map((value) => ({ op: "Ne", value })));
+
+		const canvas = graphToCanvas(source);
+		expect(canvas.edges.map((edge) => edge.data?.condition?.value)).toEqual(['"true"', '"123"', '"null"', '"Approve"']);
+
+		const { graph: result } = canvasToGraph(canvas.nodes, canvas.edges);
+		expect((result.edges ?? []).map((edge) => edge.condition?.value)).toEqual(operands);
+	});
+
+	// The other half of ruling F5-3: reading is strict JSON, writing stays lenient, so an operator who types a bare
+	// word still gets a string and one who types a number still gets a number.
+	it("saves unquoted text as a string and an unquoted number as a number", () => {
+		const canvas = graphToCanvas(conditionGraph([{ op: "Ne", value: 0 }, { op: "Ne", value: 0 }]));
+		// What the operator typed into the value field, which is the only way a canvas condition value is authored.
+		const typed = canvas.edges.map((edge) => ({
+			...edge,
+			data: { ...edge.data, condition: { op: "Ne" as const, value: edge.id === "e1" ? "Approve" : "123" } },
+		}));
+
+		const { graph: result } = canvasToGraph(canvas.nodes, typed);
+		expect(wireEdge(result, "e1").condition?.value).toBe("Approve");
+		expect(wireEdge(result, "e2").condition?.value).toBe(123);
 	});
 
 	it("normalises a stored lowercase operator to its canonical member and writes the canonical one back", () => {
@@ -445,11 +484,12 @@ describe("source handle re-derivation", () => {
 });
 
 describe("pauseContextEdges", () => {
-	/** A canvas from `key:Kind` node specs and `from>to` edge specs; the editor's own shape, minus the positions. */
+	/** A canvas from `key:Kind[:JoinPolicy]` node specs and `from>to` edge specs; the editor's shape, minus positions. */
 	function canvasOf(nodeSpecs: readonly string[], edgeSpecs: readonly string[]): GraphWorkflowCanvas {
 		const nodes = nodeSpecs.map((spec) => {
-			const [key = "", kind = "Agent"] = spec.split(":");
-			return canvasNode(defaultNodeData(kind as GraphWorkflowNodeKind, key));
+			const [key = "", kind = "Agent", joinPolicy] = spec.split(":");
+			const data = defaultNodeData(kind as GraphWorkflowNodeKind, key);
+			return canvasNode(joinPolicy === "Any" ? { ...data, joinPolicy: "Any" } : data);
 		});
 		const edges = edgeSpecs.map((spec, index): GraphWorkflowCanvasEdge => {
 			const [source = "", target = ""] = spec.split(">");
@@ -516,6 +556,26 @@ describe("pauseContextEdges", () => {
 		expect(addedPairs(nodes, edges)).toEqual([]);
 	});
 
+	// An `Any` join fires on the FIRST satisfied branch, so an unconditional content edge into one is satisfied even
+	// when every approval was rejected: the join would run past the Pause instead of waiting on it.
+	it("skips an Any join successor and still feeds an All join", () => {
+		const anyJoin = ["start:Start", "a:Agent", "hold:Pause", "merge:Join:Any", "done:End"];
+		const allJoin = ["start:Start", "a:Agent", "hold:Pause", "merge:Join", "done:End"];
+		const edges = ["start>a", "a>hold", "hold>merge", "merge>done"];
+
+		expect(addedPairs(anyJoin, edges)).toEqual([]);
+		expect(addedPairs(allJoin, edges)).toEqual(["a>merge"]);
+	});
+
+	// Two ancestors are two branches, and only one of them runs. An `All` successor with a DEAD inbound edge is
+	// skipped, so a second context edge would delete the very node the affordance is there to feed.
+	it("leaves a Pause with more than one nearest ancestor alone", () => {
+		const nodes = ["start:Start", "check:Condition", "a:Agent", "a2:Agent", "hold:Pause", "b:Agent", "done:End"];
+		const edges = ["start>check", "check>a", "check>a2", "a>hold", "a2>hold", "hold>b", "b>done"];
+
+		expect(addedPairs(nodes, edges)).toEqual([]);
+	});
+
 	it("adds nothing for a Pause with no successor and none for a Pause with no ancestor", () => {
 		expect(addedPairs(["start:Start", "a:Agent", "hold:Pause"], ["start>a", "a>hold"])).toEqual([]);
 		expect(addedPairs(["hold:Pause", "b:Agent", "done:End"], ["hold>b", "b>done"])).toEqual([]);
@@ -535,6 +595,18 @@ describe("pauseContextEdges", () => {
 		expect(pairsFor("a", "first")).toEqual(["a>b"]);
 		// The whole-graph pass, which is what the importer does.
 		expect(addedPairs(nodes, edges)).toEqual(["a>b", "b>c"]);
+	});
+
+	// The reverse-order case: with `first → second → b` already drawn, wiring `a → first` is the only gesture that will
+	// ever consider `b`. The whole-graph pass would visit `second` on its own; the connection-scoped one never does.
+	it("walks through a Pause successor when the gesture wires into the Pause before it", () => {
+		const nodes = ["start:Start", "a:Agent", "first:Pause", "second:Pause", "b:Agent", "done:End"];
+		const canvas = canvasOf(nodes, ["start>a", "first>second", "second>b", "b>done", "a>first"]);
+
+		expect(pauseContextEdges(canvas.nodes, canvas.edges, { from: "a", to: "first" }).map((edge) => edge.target)).toEqual([
+			"b",
+			"second",
+		]);
 	});
 
 	it("stops on a Pause wired back into itself instead of walking forever", () => {
@@ -568,8 +640,8 @@ describe("renameNodeKey", () => {
 		}
 		const approve = result.edges.find((edge) => edge.id === "e5");
 		expect(approve?.source).toBe("human-review");
-		expect(approve?.data?.condition?.value).toBe("Approve");
-		expect(result.edges.find((edge) => edge.id === "e9")?.data?.condition?.value).toBe("Reject");
+		expect(approve?.data?.condition?.value).toBe('"Approve"');
+		expect(result.edges.find((edge) => edge.id === "e9")?.data?.condition?.value).toBe('"Reject"');
 	});
 
 	it("refuses a name held by another node or by an edge, and one outside the server's charset", () => {

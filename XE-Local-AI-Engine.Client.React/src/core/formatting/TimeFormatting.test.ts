@@ -36,12 +36,30 @@ describe("formatTimestamp", () => {
 	});
 
 	it("formats in the active UI language, not the machine's regional format", async () => {
+		await i18next.changeLanguage("en-US");
 		expect(formatTimestamp(instant)).toMatch(/^\d{1,2}\/\d{1,2}\/\d{4}/);
 
 		await i18next.changeLanguage("de");
 
 		expect(i18next.language).toBe("de");
 		expect(formatTimestamp(instant)).toMatch(/^\d{1,2}\.\d{1,2}\.\d{4}/);
+	});
+
+	// The state every language switch passes through: the locales are lazy chunks, so German is REQUESTED while
+	// i18next has resolved to the English fallback — and `addResourceBundle` does not recompute that, so it can stay
+	// there. Reading `resolvedLanguage` rendered US-ordered dates beside German labels, which is the bug this whole
+	// module exists for.
+	it("formats in the requested language before its bundle has arrived", async () => {
+		await i18next.changeLanguage("en-US");
+		i18next.removeResourceBundle("de", "translation");
+		await i18next.changeLanguage("de");
+
+		// The premise, pinned: without it the assertion below would pass for the wrong reason.
+		expect(i18next.language).toBe("de");
+		expect(i18next.resolvedLanguage).not.toBe("de");
+		expect(formatTimestamp(instant)).toMatch(/^\d{1,2}\.\d{1,2}\.\d{4}/);
+
+		i18next.addResourceBundle("de", "translation", {});
 	});
 });
 

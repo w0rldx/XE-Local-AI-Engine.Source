@@ -5684,7 +5684,7 @@
 				"pathInherited": "Erbt „{{path}}“ von {{node}}",
 				"operator": "Vergleich",
 				"value": "Wert",
-				"valueHelp": "Wird als JSON gelesen, wenn es sich parsen lässt, sonst als Text.",
+				"valueHelp": "JSON – eine Zeichenkette steht in Anführungszeichen, z. B. „Approve“. Was kein JSON ist, wird als Text gespeichert.",
 				"remove": "Kante löschen"
 			},
 			"definitions": {

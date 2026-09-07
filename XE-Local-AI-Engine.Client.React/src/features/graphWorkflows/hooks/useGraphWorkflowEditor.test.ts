@@ -77,11 +77,65 @@ describe("useGraphWorkflowEditor Pause context edges", () => {
 
 		expect(result.current.edges.some((edge) => edge.source === "a" && edge.target === "b")).toBe(false);
 
-		// Wiring something INTO the pause can starve any successor, so that gesture offers the edge once more.
+		// Wiring something INTO the pause can starve any successor, so that gesture offers the edge once more. `a`'s own
+		// edge goes first, because a Pause fed by TWO branches is one this pass leaves alone.
+		act(() => {
+			result.current.removeEdge("e2");
+		});
 		act(() => {
 			result.current.onConnect(connection("a2", "hold"));
 		});
 
+		expect(result.current.edges.some((edge) => edge.source === "a2" && edge.target === "b")).toBe(true);
+	});
+
+	it("leaves a Pause that two branches feed alone, because only one of them will run", () => {
+		const { result } = renderHook(() => useGraphWorkflowEditor(pauseChain));
+
+		act(() => {
+			result.current.onConnect(connection("hold", "b", "Approve"));
+		});
+		const context = result.current.edges.find((edge) => edge.source === "a" && edge.target === "b");
+		act(() => {
+			result.current.removeEdge(context?.id ?? "");
+		});
+
+		// `a2 → hold` gives the Pause a second nearest ancestor. Feeding `b` from both would make `b` wait on a branch
+		// that never ran, and an `All` node with a dead inbound edge is SKIPPED — the affordance would delete `b`.
+		const announced = result.current.lastNotice?.seq;
+		act(() => {
+			result.current.onConnect(connection("a2", "hold"));
+		});
+
+		expect(result.current.edges.some((edge) => edge.target === "b" && edge.data?.label === "context")).toBe(false);
+		// Nothing was added, so nothing was announced: the notice still carries the sequence the first gesture gave it.
+		expect(result.current.lastNotice?.seq).toBe(announced);
+	});
+
+	// The reverse order: the second Pause is already wired to `b`, so wiring the FIRST one is the only gesture that
+	// will ever consider `b`. Without the walk through `second`, `b` reads an approval and never `a`'s answer.
+	it("carries the answer past two consecutive Pause nodes wired back to front", () => {
+		const twoPauses: GraphWorkflowGraph = {
+			...pauseChain,
+			nodes: [
+				...(pauseChain.nodes ?? []),
+				{ key: "hold2", kind: "Pause", position: { x: 0, y: 200 }, config: { prompt: "Sure?", allowedDecisions: ["Approve"] } },
+			],
+			edges: [
+				{ key: "e1", from: "start", to: "a" },
+				{ key: "e1b", from: "start", to: "a2" },
+				{ key: "e2", from: "hold", to: "hold2" },
+				{ key: "e2b", from: "hold2", to: "b" },
+				{ key: "e3", from: "b", to: "done" },
+			],
+		};
+		const { result } = renderHook(() => useGraphWorkflowEditor(twoPauses));
+
+		act(() => {
+			result.current.onConnect(connection("a", "hold"));
+		});
+
+		expect(result.current.edges.some((edge) => edge.source === "a" && edge.target === "hold2")).toBe(true);
 		expect(result.current.edges.some((edge) => edge.source === "a" && edge.target === "b")).toBe(true);
 	});
 });
@@ -194,7 +248,7 @@ describe("useGraphWorkflowEditor onConnect", () => {
 		const edge = result.current.edges.find((candidate) => candidate.source === "review" && candidate.target === "fanout");
 		expect(edge?.sourceHandle).toBe("Approve");
 		expect(edge?.label).toBe("Approve");
-		expect(edge?.data?.condition).toEqual({ path: "output.decision", op: "Eq", value: "Approve" });
+		expect(edge?.data?.condition).toEqual({ path: "output.decision", op: "Eq", value: '"Approve"' });
 		expect(result.current.issues).not.toContainEqual({ rule: "pauseDecisionUnroutable", subject: "review" });
 	});
 

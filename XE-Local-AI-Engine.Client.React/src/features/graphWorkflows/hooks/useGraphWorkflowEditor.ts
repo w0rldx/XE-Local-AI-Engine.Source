@@ -100,6 +100,10 @@ export interface GraphWorkflowEditorState {
  *
  * A Condition handle prefills NO path: the edge inherits its source node's `config.path` (ruling C2), and the client
  * cannot invent one.
+ *
+ * A condition `value` is canvas text, and that text is JSON (`conditionValueText`): the boolean branch is `true` bare,
+ * the decision is `"Approve"` QUOTED. Writing the decision unquoted would save the same string but render differently
+ * from the identical edge reopened later.
  */
 function connectionPrefill(
 	sourceKind: GraphWorkflowNodeKind | undefined,
@@ -112,7 +116,7 @@ function connectionPrefill(
 		return { label: handle, condition: { op: "Eq", value: handle } };
 	}
 	if (sourceKind === "Pause" && asGraphWorkflowDecisionKind(handle) !== undefined) {
-		return { label: handle, condition: { path: "output.decision", op: "Eq", value: handle } };
+		return { label: handle, condition: { path: "output.decision", op: "Eq", value: JSON.stringify(handle) } };
 	}
 	return {};
 }

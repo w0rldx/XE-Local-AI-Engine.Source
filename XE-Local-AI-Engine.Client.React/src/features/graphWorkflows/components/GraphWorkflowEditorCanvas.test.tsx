@@ -221,7 +221,7 @@ describe("GraphWorkflowEditorCanvas connecting", () => {
 		});
 
 		const edge = flowEdges().find((candidate) => candidate.source === "review" && candidate.target === "fanout");
-		expect(edge?.data?.condition).toEqual({ path: "output.decision", op: "Eq", value: "Approve" });
+		expect(edge?.data?.condition).toEqual({ path: "output.decision", op: "Eq", value: '"Approve"' });
 		expect(issueText()).not.toContain("pauseDecisionUnroutable:review");
 	});
 
