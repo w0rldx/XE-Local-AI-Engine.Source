@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -86,8 +87,37 @@ public sealed class WorkSessionAgentSeederTests
         }
 
         AssertEx.Contains(definition.AllowedToolNames, AskUserTool.ToolName);
-        AssertEx.Contains(definition.AllowedToolNames, "get_current_time");
+        AssertEx.Contains(definition.AllowedToolNames, "GetCurrentTime");
         AssertEx.Equal(expected: 6, definition.AllowedToolNames.Count, "The general persona gets no knowledge-base tools.");
+    }
+
+    /// <summary>
+    ///     Every name a persona allow-lists has to be a name the node's catalog actually carries. The agent-send path
+    ///     intersects the offer with <c>AllowedToolNames</c>, so a misspelled entry grants nothing and says nothing —
+    ///     which is how <c>ClockToolName</c> shipped as the snake_case <c>get_current_time</c> while the registry
+    ///     generates <c>GetCurrentTime</c> from the method name.
+    ///     <para>
+    ///         Asked of <c>GetKnownToolNamesAsync</c> rather than of an offer: that is the canonical name space of the
+    ///         node, ungated by model capability and by the custom-tool kill switch, so the assertion is about the
+    ///         SPELLING and not about which model happens to be loaded.
+    ///     </para>
+    /// </summary>
+    [Test]
+    [Arguments(AgentDefaults.WorkSessionGeneralAgentSeedSlug)]
+    [Arguments(AgentDefaults.WorkSessionResearchAgentSeedSlug)]
+    public async Task Persona_AllowsOnlyToolNamesTheNodeCatalogCarries(string slug)
+    {
+        var definition = await ReadSeededAsync(Host.Factory, slug).ConfigureAwait(false);
+        await using var scope = Host.Factory.Services.CreateAsyncScope();
+        var names = await scope.ServiceProvider.GetRequiredService<ILocalToolOfferProvider>().GetKnownToolNamesAsync().ConfigureAwait(false);
+        var known = new HashSet<string>(names, StringComparer.Ordinal);
+
+        foreach (var name in definition.AllowedToolNames)
+        {
+            AssertEx.True(known.Contains(name),
+                $"'{slug}' allow-lists '{name}', which no tool on this node carries — the intersection would drop it silently. "
+                + $"Known: {string.Join(", ", known.Order(StringComparer.Ordinal))}.");
+        }
     }
 
     [Test]
