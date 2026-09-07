@@ -236,6 +236,15 @@ Development Mode gives each sandboxed task its own `NUGET_PACKAGES` under the ta
 - Distinct from the props-poisoning entry above (same `CS0006` face, dead path in `obj/*.nuget.g.props` and no live worker): here the path is carried by a live `MSBuild.dll /nodemode:1` process, so a plain re-restore is re-poisoned until node reuse is off.
 - The writer was `DevelopmentWorkspaceTools.BuildEnvironment`, which now sets `MSBUILDDISABLENODEREUSE=1` alongside the per-task `NUGET_PACKAGES`. `DevelopmentMountBrokerTests` asserts it.
 
+### A relative test-project name in a worktree can resolve to a SIBLING worktree's binary
+
+`dotnet test XE-Local-AI-Engine.Tests` run from inside a worktree resolved to another worktree's build output and
+reported **zero tests** — a green-looking run that verified nothing, and never the code under the cwd. Name the
+project by its **absolute `.csproj` path** and prefix the run with `MSBUILDDISABLENODEREUSE=1`; a live
+`MSBuild.dll /nodemode:1` worker started under a sibling checkout is how the wrong path gets in (the entry above is
+the same mechanism with a `NUGET_PACKAGES` payload). Zero tests is never a pass — see the treenode-filter rule.
+Authority: S6 lane D, 2026-09-07.
+
 ### Never classify a cancellation from a `CancellationToken.Register` callback
 
 Registration callbacks race disposal and execute synchronously. They may signal/kill, but must not own terminal classification or throw the final exception. Classify after the awaited operation observes authoritative cancellation state.
@@ -336,6 +345,16 @@ The MVID-keyed `/tmp/xe-local-ai-engine-tests-template-*.sqlite` cache intention
   scripts/openapi-live-check.sh
   ```
 
+  For `openapi-live-check.sh` this is now belt-and-braces rather than required: the script forwards both variables when
+  the caller exports them and falls back to the real user paths when it does not, and it pins
+  `ASPNETCORE_ENVIRONMENT=Development` for the host it starts, while keeping the `HOME` isolation the desktop port
+  contract depends on. Exporting them yourself is still the safe habit, because it is what every other script on this
+  list needs.
+- **The same trap is still live in `scripts/tests/install.test.sh`**, reached through `run-release-contract-tests.sh`
+  and so through `scripts/lint-release-scripts.sh`. On a mise box, without those two variables exported, it fails
+  asserting `one safe skills/xe-local-ai-engine tree` — a message about archive contents, for a toolchain problem. CI
+  has no mise and never sees it. Not fixed; export the two variables before running the release-script gate locally.
+  Authority: S6 lane A, 2026-09-07.
 - The same two variables are needed when you start the regen host BY HAND with an isolated `HOME`. Isolating `HOME` hides the trusted mise config, so mise refuses the toolchain and the host exits with a trust error **before** it ever reaches OpenAPI readiness — which reads as "the spec endpoint is broken", not as a toolchain problem. Point both at the real user paths. Authority: S5 lane A regen, 2026-09-07.
 - **A desktop-mode host ignores `--urls`.** `DesktopPortStore.ResolveBindUrl` owns the bind address in that launch mode, so the port you passed is not the port it listens on. Read the real one from `desktop-port.txt` under the isolated data directory (`scripts/openapi-live-check.sh` does exactly that) and build `OPENAPI_SPEC_URL` from it. Prevents: fetching a spec from a port nothing is bound to and concluding the document is gone.
 - **A schema that gains a `$ref` reorders NSwag's component output.** The referenced schema is emitted where it is first needed, so a spec diff can show several schemas removed at one offset and re-added at another with identical bodies. That is reordering, not loss. Verify it by comparing the PATH SETS (removals must be zero) rather than by reading the diff hunks, which is what `openapi-live-check.sh` reports. Prevents: reverting a correct regen because the diff looked destructive. Authority: the S5 regen that added `graph` to `GraphWorkflowRunResponse` — the live and committed path sets matched exactly while two graph-workflow schemas moved.
@@ -610,11 +629,40 @@ llama-server compiles the whole tools array to GBNF and has a combined repetitio
 
 Use `scripts/run-tool-grammar-smoke-local.sh` with a **non-reasoning, tool-capable** GGUF. The sanitized offer must return 200 and the unsanitized negative control must still return the grammar 400. If the control returns 200, the smoke is inert (reasoning model) or llama.cpp changed its limit; re-measure `MaxGrammarRepetitionBound`. FakeOllama E2E cannot validate this.
 
-A Graph Workflow Agent node's `responseJsonSchema` goes down the same grammar path, so keep it flat. A NESTED response
-schema (object → object + array of strings) was exercised live on Qwen3.8-27B Q4 during the S5 round: the node output conformed,
-but the Debug log shows no grammar/json_schema line for that request and the logged sampler chain matched an unconstrained
-request, so whether the grammar or the model produced the conformance is still unproven. Treat the grammar path as unverified
-until a negative control (a schema the model cannot satisfy unconstrained) is run. Authority: `Plans/custom-graph-workflows-2026-09-03/progress/S5-live/S5-live-report.md`.
+A Graph Workflow Agent node's `responseJsonSchema` goes down the same grammar path, so keep it flat — and its
+**structure IS enforced**. llama-server compiles the schema into a real GBNF grammar and applies it from generation
+start: proven live 2026-09-07, when a `zqx-alpha`/`zqx-beta` enum held against a prompt that explicitly forbade JSON
+and both tokens, and confirmed directly by the compiled grammar captured verbatim from a `--verbose` llama-server.
+`enum`, `required`, the object shape and the types are all carried. The compiled `root` rule leaves the model's
+`<think>` block **optional and unconstrained** and forces the schema only on what follows, so the grammar is
+reasoning-aware by construction rather than by disabling reasoning. Authority:
+`Plans/custom-graph-workflows-2026-09-03/progress/S6-live/S6-live-report.md` §5b (this replaces the S5 round's
+"unproven" reading, which had only a positive control).
+
+**But every value bound is gone before the request leaves the .NET process, and nothing warns you.** The
+`Microsoft.Extensions.AI.OpenAI` 10.9.0 adapter runs an **unconditional** strict-schema transform
+(`OpenAIClientExtensions.StrictSchemaTransformCache`, applied in `OpenAIChatClient.ToOpenAIChatResponseFormat`) with
+**no opt-out** — the `strict` AdditionalProperties key only sets the wire flag and does not gate the rewrite. It
+relocates the value-constraint keywords into a `description` **string**, which is advisory prose to the model and not
+a machine-checkable constraint, and it also makes every declared property `required` and sets
+`additionalProperties: false`, so a property you left optional is not optional. Live evidence: a `maxLength: 3` schema
+reached llama-server as `{"description":"maxLength: 3","type":"string"}` and produced a **1302-character** field,
+while an `enum` in the same round arrived untouched. Read off the shipped assembly's own keyword table, the relocated
+set is `pattern`, `format`, `minLength`, `maxLength`, `minItems`, `maxItems`, `exclusiveMinimum`, `minimum`,
+`exclusiveMaximum`, `maximum`, `contentEncoding`, `contentMediaType` — re-read that table on a package bump rather
+than trusting this list. **Tool** schemas are not transformed by default, which is exactly why XE carries its own
+`LlamaGrammarToolSchemaCompatibility` sanitiser for that path and none for this one. Do not rely on a value bound in a
+response schema; validate it yourself downstream.
+
+Two things that will waste your time here. `InvocationAgentFactoryTests.CreateAsync_WithAResponseJsonSchema_ConstrainsTheTurnToIt`
+is **not** evidence against the above and structurally cannot catch it: it asserts on the `ChatOptions` the factory
+built, which is upstream of the adapter that does the rewriting. Catching it needs an observation of the wire body or
+of the compiled grammar. And the XE Debug log never shows the grammar at any Serilog level —
+`Serilog__MinimumLevel__Default=Debug` greps **zero** hits for `grammar`, `json_schema`, `response_format` or `gbnf`.
+What prints both the compiled GBNF and the schema llama-server actually received is llama-server's own `--verbose`,
+set through `PUT models/{modelName}/launch-args` (`rawArguments`) followed by a **full host restart**: the
+Ollama-shaped `POST models/{modelName}/unload` answers 500 with a connection refused to 11434 for a
+llama.cpp-provider model and cannot respawn its process.
 
 
 `LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound` is empirical for the **whole production offer**, not an upstream constant or per-field limit. Third-party MCP schemas make this an open boundary. If sanitization still fails, translate it to `FailureCategory.ModelCapabilityUnsupported`; do not surface the raw sampler error as a model defect. The live smoke's unsanitized negative control is load-bearing: a 200 means either a reasoning template skipped GBNF or upstream changed the limit.
@@ -1273,6 +1321,17 @@ Bubblewrap's filesystem capability and non-isolated `unshare` capability are dis
 
 ---
 
+### A second copy of the tool-invocation logic drifts, and the drift looks like a product bug
+
+**Rule:** anything that executes a tool for real calls `IToolInvocationService.InvokeAsync`; a caller may add what is
+its own (an offer to compose, an envelope to shape) but never its own resolve/validate/call/classify chain.
+**Prevents:** the two drifts the training path had accumulated since S2 promoted that seam out of it —
+`HeadlessToolExecutor` never consulted `IClientLocalToolRegistry`, so `read_file` and its five worker-owned siblings
+**failed** for a teacher turn that asked for them; and a repair envelope from `ToolArgumentRepairAIFunction` came back
+as a **successful sample** carrying model-repair guidance as its tool result, poisoning the dataset quietly.
+**Authority:** `HeadlessToolExecutor` and `HeadlessToolExecutorTests`; `ToolInvocationService.TryAdmit` is the same
+seam the Graph Workflow Tool gate reads.
+
 ### Graph Workflows: `Parallel` and `Join` are labels, not semantics
 
 **Rule:** fan-out is any node with more than one satisfied outbound edge, and fan-in is the `joinPolicy` carried by **every** node. A `Parallel` or `Join` node is cosmetic — it is an inline kind that writes two rows, which is what makes the timing of a fan-out visible in the event log, and nothing more. **Prevents:** wiring a "real" parallel executor, or assuming a `Join` node is what makes a join happen — and its mirror image, giving an ordinary node two inbound edges and being surprised it waits for both. **Authority:** `GraphWorkflowStateMachine.Admission` reads `node.JoinPolicy` whatever the kind; `GraphWorkflowGraph.ValidateNode` refuses `Any` on any node with fewer than two inbound edges; `DevWorkflowStateMachine` holds the same rule.
@@ -1301,7 +1360,13 @@ This is also why `Condition` and `Parallel` nodes pass their predecessor's `outp
 
 **Rule:** `input` is the single satisfied predecessor's output document, and becomes the `upstream` map only when several predecessors are satisfied. A `Pause` writes its own document (`{decision, comment, payload}`), so `A → Pause → B` hands B the approval metadata and never A's answer, even with `includeUpstreamOutputs: true`; a `Pause` before `End` loses the result the same way. Only `Condition` and `Parallel` pass their input through. To carry content past a node that does not forward it, wire a second edge from the content's source to the consumer — the consumer's default `All` join still waits for the approval and its `input` becomes the `upstream` map with both. **Prevents:** authoring or importing a chain whose downstream Agent silently works on the wrong document (the S4 live round watched agent-2 spend three chat and three embedding calls hunting for a haiku that was never in its input). **Authority:** `GraphWorkflowDocuments.ComposeInput`, `GraphWorkflowInlineExecutor.Upstream`, `GraphWorkflowDocuments.PauseOutput`; the Open Canvas importer's `CanvasWorkflowImport.AddPauseContextEdges` is the worked example, pinned by `CanvasWorkflowImportRunTests`.
 
-An author no longer has to know this unaided, and the two halves are worth knowing separately. The EDITOR adds the edge for you (`pauseContextEdges`), but **only on the connect gesture** — never on render or validate — so an edge you delete stays deleted; wiring out of a Pause considers only the node just connected, wiring into one considers every successor reachable through consecutive pauses; the editor judges each successor exactly as the validator does (starved only when every inbound edge leaves a Pause). The VALIDATOR raises a non-blocking warning on the starved node (`GraphWorkflowGraph.Warnings`, surfaced as `warnings` on the validate response): `valid` is still zero ERRORS, so a warned graph saves and runs. Both use the same rule — the pause's nearest non-`Pause` ancestor, walking back through consecutive pauses, `Start` included — and both **skip a `Condition` ancestor**, because the edge would be that node's second unconditional out-edge, which the parser refuses. Two more guards, found by review: the editor adds nothing when the ancestor is **not unique** (two exclusive branches into an `All` successor skip it the moment the untaken branch is dead), and neither half touches a successor whose **`joinPolicy` is `Any`** — it is a property of every node kind, not only `Join`, and an unconditional content edge would admit it with every approval rejected, so the warning is not raised there and the editor adds no edge. Advice that turns a warning into an error is worse than the generic sentence, so the warning falls back to "a node before the pause" for a Condition or non-unique ancestor.
+An author no longer has to know this unaided, and the two halves are worth knowing separately. The EDITOR adds the edge for you (`pauseContextEdges`), but **only on the connect gesture** — never on render or validate — so an edge you delete stays deleted; wiring out of a Pause considers only the node just connected, wiring into one considers every successor reachable through consecutive pauses; the editor judges each successor exactly as the validator and the importer do (starved only when every inbound edge leaves a Pause). The VALIDATOR raises a non-blocking warning on the starved node (`GraphWorkflowGraph.Warnings`, surfaced as `warnings` on the validate response): `valid` is still zero ERRORS, so a warned graph saves and runs. All three use the same rule — the pause's nearest non-`Pause` ancestor, walking back through consecutive pauses, `Start` included — and all three **skip a `Condition` ancestor**, because the edge would be that node's second unconditional out-edge, which the parser refuses. Two more guards, found by review: nothing is added when the ancestor is **not unique** (two exclusive branches into an `All` successor skip it the moment the untaken branch is dead), and nothing touches a successor whose **`joinPolicy` is `Any`** — it is a property of every node kind, not only `Join`, and an unconditional content edge would admit it with every approval rejected, so the warning is not raised there and neither the editor nor the importer adds an edge. The importer reads a successor's join policy and kind off the node **it just emitted**, never off the canvas kind, which is what keeps its answer identical to the validator's; every guard but the starvation test is unreachable for a real Open Canvas graph and is stated anyway, because the rule and not today's vocabulary is what the next node kind must keep holding. Advice that turns a warning into an error is worse than the generic sentence, so the warning falls back to "a node before the pause" for a Condition or non-unique ancestor.
+
+### Graph Workflows: a cap has to be enforced BEFORE the work it bounds, not after it
+
+**Rule:** `GraphWorkflowGraph.Parse(graphJson, maxNodes)` refuses on the **declared length of the `nodes` array**, before a node is read or an edge walked, and `EnsureAcyclic` walks on an explicit `Stack<(string, int)>` rather than recursively. **Prevents:** a request under the 1 MiB body cap carrying a chain of thousands of minimal nodes, whose recursive cycle walk spends one stack frame per node and overflows the thread-pool thread's stack — a **process kill** no `catch` ever sees, on a request the cap was supposed to have refused. The old order compared the count against the *parsed* graph, so it bounded nothing about the parse that produced it. **Authority:** `GraphWorkflowGraph.Parse` / `ParseNodes` / `EnsureAcyclic`, `GraphWorkflowGraphContract.ValidateAndCountNodes`, `GraphWorkflowGraphContractTests` and `GraphWorkflowGraphTests`.
+
+The message and the exception type did not change, so the endpoint contract and the editor's mapping stand. The callers that re-parse an already **stored** graph — `GraphWorkflowRunService`, `GraphWorkflowDispatcher`, `HasRejectBranch`, `ToolNodeNames` — stay uncapped **on purpose**: that graph was capped when it was saved, and a cap an operator lowered afterwards would make a live run unroutable rather than merely unsaveable. The iterative walk is what makes those uncapped paths safe. Threading the path through it also recovered what the copy from Dev Workflows had lost: the refusal now names every node on the cycle in walk order (`a -> b -> c -> a`), not just the node it came back to.
 
 ## 5. Frontend, chat UX, API boundary
 
@@ -1390,11 +1455,11 @@ Monaco stays behind shared `CodeEditor`: import `editor.api` and chosen Monarch 
 
 A bounded Mantine `NumberInput`/`Slider` that distinguishes “unset” from override needs a post-mount `ready` guard before persistence. Mantine can emit min/default on mount and overwrite a deliberate null. Capability flags for file/image chat input remain static client constants; do not wait for a backend capabilities endpoint that is not part of this contract.
 
-### A date goes through `formatTimestamp`, never through a bare `toLocaleString()`
+### A date goes through `formatTimestamp` or `formatTime`, never through a bare `toLocaleString()`
 
-**Rule:** `formatTimestamp` (`core/formatting/TimeFormatting.ts`) formats an epoch-millis instant in the ACTIVE i18next language, and every new date rendering goes through it. **Prevents:** a session switched to German rendering German labels beside US-ordered dates — `toLocaleString()` reads the machine's regional setting and knows nothing about i18next — and the literal "Invalid Date" landing in a table row, which the helper answers as a dash. **Authority:** `formatTimestamp` and `TimeFormatting.test.ts`; it is also why `core` may import i18next directly, the same reason `ApiErrorMessage` and `Toast` do.
+**Rule:** `formatTimestamp` and its time-only sibling `formatTime` (`core/formatting/TimeFormatting.ts`) format an instant in the ACTIVE i18next language, and every date or clock rendering goes through one of them. Both take `number | string | null | undefined`, because half the wire carries epoch millis and half an ISO string and most generated timestamp fields are optional. **Prevents:** a session switched to German rendering German labels beside US-ordered dates — `toLocaleString()` reads the machine's regional setting and knows nothing about i18next — and the literal "Invalid Date" landing in a table row, which the helper answers as a dash. **Authority:** `formatTimestamp` and `TimeFormatting.test.ts`; it is also why `core` may import i18next directly, the same reason `ApiErrorMessage` and `Toast` do.
 
-An uninitialised i18next answers `undefined`, which is exactly the argument meaning "the environment's default", so a test or an early render behaves as it always did. A hand-edited `i18nextLng` holding a malformed tag (`en_US`) throws a `RangeError` **per row**, so the call is wrapped and falls back to the default. Other `toLocaleString()` date sites in the app remain on the browser locale and were deliberately left alone.
+An uninitialised i18next answers `undefined`, which is exactly the argument meaning "the environment's default", so a test or an early render behaves as it always did. A hand-edited `i18nextLng` holding a malformed tag (`en_US`) throws a `RangeError` **per row**, so the call is wrapped and falls back to the default. The rule is now repo-wide: every bare `toLocaleString()`/`toLocaleTimeString()` date site imports a helper, the local copies in agents, benchmarks, knowledge, model-fit, diagnostics and `GgufFormatters.ts` are gone, and the `features/devWorkflows` sites are in scope too under an explicit operator ruling. The known remainder is the handful of sites that pass explicit `toLocaleDateString`/`toLocaleTimeString` **options** — absorbing them needs an options parameter, which is a separate decision, so they still follow the browser locale. Grep for `toLocale` under `src/` to see the current list rather than trusting one written here. Never date an absent instant with `?? 0`: that renders 1970 as if it were data, and the helper's dash is the honest answer.
 
 ### A `DialogShell` opened over another `DialogShell` needs `raised`, never a z-index literal
 
@@ -1547,3 +1612,8 @@ These are intentionally terse. Follow the linked/current section for the active 
 | A run view falls back to nodes-only whenever `run.graphHash` and `definition.graphHash` disagree. | Only a response carrying no graph at all falls back; a hash mismatch alone is informational (§4). |
 | An authored `Agent → Pause → Agent` chain has no affordance and only the importer adds the context edge. | The editor adds it on the connect gesture and the validator warns about the starved node (§4). |
 | `WorkSessionAgentSeeder` allow-lists the clock tool as `get_current_time`. | The registry derives the name from the method: it is `GetCurrentTime` (§4, wiki 19). |
+| Whether an Agent node's `responseJsonSchema` is enforced by a grammar, or merely obeyed by the model, is unproven. | Enforced from generation start, proven live with a negative control and the compiled GBNF captured verbatim (§3). |
+| A `maxLength` in a response schema is dropped by llama.cpp's grammar converter. | llama.cpp never sees it: the MEAI OpenAI 10.9.0 strict-schema transform rewrote it into a `description` before the request left .NET (§3). |
+| The Open Canvas importer's pause context edge follows a looser rule than the editor and the validator. | All three apply the same rule and the same three guards; only WHEN they run differs (§4, wiki 21 §9.2). |
+| `MaxNodesPerDefinition` is applied after the parse, so the parser needs no cap. | `GraphWorkflowGraph.Parse` takes the cap and refuses on the declared node count before anything is read (§4, wiki 21 §2.4). |
+| Date sites outside `formatTimestamp` were deliberately left on the browser locale. | Every bare `toLocaleString()` date site now uses `formatTimestamp`/`formatTime`; only the options-passing sites remain (§5, wiki 10). |
