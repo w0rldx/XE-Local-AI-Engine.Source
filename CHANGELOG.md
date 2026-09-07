@@ -103,6 +103,14 @@ cut. The prior `v1.0.0-rc.1` tag remains bound to its own source commit and is n
 - **Monaco-based code viewer** for code shown in the UI, replacing the previous plain rendering.
 - A configurable **local chat invocation timeout**, so a slow local model on a large prompt is no longer cut off by a
   fixed limit.
+- **Graph Workflows** — draw a workflow as a diagram and run it. Nodes are agent turns, built-in read-only tool calls,
+  conditions, fan-out and fan-in, an approval step that waits for a person, and a start and an end; edges carry a
+  single declarative comparison against the previous node's output. A run pins its own copy of the graph, so editing a
+  workflow never rewrites history, and it is executed from the database — a run survives closing the browser and
+  survives restarting the app. Live progress arrives over a SignalR hub, and every run keeps an append-only event log
+  you can read after the fact. A tool step may only call a built-in, read-only tool that needs no approval; the check
+  runs both when the workflow is saved and again when a run starts, so a tool that stopped being read-only stops
+  running.
 
 ### Changed
 
@@ -119,6 +127,25 @@ cut. The prior `v1.0.0-rc.1` tag remains bound to its own source commit and is n
   lifecycle, and a hand-written launch flag would silently bypass it.
 - The launch-policy fingerprint moved from 4 to 5, so every already-fitted model is re-fitted once on the first start
   after the update. No action is required; the re-fit is automatic and happens only once.
+
+### Removed
+
+- **Open Canvas (the experimental "Preview → Open Canvas" workflow builder) has been removed**, and Graph Workflows
+  replaces it.
+- **Your saved Open Canvas workflows are converted into Graph Workflows automatically, on the first start of this
+  build.** There is no button and no prompt: the app reads them, converts them, and then drops the old table in the
+  same start-up. **The conversion is one-shot and cannot be undone.**
+  - **Back up the application's data directory before you upgrade** if those workflows matter to you. The app takes
+    its own best-effort database snapshot immediately before migrating, but best-effort is exactly what it says, and
+    a copy you made yourself is the only guarantee.
+  - A workflow the new validator cannot accept is **still imported**, with `IMPORT NEEDS ATTENTION:` and the reason at
+    the front of its description. Nothing is thrown away for being invalid — but such a workflow **cannot be run until
+    you open it and fix what the editor points at**.
+  - Converted workflows arrive without saved node positions, so one opens neatly laid out and with unsaved changes.
+    That is expected; save it once and the layout sticks.
+  - Two changes are worth knowing about: a Debug node is removed and its two edges joined, since it only forwarded
+    what it was given; and an Open Canvas "Continue" step becomes an **Approve** step, because that is the faithful
+    translation of what it did.
 
 ### Fixed
 

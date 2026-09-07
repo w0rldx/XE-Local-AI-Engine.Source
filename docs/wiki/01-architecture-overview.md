@@ -86,11 +86,14 @@ Distinct from the platform link, the React SPA talks to the host over a **loopba
   (`Program.cs`, `config.Endpoints.NameGenerator`).
 - Local SignalR hubs, each `RequireAuthorization(NodeAuthorizationPolicies.Operator)`. **The `MapHub`
   block in `Client/Program.cs` is the inventory** — count it there rather than trusting a number here.
-  In registration order it maps `LocalChatHub`, `SchedulerHub`, `PreviewWorkflowHub`, `BenchmarkRunHub`,
+  In registration order it maps `LocalChatHub`, `SchedulerHub`, `BenchmarkRunHub`,
   `DatasetGenerationHub`, `TrainingRuntimeHub`, `TrainingRunHub`, `GgufDownloadHub`, `CudaBuildHub`,
-  `LlamaCppSourceBuildHub`, `RuntimeAcquisitionHub`, `KnowledgeBaseHub`, `ImageJobHub` and
-  `StableDiffusionCppSourceBuildHub` unconditionally, then `DevelopmentAttemptHub` only when
-  `Development:Enabled` (default `true`) — so every hub but the Development one is always present.
+  `LlamaCppSourceBuildHub`, `RuntimeAcquisitionHub`, `KnowledgeBaseHub`, `ImageJobHub`,
+  `StableDiffusionCppSourceBuildHub`, `WorkSessionHub`, `DevWorkflowRunHub` and `GraphWorkflowRunHub`
+  unconditionally, then `DevelopmentAttemptHub` only when `Development:Enabled` (default `true`) — so every
+  hub but the Development one is always present. The work-session and the two workflow hubs are mapped
+  unconditionally on purpose: their feature flags are enforced by request-path middleware that answers 404 for
+  the whole prefix, hub path included, rather than by leaving a route unmapped.
 - JWT-bearer auth (operator role), antiforgery, per-IP rate limiting, and a
   `LocalApiSecurityMiddleware` that enforces the loopback/`Host`/`Origin` posture
   (`ConfigureServices.cs`, `Program.cs`).
@@ -204,7 +207,7 @@ there are load-bearing (`AddNodeImages` and `AddNodeTrainingRuntime` reuse the H
 lease). Today it covers core options, auth/connection, invocation, workspace/agents, analysis, adaptive
 memory, drafting, eval, golden harvest, scheduling stores, model fit, benchmarks, training datasets,
 capacity, MCP agent runs, playbook retrieval/monitoring, worker infrastructure, model capabilities/MCP,
-AgentHome, Coder, preview workflows, document ingestion, knowledge base, chat, chat stream budget,
+AgentHome, Coder, graph workflows, document ingestion, knowledge base, chat, chat stream budget,
 development, the container sandbox, model runtime, images, the training runtime, and training runs.
 
 ```

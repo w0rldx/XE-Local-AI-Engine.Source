@@ -33,8 +33,8 @@ five things, in order:
    `IMcpToolRegistry → McpToolRegistry`.
 4. **Registers the agent factories** — `IInvocationAgentFactory → InvocationAgentFactory` (single
    agent) and `IOrchestrationAgentFactory → OrchestrationAgentFactory` (multi-agent handoff).
-5. **Registers the gated runners** — `IPlaybookEvalAgentRunner → MafPlaybookEvalAgentRunner` (golden
-   eval) and `IPreviewWorkflowRunner → PreviewWorkflowRunner` (Open Canvas preview).
+5. **Registers the gated runner** — `IPlaybookEvalAgentRunner → MafPlaybookEvalAgentRunner` (golden
+   eval).
 
 ### 1.2 The chat-client decorator pipeline
 
@@ -203,9 +203,10 @@ byte-identical.
   with an **empty tool set** and runs it **threadless** (`session: null`). It mirrors the real worker
   loop's prompt assembly so the eval measures the injected prompt's effect, not tool behaviour. The
   client is owned by the caller and intentionally not disposed.
-- **`PreviewWorkflowRunner`** (`PreviewWorkflows/Implementation/PreviewWorkflowRunner.cs`) — the Open
-  Canvas (Preview) visual-workflow runner over a raw MAF `WorkflowBuilder`; again confines all
-  `Workflows` types to the runner.
+
+[Graph Workflows](21-graph-workflows.md) do **not** add a runner here. An `Agent` node drives the same
+headless `IInvocationRunner` stack a scheduled saved-agent run uses, from `Client.Application`, and the
+`PreviewWorkflowRunner` that used to sit beside the eval runner went with Open Canvas.
 
 ---
 
@@ -857,8 +858,9 @@ provider choice rather than a new registration to keep correct.
 ## Key invariants for maintainers
 
 - **MAF stays behind interfaces.** `Microsoft.Agents.AI.Workflows` types live only inside AI.Agent
-  runners/sessions (`IOrchestrationRunSession`, `IPreviewWorkflowRunner`); the application layer never
-  references them.
+  runners and sessions — today `IOrchestrationRunSession` is the sole holder — and the application layer
+  never references them. [Graph Workflows](21-graph-workflows.md) are not an exception to this: they route
+  on their own state machine in `Client.Application` and reference no MAF workflow type at all.
 - **One decorated pipeline.** Never bypass `DecorateChatClientPipeline`; tool observability + automatic
   invocation must wrap every send. Re-apply it after swapping the base client in tests.
 - **Offer is never widened.** Only the seeded Default Assistant gets the full offer; all other agents

@@ -81,6 +81,16 @@ receipt-carrying model comparisons (`Client.Application/Services/Benchmarks/`, `
 `LocalApiRoutes.Benchmarks`, the `AddBenchmarks`/`AddBenchmarkRunLaunchReceipts` migrations); it has **no
 dedicated wiki page yet**, so that code is the source of truth until one exists.
 
+**Shipped since the last review: Graph Workflows, and Open Canvas is gone.** [Graph Workflows](21-graph-workflows.md)
+are operator-authored acyclic graphs of agent turns, tool calls, conditions and human pauses, executed from the
+database by a single dispatcher loop and durable across a restart. The feature is **on by default** and is a
+top-level navigation entry. It replaced the **Open Canvas (Preview)** visual builder, which was removed together with
+its `preview/*` routes, its hub and its React feature; saved canvases are converted into Graph Workflow definitions
+**once, automatically, on the first start of the build that removed it**. That conversion is irreversible — read
+[§9 of the Graph Workflows page](21-graph-workflows.md#9-the-open-canvas-import) before upgrading a node whose
+canvases matter. Any doc, comment or assumption that still describes Open Canvas as the visual workflow builder is
+stale.
+
 **In-app llama.cpp source builds.** Upstream ships no prebuilt Linux CUDA `llama-server`, so the node can
 compile one itself and adopt it as a managed runtime — an explicit, Operator-gated, prerequisite-checked
 action, never implicit. Prebuilt download stays the default. If you read anywhere that this engine has
@@ -111,6 +121,7 @@ action, never implicit. Prebuilt download stays the default. If you read anywher
 | 18 | [Training](18-training.md) | Local fine-tuning: the `Providers.Training` uv/Python runtime, dataset generation, training runs, export/promote/eval |
 | 19 | [Compute Tools](19-compute-tools.md) | Sandboxed code execution: the `run_python` tool, process-sandbox isolation, uv-pinned venv (numpy/scipy/sympy), security/gating (WriteExecute + approval-required, profile-opt-in), Linux-only v1, operator enablement |
 | 20 | [Benchmarks](20-benchmarks.md) | Task suites and long-context probes, freeze fan-out and cell ranking, verifiable criteria incl. `pythonTests` execution scoring, pairwise Bradley-Terry and paired-difference intervals, quant fidelity (perplexity/KLD, base-logit cache, comparability digest), the four-kind work queue, scheduled matrices and the training hand-off, export schema 4 |
+| 21 | [Graph Workflows](21-graph-workflows.md) | Operator-authored DAGs: the graph contract and its validation rules, the run and node-run lifecycles, the eight node kinds and their documents, the route family and the `graphWorkflowChanged` hub contract, the React editor and run view, the options table, and the one-shot Open Canvas import |
 
 ## Conventions in this wiki
 
