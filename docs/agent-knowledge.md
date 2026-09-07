@@ -336,6 +336,10 @@ The MVID-keyed `/tmp/xe-local-ai-engine-tests-template-*.sqlite` cache intention
   scripts/openapi-live-check.sh
   ```
 
+- The same two variables are needed when you start the regen host BY HAND with an isolated `HOME`. Isolating `HOME` hides the trusted mise config, so mise refuses the toolchain and the host exits with a trust error **before** it ever reaches OpenAPI readiness — which reads as "the spec endpoint is broken", not as a toolchain problem. Point both at the real user paths. Authority: S5 lane A regen, 2026-09-07.
+- **A desktop-mode host ignores `--urls`.** `DesktopPortStore.ResolveBindUrl` owns the bind address in that launch mode, so the port you passed is not the port it listens on. Read the real one from `desktop-port.txt` under the isolated data directory (`scripts/openapi-live-check.sh` does exactly that) and build `OPENAPI_SPEC_URL` from it. Prevents: fetching a spec from a port nothing is bound to and concluding the document is gone.
+- **A schema that gains a `$ref` reorders NSwag's component output.** The referenced schema is emitted where it is first needed, so a spec diff can show several schemas removed at one offset and re-added at another with identical bodies. That is reordering, not loss. Verify it by comparing the PATH SETS (removals must be zero) rather than by reading the diff hunks, which is what `openapi-live-check.sh` reports. Prevents: reverting a correct regen because the diff looked destructive. Authority: the S5 regen that added `graph` to `GraphWorkflowRunResponse` — the live and committed path sets matched exactly while two graph-workflow schemas moved.
+
 - Gate behavior, not discovery, when services register independently of the flag. Work Sessions keep routes/hub mapped and return 404 ahead of auth when disabled.
 - hey-api query keys are single-element object arrays; invalidate by partial-object match, not `.slice()`.
 
@@ -1293,6 +1297,8 @@ This is also why `Condition` and `Parallel` nodes pass their predecessor's `outp
 
 **Rule:** `input` is the single satisfied predecessor's output document, and becomes the `upstream` map only when several predecessors are satisfied. A `Pause` writes its own document (`{decision, comment, payload}`), so `A → Pause → B` hands B the approval metadata and never A's answer, even with `includeUpstreamOutputs: true`; a `Pause` before `End` loses the result the same way. Only `Condition` and `Parallel` pass their input through. To carry content past a node that does not forward it, wire a second edge from the content's source to the consumer — the consumer's default `All` join still waits for the approval and its `input` becomes the `upstream` map with both. **Prevents:** authoring or importing a chain whose downstream Agent silently works on the wrong document (the S4 live round watched agent-2 spend three chat and three embedding calls hunting for a haiku that was never in its input). **Authority:** `GraphWorkflowDocuments.ComposeInput`, `GraphWorkflowInlineExecutor.Upstream`, `GraphWorkflowDocuments.PauseOutput`; the Open Canvas importer's `CanvasWorkflowImport.AddPauseContextEdges` is the worked example, pinned by `CanvasWorkflowImportRunTests`.
 
+An author no longer has to know this unaided, and the two halves are worth knowing separately. The EDITOR adds the edge for you (`pauseContextEdges`), but **only on the connect gesture** — never on render or validate — so an edge you delete stays deleted; wiring out of a Pause considers only the node just connected, wiring into one considers every successor. The VALIDATOR raises a non-blocking warning on the starved node (`GraphWorkflowGraph.Warnings`, surfaced as `warnings` on the validate response): `valid` is still zero ERRORS, so a warned graph saves and runs. Both use the same rule — the pause's nearest non-`Pause` ancestor, walking back through consecutive pauses, `Start` included — and both **skip a `Condition` ancestor**, because the edge would be that node's second unconditional out-edge, which the parser refuses. Advice that turns a warning into an error is worse than the generic sentence, so the warning falls back to "a node before the pause" there and when the ancestor is not unique.
+
 ## 5. Frontend, chat UX, API boundary
 
 ### Chat rendering contract
@@ -1379,6 +1385,18 @@ Monaco stays behind shared `CodeEditor`: import `editor.api` and chosen Monarch 
 
 
 A bounded Mantine `NumberInput`/`Slider` that distinguishes “unset” from override needs a post-mount `ready` guard before persistence. Mantine can emit min/default on mount and overwrite a deliberate null. Capability flags for file/image chat input remain static client constants; do not wait for a backend capabilities endpoint that is not part of this contract.
+
+### A date goes through `formatTimestamp`, never through a bare `toLocaleString()`
+
+**Rule:** `formatTimestamp` (`core/formatting/TimeFormatting.ts`) formats an epoch-millis instant in the ACTIVE i18next language, and every new date rendering goes through it. **Prevents:** a session switched to German rendering German labels beside US-ordered dates — `toLocaleString()` reads the machine's regional setting and knows nothing about i18next — and the literal "Invalid Date" landing in a table row, which the helper answers as a dash. **Authority:** `formatTimestamp` and `TimeFormatting.test.ts`; it is also why `core` may import i18next directly, the same reason `ApiErrorMessage` and `Toast` do.
+
+An uninitialised i18next answers `undefined`, which is exactly the argument meaning "the environment's default", so a test or an early render behaves as it always did. A hand-edited `i18nextLng` holding a malformed tag (`en_US`) throws a `RangeError` **per row**, so the call is wrapped and falls back to the default. Other `toLocaleString()` date sites in the app remain on the browser locale and were deliberately left alone.
+
+### A `DialogShell` opened over another `DialogShell` needs `raised`, never a z-index literal
+
+**Rule:** a dialog that stacks over another one passes `raised` to `DialogShell`; the component owns the single raised layer. **Prevents:** the confirmation rendering UNDERNEATH the editor it is confirming. Mantine portals every modal into one shared node, so two dialogs at the same z-index are ordered by insertion and the one underneath wins whenever it was remounted last — a `key` on the outer editor is enough to cause it, which is how the benchmark re-judge confirmation disappeared. **Authority:** `DialogShell` and `DialogShell.test.tsx`; `ConfirmProvider` and `BenchmarkConfirmationDialog` are the two call sites.
+
+Fixing it at a call site with a z-index number leaves the next stacked dialog to rediscover the trap, and two call sites free to pick different numbers.
 
 ### A workflow hub's `kind` is LOWERCASE on the wire and is asserted literally on both sides
 
@@ -1521,3 +1539,7 @@ These are intentionally terse. Follow the linked/current section for the active 
 | A verifier that cannot run scores 0. | It fails the judging and the run is excluded as `verifier-unavailable`; only a TIMEOUT is a real 0 (§3, §4). |
 | The eligible-model listing re-hashes GGUF members. | Listing trusts recorded registry facts; only the freeze re-hashes (§3). |
 | Export schema is 3. | 4 since task suites — `taskItems[]`, `cells[]` and six appended CSV columns (§3). |
+| The graph-workflow run GET carries no graph, so a run view draws the definition's. | `GraphWorkflowRunResponse` carries the run's PINNED graph; the run view draws that and a definition edited since is only a notice (§4, wiki 21 §5). |
+| A run view falls back to nodes-only whenever `run.graphHash` and `definition.graphHash` disagree. | Only a response carrying no graph at all falls back; a hash mismatch alone is informational (§4). |
+| An authored `Agent → Pause → Agent` chain has no affordance and only the importer adds the context edge. | The editor adds it on the connect gesture and the validator warns about the starved node (§4). |
+| `WorkSessionAgentSeeder` allow-lists the clock tool as `get_current_time`. | The registry derives the name from the method: it is `GetCurrentTime` (§4, wiki 19). |
