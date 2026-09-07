@@ -164,6 +164,17 @@ Accumulated, per element:
   document a pause actually produces, so the pre-flight rule and the routing cannot disagree;
 - a second unconditional edge between one pair of nodes.
 
+**Warnings are a second list, and they never refuse.** `GraphWorkflowGraph.Warnings` is computed on the first ask
+rather than during the parse — only the validate endpoint asks, and every dispatcher tick parses — and nothing in it
+reaches `GraphWorkflowValidationException`. A graph that warns **saves, validates as `valid`, and runs**. There is one
+warning in v1: a node whose inbound edges **all** leave a `Pause` receives the decision document rather than the
+content that was approved (§4.6). It is keyed on that node rather than on the pause, because that is the node which
+loses the content and so the node an editor draws the badge on, and one warning is raised however many pauses reach
+it. The sentence **names** the pause's nearest non-`Pause` ancestor only when that ancestor is unique and is not a
+`Condition`: with two candidates the advice would have to pick one, and a `Condition` cannot be named because the edge
+it would ask for is that node's second unconditional out-edge, which the parser refuses — advice that turns a warning
+into an error is worse than the generic sentence.
+
 The node cap is deliberately **not** in the parser: `MaxNodesPerDefinition` is an option, and
 `GraphWorkflowGraphContract.ValidateAndCountNodes` applies it after the parse so the parser stays testable without a
 container.
@@ -513,6 +524,31 @@ check writes; the two spellings must produce the same string or a graph that pre
 `comment` and `payload` ride **beside** it rather than above it: they are the operator's, not the router's, and a
 condition that could select on them would route on free text.
 
+**A Pause's successor gets only the decision, and the editor wires around it.** A node's `input` is its ONE
+satisfied predecessor's output (§3.2), so an authored `X → Pause → Y` hands Y the approval and never X's answer, and a
+`Pause` before an `End` loses the result the same way. Two things address that, neither of them a change to what a
+Pause writes. The validator raises the non-blocking warning of §2.4 on Y. And the editor adds the missing edge itself:
+when an author **connects** an edge into or out of a Pause, `pauseContextEdges` returns the unconditional edges
+labelled `context` from the pause's nearest non-`Pause` ancestor to its successors, the canvas adds them, and a notice
+says one appeared. It descends from the Open Canvas importer's `CanvasWorkflowImport.AddPauseContextEdges`
+(§9.2) — walking back through consecutive pauses, skipping a self-loop — judged per **successor** exactly as the
+validator judges it: only a successor whose every inbound edge leaves a Pause is starved (one something else already
+feeds is not, so it gets nothing and no warning), and the ancestor is the union of the nearest non-`Pause` ancestors
+of every pause feeding it. The importer has neither that starvation test nor the uniqueness test (it adds one edge per ancestor per successor), and three further guards it never meets: A `Condition` ancestor is skipped, because the added edge carries no
+`sourceHandle` and would save as that Condition's second unconditional out-edge, which §2.4 refuses. A pause whose
+nearest non-`Pause` ancestor is **not unique** (mutually exclusive branches feeding it) gets nothing, because wiring
+both ancestors into an `All` successor would skip it the moment the untaken branch is dead. And a successor with
+`joinPolicy: "Any"` — of **any** kind, since the policy is a property of every node (§2.3) — gets nothing, because an
+unconditional content edge would admit it while every approval was rejected. Wiring into a pause visits each pause
+reachable forward through consecutive pauses with its own ancestry, so `A → P1 → P2 → B` plus `X → P2` adds nothing
+for `B` (its ancestors through `P2` are `{A, X}`). Everywhere else Y keeps its default `All` join policy, so it is admitted only once **both**
+the content and the approval have arrived, and its `input` is the `upstream` map carrying both.
+
+The pass runs on the **connect gesture and nowhere else** — never on render, never on validate — so an edge the
+author deletes stays deleted. Wiring **out of** a Pause considers only the node just connected, since that is the
+only successor that gesture can have starved; wiring **into** a Pause considers every successor of it, walking forward
+through consecutive pauses so `A → P1` wired last still reaches the `B` behind `P1 → P2 → B`.
+
 A decide call carrying a different `operationId` for an already-answered pause is 409
 `GraphWorkflowGateAlreadyDecided`, with the standing decision on the body — a second human act is refused, not
 replayed.
@@ -544,11 +580,11 @@ Every route is Operator-gated.
 |---|---|
 | `graph-workflows/definitions` | GET lists **without** the graph blob (it is the encrypted column); POST creates. |
 | `graph-workflows/definitions/{definitionId}` | GET / PUT with the version it was edited from / DELETE, which 409s while a live run pins the definition. |
-| `graph-workflows/definitions/validate` | POST a graph and get the errors back without saving. The editor asks the runtime's own parser. |
+| `graph-workflows/definitions/validate` | POST a graph and get its errors **and warnings** back without saving. The editor asks the runtime's own parser. `valid` is still zero ERRORS: a graph that only warns passes here and saves. |
 | `graph-workflows/tools` | The Tool node picker's feed (§4.3). |
 | `graph-workflows/definitions/{definitionId}/runs` | POST start → 202 with the run id; `requestId` is the idempotency key. |
 | `graph-workflows/runs` | The run list, newest first, `?status=&limit=` with `limit` required and capped at 200. |
-| `graph-workflows/runs/{runId}` | One run, its node-run **summaries**, and the run's own resolved `output`. No node-run documents — those are a per-node read. |
+| `graph-workflows/runs/{runId}` | One run, its node-run **summaries**, the run's own resolved `output`, and the **graph this run pinned at start**. No node-run documents — those are a per-node read. |
 | `graph-workflows/runs/{runId}/cancel` | 202. Live node runs drain first, so the run reads `Cancelling`. A repeat cancel is an idempotent 202. |
 | `graph-workflows/runs/{runId}/nodes/{nodeKey}` | One node run in full, input and output documents included. |
 | `graph-workflows/runs/{runId}/nodes/{nodeKey}/decide` | Answers a pause (§4.6). |
@@ -559,16 +595,29 @@ carry a graph, and start-run, which carries an input document. Without it they w
 and a body that size would be parsed, walked and hashed before the node cap could refuse it. A name is capped at 200
 characters, a description at 1024.
 
-**The run detail carries no graph.** It does carry the run's own resolved `output` — `GraphWorkflowRunResponse` is
-`(Run, NodeRuns, Output)`, and the `End` node writes that document once at terminalization — so only the per-node
-input and output documents are a separate read. The run view draws the **definition's** graph and compares
-`run.graphHash` to `definition.graphHash`; on a mismatch it says so and falls back to drawing the node runs alone,
-auto-laid-out. Exposing the pinned graph on the run DTO is a contract change deferred to a later slice.
+**The run detail carries the run's own graph.** `GraphWorkflowRunResponse` is `(Run, NodeRuns, Output, Graph)`.
+`Graph` is the copy this run **pinned when it started**, not the definition's current one, in the same wire shape
+`GraphWorkflowDefinitionResponse.Graph` carries — so a client parses a definition and a run with one piece of code.
+It sits on the run DETAIL and deliberately not on the run summary: a list must not carry one graph per row, and a
+graph may hold up to a mebibyte. `output` is the run's resolved result, written once by the succeeded `End` node at
+terminalization; the per-node input and output documents remain a separate read. Without the pinned graph a run view
+drew the definition it names, which is the wrong graph for every run started before an edit — the whole reason a run
+pins a copy at all.
+
+A pinned graph that will not deserialize **throws**, where a node-run document reads as null. The difference is what
+each blob is: a node-run document is written by the runtime and a broken one is worth reading a page about, while a
+graph was parsed before it was ever stored, so no supported route reaches a corrupt one. An empty canvas drawn beside
+a real `nodeCount` would report the corruption as a graph nobody drew.
 
 Validation errors are keyed. `GraphWorkflowValidationException` carries a `GraphWorkflowValidationResult` — a list of
 `(key, message)` pairs where the key is the node or edge, or null for a failure about the document as a whole — and
 the endpoints replay them one by one instead of collapsing them into a sentence. It is therefore **kept out of**
 `DomainValidationExceptionHandler`, which maps single-message validation exceptions globally.
+
+Warnings travel on the validate response as a second list of the same `(key, message)` shape. They are a separate
+`Warnings` member on `GraphWorkflowValidationResult` — never mixed into `Errors`, which is what the exception path and
+`valid` read — so nothing that refuses on the errors has to filter them out, and a client that ignores the member
+behaves exactly as it did before it existed.
 
 ### The hub
 
@@ -614,7 +663,7 @@ component is a thin adapter; `GraphWorkflowsPage` itself is router-free and is r
 |---|---|
 | `models/` | `GraphWorkflowModels.ts` (the one file naming generated DTOs, plus the closed vocabularies and narrowers), `GraphWorkflowCanvasModels.ts` (the discriminated node union and the `graphToCanvas` / `canvasToGraph` round trip), `GraphWorkflowLayout.ts`, `GraphWorkflowValidation.ts` (the client mirror of the graph rules), `GraphWorkflowRunGraph.ts`. |
 | `queries/` | Every read and mutation over the generated adapters, including the forward-paged events feed. |
-| `hooks/` | `useGraphWorkflowEditor` (controlled React Flow state, per-handle connect prefill, refusal of a second unconditional edge) and `useGraphWorkflowRunHub`. |
+| `hooks/` | `useGraphWorkflowEditor` (controlled React Flow state, per-handle connect prefill, refusal of a second unconditional edge, and the `context` edge added around a Pause on connect — §4.6) and `useGraphWorkflowRunHub`. |
 | `components/` | Editor: the per-kind node cards, the canvas with its palette and Auto-arrange, the validation strip, the node and edge config panels, the definition list and meta dialog. Run view: the status badge, the read-only run graph, the node-run table, the run list, the events tab, the node panel and the decision panel. |
 | `pages/` | `GraphWorkflowsPage` — editor mode without a `runId`, run mode with one. |
 | `api/` | `GraphWorkflowConflict.ts`, which reads the three `NodeConflictProblemType` members by name. |
@@ -622,19 +671,44 @@ component is a thin adapter; `GraphWorkflowsPage` itself is router-free and is r
 **The editor** mirrors the server's rules rather than inventing its own, and the mirror is a mirror on purpose: the
 authoritative answer comes from `graph-workflows/definitions/validate`, which runs the parser a run would run, and
 `serverErrorsToIssues` maps its keyed errors back onto the canvas elements. The page flow is Validate → Save (server
-validate first; a 409 reloads) → Start. `useUnsavedChangesGuard` is set with `allowSameRoute`, so writing a search
-param — selecting a node or a tab — does not trigger the leave prompt, while a real route change still does.
+validate first; a 409 reloads) → Start. The server's **warnings** arrive through `serverWarningsToIssues` as
+issues with the rule `serverWarned` and reach the strip through its own `warnings` prop; they render in their own alert
+below the errors, in a different colour and under a title that asks rather than refuses, and never join the list the
+save gate, the red chips and the config panels read, because a warning is not a reason to save less. Every client rule mirrors a rule that REFUSES a save, so the client raises none
+of them.
+
+Two round-trip rules the editor has to hold because the server does. Every JSON-shaped config field is written back as
+JSON text with a **string quoted**, since that text is exactly what a save parses again — an unquoted string read as
+the invalid-JSON complaint on a `defaultInput` the server had accepted. And the client's dot-path mirror refuses an
+EMPTY segment the way `GraphWorkflowTokens.IsDotPath` does, so `a..b` cannot read green in the drawer and then 400
+on save.
+
+`useUnsavedChangesGuard` is set with `allowSameRoute`, so writing a search param — selecting a node or a tab — does
+not trigger the leave prompt, while a real route change still does.
 
 Nodes are laid out left-to-right by `layoutGraphWorkflow`, a dependency-free layered DAG layout (longest-path ranking
 in Kahn order, one barycenter pass, ties broken by node key). It is used for three things: a node that arrives
-without a `position`, the editor's Auto-arrange, and the run view's nodes-only fallback. **A definition whose nodes
-carry no positions opens laid out and dirty** — the layout is a proposal the operator has not saved yet. That is by
-design, and §9 is why it matters.
+without a `position`, the editor's Auto-arrange, and the run view's nodes-only fallback for a response that carries
+no graph at all. **A definition whose nodes carry no positions opens laid out and dirty** — the layout is a proposal
+the operator has not saved yet. That is by design, and §9 is why it matters.
 
-**The run view** is read-only. It draws the definition's graph with the hash check of §5, lists the node runs, shows
-a selected node's input, output and error documents, offers the decision panel on a waiting pause, and renders the
-event trail. The events feed pages **forward** from `afterSeq: 0`, so `replayTruncated` means the **newest** events
-are missing, and the banner says exactly that.
+**The run view** is read-only, and it draws the graph the run **pinned at start** — the one `GET runs/{runId}`
+carries (§5) — with each node run's state overlaid on it. A definition edited since the run started is then worth
+**saying** and nothing more: an informational notice that this is the graph the run itself ran on, never a reason to
+draw less. Nodes only, auto-laid-out, is what remains for a response that carries **no** graph and whose hash
+disagrees with the definition on screen, because drawing today's edges over an older run would be a lie about routing.
+The Pause decision panel reads its prompt, its allowed answers and `requireComment` off the pinned graph for the same
+reason: a definition edited since could offer a decision this run's gate would refuse. The view also lists the node
+runs, shows a selected node's input, output and error documents, and renders the event trail. The events feed pages
+**forward** from `afterSeq: 0`, so `replayTruncated` means the **newest** events are missing, and the banner says
+exactly that.
+
+The graph → canvas conversion is **memoised on the graph object**. `graphToCanvas` parses the whole document and lays
+out every node that carries no stored position, while the run hub invalidates the run detail on every event — so one
+node transition would otherwise re-parse and re-rank up to a mebibyte of graph to redraw a single badge. The cache is
+a `WeakMap` keyed on the graph object itself: the conversion is a pure function of that document, TanStack's
+structural sharing hands back the same object while its JSON is unchanged, and an entry dies with the graph that
+keyed it. Callers treat the cached canvas as frozen and copy every node and edge they annotate.
 
 `useGraphWorkflowRunHub` degrades rather than fails. On a subscribe it re-sends its watermark as `afterSeq`; the
 store serves a client that has been away for days, so there is no buffer to roll over. While the hub is unavailable
@@ -784,6 +858,10 @@ every pause and walks back through consecutive ones, so `A → P1 → P2 → B` 
 cases add nothing: a pause with no successor (already an `IMPORT NEEDS ATTENTION:` graph, §9.3), a pair the canvas
 already wires — a second unconditional edge over one pair is a validation error (§2.4) — and a self-loop. `X` may be
 the `Start` node, whose output is the run's own input, which is exactly the content the pause interrupted.
+
+The editor offers the same edge to an **author**, on the connect gesture (§4.6). It is stricter than the importer
+— only a successor every one of whose inbound edges leaves a Pause is starved, and a `Condition` ancestor, a non-unique
+ancestor and an `Any`-policy successor of any kind are all skipped, for the reasons §4.6 gives — and it runs only on that gesture, so an author who deletes the edge keeps it deleted.
 
 `maxAttempts: 1` on an imported Agent is deliberately below the default of 3. An import is conservative: re-running
 somebody's agent turn twice more, on a graph they have not looked at since it changed shape, is not a decision this

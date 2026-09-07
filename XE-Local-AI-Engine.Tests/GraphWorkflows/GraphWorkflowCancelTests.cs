@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
@@ -354,4 +355,188 @@ public sealed class GraphWorkflowCancelTests
             StartedAtUtc: null,
             CompletedAtUtc: null,
             UpdatedAtUtc: 0);
+
+    /// <summary>
+    ///     S2's Codex finding, pinned: a pause ANSWERED between the drain tick's snapshot and its cancel write. The
+    ///     gate holds the drain in exactly that window while a real decide is attempted through the real command
+    ///     surface.
+    ///     <para>
+    ///         What is pinned here is the OUTCOME, not one guard: no decision is lost, because none can land. The run
+    ///         is already <c>Cancelling</c> when the drain runs, and TWO independent checks read that —
+    ///         <c>GraphWorkflowRunService.DecideAsync</c> before it asks the store, and
+    ///         <c>GraphWorkflowStore.DecideNodeRunAsync</c> inside its own transaction. Either alone produces this
+    ///         result, so the test does not name a single load-bearing one; it fails on the
+    ///         <c>DecisionOperationId</c> the drain would be writing over if BOTH went away.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ADecisionRacingTheDrainWrite_IsRefusedRatherThanOverwritten()
+    {
+        var gate = new GraphWorkflowDrainGate();
+        await using var harness = GraphWorkflowHarness.PrivateHost(services =>
+        {
+            // Wrapped AROUND the container's own registration rather than rebuilt from its parts: the publishing
+            // decorator stays underneath, so the drain still announces every write it commits.
+            var registered = services.Single(descriptor => descriptor.ServiceType == typeof(IGraphWorkflowStore));
+            var build = registered.ImplementationFactory
+                        ?? throw new AssertionException("The graph workflow store is expected to be registered through a factory.");
+            _ = services.Remove(registered);
+            services.AddScoped<IGraphWorkflowStore>(provider => new GatedDrainGraphWorkflowStore((IGraphWorkflowStore)build(provider), gate));
+        });
+
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoDecisions).ConfigureAwait(false);
+        await harness.AdvanceUntilAsync(runId,
+                         async () => (await harness.ReadNodeRunAsync(runId, "review").ConfigureAwait(false)).Status
+                                     == GraphWorkflowNodeRunStatus.WaitingForApproval,
+                         "the pause never reached WaitingForApproval.")
+                     .ConfigureAwait(false);
+
+        await harness.CancelAsync(runId).ConfigureAwait(false);
+
+        // The tick runs detached so the test can act inside it. Nothing here waits on a clock: the gate is the
+        // rendezvous, and the drain is standing in front of its cancel write when Reached completes.
+        var tick = harness.AdvanceAsync(runId);
+        GraphWorkflowRunConflictException refusal;
+        try
+        {
+            // Bounded: the project has no global test timeout, so a drain that stopped routing the pause through this
+            // write would otherwise hang the whole CI leg instead of failing it.
+            await gate.Reached.WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+            refusal = await AssertEx
+                            .ThrowsAsync<GraphWorkflowRunConflictException>(() => harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve))
+                            .ConfigureAwait(false);
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        _ = await tick.ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Contains(refusal.Message, "Cancelling", message: "the operator is told the run stopped, not that somebody else answered.");
+        var review = await harness.ReadNodeRunAsync(runId, "review").ConfigureAwait(false);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Cancelled, review.Status);
+        AssertEx.Null(review.DecisionOperationId, "no decision landed, so the drain overwrote none.");
+        AssertEx.Null(review.OutputJson, "a pause the drain cancelled wrote no decision document.");
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
+}
+
+/// <summary>
+///     A gate the test opens, shared across DI scopes because the dispatcher ticks in one of its own. It holds the
+///     drain at the exact instant S2's Codex finding named — after the tick has read the node runs and decided this one
+///     is live, before it writes <c>Cancelled</c> over it.
+/// </summary>
+internal sealed class GraphWorkflowDrainGate
+{
+    private readonly TaskCompletionSource _reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private readonly TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private int _trips;
+
+    /// <summary>Completes when the drain is standing in front of its first cancel write.</summary>
+    public Task Reached => _reached.Task;
+
+    /// <summary>Lets that write go through.</summary>
+    public void Release() =>
+        _ = _released.TrySetResult();
+
+    /// <summary>Trips ONCE — the first cancel write only, so the rest of the drain runs at full speed.</summary>
+    public Task WaitAsync()
+    {
+        if (Interlocked.Increment(ref _trips) != 1)
+        {
+            return Task.CompletedTask;
+        }
+
+        _ = _reached.TrySetResult();
+        return _released.Task;
+    }
+}
+
+/// <summary>
+///     The real store with ONE seam: the drain's first <c>Cancelled</c> write waits on
+///     <see cref="GraphWorkflowDrainGate" />. Everything else forwards untouched, so every check either side of that
+///     write is the production one.
+/// </summary>
+internal sealed class GatedDrainGraphWorkflowStore(IGraphWorkflowStore inner, GraphWorkflowDrainGate gate) : IGraphWorkflowStore
+{
+    public async Task<GraphWorkflowMutationResult> TransitionNodeRunAsync(TransitionGraphWorkflowNodeRunCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        if (command.TargetStatus == GraphWorkflowNodeRunStatus.Cancelled)
+        {
+            await gate.WaitAsync().ConfigureAwait(false);
+        }
+
+        return await inner.TransitionNodeRunAsync(command, cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task<GraphWorkflowDefinitionSnapshot> CreateDefinitionAsync(CreateGraphWorkflowDefinitionCommand command, CancellationToken cancellationToken = default) =>
+        inner.CreateDefinitionAsync(command, cancellationToken);
+
+    public Task<GraphWorkflowDefinitionSnapshot> UpdateDefinitionAsync(UpdateGraphWorkflowDefinitionCommand command, CancellationToken cancellationToken = default) =>
+        inner.UpdateDefinitionAsync(command, cancellationToken);
+
+    public Task<IReadOnlyList<GraphWorkflowDefinitionSummary>> ListDefinitionsAsync(CancellationToken cancellationToken = default) =>
+        inner.ListDefinitionsAsync(cancellationToken);
+
+    public Task<GraphWorkflowDefinitionSnapshot> GetDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
+        inner.GetDefinitionAsync(definitionId, cancellationToken);
+
+    public Task DeleteDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
+        inner.DeleteDefinitionAsync(definitionId, cancellationToken);
+
+    public Task<GraphWorkflowRunSnapshot> StartRunAsync(StartGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
+        inner.StartRunAsync(command, cancellationToken);
+
+    public Task<GraphWorkflowRunSnapshot?> FindRunByRequestAsync(Guid requestId, CancellationToken cancellationToken = default) =>
+        inner.FindRunByRequestAsync(requestId, cancellationToken);
+
+    public Task<GraphWorkflowRunSnapshot> GetRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
+        inner.GetRunAsync(runId, cancellationToken);
+
+    public Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status = null,
+        int limit = 50,
+        CancellationToken cancellationToken = default) =>
+        inner.ListRunsAsync(status, limit, cancellationToken);
+
+    public Task<int> CountActiveRunsAsync(int probeLimit, CancellationToken cancellationToken = default) =>
+        inner.CountActiveRunsAsync(probeLimit, cancellationToken);
+
+    public Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
+        inner.TransitionRunAsync(command, cancellationToken);
+
+    public Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default) =>
+        inner.ListNodeRunsAsync(runId, cancellationToken);
+
+    public Task<GraphWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid runId, string nodeKey, CancellationToken cancellationToken = default) =>
+        inner.GetNodeRunAsync(runId, nodeKey, cancellationToken);
+
+    public Task<GraphWorkflowMutationResult?> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default) =>
+        inner.DecideNodeRunAsync(command, cancellationToken);
+
+    public Task<GraphWorkflowNodeRunSnapshot?> FindNodeRunByDecisionOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default) =>
+        inner.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken);
+
+    public Task<GraphWorkflowMutationResult> AppendEventAsync(AppendGraphWorkflowEventCommand command, CancellationToken cancellationToken = default) =>
+        inner.AppendEventAsync(command, cancellationToken);
+
+    public Task<IReadOnlyList<GraphWorkflowRunEventSnapshot>> ListEventsAsync(Guid runId,
+        long afterSeq = 0,
+        int limit = 200,
+        CancellationToken cancellationToken = default) =>
+        inner.ListEventsAsync(runId, afterSeq, limit, cancellationToken);
+
+    public Task<IReadOnlyList<GraphWorkflowReconciledNodeRun>> ListInterruptedNodeRunsAsync(CancellationToken cancellationToken = default) =>
+        inner.ListInterruptedNodeRunsAsync(cancellationToken);
+
+    public Task<IReadOnlyList<GraphWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
+        IReadOnlyList<GraphWorkflowNodeRunVerdict> verdicts,
+        GraphWorkflowUnjudgedNodeRunSettlement? unjudged = null,
+        CancellationToken cancellationToken = default) =>
+        inner.ReconcileNonTerminalNodeRunsAsync(sanitizedReason, verdicts, unjudged, cancellationToken);
 }

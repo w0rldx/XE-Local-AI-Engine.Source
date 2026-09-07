@@ -7,7 +7,8 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>
-///     One run with every node run's summary — what the run view draws over the canvas. Deliberately WITHOUT the
+///     One run with every node run's summary AND the graph the run pinned at start — what the run view draws, without
+///     having to read the definition and hope it has not been edited since. Deliberately WITHOUT the node-run
 ///     documents: they are the largest thing a run stores, and a graph of two hundred nodes would carry all of them on
 ///     a page that renders none.
 /// </summary>

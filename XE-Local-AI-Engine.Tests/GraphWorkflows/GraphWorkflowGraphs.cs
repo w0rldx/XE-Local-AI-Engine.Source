@@ -517,6 +517,156 @@ internal static class GraphWorkflowGraphs
                                                    }
                                                    """;
 
+    /// <summary>
+    ///     The hand-authored shape a Pause quietly breaks: <c>analyze → review → summarize</c>, where <c>summarize</c>
+    ///     is reached ONLY through the pause and so receives the decision document instead of what was analysed. Legal,
+    ///     routable, and the one graph the pause-context warning is about.
+    /// </summary>
+    public const string PauseBetweenTwoAgents = """
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [
+                                                    { "key": "start", "kind": "Start" },
+                                                    { "key": "analyze", "kind": "Agent", "config": { "instructions": "Analyze the input." } },
+                                                    { "key": "review", "kind": "Pause",
+                                                      "config": { "prompt": "Approve the analysis?", "allowedDecisions": ["Approve"], "requireComment": false } },
+                                                    { "key": "summarize", "kind": "Agent", "config": { "instructions": "Summarize the analysis." } },
+                                                    { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                  ],
+                                                  "edges": [
+                                                    { "key": "e1", "from": "start", "to": "analyze" },
+                                                    { "key": "e2", "from": "analyze", "to": "review" },
+                                                    { "key": "e3", "from": "review", "to": "summarize" },
+                                                    { "key": "e4", "from": "summarize", "to": "done" }
+                                                  ]
+                                                }
+                                                """;
+
+    /// <summary>
+    ///     <see cref="PauseBetweenTwoAgents" /> with the cure: the unconditional <c>context</c> edge from the pause's
+    ///     nearest non-Pause ancestor, which is what the Open Canvas importer adds for itself. <c>summarize</c> keeps
+    ///     the default <c>All</c> join, so it is admitted only once BOTH the content and the approval have arrived.
+    /// </summary>
+    public const string PauseBetweenTwoAgentsWithContextEdge = """
+                                                               {
+                                                                 "schemaVersion": 1,
+                                                                 "nodes": [
+                                                                   { "key": "start", "kind": "Start" },
+                                                                   { "key": "analyze", "kind": "Agent", "config": { "instructions": "Analyze the input." } },
+                                                                   { "key": "review", "kind": "Pause",
+                                                                     "config": { "prompt": "Approve the analysis?", "allowedDecisions": ["Approve"], "requireComment": false } },
+                                                                   { "key": "summarize", "kind": "Agent", "config": { "instructions": "Summarize the analysis." } },
+                                                                   { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                                 ],
+                                                                 "edges": [
+                                                                   { "key": "e1", "from": "start", "to": "analyze" },
+                                                                   { "key": "e2", "from": "analyze", "to": "review" },
+                                                                   { "key": "e3", "from": "review", "to": "summarize" },
+                                                                   { "key": "e4", "from": "summarize", "to": "done" },
+                                                                   { "key": "e5", "from": "analyze", "to": "summarize", "label": "context" }
+                                                                 ]
+                                                               }
+                                                               """;
+
+    /// <summary>
+    ///     A Pause whose only ancestor is a <c>Condition</c>. The warning still fires on <c>shipped</c>, but the advice
+    ///     must NOT name <c>check</c>: an edge <c>check → shipped</c> would be that Condition's second unconditional
+    ///     out-edge, which the validator refuses.
+    /// </summary>
+    public const string PauseBehindACondition = """
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [
+                                                    { "key": "start", "kind": "Start" },
+                                                    { "key": "analyze", "kind": "Agent", "config": { "instructions": "Judge it." } },
+                                                    { "key": "check", "kind": "Condition", "config": { "path": "output.json.requiresReview" } },
+                                                    { "key": "review", "kind": "Pause",
+                                                      "config": { "prompt": "Approve?", "allowedDecisions": ["Approve"], "requireComment": false } },
+                                                    { "key": "shipped", "kind": "End", "config": { "outcome": "completed" } },
+                                                    { "key": "skipped", "kind": "End", "config": { "outcome": "completed" } }
+                                                  ],
+                                                  "edges": [
+                                                    { "key": "e1", "from": "start", "to": "analyze" },
+                                                    { "key": "e2", "from": "analyze", "to": "check" },
+                                                    { "key": "e3", "from": "check", "to": "review", "condition": { "op": "eq", "value": true } },
+                                                    { "key": "e4", "from": "check", "to": "skipped", "condition": { "op": "ne", "value": true } },
+                                                    { "key": "e5", "from": "review", "to": "shipped" }
+                                                  ]
+                                                }
+                                                """;
+
+    /// <summary>
+    ///     Two pauses fanning into ONE successor of <paramref name="kind" /> carrying <paramref name="joinPolicy" />.
+    ///     The successor is reached only through pauses whatever it is, which is what makes this the pause-context
+    ///     rule's decisive shape: under <c>Any</c> a content edge would admit it ahead of every approval, under
+    ///     <c>All</c> it still waits for them — and the policy, not the kind, is what decides that.
+    /// </summary>
+    public static string PauseFanInTo(string kind, string joinPolicy)
+    {
+        var config = kind switch
+        {
+            "Agent" => """{ "instructions": "Summarize the approvals." }""",
+            "End" => """{ "outcome": "completed" }""",
+            _ => "{}"
+        };
+
+        // An End node may have no outbound edge, so it IS the tail; anything else needs one behind it.
+        var tail = kind == "End"
+            ? string.Empty
+            : """, { "key": "done", "kind": "End", "config": { "outcome": "completed" } }""";
+        var tailEdge = kind == "End" ? string.Empty : """, { "key": "e6", "from": "merge", "to": "done" }""";
+
+        return $$"""
+                 {
+                   "schemaVersion": 1,
+                   "nodes": [
+                     { "key": "start", "kind": "Start" },
+                     { "key": "analyze", "kind": "Agent", "config": { "instructions": "Analyze the input." } },
+                     { "key": "reviewA", "kind": "Pause",
+                       "config": { "prompt": "Approve A?", "allowedDecisions": ["Approve"], "requireComment": false } },
+                     { "key": "reviewB", "kind": "Pause",
+                       "config": { "prompt": "Approve B?", "allowedDecisions": ["Approve"], "requireComment": false } },
+                     { "key": "merge", "kind": "{{kind}}", "joinPolicy": "{{joinPolicy}}", "config": {{config}} }{{tail}}
+                   ],
+                   "edges": [
+                     { "key": "e1", "from": "start", "to": "analyze" },
+                     { "key": "e2", "from": "analyze", "to": "reviewA" },
+                     { "key": "e3", "from": "analyze", "to": "reviewB" },
+                     { "key": "e4", "from": "reviewA", "to": "merge" },
+                     { "key": "e5", "from": "reviewB", "to": "merge" }{{tailEdge}}
+                   ]
+                 }
+                 """;
+    }
+
+    /// <summary>
+    ///     A pause fed by two MUTUALLY EXCLUSIVE branches of a Condition. Its content has two nearest non-Pause
+    ///     ancestors, so no single edge is the right advice: one of the two branches is always dead, and an edge from
+    ///     it would leave the successor's <c>All</c> join waiting on a branch that was never taken.
+    /// </summary>
+    public const string PauseBehindTwoExclusiveBranches = """
+                                                          {
+                                                            "schemaVersion": 1,
+                                                            "nodes": [
+                                                              { "key": "start", "kind": "Start" },
+                                                              { "key": "check", "kind": "Condition", "config": { "path": "output.json.urgent" } },
+                                                              { "key": "fast", "kind": "Agent", "config": { "instructions": "Fast path." } },
+                                                              { "key": "slow", "kind": "Agent", "config": { "instructions": "Slow path." } },
+                                                              { "key": "review", "kind": "Pause", "joinPolicy": "Any",
+                                                                "config": { "prompt": "Approve?", "allowedDecisions": ["Approve"], "requireComment": false } },
+                                                              { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                            ],
+                                                            "edges": [
+                                                              { "key": "e1", "from": "start", "to": "check" },
+                                                              { "key": "e2", "from": "check", "to": "fast", "condition": { "op": "eq", "value": true } },
+                                                              { "key": "e3", "from": "check", "to": "slow" },
+                                                              { "key": "e4", "from": "fast", "to": "review" },
+                                                              { "key": "e5", "from": "slow", "to": "review" },
+                                                              { "key": "e6", "from": "review", "to": "done" }
+                                                            ]
+                                                          }
+                                                          """;
+
     /// <summary>A pause that will not take an answer without a comment, over an unconditional out-edge.</summary>
     public const string PauseRequiringComment = """
                                                 {

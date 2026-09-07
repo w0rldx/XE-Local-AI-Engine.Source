@@ -21,6 +21,7 @@ import {
 	nodeCommonSchema,
 	pauseConfigSchema,
 	serverErrorsToIssues,
+	serverWarningsToIssues,
 	startConfigSchema,
 	toolConfigSchema,
 	validateGraphWorkflowGraph,
@@ -407,6 +408,35 @@ describe("serverErrorsToIssues", () => {
 	it("answers an empty list when the server sent no errors", () => {
 		expect(serverErrorsToIssues(undefined)).toEqual([]);
 	});
+
+	it("marks an error with the rule that carries the server's sentence", () => {
+		expect(serverErrorsToIssues([{ key: "analyze", message: "no instructions" }])[0]?.rule).toBe("serverRejected");
+	});
+});
+
+describe("serverWarningsToIssues", () => {
+	it("carries the server's second list through the same shape, keyed and marked as a warning", () => {
+		const warnings = serverWarningsToIssues([
+			{ key: "done", message: "'done' is reached only through the Pause node 'review'." },
+		]);
+
+		expect(warnings).toEqual([
+			{ rule: "serverWarned", subject: "done", message: "'done' is reached only through the Pause node 'review'." },
+		]);
+	});
+
+	it("answers an empty list when the server sent no warnings", () => {
+		expect(serverWarningsToIssues(undefined)).toEqual([]);
+	});
+
+	// Only the server raises warnings; a client rule reaching the non-blocking half would be a rule that silently
+	// stopped refusing the save.
+	it("is the only producer of the warning rule — no client rule raises it", () => {
+		const rules = rulesOf(minimal([{ key: "orphan", kind: "Agent", config: { instructions: "x" } }]));
+
+		expect(rules).not.toContain("serverWarned");
+		expect(rules.length).toBeGreaterThan(0);
+	});
 });
 
 describe("every rule has an English message", () => {
@@ -438,6 +468,11 @@ describe("config form schemas", () => {
 		// The server's `IsDotPath` accepts any segment without whitespace or wildcard punctuation, and a JSON property
 		// really can be hyphenated — refusing one it accepts would block a save the node would have taken.
 		expect(conditionConfigSchema.safeParse({ path: "output.json.requires-review" }).success).toBe(true);
+		// F5-9: an empty segment is what `GraphWorkflowTokens.IsDotPath` refuses, and the client mirror has to refuse it
+		// too — otherwise the field reads green and the save comes back 400 naming a path the drawer said was fine.
+		for (const path of ["a..b", ".a", "a.", "."]) {
+			expect(conditionConfigSchema.safeParse({ path }).success).toBe(false);
+		}
 		expect(
 			pauseConfigSchema.safeParse({ prompt: "Approve?", allowedDecisions: ["Approve"], requireComment: false }).success,
 		).toBe(true);
@@ -445,6 +480,15 @@ describe("config form schemas", () => {
 		expect(nodeCommonSchema.safeParse({ key: "analyze", label: "Analyze", maxAttempts: 3, timeoutSeconds: null }).success).toBe(
 			true,
 		);
+	});
+
+	// `char.IsWhiteSpace` and JavaScript's `\s` are not the same set, and they disagree in BOTH directions. Each of
+	// these two characters is on the opposite side of the two rules, so `\s` would fail one of these assertions.
+	it("answers the server on the two whitespace characters JavaScript disagrees with it about", () => {
+		// U+0085 is whitespace to .NET and not to `\s`: the field would read green on a path the save then 400s.
+		expect(conditionConfigSchema.safeParse({ path: "output.\u0085json" }).success).toBe(false);
+		// U+FEFF is whitespace to `\s` and not to .NET: the field would refuse a path the server stores happily.
+		expect(conditionConfigSchema.safeParse({ path: "out\uFEFFput.json" }).success).toBe(true);
 	});
 
 	it("answers an i18n KEY, not a sentence, for every field it refuses", () => {

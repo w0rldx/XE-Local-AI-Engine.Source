@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.GraphWorkflows.V1;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -229,6 +230,69 @@ public sealed class GraphWorkflowRunEndpointTests
         AssertEx.False(nodeRuns[0].TryGetProperty("output", out _), "the summaries carry no documents: they are the largest thing a run stores.");
     }
 
+    /// <summary>
+    ///     The run's own graph, and the whole reason it is on the response: the definition is edited to a DIFFERENT
+    ///     graph after the run started, and the run still answers with the one it pinned. Without this the run view
+    ///     draws the definition's current graph and renders every run started before an edit as node runs alone.
+    /// </summary>
+    [Test]
+    public async Task GetRun_CarriesTheGraphTheRunPinned_EvenAfterTheDefinitionIsEditedToAnother()
+    {
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
+        var runId = await StartRunAsync(definitionId).ConfigureAwait(false);
+        await ReplaceGraphAsync(definitionId, GraphWorkflowGraphs.BranchOnJson).ConfigureAwait(false);
+
+        using var response = await SendAsync("GET", $"{Runs}/{runId}").ConfigureAwait(false);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var graph = document.RootElement.GetProperty("graph");
+        AssertEx.Equal("analyze, done, start", NodeKeys(graph), "the run answers with the graph it started on, not with the definition's current one.");
+        AssertEx.Equal(expected: 1, graph.GetProperty("schemaVersion").GetInt32());
+
+        using var definition = JsonDocument.Parse(await (await SendAsync("GET", $"{Root}/definitions/{definitionId}").ConfigureAwait(false)).Content
+                                                       .ReadAsStringAsync()
+                                                       .ConfigureAwait(false));
+        AssertEx.Equal("analyze, check, done, review, ship, start",
+            NodeKeys(definition.RootElement.GetProperty("graph")),
+            "the definition really did move on, so the two reads are answering about different graphs.");
+    }
+
+    /// <summary>
+    ///     The pinned graph is the same wire shape a definition read carries, so a client parses both with one piece of
+    ///     code — per-kind config included, which is what a run view needs to label a node.
+    /// </summary>
+    [Test]
+    public async Task GetRun_CarriesThePinnedGraphInTheSameShapeADefinitionReadDoes()
+    {
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
+        var runId = await StartRunAsync(definitionId).ConfigureAwait(false);
+
+        using var run = JsonDocument.Parse(await (await SendAsync("GET", $"{Runs}/{runId}").ConfigureAwait(false)).Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var definition = JsonDocument.Parse(await (await SendAsync("GET", $"{Root}/definitions/{definitionId}").ConfigureAwait(false)).Content
+                                                       .ReadAsStringAsync()
+                                                       .ConfigureAwait(false));
+
+        // Structural, not raw text: what matters is that the two documents SAY the same thing, and property order is
+        // the serializer's business rather than the contract's.
+        AssertEx.True(JsonNode.DeepEquals(JsonNode.Parse(run.RootElement.GetProperty("graph").GetRawText()),
+                JsonNode.Parse(definition.RootElement.GetProperty("graph").GetRawText())),
+            $"the run's pinned graph must read as the definition's: {run.RootElement.GetProperty("graph").GetRawText()}");
+        AssertEx.False(run.RootElement.GetProperty("run").TryGetProperty("graph", out _),
+            "the graph sits beside the run SUMMARY rather than on it, so the run list still carries none.");
+    }
+
+    /// <summary>A graph the validator only warns about still saves and still starts — a warning blocks nothing.</summary>
+    [Test]
+    public async Task StartRun_OnADefinitionTheValidatorOnlyWarnsAbout_Answers202()
+    {
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.PauseBetweenTwoAgents).ConfigureAwait(false);
+
+        var runId = await StartRunAsync(definitionId).ConfigureAwait(false);
+
+        AssertEx.NotEqual(Guid.Empty, runId);
+    }
+
     [Test]
     public async Task GetNodeRun_CarriesTheDocumentsAsRawJson()
     {
@@ -311,6 +375,24 @@ public sealed class GraphWorkflowRunEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(document.RootElement.GetProperty("runs").EnumerateArray().Select(static run => run.GetProperty("id").GetGuid()), runId);
+    }
+
+    /// <summary>The node keys of a wire graph, sorted, which is the cheapest way to say WHICH graph came back.</summary>
+    private static string NodeKeys(JsonElement graph) =>
+        string.Join(", ",
+            graph.GetProperty("nodes")
+                 .EnumerateArray()
+                 .Select(static node => node.GetProperty("key").GetString() ?? string.Empty)
+                 .Order(StringComparer.Ordinal));
+
+    /// <summary>Edits the definition to a different graph, which is what makes the run's pinned copy observable.</summary>
+    private async Task ReplaceGraphAsync(Guid definitionId, string graphJson)
+    {
+        await using var scope = Host.Factory.Services.CreateAsyncScope();
+        var current = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetDefinitionAsync(definitionId).ConfigureAwait(false);
+        _ = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>()
+                       .UpdateAsync(definitionId, current.Version, name: null, description: null, graphJson)
+                       .ConfigureAwait(false);
     }
 
     private async Task<Guid> SeedDefinitionAsync(string graphJson)

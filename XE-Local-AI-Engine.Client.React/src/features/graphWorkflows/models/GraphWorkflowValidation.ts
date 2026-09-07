@@ -37,8 +37,9 @@ import {
  * One rule, one i18n key: the member name IS the suffix under `pages.graphWorkflows.definition.issues`, so a new rule
  * cannot ship without a message (`I18nParity.test.ts` asserts the whole array).
  *
- * `serverRejected` is the one member no client check produces — it carries the server's own sentence through the same
- * shape, so the validation strip has one render path rather than two.
+ * `serverRejected` and `serverWarned` are the two members no client check produces — they carry the server's own
+ * sentence through the same shape, so the validation strip has one render path rather than three. Their i18n messages
+ * are only ever the fallback for a server that sent an empty string.
  */
 export const graphWorkflowGraphRules = [
 	"duplicateNodeKey",
@@ -72,6 +73,7 @@ export const graphWorkflowGraphRules = [
 	"pauseNoDecisions",
 	"endOutcomeMissing",
 	"serverRejected",
+	"serverWarned",
 ] as const;
 export type GraphWorkflowGraphRule = (typeof graphWorkflowGraphRules)[number];
 
@@ -79,7 +81,7 @@ export interface GraphWorkflowGraphIssue {
 	readonly rule: GraphWorkflowGraphRule;
 	/** The node or edge key the rule is about — one namespace, so it is never ambiguous which it points at. */
 	readonly subject?: string;
-	/** The server's own text, for `serverRejected`. Client rules carry none: their message is the i18n key. */
+	/** The server's own text, for `serverRejected` and `serverWarned`. Client rules carry none: their message is the i18n key. */
 	readonly message?: string;
 }
 
@@ -455,16 +457,44 @@ export function serverErrorsToIssues(
 	}));
 }
 
+/**
+ * The server's `warnings[]` — the same `(key, message)` shape as its errors, and keyed on the node the warning is
+ * ABOUT, so a warning selects its subject exactly as an error does. Non-blocking by construction server-side
+ * (`GraphWorkflowGraph.Warnings` never reaches `GraphWorkflowValidationException`) and non-blocking here because the
+ * page holds them in their own list, which the save gate never reads.
+ */
+export function serverWarningsToIssues(
+	warnings: readonly GraphWorkflowValidationErrorResponse[] | undefined,
+): readonly GraphWorkflowGraphIssue[] {
+	return (warnings ?? []).map((warning) => ({
+		rule: "serverWarned" as const,
+		subject: warning.key ?? undefined,
+		message: warning.message,
+	}));
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Zod schemas for the config drawer. Messages are full i18n keys: the form renders `t(issue.message)`.
 // ---------------------------------------------------------------------------------------------------------------
 
 /**
- * `GraphWorkflowTokens.IsDotPath` verbatim: dot-separated segments of anything but whitespace and the bracket, star and
- * parenthesis characters that would make it a wildcard, an index or a function call (brief §3.1). Deliberately not
- * narrower than the server's — a JSON property may be hyphenated, and refusing one the server accepts blocks a save.
+ * `GraphWorkflowTokens.IsDotPath` verbatim: dot-separated segments, each NON-EMPTY and free of whitespace and the
+ * bracket, star and parenthesis characters that would make it a wildcard, an index or a function call (brief §3.1).
+ * Deliberately not narrower than the server's — a JSON property may be hyphenated, and refusing one the server accepts
+ * blocks a save. The dot is excluded from the segment itself, or `a..b`, `.a` and `a.` all match a rule the server
+ * refuses and the field is green on a path the save then 400s.
+ *
+ * The whitespace is `char.IsWhiteSpace` SPELLED OUT rather than `\s`, because the two sets are not the same one and
+ * disagree in both directions: `\s` misses U+0085 (a path the server refuses would be green here) and adds U+FEFF (a
+ * path the server accepts would block the save). Neither is a set this client may narrow or widen on its own.
  */
-const GRAPH_WORKFLOW_PATH_PATTERN = /^[^\s[\]*()]+(\.[^\s[\]*()]+)*$/;
+const GRAPH_WORKFLOW_PATH_FORBIDDEN =
+	/[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000[\]*()]/;
+
+/** `IsDotPath` itself: every dot-separated segment non-empty and free of the characters above. */
+function isGraphWorkflowDotPath(path: string): boolean {
+	return path.split(".").every((segment) => segment.length > 0 && !GRAPH_WORKFLOW_PATH_FORBIDDEN.test(segment));
+}
 
 function messageKey(field: string, error: string): string {
 	return `pages.graphWorkflows.form.${field}.${error}`;
@@ -496,7 +526,7 @@ function optionalDotPath(field: string) {
 	return z
 		.string()
 		.nullable()
-		.refine((value) => (value ?? "").trim().length === 0 || GRAPH_WORKFLOW_PATH_PATTERN.test(value ?? ""), {
+		.refine((value) => (value ?? "").trim().length === 0 || isGraphWorkflowDotPath(value ?? ""), {
 			message: messageKey(field, "invalid"),
 		});
 }

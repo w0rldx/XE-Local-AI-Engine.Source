@@ -126,6 +126,9 @@ internal sealed class GraphWorkflowGraph
     private readonly Dictionary<string, List<GraphWorkflowGraphEdge>> _inbound;
     private readonly Dictionary<string, List<GraphWorkflowGraphEdge>> _outbound;
 
+    /// <summary>Computed on first ask rather than in the constructor: every dispatcher tick parses, and no tick asks.</summary>
+    private IReadOnlyList<GraphWorkflowValidationError>? _warnings;
+
     private GraphWorkflowGraph(IReadOnlyDictionary<string, GraphWorkflowGraphNode> nodes, IReadOnlyList<GraphWorkflowGraphEdge> edges)
     {
         Nodes = nodes;
@@ -174,6 +177,13 @@ internal sealed class GraphWorkflowGraph
     ///     reach the tool catalog, so this is the seam the save-time and run-start tool gates ask over.
     /// </summary>
     public IReadOnlyList<string> ToolNodeNames { get; }
+
+    /// <summary>
+    ///     What is worth saying about a graph that routes anyway. Non-blocking by construction: nothing here reaches
+    ///     <see cref="GraphWorkflowValidationException" />, so a graph with warnings saves, validates as valid and runs.
+    ///     Computed on the first ask, because only the validate endpoint asks and every dispatcher tick parses.
+    /// </summary>
+    public IReadOnlyList<GraphWorkflowValidationError> Warnings => _warnings ??= PauseContextWarnings();
 
     public IReadOnlyList<GraphWorkflowGraphEdge> InboundEdges(string nodeKey) =>
         _inbound.TryGetValue(nodeKey, out var edges) ? edges : [];
@@ -718,6 +728,103 @@ internal sealed class GraphWorkflowGraph
                 $"Node '{node.NodeKey}' offers the decision {decision} and no edge out of it fires on that answer, "
                 + "so answering it would strand the run."));
         }
+    }
+
+    /// <summary>
+    ///     The one warning this parser raises: a node whose every inbound edge leaves a <c>Pause</c> receives the
+    ///     DECISION document and nothing else.
+    ///     <para>
+    ///         A Pause writes <c>{decision, comment, payload}</c> (<c>GraphWorkflowDocuments.PauseOutput</c>) and a
+    ///         node's <c>input</c> is its ONE satisfied predecessor's output document — it becomes the
+    ///         <c>upstream</c> map only when several are satisfied. So <c>X → P → Y</c>, authored one-for-one, hands Y
+    ///         the approval and never X's answer, and a Pause before an <c>End</c> loses the result the same way. The
+    ///         cure is an edge from the pause's nearest non-Pause ancestor to Y, which is exactly what the Open Canvas
+    ///         importer adds for itself (<c>CanvasWorkflowImport.AddPauseContextEdges</c>); an author gets this instead.
+    ///     </para>
+    ///     <para>
+    ///         Keyed on Y, not on the pause, because Y is the node that loses the content and so the node an editor
+    ///         should draw the badge on. One warning per Y however many pauses reach it.
+    ///     </para>
+    ///     <para>
+    ///         A successor whose <c>joinPolicy</c> is <c>Any</c> is EXEMPT, whatever its KIND, and that is a
+    ///         correctness rule rather than a taste one. The advised edge is unconditional, so it stays satisfied when
+    ///         every approval is rejected — an <c>Any</c> node would then be admitted on the content edge alone and run
+    ///         the branch the rejections were meant to stop. Collecting the decision documents is what such a node is
+    ///         FOR, so there is nothing to warn about. An <c>All</c> successor waits for the approval edges too, so it
+    ///         keeps both the warning and the advice.
+    ///     </para>
+    ///     <para>
+    ///         The ancestor is NAMED only when it is unique AND not a <c>Condition</c>. Two candidates means the pause
+    ///         is fed by mutually exclusive branches, and edges from both would leave an <c>All</c> successor waiting
+    ///         on the branch that was never taken. A Condition cannot be named because the edge would be that node's
+    ///         second unconditional out-edge, which <see cref="ValidateCondition" /> refuses. Either way the generic
+    ///         sentence stands: advice that turns a warning into a hang or an error is worse than no advice.
+    ///     </para>
+    /// </summary>
+    private IReadOnlyList<GraphWorkflowValidationError> PauseContextWarnings()
+    {
+        var warnings = new List<GraphWorkflowValidationError>();
+        foreach (var successor in Nodes.Keys
+                                       .Where(key => InboundEdges(key).Count > 0
+                                                     && InboundEdges(key).All(edge => Nodes[edge.From].Kind == GraphWorkflowNodeKind.Pause)
+                                                     && !FiresOnOneBranch(key))
+                                       .Order(StringComparer.Ordinal))
+        {
+            var pauses = InboundEdges(successor).Select(static edge => edge.From).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+            var ancestors = pauses.SelectMany(NearestNonPauseAncestors).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+            var advice = ancestors is [var ancestor] && Nodes[ancestor].Kind != GraphWorkflowNodeKind.Condition
+                ? $"Add an edge from '{ancestor}' to '{successor}' to carry it."
+                : "Add an edge from a node before the pause to that node to carry it.";
+            warnings.Add(new GraphWorkflowValidationError(successor,
+                $"Node '{successor}' is reached only through the Pause node(s) {string.Join(", ", pauses.Select(static key => $"'{key}'"))}, "
+                + "so its input is the decision document {decision, comment, payload} rather than the content that was approved. "
+                + advice));
+        }
+
+        return warnings;
+    }
+
+    /// <summary>
+    ///     A node that fires on its FIRST satisfied inbound edge — the one successor the pause-context advice must not
+    ///     be given for, because an unconditional content edge would admit it on its own, ahead of any approval.
+    ///     <para>
+    ///         Read off <c>joinPolicy</c> ALONE and never off the kind. A join policy is a property of every node
+    ///         (<c>GraphWorkflowStateMachine.Admission</c> reads <c>node.JoinPolicy</c> with no kind check, and the
+    ///         wiki's own example puts <c>Any</c> on an <c>End</c>), so testing for a <c>Join</c> node here would have
+    ///         missed an <c>Agent</c> or <c>End</c> that declared the same policy — which is the documented trap about
+    ///         reading a join policy off the Join kind.
+    ///     </para>
+    /// </summary>
+    private bool FiresOnOneBranch(string nodeKey) =>
+        Nodes[nodeKey].JoinPolicy == GraphWorkflowJoinPolicy.Any;
+
+    /// <summary>
+    ///     Where a pause's content really comes from: its predecessors, walking THROUGH consecutive pauses, because a
+    ///     pause's own output is the approval rather than the answer. <c>Start</c> is a fine answer — its output is the
+    ///     run's input, which is exactly what a node behind the pause would otherwise have read.
+    /// </summary>
+    private IReadOnlyList<string> NearestNonPauseAncestors(string pause)
+    {
+        var resolved = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal) { pause };
+        var pending = new Stack<string>();
+        pending.Push(pause);
+        while (pending.Count > 0)
+        {
+            foreach (var predecessor in InboundEdges(pending.Pop()).Select(static edge => edge.From).Where(seen.Add))
+            {
+                if (Nodes[predecessor].Kind == GraphWorkflowNodeKind.Pause)
+                {
+                    pending.Push(predecessor);
+                }
+                else
+                {
+                    resolved.Add(predecessor);
+                }
+            }
+        }
+
+        return resolved;
     }
 
     /// <summary>Depth-first colouring: white unvisited, grey on the current path, black finished. A grey hit is the cycle.</summary>

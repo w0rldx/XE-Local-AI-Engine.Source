@@ -27,6 +27,7 @@ import {
 	graphWorkflowsEqual,
 	mintEdgeKey,
 	mintNodeKey,
+	pauseContextEdges,
 	renameNodeKey,
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import { layoutGraphWorkflow } from "@/features/graphWorkflows/models/GraphWorkflowLayout";
@@ -45,14 +46,15 @@ import {
 } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 
 /**
- * A gesture the editor declined, for the caller to render. Only two exist, and both are rules the operator would
- * otherwise only meet at save time: a second unconditional edge over one pair, and the node cap.
+ * What the editor has to say about the last gesture, for the caller to render. Two are refusals — rules the operator
+ * would otherwise only meet at save time: a second unconditional edge over one pair, and the node cap. The third
+ * reports what wiring a Pause added, because an edge appearing on the canvas unannounced is worse than no affordance.
  *
- * `seq` is what makes the same refusal twice in a row a NEW refusal — without it, dismissing the notice and repeating
- * the gesture would set identical state, React would skip the re-render, and the second refusal would be silent.
+ * `seq` is what makes the same notice twice in a row a NEW notice — without it, dismissing it and repeating the
+ * gesture would set identical state, React would skip the re-render, and the second one would be silent.
  */
-export interface GraphWorkflowEditorRefusal {
-	readonly rule: "parallelEdgesBothUnconditional" | "tooManyNodes";
+export interface GraphWorkflowEditorNotice {
+	readonly rule: "parallelEdgesBothUnconditional" | "tooManyNodes" | "pauseContextEdgeAdded";
 	readonly seq: number;
 }
 
@@ -70,8 +72,8 @@ export interface GraphWorkflowEditorState {
 	readonly issues: readonly GraphWorkflowGraphIssue[];
 	readonly isDirty: boolean;
 	readonly canAddNode: boolean;
-	/** The last declined gesture, or `undefined`. Cleared by {@link GraphWorkflowEditorState.dismissRefusal}. */
-	readonly lastRefusal: GraphWorkflowEditorRefusal | undefined;
+	/** What the editor said about the last gesture, or `undefined`. Cleared by {@link GraphWorkflowEditorState.dismissNotice}. */
+	readonly lastNotice: GraphWorkflowEditorNotice | undefined;
 	readonly onNodesChange: OnNodesChange<GraphWorkflowCanvasNode>;
 	readonly onEdgesChange: OnEdgesChange<GraphWorkflowCanvasEdge>;
 	readonly onConnect: OnConnect;
@@ -88,7 +90,7 @@ export interface GraphWorkflowEditorState {
 	readonly reset: (graph: GraphWorkflowGraph) => void;
 	/** After a successful save: the baseline moves, the canvas does not. */
 	readonly markSaved: (graph: GraphWorkflowGraph) => void;
-	readonly dismissRefusal: () => void;
+	readonly dismissNotice: () => void;
 }
 
 /**
@@ -98,6 +100,10 @@ export interface GraphWorkflowEditorState {
  *
  * A Condition handle prefills NO path: the edge inherits its source node's `config.path` (ruling C2), and the client
  * cannot invent one.
+ *
+ * A condition `value` is canvas text, and that text is JSON (`conditionValueText`): the boolean branch is `true` bare,
+ * the decision is `"Approve"` QUOTED. Writing the decision unquoted would save the same string but render differently
+ * from the identical edge reopened later.
  */
 function connectionPrefill(
 	sourceKind: GraphWorkflowNodeKind | undefined,
@@ -110,7 +116,7 @@ function connectionPrefill(
 		return { label: handle, condition: { op: "Eq", value: handle } };
 	}
 	if (sourceKind === "Pause" && asGraphWorkflowDecisionKind(handle) !== undefined) {
-		return { label: handle, condition: { path: "output.decision", op: "Eq", value: handle } };
+		return { label: handle, condition: { path: "output.decision", op: "Eq", value: JSON.stringify(handle) } };
 	}
 	return {};
 }
@@ -158,13 +164,13 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 	const [nodes, setNodes] = useState<readonly GraphWorkflowCanvasNode[]>(initialCanvas.nodes);
 	const [edges, setEdges] = useState<readonly GraphWorkflowCanvasEdge[]>(initialCanvas.edges);
 	const [baseline, setBaseline] = useState<GraphWorkflowGraph | undefined>(initial);
-	const [lastRefusal, setLastRefusal] = useState<GraphWorkflowEditorRefusal | undefined>(undefined);
+	const [lastNotice, setLastNotice] = useState<GraphWorkflowEditorNotice | undefined>(undefined);
 	// Held in state, not derived: `graphToCanvas` has already dropped the unreadable `op` and narrowed the unknown kind
 	// by the time anything downstream can look, so the wire document it was read from is the only place this is visible.
 	const [loadedIssues, setLoadedIssues] = useState<readonly GraphWorkflowGraphIssue[]>(() => loadedGraphIssues(initial));
 
-	const refuse = useCallback((rule: GraphWorkflowEditorRefusal["rule"]) => {
-		setLastRefusal((previous) => ({ rule, seq: (previous?.seq ?? 0) + 1 }));
+	const announce = useCallback((rule: GraphWorkflowEditorNotice["rule"]) => {
+		setLastNotice((previous) => ({ rule, seq: (previous?.seq ?? 0) + 1 }));
 	}, []);
 
 	const conversion = useMemo(() => canvasToGraph(nodes, edges), [nodes, edges]);
@@ -199,34 +205,40 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 				prefill.condition === undefined &&
 				edges.some((edge) => edge.source === source && edge.target === target && edge.data?.condition === undefined)
 			) {
-				refuse("parallelEdgesBothUnconditional");
+				announce("parallelEdgesBothUnconditional");
 				return;
 			}
 			const key = mintEdgeKey([...nodes.map((node) => node.id), ...edges.map((edge) => edge.id)]);
-			setEdges((current) => [
-				...current,
-				{
-					id: key,
-					source,
-					target,
-					...(handle === undefined ? {} : { sourceHandle: handle }),
-					// React Flow renders the TOP-LEVEL label natively, so a branch is readable without opening a panel;
-					// `data.label` is what the drawer edits and what `canvasToGraph` prefers. Both are written.
+			const connected: GraphWorkflowCanvasEdge = {
+				id: key,
+				source,
+				target,
+				...(handle === undefined ? {} : { sourceHandle: handle }),
+				// React Flow renders the TOP-LEVEL label natively, so a branch is readable without opening a panel;
+				// `data.label` is what the drawer edits and what `canvasToGraph` prefers. Both are written.
+				...(prefill.label === undefined ? {} : { label: prefill.label }),
+				data: {
 					...(prefill.label === undefined ? {} : { label: prefill.label }),
-					data: {
-						...(prefill.label === undefined ? {} : { label: prefill.label }),
-						...(prefill.condition === undefined ? {} : { condition: prefill.condition }),
-					},
+					...(prefill.condition === undefined ? {} : { condition: prefill.condition }),
 				},
-			]);
+			};
+			// Wiring a Pause is the only gesture that can leave a node reading an approval where its author meant an
+			// answer, so the `context` edges are computed HERE and never on a render or a validate, and only for what
+			// THIS connection can have broken. An edge the operator deletes has to stay deleted.
+			const touchesPause = [source, target].some((end) => nodes.find((node) => node.id === end)?.data.kind === "Pause");
+			const context = touchesPause ? pauseContextEdges(nodes, [...edges, connected], { from: source, to: target }) : [];
+			setEdges((current) => [...current, connected, ...context]);
+			if (context.length > 0) {
+				announce("pauseContextEdgeAdded");
+			}
 		},
-		[edges, nodes, refuse],
+		[announce, edges, nodes],
 	);
 
 	const addNode = useCallback(
 		(kind: GraphWorkflowNodeKind, position?: XYPosition): string | undefined => {
 			if (nodes.length >= GRAPH_WORKFLOW_MAX_NODES) {
-				refuse("tooManyNodes");
+				announce("tooManyNodes");
 				return undefined;
 			}
 			// The key is minted from the closure because it is this function's RETURN value; the write itself is functional,
@@ -243,7 +255,7 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 			]);
 			return key;
 		},
-		[edges, nodes, refuse],
+		[announce, edges, nodes],
 	);
 
 	const updateNodeData = useCallback(
@@ -332,7 +344,7 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 		setEdges(canvas.edges);
 		setBaseline(graph);
 		setLoadedIssues(loadedGraphIssues(graph));
-		setLastRefusal(undefined);
+		setLastNotice(undefined);
 	}, []);
 
 	const markSaved = useCallback((graph: GraphWorkflowGraph) => {
@@ -342,8 +354,8 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 		setLoadedIssues([]);
 	}, []);
 
-	const dismissRefusal = useCallback(() => {
-		setLastRefusal(undefined);
+	const dismissNotice = useCallback(() => {
+		setLastNotice(undefined);
 	}, []);
 
 	return {
@@ -353,7 +365,7 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 		issues,
 		isDirty: !graphWorkflowsEqual(conversion.graph, baseline),
 		canAddNode: nodes.length < GRAPH_WORKFLOW_MAX_NODES,
-		lastRefusal,
+		lastNotice,
 		onNodesChange,
 		onEdgesChange,
 		onConnect,
@@ -366,6 +378,6 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 		autoArrange,
 		reset,
 		markSaved,
-		dismissRefusal,
+		dismissNotice,
 	};
 }

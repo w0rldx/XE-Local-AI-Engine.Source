@@ -716,6 +716,118 @@ public sealed class GraphWorkflowGraphTests
         }
     }
 
+    /// <summary>
+    ///     The pause-context warning: a node reached ONLY through a Pause is handed the decision document rather than
+    ///     the content, and the parser says so — without refusing, because the graph routes perfectly well and the
+    ///     author may have meant it.
+    /// </summary>
+    [Test]
+    public void Warnings_OnANodeReachedOnlyThroughAPause_NameTheNodeAndItsNearestNonPauseAncestor()
+    {
+        var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.PauseBetweenTwoAgents);
+
+        AssertEx.Equal(expected: 1, graph.Warnings.Count, "one warning per node that loses the content, however many pauses reach it.");
+        var warning = graph.Warnings[0];
+        AssertEx.Equal("summarize", warning.Key, "the warning belongs to the node that loses the content, so the editor draws it there.");
+        AssertEx.Contains(warning.Message, "'review'", message: "the warning names the pause it is about.");
+        AssertEx.Contains(warning.Message,
+            "Add an edge from 'analyze' to 'summarize'",
+            message: $"the nearest non-Pause ancestor is unique here, so the advice names it: {warning.Message}");
+    }
+
+    /// <summary>The cure, asserted as the absence it is: the context edge gives the node a non-Pause predecessor.</summary>
+    [Test]
+    public void Warnings_WithTheContextEdgeAroundThePause_AreEmpty()
+    {
+        AssertEx.Empty(GraphWorkflowGraph.Parse(GraphWorkflowGraphs.PauseBetweenTwoAgentsWithContextEdge).Warnings);
+    }
+
+    /// <summary>
+    ///     An <c>End</c> after a pause loses the result the same way a work node does — its input document IS the
+    ///     decision — so both branches of a two-answer pause are warned about.
+    /// </summary>
+    [Test]
+    public void Warnings_CoverAnEndReachedOnlyThroughAPause()
+    {
+        var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.PauseTwoDecisions);
+
+        AssertEx.Equal("rejected, shipped", string.Join(", ", graph.Warnings.Select(static warning => warning.Key).Order(StringComparer.Ordinal)));
+        AssertEx.Contains(AssertEx.NotNull(graph.Warnings.FirstOrDefault(static warning => warning.Key == "shipped")).Message,
+            "Add an edge from 'start' to 'shipped'",
+            message: "Start is a fine ancestor: its output is the run input, which is what the node behind the pause would have read.");
+    }
+
+    /// <summary>
+    ///     A <c>Condition</c> ancestor is never named, unique or not: the edge the advice would ask for is that node's
+    ///     second unconditional out-edge, which the validator refuses — so following the advice would turn a warning
+    ///     into an error.
+    /// </summary>
+    [Test]
+    public void Warnings_WithAConditionAsTheOnlyAncestor_DoNotNameIt()
+    {
+        var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.PauseBehindACondition);
+
+        AssertEx.Equal(expected: 1, graph.Warnings.Count);
+        AssertEx.Equal("shipped", graph.Warnings[0].Key);
+        AssertEx.Contains(graph.Warnings[0].Message, "Add an edge from a node before the pause", message: "the generic sentence, because the ancestor is a Condition.");
+        AssertEx.False(graph.Warnings[0].Message.Contains("'check'", StringComparison.Ordinal), "naming the Condition would advise an edge the validator refuses.");
+    }
+
+    /// <summary>
+    ///     An <c>Any</c> successor over pauses is exempt whatever its KIND, and not as a matter of taste: the advised
+    ///     edge is unconditional, so it would admit the node on its own and run the branch every rejection was meant to
+    ///     stop. A join policy belongs to every node, so testing the kind here would have missed the Agent and the End.
+    /// </summary>
+    [Test]
+    [Arguments("Join")]
+    [Arguments("Agent")]
+    [Arguments("End")]
+    public void Warnings_ForAnAnySuccessorFedOnlyByPauses_AreEmpty(string kind)
+    {
+        AssertEx.Empty(GraphWorkflowGraph.Parse(GraphWorkflowGraphs.PauseFanInTo(kind, "Any")).Warnings,
+            $"advising a content edge into an Any {kind} would admit it with no approval at all.");
+    }
+
+    /// <summary>The same graphs under <c>All</c> wait for both approvals, so the advice is safe and stands.</summary>
+    [Test]
+    [Arguments("Join")]
+    [Arguments("Agent")]
+    [Arguments("End")]
+    public void Warnings_ForAnAllSuccessorFedOnlyByPauses_NameTheAncestor(string kind)
+    {
+        var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.PauseFanInTo(kind, "All"));
+
+        AssertEx.Equal(expected: 1, graph.Warnings.Count);
+        AssertEx.Equal("merge", graph.Warnings[0].Key);
+        AssertEx.Contains(graph.Warnings[0].Message,
+            "Add an edge from 'analyze' to 'merge'",
+            message: $"an All {kind} still waits for the approvals, so the content edge is safe to advise.");
+    }
+
+    /// <summary>
+    ///     Two nearest non-Pause ancestors means the pause is fed by mutually exclusive branches. One of them is always
+    ///     dead, so naming either would advise an edge that leaves the successor waiting on a branch never taken.
+    /// </summary>
+    [Test]
+    public void Warnings_WithTwoExclusiveAncestors_GiveOnlyTheGenericAdvice()
+    {
+        var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.PauseBehindTwoExclusiveBranches);
+
+        AssertEx.Equal(expected: 1, graph.Warnings.Count);
+        AssertEx.Equal("done", graph.Warnings[0].Key);
+        AssertEx.Contains(graph.Warnings[0].Message, "Add an edge from a node before the pause");
+        AssertEx.False(graph.Warnings[0].Message.Contains("'fast'", StringComparison.Ordinal) || graph.Warnings[0].Message.Contains("'slow'", StringComparison.Ordinal),
+            "either branch may be the dead one, so neither can be advised.");
+    }
+
+    /// <summary>A graph with nothing to say about it says nothing — the warning list is not a place things accumulate.</summary>
+    [Test]
+    public void Warnings_OnAGraphWithNoPause_AreEmpty()
+    {
+        AssertEx.Empty(GraphWorkflowGraph.Parse(GraphWorkflowGraphs.StartAgentEnd).Warnings);
+        AssertEx.Empty(GraphWorkflowGraph.Parse(GraphWorkflowGraphs.BranchOnJson).Warnings);
+    }
+
     /// <summary>A Start, one Agent carrying <paramref name="config" />, and an End — the smallest graph a config fits in.</summary>
     private static string Agent(string config) =>
         $$"""

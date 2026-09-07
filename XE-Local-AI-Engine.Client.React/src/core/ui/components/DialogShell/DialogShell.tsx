@@ -21,6 +21,13 @@ export interface IDialogShellProps extends Omit<ModalProps, "title" | "withClose
 	 * Use for editors with unsaved changes or in-flight operations. Defaults to false.
 	 */
 	confirmCloseWhen?: boolean;
+	/**
+	 * Set on a dialog that opens OVER another DialogShell. Mantine portals every modal into one shared node, so two
+	 * dialogs at the same z-index are ordered by insertion — and the one underneath wins whenever it was remounted
+	 * last (a `key` on the outer editor is enough). The confirmation then renders behind the thing it is confirming.
+	 * Defaults to false; the raised layer is {@link RAISED_DIALOG_Z_INDEX}.
+	 */
+	raised?: boolean;
 	/** Optional sticky footer (e.g. Save/Cancel actions) pinned to the bottom of the scroll area. */
 	footer?: ReactNode;
 	/**
@@ -34,6 +41,10 @@ export interface IDialogShellProps extends Omit<ModalProps, "title" | "withClose
 // Body padding token: the sticky footer's negative margins cancel Modal.Body's padding so the
 // footer's border and background bleed to the dialog edges. Falls back to Mantine's modal padding.
 const MODAL_PADDING = "var(--mb-padding, var(--mantine-spacing-md))";
+
+// The one layer a stacked dialog sits on, above Mantine's default modal z-index of 200. Every dialog that opens over
+// another one takes it through `raised`, so no call site has to know the number.
+const RAISED_DIALOG_Z_INDEX = 400;
 
 /**
  * Normalized dialog shell that wraps Mantine Modal with the application's consistent overlay,
@@ -49,6 +60,7 @@ export function DialogShell({
 	showCloseButton = true,
 	enableFullScreenToggle = true,
 	confirmCloseWhen = false,
+	raised = false,
 	footer,
 	children,
 	onClose,
@@ -127,6 +139,7 @@ export function DialogShell({
 			transitionProps={effectiveFullScreen ? { transition: "fade" } : transitionProps}
 			closeOnClickOutside={confirmCloseWhen ? false : closeOnClickOutside}
 			closeOnEscape={confirmCloseWhen ? false : closeOnEscape}
+			zIndex={raised ? RAISED_DIALOG_Z_INDEX : undefined}
 			overlayProps={{
 				backgroundOpacity: 0.55,
 				blur: 3,

@@ -36,6 +36,13 @@ internal static class GraphWorkflowContractMapper
     ///     The stored graph document as the wire shape. Only two things are normalized: an absent
     ///     <c>schemaVersion</c> reads as 1, and an absent node or edge list reads as empty rather than null. Everything
     ///     else — labels, positions, per-kind config, condition values — is handed over exactly as it was stored.
+    ///     <para>
+    ///         Unreadable text THROWS, unlike <see cref="ToDocument" />, and the difference is what each blob is: a
+    ///         node-run document is written by the runtime and a broken one is worth reading a page about, while a
+    ///         graph was parsed before it was ever stored. There is no supported route to a corrupt one, so a 500 with
+    ///         a log is the honest answer — an empty canvas drawn beside a real <c>nodeCount</c> would report the
+    ///         corruption as a graph nobody drew.
+    ///     </para>
     /// </summary>
     public static GraphWorkflowGraph ToWireGraph(string graphJson)
     {
@@ -120,7 +127,11 @@ internal static class GraphWorkflowContractMapper
         ArgumentNullException.ThrowIfNull(value);
         return new GraphWorkflowRunResponse(value.Run.ToResponse(),
             [.. value.NodeRuns.Select(ToSummaryResponse)],
-            ToDocument(value.Run.OutputJson));
+            ToDocument(value.Run.OutputJson),
+
+            // The run's PINNED blob, through the same projection a definition read uses: the definition it names may
+            // have been edited, or deleted, since — and the node runs below belong to this graph, not to that one.
+            ToWireGraph(value.Run.GraphJson));
     }
 
     public static GraphWorkflowNodeRunSummaryResponse ToSummaryResponse(this GraphWorkflowNodeRunSnapshot value)

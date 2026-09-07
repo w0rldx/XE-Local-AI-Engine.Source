@@ -71,6 +71,29 @@ describe("DialogShell", () => {
 		expect(target.getAttribute("role")).toBe("dialog");
 	});
 
+	// REGRESSION (S4, `3236991c8`): the benchmark re-judge confirmation rendered UNDER the editor that opened it, and
+	// the fix was a raw `zIndex={400}` at the call site — a trap every future stacked dialog would have to know about.
+	it("raises a stacked dialog above the default modal layer only when it opts in", () => {
+		const { container } = renderWithProviders(
+			<>
+				<DialogShell opened={true} onClose={vi.fn()} title="Editor" data-testid="base-dialog">
+					<div>base</div>
+				</DialogShell>
+				<DialogShell opened={true} onClose={vi.fn()} title="Confirm" raised={true} data-testid="raised-dialog">
+					<div>raised</div>
+				</DialogShell>
+			</>,
+		);
+
+		const layerOf = (testId: string) =>
+			screen.getByTestId(testId).closest("[style*='--mb-z-index']")?.getAttribute("style") ?? "";
+
+		expect(container).toBeTruthy();
+		expect(layerOf("raised-dialog")).toContain("--mb-z-index: 400");
+		// Mantine's own default, asserted so the negative above cannot pass because the lookup found nothing.
+		expect(layerOf("base-dialog")).toContain("--mb-z-index: 200");
+	});
+
 	it("shows a fullscreen toggle that flips between fullscreen and exit-fullscreen", () => {
 		renderWithProviders(
 			<DialogShell opened={true} onClose={vi.fn()} title="Editor">
