@@ -362,10 +362,10 @@ public sealed class GraphWorkflowCancelTests
     ///     surface.
     ///     <para>
     ///         The answer this build gives is that no decision is lost, because none can land: the run is already
-    ///         <c>Cancelling</c> when the drain runs, and both the run service and the store's decide write re-check
-    ///         that INSIDE their own read — so the operator is refused rather than silently overwritten, and the node
-    ///         terminalizes <c>Cancelled</c> carrying no decision at all. Delete either re-check and this test fails on
-    ///         the <c>DecisionOperationId</c> the drain would then be writing over.
+    ///         <c>Cancelling</c> when the drain runs, and <c>GraphWorkflowRunService.DecideAsync</c> refuses on its own
+    ///         run-status read before the store is asked at all — so the operator is refused rather than silently
+    ///         overwritten, and the node terminalizes <c>Cancelled</c> carrying no decision. Delete THAT check and this
+    ///         test fails on the <c>DecisionOperationId</c> the drain would then be writing over.
     ///     </para>
     /// </summary>
     [Test]
@@ -395,12 +395,21 @@ public sealed class GraphWorkflowCancelTests
         // The tick runs detached so the test can act inside it. Nothing here waits on a clock: the gate is the
         // rendezvous, and the drain is standing in front of its cancel write when Reached completes.
         var tick = harness.AdvanceAsync(runId);
-        await gate.Reached.ConfigureAwait(false);
-
-        var refusal = await AssertEx
+        GraphWorkflowRunConflictException refusal;
+        try
+        {
+            // Bounded: the project has no global test timeout, so a drain that stopped routing the pause through this
+            // write would otherwise hang the whole CI leg instead of failing it.
+            await gate.Reached.WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+            refusal = await AssertEx
                             .ThrowsAsync<GraphWorkflowRunConflictException>(() => harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve))
                             .ConfigureAwait(false);
-        gate.Release();
+        }
+        finally
+        {
+            gate.Release();
+        }
+
         _ = await tick.ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 

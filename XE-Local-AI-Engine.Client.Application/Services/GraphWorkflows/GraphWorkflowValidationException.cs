@@ -35,8 +35,6 @@ public sealed record GraphWorkflowValidationResult(IReadOnlyList<GraphWorkflowVa
 
     public bool IsValid => Errors.Count == 0;
 
-    public static GraphWorkflowValidationResult Valid { get; } = new([]);
-
     public static GraphWorkflowValidationResult Invalid(IReadOnlyList<GraphWorkflowValidationError> errors) =>
         new(errors);
 

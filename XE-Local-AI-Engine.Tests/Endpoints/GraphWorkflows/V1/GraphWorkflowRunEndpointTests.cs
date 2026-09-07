@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.GraphWorkflows.V1;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -272,7 +273,11 @@ public sealed class GraphWorkflowRunEndpointTests
                                                        .ReadAsStringAsync()
                                                        .ConfigureAwait(false));
 
-        AssertEx.Equal(definition.RootElement.GetProperty("graph").GetRawText(), run.RootElement.GetProperty("graph").GetRawText());
+        // Structural, not raw text: what matters is that the two documents SAY the same thing, and property order is
+        // the serializer's business rather than the contract's.
+        AssertEx.True(JsonNode.DeepEquals(JsonNode.Parse(run.RootElement.GetProperty("graph").GetRawText()),
+                JsonNode.Parse(definition.RootElement.GetProperty("graph").GetRawText())),
+            $"the run's pinned graph must read as the definition's: {run.RootElement.GetProperty("graph").GetRawText()}");
         AssertEx.False(run.RootElement.GetProperty("run").TryGetProperty("graph", out _),
             "the graph sits beside the run SUMMARY rather than on it, so the run list still carries none.");
     }

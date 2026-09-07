@@ -37,34 +37,22 @@ internal static class GraphWorkflowContractMapper
     ///     <c>schemaVersion</c> reads as 1, and an absent node or edge list reads as empty rather than null. Everything
     ///     else — labels, positions, per-kind config, condition values — is handed over exactly as it was stored.
     ///     <para>
-    ///         Unreadable text answers the EMPTY graph rather than throwing, for the reason
-    ///         <see cref="ToDocument" /> answers null: a definition's graph was parsed before it was stored, so a blob
-    ///         that will not deserialize is a bug upstream — and 500-ing a run read would take away the one page an
-    ///         operator would diagnose it from. The run's <c>graphHash</c> travels beside this member and no legal
-    ///         graph is empty (the parser demands a <c>Start</c> and an <c>End</c>), so an empty one here reads as
-    ///         "unreadable" rather than as a graph.
+    ///         Unreadable text THROWS, unlike <see cref="ToDocument" />, and the difference is what each blob is: a
+    ///         node-run document is written by the runtime and a broken one is worth reading a page about, while a
+    ///         graph was parsed before it was ever stored. There is no supported route to a corrupt one, so a 500 with
+    ///         a log is the honest answer — an empty canvas drawn beside a real <c>nodeCount</c> would report the
+    ///         corruption as a graph nobody drew.
     ///     </para>
     /// </summary>
     public static GraphWorkflowGraph ToWireGraph(string graphJson)
     {
-        GraphWorkflowGraph? graph;
-        try
+        var graph = JsonSerializer.Deserialize<GraphWorkflowGraph>(graphJson, GraphOptions) ?? GraphWorkflowGraph.Empty;
+        return graph with
         {
-            graph = JsonSerializer.Deserialize<GraphWorkflowGraph>(graphJson, GraphOptions);
-        }
-        catch (JsonException)
-        {
-            return GraphWorkflowGraph.Empty;
-        }
-
-        return graph is null
-            ? GraphWorkflowGraph.Empty
-            : graph with
-            {
-                SchemaVersion = graph.SchemaVersion ?? 1,
-                Nodes = graph.Nodes ?? [],
-                Edges = graph.Edges ?? []
-            };
+            SchemaVersion = graph.SchemaVersion ?? 1,
+            Nodes = graph.Nodes ?? [],
+            Edges = graph.Edges ?? []
+        };
     }
 
     /// <summary>
