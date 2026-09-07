@@ -109,6 +109,29 @@ describe("the options parameter", () => {
 		expect(formatTimestamp(instant, dayOptions)).toMatch(/^12\./);
 	});
 
+	// The language fallback re-renders with the LANGUAGE dropped, so an options object that is invalid on its own
+	// throws a second time from inside the catch — and the helper promises a dash, not a thrown table row.
+	it("answers the dash rather than throwing when the options themselves are invalid", async () => {
+		await i18next.changeLanguage("en-US");
+		// `dateStyle` beside a component field is a spec TypeError, whatever the locale.
+		const invalidOptions = { dateStyle: "full", year: "numeric" } as Intl.DateTimeFormatOptions;
+
+		// The premise, pinned: this exact call is what throws, in both the first attempt and the fallback.
+		expect(() => new Date(instant).toLocaleString("en-US", invalidOptions)).toThrow(TypeError);
+		expect(() => new Date(instant).toLocaleString(undefined, invalidOptions)).toThrow(TypeError);
+
+		expect(formatTimestamp(instant, invalidOptions)).toBe("—");
+		expect(formatTime(instant, invalidOptions)).toBe("—");
+	});
+
+	it("still renders through the fallback when the language is malformed but the options are fine", async () => {
+		await i18next.changeLanguage("en_US");
+
+		expect(i18next.language).toBe("en_US");
+		expect(formatTimestamp(instant, dayOptions)).not.toBe("—");
+		expect(formatTimestamp(instant, dayOptions)).toBe(new Date(instant).toLocaleDateString(undefined, dayOptions));
+	});
+
 	it("narrows the clock the same way, and answers the dash for an absent value with options in hand", async () => {
 		await i18next.changeLanguage("en-US");
 		const clockOptions: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", timeZone: "UTC" };
