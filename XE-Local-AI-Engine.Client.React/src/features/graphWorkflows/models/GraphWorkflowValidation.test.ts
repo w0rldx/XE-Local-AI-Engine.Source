@@ -21,6 +21,7 @@ import {
 	nodeCommonSchema,
 	pauseConfigSchema,
 	serverErrorsToIssues,
+	serverWarningsToIssues,
 	startConfigSchema,
 	toolConfigSchema,
 	validateGraphWorkflowGraph,
@@ -406,6 +407,35 @@ describe("serverErrorsToIssues", () => {
 
 	it("answers an empty list when the server sent no errors", () => {
 		expect(serverErrorsToIssues(undefined)).toEqual([]);
+	});
+
+	it("marks an error with the rule that carries the server's sentence", () => {
+		expect(serverErrorsToIssues([{ key: "analyze", message: "no instructions" }])[0]?.rule).toBe("serverRejected");
+	});
+});
+
+describe("serverWarningsToIssues", () => {
+	it("carries the server's second list through the same shape, keyed and marked as a warning", () => {
+		const warnings = serverWarningsToIssues([
+			{ key: "done", message: "'done' is reached only through the Pause node 'review'." },
+		]);
+
+		expect(warnings).toEqual([
+			{ rule: "serverWarned", subject: "done", message: "'done' is reached only through the Pause node 'review'." },
+		]);
+	});
+
+	it("answers an empty list when the server sent no warnings", () => {
+		expect(serverWarningsToIssues(undefined)).toEqual([]);
+	});
+
+	// Only the server raises warnings; a client rule reaching the non-blocking half would be a rule that silently
+	// stopped refusing the save.
+	it("is the only producer of the warning rule — no client rule raises it", () => {
+		const rules = rulesOf(minimal([{ key: "orphan", kind: "Agent", config: { instructions: "x" } }]));
+
+		expect(rules).not.toContain("serverWarned");
+		expect(rules.length).toBeGreaterThan(0);
 	});
 });
 

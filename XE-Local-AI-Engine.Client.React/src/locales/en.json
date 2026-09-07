@@ -5420,7 +5420,8 @@
 					"tooManyNodes": "This graph already has as many nodes as a run accepts."
 				},
 				"validation": {
-					"title": "This graph cannot be saved yet"
+					"title": "This graph cannot be saved yet",
+					"warningsTitle": "Worth checking before you run"
 				}
 			},
 			"node": {
@@ -5562,7 +5563,8 @@
 					"pausePromptMissing": "“{{subject}}” is a Pause node with no question to ask.",
 					"pauseNoDecisions": "“{{subject}}” is a Pause node that offers no decision.",
 					"endOutcomeMissing": "“{{subject}}” is an End node with no outcome name.",
-					"serverRejected": "The node refused this graph."
+					"serverRejected": "The node refused this graph.",
+					"serverWarned": "The node flagged something worth checking."
 				}
 			},
 			"form": {
@@ -5707,6 +5709,7 @@
 				"attempt": "attempt {{attempt}}",
 				"empty": "This run has no nodes yet.",
 				"overCap": "This run has {{nodeCount}} nodes — more than the graph draws. Use the node table to work through them.",
+				"definitionChanged": "The definition has been edited since this run started. This is the graph the run itself ran on.",
 				"graphMismatch": "The definition changed after this run started, so the connections it ran on are unknown. Showing its nodes only."
 			},
 			"runs": {
@@ -5801,7 +5804,8 @@
 				"unsavedLayout": "This graph had no saved layout — Save to keep the one on screen.",
 				"validate": "Check",
 				"validationFailed": "The graph could not be checked.",
-				"validationPassed": "This graph passed validation."
+				"validationPassed": "This graph passed validation.",
+				"validationPassedWithWarnings": "This graph is valid. Check the notes below before you run it."
 			}
 		},
 		"integrations": {
