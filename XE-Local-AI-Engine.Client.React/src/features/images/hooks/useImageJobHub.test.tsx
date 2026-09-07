@@ -17,7 +17,7 @@ const invokeSpy = vi.fn(() => Promise.resolve());
 let connectionState = "Disconnected";
 
 // Mock the SignalR client: `on` captures handlers, `start` flips to Connected, `invoke` is spied, and `state`/
-// `onreconnected` model the connect lifecycle the subscribe logic guards on (mirrors usePreviewWorkflowHub.test).
+// `onreconnected` model the connect lifecycle the subscribe logic guards on.
 vi.mock("@microsoft/signalr", () => {
 	class FakeBuilder {
 		withUrl() {

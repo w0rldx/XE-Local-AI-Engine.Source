@@ -23,10 +23,6 @@ describe("nodeCapabilities", () => {
 		expect(nodeCapabilities.modelFit).toBe(true);
 	});
 
-	it("enables the Open Canvas (preview) surface by default", () => {
-		expect(nodeCapabilities.preview).toBe(true);
-	});
-
 	it("enables local benchmarks by default", () => {
 		expect(nodeCapabilities.benchmarks).toBe(true);
 	});
@@ -102,7 +98,6 @@ describe("nodeCapabilities", () => {
 			scheduler: "/scheduler",
 			modelRecommendations: "/model-recommendations",
 			loadedModels: "/loaded-models",
-			preview: "/preview",
 			images: "/images",
 			integrationTriggers: "/integrations/triggers",
 			integrationSessions: "/integrations/sessions",

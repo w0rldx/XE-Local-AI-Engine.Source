@@ -48,17 +48,16 @@ export interface NodeCapabilityConfig {
 	readonly scheduler: boolean;
 	readonly modelFit: boolean;
 	readonly loadedModels: boolean;
-	readonly preview: boolean;
 	readonly knowledgeBase: boolean;
 	// Local image-generation surface (stable-diffusion.cpp text-to-image). Enabled by default, but surfaced as a
-	// PREVIEW feature: its nav entry is a child of the Preview group (next to Open Canvas) rather than a top-level
-	// link, because the runtime is not yet confidently verified end-to-end. This flag alone gates both the nav child
-	// and the /images route — it is independent of the `preview` flag, which gates only Open Canvas.
+	// PREVIEW feature: its nav entry is a child of the Preview group rather than a top-level link, because the
+	// runtime is not yet confidently verified end-to-end. This flag alone gates both the nav child and the
+	// /images route.
 	readonly images: boolean;
 	// Durable software-development workflow (Development Mode). The surface ships in every build; the authenticated
 	// runtime capability controls whether its actions are available on this node. It is an EXPERIMENTAL surface, so
-	// its nav entry is a child of the Preview group (next to Open Canvas and Image Generation) rather than a
-	// top-level link. This flag alone gates both the nav child and the /development route.
+	// its nav entry is a child of the Preview group (next to Image Generation) rather than a top-level link.
+	// This flag alone gates both the nav child and the /development route.
 	readonly development: boolean;
 	// Long-running agent Work Sessions (own plan, findings, artifacts and checkpoints, driven by a detached
 	// supervisor). Gates both the nav entry and the two /work-sessions routes. The node ALSO has its own
@@ -76,8 +75,8 @@ export interface NodeCapabilityConfig {
 	readonly integrations: boolean;
 	// Graph Workflows: operator-authored DAGs of the eight v1 node kinds (Start, Agent, Tool, Condition, Parallel,
 	// Join, Pause, End) with a canvas editor and a live run view. Ships GATED OFF — S4 flips it once the surface is
-	// verified end to end. It is an experimental surface, so its nav entry is a child of the Preview group rather than
-	// a top-level link. The node ALSO has its own `GraphWorkflows:Enabled` switch, which 404s the API — this flag only
+	// verified end to end. Its nav entry is a top-level link (promoted out of the Preview group when Open Canvas was
+	// removed). The node ALSO has its own `GraphWorkflows:Enabled` switch, which 404s the API — this flag only
 	// decides whether the surface is offered.
 	readonly graphWorkflows: boolean;
 }
@@ -147,10 +146,6 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// Loaded-models live overview + eject surface. On by default; polls the runtime's in-memory model set (RAM/VRAM)
 	// and offers a graceful eject (unload from memory after any in-flight generation finishes — never disk delete).
 	loadedModels: true,
-	// Open Canvas (Preview) workflow builder surface. On by default; node-local SQLite-backed workflow CRUD with
-	// live per-node run output streamed over the preview SignalR hub. Workflows persist; run output is transient
-	// (never logged/indexed) and the run-output store is empty on every page load.
-	preview: true,
 	// Knowledge-base management surface (document ingestion + semantic search). On by default; node-local
 	// SQLite-backed document store with a background extract→chunk→embed→index pipeline, live status over the
 	// knowledge-base SignalR hub. Selective encryption: source document blobs and display names are encrypted
@@ -199,7 +194,6 @@ export const nodeRoutePaths = {
 	scheduler: "/scheduler",
 	modelRecommendations: "/model-recommendations",
 	loadedModels: "/loaded-models",
-	preview: "/preview",
 	knowledgeBase: "/knowledge-base",
 	images: "/images",
 	// Dedicated Development Mode project/task workflow — gated on nodeCapabilities.development.

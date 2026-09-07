@@ -14,6 +14,7 @@ import {
 	IconRobot,
 	IconSchool,
 	IconSettings,
+	IconSitemap,
 } from "@tabler/icons-react";
 import type { ForwardRefExoticComponent, RefAttributes } from "react";
 
@@ -27,7 +28,6 @@ type NavigationCapabilityKey =
 	| "scheduler"
 	| "modelFit"
 	| "loadedModels"
-	| "preview"
 	| "knowledgeBase"
 	| "images"
 	| "development"
@@ -153,10 +153,10 @@ const allNavigationLinks: INavigationLink[] = [
 			{ translationKey: "navigation.integrationKeys", to: nodeRoutePaths.integrationKeys, capability: "integrations" },
 		],
 	},
-	// Preview group: collects experimental / preview features under one menu point. Open Canvas (the MAF workflow
-	// builder), Image Generation (stable-diffusion.cpp) and Development Mode (the registered-source worktree
-	// workflow) all live here — none of the three is confidently verified end-to-end yet, so each is presented as a
-	// preview surface rather than a flagship top-level entry.
+	// Preview group: collects experimental / preview features under one menu point. Image Generation
+	// (stable-diffusion.cpp), Development Mode (the registered-source worktree workflow) and Workflow Runs live
+	// here — none of the three is confidently verified end-to-end yet, so each is presented as a preview surface
+	// rather than a flagship top-level entry.
 	// Each child carries its OWN capability (the group itself is ungated, like Models / Automation), so turning one
 	// capability off drops only that child and the generic empty-group filter below removes the group once every
 	// child is off. That keeps every child's nav visibility exactly aligned with its route's own capability redirect.
@@ -165,16 +165,21 @@ const allNavigationLinks: INavigationLink[] = [
 		icon: IconBinaryTree2,
 		translationKey: "navigation.previewGroup",
 		links: [
-			{ translationKey: "navigation.preview", to: nodeRoutePaths.preview, capability: "preview" },
 			{ translationKey: "navigation.images", to: nodeRoutePaths.images, capability: "images" },
 			{ translationKey: "navigation.development", to: nodeRoutePaths.development, capability: "development" },
 			// Labelled "Workflow Runs", not "Development Workflows" (C42): sitting next to "Development" the module name
 			// reads as its sibling, and the two are not siblings — this one lists work items, their runs and their nodes.
 			{ translationKey: "navigation.devWorkflows", to: nodeRoutePaths.devWorkflows, capability: "devWorkflows" },
-			// Graph Workflows ships gated OFF (S4 flips it), so this child is filtered out of the default menu — it is
-			// declared here now so the flip is a one-line capability change rather than a nav edit.
-			{ translationKey: "navigation.graphWorkflows", to: nodeRoutePaths.graphWorkflows, capability: "graphWorkflows" },
 		],
+	},
+	// Graph Workflows is a TOP-LEVEL entry, not a Preview child: it is the successor to the retired Open Canvas and
+	// carries its own capability, which still ships off — the flip is what makes this entry render.
+	{
+		id: "graphWorkflows",
+		icon: IconSitemap,
+		translationKey: "navigation.graphWorkflows",
+		to: nodeRoutePaths.graphWorkflows,
+		capability: "graphWorkflows",
 	},
 	{
 		id: "benchmarks",

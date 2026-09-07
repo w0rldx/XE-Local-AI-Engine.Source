@@ -28,7 +28,7 @@ import {
 // Job state lives in TanStack Query, never a store, which is why the live progress gets its own query key rather than
 // a ref or a context.
 //
-// Connection + subscribe lifecycle copies usePreviewWorkflowHub: invokes are guarded on Connected, re-applied on
+// Connection + subscribe lifecycle follows the shared hub pattern: invokes are guarded on Connected, re-applied on
 // reconnect (a transient drop loses group membership), and cleanup defers stop() until the start promise settles so a
 // StrictMode double-invoke / fast remount cannot abort an in-flight negotiation.
 

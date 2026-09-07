@@ -4,7 +4,7 @@
 // place a `Queued` node could be made to look like a running one.
 //
 // React Flow renders into a measured container and jsdom reports 0×0, which suppresses the viewport entirely (see the
-// same note in `features/preview/components/WorkflowCanvas.test.tsx`), so no card would ever paint through a real
+// same note in `features/graphWorkflows/components/GraphWorkflowEditorCanvas.test.tsx`), so no card would ever paint through a real
 // `<ReactFlow>`. The mock below is the minimum that keeps the units under test real: it renders each node through the
 // registered `nodeTypes` component with the data the mapper built, and wires the click the view actually listens for.
 

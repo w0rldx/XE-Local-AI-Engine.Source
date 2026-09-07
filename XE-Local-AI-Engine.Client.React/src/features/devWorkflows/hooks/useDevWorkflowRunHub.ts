@@ -64,10 +64,10 @@ function isChangeKind(kind: string): kind is DevWorkflowChangeKind {
 /**
  * Live state for one workflow run over `development-workflows/hub`.
  *
- * Modelled on `useWorkSessionHub` and explicitly NOT on `usePreviewWorkflowHub`: the preview hook's job is dispatching
- * payload into a store, and under O10 these pings carry no content at all — the DB is the replay authority and every
- * byte the UI paints comes from a REST read. So there is no client-side mirror, only a watermark: its jobs are
- * `afterSeq` on re-subscribe and monotonic dedupe of pings.
+ * Modelled on `useWorkSessionHub`, and explicitly NOT on a hub hook that dispatches payload into a store: under O10
+ * these pings carry no content at all — the DB is the replay authority and every byte the UI paints comes from a
+ * REST read. So there is no client-side mirror, only a watermark: its jobs are `afterSeq` on re-subscribe and
+ * monotonic dedupe of pings.
  *
  * Node-run invalidation is keyed on the RUN, not the selected node: `[{ _id, path: { runId } }]` matches every cached
  * node-detail variant under that run by partial deep equality. That keeps the selection out of the effect's
