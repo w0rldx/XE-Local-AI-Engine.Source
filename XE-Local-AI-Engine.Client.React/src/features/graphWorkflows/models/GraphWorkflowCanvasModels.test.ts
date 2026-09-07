@@ -529,9 +529,9 @@ describe("pauseContextEdges", () => {
 	it("walks through consecutive Pause nodes to the nearest non-Pause ancestor", () => {
 		const nodes = ["start:Start", "a:Agent", "first:Pause", "second:Pause", "b:Agent", "done:End"];
 
-		// One rule applied to every Pause, exactly as the importer applies it: the second Pause also gets to see the
-		// content it is approving, so `a` reaches both it and the node behind it.
-		expect(addedPairs(nodes, ["start>a", "a>first", "first>second", "second>b", "b>done"])).toEqual(["a>second", "a>b"]);
+		// One rule applied to every starved successor: the second Pause also gets to see the content it is approving,
+		// so `a` reaches both it and the node behind it. In successor-key order, which is the order the pass draws in.
+		expect(addedPairs(nodes, ["start>a", "a>first", "first>second", "second>b", "b>done"])).toEqual(["a>b", "a>second"]);
 	});
 
 	it("treats Start as a fine ancestor, because its output is the run's input", () => {
@@ -540,10 +540,11 @@ describe("pauseContextEdges", () => {
 		]);
 	});
 
-	it("still routes the answer to a successor another node already feeds, and adds nothing without a Pause", () => {
-		// `c` feeding `b` is not `a`'s answer. Two satisfied predecessors make `b`'s input the `upstream` map, which is
-		// the legitimate shape — the importer guards on the PAIR only, and so does this.
-		expect(addedPairs([...chain, "c:Agent"], ["start>a", "a>hold", "hold>b", "c>b", "b>done"])).toEqual(["a>b"]);
+	it("leaves a successor something other than a Pause already feeds alone, and adds nothing without a Pause", () => {
+		// `b` is not starved: `c` already hands it content, so its `input` is the `upstream` map either way and a third
+		// inbound edge would only give its `All` policy one more branch to wait for. `PauseContextWarnings` does not
+		// warn about a Y like this one, and the two have to agree about which graphs need an edge.
+		expect(addedPairs([...chain, "c:Agent"], ["start>a", "a>hold", "hold>b", "c>b", "b>done"])).toEqual([]);
 		expect(addedPairs(["start:Start", "a:Agent", "done:End"], ["start>a", "a>done"])).toEqual([]);
 	});
 
@@ -556,15 +557,22 @@ describe("pauseContextEdges", () => {
 		expect(addedPairs(nodes, edges)).toEqual([]);
 	});
 
-	// An `Any` join fires on the FIRST satisfied branch, so an unconditional content edge into one is satisfied even
-	// when every approval was rejected: the join would run past the Pause instead of waiting on it.
-	it("skips an Any join successor and still feeds an All join", () => {
-		const anyJoin = ["start:Start", "a:Agent", "hold:Pause", "merge:Join:Any", "done:End"];
-		const allJoin = ["start:Start", "a:Agent", "hold:Pause", "merge:Join", "done:End"];
+	// An `Any` policy fires on the FIRST satisfied branch, so an unconditional content edge into one is satisfied even
+	// when every approval was rejected: the node would run past the Pause instead of waiting on it. The policy is a
+	// member of every node, and `GraphWorkflowStateMachine.Admission` reads it off whatever it is admitting.
+	it("skips an Any successor of any kind and still feeds an All one", () => {
 		const edges = ["start>a", "a>hold", "hold>merge", "merge>done"];
+		const skipped = [
+			["start:Start", "a:Agent", "hold:Pause", "merge:Join:Any", "done:End"],
+			["start:Start", "a:Agent", "hold:Pause", "merge:Agent:Any", "done:End"],
+			["start:Start", "a:Agent", "hold:Pause", "merge:End:Any", "done:End"],
+		];
 
-		expect(addedPairs(anyJoin, edges)).toEqual([]);
-		expect(addedPairs(allJoin, edges)).toEqual(["a>merge"]);
+		for (const nodes of skipped) {
+			expect(addedPairs(nodes, edges), nodes[3]).toEqual([]);
+		}
+		expect(addedPairs(["start:Start", "a:Agent", "hold:Pause", "merge:Join", "done:End"], edges)).toEqual(["a>merge"]);
+		expect(addedPairs(["start:Start", "a:Agent", "hold:Pause", "merge:Agent", "done:End"], edges)).toEqual(["a>merge"]);
 	});
 
 	// Two ancestors are two branches, and only one of them runs. An `All` successor with a DEAD inbound edge is
@@ -607,6 +615,17 @@ describe("pauseContextEdges", () => {
 			"b",
 			"second",
 		]);
+	});
+
+	// The walk only nominates candidates. `b` is behind `second`, and `second` is fed by `a` AND `x`, so nothing can be
+	// named for `b` without risking a dead branch — and `second` itself is not starved, because `x` already feeds it.
+	// `PauseContextWarnings` answers the same graph the same way, and the two must not disagree.
+	it("judges a successor of the walk on its own ancestry, not the wired Pause's", () => {
+		const nodes = ["start:Start", "a:Agent", "x:Agent", "first:Pause", "second:Pause", "b:Agent", "done:End"];
+		const edges = ["start>a", "start>x", "first>second", "x>second", "second>b", "b>done", "a>first"];
+		const canvas = canvasOf(nodes, edges);
+
+		expect(pauseContextEdges(canvas.nodes, canvas.edges, { from: "a", to: "first" })).toEqual([]);
 	});
 
 	it("stops on a Pause wired back into itself instead of walking forever", () => {
