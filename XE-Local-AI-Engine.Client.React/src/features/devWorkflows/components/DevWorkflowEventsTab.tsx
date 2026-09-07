@@ -2,6 +2,7 @@ import { Alert, Anchor, Badge, Button, Code, Collapse, Group, Paper, Stack, Text
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatTime } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import type { DevWorkflowRunEventResponse } from "@/features/devWorkflows/models/DevWorkflowModels";
 import type { DevWorkflowEventsAnchor } from "@/features/devWorkflows/queries/useDevWorkflows";
@@ -143,7 +144,7 @@ export function DevWorkflowEventsTab({
 									{t("pages.devWorkflows.events.meta", "#{{sequence}}", { sequence: event.sequence ?? 0 })}
 								</Text>
 								<Text size="xs" c="dimmed">
-									{new Date(event.occurredAtUtc ?? 0).toLocaleTimeString()}
+									{formatTime(event.occurredAtUtc)}
 								</Text>
 							</Group>
 							{nodeLabel || event.outcome ? (

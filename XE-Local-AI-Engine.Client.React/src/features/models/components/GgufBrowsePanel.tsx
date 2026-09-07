@@ -4,7 +4,7 @@ import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import { formatGgufTimestamp } from "@/features/models/models/GgufFormatters";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import type { GgufRepository } from "@/features/models/models/GgufModels";
 
 interface GgufBrowsePanelProps {
@@ -143,7 +143,7 @@ export function GgufBrowsePanel({
 										</Table.Td>
 										<Table.Td>{repository.downloads.toLocaleString()}</Table.Td>
 										<Table.Td>{repository.likes.toLocaleString()}</Table.Td>
-										<Table.Td>{formatGgufTimestamp(repository.lastModifiedAtUtc)}</Table.Td>
+										<Table.Td>{formatTimestamp(repository.lastModifiedAtUtc)}</Table.Td>
 										<Table.Td>{repository.license ?? "—"}</Table.Td>
 										<Table.Td>
 											<Button

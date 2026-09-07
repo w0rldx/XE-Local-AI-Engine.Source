@@ -8,7 +8,7 @@
 import i18next from "i18next";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { formatDurationSeconds, formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { formatDurationSeconds, formatTime, formatTimestamp } from "@/core/formatting/TimeFormatting";
 
 const instant = Date.UTC(2025, 2, 12, 13, 0, 0);
 
@@ -23,7 +23,17 @@ describe("formatTimestamp", () => {
 
 	it("renders a dash for an absent or unusable instant", () => {
 		expect(formatTimestamp(null)).toBe("—");
+		expect(formatTimestamp(undefined)).toBe("—");
 		expect(formatTimestamp(Number.NaN)).toBe("—");
+		expect(formatTimestamp("not-a-date")).toBe("—");
+	});
+
+	// Half the wire carries an ISO string and half epoch millis, so the same helper takes both rather than the
+	// language rule living in two places.
+	it("accepts an ISO string as well as epoch millis", async () => {
+		await i18next.changeLanguage("de");
+		expect(formatTimestamp(new Date(instant).toISOString())).toBe(formatTimestamp(instant));
+		expect(formatTimestamp(new Date(instant).toISOString())).toMatch(/^\d{1,2}\.\d{1,2}\.\d{4}/);
 	});
 
 	it("falls back to the environment default when the stored language tag is malformed", async () => {
@@ -60,6 +70,18 @@ describe("formatTimestamp", () => {
 		expect(formatTimestamp(instant)).toMatch(/^\d{1,2}\.\d{1,2}\.\d{4}/);
 
 		i18next.addResourceBundle("de", "translation", {});
+	});
+});
+
+describe("formatTime", () => {
+	// The event feeds render the clock alone, and they used to coalesce an absent instant to epoch zero — which reads
+	// as a real time of day, unlike the dash.
+	it("renders the clock part in the active UI language, and a dash when absent", async () => {
+		await i18next.changeLanguage("en-US");
+		expect(formatTime(instant)).toBe(new Date(instant).toLocaleTimeString("en-US"));
+		expect(formatTime(new Date(instant).toISOString())).toBe(formatTime(instant));
+		expect(formatTime(null)).toBe("—");
+		expect(formatTime(undefined)).toBe("—");
 	});
 });
 

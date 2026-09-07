@@ -3,6 +3,7 @@ import type { TFunction } from "i18next";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatTime } from "@/core/formatting/TimeFormatting";
 import type { WorkSessionEventResponse } from "@/features/workSessions/models/WorkSessionModels";
 
 /** The two event types whose `detailJson` carries the step's consumption record. Every other type is rendered as-is. */
@@ -155,7 +156,7 @@ export function WorkSessionEventsTab({ events, hasMore, canLoadMore, onLoadMore 
 								})}
 							</Text>
 							<Text size="xs" c="dimmed">
-								{new Date(event.occurredAtUtc ?? 0).toLocaleTimeString()}
+								{formatTime(event.occurredAtUtc)}
 							</Text>
 						</Group>
 						{event.outcome || consumption ? (

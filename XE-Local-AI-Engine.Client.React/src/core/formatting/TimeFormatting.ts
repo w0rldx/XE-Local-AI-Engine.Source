@@ -1,16 +1,19 @@
-// Shared time formatters. They live in core because the scheduler's run history and the integrations execution
-// tables render the identical thing — a stored epoch-millis instant and a stored millisecond duration — and neither
-// feature owns the concept. Both render an absent or unusable value as a dash rather than the literal "Invalid Date"
-// a bare toLocaleString() would print into a table row.
+// Shared time formatters. They live in core because every feature that renders a stored instant or a stored
+// millisecond duration renders the identical thing, and none of them owns the concept. They render an absent or
+// unusable value as a dash rather than the literal "Invalid Date" a bare toLocaleString() would print into a table row.
 
 import i18next from "i18next";
 
 /**
- * Formats an epoch-millis instant in the ACTIVE UI LANGUAGE, or a dash when absent or unusable.
+ * Formats an instant in the ACTIVE UI LANGUAGE, or a dash when absent or unusable.
+ *
+ * The value is epoch millis or an ISO string, because the wire carries both and a second helper would be a second
+ * place for the language rule to drift out of. `undefined` counts as absent alongside `null`: most generated
+ * timestamp fields are optional (`updatedAtUtc?: number`), and the alternative is a `?? null` at every call site.
  *
  * The language, not the browser locale: a session switched to German rendered German labels next to US-ordered dates,
  * because a bare `toLocaleString()` reads the machine's regional setting and knows nothing about i18next. Read here
- * rather than threaded through the fifteen call sites, which is also why `core` may import i18next — the same reason
+ * rather than threaded through every call site, which is also why `core` may import i18next — the same reason
  * `ApiErrorMessage` and `Toast` do. An uninitialised i18next answers `undefined`, which is exactly the argument that
  * means "the environment's default", so a test or an early render behaves as it did before.
  *
@@ -19,8 +22,26 @@ import i18next from "i18next";
  * does not recompute it, so it can stay there. `toLocaleString` needs no bundle, only the tag, so the requested
  * language is both the honest answer and the one available first.
  */
-export function formatTimestamp(value: number | null): string {
-	if (value === null) {
+export function formatTimestamp(value: number | string | null | undefined): string {
+	return formatIn(value, (date, language) => date.toLocaleString(language));
+}
+
+/**
+ * Formats the CLOCK PART of an instant in the active UI language, or a dash when absent or unusable.
+ *
+ * Same rule and same absent handling as {@link formatTimestamp}; the event feeds want the time alone because every
+ * row shares the day.
+ */
+export function formatTime(value: number | string | null | undefined): string {
+	return formatIn(value, (date, language) => date.toLocaleTimeString(language));
+}
+
+// The guard and the language lookup live here so the two renderers cannot drift apart.
+function formatIn(
+	value: number | string | null | undefined,
+	render: (date: Date, language: string | undefined) => string,
+): string {
+	if (value === null || value === undefined) {
 		return "—";
 	}
 	const date = new Date(value);
@@ -28,11 +49,11 @@ export function formatTimestamp(value: number | null): string {
 		return "—";
 	}
 	try {
-		return date.toLocaleString(i18next.language ?? i18next.resolvedLanguage);
+		return render(date, i18next.language ?? i18next.resolvedLanguage);
 	} catch {
 		// A malformed stored tag — `en_US` left in `i18nextLng` by hand — is a RangeError, and it would throw once per
 		// table ROW. The environment's own default is a worse date, not a broken page.
-		return date.toLocaleString();
+		return render(date, undefined);
 	}
 }
 

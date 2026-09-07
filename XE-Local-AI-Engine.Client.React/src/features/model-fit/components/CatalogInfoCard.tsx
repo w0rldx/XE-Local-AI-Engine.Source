@@ -2,6 +2,7 @@ import { Badge, Button, Card, Group, Text } from "@mantine/core";
 import { IconRefresh } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { formatModelFitReleaseDate } from "@/features/model-fit/components/ModelFitFormatters";
 import type { ModelFitCatalogInfo } from "@/features/model-fit/models/ModelFitModels";
 
 interface CatalogInfoCardProps {
@@ -30,7 +31,7 @@ export function CatalogInfoCard({ catalog, onRefresh, isRefreshing }: CatalogInf
 					{catalog.updatedAt ? (
 						<Text size="sm" c="dimmed" data-testid="model-fit-catalog-updated-at">
 							{t("pages.modelFit.recommendations.catalog.updatedAt", "Updated {{time}}", {
-								time: new Date(catalog.updatedAt).toLocaleString(),
+								time: formatModelFitReleaseDate(catalog.updatedAt),
 							})}
 						</Text>
 					) : null}

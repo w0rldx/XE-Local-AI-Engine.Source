@@ -7,6 +7,8 @@ import {
 	IconRefresh,
 	IconTrash,
 } from "@tabler/icons-react";
+
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import {
 	useGenerateLocalModelProxyApiKey,
 	useLocalModelProxyApiKey,
@@ -105,7 +107,7 @@ export function LocalModelProxyKeyPanel() {
 						<Text size="xs" c="dimmed" data-testid="local-model-proxy-key-last-used">
 							{data.lastUsedAt
 								? t("pages.nodeSettings.localModelProxyKey.lastUsed", "Last used {{when}}", {
-										when: new Date(data.lastUsedAt).toLocaleString(),
+										when: formatTimestamp(data.lastUsedAt),
 									})
 								: t(
 										"pages.nodeSettings.localModelProxyKey.neverUsed",

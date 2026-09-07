@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { CreateWorkSessionDialog } from "@/features/workSessions/components/CreateWorkSessionDialog";
@@ -90,7 +91,7 @@ export function WorkSessionsPage() {
 								<Text size="xs" c="dimmed">
 									{t("pages.workSessions.card.meta", "{{steps}} steps · updated {{updated}}", {
 										steps: session.stepCount ?? 0,
-										updated: new Date(session.updatedAtUtc ?? 0).toLocaleString(),
+										updated: formatTimestamp(session.updatedAtUtc),
 									})}
 								</Text>
 							</Stack>
