@@ -25,7 +25,17 @@ import type {
 	GraphWorkflowGraphNode,
 	GraphWorkflowNodeKind,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
+import { agentConfigSchema } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 import { eightNodeGraph } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
+
+/** The Agent members `agentConfigSchema` needs beyond the one under test. */
+const canvasAgentConfig = {
+	agentDefinitionId: null,
+	instructions: "Do the thing.",
+	model: null,
+	reasoningEffort: null,
+	includeUpstreamOutputs: true,
+};
 
 function clone(): GraphWorkflowGraph {
 	return JSON.parse(JSON.stringify(eightNodeGraph)) as GraphWorkflowGraph;
@@ -261,6 +271,32 @@ describe("node config conversion", () => {
 		expect(config["inputSchema"]).toBeNull();
 		// `defaultInput` is `unknown` on the wire, so any JSON value survives.
 		expect(config["defaultInput"]).toBe("a plain string is legal here");
+	});
+
+	it("round-trips a string-valued defaultInput unchanged", () => {
+		// F5-3: the wire member is a JSON STRING. Rendered verbatim it read as `abc`, which does not parse, so a
+		// definition the server accepts carried a permanent invalidJson issue and a save rewrote the member to null.
+		const canvas = graphToCanvas(graph([{ key: "start", kind: "Start", config: { defaultInput: "abc" } }], []));
+
+		expect(dataOfKind(canvas, "start", "Start").defaultInput).toBe('"abc"');
+
+		const { graph: result, issues } = canvasToGraph(canvas.nodes, canvas.edges);
+
+		expect(issues).toEqual([]);
+		expect(((result.nodes ?? [])[0]?.config as Record<string, unknown>)["defaultInput"]).toBe("abc");
+	});
+
+	it("reports a string-valued responseJsonSchema as the wrong SHAPE, not as unparseable text", () => {
+		const canvas = graphToCanvas(graph([{ key: "agent-1", kind: "Agent", config: { responseJsonSchema: "abc" } }], []));
+		const text = dataOfKind(canvas, "agent-1", "Agent").responseJsonSchema;
+
+		expect(text).toBe('"abc"');
+		// The drawer's own field check is what tells the two apart: the text parses, so it is `notObject`, and the
+		// operator is told to enter an object rather than to fix JSON that is already valid.
+		expect(agentConfigSchema.safeParse({ ...canvasAgentConfig, responseJsonSchema: text }).error?.issues[0]?.message).toBe(
+			"pages.graphWorkflows.form.responseJsonSchema.notObject",
+		);
+		expect(canvasToGraph(canvas.nodes, canvas.edges).issues).toEqual([{ rule: "invalidJson", subject: "agent-1" }]);
 	});
 
 	it("omits an empty label and a default joinPolicy, and writes Any", () => {

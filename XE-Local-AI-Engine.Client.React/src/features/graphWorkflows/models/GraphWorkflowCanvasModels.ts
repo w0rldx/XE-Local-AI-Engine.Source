@@ -149,17 +149,15 @@ function numberOrUndefined(value: unknown): number | undefined {
 }
 
 /**
- * A JSON-shaped wire member as editable text. An object or array is pretty-printed; a STRING is kept verbatim, because
- * a graph saved by an older client may hold half-typed text there and re-quoting it would destroy what the operator
- * wrote. The cost is deliberate and visible: text that is not JSON comes back as an `invalidJson` issue on the next
- * save rather than silently surviving another round trip.
+ * A JSON-shaped wire member as editable text. Every value is written as JSON — an object or array pretty-printed, a
+ * string QUOTED — because the text this returns is what `parseJsonField` reads back. A string rendered verbatim
+ * (`abc` for the stored `"abc"`) does not parse, so a `defaultInput` the server accepts became a permanent
+ * `invalidJson` issue on a definition nobody had edited; quoting it makes the round trip lossless and leaves the
+ * "must be an object" members (`inputSchema`, `responseJsonSchema`, `arguments`) reporting the shape they really have.
  */
 function jsonText(value: unknown): string | null {
 	if (value === undefined || value === null) {
 		return null;
-	}
-	if (typeof value === "string") {
-		return value;
 	}
 	return JSON.stringify(value, null, 2) ?? null;
 }
