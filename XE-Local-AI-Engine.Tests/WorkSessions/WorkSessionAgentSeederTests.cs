@@ -174,6 +174,57 @@ public sealed class WorkSessionAgentSeederTests
             "the repair updates the row it found; it must not add a second.");
     }
 
+    /// <summary>
+    ///     A row carrying BOTH spellings. The legacy key must not decide the surviving approval whichever order the two
+    ///     were written in — the live name's value is the one an operator configured, and enumeration order is not a
+    ///     thing this repair is allowed to depend on.
+    /// </summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task Seeder_OnARowCarryingBothClockNames_KeepsTheCorrectlyNamedApproval(bool legacyFirst)
+    {
+        // Private host: it writes and rewrites a seeded row every other test in this class reads.
+        await using var factory = new TestServerWebAppFactory();
+        var approvals = new Dictionary<string, bool>(StringComparer.Ordinal);
+        foreach (var (name, requiresApproval) in legacyFirst
+                     ? [("get_current_time", true), ("GetCurrentTime", false)]
+                     : new[]
+                     {
+                         ("GetCurrentTime", false),
+                         ("get_current_time", true)
+                     })
+        {
+            approvals[name] = requiresApproval;
+        }
+
+        var seed = WorkSessionAgentSeeder.BuildGeneralSeedInput();
+        var both = seed with
+        {
+            AllowedToolNames = [.. seed.AllowedToolNames, "get_current_time"],
+            ToolApprovals = approvals
+        };
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            _ = await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>()
+                           .AddSeededAsync(both, AgentDefaults.WorkSessionGeneralAgentSeedSlug)
+                           .ConfigureAwait(false);
+        }
+
+        await new WorkSessionAgentSeeder(factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<WorkSessionAgentSeeder>.Instance)
+              .StartAsync(CancellationToken.None)
+              .ConfigureAwait(false);
+
+        var repaired = await ReadSeededAsync(factory, AgentDefaults.WorkSessionGeneralAgentSeedSlug).ConfigureAwait(false);
+        AssertEx.False(repaired.ToolApprovals.ContainsKey("get_current_time"));
+        AssertEx.False(repaired.ToolApprovals["GetCurrentTime"],
+            "the correctly named key already had a value, so the legacy one supplies nothing — whichever was written first.");
+        AssertEx.Equal(expected: 1,
+            repaired.AllowedToolNames.Count(static name => name == "GetCurrentTime"),
+            "the two spellings collapse to one entry, not two.");
+    }
+
     private static async Task<AgentDefinitionRecord> ReadSeededAsync(TestServerWebAppFactory factory, string slug)
     {
         // The host fixture strips every hosted service, so its InitializeAsync ran the seeder once for the whole class
