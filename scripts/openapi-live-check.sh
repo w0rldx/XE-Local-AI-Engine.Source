@@ -69,15 +69,45 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
+# The isolated HOME/XDG_DATA_HOME below hides a mise trust store and every mise tool install, so on a
+# mise-managed box each shim on PATH aborts and the host dies before readiness — which reads as a broken spec
+# endpoint, not as a toolchain problem. Forward the caller's values, else the real user paths when they exist.
+# A box without mise has neither, and nothing is exported. See docs/agent-knowledge.md section 1.
+mise_trusted_config_paths="${MISE_TRUSTED_CONFIG_PATHS:-}"
+mise_data_dir="${MISE_DATA_DIR:-}"
+# ${HOME:-} throughout: this script runs under set -u, and an unset HOME must skip the fallback rather than
+# abort the whole check.
+if [[ -z "${mise_trusted_config_paths}" && -f "${HOME:-}/.config/mise/config.toml" ]]; then
+  mise_trusted_config_paths="${HOME:-}/.config/mise/config.toml"
+fi
+if [[ -z "${mise_data_dir}" && -d "${HOME:-}/.local/share/mise" ]]; then
+  mise_data_dir="${HOME:-}/.local/share/mise"
+fi
+
+# A Release host defaults to Production, and Program maps the OpenAPI document only when !IsProduction(), so
+# without this the spec fetch below answers 404 on every path and reads as total contract loss.
+host_env=(
+  "PATH=${temp_root}/bin:${PATH}"
+  "XDG_DATA_HOME=${temp_root}/data"
+  "HOME=${temp_root}/home"
+  "ASPNETCORE_ENVIRONMENT=Development"
+  "XE_LAUNCH_MODE=desktop"
+  "FirstRunModel__Enabled=false"
+)
+if [[ -n "${mise_trusted_config_paths}" ]]; then
+  host_env+=("MISE_TRUSTED_CONFIG_PATHS=${mise_trusted_config_paths}")
+fi
+if [[ -n "${mise_data_dir}" ]]; then
+  host_env+=("MISE_DATA_DIR=${mise_data_dir}")
+fi
+
 echo "[openapi-live] Starting an isolated desktop backend (Release, --no-build)."
 "${ASSEMBLY_GUARD}" snapshot "${guard_state}" --root "${CLIENT_RELEASE_ROOT}"
 guard_started="true"
-PATH="${temp_root}/bin:${PATH}" \
-XDG_DATA_HOME="${temp_root}/data" \
-HOME="${temp_root}/home" \
-XE_LAUNCH_MODE=desktop \
-FirstRunModel__Enabled=false \
-setsid dotnet run --project "${CLIENT_PROJECT}" --configuration Release --no-build -- --desktop \
+# -u first: env inherits the caller's environment, so a MISE_* variable the caller exported EMPTY would reach
+# the host as an empty data directory / trust list. Dropped, then re-added above only when it has a value.
+env -u MISE_TRUSTED_CONFIG_PATHS -u MISE_DATA_DIR "${host_env[@]}" \
+  setsid dotnet run --project "${CLIENT_PROJECT}" --configuration Release --no-build -- --desktop \
   >"${backend_log}" 2>&1 &
 backend_pid=$!
 
