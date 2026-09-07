@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.GraphWorkflows.Import;
 
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -156,5 +157,5 @@ public sealed class CanvasWorkflowImportTests
 
     /// <summary>The hash the store writes beside every graph, spelled out here so the column is pinned to the blob.</summary>
     private static string GraphHash(string graphJson) =>
-        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(graphJson)));
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(graphJson)));
 }

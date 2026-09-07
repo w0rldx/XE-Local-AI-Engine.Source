@@ -132,9 +132,29 @@ internal sealed class GraphWorkflowGraph
     /// </summary>
     private static readonly HashSet<string> DroppedSchemaKeywords = new(StringComparer.Ordinal)
     {
-        "contentEncoding", "contentMediaType", "default", "not", "minLength", "maxLength", "pattern", "format", "minimum",
-        "maximum", "multipleOf", "patternProperties", "minItems", "maxItems", "unevaluatedProperties", "propertyNames",
-        "minProperties", "maxProperties", "unevaluatedItems", "contains", "minContains", "maxContains", "uniqueItems"
+        "contentEncoding",
+        "contentMediaType",
+        "default",
+        "not",
+        "minLength",
+        "maxLength",
+        "pattern",
+        "format",
+        "minimum",
+        "maximum",
+        "multipleOf",
+        "patternProperties",
+        "minItems",
+        "maxItems",
+        "unevaluatedProperties",
+        "propertyNames",
+        "minProperties",
+        "maxProperties",
+        "unevaluatedItems",
+        "contains",
+        "minContains",
+        "maxContains",
+        "uniqueItems"
     };
 
     /// <summary>
@@ -1020,7 +1040,10 @@ internal sealed class GraphWorkflowGraph
     private IReadOnlyList<string> NearestNonPauseAncestors(string pause)
     {
         var resolved = new List<string>();
-        var seen = new HashSet<string>(StringComparer.Ordinal) { pause };
+        var seen = new HashSet<string>(StringComparer.Ordinal)
+        {
+            pause
+        };
         var pending = new Stack<string>();
         pending.Push(pause);
         while (pending.Count > 0)

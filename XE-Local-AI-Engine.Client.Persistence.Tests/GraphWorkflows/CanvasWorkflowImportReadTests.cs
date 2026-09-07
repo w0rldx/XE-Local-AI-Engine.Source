@@ -121,7 +121,12 @@ public sealed class CanvasWorkflowImportReadTests
         _ = await SeedAsync(probe, "Intact", PauseGraph, createdAtUtc: 2).ConfigureAwait(false);
         await probe.ExecuteAsync("UPDATE canvas_workflows SET graph_json = $graph WHERE id = $id;", command =>
         {
-            command.Parameters.AddWithValue("$graph", new byte[] { 0x00, 0x01, 0x02 });
+            command.Parameters.AddWithValue("$graph", new byte[]
+            {
+                0x00,
+                0x01,
+                0x02
+            });
             command.Parameters.AddWithValue("$id", damaged.ToString());
         }).ConfigureAwait(false);
 
@@ -163,9 +168,8 @@ public sealed class CanvasWorkflowImportReadTests
         using var keyHolder = new NullNodeSqliteKeyHolder();
         var encrypted = NodePayloadProtector.Encrypt(Encoding.UTF8.GetBytes(graphJson), keyHolder.Key.Span, Guid.Empty, id, "graph_json");
 
-        await probe.ExecuteAsync(
-            "INSERT INTO canvas_workflows (id, name, graph_json, version, created_at_utc, updated_at_utc) "
-            + "VALUES ($id, $name, $graph, 1, $created, $created);",
+        await probe.ExecuteAsync("INSERT INTO canvas_workflows (id, name, graph_json, version, created_at_utc, updated_at_utc) "
+                                 + "VALUES ($id, $name, $graph, 1, $created, $created);",
             command =>
             {
                 command.Parameters.AddWithValue("$id", id.ToString());

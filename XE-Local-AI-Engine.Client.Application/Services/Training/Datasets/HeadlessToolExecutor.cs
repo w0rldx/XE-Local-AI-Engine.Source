@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
 using System.Text.Json;
 using XE_Local_AI_Engine.AI.Agent.Tools;
-using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Tools;
@@ -130,10 +129,10 @@ internal sealed class HeadlessToolExecutor(
         CancellationToken cancellationToken)
     {
         var outcome = await _toolInvocation.InvokeAsync(toolName,
-                                              argumentsJson,
-                                              new ToolInvocationContext(Guid.Empty, Guid.Empty, GenerationNodeKey, UnboundedBudget),
-                                              cancellationToken)
-                                          .ConfigureAwait(false);
+                                               argumentsJson,
+                                               new ToolInvocationContext(Guid.Empty, Guid.Empty, GenerationNodeKey, UnboundedBudget),
+                                               cancellationToken)
+                                           .ConfigureAwait(false);
 
         switch (outcome.Kind)
         {

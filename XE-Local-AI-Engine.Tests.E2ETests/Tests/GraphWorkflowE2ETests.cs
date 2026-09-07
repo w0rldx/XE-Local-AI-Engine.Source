@@ -264,18 +264,17 @@ public sealed class GraphWorkflowE2ETests : XESerialE2ETestBase
     ///     </para>
     /// </summary>
     private async Task WaitForCanvasSettledAsync() =>
-        await Page.WaitForFunctionAsync(
-            """
-            () => new Promise((resolve) => {
-                const read = () => document.querySelector('.react-flow__viewport')?.style?.transform ?? '';
-                const before = read();
-                if (before.length === 0) {
-                    resolve(false);
-                    return;
-                }
-                requestAnimationFrame(() => requestAnimationFrame(() => resolve(read() === before)));
-            })
-            """);
+        await Page.WaitForFunctionAsync("""
+                                        () => new Promise((resolve) => {
+                                            const read = () => document.querySelector('.react-flow__viewport')?.style?.transform ?? '';
+                                            const before = read();
+                                            if (before.length === 0) {
+                                                resolve(false);
+                                                return;
+                                            }
+                                            requestAnimationFrame(() => requestAnimationFrame(() => resolve(read() === before)));
+                                        })
+                                        """);
 
     /// <summary>
     ///     Selects a node the way an operator does — by clicking its card — and waits for the config panel that proves
@@ -304,15 +303,14 @@ public sealed class GraphWorkflowE2ETests : XESerialE2ETestBase
         var edge = Page.Locator(".react-flow__edge").First;
         await Expect(edge).ToBeVisibleAsync();
 
-        var point = await edge.EvaluateAsync<float[]>(
-            """
-            (element) => {
-                const path = element.querySelector('path');
-                const middle = path.getPointAtLength(path.getTotalLength() / 2);
-                const screen = new DOMPoint(middle.x, middle.y).matrixTransform(path.getScreenCTM());
-                return [screen.x, screen.y];
-            }
-            """);
+        var point = await edge.EvaluateAsync<float[]>("""
+                                                      (element) => {
+                                                          const path = element.querySelector('path');
+                                                          const middle = path.getPointAtLength(path.getTotalLength() / 2);
+                                                          const screen = new DOMPoint(middle.x, middle.y).matrixTransform(path.getScreenCTM());
+                                                          return [screen.x, screen.y];
+                                                      }
+                                                      """);
 
         await Page.Mouse.ClickAsync(point[0], point[1]);
 
@@ -327,11 +325,15 @@ public sealed class GraphWorkflowE2ETests : XESerialE2ETestBase
         {
             // A geometry-driven click fails as "the drawer never opened", which says nothing about WHY. Name what was
             // actually under the point instead, so the next reader does not have to reconstruct it from a trace.
-            var hit = await Page.EvaluateAsync<string>(
-                "([x, y]) => document.elementFromPoint(x, y)?.className?.baseVal ?? document.elementFromPoint(x, y)?.className ?? 'nothing'",
-                new[] { point[0], point[1] });
+            var hit = await Page.EvaluateAsync<string>("([x, y]) => document.elementFromPoint(x, y)?.className?.baseVal ?? document.elementFromPoint(x, y)?.className ?? 'nothing'",
+                new[]
+                {
+                    point[0],
+                    point[1]
+                });
             Assert.Fail($"Clicking the starter edge at ({point[0]}, {point[1]}) did not select it — the point is over '{hit}'.");
         }
+
         await Page.GetByTestId("gw-edge-config-remove").ClickAsync();
         await Expect(edgeConfig).ToHaveCountAsync(0);
         await Expect(Page.Locator(".react-flow__edge")).ToHaveCountAsync(0);

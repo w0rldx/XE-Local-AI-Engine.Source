@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Training;
 
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;

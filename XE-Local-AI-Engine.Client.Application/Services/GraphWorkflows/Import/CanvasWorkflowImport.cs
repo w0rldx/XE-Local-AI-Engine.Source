@@ -412,7 +412,12 @@ public static class CanvasWorkflowImport
                     // A run input is a JSON document, and the editor renders a stored default as JSON text — a bare
                     // string would round-trip as unquoted prose the editor cannot parse. The seed text rides under one
                     // member, so the first Agent still sees it verbatim inside the Start node's input document.
-                    ["defaultInput"] = string.IsNullOrEmpty(startText) ? null : new JsonObject { ["text"] = startText }
+                    ["defaultInput"] = string.IsNullOrEmpty(startText)
+                        ? null
+                        : new JsonObject
+                        {
+                            ["text"] = startText
+                        }
                 }
             };
         }
@@ -725,7 +730,10 @@ public static class CanvasWorkflowImport
     private static List<string> NonPauseAncestors(string pause, HashSet<string> pauseKeys, List<(string From, string To)> wiring)
     {
         var resolved = new List<string>();
-        var seen = new HashSet<string>(StringComparer.Ordinal) { pause };
+        var seen = new HashSet<string>(StringComparer.Ordinal)
+        {
+            pause
+        };
         var pending = new Stack<string>();
         pending.Push(pause);
         while (pending.Count > 0)

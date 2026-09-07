@@ -868,7 +868,10 @@ internal static class GraphWorkflowGraphs
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(nodeCount, other: 2);
 
-        var keys = new List<string> { "start" };
+        var keys = new List<string>
+        {
+            "start"
+        };
         keys.AddRange(Enumerable.Range(1, nodeCount - 2).Select(static index => $"n{index}"));
         keys.Add("done");
 

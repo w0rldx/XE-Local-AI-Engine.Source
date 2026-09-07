@@ -159,6 +159,7 @@ internal sealed class ToolInvocationService(
                     context.NodeRunId,
                     context.RunId);
             }
+
             return new ToolInvocationOutcome(ToolInvocationOutcomeKind.Faulted, null, $"'{toolName}' threw during invocation.");
         }
     }
