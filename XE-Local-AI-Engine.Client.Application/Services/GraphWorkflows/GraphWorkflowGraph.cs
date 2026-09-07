@@ -126,6 +126,9 @@ internal sealed class GraphWorkflowGraph
     private readonly Dictionary<string, List<GraphWorkflowGraphEdge>> _inbound;
     private readonly Dictionary<string, List<GraphWorkflowGraphEdge>> _outbound;
 
+    /// <summary>Computed on first ask rather than in the constructor: every dispatcher tick parses, and no tick asks.</summary>
+    private IReadOnlyList<GraphWorkflowValidationError>? _warnings;
+
     private GraphWorkflowGraph(IReadOnlyDictionary<string, GraphWorkflowGraphNode> nodes, IReadOnlyList<GraphWorkflowGraphEdge> edges)
     {
         Nodes = nodes;
@@ -174,6 +177,13 @@ internal sealed class GraphWorkflowGraph
     ///     reach the tool catalog, so this is the seam the save-time and run-start tool gates ask over.
     /// </summary>
     public IReadOnlyList<string> ToolNodeNames { get; }
+
+    /// <summary>
+    ///     What is worth saying about a graph that routes anyway. Non-blocking by construction: nothing here reaches
+    ///     <see cref="GraphWorkflowValidationException" />, so a graph with warnings saves, validates as valid and runs.
+    ///     Computed on the first ask, because only the validate endpoint asks and every dispatcher tick parses.
+    /// </summary>
+    public IReadOnlyList<GraphWorkflowValidationError> Warnings => _warnings ??= PauseContextWarnings();
 
     public IReadOnlyList<GraphWorkflowGraphEdge> InboundEdges(string nodeKey) =>
         _inbound.TryGetValue(nodeKey, out var edges) ? edges : [];
@@ -718,6 +728,75 @@ internal sealed class GraphWorkflowGraph
                 $"Node '{node.NodeKey}' offers the decision {decision} and no edge out of it fires on that answer, "
                 + "so answering it would strand the run."));
         }
+    }
+
+    /// <summary>
+    ///     The one warning this parser raises: a node whose every inbound edge leaves a <c>Pause</c> receives the
+    ///     DECISION document and nothing else.
+    ///     <para>
+    ///         A Pause writes <c>{decision, comment, payload}</c> (<c>GraphWorkflowDocuments.PauseOutput</c>) and a
+    ///         node's <c>input</c> is its ONE satisfied predecessor's output document — it becomes the
+    ///         <c>upstream</c> map only when several are satisfied. So <c>X → P → Y</c>, authored one-for-one, hands Y
+    ///         the approval and never X's answer, and a Pause before an <c>End</c> loses the result the same way. The
+    ///         cure is an edge from the pause's nearest non-Pause ancestor to Y, which is exactly what the Open Canvas
+    ///         importer adds for itself (<c>CanvasWorkflowImport.AddPauseContextEdges</c>); an author gets this instead.
+    ///     </para>
+    ///     <para>
+    ///         Keyed on Y, not on the pause, because Y is the node that loses the content and so the node an editor
+    ///         should draw the badge on. One warning per Y however many pauses reach it. The ancestor is NAMED only
+    ///         when it is unique: with two candidates the advice would have to pick one, and picking wrong is worse
+    ///         than saying "a node before the pause".
+    ///     </para>
+    /// </summary>
+    private IReadOnlyList<GraphWorkflowValidationError> PauseContextWarnings()
+    {
+        var warnings = new List<GraphWorkflowValidationError>();
+        foreach (var successor in Nodes.Keys
+                                       .Where(key => InboundEdges(key).Count > 0
+                                                     && InboundEdges(key).All(edge => Nodes[edge.From].Kind == GraphWorkflowNodeKind.Pause))
+                                       .Order(StringComparer.Ordinal))
+        {
+            var pauses = InboundEdges(successor).Select(static edge => edge.From).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+            var ancestors = pauses.SelectMany(NearestNonPauseAncestors).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+            var advice = ancestors.Count == 1
+                ? $"Add an edge from '{ancestors[0]}' to '{successor}' to carry it."
+                : "Add an edge from a node before the pause to that node to carry it.";
+            warnings.Add(new GraphWorkflowValidationError(successor,
+                $"Node '{successor}' is reached only through the Pause node(s) {string.Join(", ", pauses.Select(static key => $"'{key}'"))}, "
+                + "so its input is the decision document {decision, comment, payload} rather than the content that was approved. "
+                + advice));
+        }
+
+        return warnings;
+    }
+
+    /// <summary>
+    ///     Where a pause's content really comes from: its predecessors, walking THROUGH consecutive pauses, because a
+    ///     pause's own output is the approval rather than the answer. <c>Start</c> is a fine answer — its output is the
+    ///     run's input, which is exactly what a node behind the pause would otherwise have read.
+    /// </summary>
+    private IReadOnlyList<string> NearestNonPauseAncestors(string pause)
+    {
+        var resolved = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal) { pause };
+        var pending = new Stack<string>();
+        pending.Push(pause);
+        while (pending.Count > 0)
+        {
+            foreach (var predecessor in InboundEdges(pending.Pop()).Select(static edge => edge.From).Where(seen.Add))
+            {
+                if (Nodes[predecessor].Kind == GraphWorkflowNodeKind.Pause)
+                {
+                    pending.Push(predecessor);
+                }
+                else
+                {
+                    resolved.Add(predecessor);
+                }
+            }
+        }
+
+        return resolved;
     }
 
     /// <summary>Depth-first colouring: white unvisited, grey on the current path, black finished. A grey hit is the cycle.</summary>

@@ -25,12 +25,27 @@ public sealed record GraphWorkflowValidationError(string? Key, string Message)
 /// </summary>
 public sealed record GraphWorkflowValidationResult(IReadOnlyList<GraphWorkflowValidationError> Errors)
 {
+    /// <summary>
+    ///     Things worth saying about a graph that is nonetheless fine. A warning NEVER blocks: a definition carrying
+    ///     one saves, validates as <see cref="IsValid" />, and runs — which is why this is a second list rather than a
+    ///     severity member on <see cref="GraphWorkflowValidationError" />, where every consumer of
+    ///     <see cref="Errors" /> would then have to remember to filter it out before refusing.
+    /// </summary>
+    public IReadOnlyList<GraphWorkflowValidationError> Warnings { get; init; } = [];
+
     public bool IsValid => Errors.Count == 0;
 
     public static GraphWorkflowValidationResult Valid { get; } = new([]);
 
     public static GraphWorkflowValidationResult Invalid(IReadOnlyList<GraphWorkflowValidationError> errors) =>
         new(errors);
+
+    /// <summary>A clean report that still has something to say. Errors stay empty, so this is <see cref="IsValid" />.</summary>
+    public static GraphWorkflowValidationResult ValidWith(IReadOnlyList<GraphWorkflowValidationError> warnings) =>
+        new([])
+        {
+            Warnings = warnings
+        };
 }
 
 /// <summary>

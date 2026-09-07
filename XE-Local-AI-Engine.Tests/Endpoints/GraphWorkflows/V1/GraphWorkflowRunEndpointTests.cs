@@ -229,6 +229,17 @@ public sealed class GraphWorkflowRunEndpointTests
         AssertEx.False(nodeRuns[0].TryGetProperty("output", out _), "the summaries carry no documents: they are the largest thing a run stores.");
     }
 
+    /// <summary>A graph the validator only warns about still saves and still starts — a warning blocks nothing.</summary>
+    [Test]
+    public async Task StartRun_OnADefinitionTheValidatorOnlyWarnsAbout_Answers202()
+    {
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.PauseBetweenTwoAgents).ConfigureAwait(false);
+
+        var runId = await StartRunAsync(definitionId).ConfigureAwait(false);
+
+        AssertEx.NotEqual(Guid.Empty, runId);
+    }
+
     [Test]
     public async Task GetNodeRun_CarriesTheDocumentsAsRawJson()
     {

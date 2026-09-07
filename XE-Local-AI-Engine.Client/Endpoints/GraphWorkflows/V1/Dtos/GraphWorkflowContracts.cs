@@ -165,8 +165,18 @@ public sealed record GraphWorkflowValidationErrorResponse(string? Key, string Me
 /// <summary>
 ///     A validation report, which is why it answers 200 for anything well-formed: zero errors and five are the same
 ///     shape, and neither is a failure of the request that asked.
+///     <para>
+///         <see cref="Warnings" /> are the same <c>(key, message)</c> shape and are NOT errors: <see cref="Valid" />
+///         stays <c>errors.length === 0</c>, a definition carrying only warnings saves and starts, and a client that
+///         ignores the member behaves exactly as it did before. One record for both rather than a severity member,
+///         so nothing that refuses on <see cref="Errors" /> has to remember to filter first.
+///     </para>
 /// </summary>
-public sealed record ValidateGraphWorkflowDefinitionResponse(bool Valid, IReadOnlyList<GraphWorkflowValidationErrorResponse> Errors, int NodeCount);
+public sealed record ValidateGraphWorkflowDefinitionResponse(
+    bool Valid,
+    IReadOnlyList<GraphWorkflowValidationErrorResponse> Errors,
+    int NodeCount,
+    IReadOnlyList<GraphWorkflowValidationErrorResponse> Warnings);
 
 // A concrete response record per list rather than a generic envelope: NSwag builds schema ids from the CLR type name,
 // and a generic would land in the generated client as an unreadable ListGraphWorkflowFeedResponseOfT.

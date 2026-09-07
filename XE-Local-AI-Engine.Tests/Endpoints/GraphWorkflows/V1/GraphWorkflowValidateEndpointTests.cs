@@ -32,6 +32,47 @@ public sealed class GraphWorkflowValidateEndpointTests
         AssertEx.True(document.RootElement.GetProperty("valid").GetBoolean(), $"StartAgentEnd routes, so the report is clean: {body}");
         AssertEx.Equal(0, document.RootElement.GetProperty("errors").GetArrayLength());
         AssertEx.Equal(3, document.RootElement.GetProperty("nodeCount").GetInt32());
+        AssertEx.Equal(0, document.RootElement.GetProperty("warnings").GetArrayLength(), $"a graph with nothing to say about it says nothing: {body}");
+    }
+
+    /// <summary>
+    ///     The pause-context warning on the wire. It is NOT an error: <c>valid</c> stays true, <c>errors</c> stays
+    ///     empty, and a definition carrying it saves and starts — the report only tells the author that the node after
+    ///     the pause will receive the decision rather than the answer.
+    /// </summary>
+    [Test]
+    public async Task Validate_WithANodeReachedOnlyThroughAPause_Answers200ValidWithAWarning()
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, Body(GraphWorkflowGraphs.PauseBetweenTwoAgents)).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.True(document.RootElement.GetProperty("valid").GetBoolean(), $"a warning never makes a graph invalid: {body}");
+        AssertEx.Equal(0, document.RootElement.GetProperty("errors").GetArrayLength());
+
+        var warnings = document.RootElement.GetProperty("warnings").EnumerateArray().ToArray();
+        AssertEx.Equal(1, warnings.Length, $"one warning, on the node that loses the content: {body}");
+        AssertEx.Equal("summarize", warnings[0].GetProperty("key").GetString());
+        AssertEx.Contains(warnings[0].GetProperty("message").GetString(), "Add an edge from 'analyze' to 'summarize'");
+    }
+
+    /// <summary>The cure, over the wire: the same graph with the context edge reports nothing at all.</summary>
+    [Test]
+    public async Task Validate_WithTheContextEdgeAroundThePause_Answers200WithNoWarning()
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, Body(GraphWorkflowGraphs.PauseBetweenTwoAgentsWithContextEdge)).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        using var document = JsonDocument.Parse(body);
+        AssertEx.True(document.RootElement.GetProperty("valid").GetBoolean());
+        AssertEx.Equal(0, document.RootElement.GetProperty("warnings").GetArrayLength(), $"the context edge gives the node a non-Pause predecessor: {body}");
     }
 
     [Test]
