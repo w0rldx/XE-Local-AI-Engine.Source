@@ -643,14 +643,30 @@ reasoning-aware by construction rather than by disabling reasoning. Authority:
 `Microsoft.Extensions.AI.OpenAI` 10.9.0 adapter runs an **unconditional** strict-schema transform
 (`OpenAIClientExtensions.StrictSchemaTransformCache`, applied in `OpenAIChatClient.ToOpenAIChatResponseFormat`) with
 **no opt-out** — the `strict` AdditionalProperties key only sets the wire flag and does not gate the rewrite. It
-relocates the value-constraint keywords into a `description` **string**, which is advisory prose to the model and not
-a machine-checkable constraint, and it also makes every declared property `required` and sets
-`additionalProperties: false`, so a property you left optional is not optional. Live evidence: a `maxLength: 3` schema
-reached llama-server as `{"description":"maxLength: 3","type":"string"}` and produced a **1302-character** field,
-while an `enum` in the same round arrived untouched. Read off the shipped assembly's own keyword table, the relocated
-set is `pattern`, `format`, `minLength`, `maxLength`, `minItems`, `maxItems`, `exclusiveMinimum`, `minimum`,
-`exclusiveMaximum`, `maximum`, `contentEncoding`, `contentMediaType` — re-read that table on a package bump rather
-than trusting this list. **Tool** schemas are not transformed by default, which is exactly why XE carries its own
+relocates the value-constraint keywords into the schema's `description` **string**, one `"<keyword>: <value>"` line
+each, which is advisory prose to the model and not a machine-checkable constraint. Live evidence: a `maxLength: 3`
+schema reached llama-server as `{"description":"maxLength: 3","type":"string"}` and produced a **1302-character**
+field, while an `enum` in the same round arrived untouched.
+
+The relocated set is 22 keywords, in the order the source declares them: `contentEncoding`, `contentMediaType`,
+`not`, `minLength`, `maxLength`, `pattern`, `format`, `minimum`, `maximum`, `multipleOf`, `patternProperties`,
+`minItems`, `maxItems`, `unevaluatedProperties`, `propertyNames`, `minProperties`, `maxProperties`,
+`unevaluatedItems`, `contains`, `minContains`, `maxContains`, `uniqueItems`. `default` goes the same way through a
+separate option (`MoveDefaultKeywordToDescription`, rendered `"Default value: …"`). `exclusiveMinimum` and
+`exclusiveMaximum` are **not** in the set — they survive. Authority: `unsupportedProperties` in
+`src/Libraries/Microsoft.Extensions.AI.OpenAI/OpenAIClientExtensions.cs` at `dotnet/extensions` tag `v10.9.0`;
+re-read that list on a package bump rather than trusting this copy. Do not dump
+`Microsoft.Extensions.AI.Abstractions.dll` looking for it — that assembly carries an unrelated format vocabulary that
+reads convincingly like the same table and is not.
+
+Two more effects of the same pass. Every declared property is made `required`, so a property you left optional is not
+optional. And `additionalProperties: false` is injected only into an object that has `properties` and **omits** the
+key: an object that sets `additionalProperties` explicitly, `true` or a schema, is left open as written. The walk
+descends `properties`, `items`, `additionalProperties`, `not`, `anyOf`, `oneOf` and `allOf` and nothing else, so a
+constraint parked under `$defs`, `definitions` or `prefixItems` is **not** relocated and a `$ref` target is untouched
+— which is a reach to know, not a workaround to rely on.
+
+**Tool** schemas are not transformed by default, which is exactly why XE carries its own
 `LlamaGrammarToolSchemaCompatibility` sanitiser for that path and none for this one. Do not rely on a value bound in a
 response schema; validate it yourself downstream.
 

@@ -448,12 +448,13 @@ grammar from the first output token, so the **structure** is guaranteed: the obj
 `enum`'s member list, the required keys. The compiled `root` rule leaves the model's `<think>` block optional and
 unconstrained and forces the schema only on what follows, so a reasoning model is not fighting the grammar. What is
 **not** enforced is every value bound — `minLength`, `maxLength`, `pattern`, `format`, the numeric minimum and
-maximum, the item counts, the content encoding. Those never reach llama.cpp at all: the
-`Microsoft.Extensions.AI.OpenAI` strict-schema transform relocates them into a `description` string on the way out of
-the .NET process, where they are advice to the model rather than a constraint (a `maxLength: 3` produced a
-1302-character field in the S6 live round). The same transform also marks every declared property `required` and sets
-`additionalProperties: false`, so a property the author left optional is not optional in practice. Validate a value
-bound downstream, in an edge condition or the consuming node, and never in the schema alone. See
+maximum, the item counts, the content encoding and sixteen more. Those never reach llama.cpp at all: the
+`Microsoft.Extensions.AI.OpenAI` strict-schema transform relocates all twenty-two of them into the schema's
+`description` string on the way out of the .NET process, where they are advice to the model rather than a constraint
+(a `maxLength: 3` produced a 1302-character field in the S6 live round). The same pass marks every declared property
+`required`, so a property the author left optional is not optional in practice, and closes an object that has
+`properties` and omits `additionalProperties` — an object that sets that key explicitly is left as written. Validate
+a value bound downstream, in an edge condition or the consuming node, and never in the schema alone. See
 `docs/agent-knowledge.md` §3 for the evidence and the `--verbose` recipe that shows the compiled grammar.
 
 A node declaring a response schema must come back a JSON **object**. A parse failure fails `NodeFailed` — the
