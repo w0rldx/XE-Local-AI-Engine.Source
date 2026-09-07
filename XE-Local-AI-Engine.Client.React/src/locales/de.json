@@ -5420,7 +5420,8 @@
 					"tooManyNodes": "Dieser Graph hat bereits so viele Knoten, wie ein Lauf zulässt."
 				},
 				"validation": {
-					"title": "Dieser Graph kann noch nicht gespeichert werden"
+					"title": "Dieser Graph kann noch nicht gespeichert werden",
+					"warningsTitle": "Vor dem Start prüfenswert"
 				}
 			},
 			"node": {
@@ -5562,7 +5563,8 @@
 					"pausePromptMissing": "„{{subject}}“ ist ein Pausenknoten ohne Frage.",
 					"pauseNoDecisions": "„{{subject}}“ ist ein Pausenknoten, der keine Entscheidung anbietet.",
 					"endOutcomeMissing": "„{{subject}}“ ist ein End-Knoten ohne Ergebnisnamen.",
-					"serverRejected": "Der Node hat diesen Graphen abgelehnt."
+					"serverRejected": "Der Node hat diesen Graphen abgelehnt.",
+					"serverWarned": "Der Node hat etwas Prüfenswertes gemeldet."
 				}
 			},
 			"form": {
@@ -5707,7 +5709,7 @@
 				"attempt": "Versuch {{attempt}}",
 				"empty": "Dieser Lauf hat noch keine Knoten.",
 				"overCap": "Dieser Lauf hat {{nodeCount}} Knoten — mehr, als der Graph zeichnet. Arbeiten Sie die Knotentabelle durch.",
-				"definitionChanged": "Die Definition wurde seit dem Start dieses Laufs bearbeitet. Angezeigt wird der Graph, auf dem der Lauf tats\u00e4chlich ausgef\u00fchrt wurde.",
+				"definitionChanged": "Die Definition wurde seit dem Start dieses Laufs bearbeitet. Angezeigt wird der Graph, auf dem der Lauf tatsächlich ausgeführt wurde.",
 				"graphMismatch": "Die Definition wurde nach dem Start dieses Laufs geändert; die tatsächlichen Verbindungen sind daher unbekannt. Es werden nur die Knoten angezeigt."
 			},
 			"runs": {

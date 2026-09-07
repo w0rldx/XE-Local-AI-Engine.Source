@@ -43,7 +43,11 @@ import { useGraphWorkflowRunHub } from "@/features/graphWorkflows/hooks/useGraph
 import { graphToCanvas } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import type { GraphWorkflowGraph, GraphWorkflowSelection } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { toGraphWorkflowRunCanvas } from "@/features/graphWorkflows/models/GraphWorkflowRunGraph";
-import { type GraphWorkflowGraphIssue, serverErrorsToIssues } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
+import {
+	type GraphWorkflowGraphIssue,
+	serverErrorsToIssues,
+	serverWarningsToIssues,
+} from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 import {
 	useCreateGraphWorkflowDefinition,
 	useDeleteGraphWorkflowDefinition,
@@ -147,9 +151,14 @@ function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow }: Mod
 	const [saveConflict, setSaveConflict] = useState(false);
 	const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
 	// The server's answer, PINNED to the graph it answered about. Any edit mints a new `editor.graph` object, so the
-	// stale errors drop out on the next render with no effect and no manual clearing.
+	// stale errors AND warnings drop out on the next render with no effect and no manual clearing.
 	const [validated, setValidated] = useState<
-		{ readonly graph: GraphWorkflowGraph; readonly issues: readonly GraphWorkflowGraphIssue[] } | undefined
+		| {
+				readonly graph: GraphWorkflowGraph;
+				readonly issues: readonly GraphWorkflowGraphIssue[];
+				readonly warnings: readonly GraphWorkflowGraphIssue[];
+		  }
+		| undefined
 	>(undefined);
 
 	// Load a definition into the canvas exactly once per `id:version`. Keyed on the version rather than on the query
@@ -179,7 +188,12 @@ function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow }: Mod
 	const layoutIsUnsaved = (loadedGraph?.nodes ?? []).some((node) => !node.position);
 
 	const serverIssues = validated?.graph === editor.graph ? validated.issues : NO_ISSUES;
+	// Errors only. This is the list the canvas rings, the config panels and the save gate read, so a warning can never
+	// mark a card red or hold a save.
 	const issues = useMemo(() => [...editor.issues, ...serverIssues], [editor.issues, serverIssues]);
+	const serverWarnings = validated?.graph === editor.graph ? validated.warnings : NO_ISSUES;
+	// The strip is the one place both halves render; it splits them again on `severity`.
+	const stripIssues = useMemo(() => [...issues, ...serverWarnings], [issues, serverWarnings]);
 
 	const selectNode = useCallback(
 		(nodeKey: string | undefined) => {
@@ -202,7 +216,9 @@ function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow }: Mod
 	const runValidation = async (graph: GraphWorkflowGraph): Promise<readonly GraphWorkflowGraphIssue[] | undefined> => {
 		const result = await validateMutation.mutateAsync({ body: { graph } });
 		const found = serverErrorsToIssues(result.errors);
-		setValidated({ graph, issues: found });
+		// Warnings ride along on the same answer and are non-blocking by construction server-side: `valid` is
+		// `Errors.Count == 0`, so a graph that only warns still passes and still saves.
+		setValidated({ graph, issues: found, warnings: serverWarningsToIssues(result.warnings) });
 		return result.valid === true ? undefined : found;
 	};
 
@@ -476,7 +492,7 @@ function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow }: Mod
 				/>
 			</div>
 			<GraphWorkflowValidationStrip
-				issues={issues}
+				issues={stripIssues}
 				onSelectSubject={(subject) => {
 					if (editor.nodes.some((node) => node.id === subject)) {
 						selectNode(subject);

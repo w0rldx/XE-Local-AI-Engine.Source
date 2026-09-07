@@ -20,7 +20,9 @@ import {
 	loadedGraphIssues,
 	nodeCommonSchema,
 	pauseConfigSchema,
+	isGraphWorkflowWarning,
 	serverErrorsToIssues,
+	serverWarningsToIssues,
 	startConfigSchema,
 	toolConfigSchema,
 	validateGraphWorkflowGraph,
@@ -406,6 +408,40 @@ describe("serverErrorsToIssues", () => {
 
 	it("answers an empty list when the server sent no errors", () => {
 		expect(serverErrorsToIssues(undefined)).toEqual([]);
+	});
+
+	it("leaves an error's severity unsaid, which is what makes absent mean error", () => {
+		expect(serverErrorsToIssues([{ key: "analyze", message: "no instructions" }])[0]?.severity).toBeUndefined();
+	});
+});
+
+describe("serverWarningsToIssues", () => {
+	it("carries the server's second list through the same shape, keyed and marked as a warning", () => {
+		const warnings = serverWarningsToIssues([
+			{ key: "done", message: "'done' is reached only through the Pause node 'review'." },
+		]);
+
+		expect(warnings).toEqual([
+			{
+				rule: "serverWarned",
+				subject: "done",
+				message: "'done' is reached only through the Pause node 'review'.",
+				severity: "warning",
+			},
+		]);
+		expect(warnings.every(isGraphWorkflowWarning)).toBe(true);
+	});
+
+	it("answers an empty list when the server sent no warnings", () => {
+		expect(serverWarningsToIssues(undefined)).toEqual([]);
+	});
+
+	// The strip splits on severity, so a client rule leaking into the warning half would be a rule that silently
+	// stopped blocking Save.
+	it("never marks a client rule as a warning", () => {
+		expect(validateGraphWorkflowGraph(minimal([{ key: "orphan", kind: "Agent", config: { instructions: "x" } }])).some(isGraphWorkflowWarning)).toBe(
+			false,
+		);
 	});
 });
 

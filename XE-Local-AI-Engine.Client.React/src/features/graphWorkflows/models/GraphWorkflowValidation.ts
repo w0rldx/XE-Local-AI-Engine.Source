@@ -37,8 +37,9 @@ import {
  * One rule, one i18n key: the member name IS the suffix under `pages.graphWorkflows.definition.issues`, so a new rule
  * cannot ship without a message (`I18nParity.test.ts` asserts the whole array).
  *
- * `serverRejected` is the one member no client check produces — it carries the server's own sentence through the same
- * shape, so the validation strip has one render path rather than two.
+ * `serverRejected` and `serverWarned` are the two members no client check produces — they carry the server's own
+ * sentence through the same shape, so the validation strip has one render path rather than three. Their i18n messages
+ * are only ever the fallback for a server that sent an empty string.
  */
 export const graphWorkflowGraphRules = [
 	"duplicateNodeKey",
@@ -72,6 +73,7 @@ export const graphWorkflowGraphRules = [
 	"pauseNoDecisions",
 	"endOutcomeMissing",
 	"serverRejected",
+	"serverWarned",
 ] as const;
 export type GraphWorkflowGraphRule = (typeof graphWorkflowGraphRules)[number];
 
@@ -79,8 +81,19 @@ export interface GraphWorkflowGraphIssue {
 	readonly rule: GraphWorkflowGraphRule;
 	/** The node or edge key the rule is about — one namespace, so it is never ambiguous which it points at. */
 	readonly subject?: string;
-	/** The server's own text, for `serverRejected`. Client rules carry none: their message is the i18n key. */
+	/** The server's own text, for `serverRejected` and `serverWarned`. Client rules carry none: their message is the i18n key. */
 	readonly message?: string;
+	/**
+	 * Absent means `"error"`, which is what every client rule is: the canvas only mirrors rules that REFUSE a save.
+	 * `"warning"` is the server's second list — a graph that routes anyway, so it never blocks Save and never joins the
+	 * red strip. Optional rather than required so no error construction site has to say what it already is.
+	 */
+	readonly severity?: "error" | "warning";
+}
+
+/** The one place the "absent means error" default lives, so no caller re-derives it. */
+export function isGraphWorkflowWarning(issue: GraphWorkflowGraphIssue): boolean {
+	return issue.severity === "warning";
 }
 
 /** The wire's `config` as a bag. Anything that is not a plain object reads as empty, so a malformed node still renders. */
@@ -452,6 +465,23 @@ export function serverErrorsToIssues(
 		rule: "serverRejected" as const,
 		subject: error.key ?? undefined,
 		message: error.message,
+	}));
+}
+
+/**
+ * The server's `warnings[]` — the same `(key, message)` shape as its errors, and keyed on the node the warning is
+ * ABOUT, so a warning selects its subject exactly as an error does. Non-blocking by construction server-side
+ * (`GraphWorkflowGraph.Warnings` never reaches `GraphWorkflowValidationException`), and non-blocking here because
+ * `severity` keeps them out of the list the save gate reads.
+ */
+export function serverWarningsToIssues(
+	warnings: readonly GraphWorkflowValidationErrorResponse[] | undefined,
+): readonly GraphWorkflowGraphIssue[] {
+	return (warnings ?? []).map((warning) => ({
+		rule: "serverWarned" as const,
+		subject: warning.key ?? undefined,
+		message: warning.message,
+		severity: "warning" as const,
 	}));
 }
 

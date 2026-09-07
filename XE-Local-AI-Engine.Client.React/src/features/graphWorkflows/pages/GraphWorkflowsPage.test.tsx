@@ -139,10 +139,17 @@ function runViewRoutes(
 	];
 }
 
-/** The server's structural check. `valid: false` is what puts an error on a node, so both answers are needed. */
-function validateRoute(body: { valid: boolean; errors?: { key: string | null; message: string }[] }) {
+/**
+ * The server's structural check. `valid: false` is what puts an error on a node, so both answers are needed, and
+ * `warnings` is the second, non-blocking list: `valid` stays `errors.length === 0` whatever is in it.
+ */
+function validateRoute(body: {
+	valid: boolean;
+	errors?: { key: string | null; message: string }[];
+	warnings?: { key: string | null; message: string }[];
+}) {
 	return http.post(localApiPath("graph-workflows/definitions/validate"), () =>
-		HttpResponse.json({ valid: body.valid, errors: body.errors ?? [], nodeCount: 8 }),
+		HttpResponse.json({ valid: body.valid, errors: body.errors ?? [], warnings: body.warnings ?? [], nodeCount: 8 }),
 	);
 }
 
@@ -377,5 +384,54 @@ describe("GraphWorkflowsPage", () => {
 		renderPage({ definitionId, runId, tab: "runs" });
 
 		expect((await screen.findByTestId("graph-workflow-run-graph-mismatch")).textContent).toContain("nodes only");
+	});
+	it("shows a server warning without blocking the save, and writes the definition anyway", async () => {
+		const put = vi.fn();
+		server.use(
+			...editorRoutes(),
+			validateRoute({
+				valid: true,
+				warnings: [{ key: "done", message: "'done' is reached only through the Pause node 'review'." }],
+			}),
+			http.put(localApiPath(`graph-workflows/definitions/${definitionId}`), () => {
+				put();
+				return HttpResponse.json(graphWorkflowDefinition({ version: 2 }));
+			}),
+		);
+
+		renderPage({ definitionId });
+		await openAndDirty();
+		fireEvent.click(screen.getByTestId("gw-page-save"));
+
+		const warnings = await screen.findByTestId("graph-workflow-validation-warnings");
+		expect(warnings.textContent).toContain("reached only through the Pause node");
+		// Non-blocking on both counts: the write went through, and nothing joined the red half.
+		await waitFor(() => {
+			expect(put).toHaveBeenCalled();
+		});
+		expect(screen.queryByTestId("graph-workflow-validation-unkeyed")).toBeNull();
+		expect(screen.queryByTestId("graph-workflow-validation-issues")).toBeNull();
+	});
+
+	it("clears a warning the same way it clears an error — on the next edit", async () => {
+		server.use(
+			...editorRoutes(),
+			validateRoute({
+				valid: true,
+				warnings: [{ key: "done", message: "'done' is reached only through the Pause node 'review'." }],
+			}),
+		);
+
+		renderPage({ definitionId });
+		await openAndDirty();
+		fireEvent.click(screen.getByTestId("gw-page-validate"));
+		expect(await screen.findByTestId("graph-workflow-validation-warnings")).toBeDefined();
+
+		// Any edit mints a new graph object, and the server's answer is pinned to the one it answered about.
+		fireEvent.click(screen.getByTestId("graph-workflow-auto-arrange"));
+
+		await waitFor(() => {
+			expect(screen.queryByTestId("graph-workflow-validation-warnings")).toBeNull();
+		});
 	});
 });

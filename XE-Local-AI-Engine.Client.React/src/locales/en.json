@@ -5420,7 +5420,8 @@
 					"tooManyNodes": "This graph already has as many nodes as a run accepts."
 				},
 				"validation": {
-					"title": "This graph cannot be saved yet"
+					"title": "This graph cannot be saved yet",
+					"warningsTitle": "Worth checking before you run"
 				}
 			},
 			"node": {
@@ -5562,7 +5563,8 @@
 					"pausePromptMissing": "“{{subject}}” is a Pause node with no question to ask.",
 					"pauseNoDecisions": "“{{subject}}” is a Pause node that offers no decision.",
 					"endOutcomeMissing": "“{{subject}}” is an End node with no outcome name.",
-					"serverRejected": "The node refused this graph."
+					"serverRejected": "The node refused this graph.",
+					"serverWarned": "The node flagged something worth checking."
 				}
 			},
 			"form": {

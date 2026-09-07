@@ -3,6 +3,9 @@
 // The hybrid error shape is only worth having if the two halves render differently, so that is what this pins: a keyed
 // issue is a control that takes the operator to its node or edge, an unkeyed one is a sentence in a single Alert, and
 // both arrive through the same `GraphWorkflowGraphIssue` whether the client or the server raised them.
+//
+// The second axis is severity. A warning shares the shape and the click behaviour, and shares nothing else: its own
+// Alert, its own colour, and never the sentence that says the graph cannot be saved.
 
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -100,5 +103,58 @@ describe("GraphWorkflowValidationStrip", () => {
 		expect(items).toHaveLength(2);
 		expect(alert.textContent).toContain("the graph has no Start node");
 		expect(screen.getByTestId("graph-workflow-validation-issue-analyze")).toBeTruthy();
+	});
+	it("renders warnings in their own alert, apart from the errors, and never refuses the save in it", () => {
+		renderWithProviders(
+			<GraphWorkflowValidationStrip
+				issues={[
+					{ rule: "unreachable", subject: "lookup" },
+					{ rule: "serverWarned", subject: "done", message: "'done' is reached only through the Pause node 'review'.", severity: "warning" },
+				]}
+				onSelectSubject={vi.fn()}
+			/>,
+		);
+
+		const warnings = screen.getByTestId("graph-workflow-validation-warnings");
+		expect(warnings.textContent).toContain("Worth checking before you run");
+		expect(warnings.textContent).toContain("reached only through the Pause node");
+		// The error half is untouched, and the warning is not in it.
+		expect(warnings.textContent).not.toContain("cannot be saved");
+		expect(screen.getByTestId("graph-workflow-validation-issues").textContent).not.toContain("Pause node");
+		expect(screen.getByTestId("graph-workflow-validation-issue-lookup")).toBeTruthy();
+	});
+
+	it("selects a warning's subject on click, exactly as an error does", () => {
+		const onSelectSubject = vi.fn();
+		renderWithProviders(
+			<GraphWorkflowValidationStrip
+				issues={[{ rule: "serverWarned", subject: "done", message: "'done' loses the content.", severity: "warning" }]}
+				onSelectSubject={onSelectSubject}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("graph-workflow-validation-warning-done"));
+		expect(onSelectSubject).toHaveBeenCalledWith("done");
+	});
+
+	it("renders no warning alert at all when every issue is an error", () => {
+		renderWithProviders(
+			<GraphWorkflowValidationStrip issues={[{ rule: "noStart" }, { rule: "unreachable", subject: "lookup" }]} onSelectSubject={vi.fn()} />,
+		);
+
+		expect(screen.queryByTestId("graph-workflow-validation-warnings")).toBeNull();
+	});
+
+	it("renders the warning alert alone when nothing is an error", () => {
+		renderWithProviders(
+			<GraphWorkflowValidationStrip
+				issues={[{ rule: "serverWarned", subject: "done", message: "'done' loses the content.", severity: "warning" }]}
+				onSelectSubject={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByTestId("graph-workflow-validation-warnings")).toBeTruthy();
+		expect(screen.queryByTestId("graph-workflow-validation-unkeyed")).toBeNull();
+		expect(screen.queryByTestId("graph-workflow-validation-issues")).toBeNull();
 	});
 });
