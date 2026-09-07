@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 using OllamaSharp;
 using OllamaSharp.Models;
+using OllamaSharp.Models.Exceptions;
 
 /// <summary>
 ///     Evicts a loaded model from Ollama's memory by posting to <c>/api/generate</c> with <c>keep_alive=0</c> and the
@@ -22,7 +23,8 @@ public static class OllamaModelUnloader
 {
     /// <summary>
     ///     Requests immediate eviction of <paramref name="modelName" /> from Ollama's memory. Unloading a model the
-    ///     runtime is not currently holding is a harmless no-op, which keeps the eject action idempotent.
+    ///     runtime is not currently holding is a harmless no-op, and a model it does not know at all is swallowed here
+    ///     (see the remarks), so the eject action is idempotent for both callers rather than only for the loaded case.
     /// </summary>
     /// <param name="client">The Ollama API client to send the unload request through.</param>
     /// <param name="modelName">The model to evict. This is sent verbatim as the request's <c>model</c> field.</param>
@@ -39,12 +41,23 @@ public static class OllamaModelUnloader
             Stream = false
         };
 
-        // Fully enumerate the (single, non-stream) response so the request is actually dispatched. GenerateAsync is a
-        // streaming method; without draining the enumerator no HTTP call is sent. The chunks themselves are unused — the
-        // side effect (Ollama setting the model's expiry to zero) is all the eject action needs.
-        await foreach (var chunk in client.GenerateAsync(request, cancellationToken).ConfigureAwait(false))
+        try
         {
-            _ = chunk;
+            // Fully enumerate the (single, non-stream) response so the request is actually dispatched. GenerateAsync is a
+            // streaming method; without draining the enumerator no HTTP call is sent. The chunks themselves are unused — the
+            // side effect (Ollama setting the model's expiry to zero) is all the eject action needs.
+            await foreach (var chunk in client.GenerateAsync(request, cancellationToken).ConfigureAwait(false))
+            {
+                _ = chunk;
+            }
+        }
+        catch (OllamaException exception) when (exception.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+        {
+            // A model this runtime does not hold is a no-op, but a model it has never HEARD of is a 404 whose body reads
+            // "model '<name>' not found, try pulling it first" — which OllamaSharp raises as an OllamaException carrying
+            // that text. Both callers document eject as idempotent, and a model Ollama does not know is already in the
+            // requested state, so the not-found case is absorbed here (the one place the eviction wire shape lives)
+            // rather than at each call site. Any other OllamaException still propagates.
         }
     }
 }
