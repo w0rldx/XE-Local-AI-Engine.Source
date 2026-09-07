@@ -5707,6 +5707,7 @@
 				"attempt": "Versuch {{attempt}}",
 				"empty": "Dieser Lauf hat noch keine Knoten.",
 				"overCap": "Dieser Lauf hat {{nodeCount}} Knoten — mehr, als der Graph zeichnet. Arbeiten Sie die Knotentabelle durch.",
+				"definitionChanged": "Die Definition wurde seit dem Start dieses Laufs bearbeitet. Angezeigt wird der Graph, auf dem der Lauf tats\u00e4chlich ausgef\u00fchrt wurde.",
 				"graphMismatch": "Die Definition wurde nach dem Start dieses Laufs geändert; die tatsächlichen Verbindungen sind daher unbekannt. Es werden nur die Knoten angezeigt."
 			},
 			"runs": {

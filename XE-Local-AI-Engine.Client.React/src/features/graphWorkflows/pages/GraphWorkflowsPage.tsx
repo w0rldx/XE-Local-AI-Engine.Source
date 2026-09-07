@@ -42,8 +42,8 @@ import { useGraphWorkflowEditor } from "@/features/graphWorkflows/hooks/useGraph
 import { useGraphWorkflowRunHub } from "@/features/graphWorkflows/hooks/useGraphWorkflowRunHub";
 import { graphToCanvas } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import type { GraphWorkflowGraph, GraphWorkflowSelection } from "@/features/graphWorkflows/models/GraphWorkflowModels";
-import { type GraphWorkflowGraphIssue, serverErrorsToIssues } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 import { toGraphWorkflowRunCanvas } from "@/features/graphWorkflows/models/GraphWorkflowRunGraph";
+import { type GraphWorkflowGraphIssue, serverErrorsToIssues } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 import {
 	useCreateGraphWorkflowDefinition,
 	useDeleteGraphWorkflowDefinition,
@@ -639,28 +639,35 @@ function GraphWorkflowRunMode({ selection, onSelectionChange, isNarrow }: ModePr
 	const runsQuery = useGraphWorkflowRuns(definitionId);
 	const definition = definitionQuery.data;
 
+	// The graph this run PINNED at start (F5-1). It is the shape the run routed on, so it wins over the definition,
+	// which may have been edited since; a response older than F5-1 carries none and the canvas falls back.
+	const runGraph = runQuery.data?.graph;
+
 	const canvas = useMemo(
 		() =>
 			toGraphWorkflowRunCanvas({
 				run,
 				nodeRuns: runQuery.data?.nodeRuns ?? [],
-				// Only passed once it has actually loaded: a pending definition query is not a graph MISMATCH.
+				runGraph,
+				// Only passed once it has actually loaded: a pending definition query is not an edited definition.
 				definitionGraph: definition === undefined ? undefined : { graph: definition.graph, graphHash: definition.graphHash },
 			}),
-		[definition, run, runQuery.data?.nodeRuns],
+		[definition, run, runGraph, runQuery.data?.nodeRuns],
 	);
 
-	// The Pause node's own configuration, read off the definition graph through the same defensive parse the canvas
-	// uses — the node run carries the decision, never the prompt or the allowed set.
+	// The Pause node's own configuration, read through the same defensive parse the canvas uses — the node run carries
+	// the decision, never the prompt or the allowed set. Off the PINNED graph: the pause that is open belongs to this
+	// run's graph, and a definition edited since could offer a decision this run's gate will refuse.
+	const pauseGraph = runGraph ?? definition?.graph;
 	const pauseConfig = useMemo(() => {
-		if (selection.nodeKey === undefined || definition?.graph === undefined) {
+		if (selection.nodeKey === undefined || pauseGraph === undefined) {
 			return undefined;
 		}
-		const node = graphToCanvas(definition.graph).nodes.find((candidate) => candidate.id === selection.nodeKey)?.data;
+		const node = graphToCanvas(pauseGraph).nodes.find((candidate) => candidate.id === selection.nodeKey)?.data;
 		return node?.kind === "Pause"
 			? { prompt: node.prompt, allowedDecisions: node.allowedDecisions, requireComment: node.requireComment }
 			: undefined;
-	}, [definition?.graph, selection.nodeKey]);
+	}, [pauseGraph, selection.nodeKey]);
 
 	const select = useCallback(
 		(next: Partial<GraphWorkflowSelection>) => onSelectionChange({ ...selection, ...next }),

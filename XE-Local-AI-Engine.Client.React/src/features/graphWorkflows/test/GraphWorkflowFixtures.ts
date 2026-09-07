@@ -219,6 +219,9 @@ export function makeNodeRun(overrides: Partial<GraphWorkflowNodeRunSummaryRespon
  * A run parked on the Pause node, with one node run per node key — the server materializes every node of the pinned
  * graph at run start, so a run view that only shows started nodes would be showing a different graph.
  *
+ * `graph` is the run's PINNED graph, which `GET runs/{runId}` carries since F5-1. Override it with `undefined` to get
+ * a pre-F5-1 response back.
+ *
  * The mix is deliberately realistic rather than uniform: the Tool node is `Failed` with `AttemptsExhausted` (the state
  * the row shows even when the `Timeout` class only appears on the retry event) and the Join is `Skipped`, so a test can
  * assert a failed node stays failed inside a run that is still going.
@@ -265,6 +268,7 @@ export function graphWorkflowRun(overrides: Partial<GraphWorkflowRunResponse> = 
 			}),
 		],
 		output: undefined,
+		graph: eightNodeGraph,
 		...overrides,
 	};
 }

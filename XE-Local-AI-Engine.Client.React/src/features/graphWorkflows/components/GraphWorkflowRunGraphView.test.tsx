@@ -160,9 +160,7 @@ describe("GraphWorkflowRunGraphView", () => {
 
 	it("re-frames the viewport when the graph's shape changes, and NOT on a status tick", () => {
 		const running = graphWorkflowRun().nodeRuns ?? [];
-		const { rerender } = renderView(
-			<GraphWorkflowRunGraphView canvas={matchedCanvas(running)} onSelectNode={vi.fn()} />,
-		);
+		const { rerender } = renderView(<GraphWorkflowRunGraphView canvas={matchedCanvas(running)} onSelectNode={vi.fn()} />);
 		expect(fitView).toHaveBeenCalledTimes(1);
 
 		// A status tick: same nodes, same edges, same graph hash — an operator's viewport must not jump under them.
@@ -196,6 +194,29 @@ describe("GraphWorkflowRunGraphView", () => {
 		expect(screen.getByTestId("graph-workflow-run-graph-mismatch").textContent).toContain("nodes only");
 		expect(screen.getByTestId("react-flow").getAttribute("data-edges")).toBe("");
 		expect(screen.getByTestId("graph-workflow-run-node-analyze")).toBeDefined();
+	});
+
+	it("draws the run's PINNED nodes and edges, and says only that the definition moved on", () => {
+		const canvas = toGraphWorkflowRunCanvas({
+			run: graphWorkflowRunSummary(),
+			nodeRuns: graphWorkflowRun().nodeRuns ?? [],
+			runGraph: eightNodeGraph,
+			// Renamed since: `review` is gone from the definition, and drawing `approval` would be a different run.
+			definitionGraph: {
+				graph: {
+					...eightNodeGraph,
+					nodes: (eightNodeGraph.nodes ?? []).map((node) => (node.key === "review" ? { ...node, key: "approval" } : node)),
+				},
+				graphHash: "sha256:someone-saved-since",
+			},
+		});
+		renderView(<GraphWorkflowRunGraphView canvas={canvas} onSelectNode={vi.fn()} />);
+
+		expect(screen.getByTestId("graph-workflow-run-node-review")).toBeDefined();
+		expect(screen.queryByTestId("graph-workflow-run-node-approval")).toBeNull();
+		// The edges are still there — the definition changing is informational, not a reason to draw less.
+		expect(screen.getByTestId("react-flow").getAttribute("data-edges")).toContain("e1");
+		expect(screen.getByTestId("graph-workflow-run-graph-mismatch").textContent).toContain("the graph the run itself ran on");
 	});
 
 	it("shows a banner instead of a canvas for a run past the render cap", () => {

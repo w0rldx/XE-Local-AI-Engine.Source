@@ -9,15 +9,25 @@ import {
 	IconTool,
 	IconUserCheck,
 } from "@tabler/icons-react";
-import { Background, Controls, Handle, type NodeProps, type NodeTypes, Position, ReactFlow, ReactFlowProvider, useReactFlow } from "@xyflow/react";
+import {
+	Background,
+	Controls,
+	Handle,
+	type NodeProps,
+	type NodeTypes,
+	Position,
+	ReactFlow,
+	ReactFlowProvider,
+	useReactFlow,
+} from "@xyflow/react";
 import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import "@xyflow/react/dist/style.css";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
-import { GraphWorkflowNodeStatusBadge } from "@/features/graphWorkflows/components/GraphWorkflowStatusBadge";
 import classes from "@/features/graphWorkflows/components/GraphWorkflowRunNodes.module.css";
+import { GraphWorkflowNodeStatusBadge } from "@/features/graphWorkflows/components/GraphWorkflowStatusBadge";
 import type {
 	GraphWorkflowCanvasNode,
 	GraphWorkflowCanvasNodeData,
@@ -135,14 +145,19 @@ function GraphWorkflowRunGraphViewInner({ canvas, selectedNodeKey, onSelectNode 
 		fitView().catch(() => undefined);
 	}, [fitView, canvas.structuralKey]);
 
-	// The definition was saved again after this run started, so its edges are NOT the routing this run took. The nodes
-	// are still the run's own rows, which is why they are drawn and the edges are not.
-	const mismatch = canvas.graphMismatch ? (
+	// The definition was saved again after this run started. With the run's own pinned graph on screen that is worth
+	// SAYING and nothing more; without one the edges are unknown, so only the run's rows are drawn.
+	const mismatch = canvas.graphNotice ? (
 		<Alert color="yellow" variant="light" data-testid="graph-workflow-run-graph-mismatch">
-			{t(
-				"pages.graphWorkflows.run.graphMismatch",
-				"The definition changed after this run started, so the connections it ran on are unknown. Showing its nodes only.",
-			)}
+			{canvas.graphNotice === "definitionChanged"
+				? t(
+						"pages.graphWorkflows.run.definitionChanged",
+						"The definition has been edited since this run started. This is the graph the run itself ran on.",
+					)
+				: t(
+						"pages.graphWorkflows.run.graphMismatch",
+						"The definition changed after this run started, so the connections it ran on are unknown. Showing its nodes only.",
+					)}
 		</Alert>
 	) : null;
 

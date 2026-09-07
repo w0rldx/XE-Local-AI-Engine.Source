@@ -6,7 +6,7 @@
 // fallback. Every component below is real; only the three things jsdom cannot host are stood in for.
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // React Flow measures its container and jsdom reports 0×0, so a real `<ReactFlow>` paints no viewport and no card —
@@ -110,11 +110,32 @@ function editorRoutes(graph: GraphWorkflowGraph = eightNodeGraph) {
 	];
 }
 
-function runViewRoutes(graph: GraphWorkflowGraph = eightNodeGraph) {
+/**
+ * The run and the definition it was started from. `graph` is BOTH the run's pinned graph and the definition's current
+ * one, which is the ordinary case; `definitionNow` overrides only the definition, standing in for an edit made after
+ * the run started.
+ */
+function runViewRoutes(
+	graph: GraphWorkflowGraph = eightNodeGraph,
+	options: { readonly definitionNow?: GraphWorkflowGraph; readonly pinned?: GraphWorkflowGraph | undefined } = {},
+) {
+	const hasPinned = !("pinned" in options) || options.pinned !== undefined;
 	return [
-		jsonRoute("get", `graph-workflows/runs/${runId}`, graphWorkflowRun()),
+		jsonRoute(
+			"get",
+			`graph-workflows/runs/${runId}`,
+			graphWorkflowRun({ graph: hasPinned ? (options.pinned ?? graph) : undefined }),
+		),
 		jsonRoute("get", "graph-workflows/runs", { runs: [graphWorkflowRunSummary()] }),
-		jsonRoute("get", `graph-workflows/definitions/${definitionId}`, graphWorkflowDefinition({ graph })),
+		jsonRoute(
+			"get",
+			`graph-workflows/definitions/${definitionId}`,
+			graphWorkflowDefinition(
+				options.definitionNow === undefined
+					? { graph }
+					: { graph: options.definitionNow, graphHash: "sha256:someone-saved-since" },
+			),
+		),
 	];
 }
 
@@ -287,7 +308,7 @@ describe("GraphWorkflowsPage", () => {
 		expect(put).not.toHaveBeenCalled();
 	});
 
-	it("offers a Pause node exactly the decisions its definition allows, with the definition's prompt", async () => {
+	it("offers a Pause node exactly the decisions the run's graph allows, with that graph's prompt", async () => {
 		// Approve ONLY — the decision panel's own fallback is ["Approve", "Reject"], so a Reject button here would mean
 		// the page never passed the Pause config down.
 		const approveOnly: GraphWorkflowGraph = {
@@ -308,5 +329,53 @@ describe("GraphWorkflowsPage", () => {
 		expect(await screen.findByTestId("graph-workflow-decision-Approve")).toBeDefined();
 		expect(screen.queryByTestId("graph-workflow-decision-Reject")).toBeNull();
 		expect(screen.getByTestId("graph-workflow-decision-prompt").textContent).toBe("Approve the analysis?");
+	});
+	it("reads the run's PINNED graph, not the edited definition, and only says the definition moved on", async () => {
+		// The Pause was renamed and re-prompted in the definition since. jsdom measures React Flow at 0x0 so no card
+		// paints here (the view's own suite mocks it); the decision panel is the observable that names WHICH graph the
+		// page read, and it must be the one the run pinned.
+		const definitionNow: GraphWorkflowGraph = {
+			...eightNodeGraph,
+			nodes: (eightNodeGraph.nodes ?? []).map((node) =>
+				node.key === "review"
+					? { ...node, config: { prompt: "Sign this off?", allowedDecisions: ["Approve"], requireComment: false } }
+					: node,
+			),
+		};
+		server.use(
+			...runViewRoutes(eightNodeGraph, { definitionNow }),
+			jsonRoute("get", `graph-workflows/runs/${runId}/nodes/review`, pendingPauseNodeRun()),
+		);
+
+		renderPage({ definitionId, runId, nodeKey: "review", tab: "runs" });
+
+		expect((await screen.findByTestId("graph-workflow-decision-prompt")).textContent).toBe("Approve the analysis?");
+		// The pinned graph allows both; the edited definition allows only Approve, so a Reject button proves the source.
+		expect(screen.getByTestId("graph-workflow-decision-Reject")).toBeDefined();
+		// Informational, not a degradation: the banner never says the connections are unknown.
+		const banner = screen.getByTestId("graph-workflow-run-graph-mismatch");
+		expect(banner.textContent).toContain("the graph the run itself ran on");
+		expect(banner.textContent).not.toContain("nodes only");
+	});
+
+	it("says nothing about the graph when the definition still is the one the run ran on", async () => {
+		server.use(...runViewRoutes());
+
+		renderPage({ definitionId, runId, tab: "runs" });
+
+		expect(await screen.findByTestId("graph-workflow-node-run-table")).toBeDefined();
+		expect(screen.queryByTestId("graph-workflow-run-graph-mismatch")).toBeNull();
+	});
+
+	it("falls back to nodes only for a run response that carries no graph", async () => {
+		const definitionNow: GraphWorkflowGraph = {
+			...eightNodeGraph,
+			nodes: (eightNodeGraph.nodes ?? []).filter((node) => node.key !== "lookup"),
+		};
+		server.use(...runViewRoutes(eightNodeGraph, { definitionNow, pinned: undefined }));
+
+		renderPage({ definitionId, runId, tab: "runs" });
+
+		expect((await screen.findByTestId("graph-workflow-run-graph-mismatch")).textContent).toContain("nodes only");
 	});
 });
