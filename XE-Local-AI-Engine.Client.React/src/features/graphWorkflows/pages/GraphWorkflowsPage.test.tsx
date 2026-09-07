@@ -385,17 +385,29 @@ describe("GraphWorkflowsPage", () => {
 
 		expect((await screen.findByTestId("graph-workflow-run-graph-mismatch")).textContent).toContain("nodes only");
 	});
-	it("shows a server warning without blocking the save, and writes the definition anyway", async () => {
+	it("shows a server warning without blocking the save, and keeps it through the save's own reload", async () => {
 		const put = vi.fn();
+		// The write bumps the version, and the GET answers the NEW one from then on — which is what makes the
+		// definition query refetch and the editor reload. Answering version 1 forever hid the bug this pins: the
+		// reload mints a fresh graph object, and pinning the server's answer by reference erased the warning.
+		let version = 1;
+		let stored: GraphWorkflowGraph = eightNodeGraph;
 		server.use(
-			...editorRoutes(),
+			jsonRoute("get", "graph-workflows/definitions", { definitions: [graphWorkflowDefinitionSummary()] }),
+			http.get(localApiPath(`graph-workflows/definitions/${definitionId}`), () =>
+				HttpResponse.json(graphWorkflowDefinition({ version, graph: stored })),
+			),
 			validateRoute({
 				valid: true,
 				warnings: [{ key: "done", message: "'done' is reached only through the Pause node 'review'." }],
 			}),
-			http.put(localApiPath(`graph-workflows/definitions/${definitionId}`), () => {
+			// Stores what it was sent, the way the real endpoint does: the reload has to answer the graph that was
+			// SAVED, or the editor reloads a different document and the warning is right to disappear.
+			http.put(localApiPath(`graph-workflows/definitions/${definitionId}`), async ({ request }) => {
 				put();
-				return HttpResponse.json(graphWorkflowDefinition({ version: 2 }));
+				stored = ((await request.json()) as { graph: GraphWorkflowGraph }).graph;
+				version = 2;
+				return HttpResponse.json(graphWorkflowDefinition({ version: 2, graph: stored }));
 			}),
 		);
 
@@ -409,6 +421,11 @@ describe("GraphWorkflowsPage", () => {
 		await waitFor(() => {
 			expect(put).toHaveBeenCalled();
 		});
+		// The reload lands here: version 2, a fresh graph object for the same document, and Save clean again.
+		await waitFor(() => {
+			expect(screen.getByTestId<HTMLButtonElement>("gw-page-save").disabled).toBe(true);
+		});
+		expect(screen.getByTestId("graph-workflow-validation-warnings").textContent).toContain("reached only through the Pause node");
 		expect(screen.queryByTestId("graph-workflow-validation-unkeyed")).toBeNull();
 		expect(screen.queryByTestId("graph-workflow-validation-issues")).toBeNull();
 	});
@@ -423,15 +440,36 @@ describe("GraphWorkflowsPage", () => {
 		);
 
 		renderPage({ definitionId });
-		await openAndDirty();
+		// Validated on the graph as STORED, so the auto-arrange below is a real edit rather than a repeat of one.
+		await waitFor(() => {
+			expect(screen.getByTestId("gw-page-definition-name").textContent).toBe("Analyze → review → read");
+		});
 		fireEvent.click(screen.getByTestId("gw-page-validate"));
 		expect(await screen.findByTestId("graph-workflow-validation-warnings")).toBeDefined();
 
-		// Any edit mints a new graph object, and the server's answer is pinned to the one it answered about.
+		// The server's answer is about the graph it was asked about; moving every node makes it a different graph.
 		fireEvent.click(screen.getByTestId("graph-workflow-auto-arrange"));
 
 		await waitFor(() => {
 			expect(screen.queryByTestId("graph-workflow-validation-warnings")).toBeNull();
 		});
+	});
+	it("selects nothing when a server issue names a key the canvas no longer holds", async () => {
+		// A stale key used to fall through to `selectEdge`, which — with a node open — cleared that node's selection
+		// and closed the panel the operator was working in, to select an edge that does not exist.
+		server.use(
+			...editorRoutes(),
+			validateRoute({ valid: false, errors: [{ key: "deleted-node", message: "This node is gone." }] }),
+		);
+
+		const { onSelectionChange } = renderPage({ definitionId, nodeKey: "analyze" });
+		await openAndDirty();
+		fireEvent.click(screen.getByTestId("gw-page-save"));
+		const chip = await screen.findByTestId("graph-workflow-validation-issue-deleted-node");
+		onSelectionChange.mockClear();
+
+		fireEvent.click(chip);
+
+		expect(onSelectionChange).not.toHaveBeenCalled();
 	});
 });

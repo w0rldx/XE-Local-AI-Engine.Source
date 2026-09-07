@@ -40,9 +40,9 @@ import { GraphWorkflowStartRunDialog } from "@/features/graphWorkflows/component
 import { GraphWorkflowValidationStrip } from "@/features/graphWorkflows/components/GraphWorkflowValidationStrip";
 import { useGraphWorkflowEditor } from "@/features/graphWorkflows/hooks/useGraphWorkflowEditor";
 import { useGraphWorkflowRunHub } from "@/features/graphWorkflows/hooks/useGraphWorkflowRunHub";
-import { graphToCanvas } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
+import { graphWorkflowsEqual } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import type { GraphWorkflowGraph, GraphWorkflowSelection } from "@/features/graphWorkflows/models/GraphWorkflowModels";
-import { toGraphWorkflowRunCanvas } from "@/features/graphWorkflows/models/GraphWorkflowRunGraph";
+import { cachedGraphToCanvas, toGraphWorkflowRunCanvas } from "@/features/graphWorkflows/models/GraphWorkflowRunGraph";
 import {
 	type GraphWorkflowGraphIssue,
 	serverErrorsToIssues,
@@ -187,13 +187,17 @@ function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow }: Mod
 	// has touched opens dirty. Not an error and never auto-saved: the hint just says which kind of unsaved this is.
 	const layoutIsUnsaved = (loadedGraph?.nodes ?? []).some((node) => !node.position);
 
-	const serverIssues = validated?.graph === editor.graph ? validated.issues : NO_ISSUES;
+	// CONTENT, not object identity. A successful save invalidates the definition, the refetch answers a new version,
+	// and the load-once effect calls `reset` — which mints a fresh `editor.graph` for a document that did not change,
+	// so an identity check erased the very warnings that save had just been told about. `graphWorkflowsEqual`
+	// normalises both sides, so a real edit still drops the stale answer on the next render.
+	const answeredGraph = validated?.graph;
+	const answersThisGraph = useMemo(() => graphWorkflowsEqual(answeredGraph, editor.graph), [answeredGraph, editor.graph]);
 	// Errors only. This is the list the canvas rings, the config panels and the save gate read, so a warning can never
 	// mark a card red or hold a save.
+	const serverIssues = answersThisGraph ? (validated?.issues ?? NO_ISSUES) : NO_ISSUES;
 	const issues = useMemo(() => [...editor.issues, ...serverIssues], [editor.issues, serverIssues]);
-	const serverWarnings = validated?.graph === editor.graph ? validated.warnings : NO_ISSUES;
-	// The strip is the one place both halves render; it splits them again on `severity`.
-	const stripIssues = useMemo(() => [...issues, ...serverWarnings], [issues, serverWarnings]);
+	const serverWarnings = answersThisGraph ? (validated?.warnings ?? NO_ISSUES) : NO_ISSUES;
 
 	const selectNode = useCallback(
 		(nodeKey: string | undefined) => {
@@ -213,22 +217,33 @@ function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow }: Mod
 		[onSelectionChange, selection],
 	);
 
-	const runValidation = async (graph: GraphWorkflowGraph): Promise<readonly GraphWorkflowGraphIssue[] | undefined> => {
+	/** `rejected` is `undefined` when the graph passed; `warned` says whether the same answer carried notes. */
+	const runValidation = async (
+		graph: GraphWorkflowGraph,
+	): Promise<{ readonly rejected?: readonly GraphWorkflowGraphIssue[]; readonly warned: boolean }> => {
 		const result = await validateMutation.mutateAsync({ body: { graph } });
 		const found = serverErrorsToIssues(result.errors);
 		// Warnings ride along on the same answer and are non-blocking by construction server-side: `valid` is
 		// `Errors.Count == 0`, so a graph that only warns still passes and still saves.
-		setValidated({ graph, issues: found, warnings: serverWarningsToIssues(result.warnings) });
-		return result.valid === true ? undefined : found;
+		const warnings = serverWarningsToIssues(result.warnings);
+		setValidated({ graph, issues: found, warnings });
+		return { ...(result.valid === true ? {} : { rejected: found }), warned: warnings.length > 0 };
 	};
 
 	const handleValidate = (): void => {
 		const graph = editor.graph;
 		runValidation(graph)
-			.then((rejected) => {
-				if (rejected === undefined) {
-					toast.success(t("pages.graphWorkflows.page.validationPassed", "This graph passed validation."));
+			.then(({ rejected, warned }) => {
+				if (rejected !== undefined) {
+					return;
 				}
+				// "Passed validation" over a strip full of notes reads as "nothing to see"; the neutral sentence sends
+				// the operator to them instead.
+				toast.success(
+					warned
+						? t("pages.graphWorkflows.page.validationPassedWithWarnings", "This graph is valid. Check the notes below before you run it.")
+						: t("pages.graphWorkflows.page.validationPassed", "This graph passed validation."),
+				);
 			})
 			.catch((error: unknown) => {
 				toast.error(apiErrorMessage(error, t("pages.graphWorkflows.page.validationFailed", "The graph could not be checked.")));
@@ -246,7 +261,7 @@ function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow }: Mod
 		setSaveConflict(false);
 		try {
 			// The server is asked BEFORE the write, so a refusal costs no version bump and the errors land on their nodes.
-			if ((await runValidation(graph)) !== undefined) {
+			if ((await runValidation(graph)).rejected !== undefined) {
 				return;
 			}
 			await updateMutation.mutateAsync({
@@ -492,13 +507,18 @@ function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow }: Mod
 				/>
 			</div>
 			<GraphWorkflowValidationStrip
-				issues={stripIssues}
+				issues={issues}
+				warnings={serverWarnings}
 				onSelectSubject={(subject) => {
 					if (editor.nodes.some((node) => node.id === subject)) {
 						selectNode(subject);
 						return;
 					}
-					selectEdge(subject);
+					// A server issue can name a key the canvas no longer holds. Selecting nothing is the honest answer;
+					// `selectEdge` on a missing id used to open an empty drawer over the canvas.
+					if (editor.edges.some((edge) => edge.id === subject)) {
+						selectEdge(subject);
+					}
 				}}
 			/>
 		</Stack>
@@ -672,14 +692,16 @@ function GraphWorkflowRunMode({ selection, onSelectionChange, isNarrow }: ModePr
 	);
 
 	// The Pause node's own configuration, read through the same defensive parse the canvas uses — the node run carries
-	// the decision, never the prompt or the allowed set. Off the PINNED graph: the pause that is open belongs to this
-	// run's graph, and a definition edited since could offer a decision this run's gate will refuse.
-	const pauseGraph = runGraph ?? definition?.graph;
+	// the decision, never the prompt or the allowed set. Off the PINNED graph, falling back to the definition ONLY when
+	// it is the graph that ran: a definition edited since could offer a decision this run's gate will refuse, and the
+	// notice is exactly the signal that it has been.
+	const pauseGraph = runGraph ?? (canvas.graphNotice === undefined ? definition?.graph : undefined);
 	const pauseConfig = useMemo(() => {
 		if (selection.nodeKey === undefined || pauseGraph === undefined) {
 			return undefined;
 		}
-		const node = graphToCanvas(pauseGraph).nodes.find((candidate) => candidate.id === selection.nodeKey)?.data;
+		// Cached on the graph: without it every node click re-parsed and re-laid-out the whole pinned document.
+		const node = cachedGraphToCanvas(pauseGraph).nodes.find((candidate) => candidate.id === selection.nodeKey)?.data;
 		return node?.kind === "Pause"
 			? { prompt: node.prompt, allowedDecisions: node.allowedDecisions, requireComment: node.requireComment }
 			: undefined;

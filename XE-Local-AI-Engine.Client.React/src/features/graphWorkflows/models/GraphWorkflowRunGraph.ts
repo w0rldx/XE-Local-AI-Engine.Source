@@ -72,11 +72,12 @@ export interface GraphWorkflowRunCanvas {
  * sharing hands back the SAME `graph` object while its JSON is unchanged, so object identity is a sound key.
  *
  * A `WeakMap`, so an entry dies with the graph that keyed it and nothing has to be evicted. Callers must treat the
- * result as frozen: `toGraphWorkflowRunCanvas` copies every node and edge it returns rather than annotating these.
+ * result as FROZEN and copy what they annotate, as `toGraphWorkflowRunCanvas` does with every node and edge it
+ * returns — the run view and the Pause panel both read this same conversion.
  */
 const canvasByGraph = new WeakMap<GraphWorkflowGraph, GraphWorkflowCanvas>();
 
-function cachedGraphToCanvas(graph: GraphWorkflowGraph): GraphWorkflowCanvas {
+export function cachedGraphToCanvas(graph: GraphWorkflowGraph): GraphWorkflowCanvas {
 	const cached = canvasByGraph.get(graph);
 	if (cached !== undefined) {
 		return cached;

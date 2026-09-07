@@ -5804,7 +5804,8 @@
 				"unsavedLayout": "This graph had no saved layout — Save to keep the one on screen.",
 				"validate": "Check",
 				"validationFailed": "The graph could not be checked.",
-				"validationPassed": "This graph passed validation."
+				"validationPassed": "This graph passed validation.",
+				"validationPassedWithWarnings": "This graph is valid. Check the notes below before you run it."
 			}
 		},
 		"integrations": {
