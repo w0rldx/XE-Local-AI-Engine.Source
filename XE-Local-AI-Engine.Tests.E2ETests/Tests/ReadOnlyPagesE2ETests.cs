@@ -5,9 +5,9 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     One smoke test each for the three shipped read-only routes that had no browser coverage at all:
-///     <c>/diagnostics</c> (local snapshot store), <c>/preview</c> (Open Canvas) and <c>/usage</c> (token-usage
-///     dashboard). Each asserts the same three things:
+///     One smoke test each for the shipped read-only routes that had no browser coverage at all:
+///     <c>/diagnostics</c> (local snapshot store) and <c>/usage</c> (token-usage dashboard). Each asserts the same
+///     three things:
 ///     <list type="bullet">
 ///         <item>The page's own header renders (so a capability redirect to home cannot read as a pass).</item>
 ///         <item>Its main region settles into a real state rather than staying on a loader or an error panel.</item>
@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///         without making it stricter. A page-level JS error and a 500 from the node are unambiguous.
 ///     </para>
 ///     <para>
-///         POOLED: all three pages are read-only. They read node-global state, but only in the weak sense that they
+///         POOLED: both pages are read-only. They read node-global state, but only in the weak sense that they
 ///         render whatever exists — no assertion here depends on a node-wide count or emptiness, so a concurrent
 ///         sibling writing unrelated rows cannot break them.
 ///     </para>
@@ -74,25 +74,6 @@ public sealed class ReadOnlyPagesE2ETests : XEPooledE2ETestBase
         {
             Timeout = 10_000
         });
-
-        await AssertNoErrorsAsync();
-    }
-
-    [Test]
-    [Category("Page")]
-    public async Task Preview_Page_Renders_The_Workflow_List()
-    {
-        await NavigateAndWatchAsync("/preview", "Open Canvas");
-
-        await Expect(Page.GetByTestId("preview-create-button")).ToBeEnabledAsync();
-
-        // The list settles into one of its two success shapes; which one depends on whether a sibling has saved a
-        // workflow, so neither alone may be asserted.
-        await Expect(Page.Locator("[data-testid='preview-workflows-empty'], [data-testid='preview-workflows-table']").First)
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
-            {
-                Timeout = 10_000
-            });
 
         await AssertNoErrorsAsync();
     }

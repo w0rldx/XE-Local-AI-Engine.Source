@@ -1,13 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.GraphWorkflows.Import;
 
 /// <summary>
-///     Stored Open Canvas graph blobs, written out by hand rather than built through the Preview model. The Preview
-///     namespace is deleted in the phase after the one these fixtures were added for, so a builder reference here would
-///     take this suite with it; a JSON literal is what the database actually holds and it outlives the type that wrote
-///     it.
+///     Stored Open Canvas graph blobs, written out by hand rather than built through the Open Canvas model. That
+///     namespace was deleted in the phase after the one these fixtures were added for, so a builder reference here
+///     would have taken this suite with it; a JSON literal is what the database actually holds and it outlives the
+///     type that wrote it.
 ///     <para>
 ///         Web-defaults camelCase members, <c>kind</c> as the enum's own name, and null agent fields simply absent —
-///         which is exactly what <c>PreviewWorkflowGraphMapper.Serialize</c> produced.
+///         which is exactly what the Open Canvas graph serializer produced.
 ///     </para>
 /// </summary>
 internal static class CanvasGraphs

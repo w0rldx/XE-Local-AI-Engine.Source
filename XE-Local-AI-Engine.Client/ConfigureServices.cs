@@ -46,7 +46,6 @@ using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
-using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using XE_Local_AI_Engine.Client.Services.Proxy;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
@@ -162,10 +161,6 @@ public static class ConfigureServices
         // Hub-backed scheduler event publisher — supersedes the no-op default registered in AddNodeScheduler so
         // run/definition lifecycle events broadcast to connected SignalR clients (SchedulerHub mapped in Program).
         builder.Services.AddSingleton<ISchedulerEventPublisher, SchedulerEventPublisher>();
-
-        // Hub-backed preview-workflow event publisher — supersedes the no-op default registered in AddNodePreviewWorkflows
-        // so run/node lifecycle events broadcast to the connected operator (PreviewWorkflowHub mapped in Program).
-        builder.Services.AddSingleton<IPreviewWorkflowEventPublisher, PreviewWorkflowEventPublisher>();
 
         // Ordered per-run benchmark output relay. The application buffer remains the bounded replay authority; this
         // host service only bridges its published events to the Operator-scoped benchmark hub.

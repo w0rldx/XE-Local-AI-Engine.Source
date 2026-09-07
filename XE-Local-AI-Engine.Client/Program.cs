@@ -650,8 +650,6 @@ namespace XE_Local_AI_Engine.Client
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             app.MapHub<SchedulerHub>(LocalApiRoutes.Scheduler.Hub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-            app.MapHub<PreviewWorkflowHub>(LocalApiRoutes.Preview.Hub)
-               .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             app.MapHub<BenchmarkRunHub>(LocalApiRoutes.Benchmarks.Hub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             app.MapHub<DatasetGenerationHub>(LocalApiRoutes.Training.DatasetGenerationHub)
