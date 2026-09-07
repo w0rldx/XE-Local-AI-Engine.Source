@@ -16,6 +16,7 @@ import {
 	graphWorkflowsEqual,
 	mintEdgeKey,
 	mintNodeKey,
+	pauseContextEdges,
 	renameNodeKey,
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import { NODE_SPACING_Y, RANK_SPACING_X } from "@/features/graphWorkflows/models/GraphWorkflowLayout";
@@ -25,7 +26,17 @@ import type {
 	GraphWorkflowGraphNode,
 	GraphWorkflowNodeKind,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
+import { agentConfigSchema } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 import { eightNodeGraph } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
+
+/** The Agent members `agentConfigSchema` needs beyond the one under test. */
+const canvasAgentConfig = {
+	agentDefinitionId: null,
+	instructions: "Do the thing.",
+	model: null,
+	reasoningEffort: null,
+	includeUpstreamOutputs: true,
+};
 
 function clone(): GraphWorkflowGraph {
 	return JSON.parse(JSON.stringify(eightNodeGraph)) as GraphWorkflowGraph;
@@ -263,6 +274,33 @@ describe("node config conversion", () => {
 		expect(config["defaultInput"]).toBe("a plain string is legal here");
 	});
 
+	it("round-trips a string-valued defaultInput unchanged", () => {
+		// F5-3: the wire member is a JSON STRING. Rendered verbatim it read as `abc`, which does not parse, so a
+		// definition the server accepts carried a permanent invalidJson issue and a save rewrote the member to null.
+		const canvas = graphToCanvas(graph([{ key: "start", kind: "Start", config: { defaultInput: "abc" } }], []));
+
+		expect(dataOfKind(canvas, "start", "Start").defaultInput).toBe('"abc"');
+
+		const { graph: result, issues } = canvasToGraph(canvas.nodes, canvas.edges);
+
+		expect(issues).toEqual([]);
+		const config = (result.nodes ?? [])[0]?.config as Record<string, unknown>;
+		expect(config["defaultInput"]).toBe("abc");
+	});
+
+	it("reports a string-valued responseJsonSchema as the wrong SHAPE, not as unparseable text", () => {
+		const canvas = graphToCanvas(graph([{ key: "agent-1", kind: "Agent", config: { responseJsonSchema: "abc" } }], []));
+		const text = dataOfKind(canvas, "agent-1", "Agent").responseJsonSchema;
+
+		expect(text).toBe('"abc"');
+		// The drawer's own field check is what tells the two apart: the text parses, so it is `notObject`, and the
+		// operator is told to enter an object rather than to fix JSON that is already valid.
+		expect(agentConfigSchema.safeParse({ ...canvasAgentConfig, responseJsonSchema: text }).error?.issues[0]?.message).toBe(
+			"pages.graphWorkflows.form.responseJsonSchema.notObject",
+		);
+		expect(canvasToGraph(canvas.nodes, canvas.edges).issues).toEqual([{ rule: "invalidJson", subject: "agent-1" }]);
+	});
+
 	it("omits an empty label and a default joinPolicy, and writes Any", () => {
 		const both = canvasToGraph(
 			[
@@ -403,6 +441,104 @@ describe("source handle re-derivation", () => {
 		const canvas = graphToCanvas(graph(nodes, [{ key: "e1", from: "plain", to: "done", label: "true" }]));
 
 		expect(edgeOf(canvas, "e1").sourceHandle).toBeUndefined();
+	});
+});
+
+describe("pauseContextEdges", () => {
+	/** A canvas from `key:Kind` node specs and `from>to` edge specs; the editor's own shape, minus the positions. */
+	function canvasOf(nodeSpecs: readonly string[], edgeSpecs: readonly string[]): GraphWorkflowCanvas {
+		const nodes = nodeSpecs.map((spec) => {
+			const [key = "", kind = "Agent"] = spec.split(":");
+			return canvasNode(defaultNodeData(kind as GraphWorkflowNodeKind, key));
+		});
+		const edges = edgeSpecs.map((spec, index): GraphWorkflowCanvasEdge => {
+			const [source = "", target = ""] = spec.split(">");
+			return { id: `e${index + 1}`, source, target, data: {} };
+		});
+		return { nodes, edges };
+	}
+
+	function addedPairs(nodeSpecs: readonly string[], edgeSpecs: readonly string[]): string[] {
+		const canvas = canvasOf(nodeSpecs, edgeSpecs);
+		return pauseContextEdges(canvas.nodes, canvas.edges).map((edge) => `${edge.source}>${edge.target}`);
+	}
+
+	const chain = ["start:Start", "a:Agent", "hold:Pause", "b:Agent", "done:End"];
+
+	it("routes the answer around a Pause, from the Pause's own predecessor", () => {
+		const canvas = canvasOf(chain, ["start>a", "a>hold", "hold>b", "b>done"]);
+		const added = pauseContextEdges(canvas.nodes, canvas.edges);
+
+		expect(added).toHaveLength(1);
+		expect(added[0]).toMatchObject({ source: "a", target: "b", label: "context" });
+		expect(added[0]?.data).toEqual({ label: "context" });
+		// A key from the ONE namespace the graph uses, so the new edge cannot collide with a node or an existing edge.
+		expect(added[0]?.id).toBe("e5");
+		expect(added[0]?.data?.condition).toBeUndefined();
+	});
+
+	it("adds the edge whichever side of the Pause was wired last", () => {
+		// The successor first, then the predecessor: both orders reach the same graph, so both must reach the same edge.
+		expect(addedPairs(chain, ["start>a", "hold>b", "a>hold", "b>done"])).toEqual(["a>b"]);
+	});
+
+	it("does not duplicate an edge the author already drew", () => {
+		expect(addedPairs(chain, ["start>a", "a>hold", "hold>b", "a>b", "b>done"])).toEqual([]);
+	});
+
+	it("walks through consecutive Pause nodes to the nearest non-Pause ancestor", () => {
+		const nodes = ["start:Start", "a:Agent", "first:Pause", "second:Pause", "b:Agent", "done:End"];
+
+		// One rule applied to every Pause, exactly as the importer applies it: the second Pause also gets to see the
+		// content it is approving, so `a` reaches both it and the node behind it.
+		expect(addedPairs(nodes, ["start>a", "a>first", "first>second", "second>b", "b>done"])).toEqual(["a>second", "a>b"]);
+	});
+
+	it("treats Start as a fine ancestor, because its output is the run's input", () => {
+		expect(addedPairs(["start:Start", "hold:Pause", "b:Agent", "done:End"], ["start>hold", "hold>b", "b>done"])).toEqual([
+			"start>b",
+		]);
+	});
+
+	it("still routes the answer to a successor another node already feeds, and adds nothing without a Pause", () => {
+		// `c` feeding `b` is not `a`'s answer. Two satisfied predecessors make `b`'s input the `upstream` map, which is
+		// the legitimate shape — the importer guards on the PAIR only, and so does this.
+		expect(addedPairs([...chain, "c:Agent"], ["start>a", "a>hold", "hold>b", "c>b", "b>done"])).toEqual(["a>b"]);
+		expect(addedPairs(["start:Start", "a:Agent", "done:End"], ["start>a", "a>done"])).toEqual([]);
+	});
+
+	// A Condition's out-edges carry a `true`/`false` handle; an added edge carries none, so it would save as a SECOND
+	// unconditional branch out of that Condition — refused by `conditionMultipleDefaults` here and by the server there.
+	it("skips a Condition ancestor rather than giving it a second unconditional branch", () => {
+		const nodes = ["start:Start", "a:Agent", "check:Condition", "hold:Pause", "b:Agent", "c:Agent", "done:End"];
+		const edges = ["start>a", "a>check", "check>hold", "check>c", "hold>b", "b>done", "c>done"];
+
+		expect(addedPairs(nodes, edges)).toEqual([]);
+	});
+
+	it("adds nothing for a Pause with no successor and none for a Pause with no ancestor", () => {
+		expect(addedPairs(["start:Start", "a:Agent", "hold:Pause"], ["start>a", "a>hold"])).toEqual([]);
+		expect(addedPairs(["hold:Pause", "b:Agent", "done:End"], ["hold>b", "b>done"])).toEqual([]);
+	});
+
+	it("considers only what the one connection can have broken", () => {
+		const nodes = ["start:Start", "a:Agent", "first:Pause", "b:Agent", "second:Pause", "c:Agent", "done:End"];
+		const edges = ["start>a", "a>first", "first>b", "b>second", "second>c", "c>done"];
+		const canvas = canvasOf(nodes, edges);
+		const pairsFor = (from: string, to: string) =>
+			pauseContextEdges(canvas.nodes, canvas.edges, { from, to }).map((edge) => `${edge.source}>${edge.target}`);
+
+		// Wiring OUT of a pause can only starve the node just connected, so `first` is left alone even though it is
+		// missing its edge too — the operator may have deleted that one on purpose.
+		expect(pairsFor("second", "c")).toEqual(["b>c"]);
+		// Wiring INTO a pause can starve any of its successors, so all of them are considered.
+		expect(pairsFor("a", "first")).toEqual(["a>b"]);
+		// The whole-graph pass, which is what the importer does.
+		expect(addedPairs(nodes, edges)).toEqual(["a>b", "b>c"]);
+	});
+
+	it("stops on a Pause wired back into itself instead of walking forever", () => {
+		expect(addedPairs(["hold:Pause", "b:Agent", "done:End"], ["hold>hold", "hold>b", "b>done"])).toEqual([]);
 	});
 });
 

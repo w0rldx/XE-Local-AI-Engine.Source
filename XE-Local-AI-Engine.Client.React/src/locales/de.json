@@ -5413,9 +5413,10 @@
 			"editor": {
 				"autoArrange": "Automatisch anordnen",
 				"deleteHint": "Ziehen Sie einen Knoten auf die Arbeitsfläche oder klicken Sie ihn in der Palette an. Markieren Sie einen Knoten oder eine Verbindung und drücken Sie Entf, um ihn zu entfernen.",
-				"refusal": {
+				"notice": {
 					"dismiss": "Ausblenden",
 					"parallelEdgesBothUnconditional": "Diese beiden Knoten sind bereits durch eine Verbindung ohne Bedingung verbunden. Geben Sie der neuen Verbindung zuerst eine Bedingung.",
+					"pauseContextEdgeAdded": "Eine Pause gibt nur ihre Entscheidung weiter. Die Antwort des vorherigen Knotens wird deshalb jetzt über eine Verbindung mit der Beschriftung „context“ daran vorbeigeführt. Löschen Sie diese Verbindung, wenn Sie sie nicht möchten.",
 					"tooManyNodes": "Dieser Graph hat bereits so viele Knoten, wie ein Lauf zulässt."
 				},
 				"validation": {

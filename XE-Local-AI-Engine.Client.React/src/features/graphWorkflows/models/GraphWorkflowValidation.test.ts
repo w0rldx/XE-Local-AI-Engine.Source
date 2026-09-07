@@ -438,6 +438,11 @@ describe("config form schemas", () => {
 		// The server's `IsDotPath` accepts any segment without whitespace or wildcard punctuation, and a JSON property
 		// really can be hyphenated — refusing one it accepts would block a save the node would have taken.
 		expect(conditionConfigSchema.safeParse({ path: "output.json.requires-review" }).success).toBe(true);
+		// F5-9: an empty segment is what `GraphWorkflowTokens.IsDotPath` refuses, and the client mirror has to refuse it
+		// too — otherwise the field reads green and the save comes back 400 naming a path the drawer said was fine.
+		for (const path of ["a..b", ".a", "a.", "."]) {
+			expect(conditionConfigSchema.safeParse({ path }).success).toBe(false);
+		}
 		expect(
 			pauseConfigSchema.safeParse({ prompt: "Approve?", allowedDecisions: ["Approve"], requireComment: false }).success,
 		).toBe(true);

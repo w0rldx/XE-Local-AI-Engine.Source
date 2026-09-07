@@ -53,7 +53,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 				size="sm"
 				showCloseButton={false}
 				enableFullScreenToggle={false}
-				zIndex={400}
+				raised={true}
 			>
 				<Stack gap="md">
 					{options.description && (

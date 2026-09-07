@@ -5413,9 +5413,10 @@
 			"editor": {
 				"autoArrange": "Auto-arrange",
 				"deleteHint": "Drag a node onto the canvas, or click one in the palette. Select a node or a connection and press Delete to remove it.",
-				"refusal": {
+				"notice": {
 					"dismiss": "Dismiss",
 					"parallelEdgesBothUnconditional": "These two nodes are already joined by a connection without a condition. Give the new one a condition first.",
+					"pauseContextEdgeAdded": "A Pause passes on only its decision, so a connection labelled “context” now carries the earlier node’s answer around it. Delete that connection if you do not want it.",
 					"tooManyNodes": "This graph already has as many nodes as a run accepts."
 				},
 				"validation": {
