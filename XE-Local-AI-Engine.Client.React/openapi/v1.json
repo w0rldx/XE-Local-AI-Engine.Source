@@ -32630,6 +32630,9 @@
           },
           "output": {
             "nullable": true
+          },
+          "graph": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph"
           }
         }
       },
@@ -32719,51 +32722,6 @@
           "completedAtUtc": {
             "type": "integer",
             "nullable": true
-          },
-          "updatedAtUtc": {
-            "type": "integer"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunRequest": {
-        "type": "object",
-        "additionalProperties": false
-      },
-      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "guid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string",
-            "nullable": true
-          },
-          "graph": {
-            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph"
-          },
-          "graphHash": {
-            "type": "string"
-          },
-          "nodeCount": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "schemaVersion": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "version": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "createdAtUtc": {
-            "type": "integer"
           },
           "updatedAtUtc": {
             "type": "integer"
@@ -32891,6 +32849,51 @@
             "type": "string"
           },
           "value": {}
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "graph": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph"
+          },
+          "graphHash": {
+            "type": "string"
+          },
+          "nodeCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
         }
       },
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1CreateGraphWorkflowDefinitionRequest": {
@@ -33254,6 +33257,12 @@
           "nodeCount": {
             "type": "integer",
             "format": "int32"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse"
+            }
           }
         }
       },
