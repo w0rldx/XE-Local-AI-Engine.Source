@@ -610,7 +610,11 @@ llama-server compiles the whole tools array to GBNF and has a combined repetitio
 
 Use `scripts/run-tool-grammar-smoke-local.sh` with a **non-reasoning, tool-capable** GGUF. The sanitized offer must return 200 and the unsanitized negative control must still return the grammar 400. If the control returns 200, the smoke is inert (reasoning model) or llama.cpp changed its limit; re-measure `MaxGrammarRepetitionBound`. FakeOllama E2E cannot validate this.
 
-A Graph Workflow Agent node's `responseJsonSchema` goes down the same grammar path, so keep it flat — the response-schema case is **untested** as of this slice.
+A Graph Workflow Agent node's `responseJsonSchema` goes down the same grammar path, so keep it flat. A NESTED response
+schema (object → object + array of strings) was exercised live on Qwen3.8-27B Q4 during the S5 round: the node output conformed,
+but the Debug log shows no grammar/json_schema line for that request and the logged sampler chain matched an unconstrained
+request, so whether the grammar or the model produced the conformance is still unproven. Treat the grammar path as unverified
+until a negative control (a schema the model cannot satisfy unconstrained) is run. Authority: `Plans/custom-graph-workflows-2026-09-03/progress/S5-live/S5-live-report.md`.
 
 
 `LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound` is empirical for the **whole production offer**, not an upstream constant or per-field limit. Third-party MCP schemas make this an open boundary. If sanitization still fails, translate it to `FailureCategory.ModelCapabilityUnsupported`; do not surface the raw sampler error as a model defect. The live smoke's unsanitized negative control is load-bearing: a 200 means either a reasoning template skipped GBNF or upstream changed the limit.
