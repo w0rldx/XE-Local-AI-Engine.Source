@@ -929,32 +929,42 @@ internal sealed class DevWorkflowGraph
     /// <summary>
     ///     A topological order of the augmented graph — every node after all of its inbound sources — so one pass
     ///     computes the fixpoint. Safe because acyclicity is already proven before any of this runs.
+    ///     <para>
+    ///         On an EXPLICIT stack for the reason <see cref="EnsureAcyclic(IReadOnlyList{DevWorkflowGraphEdge},
+    ///         Func{string, IReadOnlyList{string}, string})" /> is: one frame per node is a process kill on a long
+    ///         chain, and this walk is reached by any definition that declares a write or an apply. The frame carries
+    ///         how far through the node's inbound edges the walk has got, which is what keeps the order the recursive
+    ///         one produced — a source has to be EMITTED before the next source is started, not merely marked.
+    ///     </para>
     /// </summary>
     private List<string> AncestorsFirst(ILookup<string, DevWorkflowGraphEdge> inbound)
     {
+        var sources = Nodes.Keys.ToDictionary(key => key, key => inbound[key].ToList(), StringComparer.Ordinal);
         var order = new List<string>(Nodes.Count);
         var placed = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var nodeKey in Nodes.Keys)
+        var pending = new Stack<(string NodeKey, int EdgeIndex)>();
+        foreach (var root in Nodes.Keys.Where(placed.Add))
         {
-            Place(nodeKey);
+            pending.Push((root, 0));
+            while (pending.Count > 0)
+            {
+                var (nodeKey, edgeIndex) = pending.Pop();
+                var entering = sources[nodeKey];
+                if (edgeIndex == entering.Count)
+                {
+                    order.Add(nodeKey);
+                    continue;
+                }
+
+                pending.Push((nodeKey, edgeIndex + 1));
+                if (placed.Add(entering[edgeIndex].From))
+                {
+                    pending.Push((entering[edgeIndex].From, 0));
+                }
+            }
         }
 
         return order;
-
-        void Place(string nodeKey)
-        {
-            if (!placed.Add(nodeKey))
-            {
-                return;
-            }
-
-            foreach (var edge in inbound[nodeKey])
-            {
-                Place(edge.From);
-            }
-
-            order.Add(nodeKey);
-        }
     }
 
     /// <summary>
@@ -1197,41 +1207,64 @@ internal sealed class DevWorkflowGraph
             });
     }
 
-    /// <summary>Depth-first colouring: white unvisited, grey on the current path, black finished. A grey hit is the cycle.</summary>
+    /// <summary>
+    ///     Depth-first colouring: white unvisited, grey on the current path, black finished. A grey hit is the cycle.
+    ///     <para>
+    ///         Walked on an EXPLICIT stack rather than by recursion, so a long chain costs heap rather than one stack
+    ///         frame per node — a stack overflow is a process kill nothing can catch, and this parse runs on a
+    ///         thread-pool thread on behalf of a request body. The frame is the node plus how far through its
+    ///         out-edges the walk has got, which is what makes the iterative walk visit in the same order the
+    ///         recursive one did: one edge finished before the next is started.
+    ///     </para>
+    /// </summary>
     private void EnsureAcyclic(IReadOnlyList<DevWorkflowGraphEdge> edges, Func<string, IReadOnlyList<string>, string> message)
     {
-        var outbound = edges.ToLookup(static edge => edge.From, StringComparer.Ordinal);
+        // Keyed by every declared node rather than only by the ones an edge leaves, so a leaf is a lookup that answers
+        // an empty list instead of a miss. Both endpoints of every edge are declared by the time this runs.
+        var outbound = Nodes.Keys.ToDictionary(key => key, _ => new List<DevWorkflowGraphEdge>(), StringComparer.Ordinal);
+        foreach (var edge in edges)
+        {
+            outbound[edge.From].Add(edge);
+        }
+
         var onPath = new HashSet<string>(StringComparer.Ordinal);
         var path = new List<string>();
         var finished = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var nodeKey in Nodes.Keys)
+        var pending = new Stack<(string NodeKey, int EdgeIndex)>();
+        foreach (var root in Nodes.Keys.Where(key => !finished.Contains(key)))
         {
-            Walk(nodeKey);
-        }
-
-        void Walk(string nodeKey)
-        {
-            if (finished.Contains(nodeKey))
+            _ = onPath.Add(root);
+            path.Add(root);
+            pending.Push((root, 0));
+            while (pending.Count > 0)
             {
-                return;
-            }
+                var (nodeKey, edgeIndex) = pending.Pop();
+                var leaving = outbound[nodeKey];
+                if (edgeIndex == leaving.Count)
+                {
+                    _ = onPath.Remove(nodeKey);
+                    path.RemoveAt(path.Count - 1);
+                    _ = finished.Add(nodeKey);
+                    continue;
+                }
 
-            if (!onPath.Add(nodeKey))
-            {
-                // The path from the repeated key onwards IS the cycle, which is what lets the message name the nodes
-                // that made it rather than the one node the walk happened to come back to.
-                throw new DevWorkflowValidationException(message(nodeKey, path[path.IndexOf(nodeKey)..]));
-            }
+                pending.Push((nodeKey, edgeIndex + 1));
+                var next = leaving[edgeIndex].To;
+                if (finished.Contains(next))
+                {
+                    continue;
+                }
 
-            path.Add(nodeKey);
-            foreach (var edge in outbound[nodeKey])
-            {
-                Walk(edge.To);
-            }
+                if (!onPath.Add(next))
+                {
+                    // The path from the repeated key onwards IS the cycle, which is what lets the message name the
+                    // nodes that made it rather than the one node the walk happened to come back to.
+                    throw new DevWorkflowValidationException(message(next, path[path.IndexOf(next)..]));
+                }
 
-            path.RemoveAt(path.Count - 1);
-            _ = onPath.Remove(nodeKey);
-            _ = finished.Add(nodeKey);
+                path.Add(next);
+                pending.Push((next, 0));
+            }
         }
     }
 
