@@ -591,6 +591,34 @@ function nonPauseAncestors(pause: string, pauseKeys: ReadonlySet<string>, wiring
 }
 
 /**
+ * Every node a wire INTO `pause` can starve: the pause's own successors, and — walking THROUGH a successor that is
+ * itself a Pause, whose output is only its approval — the nodes behind that one too. The forward mirror of
+ * `nonPauseAncestors`, and what keeps `A → P1 → P2 → B` whole: wiring `A → P1` has to reach `B`, not just `P2`.
+ *
+ * A Pause successor is returned as well as walked through, exactly as the importer treats it: `P2` needs the content
+ * it is approving as much as `B` does.
+ */
+function successorsThroughPauses(pause: string, pauseKeys: ReadonlySet<string>, wiring: readonly GraphWorkflowWire[]): string[] {
+	const resolved: string[] = [];
+	const seen = new Set<string>([pause]);
+	const pending = [pause];
+	while (pending.length > 0) {
+		const current = pending.pop() ?? "";
+		for (const successor of wiring.filter((pair) => pair.from === current).map((pair) => pair.to)) {
+			if (seen.has(successor)) {
+				continue;
+			}
+			seen.add(successor);
+			resolved.push(successor);
+			if (pauseKeys.has(successor)) {
+				pending.push(successor);
+			}
+		}
+	}
+	return resolved;
+}
+
+/**
  * The `context` edges this graph is missing around its Pause nodes — the authoring half of the affordance S4 gave the
  * importer (`CanvasWorkflowImport.AddPauseContextEdges`, wiki page 21 §5).
  *
@@ -602,10 +630,17 @@ function nonPauseAncestors(pause: string, pauseKeys: ReadonlySet<string>, wiring
  * `upstream` map is the legitimate shape for a multi-input node, and skipping it would be the one case where the
  * affordance silently does nothing.
  *
- * The ONE guard is the importer's: a pair something already wires gets no second edge, and neither does a self-loop.
- * A `Condition` ancestor is skipped as well, which the importer never meets: the added edge would carry no
- * `sourceHandle`, so it saves as a second UNCONDITIONAL out-edge of that Condition, which both this client's
- * `conditionMultipleDefaults` rule and the server's own parser refuse.
+ * The guards, all of which keep the edge from changing what the run DOES:
+ *   - the importer's: a pair something already wires gets no second edge, and neither does a self-loop;
+ *   - a `Condition` ancestor is skipped, which the importer never meets: the added edge would carry no `sourceHandle`,
+ *     so it saves as a second UNCONDITIONAL out-edge of that Condition, which both this client's
+ *     `conditionMultipleDefaults` rule and the server's own parser refuse;
+ *   - a Pause with SEVERAL nearest non-Pause ancestors is left alone. Two ancestors are usually two exclusive
+ *     branches, and an `All` successor with a dead inbound edge is SKIPPED (`GraphWorkflowStateMachine`), so the
+ *     affordance would delete the node it was meant to feed. One ancestor is the case it can answer honestly;
+ *   - an `Any` `Join` successor is skipped: its policy fires on ONE satisfied branch, so an unconditional content edge
+ *     stays satisfied when every approval is rejected and the join would run past the Pause it was waiting on. An
+ *     `All` join is exactly the shape the affordance is built on and still gets its edge.
  *
  * Returns only the edges to ADD, so the caller can tell the operator that something appeared on the canvas. PURE — the
  * editor runs it on the connect gesture and nowhere else, so an edge the operator deletes stays deleted.
@@ -623,6 +658,10 @@ export function pauseContextEdges(
 ): readonly GraphWorkflowCanvasEdge[] {
 	const kindByKey = new Map(nodes.map((node) => [node.id, node.data.kind]));
 	const pauseKeys = new Set(nodes.filter((node) => node.data.kind === "Pause").map((node) => node.id));
+	// Only a `Join` carries a join policy the run reads; every other multi-input node waits for all of its inbound edges.
+	const anyJoins = new Set(
+		nodes.filter((node) => node.data.kind === "Join" && node.data.joinPolicy === "Any").map((node) => node.id),
+	);
 	if (pauseKeys.size === 0) {
 		return [];
 	}
@@ -637,7 +676,11 @@ export function pauseContextEdges(
 		connection === undefined
 			? [...pauseKeys].toSorted(byKey).map((pause) => [pause, successorsOf(pause)] as const)
 			: [
-					...(pauseKeys.has(connection.to) ? [[connection.to, successorsOf(connection.to)] as const] : []),
+					// Through consecutive Pause nodes, because the whole-graph pass is not coming to visit the second one:
+					// with `P1 → P2 → B` already drawn, wiring `A → P1` is the only gesture `B` will ever get.
+					...(pauseKeys.has(connection.to)
+						? [[connection.to, successorsThroughPauses(connection.to, pauseKeys, wiring)] as const]
+						: []),
 					...(pauseKeys.has(connection.from) ? [[connection.from, [connection.to]] as const] : []),
 				];
 
@@ -646,24 +689,28 @@ export function pauseContextEdges(
 	const added: GraphWorkflowCanvasEdge[] = [];
 
 	for (const [pause, successors] of scope) {
+		const ancestors = nonPauseAncestors(pause, pauseKeys, wiring);
+		// Exactly one, or nothing: see the guards above. `[0]` is then the only member there is.
+		const ancestor = ancestors.length === 1 ? ancestors[0] : undefined;
+		if (ancestor === undefined || kindByKey.get(ancestor) === "Condition") {
+			continue;
+		}
 		for (const successor of [...successors].toSorted(byKey)) {
-			for (const ancestor of nonPauseAncestors(pause, pauseKeys, wiring)) {
-				const pair = `${ancestor}>${successor}`;
-				if (ancestor === successor || pairs.has(pair) || kindByKey.get(ancestor) === "Condition") {
-					continue;
-				}
-				pairs.add(pair);
-				const key = mintEdgeKey(taken);
-				taken.add(key);
-				// Both labels, for the same reason `graphToCanvas` writes both: React Flow renders the top-level one.
-				added.push({
-					id: key,
-					source: ancestor,
-					target: successor,
-					label: "context",
-					data: { label: "context" },
-				});
+			const pair = `${ancestor}>${successor}`;
+			if (ancestor === successor || pairs.has(pair) || anyJoins.has(successor)) {
+				continue;
 			}
+			pairs.add(pair);
+			const key = mintEdgeKey(taken);
+			taken.add(key);
+			// Both labels, for the same reason `graphToCanvas` writes both: React Flow renders the top-level one.
+			added.push({
+				id: key,
+				source: ancestor,
+				target: successor,
+				label: "context",
+				data: { label: "context" },
+			});
 		}
 	}
 	return added;

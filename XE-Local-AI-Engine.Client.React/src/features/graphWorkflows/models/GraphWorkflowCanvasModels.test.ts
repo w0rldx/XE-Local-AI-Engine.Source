@@ -445,11 +445,12 @@ describe("source handle re-derivation", () => {
 });
 
 describe("pauseContextEdges", () => {
-	/** A canvas from `key:Kind` node specs and `from>to` edge specs; the editor's own shape, minus the positions. */
+	/** A canvas from `key:Kind[:JoinPolicy]` node specs and `from>to` edge specs; the editor's shape, minus positions. */
 	function canvasOf(nodeSpecs: readonly string[], edgeSpecs: readonly string[]): GraphWorkflowCanvas {
 		const nodes = nodeSpecs.map((spec) => {
-			const [key = "", kind = "Agent"] = spec.split(":");
-			return canvasNode(defaultNodeData(kind as GraphWorkflowNodeKind, key));
+			const [key = "", kind = "Agent", joinPolicy] = spec.split(":");
+			const data = defaultNodeData(kind as GraphWorkflowNodeKind, key);
+			return canvasNode(joinPolicy === "Any" ? { ...data, joinPolicy: "Any" } : data);
 		});
 		const edges = edgeSpecs.map((spec, index): GraphWorkflowCanvasEdge => {
 			const [source = "", target = ""] = spec.split(">");
@@ -516,6 +517,26 @@ describe("pauseContextEdges", () => {
 		expect(addedPairs(nodes, edges)).toEqual([]);
 	});
 
+	// An `Any` join fires on the FIRST satisfied branch, so an unconditional content edge into one is satisfied even
+	// when every approval was rejected: the join would run past the Pause instead of waiting on it.
+	it("skips an Any join successor and still feeds an All join", () => {
+		const anyJoin = ["start:Start", "a:Agent", "hold:Pause", "merge:Join:Any", "done:End"];
+		const allJoin = ["start:Start", "a:Agent", "hold:Pause", "merge:Join", "done:End"];
+		const edges = ["start>a", "a>hold", "hold>merge", "merge>done"];
+
+		expect(addedPairs(anyJoin, edges)).toEqual([]);
+		expect(addedPairs(allJoin, edges)).toEqual(["a>merge"]);
+	});
+
+	// Two ancestors are two branches, and only one of them runs. An `All` successor with a DEAD inbound edge is
+	// skipped, so a second context edge would delete the very node the affordance is there to feed.
+	it("leaves a Pause with more than one nearest ancestor alone", () => {
+		const nodes = ["start:Start", "check:Condition", "a:Agent", "a2:Agent", "hold:Pause", "b:Agent", "done:End"];
+		const edges = ["start>check", "check>a", "check>a2", "a>hold", "a2>hold", "hold>b", "b>done"];
+
+		expect(addedPairs(nodes, edges)).toEqual([]);
+	});
+
 	it("adds nothing for a Pause with no successor and none for a Pause with no ancestor", () => {
 		expect(addedPairs(["start:Start", "a:Agent", "hold:Pause"], ["start>a", "a>hold"])).toEqual([]);
 		expect(addedPairs(["hold:Pause", "b:Agent", "done:End"], ["hold>b", "b>done"])).toEqual([]);
@@ -535,6 +556,18 @@ describe("pauseContextEdges", () => {
 		expect(pairsFor("a", "first")).toEqual(["a>b"]);
 		// The whole-graph pass, which is what the importer does.
 		expect(addedPairs(nodes, edges)).toEqual(["a>b", "b>c"]);
+	});
+
+	// The reverse-order case: with `first → second → b` already drawn, wiring `a → first` is the only gesture that will
+	// ever consider `b`. The whole-graph pass would visit `second` on its own; the connection-scoped one never does.
+	it("walks through a Pause successor when the gesture wires into the Pause before it", () => {
+		const nodes = ["start:Start", "a:Agent", "first:Pause", "second:Pause", "b:Agent", "done:End"];
+		const canvas = canvasOf(nodes, ["start>a", "first>second", "second>b", "b>done", "a>first"]);
+
+		expect(pauseContextEdges(canvas.nodes, canvas.edges, { from: "a", to: "first" }).map((edge) => edge.target)).toEqual([
+			"b",
+			"second",
+		]);
 	});
 
 	it("stops on a Pause wired back into itself instead of walking forever", () => {
