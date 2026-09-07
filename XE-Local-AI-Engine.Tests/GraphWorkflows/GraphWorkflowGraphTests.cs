@@ -774,25 +774,34 @@ public sealed class GraphWorkflowGraphTests
     }
 
     /// <summary>
-    ///     An <c>Any</c> join over pauses is exempt, and not as a matter of taste: the advised edge is unconditional,
-    ///     so it would satisfy the join on its own and run the branch that every rejection was meant to stop.
+    ///     An <c>Any</c> successor over pauses is exempt whatever its KIND, and not as a matter of taste: the advised
+    ///     edge is unconditional, so it would admit the node on its own and run the branch every rejection was meant to
+    ///     stop. A join policy belongs to every node, so testing the kind here would have missed the Agent and the End.
     /// </summary>
     [Test]
-    public void Warnings_ForAnAnyJoinFedOnlyByPauses_AreEmpty()
+    [Arguments("Join")]
+    [Arguments("Agent")]
+    [Arguments("End")]
+    public void Warnings_ForAnAnySuccessorFedOnlyByPauses_AreEmpty(string kind)
     {
-        AssertEx.Empty(GraphWorkflowGraph.Parse(GraphWorkflowGraphs.PauseFanInToJoin("Any")).Warnings,
-            "advising a content edge into an Any join would let it fire without any approval at all.");
+        AssertEx.Empty(GraphWorkflowGraph.Parse(GraphWorkflowGraphs.PauseFanInTo(kind, "Any")).Warnings,
+            $"advising a content edge into an Any {kind} would admit it with no approval at all.");
     }
 
-    /// <summary>The same graph under <c>All</c> still waits for both approvals, so the advice is safe and stands.</summary>
+    /// <summary>The same graphs under <c>All</c> wait for both approvals, so the advice is safe and stands.</summary>
     [Test]
-    public void Warnings_ForAnAllJoinFedOnlyByPauses_NameTheAncestor()
+    [Arguments("Join")]
+    [Arguments("Agent")]
+    [Arguments("End")]
+    public void Warnings_ForAnAllSuccessorFedOnlyByPauses_NameTheAncestor(string kind)
     {
-        var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.PauseFanInToJoin("All"));
+        var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.PauseFanInTo(kind, "All"));
 
         AssertEx.Equal(expected: 1, graph.Warnings.Count);
         AssertEx.Equal("merge", graph.Warnings[0].Key);
-        AssertEx.Contains(graph.Warnings[0].Message, "Add an edge from 'analyze' to 'merge'", message: "an All join still waits for the approvals, so the content edge is safe.");
+        AssertEx.Contains(graph.Warnings[0].Message,
+            "Add an edge from 'analyze' to 'merge'",
+            message: $"an All {kind} still waits for the approvals, so the content edge is safe to advise.");
     }
 
     /// <summary>
