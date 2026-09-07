@@ -532,14 +532,18 @@ when an author **connects** an edge into or out of a Pause, `pauseContextEdges` 
 labelled `context` from the pause's nearest non-`Pause` ancestor to its successors, the canvas adds them, and a notice
 says one appeared. It is the same rule as the Open Canvas importer's `CanvasWorkflowImport.AddPauseContextEdges`
 (§9.2) — walking back through consecutive pauses, skipping a pair something already wires, skipping a self-loop —
-plus one guard the importer never meets: a `Condition` ancestor is skipped, because the added edge carries no
-`sourceHandle` and would save as that Condition's second unconditional out-edge, which §2.4 refuses. Y keeps its
-default `All` join policy, so it is admitted only once **both** the content and the approval have arrived, and its
-`input` is the `upstream` map carrying both.
+plus three guards the importer never meets. A `Condition` ancestor is skipped, because the added edge carries no
+`sourceHandle` and would save as that Condition's second unconditional out-edge, which §2.4 refuses. A pause whose
+nearest non-`Pause` ancestor is **not unique** (mutually exclusive branches feeding it) gets nothing, because wiring
+both ancestors into an `All` successor would skip it the moment the untaken branch is dead. And a successor that is a
+`Join` with `joinPolicy: "Any"` gets nothing, because an unconditional content edge would admit it while every
+approval was rejected. Everywhere else Y keeps its default `All` join policy, so it is admitted only once **both**
+the content and the approval have arrived, and its `input` is the `upstream` map carrying both.
 
 The pass runs on the **connect gesture and nowhere else** — never on render, never on validate — so an edge the
 author deletes stays deleted. Wiring **out of** a Pause considers only the node just connected, since that is the
-only successor that gesture can have starved; wiring **into** a Pause considers every successor of it.
+only successor that gesture can have starved; wiring **into** a Pause considers every successor of it, walking forward
+through consecutive pauses so `A → P1` wired last still reaches the `B` behind `P1 → P2 → B`.
 
 A decide call carrying a different `operationId` for an already-answered pause is 409
 `GraphWorkflowGateAlreadyDecided`, with the standing decision on the body — a second human act is refused, not
@@ -850,9 +854,9 @@ cases add nothing: a pause with no successor (already an `IMPORT NEEDS ATTENTION
 already wires — a second unconditional edge over one pair is a validation error (§2.4) — and a self-loop. `X` may be
 the `Start` node, whose output is the run's own input, which is exactly the content the pause interrupted.
 
-The editor offers the same edge to an **author**, on the connect gesture (§4.6). It carries one guard the importer
-never needs — a `Condition` ancestor is skipped, since an unconditional edge leaving a Condition is a validation
-error — and it runs only on that gesture, so an author who deletes the edge keeps it deleted.
+The editor offers the same edge to an **author**, on the connect gesture (§4.6). It carries three guards the importer
+never needs — a `Condition` ancestor, a non-unique ancestor and an `Any`-join successor are all skipped, for the
+reasons §4.6 gives — and it runs only on that gesture, so an author who deletes the edge keeps it deleted.
 
 `maxAttempts: 1` on an imported Agent is deliberately below the default of 3. An import is conservative: re-running
 somebody's agent turn twice more, on a graph they have not looked at since it changed shape, is not a decision this
