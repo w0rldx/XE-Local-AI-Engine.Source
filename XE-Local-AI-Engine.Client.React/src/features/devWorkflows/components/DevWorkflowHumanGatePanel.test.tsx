@@ -10,6 +10,7 @@ import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/core/api/errors/ApiError";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import {
 	type DevWorkflowDecisionSubmission,
@@ -360,5 +361,18 @@ describe("DevWorkflowHumanGatePanel", () => {
 
 		expect(screen.getByTestId("dev-workflow-gate-history")).toBeDefined();
 		expect(screen.queryByTestId("dev-workflow-gate-Approve")).toBeNull();
+	});
+
+	// The decision history is the audit trail of a human act, so a missing stamp has to read as missing. Coalescing
+	// it to epoch zero dated somebody's approval to 1970 and looked like a real entry.
+	it("shows the dash, not a 1970 date, for a decision with no timestamp", () => {
+		renderPanel(
+			gateNode({
+				decisions: [{ id: "d1", attempt: 1, decision: "Approve", decidedBySubject: "admin", sequence: 10 }],
+			}),
+		);
+
+		const row = screen.getByTestId("dev-workflow-gate-decision-d1");
+		expect(row.textContent).toContain(`admin \u00b7 ${formatTimestamp(undefined)}`);
 	});
 });

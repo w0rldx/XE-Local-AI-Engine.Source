@@ -12,15 +12,17 @@ import { formatDurationSeconds, formatTime, formatTimestamp } from "@/core/forma
 
 const instant = Date.UTC(2025, 2, 12, 13, 0, 0);
 
+// File-level rather than inside the first describe: every block below reads the same i18next singleton, and scoping
+// the init to one of them would leave the others depending on the order the runner happens to pick.
+beforeAll(async () => {
+	await i18next.init({ lng: "en-US", resources: { "en-US": { translation: {} }, de: { translation: {} } } });
+});
+
+afterAll(async () => {
+	await i18next.changeLanguage("en-US");
+});
+
 describe("formatTimestamp", () => {
-	beforeAll(async () => {
-		await i18next.init({ lng: "en-US", resources: { "en-US": { translation: {} }, de: { translation: {} } } });
-	});
-
-	afterAll(async () => {
-		await i18next.changeLanguage("en-US");
-	});
-
 	it("renders a dash for an absent or unusable instant", () => {
 		expect(formatTimestamp(null)).toBe("—");
 		expect(formatTimestamp(undefined)).toBe("—");
@@ -70,6 +72,53 @@ describe("formatTimestamp", () => {
 		expect(formatTimestamp(instant)).toMatch(/^\d{1,2}\.\d{1,2}\.\d{4}/);
 
 		i18next.addResourceBundle("de", "translation", {});
+	});
+});
+
+// The four sites that pass explicit options (the chat clock, the conversation-list day, the model-fit release date
+// and the usage dashboard's day label) moved onto these helpers rather than growing a third formatter. What has to
+// hold is that the options decide the FIELDS while the language still decides the order, and that a partial field
+// set is not silently padded back out to a full date-and-time by `toLocaleString`'s defaults.
+//
+// The output is asserted against the very `toLocaleDateString`/`toLocaleTimeString` call each site used to make,
+// which is the parity that mattered, and against the SHAPE across a language switch — not a literal month name or
+// AM/PM separator, both of which move between ICU versions.
+const dayOptions: Intl.DateTimeFormatOptions = { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" };
+
+describe("the options parameter", () => {
+	it("renders exactly the named fields, matching the toLocaleDateString call each site replaced", async () => {
+		await i18next.changeLanguage("en-US");
+
+		expect(formatTimestamp(instant, dayOptions)).toBe(new Date(instant).toLocaleDateString("en-US", dayOptions));
+
+		// The premise, pinned: `toLocaleString` pads its options out to a date AND a clock only when they name no
+		// date field at all, so a migrated site keeps its date-only output instead of growing a time of day.
+		expect(formatTimestamp(instant, dayOptions)).not.toMatch(/\d:\d/);
+	});
+
+	it("still formats in the active UI language, not the machine's", async () => {
+		await i18next.changeLanguage("en-US");
+
+		// English leads with the month, German with the day — the ordering bug this module exists for, under options.
+		expect(formatTimestamp(instant, dayOptions)).toMatch(/^\D/);
+		expect(formatTimestamp(instant, dayOptions)).toMatch(/\b12\b/);
+
+		await i18next.changeLanguage("de");
+
+		expect(i18next.language).toBe("de");
+		expect(formatTimestamp(instant, dayOptions)).toMatch(/^12\./);
+	});
+
+	it("narrows the clock the same way, and answers the dash for an absent value with options in hand", async () => {
+		await i18next.changeLanguage("en-US");
+		const clockOptions: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", timeZone: "UTC" };
+
+		expect(formatTime(instant, clockOptions)).toBe(new Date(instant).toLocaleTimeString("en-US", clockOptions));
+		expect(formatTime(instant, clockOptions)).toMatch(/^01:00/);
+
+		// The absent guard runs before the renderer, so options change nothing about it.
+		expect(formatTime(null, clockOptions)).toBe("—");
+		expect(formatTimestamp(undefined, dayOptions)).toBe("—");
 	});
 });
 

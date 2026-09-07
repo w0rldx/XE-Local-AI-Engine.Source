@@ -5,6 +5,7 @@ import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import { memo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatTime } from "@/core/formatting/TimeFormatting";
 import { ChatMarkdown } from "@/features/chat/components/ChatMarkdown";
 import {
 	type ChatMessageActionCapabilities,
@@ -90,8 +91,12 @@ function timeText(iso?: string): string {
 		return "";
 	}
 
-	const date = new Date(iso);
-	return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+	// Empty, not the helper's dash: an unusable stamp leaves the bubble's corner blank rather than printing a
+	// placeholder into the middle of a conversation.
+	if (Number.isNaN(new Date(iso).getTime())) {
+		return "";
+	}
+	return formatTime(iso, { hour: "2-digit", minute: "2-digit" });
 }
 
 function roleLabel(role: ChatMessageModel["role"]): string {
