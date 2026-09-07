@@ -318,11 +318,50 @@ describe("node config conversion", () => {
 });
 
 describe("edge conditions", () => {
-	it("keeps a string value as itself and a non-string value as its JSON text", () => {
+	/** One Condition node fanning out to one End, with a conditional edge per operand: `e1`, `e2`, … in order. */
+	function conditionGraph(conditions: readonly NonNullable<GraphWorkflowGraphEdge["condition"]>[]): GraphWorkflowGraph {
+		return graph(
+			[
+				{ key: "check", kind: "Condition", position: { x: 0, y: 0 }, config: { path: "output.json.status" } },
+				{ key: "done", kind: "End", position: { x: 0, y: 120 }, config: { outcome: "completed", resultPath: null } },
+			],
+			conditions.map((condition, index) => ({ key: `e${index + 1}`, from: "check", to: "done", condition })),
+		);
+	}
+
+	it("renders every value as its JSON text, so a string is quoted", () => {
 		const canvas = graphToCanvas(eightNodeGraph);
 
-		expect(edgeOf(canvas, "e5").data?.condition).toEqual({ path: "output.decision", op: "Eq", value: "Approve" });
+		expect(edgeOf(canvas, "e5").data?.condition).toEqual({ path: "output.decision", op: "Eq", value: '"Approve"' });
 		expect(edgeOf(canvas, "e3").data?.condition).toEqual({ op: "Eq", value: "true" });
+	});
+
+	// The bug the quoting exists for: the field renders, the operator saves, and the operand has changed TYPE — which
+	// silently changes which branch the stored condition matches on the next run.
+	it("round-trips a string operand that reads as another JSON type", () => {
+		const operands = ["true", "123", "null", "Approve"];
+		const source = conditionGraph(operands.map((value) => ({ op: "Ne", value })));
+
+		const canvas = graphToCanvas(source);
+		expect(canvas.edges.map((edge) => edge.data?.condition?.value)).toEqual(['"true"', '"123"', '"null"', '"Approve"']);
+
+		const { graph: result } = canvasToGraph(canvas.nodes, canvas.edges);
+		expect((result.edges ?? []).map((edge) => edge.condition?.value)).toEqual(operands);
+	});
+
+	// The other half of ruling F5-3: reading is strict JSON, writing stays lenient, so an operator who types a bare
+	// word still gets a string and one who types a number still gets a number.
+	it("saves unquoted text as a string and an unquoted number as a number", () => {
+		const canvas = graphToCanvas(conditionGraph([{ op: "Ne", value: 0 }, { op: "Ne", value: 0 }]));
+		// What the operator typed into the value field, which is the only way a canvas condition value is authored.
+		const typed = canvas.edges.map((edge) => ({
+			...edge,
+			data: { ...edge.data, condition: { op: "Ne" as const, value: edge.id === "e1" ? "Approve" : "123" } },
+		}));
+
+		const { graph: result } = canvasToGraph(canvas.nodes, typed);
+		expect(wireEdge(result, "e1").condition?.value).toBe("Approve");
+		expect(wireEdge(result, "e2").condition?.value).toBe(123);
 	});
 
 	it("normalises a stored lowercase operator to its canonical member and writes the canonical one back", () => {
@@ -601,8 +640,8 @@ describe("renameNodeKey", () => {
 		}
 		const approve = result.edges.find((edge) => edge.id === "e5");
 		expect(approve?.source).toBe("human-review");
-		expect(approve?.data?.condition?.value).toBe("Approve");
-		expect(result.edges.find((edge) => edge.id === "e9")?.data?.condition?.value).toBe("Reject");
+		expect(approve?.data?.condition?.value).toBe('"Approve"');
+		expect(result.edges.find((edge) => edge.id === "e9")?.data?.condition?.value).toBe('"Reject"');
 	});
 
 	it("refuses a name held by another node or by an edge, and one outside the server's charset", () => {

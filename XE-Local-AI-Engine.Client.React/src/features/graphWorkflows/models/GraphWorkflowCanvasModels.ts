@@ -237,11 +237,15 @@ function nodeDataFromWire(node: GraphWorkflowGraphNode): GraphWorkflowCanvasNode
 	}
 }
 
-/** A wire condition `value` as canvas text: a string stays itself, so `"Approve"` reads as `Approve`, not `"Approve"`. */
+/**
+ * A wire condition `value` as canvas text: its JSON, so a string reads QUOTED — `"Approve"`, not `Approve`.
+ *
+ * The quotes are what keep the operand's TYPE through an open-and-save. `conditionValueToWire` parses this text as
+ * JSON, so rendering a string raw handed back the stored strings `"true"`, `"123"` and `"null"` as a boolean, a number
+ * and null — a different branch than the one the author stored, on an edit that touched nothing. Writing is still
+ * lenient (ruling F5-3): text that is not JSON saves as the string it is, so typing `Approve` still works.
+ */
 function conditionValueText(value: unknown): string {
-	if (typeof value === "string") {
-		return value;
-	}
 	return value === undefined ? "" : (JSON.stringify(value) ?? "");
 }
 
@@ -278,18 +282,24 @@ function sourceHandleFor(
 		return stored;
 	}
 	const label = stringOrEmpty(edge.label);
+	// The WIRE operand, never the canvas text: that text is JSON, so a decision reads `"Approve"` there and a boolean
+	// branch and a `"true"` string are one and the same token again. The handle is derived from what was stored.
+	const operand: unknown = edge.condition?.value;
 	if (sourceKind === "Condition") {
 		if (label === "true" || label === "false") {
 			return label;
 		}
-		return condition?.op === "Eq" && (condition.value === "true" || condition.value === "false") ? condition.value : undefined;
+		if (condition?.op !== "Eq") {
+			return undefined;
+		}
+		return operand === true || operand === "true" ? "true" : operand === false || operand === "false" ? "false" : undefined;
 	}
 	if (sourceKind === "Pause") {
 		const decisions: readonly string[] = graphWorkflowDecisionKinds;
 		if (decisions.includes(label)) {
 			return label;
 		}
-		return condition !== undefined && decisions.includes(condition.value) ? condition.value : undefined;
+		return condition !== undefined && typeof operand === "string" && decisions.includes(operand) ? operand : undefined;
 	}
 	return undefined;
 }
@@ -429,7 +439,11 @@ function configToWire(data: GraphWorkflowCanvasNodeData, issues: GraphWorkflowGr
 	}
 }
 
-/** A canvas condition value back to JSON, falling back to the raw string — so `Approve` stays a string, `true` a boolean. */
+/**
+ * A canvas condition value back to JSON, falling back to the raw string — so `"Approve"` and `Approve` both stay the
+ * string `Approve`, and `true` a boolean. Deliberately LENIENT (ruling F5-3) while `conditionValueText` writes strict
+ * JSON: the field reads back what it rendered, and an operator who types an unquoted word still gets a string.
+ */
 function conditionValueToWire(value: string): unknown {
 	try {
 		return JSON.parse(value);

@@ -248,7 +248,7 @@ describe("useGraphWorkflowEditor onConnect", () => {
 		const edge = result.current.edges.find((candidate) => candidate.source === "review" && candidate.target === "fanout");
 		expect(edge?.sourceHandle).toBe("Approve");
 		expect(edge?.label).toBe("Approve");
-		expect(edge?.data?.condition).toEqual({ path: "output.decision", op: "Eq", value: "Approve" });
+		expect(edge?.data?.condition).toEqual({ path: "output.decision", op: "Eq", value: '"Approve"' });
 		expect(result.current.issues).not.toContainEqual({ rule: "pauseDecisionUnroutable", subject: "review" });
 	});
 

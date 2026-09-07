@@ -162,7 +162,10 @@ export function GraphWorkflowEdgeConfigPanel({
 					{takesValue(condition.op) ? (
 						<TextInput
 							label={t("pages.graphWorkflows.edge.value", "Value")}
-							description={t("pages.graphWorkflows.edge.valueHelp", "Read as JSON when it parses, otherwise as text.")}
+							description={t(
+								"pages.graphWorkflows.edge.valueHelp",
+								"JSON — a string is quoted, like “Approve”. Anything that is not JSON is saved as text.",
+							)}
 							value={condition.value}
 							disabled={readOnly}
 							error={errorFor("value")}
