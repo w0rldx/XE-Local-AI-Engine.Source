@@ -530,11 +530,11 @@ satisfied predecessor's output (§3.2), so an authored `X → Pause → Y` hands
 Pause writes. The validator raises the non-blocking warning of §2.4 on Y. And the editor adds the missing edge itself:
 when an author **connects** an edge into or out of a Pause, `pauseContextEdges` returns the unconditional edges
 labelled `context` from the pause's nearest non-`Pause` ancestor to its successors, the canvas adds them, and a notice
-says one appeared. It is the same rule as the Open Canvas importer's `CanvasWorkflowImport.AddPauseContextEdges`
+says one appeared. It descends from the Open Canvas importer's `CanvasWorkflowImport.AddPauseContextEdges`
 (§9.2) — walking back through consecutive pauses, skipping a self-loop — judged per **successor** exactly as the
 validator judges it: only a successor whose every inbound edge leaves a Pause is starved (one something else already
 feeds is not, so it gets nothing and no warning), and the ancestor is the union of the nearest non-`Pause` ancestors
-of every pause feeding it. Three further guards the importer never meets: A `Condition` ancestor is skipped, because the added edge carries no
+of every pause feeding it. The importer has neither that starvation test nor the uniqueness test (it adds one edge per ancestor per successor), and three further guards it never meets: A `Condition` ancestor is skipped, because the added edge carries no
 `sourceHandle` and would save as that Condition's second unconditional out-edge, which §2.4 refuses. A pause whose
 nearest non-`Pause` ancestor is **not unique** (mutually exclusive branches feeding it) gets nothing, because wiring
 both ancestors into an `All` successor would skip it the moment the untaken branch is dead. And a successor with
@@ -859,9 +859,9 @@ cases add nothing: a pause with no successor (already an `IMPORT NEEDS ATTENTION
 already wires — a second unconditional edge over one pair is a validation error (§2.4) — and a self-loop. `X` may be
 the `Start` node, whose output is the run's own input, which is exactly the content the pause interrupted.
 
-The editor offers the same edge to an **author**, on the connect gesture (§4.6). It carries three guards the importer
-never needs — a `Condition` ancestor, a non-unique ancestor and an `Any`-policy successor of any kind are all skipped, for the
-reasons §4.6 gives — and it runs only on that gesture, so an author who deletes the edge keeps it deleted.
+The editor offers the same edge to an **author**, on the connect gesture (§4.6). It is stricter than the importer
+— only a successor every one of whose inbound edges leaves a Pause is starved, and a `Condition` ancestor, a non-unique
+ancestor and an `Any`-policy successor of any kind are all skipped, for the reasons §4.6 gives — and it runs only on that gesture, so an author who deletes the edge keeps it deleted.
 
 `maxAttempts: 1` on an imported Agent is deliberately below the default of 3. An import is conservative: re-running
 somebody's agent turn twice more, on a graph they have not looked at since it changed shape, is not a decision this
