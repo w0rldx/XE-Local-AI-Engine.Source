@@ -29,9 +29,9 @@ click the item inside. Written here as `Group → Item`.
 | **Automation → MCP** | External tool servers |
 | **Automation → Scheduler** | Unattended runs |
 | **Automation → Tools** | Available tools |
-| **Preview → Open Canvas** | Visual workflow builder (experimental) |
 | **Preview → Image Generation** | Local image generation |
 | **Preview → Development** | Development Mode ([read this first](privacy-and-data.md#development-mode-and-its-limits)) |
+| **Graph Workflows** | Draw a workflow as a diagram — agent steps, tool calls, conditions, and a step that waits for your approval — then start runs of it and follow each one |
 | **Benchmarks** | Compare models on one task of your own ([what it does](features.md#benchmarks)) |
 | **Training → Datasets** | Build a training set with a local model, and review every sample |
 | **Training → Training** | Fine-tune a model on it — **Linux + NVIDIA only** ([what it does](features.md#fine-tuning-training)) |

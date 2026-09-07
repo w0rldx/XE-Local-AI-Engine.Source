@@ -70,7 +70,10 @@ Each entity's encrypted columns are registered explicitly with their AAD identit
 | `NodeToolEvent` | `plaintext_args`, `plaintext_result` (both optional) | (ConversationId, ToolCallId, …) |
 | `NodeSelectedFolder` | `host_path` (required) | (`Guid.Empty`, Id, `host_path`) — node-scoped |
 | `AgentDefinition` | `instructions` (required), `description` (optional) | (`Guid.Empty`, Id, …) — node-scoped |
-| `CanvasWorkflow` | `graph_json` (required) | (`Guid.Empty`, Id, `graph_json`) — node-scoped |
+| `GraphWorkflowDefinition` | `graph_json` (required) | (`Guid.Empty`, Id, `graph_workflow_definition_graph_json`) — node-scoped |
+| `GraphWorkflowRun` | `graph_json` (required), `input_json`, `output_json` | (DefinitionId, Id, `graph_workflow_run_*`) — the run binds its definition |
+| `GraphWorkflowNodeRun` | `input_json`, `output_json`, `error`, `decided_by` (all optional) | (RunId, Id, `graph_workflow_node_run_*`) — **four distinct AAD column names on one row**: an edge condition routes on `output_json`, so a shared name would let a database writer move an input, an error or a decider into the output column and reroute a run without forging a ciphertext |
+| `GraphWorkflowRunEvent` | `detail_json` (optional) | (RunId, Id, `graph_workflow_run_event_detail_json`) |
 | `AgentSkill` | `description`, `body` (both required) | (`Guid.Empty`, Id, …) — node-scoped |
 | `AgentSkillResource` | `content` | (SkillId, Id, name-derived column) — moving or renaming a resource fails authentication |
 | `CustomTool` | `description`, secret-bearing `config_json` | (`Guid.Empty`, Id, `description` / `custom_tool_config_json`) |
@@ -107,7 +110,10 @@ Entities live in `Entities/` with mapping in the matching `Configurations/*Confi
 | `AgentSkill` | skills | Agent Mode | encrypted description + SKILL.md body |
 | `AgentSkillResource` | `agent_skill_resources` | Agent Mode | encrypted imported resource content; cascade FK to `agent_skills` |
 | `CustomTool` | `custom_tools` | Agent Mode / Custom Tools | `custom__*` name; encrypted model description + secret-bearing configuration; structural kind/mode/parameters/enabled/acknowledged/version |
-| `CanvasWorkflow` | workflows | Open Canvas | encrypted `graph_json` (carries agent instructions) |
+| `GraphWorkflowDefinition` | `graph_workflow_definitions` | [Graph Workflows](21-graph-workflows.md) | encrypted `graph_json` (carries per-node agent instructions); plaintext name/description plus the denormalized `graph_hash`, `node_count` and `schema_version` the list page reads instead of decrypting every graph |
+| `GraphWorkflowRun` | `graph_workflow_runs` | Graph Workflows | one execution. Encrypted pinned `graph_json`, `input_json`, `output_json`; unique `request_id` (the caller's idempotency key); **no foreign key to the definition**, so a definition may be hard-deleted while terminal runs stand with the graph they actually ran; `seq` is the run's single monotonic change watermark |
+| `GraphWorkflowNodeRun` | `graph_workflow_node_runs` | Graph Workflows | one row per `(run, node key)`, unique on the pair — `attempt` increments in place and per-attempt history lives in the event log. Encrypted input/output documents, error text and decider subject; plaintext `node_key`, kind, status and decision columns |
+| `GraphWorkflowRunEvent` | `graph_workflow_run_events` | Graph Workflows | append-only change log, unique on `(run_id, seq)`; encrypted `detail_json` holds small structured payloads only, never a transcript |
 | `PlaybookAction` | playbook actions | Agent Mode | encrypted behavior; analysis/eval staging + `enabled_at_utc` |
 | `GoldenConversation` | golden conversations | Agent Mode eval | encrypted payload; harvest provenance |
 | `McpServerRegistration` | mcp servers | MCP | transport kind, registration metadata |
@@ -171,7 +177,7 @@ Migrations live in `Migrations/` and upgrade the existing SQLite schemas in plac
 | `20260602105529_AddModelFitTables` | Model-fit snapshot/recommendation/benchmark plus the legacy utility-image allow-list later removed by `DropApprovedUtilityImages` |
 | `20260602195614_AddAgentDefinitionSeedProvenance` | `seed_slug` + source for the agency seed pack |
 | `20260606045854_AddAgentSkills` | `AgentSkill` (encrypted description + body) |
-| `20260606151544_AddCanvasWorkflows` | `CanvasWorkflow` (encrypted graph JSON) |
+| `20260606151544_AddCanvasWorkflows` | `CanvasWorkflow` (encrypted graph JSON) — the Open Canvas table, later removed by `DropCanvasWorkflows` |
 | `20260608093959_AddMessageAgentDefinitionId` | Per-message agent attribution |
 | `20260610165152_EncryptConversationTitle` | Migrate conversation `title` → encrypted BLOB (backfill from first message) |
 | `20260617222625_AddModelProviderMap` | `model_provider_map` (NOCASE PK; unencrypted) — runtime re-arch routing |
@@ -217,8 +223,10 @@ Migrations live in `Migrations/` and upgrade the existing SQLite schemas in plac
 | `20260815171537_AddTrainingDatasetDefinitionSnapshot` | Adds `training_datasets.definition_json`, the pinned copy of the definition body a dataset was generated from |
 | `20260816174029_AddBenchmarkRunLaunchReceipts` | Adds the benchmark run's launch/environment receipt columns |
 | `AddIntegrationFoundation` | Adds the five external-integration tables (`integration_triggers`, `integration_api_keys`, `integration_sessions`, `integration_executions`, `integration_execution_events`) plus `conversations.kind`, whose backfill stamps `work-session` on every conversation an `agent_work_sessions` row owns |
+| `20260904145855_AddGraphWorkflows` | The four [Graph Workflows](21-graph-workflows.md) tables: `graph_workflow_definitions`, `graph_workflow_runs`, `graph_workflow_node_runs`, `graph_workflow_run_events` |
 | `20260904190259_AddModelReadinessTelemetry` | Adds `model_readiness_ms` to `agent_execution_logs` and `dev_workflow_node_runs` — how much of a turn was a local runtime warming |
 | `20260904234758_AddVramAtLoadTelemetry` | Adds `vram_free_at_load_bytes` and `vram_admitted_bytes` to `dev_workflow_node_runs` — what the box had free, and what admission reserved, at the serving model's last load |
+| `DropCanvasWorkflows` | Removes `canvas_workflows` with the Open Canvas feature. **Ordering is load-bearing**: the node reads and decrypts every canvas *before* migrations run and writes the converted Graph Workflow definitions *after*, because a migration has no node key and cannot decrypt the blob — see [Graph Workflows §9](21-graph-workflows.md#9-the-open-canvas-import) |
 
 The table above is a timeline, not an inventory — `ls Migrations/*.cs` (excluding `.Designer.cs` and
 `*ModelSnapshot.cs`) is the count that is true today, and the two contexts share the folder while
@@ -271,6 +279,7 @@ Two reading traps a query must respect. The columns hold the **last attempt only
 - [Scheduler](06-scheduler.md) — scheduler tables
 - [Model Fit](07-model-fit.md) — model-fit snapshot/recommendation/benchmark tables
 - [Training](18-training.md) — the training/dataset/evaluation tables and their encryption
+- [Graph Workflows](21-graph-workflows.md) — the four graph-workflow tables and the one-shot Open Canvas import
 - [API & Hubs](09-api-and-hubs.md) — auth/identity consumers
 - [Security & Privacy](12-security-and-privacy.md) — key derivation, AAD binding, cloud-credential storage
 - [Testing & Validation](13-testing-and-validation.md)

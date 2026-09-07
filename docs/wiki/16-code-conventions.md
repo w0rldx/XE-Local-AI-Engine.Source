@@ -98,7 +98,7 @@ related request/response records. Intentional — do **not** explode into one-re
 
 Each `internal static` mapper is its own `{Name}Mapper.cs` in the area's `Mappers/` subfolder (e.g.
 `DevelopmentContractMapper`, `CloudSettingsEndpointDtoMapper`, `NodeSettingsEndpointDtoMapper`,
-`PreviewWorkflowResponseMapper`, `InvocationMonitorResponseMapper`, `SkillMapper`,
+`GraphWorkflowContractMapper`, `InvocationMonitorResponseMapper`, `SkillMapper`,
 `TutorialStateMapper`). A mapper inlined inside a `*Dtos.cs`/`*Contracts.cs` or among endpoint classes in
 an `*Endpoint(s).cs` file is the outlier — extract it into `Mappers/`.
 
@@ -181,6 +181,14 @@ ephemeral UI state, use a **nested `actions: { … }`** object (dominant convent
 (`useStore((s) => s.actions.x)`). `useShallow` is **deliberately unused** (0 occurrences) — avoid object
 selectors rather than reaching for it. Reference: `features/mcp/stores/McpManagementStore.ts`.
 
+### An unsaved-changes guard on a search-param page needs `allowSameRoute`
+
+`useUnsavedChangesGuard({ isDirty })` blocks every navigation, including one that only rewrites a search
+param. On a page whose selections live in search params — the [Graph Workflows](21-graph-workflows.md)
+editor is the one that hit this — that turns clicking a node into a leave prompt. Pass `allowSameRoute: true`
+there: it compares pathnames and blocks a real route change while letting a same-route search-param write
+through. The default is unchanged, and the other seven callers do not set it.
+
 ### Auth / error interceptors live once on the shared axios instance
 
 `Bearer` injection, 401→refresh, and the FormData Content-Type fix are registered once on the shared axios
@@ -200,7 +208,7 @@ broken." Config is `doctor.config.jsonc` (JSONC for comments; a `.json` with `//
 Some findings are intentional idioms carrying a justification comment; removing the suppression
 reintroduces a real bug:
 - **`no-ref-current-in-render`** in the SignalR hub hooks (`useSchedulerHub`,
-  `useModelFitSchedulerEvents`, `useImageJobHub`, `usePreviewWorkflowHub`) — the *latest-value ref* idiom;
+  `useModelFitSchedulerEvents`, `useImageJobHub`) — the *latest-value ref* idiom;
   making these effect deps would tear down and rebuild the hub connection mid-negotiation.
 - **`effect-needs-cleanup`** on those hooks — the cleanup is real but hidden behind a shared refcount
   (`hub.release()` + `connection.off(...)`); the rule can't see the indirection.

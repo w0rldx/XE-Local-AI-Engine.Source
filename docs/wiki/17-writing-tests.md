@@ -11,7 +11,8 @@ make a test flaky, slow, or silently vacuous. Read it before adding a suite.
 | The thing you are testing | Project |
 |---|---|
 | An endpoint, hub, hosted service, auth policy, or anything needing the wired node host | `XE-Local-AI-Engine.Tests` |
-| MAF/MEAI agent runtime — chat clients, tools, invocation, evals, preview workflows | `XE-Local-AI-Engine.AI.Agent.Tests` |
+| MAF/MEAI agent runtime — chat clients, tools, invocation, evals | `XE-Local-AI-Engine.AI.Agent.Tests` |
+| A [Graph Workflows](21-graph-workflows.md) parser, state-machine, document, dispatcher, executor or endpoint rule | `XE-Local-AI-Engine.Tests` (`GraphWorkflows/`, `Endpoints/GraphWorkflows/V1/`, `Hubs/`) — the module lives in `Client.Application`, not in the agent runtime |
 | An EF migration, an entity store, the AEAD cipher, or the persistence contract | `XE-Local-AI-Engine.Client.Persistence.Tests` |
 | A user-visible flow that must survive real routing, real SignalR, and a real browser | `XE-Local-AI-Engine.Tests.E2ETests` |
 | A React component, hook, or mapper | colocated `*.test.ts(x)` next to the source in `XE-Local-AI-Engine.Client.React/src/` |
