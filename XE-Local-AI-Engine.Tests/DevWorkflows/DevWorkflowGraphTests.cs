@@ -952,14 +952,19 @@ public sealed class DevWorkflowGraphTests
     ///         which runs only when a materialization adds an edge the author did not write; and the gate-and-apply
     ///         tail is what makes the invariants ask for a topological order of the whole depth.
     ///     </para>
+    ///     <para>
+    ///         The ancestor row is twice as deep because its frame is smaller: measured, the recursive walk it replaced
+    ///         still survives 50 000 of them and aborts on 100 000, while the acyclicity walk aborts on 50 000. Each
+    ///         row is sized to the walk it is about rather than to a number that reads tidy.
+    ///     </para>
     /// </summary>
     [Test]
     [Arguments(false, false, 50_000, "the authored edge set")]
     [Arguments(true, false, 50_001, "the augmented edge set, whose walk runs only when a materialization adds an edge")]
-    [Arguments(false, true, 50_003, "the topological order the gate and apply invariants are computed over")]
+    [Arguments(false, true, 100_003, "the topological order the gate and apply invariants are computed over")]
     public void Parse_WithAChainDeeperThanTheStackWouldCarry_IsWalkedWithoutRecursion(bool materialized, bool gatedApply, int expected, string because) =>
         AssertEx.Equal(expected,
-            DevWorkflowGraph.Parse(DevWorkflowGraphs.Chain(nodeCount: 50_000, materialized, gatedApply)).Nodes.Count,
+            DevWorkflowGraph.Parse(DevWorkflowGraphs.Chain(gatedApply ? 100_000 : 50_000, materialized, gatedApply)).Nodes.Count,
             because);
 
     [Test]
