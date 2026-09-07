@@ -543,6 +543,34 @@ internal static class GraphWorkflowGraphs
                                                 """;
 
     /// <summary>
+    ///     <see cref="PauseBetweenTwoAgents" /> with a loose response schema on <c>analyze</c> as well: one graph that
+    ///     earns BOTH warning kinds, on two different nodes. The schema constrains a string it cannot constrain and
+    ///     leaves the property optional when the runtime will require it.
+    /// </summary>
+    public const string PauseAfterALooseResponseSchema = """
+                                                         {
+                                                           "schemaVersion": 1,
+                                                           "nodes": [
+                                                             { "key": "start", "kind": "Start" },
+                                                             { "key": "analyze", "kind": "Agent",
+                                                               "config": { "instructions": "Analyze the input.",
+                                                                           "responseJsonSchema": { "type": "object",
+                                                                                                   "properties": { "verdict": { "type": "string", "pattern": "^(ok|bad)$" } } } } },
+                                                             { "key": "review", "kind": "Pause",
+                                                               "config": { "prompt": "Approve the analysis?", "allowedDecisions": ["Approve"], "requireComment": false } },
+                                                             { "key": "summarize", "kind": "Agent", "config": { "instructions": "Summarize the analysis." } },
+                                                             { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                           ],
+                                                           "edges": [
+                                                             { "key": "e1", "from": "start", "to": "analyze" },
+                                                             { "key": "e2", "from": "analyze", "to": "review" },
+                                                             { "key": "e3", "from": "review", "to": "summarize" },
+                                                             { "key": "e4", "from": "summarize", "to": "done" }
+                                                           ]
+                                                         }
+                                                         """;
+
+    /// <summary>
     ///     <see cref="PauseBetweenTwoAgents" /> with the cure: the unconditional <c>context</c> edge from the pause's
     ///     nearest non-Pause ancestor, which is what the Open Canvas importer adds for itself. <c>summarize</c> keeps
     ///     the default <c>All</c> join, so it is admitted only once BOTH the content and the approval have arrived.
