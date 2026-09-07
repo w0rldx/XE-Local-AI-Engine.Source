@@ -482,6 +482,15 @@ describe("config form schemas", () => {
 		);
 	});
 
+	// `char.IsWhiteSpace` and JavaScript's `\s` are not the same set, and they disagree in BOTH directions. Each of
+	// these two characters is on the opposite side of the two rules, so `\s` would fail one of these assertions.
+	it("answers the server on the two whitespace characters JavaScript disagrees with it about", () => {
+		// U+0085 is whitespace to .NET and not to `\s`: the field would read green on a path the save then 400s.
+		expect(conditionConfigSchema.safeParse({ path: "output.\u0085json" }).success).toBe(false);
+		// U+FEFF is whitespace to `\s` and not to .NET: the field would refuse a path the server stores happily.
+		expect(conditionConfigSchema.safeParse({ path: "out\uFEFFput.json" }).success).toBe(true);
+	});
+
 	it("answers an i18n KEY, not a sentence, for every field it refuses", () => {
 		const cases = [
 			[nodeCommonSchema, { key: "not a key", label: "" }, "pages.graphWorkflows.form.key.invalid"],

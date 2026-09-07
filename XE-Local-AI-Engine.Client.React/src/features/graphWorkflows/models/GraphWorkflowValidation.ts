@@ -481,10 +481,20 @@ export function serverWarningsToIssues(
  * `GraphWorkflowTokens.IsDotPath` verbatim: dot-separated segments, each NON-EMPTY and free of whitespace and the
  * bracket, star and parenthesis characters that would make it a wildcard, an index or a function call (brief §3.1).
  * Deliberately not narrower than the server's — a JSON property may be hyphenated, and refusing one the server accepts
- * blocks a save. The dot is excluded from the segment itself, or `a..b`, `.a` and `a.` all match a pattern the server
+ * blocks a save. The dot is excluded from the segment itself, or `a..b`, `.a` and `a.` all match a rule the server
  * refuses and the field is green on a path the save then 400s.
+ *
+ * The whitespace is `char.IsWhiteSpace` SPELLED OUT rather than `\s`, because the two sets are not the same one and
+ * disagree in both directions: `\s` misses U+0085 (a path the server refuses would be green here) and adds U+FEFF (a
+ * path the server accepts would block the save). Neither is a set this client may narrow or widen on its own.
  */
-const GRAPH_WORKFLOW_PATH_PATTERN = /^[^\s.[\]*()]+(\.[^\s.[\]*()]+)*$/;
+const GRAPH_WORKFLOW_PATH_FORBIDDEN =
+	/[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000[\]*()]/;
+
+/** `IsDotPath` itself: every dot-separated segment non-empty and free of the characters above. */
+function isGraphWorkflowDotPath(path: string): boolean {
+	return path.split(".").every((segment) => segment.length > 0 && !GRAPH_WORKFLOW_PATH_FORBIDDEN.test(segment));
+}
 
 function messageKey(field: string, error: string): string {
 	return `pages.graphWorkflows.form.${field}.${error}`;
@@ -516,7 +526,7 @@ function optionalDotPath(field: string) {
 	return z
 		.string()
 		.nullable()
-		.refine((value) => (value ?? "").trim().length === 0 || GRAPH_WORKFLOW_PATH_PATTERN.test(value ?? ""), {
+		.refine((value) => (value ?? "").trim().length === 0 || isGraphWorkflowDotPath(value ?? ""), {
 			message: messageKey(field, "invalid"),
 		});
 }
