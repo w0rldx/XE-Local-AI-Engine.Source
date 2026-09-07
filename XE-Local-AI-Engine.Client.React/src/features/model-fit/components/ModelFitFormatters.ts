@@ -15,15 +15,6 @@ export function fitLevelColor(fitLevel: string | null): string {
 	}
 }
 
-// Formats an epoch-millis timestamp for display, or a dash when absent.
-export function formatModelFitTimestamp(value: number | null): string {
-	if (value === null) {
-		return "—";
-	}
-	const date = new Date(value);
-	return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
-}
-
 // Formats a model release date (an ISO date string like "2025-03-12", or an ISO datetime whose leading date we take)
 // as a locale-aware, date-only string, or a dash when absent or unparsable. The calendar date is parsed from its
 // year/month/day parts and built with the local-time Date constructor — never `new Date("2025-03-12")`, which parses

@@ -1,6 +1,7 @@
 import { Button, Divider, Group, NavLink, ScrollArea, Select, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { DevWorkflowRunStatusBadge } from "@/features/devWorkflows/components/DevWorkflowStatusBadge";
@@ -95,7 +96,7 @@ export function DevWorkflowRunSummaryPanel({
 									}
 									description={
 										run.startedAtUtc
-											? new Date(run.startedAtUtc).toLocaleString()
+											? formatTimestamp(run.startedAtUtc)
 											: // A Pending run genuinely has no start time; printing epoch zero would date it to 1970.
 												t("pages.devWorkflows.detail.notStarted", "not started yet")
 									}

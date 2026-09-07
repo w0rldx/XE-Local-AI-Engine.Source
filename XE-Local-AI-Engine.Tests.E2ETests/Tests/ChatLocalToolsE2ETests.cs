@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Tests;
 
+using System.Runtime.CompilerServices;
 using Microsoft.Playwright;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
@@ -13,8 +14,9 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///         <item>
 ///             <see cref="FakeOllamaState.ToolCallScript" /> returns the tool-call on the first
 ///             request; the <c>FunctionInvokingChatClient</c> executes the tool, appends the result,
-///             and re-invokes the model.  On the second request the script returns <c>null</c> so
-///             the fake model echoes the final text reply.
+///             and re-invokes the model.  On the second request the script returns <c>null</c> and
+///             <see cref="FakeOllamaState.ChatScript" /> answers instead — parked in a gate the test
+///             releases, so the stream is still open when the mid-stream assertion runs.
 ///         </item>
 ///         <item>A tool-call group appears in the chat timeline.</item>
 ///         <item>The assistant text reply completes (send button reverts to "Send").</item>
@@ -38,11 +40,20 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
     // (it advertises `completion` + `tools` via ShowEndpoint), mirroring a real user selecting e.g. qwen.
     private const string ToolCapableModelName = "qwen3.5:0.8b";
 
+    // Holds the fake's post-tool answer open until the test releases it, so "the stream is in flight" is a state the
+    // test creates rather than one it hopes to catch. Same shape as OnboardingTourE2ETests' tutorial-reply gate.
+    private readonly TaskCompletionSource<bool> _answerGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     [After(Test)]
     public void ResetToolCallScript()
     {
-        // Always clear the script so no state leaks into subsequent tests on the shared session.
+        // Release first: a test that failed before its own release would otherwise leave the parked FakeOllama
+        // request holding a connection on the shared session.
+        _answerGate.TrySetResult(true);
+
+        // Always clear the scripts so no state leaks into subsequent tests on the shared session.
         Factory.FakeOllamaState.ToolCallScript = null;
+        Factory.FakeOllamaState.ChatScript = null;
     }
 
     private async Task<ILocator> NavigateAndWaitForChatAsync()
@@ -164,9 +175,15 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
                 };
             }
 
-            // Subsequent calls: fall through to the echo text reply.
+            // Subsequent calls: fall through to the gated text reply below.
             return null;
         };
+
+        // The second request — the one FunctionInvokingChatClient makes after the tool result — parks in this gate.
+        // Without it the whole exchange could finish before Playwright's first poll of the send button, and the
+        // mid-stream assertion below failed that way once under the 4-wide parallel suite. The None here is the
+        // [EnumeratorCancellation] idiom: the fake substitutes its own RequestAborted when it enumerates.
+        Factory.FakeOllamaState.ChatScript = _ => GatedAnswerAsync(_answerGate.Task, CancellationToken.None);
 
         await NavigateAndWaitForChatAsync();
         await EnableLocalToolsToggleAsync();
@@ -241,12 +258,15 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
         });
         await sendButton.ClickAsync();
 
-        // Stream started: button switches to "Stop". Wait for it to confirm the send is in-flight.
+        // Stream started: button switches to "Stop". The gate guarantees the stream is still open here.
         await Expect(sendButton)
             .ToHaveTextAsync("Stop", new LocatorAssertionsToHaveTextOptions
             {
                 Timeout = 5000
             });
+
+        // Let the fake finish the answer.
+        _answerGate.SetResult(true);
 
         // Stream must complete: send button reverts to "Send" text.
         await Expect(sendButton)
@@ -288,6 +308,14 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
             {
                 Timeout = 5000
             });
+    }
+
+    // The token is the fake's RequestAborted: without it a parked request could only be released by the after-hook,
+    // so a cancelled or torn-down run would sit on the gate.
+    private static async IAsyncEnumerable<string> GatedAnswerAsync(Task gate, [EnumeratorCancellation] CancellationToken ct)
+    {
+        await gate.WaitAsync(ct).ConfigureAwait(false);
+        yield return "12*9 is 108";
     }
 
     [Test]

@@ -1,5 +1,7 @@
 import type { TFunction } from "i18next";
 
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+
 // Domain view-models for the invocation monitor. The generated OpenAPI responses are the single source of truth
 // for the wire shape; their fields are all optional. These stricter types (every field required) are what the
 // page and the pure helpers below depend on — the mappers in InvocationMonitorMappers.ts coalesce each optional
@@ -69,7 +71,7 @@ export function formatInvocationTimestamp(value: string | null | undefined): str
 		return "Not reported";
 	}
 
-	return date.toLocaleString();
+	return formatTimestamp(date.getTime());
 }
 
 export function formatInvocationDuration(durationMs: number | null | undefined): string {

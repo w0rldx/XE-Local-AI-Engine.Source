@@ -5,6 +5,7 @@ import type {
 	XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse,
 	XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus,
 } from "@/core/api/generated";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 
 // Local aliases for the (verbose) generated DTO names so the feature code reads cleanly. The generated types stay
 // the single source of truth — these are pure re-exports, not parallel shapes.
@@ -150,11 +151,7 @@ export function formatKnowledgeBytes(bytes: number): string {
 
 // createdAtUtc / updatedAtUtc ride the wire as epoch MILLISECONDS (matches the agent-execution-log convention).
 export function formatKnowledgeTimestamp(epochMs: number): string {
-	if (!Number.isFinite(epochMs) || epochMs <= 0) {
-		return "—";
-	}
-	const date = new Date(epochMs);
-	return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
+	return Number.isFinite(epochMs) && epochMs > 0 ? formatTimestamp(epochMs) : "—";
 }
 
 // Returns the lower-cased extension of a filename (including the leading dot), or "" when there is none.

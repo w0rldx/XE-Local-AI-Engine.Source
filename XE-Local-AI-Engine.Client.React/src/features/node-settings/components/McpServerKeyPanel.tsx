@@ -1,5 +1,7 @@
 import { Alert, Badge, Button, Card, Code, CopyButton, Group, Select, Stack, Text, Title } from "@mantine/core";
 import { IconAlertTriangle, IconCheck, IconCopy, IconPlugConnected, IconRefresh, IconTrash } from "@tabler/icons-react";
+
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import {
 	useGenerateMcpServerApiKey,
 	useMcpServerApiKey,
@@ -102,7 +104,7 @@ export function McpServerKeyPanel() {
 						<Text size="xs" c="dimmed" data-testid="mcp-server-key-last-used">
 							{data.lastUsedAt
 								? t("pages.nodeSettings.mcpServerKey.lastUsed", "Last used {{when}}", {
-										when: new Date(data.lastUsedAt).toLocaleString(),
+										when: formatTimestamp(data.lastUsedAt),
 									})
 								: t("pages.nodeSettings.mcpServerKey.neverUsed", "Never used yet — no client has connected with this key.")}
 						</Text>

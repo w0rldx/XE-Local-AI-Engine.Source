@@ -12,6 +12,7 @@ import {
 	startNodeBindingMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -36,7 +37,7 @@ function errorMessage(error: unknown): string {
 
 function formatDate(value: string): string {
 	const date = new Date(value);
-	return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+	return Number.isNaN(date.getTime()) ? value : formatTimestamp(date.getTime());
 }
 
 export function NodeBinding() {

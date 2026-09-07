@@ -4,6 +4,7 @@ import { type FormEvent, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import {
 	type ImageModelFamily,
 	imageModelFamilies,
@@ -13,7 +14,6 @@ import {
 	suggestFamilyForRepo,
 } from "@/features/images/models/ImageModels";
 import { useBrowseImageRepositories, useInspectImageRepository } from "@/features/images/queries/useImageQueries";
-import { formatGgufTimestamp } from "@/features/models/models/GgufFormatters";
 import { humanizeBytes } from "@/features/models/models/DownloadRateEstimate";
 
 /** The file-set an operator assembled in this panel, ready for the install mutation. */
@@ -431,7 +431,7 @@ function RepositoryResults({ isSearching, hasSearched, repositories, onOpen }: R
 							</Table.Td>
 							<Table.Td>{repository.downloads.toLocaleString()}</Table.Td>
 							<Table.Td>{repository.likes.toLocaleString()}</Table.Td>
-							<Table.Td>{formatGgufTimestamp(repository.lastModifiedAtUtc)}</Table.Td>
+							<Table.Td>{formatTimestamp(repository.lastModifiedAtUtc)}</Table.Td>
 							<Table.Td>{repository.license ?? "—"}</Table.Td>
 							<Table.Td>
 								<Button

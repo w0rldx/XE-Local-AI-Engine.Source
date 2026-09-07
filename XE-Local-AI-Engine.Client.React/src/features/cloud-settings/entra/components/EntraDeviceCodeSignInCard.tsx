@@ -19,6 +19,7 @@ import { IconAlertTriangle, IconCheck, IconCopy, IconExternalLink, IconLogin, Ic
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { toast } from "@/core/ui/notifications/Toast";
 import {
 	useEntraDeviceCodeSignIn,
@@ -153,7 +154,7 @@ export function EntraDeviceCodeSignInCard() {
 							rightSectionWidth={64}
 						/>
 						<Text size="sm" c="dimmed">
-							{t("pages.cloudSettings.entra.expires", "Code expires")}: {new Date(deviceCode.expiresAtUtc).toLocaleString()}
+							{t("pages.cloudSettings.entra.expires", "Code expires")}: {formatTimestamp(deviceCode.expiresAtUtc)}
 						</Text>
 						<Group gap="xs">
 							<Loader size="xs" />

@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import type { Snapshot } from "@/core/diagnostics/Diagnostics";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { BreadcrumbTimeline } from "@/features/diagnostics/components/BreadcrumbTimeline";
 import { NetworkLog } from "@/features/diagnostics/components/NetworkLog";
 import { RrwebReplay } from "@/features/diagnostics/components/RrwebReplay";
@@ -50,7 +51,7 @@ export function SnapshotDetail({ snapshot, onBack }: SnapshotDetailProps) {
 					</Badge>
 				</Group>
 				<Text c="dimmed" size="sm">
-					{t("diagnostics.detail.capturedAt", { time: new Date(snapshot.createdAt).toLocaleString() })}
+					{t("diagnostics.detail.capturedAt", { time: formatTimestamp(snapshot.createdAt) })}
 				</Text>
 			</Group>
 

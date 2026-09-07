@@ -3,6 +3,7 @@ import { IconAlertTriangle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
@@ -13,15 +14,6 @@ interface AgentExecutionLogPanelProps {
 	agentDefinitionId: string;
 	agentName: string;
 	enabled: boolean;
-}
-
-// Render an epoch-millisecond timestamp as a locale string, or an em-dash for a missing/invalid value.
-function formatTimestamp(epochMs: number): string {
-	if (epochMs <= 0) {
-		return "—";
-	}
-	const date = new Date(epochMs);
-	return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
 }
 
 // Render an optional token counter (null when the streaming path did not populate it).
@@ -106,7 +98,7 @@ export function AgentExecutionLogPanel({ agentDefinitionId, agentName, enabled }
 														: t("pages.agents.executionLog.outcome.failed", "Failed")}
 												</Badge>
 											</Table.Td>
-											<Table.Td>{formatTimestamp(log.createdAtUtc)}</Table.Td>
+											<Table.Td>{formatTimestamp(log.createdAtUtc > 0 ? log.createdAtUtc : null)}</Table.Td>
 											<Table.Td>
 												<Text size="sm" lineClamp={1}>
 													{log.modelName || "—"}

@@ -1,3 +1,5 @@
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+
 export type ConnectionStateValue = "disconnected" | "connecting" | "connected" | "reconnecting" | "pairing" | "error" | "unknown";
 
 // Stricter domain view-model the dashboard renders. The generated connection-status response has all-optional
@@ -60,7 +62,7 @@ export function formatOptionalDate(value?: string | null): string {
 	}
 
 	const date = new Date(value);
-	return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+	return Number.isNaN(date.getTime()) ? value : formatTimestamp(date.getTime());
 }
 
 export function connectionActionHint(state: string, autoConnectOnStart: boolean): string {

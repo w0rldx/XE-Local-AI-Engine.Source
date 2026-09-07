@@ -18,6 +18,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { Snapshot } from "@/core/diagnostics/Diagnostics";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
@@ -163,7 +164,7 @@ export function DiagnosticsPanel() {
 							<Table.Tbody>
 								{snapshots.map((snapshot) => (
 									<Table.Tr key={snapshot.id}>
-										<Table.Td style={nowrapCell}>{new Date(snapshot.createdAt).toLocaleString()}</Table.Td>
+										<Table.Td style={nowrapCell}>{formatTimestamp(snapshot.createdAt)}</Table.Td>
 										<Table.Td>
 											<Badge color={snapshot.kind === "error" ? "red" : "blue"} variant="light">
 												{t(`diagnostics.kind.${snapshot.kind}`)}

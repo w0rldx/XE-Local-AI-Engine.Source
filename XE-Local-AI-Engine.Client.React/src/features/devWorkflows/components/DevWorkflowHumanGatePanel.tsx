@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { MarkdownView } from "@/core/ui/components/MarkdownView/MarkdownView";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
@@ -315,7 +316,7 @@ function DecisionHistory({
 							{t("pages.devWorkflows.gate.decidedMeta", "attempt {{attempt}} · {{subject}} · {{when}}", {
 								attempt: decision.attempt ?? 1,
 								subject: decision.decidedBySubject ?? t("pages.devWorkflows.gate.unknownSubject", "unknown"),
-								when: new Date(decision.decidedAtUtc ?? 0).toLocaleString(),
+								when: formatTimestamp(decision.decidedAtUtc),
 							})}
 						</Text>
 						{decision.comment ? <Text size="xs">{decision.comment}</Text> : null}
