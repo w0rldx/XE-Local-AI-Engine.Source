@@ -94,6 +94,16 @@ function baseRoutes(run: Record<string, unknown> = runRow()) {
 	);
 }
 
+/** The stacking layer of the dialog an element sits in: the z-index Mantine writes onto the Modal root. */
+function modalLayerOf(element: HTMLElement): number {
+	const root = element.closest<HTMLElement>(".mantine-Modal-root");
+	if (!root) {
+		throw new Error("The element is not inside a Mantine Modal.");
+	}
+
+	return Number(root.style.getPropertyValue("--mb-z-index"));
+}
+
 describe("BenchmarksPage judge changes", () => {
 	beforeEach(() => {
 		hubMock.mockReturnValue({ parts: [], overlay: noBenchmarkRunLiveOverlay, isConnected: false, isReconnecting: false });
@@ -134,6 +144,32 @@ describe("BenchmarksPage judge changes", () => {
 		expect(bodies[1]?.["confirmRejudge"]).toBe(true);
 		// The same policy is resent — a confirmation must never silently change what it confirms.
 		expect(bodies[1]?.["policy"]).toEqual(bodies[0]?.["policy"]);
+	});
+
+	// The editor stays open behind the confirmation so a cancel returns to the untouched draft, which only works if
+	// the confirmation actually sits above it. Mantine portals every dialog into ONE shared node, so two dialogs on the
+	// default layer are ordered by insertion and the editor — remounted by its `key` when it opens — is inserted last.
+	// Live, that made the confirm button unclickable: the rubric card behind it swallowed the pointer.
+	it("raises the re-judge confirmation above the still-open judge editor", async () => {
+		baseRoutes();
+		server.use(
+			http.put(localApiPath(`benchmarks/projects/${projectId}/judge`), () =>
+				HttpResponse.json(
+					{ type: "about:blank", title: "Conflict", status: 409, detail: "Confirm the re-judge.", code: "RejudgeRequired" },
+					{ status: 409, headers: { "content-type": "application/problem+json" } },
+				),
+			),
+		);
+
+		renderWithProviders(<BenchmarksPage />);
+
+		fireEvent.click(await screen.findByRole("button", { name: "Edit judge" }));
+		fireEvent.click(await screen.findByRole("button", { name: "Save judge" }));
+
+		const confirmLayer = modalLayerOf(await screen.findByTestId("benchmark-rejudge-confirm"));
+		// The editor is still mounted: the operator can cancel and keep editing.
+		const editorLayer = modalLayerOf(screen.getByTestId("benchmark-rubric-editor"));
+		expect(confirmLayer).toBeGreaterThan(editorLayer);
 	});
 
 	// The node refuses a judge change while a judging is still running; that is a wait, not a bad request.
