@@ -1289,6 +1289,10 @@ This is also why `Condition` and `Parallel` nodes pass their predecessor's `outp
 
 `graph-workflows/tools` is filtered server-side through the same `TryAdmit`, so the picker cannot offer a name the run would refuse. A graph with no Tool node never reads the catalog at all.
 
+### Graph Workflows: a node's `input` is its ONE satisfied predecessor's output, so a node inserted mid-chain REPLACES the content
+
+**Rule:** `input` is the single satisfied predecessor's output document, and becomes the `upstream` map only when several predecessors are satisfied. A `Pause` writes its own document (`{decision, comment, payload}`), so `A → Pause → B` hands B the approval metadata and never A's answer, even with `includeUpstreamOutputs: true`; a `Pause` before `End` loses the result the same way. Only `Condition` and `Parallel` pass their input through. To carry content past a node that does not forward it, wire a second edge from the content's source to the consumer — the consumer's default `All` join still waits for the approval and its `input` becomes the `upstream` map with both. **Prevents:** authoring or importing a chain whose downstream Agent silently works on the wrong document (the S4 live round watched agent-2 spend three chat and three embedding calls hunting for a haiku that was never in its input). **Authority:** `GraphWorkflowDocuments.ComposeInput`, `GraphWorkflowInlineExecutor.Upstream`, `GraphWorkflowDocuments.PauseOutput`; the Open Canvas importer's `CanvasWorkflowImport.AddPauseContextEdges` is the worked example, pinned by `CanvasWorkflowImportRunTests`.
+
 ## 5. Frontend, chat UX, API boundary
 
 ### Chat rendering contract
