@@ -108,8 +108,11 @@ A condition is a single declarative comparison **against the source node's outpu
 - Evaluation **fails closed**: a path the output does not carry answers `false` for every operator except
   `NotExists`. An edge must never fire on data that is not there.
 - Numbers compare exactly — `long`, then `decimal`, then `BigInteger` for integer tokens past decimal's range — so a
-  `Gt` over ids past 2^53 answers on the numbers rather than on a rounding artefact. Strings compare ordinally. A
-  type mismatch is not an ordering and reads as "no".
+  `Gt` over ids past 2^53 answers on the numbers rather than on a rounding artefact. `double` is the fourth and last
+  arm (`GraphWorkflowCondition.Order`), reached only by the fractional and exponent tokens no exact arm reads; two
+  that differ only past roughly 17 significant digits therefore read as equal, which is the chain's stated ceiling. A
+  token not even `double` reads is not an ordering at all. Strings compare ordinally. A type mismatch is not an
+  ordering and reads as "no".
 
 A `Condition` node may carry a default `path` in its own config; its out-edges inherit it when their condition omits
 one. That is authoring convenience only — the comparison still lives on the edge. An edge that resolves a path from
@@ -168,8 +171,9 @@ container.
 ### 2.5 A complete example
 
 The eight-node graph below is the module's canonical shape — `Start → Agent → Condition → { Pause | Tool } →
-Parallel → Join → End` — and is the fixture the React tests use
-(`features/graphWorkflows/test/GraphWorkflowFixtures.ts`, `eightNodeGraph`).
+Parallel → Join → End`. It is the React tests' `eightNodeGraph` fixture
+(`features/graphWorkflows/test/GraphWorkflowFixtures.ts`) with every node's `position` and `analyze`'s
+`timeoutSeconds: null` left out for reading — the graph is otherwise the same one.
 
 ```jsonc
 {
@@ -274,8 +278,9 @@ While node runs are still live, `WaitingForApproval` outranks `Pending`: every n
 there are almost always `Pending` rows, and reading those as `Running` would report a run blocked on an unanswered
 pause as busy — the one thing the two statuses exist to tell apart.
 
-`GraphWorkflowFailureClass` records why: `NodeFailed`, `Timeout`, `AttemptsExhausted`, `OutputTooLarge`,
-`GateRejected`, `ValidationFailed`, `Cancelled`, `Interrupted`. `GateRejected` narrows where a reader should look; it
+`GraphWorkflowFailureClass` records why: `None` — the default, carried by everything that has not failed — then
+`NodeFailed`, `Timeout`, `AttemptsExhausted`, `OutputTooLarge`, `GateRejected`, `ValidationFailed`, `Cancelled`,
+`Interrupted`. `GateRejected` narrows where a reader should look; it
 is not a causal proof, because a rejection can route into a branch that then runs perfectly well.
 
 ### 3.3 Node-run statuses and admission
@@ -543,19 +548,22 @@ Every route is Operator-gated.
 | `graph-workflows/tools` | The Tool node picker's feed (§4.3). |
 | `graph-workflows/definitions/{definitionId}/runs` | POST start → 202 with the run id; `requestId` is the idempotency key. |
 | `graph-workflows/runs` | The run list, newest first, `?status=&limit=` with `limit` required and capped at 200. |
-| `graph-workflows/runs/{runId}` | One run plus its node-run **summaries**. No documents — those are a per-node read. |
+| `graph-workflows/runs/{runId}` | One run, its node-run **summaries**, and the run's own resolved `output`. No node-run documents — those are a per-node read. |
 | `graph-workflows/runs/{runId}/cancel` | 202. Live node runs drain first, so the run reads `Cancelling`. A repeat cancel is an idempotent 202. |
 | `graph-workflows/runs/{runId}/nodes/{nodeKey}` | One node run in full, input and output documents included. |
 | `graph-workflows/runs/{runId}/nodes/{nodeKey}/decide` | Answers a pause (§4.6). |
 | `graph-workflows/runs/{runId}/events` | The event log, paged from an **exclusive** `afterSeq`, capped at `EventReplayLimit` — which the response reports rather than leaving a client to infer it from a full page. |
 
-The three routes that carry a graph cap the request body at **1 MiB** (`GraphWorkflowRequestSizeLimit`); without it
-they would inherit Kestrel's 30 MB default and a body that size would be parsed, walked and hashed before the node cap
-could refuse it. A name is capped at 200 characters, a description at 1024.
+Four routes cap the request body at **1 MiB** (`GraphWorkflowRequestSizeLimit`): create, update and validate, which
+carry a graph, and start-run, which carries an input document. Without it they would inherit Kestrel's 30 MB default
+and a body that size would be parsed, walked and hashed before the node cap could refuse it. A name is capped at 200
+characters, a description at 1024.
 
-**The run detail carries no graph.** The run view draws the **definition's** graph and compares `run.graphHash` to
-`definition.graphHash`; on a mismatch it says so and falls back to drawing the node runs alone, auto-laid-out.
-Exposing the pinned graph on the run DTO is a contract change deferred to a later slice.
+**The run detail carries no graph.** It does carry the run's own resolved `output` — `GraphWorkflowRunResponse` is
+`(Run, NodeRuns, Output)`, and the `End` node writes that document once at terminalization — so only the per-node
+input and output documents are a separate read. The run view draws the **definition's** graph and compares
+`run.graphHash` to `definition.graphHash`; on a mismatch it says so and falls back to drawing the node runs alone,
+auto-laid-out. Exposing the pinned graph on the run DTO is a contract change deferred to a later slice.
 
 Validation errors are keyed. `GraphWorkflowValidationException` carries a `GraphWorkflowValidationResult` — a list of
 `(key, message)` pairs where the key is the node or edge, or null for a failure about the document as a whole — and
@@ -579,8 +587,10 @@ render. `kind` is **lowercase on the wire** — `run`, `node`, `gate` — writte
 moves the append-only event feed, so the client invalidates it unconditionally.
 
 The publisher is a **store decorator** (`PublishingGraphWorkflowStore`), so exactly one ping is emitted per committed
-mutation, carrying the sequence that commit allocated — and every published transition carries a **fresh, increasing**
-sequence. A publisher failure is logged and never fails the write that already committed. `Client.Application`
+mutation that has a subscriber, carrying the sequence that commit allocated — and every published transition carries a
+**fresh, increasing** sequence. Three writes deliberately publish nothing, because nothing is subscribed to them: the
+definition writes (`CreateDefinitionAsync`, `UpdateDefinitionAsync`, `DeleteDefinitionAsync`), `StartRunAsync`, and
+the startup reconciler `ReconcileNonTerminalNodeRunsAsync`. [API & Hubs](09-api-and-hubs.md) states the same. A publisher failure is logged and never fails the write that already committed. `Client.Application`
 depends only on `IGraphWorkflowEventPublisher`; the host swaps the hub-backed implementation in over a registered
 no-op, so a host without the hub stays resolvable.
 
@@ -681,7 +691,7 @@ environment variable such as `GraphWorkflows__MaxConcurrentRuns`.
 | `MaxOutputJsonBytes` | 262 144 | One node run's composed output document, in UTF-8 bytes, checked before it is encrypted and stored. |
 | `DispatchIntervalMilliseconds` | 500 | The sweep cadence, independent of the change signals the dispatcher also listens for. Floored at 100 ms. |
 | `MaxConcurrentRuns` | 4 | Live runs at once, and the size of both the Agent and Tool in-flight lanes. Runs above the cap **wait**; they are not refused. |
-| `MaxRunInputBytes` | 65 536 | A run-start input document, checked at the endpoint so an oversized body never reaches the store. Also the budget for the inlined `upstream` map in an Agent prompt. |
+| `MaxRunInputBytes` | 65 536 | A run-start input document, checked in `GraphWorkflowRunService.StartAsync` (§3.1) rather than at the endpoint, so every caller of the service is held to it. Also the budget for the inlined `upstream` map in an Agent prompt. |
 | `EventReplayLimit` | 200 | Events one replay may return, hub snapshot and events route alike. Ceiling 1000 — one replay is one response body. |
 
 `GraphWorkflowOptionsValidator` checks at startup what the data annotations cannot: a semantic floor under each
@@ -689,8 +699,8 @@ budget (a `MaxNodesPerDefinition` of 1 passes `[Range(1, …)]` and still admits
 Start and an End), the `MaxNodeRunsPerRun ≥ MaxNodesPerDefinition` relation, and the replay ceiling. An operator meets
 these at boot rather than once per node run.
 
-Two limits that are **not** options, because they are not runtime budgets: the 1 MiB request-body cap on the three
-graph-carrying routes, and the 200-row cap on a run list page.
+Two limits that are **not** options, because they are not runtime budgets: the 1 MiB request-body cap on the four
+routes that carry one (create, update, validate and start-run), and the 200-row cap on a run list page.
 
 One ceiling that lives outside this module: an `Agent` node's `responseJsonSchema` goes down the same llama.cpp GBNF
 path as a tool schema, which has an empirical combined repetition bound
@@ -741,12 +751,17 @@ in the same build would destroy everything past it as its *normal* outcome.
 | `Debug` | **Elided.** Every `X → Debug` and `Debug → Y` collapses to `X → Y`. A Debug node was a side-event tap that forwarded its input unchanged, so removing it preserves the run's meaning exactly. |
 | `Pause` | `Pause` with `prompt: "Approve and continue?"`, `allowedDecisions: ["Approve"]`, `requireComment: false`; its single out-edge gains `label: "approved"` and `condition: { "path": "output.decision", "op": "Eq", "value": "Approve" }`. Open Canvas's `Continue` was a resume rather than a decision, so `Approve` alone is the faithful translation — and one allowed decision with one matching out-edge satisfies the Pause pre-flight rule of §2.4. |
 | `End` | `End` with `outcome: "completed"`, `resultPath: null`. |
-| `ModelProfile` (on an Agent) | **Dropped.** An Agent node's config has no profile member. A non-null value emits one warning naming the workflow id, never the value. |
+| `ModelProfile` (on an Agent) | **Dropped.** An Agent node's config has no profile member. A non-null value records a reason naming the canvas id and the **node key**, never the value. That reason reaches the log as a per-change Warning only when the definition imported cleanly; on the needs-attention path it is folded into the description instead (§9.3). |
 
 Node keys are the Open Canvas ids sanitized to `[A-Za-z0-9_-]{1,64}`; an unmappable or duplicate key becomes
-`n{index}`, and a `sourceId → key` map rewires the edges. Each emitted edge gets a minted key `e{index}`.
-The definition takes the canvas name (truncated to the 200-character limit) and the description
-`"Imported from Open Canvas (canvas workflow {id})."` — provenance without a schema change.
+`n{index}`, and a `sourceId → key` map rewires the edges. Each emitted edge gets a minted key `e{index}`. Node and
+edge keys share one namespace, so `CanvasWorkflowImport.MintKey` appends `_2`, `_3` and on when the fallback is
+itself taken — the key is unique before it is pretty.
+The definition takes the canvas name, truncated to **255** characters (`CanvasWorkflowImport.MaxNameLength`, which
+is the `name` column's own bound — `GraphWorkflowDefinitionConfiguration` declares `HasMaxLength(255)`), and the
+description `"Imported from Open Canvas (canvas workflow {id})."` — provenance without a schema change. The create and
+update validators cap a name at **200** (`GraphWorkflowRequestLimits.MaxNameLength`), so an imported name of 201 to
+255 characters lands in the database but has to be shortened before the definition can be saved again.
 
 **The importer emits no positions.** `position` is optional and the editor already lays out a node that arrives
 without one, so generating a second layout rule here would leave one of the two dead. The practical consequence:
@@ -775,9 +790,15 @@ names.** Nothing is discarded for being invalid. A Debug node with no successor,
 an unknown kind — all of them arrive as a definition you can see and edit, rather than as an absence you have to
 notice.
 
-Exactly two causes skip a row, both logged at **Error** with the canvas id and counted as failed: the blob does not
+Two causes skip a row in the **read** half, both logged at **Error** and counted as failed: the blob does not
 decrypt, or it does not parse as JSON at all. A blob that does not parse could never have been saved through the old
-endpoint.
+endpoint. That log line carries the canvas id and the exception type only — not the name, which the read never
+decrypted a reason for, and not a reason.
+
+`{Failed}` in the summary is not the read half alone. The **write** half counts a row there too, also at **Error**,
+whenever the canvas could not be stored at all: any non-validation exception out of `CreateAsync`, the unvalidated
+store write itself throwing ("could not be stored and is lost"), or the mapping throwing before either is reached.
+A validation refusal is *not* one of these — that is the needs-attention path below, and the row survives.
 
 **Graph content is never logged.** Instructions and start text are exactly the payload the column is encrypted to
 protect. The reader logs entry and per-row failures; the writer logs one line per clean import. The summary an
@@ -789,7 +810,10 @@ Open Canvas one-shot import complete: {Imported} imported, {NeedsAttention} need
 Open Canvas has been removed; canvas_workflows is dropped.
 ```
 
-One further Warning line follows per needs-attention and per failed canvas, naming the id, the name and the reason.
+One further **Warning** line follows per needs-attention canvas, naming the id, the name and the reason. A **failed**
+canvas gets an **Error** line instead, and it names no reason: the read-half line carries the id and the exception
+type, the write-half lines the id, the name and the exception type. A cleanly imported canvas whose mapping still
+changed something gets one Warning per change.
 
 ### 9.4 The one real risk, stated plainly
 

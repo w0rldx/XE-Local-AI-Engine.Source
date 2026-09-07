@@ -4,9 +4,9 @@ using FastEndpoints;
 using Microsoft.AspNetCore.Http.Metadata;
 
 /// <summary>
-///     The request-body cap for the three routes that carry a graph — create, update and validate. Without one they
-///     inherit Kestrel's 30 MB default, and a body that size is parsed, walked by the runtime's parser and hashed
-///     before the node cap ever gets a chance to refuse it.
+///     The request-body cap for the four routes that carry a document — create, update and validate, which carry a
+///     graph, and start-run, which carries an input. Without one they inherit Kestrel's 30 MB default, and a body that
+///     size is parsed, walked by the runtime's parser and hashed before the node cap ever gets a chance to refuse it.
 ///     <para>
 ///         Two mechanisms, as elsewhere in this tree: the metadata is what the HOST enforces before the body is read,
 ///         and <see cref="RefuseIfOversized" /> is the cheap early exit the handler makes for itself. The metadata is
