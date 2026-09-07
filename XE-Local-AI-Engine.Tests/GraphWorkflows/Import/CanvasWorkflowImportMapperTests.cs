@@ -245,6 +245,82 @@ public sealed class CanvasWorkflowImportMapperTests
     }
 
     /// <summary>
+    ///     Guard 1 of the editor's rule (<c>GraphWorkflowGraph.PauseContextWarnings</c>): only a STARVED successor is
+    ///     owed a context edge. <c>agent-3</c> is also fed by <c>agent-2</c>, which is no pause and already carries
+    ///     content, so it loses nothing — and a second unconditional edge would only change when it is admitted. The
+    ///     old importer added the edge regardless of the successor's other inbound edges.
+    /// </summary>
+    [Test]
+    public void MapGraph_AddsNoContextEdgeToAPauseSuccessorThatIsAlreadyFedDirectly()
+    {
+        var mapped = CanvasWorkflowImport.MapGraph(CanvasGraphs.PauseSuccessorAlsoFedDirectly);
+
+        AssertEx.Equal("start->agent-1, start->agent-2, agent-1->pause-1, pause-1->agent-3, agent-2->agent-3, agent-3->end",
+            Wiring(mapped.Document),
+            "the canvas wiring survives untouched: no agent-1->agent-3 context edge is owed.");
+        AssertEx.Equal(expected: 6, GraphWorkflowGraphContract.ValidateAndCountNodes(mapped.Document.ToJsonString(), maxNodes: 200));
+    }
+
+    /// <summary>
+    ///     Guard 3, the uniqueness half: two nearest non-Pause ancestors mean the pause is fed by branches, and edges
+    ///     from BOTH would leave the successor's default <c>All</c> join waiting on the branch that was never taken.
+    ///     The editor withholds the named advice for the same reason; the importer now withholds the edge. The old
+    ///     importer added one edge per ancestor.
+    /// </summary>
+    [Test]
+    public void MapGraph_AddsNoContextEdgeWhenThePauseHasTwoNearestAncestors()
+    {
+        var mapped = CanvasWorkflowImport.MapGraph(CanvasGraphs.PauseWithTwoAncestors);
+
+        AssertEx.Equal("start->agent-1, start->agent-2, agent-1->pause-1, agent-2->pause-1, pause-1->end",
+            Wiring(mapped.Document),
+            "neither agent-1->end nor agent-2->end is added: advice that turns a warning into a hang is worse than none.");
+        AssertEx.Equal(expected: 5, GraphWorkflowGraphContract.ValidateAndCountNodes(mapped.Document.ToJsonString(), maxNodes: 200));
+    }
+
+    /// <summary>
+    ///     Guard 3, the Condition half: an edge out of a Condition node would be that node's SECOND unconditional
+    ///     out-edge, which <c>GraphWorkflowGraph.ValidateCondition</c> refuses — so the import would have produced a
+    ///     definition that cannot be parsed at all instead of one that merely needs an edit.
+    /// </summary>
+    [Test]
+    public void MapGraph_AddsNoContextEdgeWhenTheNearestAncestorIsACondition()
+    {
+        var mapped = CanvasWorkflowImport.MapGraph(CanvasGraphs.PauseBehindAConditionKind);
+
+        AssertEx.Equal("start->branch, branch->pause-1, pause-1->end", Wiring(mapped.Document),
+            "no branch->end edge is added around the pause.");
+        AssertEx.Equal("Condition", Node(mapped.Document, "branch")["kind"]!.GetValue<string>(),
+            "the canvas kind is written through verbatim, which is what makes this guard reachable at all.");
+    }
+
+    /// <summary>
+    ///     Guard 2 has no canvas that can reach it: this mapper emits <c>joinPolicy</c> on no node of any kind, so
+    ///     every imported successor takes the parser's default <c>All</c> and an <c>Any</c> successor cannot be
+    ///     produced by an import. The guard is stated in the importer anyway, and this is the pin that fails the day a
+    ///     mapped node starts declaring a policy — at which point the guard needs a behavioural test of its own.
+    /// </summary>
+    [Test]
+    [Arguments(CanvasGraphs.WithPause)]
+    [Arguments(CanvasGraphs.AgentAcrossPause)]
+    [Arguments(CanvasGraphs.ChainedPauses)]
+    [Arguments(CanvasGraphs.PauseAfterStart)]
+    [Arguments(CanvasGraphs.PauseSuccessorAlsoFedDirectly)]
+    [Arguments(CanvasGraphs.PauseWithTwoAncestors)]
+    public void MapGraph_DeclaresAJoinPolicyOnNoNode(string graphJson)
+    {
+        var mapped = CanvasWorkflowImport.MapGraph(graphJson);
+
+        var declared = mapped.Document["nodes"]!.AsArray()
+                             .Where(static node => node!["joinPolicy"] is not null)
+                             .Select(static node => node!["key"]!.GetValue<string>())
+                             .ToList();
+
+        AssertEx.Equal(expected: 0, declared.Count,
+            $"the mapper declared a joinPolicy on {string.Join(", ", declared)}; guard 2 of AddPauseContextEdges now needs a real test.");
+    }
+
+    /// <summary>
     ///     A pause with nothing after it has no successor for a context edge to land on. That graph is already an
     ///     IMPORT NEEDS ATTENTION case — the pause's one answer arrives nowhere — and inventing an edge cannot save it.
     /// </summary>

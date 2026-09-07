@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Training;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -10,8 +11,10 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
 ///     Pins the execution invariant: real execution requires <see cref="ToolCategory.ReadLocal" /> AND a composed
@@ -111,14 +114,31 @@ public sealed class HeadlessToolExecutorTests
             _ = offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                              .Returns<IReadOnlyList<AllowedToolDto>>([offer]);
 
+            // The SAME tool as the model-agnostic catalog entry the shared invocation seam reads, so the real
+            // execution leg resolves what the offer above promised. The seam is the real one, not a substitute:
+            // delegating to it is what is under test, and mocking it would assert nothing about the delegation.
+            _ = offerProvider.GetKnownToolsAsync(Arg.Any<CancellationToken>())
+                             .Returns<IReadOnlyList<LocalToolCatalogEntry>>([
+                                 new LocalToolCatalogEntry
+                                 {
+                                     Name = ToolName,
+                                     Description = "Reads a file.",
+                                     RequiresApproval = catalogDefault,
+                                     Source = "builtin",
+                                     Category = category
+                                 }
+                             ]);
+
             Policy = Substitute.For<IToolApprovalPolicy>();
             _ = Policy.RequiresApproval(ToolName, category, catalogDefault).Returns(catalogDefault || policyTightens);
 
             Store = Substitute.For<ITrainingDatasetStore>();
             _ = Store.ListUsableMocksAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns<IReadOnlyList<ToolMockRecord>>([]);
 
-            Executor = new HeadlessToolExecutor(offerProvider, Policy, new StubToolRegistry(), Store,
-                new ToolMockEngine(), new ToolMockStaticVerifier(), NullLogger<HeadlessToolExecutor>.Instance);
+            var invocation = new ToolInvocationService(offerProvider, Policy, new StubToolRegistry(),
+                new EmptyClientLocalToolRegistry(), NullLogger<ToolInvocationService>.Instance);
+            Executor = new HeadlessToolExecutor(offerProvider, Policy, Store,
+                new ToolMockEngine(), new ToolMockStaticVerifier(), invocation);
         }
 
         public IHeadlessToolExecutor Executor { get; }

@@ -2,6 +2,7 @@ import { Alert, Anchor, Collapse, Paper, Stack, Text } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import type { WorkSessionCheckpointResponse } from "@/features/workSessions/models/WorkSessionModels";
 
@@ -29,7 +30,7 @@ export function WorkSessionCheckpointsTab({ checkpoints }: { checkpoints: readon
 							{t("pages.workSessions.checkpoints.step", "Checkpoint at step {{step}}", { step: checkpoint.step ?? 0 })}
 						</Text>
 						<Text size="xs" c="dimmed">
-							{new Date(checkpoint.createdAtUtc ?? 0).toLocaleString()}
+							{formatTimestamp(checkpoint.createdAtUtc)}
 						</Text>
 						<Text size="sm">
 							{/* A node without a local model cannot summarize; explain the missing value rather than render an empty string. */}

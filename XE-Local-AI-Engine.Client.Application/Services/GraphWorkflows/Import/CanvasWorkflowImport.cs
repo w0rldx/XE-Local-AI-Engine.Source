@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>One saved Open Canvas workflow, decrypted, waiting for the Graph Workflow tables to exist.</summary>
@@ -219,6 +220,7 @@ public static class CanvasWorkflowImport
         var used = new HashSet<string>(StringComparer.Ordinal);
         var keyByCanvasId = new Dictionary<string, string>(StringComparer.Ordinal);
         var mappedNodes = new JsonArray();
+        var nodeByKey = new Dictionary<string, JsonObject>(StringComparer.Ordinal);
         var pauseKeys = new HashSet<string>(StringComparer.Ordinal);
 
         for (var index = 0; index < nodes.Count; index++)
@@ -249,10 +251,16 @@ public static class CanvasWorkflowImport
                 reasons.Add($"The Open Canvas model profile on node '{key}' has no equivalent here and was dropped.");
             }
 
-            mappedNodes.Add(MapNode(node, key, canvas.StartText, reasons));
+            var mappedNode = MapNode(node, key, canvas.StartText, reasons);
+            mappedNodes.Add(mappedNode);
+
+            // The context-edge guards read a successor's kind and join policy off the node this mapper actually
+            // emitted, never off the canvas kind: the two guards below are stated over the DOCUMENT the validator
+            // will read, so they cannot disagree with it.
+            nodeByKey[key] = mappedNode;
         }
 
-        var mappedEdges = MapEdges(edges, elided, keyByCanvasId, pauseKeys, used, reasons);
+        var mappedEdges = MapEdges(edges, elided, keyByCanvasId, pauseKeys, nodeByKey, used, reasons);
         return new ImportMapResult(new JsonObject
             {
                 ["schemaVersion"] = 1,
@@ -486,6 +494,7 @@ public static class CanvasWorkflowImport
         HashSet<string> elided,
         Dictionary<string, string> keyByCanvasId,
         HashSet<string> pauseKeys,
+        IReadOnlyDictionary<string, JsonObject> nodeByKey,
         HashSet<string> used,
         List<string> reasons)
     {
@@ -558,7 +567,7 @@ public static class CanvasWorkflowImport
             }
         }
 
-        AddPauseContextEdges(pauseKeys, pairs, used, mapped, index);
+        AddPauseContextEdges(pauseKeys, nodeByKey, pairs, used, mapped, index);
 
         foreach (var stranded in strandedDebug.Order(StringComparer.Ordinal))
         {
@@ -574,8 +583,8 @@ public static class CanvasWorkflowImport
     }
 
     /// <summary>
-    ///     The context edge around every imported Pause: one unconditional edge from the pause's nearest NON-Pause
-    ///     ancestor to each of its successors.
+    ///     The context edge around an imported Pause: one unconditional edge from the pause's nearest NON-Pause
+    ///     ancestor to a successor that would otherwise read nothing but the approval.
     ///     <para>
     ///         Open Canvas's Pause was a pass-through resume — its post-adapter forwarded the answer it was waiting on
     ///         unchanged — while a Graph Workflow Pause writes a decision document of its own
@@ -595,11 +604,29 @@ public static class CanvasWorkflowImport
     ///         at most one edge may be unconditional, which the <paramref name="pairs" /> guard below keeps.
     ///     </para>
     ///     <para>
-    ///         Applied to EVERY Pause, walking back through consecutive ones, so <c>A -> P1 -> P2 -> B</c> gains both
-    ///         <c>A -> P2</c> and <c>A -> B</c>: one rule, and the second pause sees the content it is approving too.
+    ///         Keyed on the SUCCESSOR and gated by the same three guards as the editor's advice
+    ///         (<c>GraphWorkflowGraph.PauseContextWarnings</c>), so the importer cannot advise an edge the validator
+    ///         would refuse or that would change when a node runs. A successor qualifies only when it is STARVED —
+    ///         every one of its inbound edges leaves a Pause, so there is no other route for the content — when its
+    ///         <c>joinPolicy</c> is not <c>Any</c> (read off the mapped node, never off its kind: an unconditional
+    ///         content edge would admit an <c>Any</c> node on its own, ahead of every approval), and when the nearest
+    ///         non-Pause ancestor is UNIQUE and is not a <c>Condition</c>. Two candidates means mutually exclusive
+    ///         branches, and edges from both would hang an <c>All</c> successor on the branch never taken; a Condition
+    ///         would receive a second unconditional out-edge, which <c>GraphWorkflowGraph.ValidateCondition</c>
+    ///         refuses.
+    ///     </para>
+    ///     <para>
+    ///         The ancestry walk still passes through consecutive pauses, so <c>A -> P1 -> P2 -> B</c> gains both
+    ///         <c>A -> P2</c> and <c>A -> B</c>: the second pause sees the content it is approving too.
+    ///     </para>
+    ///     <para>
+    ///         Every guard but the first is unreachable for a real import — an Open Canvas graph carries no Condition,
+    ///         no Join and no join policy — and they are stated anyway because the rule, not today's vocabulary, is
+    ///         what the next node kind has to keep holding.
     ///     </para>
     /// </summary>
     private static void AddPauseContextEdges(HashSet<string> pauseKeys,
+        IReadOnlyDictionary<string, JsonObject> nodeByKey,
         HashSet<(string From, string To)> pairs,
         HashSet<string> used,
         JsonArray mapped,
@@ -607,38 +634,87 @@ public static class CanvasWorkflowImport
     {
         // A snapshot: the walk reads the canvas's own wiring and never the context edges this loop adds to it.
         var wiring = pairs.ToList();
-        foreach (var pause in pauseKeys.Order(StringComparer.Ordinal))
+
+        // Reached through the pauses, but DECIDED on the successor: a pause with no successor is in no pair at all and
+        // so gets nothing to bypass to. That graph is already an IMPORT NEEDS ATTENTION case — the pre-flight rule
+        // refuses a pause whose one answer arrives nowhere — and inventing an edge here would not save it. A successor
+        // several pauses reach is considered ONCE, over the union of what all of them are fed by.
+        var advised = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var successor in pauseKeys.Order(StringComparer.Ordinal)
+                                           .SelectMany(pause => wiring.Where(pair => string.Equals(pair.From, pause, StringComparison.Ordinal))
+                                                                      .Select(static pair => pair.To)
+                                                                      .Order(StringComparer.Ordinal)))
         {
-            var successors = wiring.Where(pair => string.Equals(pair.From, pause, StringComparison.Ordinal))
-                                   .Select(static pair => pair.To)
-                                   .Order(StringComparer.Ordinal);
-
-            // A pause with no successor gets nothing to bypass to. That graph is already an IMPORT NEEDS ATTENTION
-            // case — the pre-flight rule refuses a pause whose one answer arrives nowhere — and inventing an edge here
-            // would not save it.
-            foreach (var successor in successors)
+            if (!advised.Add(successor))
             {
-                foreach (var ancestor in NonPauseAncestors(pause, pauseKeys, wiring))
-                {
-                    // A pair the canvas already wires needs no second edge — and a second UNCONDITIONAL one over the
-                    // same pair is a validation error. A self-loop would be a cycle.
-                    if (string.Equals(ancestor, successor, StringComparison.Ordinal) || !pairs.Add((ancestor, successor)))
-                    {
-                        continue;
-                    }
-
-                    mapped.Add(new JsonObject
-                    {
-                        ["key"] = MintKey($"e{index}", $"e{index}", used),
-                        ["from"] = ancestor,
-                        ["to"] = successor,
-                        ["label"] = "context"
-                    });
-                    index++;
-                }
+                continue;
             }
+
+            var inbound = wiring.Where(pair => string.Equals(pair.To, successor, StringComparison.Ordinal))
+                                .Select(static pair => pair.From)
+                                .Distinct(StringComparer.Ordinal)
+                                .ToList();
+
+            // Guard 1 — STARVED. An inbound edge that does not leave a Pause already carries the content, so the
+            // successor loses nothing and a second unconditional edge would only change when it is admitted.
+            if (!inbound.TrueForAll(pauseKeys.Contains))
+            {
+                continue;
+            }
+
+            // Guard 2 — an 'Any' successor fires on its FIRST satisfied edge, so an unconditional content edge would
+            // admit it ahead of every approval, including when all of them are rejected. Read off joinPolicy alone.
+            if (JoinPolicyOf(nodeByKey, successor) == GraphWorkflowJoinPolicy.Any)
+            {
+                continue;
+            }
+
+            // Guard 3 — the ancestor has to be UNIQUE and not a Condition, or the advised edge hangs an 'All'
+            // successor on a branch never taken, or lands a second unconditional out-edge on a Condition.
+            var ancestors = inbound.SelectMany(pause => NonPauseAncestors(pause, pauseKeys, wiring))
+                                   .Distinct(StringComparer.Ordinal)
+                                   .Order(StringComparer.Ordinal)
+                                   .ToList();
+            if (ancestors is not [var ancestor] || KindOf(nodeByKey, ancestor) == GraphWorkflowNodeKind.Condition)
+            {
+                continue;
+            }
+
+            // A pair the canvas already wires needs no second edge — and a second UNCONDITIONAL one over the same
+            // pair is a validation error. A self-loop would be a cycle.
+            if (string.Equals(ancestor, successor, StringComparison.Ordinal) || !pairs.Add((ancestor, successor)))
+            {
+                continue;
+            }
+
+            mapped.Add(new JsonObject
+            {
+                ["key"] = MintKey($"e{index}", $"e{index}", used),
+                ["from"] = ancestor,
+                ["to"] = successor,
+                ["label"] = "context"
+            });
+            index++;
         }
     }
+
+    /// <summary>
+    ///     A mapped node's join policy, parsed with the SAME token reader the graph parser uses so the importer cannot
+    ///     read a member the validator would read differently. Absent — which is every node this mapper emits today —
+    ///     or unparseable falls back to the parser's own default.
+    /// </summary>
+    private static GraphWorkflowJoinPolicy JoinPolicyOf(IReadOnlyDictionary<string, JsonObject> nodeByKey, string key) =>
+        nodeByKey.TryGetValue(key, out var node)
+        && GraphWorkflowTokens.TryParseName<GraphWorkflowJoinPolicy>(node["joinPolicy"]?.GetValue<string>(), out var parsed)
+            ? parsed
+            : GraphWorkflowJoinPolicy.All;
+
+    /// <summary>A mapped node's kind, read the same way; an unknown key answers a kind no guard matches.</summary>
+    private static GraphWorkflowNodeKind? KindOf(IReadOnlyDictionary<string, JsonObject> nodeByKey, string key) =>
+        nodeByKey.TryGetValue(key, out var node)
+        && GraphWorkflowTokens.TryParseName<GraphWorkflowNodeKind>(node["kind"]?.GetValue<string>(), out var parsed)
+            ? parsed
+            : null;
 
     /// <summary>
     ///     The nodes a pause's content really comes from: its predecessors, with consecutive Pause nodes walked

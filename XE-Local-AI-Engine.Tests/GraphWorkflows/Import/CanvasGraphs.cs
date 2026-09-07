@@ -186,6 +186,79 @@ internal static class CanvasGraphs
                                                }
                                                """;
 
+    /// <summary>
+    ///     A pause successor that is NOT starved: <c>agent-3</c> also has an inbound edge from <c>agent-2</c>, which is
+    ///     no Pause and already carries content, so no context edge is owed. Not a shape the canvas editor's linear
+    ///     validator could author, but a stored row is only JSON and the mapper has to be total over it.
+    /// </summary>
+    public const string PauseSuccessorAlsoFedDirectly = """
+                                                        {
+                                                          "startText": "Ship it?",
+                                                          "nodes": [
+                                                            { "id": "start", "kind": "Start" },
+                                                            { "id": "agent-1", "kind": "Agent", "instructions": "Prepare.", "model": "qwen3:8b" },
+                                                            { "id": "agent-2", "kind": "Agent", "instructions": "Gather.", "model": "qwen3:8b" },
+                                                            { "id": "pause-1", "kind": "Pause" },
+                                                            { "id": "agent-3", "kind": "Agent", "instructions": "Announce.", "model": "qwen3:8b" },
+                                                            { "id": "end", "kind": "End" }
+                                                          ],
+                                                          "edges": [
+                                                            { "sourceId": "start", "targetId": "agent-1" },
+                                                            { "sourceId": "start", "targetId": "agent-2" },
+                                                            { "sourceId": "agent-1", "targetId": "pause-1" },
+                                                            { "sourceId": "pause-1", "targetId": "agent-3" },
+                                                            { "sourceId": "agent-2", "targetId": "agent-3" },
+                                                            { "sourceId": "agent-3", "targetId": "end" }
+                                                          ]
+                                                        }
+                                                        """;
+
+    /// <summary>
+    ///     A pause fed by TWO non-Pause nodes, so its nearest-ancestor set has two members and neither may be named:
+    ///     edges from both would leave the successor's default <c>All</c> policy waiting on a branch never taken.
+    /// </summary>
+    public const string PauseWithTwoAncestors = """
+                                                {
+                                                  "startText": "Ship it?",
+                                                  "nodes": [
+                                                    { "id": "start", "kind": "Start" },
+                                                    { "id": "agent-1", "kind": "Agent", "instructions": "Draft.", "model": "qwen3:8b" },
+                                                    { "id": "agent-2", "kind": "Agent", "instructions": "Review.", "model": "qwen3:8b" },
+                                                    { "id": "pause-1", "kind": "Pause" },
+                                                    { "id": "end", "kind": "End" }
+                                                  ],
+                                                  "edges": [
+                                                    { "sourceId": "start", "targetId": "agent-1" },
+                                                    { "sourceId": "start", "targetId": "agent-2" },
+                                                    { "sourceId": "agent-1", "targetId": "pause-1" },
+                                                    { "sourceId": "agent-2", "targetId": "pause-1" },
+                                                    { "sourceId": "pause-1", "targetId": "end" }
+                                                  ]
+                                                }
+                                                """;
+
+    /// <summary>
+    ///     A canvas kind the mapper writes through verbatim, which lands a node of kind <c>Condition</c> in the mapped
+    ///     document. Naming it as the context ancestor would give that node a second unconditional out-edge, which the
+    ///     validator refuses — so the advice is withheld even though the pause successor is starved.
+    /// </summary>
+    public const string PauseBehindAConditionKind = """
+                                                    {
+                                                      "startText": "Ship it?",
+                                                      "nodes": [
+                                                        { "id": "start", "kind": "Start" },
+                                                        { "id": "branch", "kind": "Condition" },
+                                                        { "id": "pause-1", "kind": "Pause" },
+                                                        { "id": "end", "kind": "End" }
+                                                      ],
+                                                      "edges": [
+                                                        { "sourceId": "start", "targetId": "branch" },
+                                                        { "sourceId": "branch", "targetId": "pause-1" },
+                                                        { "sourceId": "pause-1", "targetId": "end" }
+                                                      ]
+                                                    }
+                                                    """;
+
     /// <summary>An agent carrying the provider hint that has no destination in the new Agent config.</summary>
     public const string WithModelProfile = """
                                            {

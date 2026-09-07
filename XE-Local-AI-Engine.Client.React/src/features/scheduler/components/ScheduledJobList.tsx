@@ -2,6 +2,7 @@ import { ActionIcon, Badge, Group, Switch, Table, Text } from "@mantine/core";
 import { IconPencil, IconPlayerPlay, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import type { ScheduledJob } from "@/features/scheduler/models/SchedulerModels";
 
@@ -23,11 +24,7 @@ function scheduleSummary(job: ScheduledJob): string {
 	if (job.scheduleKind === "SimpleInterval") {
 		return job.intervalSeconds !== null ? `${job.intervalSeconds}s` : "—";
 	}
-	if (job.startAtUtc !== null) {
-		const date = new Date(job.startAtUtc);
-		return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
-	}
-	return "—";
+	return formatTimestamp(job.startAtUtc);
 }
 
 // Table of scheduled jobs with enable/disable, trigger, edit, and delete row actions. Pure presentation — the

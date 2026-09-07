@@ -2,6 +2,7 @@ import { ActionIcon, Checkbox, Group, Menu, Stack, Table, Text, Tooltip } from "
 import { IconDots, IconRefresh, IconRuler2, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { formatDurationSeconds, formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { BenchmarkLaunchBadges } from "@/features/benchmarks/components/BenchmarkLaunchBadges";
 import {
@@ -29,9 +30,6 @@ import {
 import { rankExclusionAction } from "@/features/benchmarks/models/BenchmarkRanking";
 import type { BenchmarkRepeatStats } from "@/features/benchmarks/models/BenchmarkThroughput";
 import { formatLatencyMs, formatStatSummary, formatTokensPerSecond } from "@/features/benchmarks/models/BenchmarkThroughput";
-
-const formatDuration = (durationMs: number | null): string => (durationMs === null ? "—" : `${(durationMs / 1000).toFixed(1)}s`);
-const formatTimestamp = (epochMs: number): string => (epochMs > 0 ? new Date(epochMs).toLocaleString() : "—");
 
 // tg (decode) leads because it is the number an operator compares models by; pp and TTFT ride under it because a fast
 // decode over a slow prefill is a different machine from a fast one, and the blended figure this replaced hid that.
@@ -348,7 +346,7 @@ export function BenchmarkRunRow({
 				<FidelityCell run={run} />
 			</Table.Td>
 			<Table.Td>
-				<Text size="sm">{formatDuration(run.durationMs)}</Text>
+				<Text size="sm">{formatDurationSeconds(run.durationMs)}</Text>
 			</Table.Td>
 			<Table.Td>
 				<Stack gap={2}>
@@ -361,7 +359,7 @@ export function BenchmarkRunRow({
 				</Stack>
 			</Table.Td>
 			<Table.Td>
-				<Text size="xs">{formatTimestamp(run.createdAtUtc)}</Text>
+				<Text size="xs">{formatTimestamp(run.createdAtUtc > 0 ? run.createdAtUtc : null)}</Text>
 			</Table.Td>
 			<Table.Td>
 				<Group gap={4} wrap="nowrap">

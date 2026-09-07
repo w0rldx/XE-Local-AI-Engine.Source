@@ -13,6 +13,12 @@ cat >"${TEMP_ROOT}/bin/dotnet" <<'FAKE_DOTNET'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ " $* " == *" run "* && " $* " == *" --no-build "* && " $* " == *" --desktop "* ]]
+# A Release host defaults to Production, which maps no OpenAPI document; the checker must pin the environment
+# or the spec fetch 404s on every path.
+[[ "${ASPNETCORE_ENVIRONMENT:-}" == "Development" ]]
+# The mise variables the isolated HOME would otherwise hide. Recorded rather than asserted here so one case can
+# require a forwarded value and another can require that nothing was exported at all.
+printf '%s\n' "${MISE_DATA_DIR-<unset>}" >"${FAKE_MISE_RECORD}"
 if [[ -n "${FAKE_MUTATE_ASSEMBLY:-}" ]]; then
   printf 'changed\n' >>"${FAKE_MUTATE_ASSEMBLY}"
 fi
@@ -52,13 +58,25 @@ chmod 700 "${TEMP_ROOT}/bin/dotnet" "${TEMP_ROOT}/bin/pnpm"
 
 export PATH="${TEMP_ROOT}/bin:${PATH}"
 export FAKE_PNPM_RECORD="${TEMP_ROOT}/pnpm-record"
+export FAKE_MISE_RECORD="${TEMP_ROOT}/mise-record"
 export OPENAPI_LIVE_TIMEOUT_SECONDS=10
 export OPENAPI_LIVE_CLIENT_RELEASE_ROOT="${TEMP_ROOT}/release"
 
-output="$("${SCRIPT_DIR}/openapi-live-check.sh" 2>&1)"
+# A caller that sets MISE_DATA_DIR: the value has to survive the HOME isolation and reach the host, or every
+# mise shim on PATH aborts and the host dies before readiness.
+output="$(MISE_DATA_DIR="${TEMP_ROOT}/mise-data" "${SCRIPT_DIR}/openapi-live-check.sh" 2>&1)"
 [[ "${output}" == *"PASS: live backend contract matches committed frontend artifacts."* ]]
 [[ "${output}" == *"verify: build output unchanged during the run"* ]]
 [[ -s "${FAKE_PNPM_RECORD}" ]]
+[[ "$(cat "${FAKE_MISE_RECORD}")" == "${TEMP_ROOT}/mise-data" ]]
+
+# No caller value and no real user paths: the variable must be ABSENT from the host environment rather than
+# exported empty, which mise reads as a data directory of "". Asserted on the record the fake writes before it
+# does anything else, and the run's own outcome is ignored: a HOME with no trust store is precisely the
+# condition that kills the host on a mise-managed box, which is the trap this forwarding exists to avoid.
+rm -f "${FAKE_MISE_RECORD}"
+HOME="${TEMP_ROOT}/no-such-home" MISE_DATA_DIR='' "${SCRIPT_DIR}/openapi-live-check.sh" >/dev/null 2>&1 || true
+[[ "$(cat "${FAKE_MISE_RECORD}")" == "<unset>" ]]
 
 printf 'stable\n' >"${TEMP_ROOT}/release/fake.dll"
 export FAKE_MUTATE_ASSEMBLY="${TEMP_ROOT}/release/fake.dll"

@@ -543,6 +543,34 @@ internal static class GraphWorkflowGraphs
                                                 """;
 
     /// <summary>
+    ///     <see cref="PauseBetweenTwoAgents" /> with a loose response schema on <c>analyze</c> as well: one graph that
+    ///     earns BOTH warning kinds, on two different nodes. The schema constrains a string it cannot constrain and
+    ///     leaves the property optional when the runtime will require it.
+    /// </summary>
+    public const string PauseAfterALooseResponseSchema = """
+                                                         {
+                                                           "schemaVersion": 1,
+                                                           "nodes": [
+                                                             { "key": "start", "kind": "Start" },
+                                                             { "key": "analyze", "kind": "Agent",
+                                                               "config": { "instructions": "Analyze the input.",
+                                                                           "responseJsonSchema": { "type": "object",
+                                                                                                   "properties": { "verdict": { "type": "string", "pattern": "^(ok|bad)$" } } } } },
+                                                             { "key": "review", "kind": "Pause",
+                                                               "config": { "prompt": "Approve the analysis?", "allowedDecisions": ["Approve"], "requireComment": false } },
+                                                             { "key": "summarize", "kind": "Agent", "config": { "instructions": "Summarize the analysis." } },
+                                                             { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                           ],
+                                                           "edges": [
+                                                             { "key": "e1", "from": "start", "to": "analyze" },
+                                                             { "key": "e2", "from": "analyze", "to": "review" },
+                                                             { "key": "e3", "from": "review", "to": "summarize" },
+                                                             { "key": "e4", "from": "summarize", "to": "done" }
+                                                           ]
+                                                         }
+                                                         """;
+
+    /// <summary>
     ///     <see cref="PauseBetweenTwoAgents" /> with the cure: the unconditional <c>context</c> edge from the pause's
     ///     nearest non-Pause ancestor, which is what the Open Canvas importer adds for itself. <c>summarize</c> keeps
     ///     the default <c>All</c> join, so it is admitted only once BOTH the content and the approval have arrived.
@@ -830,4 +858,29 @@ internal static class GraphWorkflowGraphs
                                                   ]
                                                 }
                                                 """;
+
+    /// <summary>
+    ///     One Start, one End and <paramref name="nodeCount" /> nodes in a single chain — the deepest legal graph of
+    ///     its size, so a walk over it is as long as a walk over a graph of that many nodes can be. Minimal on purpose:
+    ///     the point of this shape is its DEPTH, and a chain of thousands still fits the request body cap.
+    /// </summary>
+    public static string Chain(int nodeCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(nodeCount, other: 2);
+
+        var keys = new List<string> { "start" };
+        keys.AddRange(Enumerable.Range(1, nodeCount - 2).Select(static index => $"n{index}"));
+        keys.Add("done");
+
+        var nodes = keys.Select(static (key, index) => index switch
+        {
+            0 => """{ "key": "start", "kind": "Start" }""",
+            _ => key == "done"
+                ? """{ "key": "done", "kind": "End", "config": { "outcome": "completed" } }"""
+                : $$"""{ "key": "{{key}}", "kind": "Agent", "config": { "instructions": "Step." } }"""
+        });
+        var edges = keys.Zip(keys.Skip(1), static (from, to) => $$"""{ "key": "e_{{from}}", "from": "{{from}}", "to": "{{to}}" }""");
+
+        return $$"""{ "schemaVersion": 1, "nodes": [{{string.Join(", ", nodes)}}], "edges": [{{string.Join(", ", edges)}}] }""";
+    }
 }

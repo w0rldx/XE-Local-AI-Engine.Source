@@ -7,6 +7,7 @@ import { Badge, Group, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import type { Breadcrumb, BreadcrumbCategory } from "@/core/diagnostics/Diagnostics";
+import { formatTime } from "@/core/formatting/TimeFormatting";
 
 export interface BreadcrumbTimelineProps {
 	readonly breadcrumbs: readonly Breadcrumb[];
@@ -44,10 +45,6 @@ function summarize(breadcrumb: Breadcrumb): string {
 			return exhaustive;
 		}
 	}
-}
-
-function formatTime(timestamp: number): string {
-	return new Date(timestamp).toLocaleTimeString();
 }
 
 export function BreadcrumbTimeline({ breadcrumbs }: BreadcrumbTimelineProps) {

@@ -27,6 +27,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { useCodexLogin, useCodexLogout, useCodexStatus } from "@/features/cloud-settings/codex/queries/useCodexAuth";
 
 interface CodexSignInCardProps {
@@ -130,7 +131,7 @@ export function CodexSignInCard({ onSignedInChange }: CodexSignInCardProps) {
 								<Text size="sm" c="dimmed">
 									{t("pages.cloudSettings.codex.expires")}:
 								</Text>
-								<Text size="sm">{new Date(status.expiresAtUtc).toLocaleString()}</Text>
+								<Text size="sm">{formatTimestamp(status.expiresAtUtc)}</Text>
 							</Group>
 						) : null}
 						<Button

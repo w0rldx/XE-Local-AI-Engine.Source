@@ -4,13 +4,13 @@ import { useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { CatalogInfoCard } from "@/features/model-fit/components/CatalogInfoCard";
 import { HardwareProfileCard } from "@/features/model-fit/components/HardwareProfileCard";
 import { InferenceProfilePanel } from "@/features/model-fit/components/InferenceProfilePanel";
-import { formatModelFitTimestamp } from "@/features/model-fit/components/ModelFitFormatters";
 import { NoScheduleAlert } from "@/features/model-fit/components/NoScheduleAlert";
 import { RecommendationsResults } from "@/features/model-fit/components/RecommendationsResults";
 import { useModelRecommendations } from "@/features/model-fit/hooks/useModelRecommendations";
@@ -99,7 +99,7 @@ export function ModelRecommendationsPage() {
 					{model.latest?.lastRefreshedAtUtc ? (
 						<Text size="sm" c="dimmed" data-testid="model-fit-last-refreshed">
 							{t("pages.modelFit.recommendations.lastRefreshed", "Last refreshed: {{time}}", {
-								time: formatModelFitTimestamp(model.latest.lastRefreshedAtUtc),
+								time: formatTimestamp(model.latest.lastRefreshedAtUtc),
 							})}
 						</Text>
 					) : null}

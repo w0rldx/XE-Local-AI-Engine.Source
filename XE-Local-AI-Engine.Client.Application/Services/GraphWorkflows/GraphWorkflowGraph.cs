@@ -94,6 +94,9 @@ internal sealed class GraphWorkflowGraph
     /// </summary>
     private const int MaxKeyLength = 64;
 
+    /// <summary>How many names a response-schema warning lists per clause before it counts the rest. A sentence, not an inventory.</summary>
+    private const int MaxNamedOptionalProperties = 3;
+
     /// <summary>
     ///     The reasoning efforts an Agent node may name, which are the ones an agent definition may pin — the override
     ///     has to be sayable in the same vocabulary as the pin it replaces. Not an enum: this travels to the provider as
@@ -117,6 +120,31 @@ internal sealed class GraphWorkflowGraph
         [GraphWorkflowNodeKind.Pause] = ["prompt", "allowedDecisions", "requireComment"],
         [GraphWorkflowNodeKind.End] = ["outcome", "resultPath"]
     };
+
+    /// <summary>
+    ///     The JSON Schema keywords the OpenAI strict-schema transform MOVES INTO A DESCRIPTION on its way to the
+    ///     grammar, so a response schema that carries one is asking for something the runtime will not check. The
+    ///     transform is applied unconditionally by the <c>Microsoft.Extensions.AI.OpenAI</c> adapter behind
+    ///     <c>ChatResponseFormat.ForJsonSchema</c> and has no opt-out, which is why this is a warning at authoring time
+    ///     rather than a fix in the executor. Structure — <c>enum</c>, <c>required</c>, <c>type</c>, the object shape —
+    ///     IS enforced, so none of that is listed here. <c>default</c> is relocated the same way by the transform's own
+    ///     <c>MoveDefaultKeywordToDescription</c>, so it belongs on this list rather than among the structure.
+    /// </summary>
+    private static readonly HashSet<string> DroppedSchemaKeywords = new(StringComparer.Ordinal)
+    {
+        "contentEncoding", "contentMediaType", "default", "not", "minLength", "maxLength", "pattern", "format", "minimum",
+        "maximum", "multipleOf", "patternProperties", "minItems", "maxItems", "unevaluatedProperties", "propertyNames",
+        "minProperties", "maxProperties", "unevaluatedItems", "contains", "minContains", "maxContains", "uniqueItems"
+    };
+
+    /// <summary>
+    ///     The members whose value is a sub-schema the transform DESCENDS INTO, beyond the two the walk handles itself.
+    ///     <c>TransformSchemaCore</c> recurses through exactly <c>properties</c>, <c>items</c>,
+    ///     <c>additionalProperties</c>, <c>not</c>, <c>anyOf</c>, <c>oneOf</c> and <c>allOf</c> — so <c>$defs</c>,
+    ///     <c>definitions</c> and <c>prefixItems</c> are left alone, and a constraint parked in one of them is neither
+    ///     relocated nor worth a warning.
+    /// </summary>
+    private static readonly string[] NestedSchemaMembers = ["items", "anyOf", "oneOf", "allOf"];
 
     /// <summary>Detached from its document by <c>Clone</c>, so a node that declares no config reads as an empty one.</summary>
     private static readonly JsonElement EmptyConfig = CloneEmptyObject();
@@ -183,7 +211,7 @@ internal sealed class GraphWorkflowGraph
     ///     <see cref="GraphWorkflowValidationException" />, so a graph with warnings saves, validates as valid and runs.
     ///     Computed on the first ask, because only the validate endpoint asks and every dispatcher tick parses.
     /// </summary>
-    public IReadOnlyList<GraphWorkflowValidationError> Warnings => _warnings ??= PauseContextWarnings();
+    public IReadOnlyList<GraphWorkflowValidationError> Warnings => _warnings ??= [.. PauseContextWarnings(), .. ResponseSchemaWarnings()];
 
     public IReadOnlyList<GraphWorkflowGraphEdge> InboundEdges(string nodeKey) =>
         _inbound.TryGetValue(nodeKey, out var edges) ? edges : [];
@@ -237,11 +265,15 @@ internal sealed class GraphWorkflowGraph
     ///     graph nobody can walk; every per-node and per-edge failure ACCUMULATES, keyed by the element it belongs to,
     ///     so an author fixing a canvas gets every complaint at once.
     ///     <para>
-    ///         The node cap is deliberately NOT enforced here — it is an option, and this stays testable without a
-    ///         container. <c>GraphWorkflowGraphContract.ValidateAndCountNodes</c> checks it after the parse.
+    ///         <paramref name="maxNodes" /> is the caller's node cap, checked against the declared array BEFORE any
+    ///         node is read or any edge walked — the cap is what bounds the work this parse does, so enforcing it
+    ///         afterwards would bound nothing. It is passed as a number rather than read from options, so this stays
+    ///         testable without a container. A caller that omits it parses a graph that was already capped when it was
+    ///         saved: the run engine and the dispatcher re-parse stored graphs, and a cap lowered since would make a
+    ///         live run unroutable rather than merely unsaveable.
     ///     </para>
     /// </summary>
-    public static GraphWorkflowGraph Parse(string graphJson)
+    public static GraphWorkflowGraph Parse(string graphJson, int maxNodes = int.MaxValue)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(graphJson);
 
@@ -263,7 +295,7 @@ internal sealed class GraphWorkflowGraph
         // ONE namespace for node and edge keys: an edge key colliding with a node key makes an element lookup
         // ambiguous in the editor for no gain.
         var keys = new HashSet<string>(StringComparer.Ordinal);
-        var nodes = ParseNodes(root, keys, errors);
+        var nodes = ParseNodes(root, maxNodes, keys, errors);
         var edges = ParseEdges(root, nodes, keys, errors);
         var graph = new GraphWorkflowGraph(nodes, edges);
         graph.Validate(errors);
@@ -315,12 +347,22 @@ internal sealed class GraphWorkflowGraph
     }
 
     private static Dictionary<string, GraphWorkflowGraphNode> ParseNodes(JsonElement root,
+        int maxNodes,
         HashSet<string> keys,
         List<GraphWorkflowValidationError> errors)
     {
         if (!root.TryGetProperty("nodes", out var nodesElement) || nodesElement.ValueKind != JsonValueKind.Array)
         {
             throw new GraphWorkflowValidationException("A graph workflow definition needs a 'nodes' array.");
+        }
+
+        // The cap bites on the DECLARED length, before a single node is read: everything after this walks the graph,
+        // and only the body size would otherwise bound how far. Duplicate keys are refused below, so this length and
+        // the parsed node count are the same number wherever the parse survives.
+        var declared = nodesElement.GetArrayLength();
+        if (declared > maxNodes)
+        {
+            throw new GraphWorkflowValidationException($"The graph declares {declared} nodes, more than the {maxNodes} one definition may carry.");
         }
 
         var nodes = new Dictionary<string, GraphWorkflowGraphNode>(StringComparer.Ordinal);
@@ -785,6 +827,178 @@ internal sealed class GraphWorkflowGraph
     }
 
     /// <summary>
+    ///     What an Agent node's <c>responseJsonSchema</c> asks for that the run will not deliver. One warning per node,
+    ///     because the author's next move is to open that node and edit one schema whatever the schema got wrong.
+    ///     <para>
+    ///         The schema does not reach llama.cpp as written: it travels through <c>ChatResponseFormat.ForJsonSchema</c>
+    ///         and the <c>Microsoft.Extensions.AI.OpenAI</c> adapter, whose strict-schema transform runs unconditionally
+    ///         and cannot be opted out of. That transform relocates the value keywords in
+    ///         <see cref="DroppedSchemaKeywords" /> into the property's <c>description</c>, marks every declared property
+    ///         <c>required</c>, and injects <c>additionalProperties: false</c> into any object that declares
+    ///         <c>properties</c> and does NOT already say what it wants. The grammar is then built from the REWRITTEN
+    ///         schema, so <c>maxLength: 3</c> is a hint the model may read and nothing enforces, while a property the
+    ///         author left optional comes back mandatory. Structure — <c>type</c>, <c>enum</c>, <c>required</c>, the
+    ///         object shape — survives, which is why none of it is warned about.
+    ///     </para>
+    ///     <para>
+    ///         Warned rather than refused: a schema is still useful with the constraints in it, the transform is the
+    ///         adapter's business and could change, and every one of these graphs runs. The whole point is that the
+    ///         author stops believing the parts that do not hold.
+    ///     </para>
+    /// </summary>
+    private IReadOnlyList<GraphWorkflowValidationError> ResponseSchemaWarnings()
+    {
+        var warnings = new List<GraphWorkflowValidationError>();
+        foreach (var (nodeKey, node) in Nodes.OrderBy(static entry => entry.Key, StringComparer.Ordinal))
+        {
+            if (node.Config is not GraphWorkflowAgentConfig { ResponseJsonSchema: { } schema })
+            {
+                continue;
+            }
+
+            if (DescribeSchema(schema) is { } complaint)
+            {
+                warnings.Add(new GraphWorkflowValidationError(nodeKey,
+                    GraphWorkflowStateMachine.Bounded($"Node '{nodeKey}' declares a response schema the runtime rewrites before it becomes a grammar: it {complaint}.",
+                        GraphWorkflowStateMachine.MaxTerminalReason)));
+            }
+        }
+
+        return warnings;
+    }
+
+    /// <summary>
+    ///     The middle of the sentence, or <c>null</c> when the schema survives the transform intact. Walked breadth-first
+    ///     on an explicit queue over exactly the positions the transform itself recurses through, so a constraint buried
+    ///     under <c>items</c> is found and one parked in a <c>$defs</c> pool is correctly ignored. No depth guard of its
+    ///     own: the schema came out of <see cref="JsonDocument" />, whose own 64-level limit already refused anything
+    ///     deeper at parse time. Optional property names are deduplicated by NAME rather than by path, so the same name
+    ///     left optional on two sub-objects is said once — a sentence naming the problem, not an inventory of every site.
+    /// </summary>
+    private static string? DescribeSchema(JsonElement schema)
+    {
+        var dropped = new List<string>();
+        var droppedSeen = new HashSet<string>(StringComparer.Ordinal);
+        var optional = new List<string>();
+        var optionalSeen = new HashSet<string>(StringComparer.Ordinal);
+        var closedByTheRuntime = false;
+
+        var pending = new Queue<JsonElement>();
+        pending.Enqueue(schema);
+        while (pending.Count > 0)
+        {
+            var current = pending.Dequeue();
+            if (current.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            // Only the member names of a SCHEMA node are keywords. A property literally named "pattern" lives under
+            // 'properties' and is enqueued as a sub-schema below, so it is never mistaken for the constraint.
+            foreach (var member in current.EnumerateObject().Where(member => DroppedSchemaKeywords.Contains(member.Name) && droppedSeen.Add(member.Name)))
+            {
+                dropped.Add(member.Name);
+            }
+
+            _ = current.TryGetProperty("properties", out var properties);
+            if (properties.ValueKind == JsonValueKind.Object)
+            {
+                var required = current.TryGetProperty("required", out var declared) && declared.ValueKind == JsonValueKind.Array
+                    ? declared.EnumerateArray().Where(static entry => entry.ValueKind == JsonValueKind.String).Select(static entry => entry.GetString()!).ToHashSet(StringComparer.Ordinal)
+                    : [];
+                foreach (var property in properties.EnumerateObject())
+                {
+                    if (!required.Contains(property.Name) && optionalSeen.Add(property.Name))
+                    {
+                        optional.Add(property.Name);
+                    }
+
+                    pending.Enqueue(property.Value);
+                }
+            }
+
+            // ABSENT is the case that changes: the transform injects `additionalProperties: false` only where the
+            // key is missing, so a schema that already SAYS what it wants — `false`, `true`, or a sub-schema — keeps
+            // it. An explicit `true` becomes `{}` on the way through and is still open at the grammar.
+            if (current.TryGetProperty("additionalProperties", out var additional))
+            {
+                pending.Enqueue(additional);
+            }
+            else if (properties.ValueKind == JsonValueKind.Object)
+            {
+                closedByTheRuntime = true;
+            }
+
+            foreach (var nested in NestedSchemas(current))
+            {
+                pending.Enqueue(nested);
+            }
+        }
+
+        var facts = new List<string>();
+        if (dropped.Count > 0)
+        {
+            facts.Add($"drops {Quoted(dropped, MaxNamedOptionalProperties)} rather than enforcing {(dropped.Count == 1 ? "it" : "them")}");
+        }
+
+        if (optional.Count > 0)
+        {
+            facts.Add($"requires every declared property ({Quoted(optional, MaxNamedOptionalProperties)} {(optional.Count == 1 ? "is" : "are")} optional here)");
+        }
+
+        if (closedByTheRuntime)
+        {
+            facts.Add("forbids additional properties");
+        }
+
+        return facts.Count switch
+        {
+            0 => null,
+            1 => facts[0],
+            _ => $"{string.Join(", ", facts.Take(facts.Count - 1))} and {facts[^1]}"
+        };
+    }
+
+    /// <summary>
+    ///     Every sub-schema of <paramref name="schema" /> other than the two its caller already walked: array items in
+    ///     both the single-schema and the tuple spelling, and the composition keywords. <c>not</c> is descended by the
+    ///     transform but not here, along with the other relocated keywords that happen to CONTAIN a schema
+    ///     (<c>contains</c>, <c>propertyNames</c>, <c>patternProperties</c>): <c>not</c> itself is moved into a
+    ///     description afterwards, so nothing under it reaches the grammar to be warned about twice.
+    /// </summary>
+    private static IEnumerable<JsonElement> NestedSchemas(JsonElement schema)
+    {
+        foreach (var name in NestedSchemaMembers)
+        {
+            if (!schema.TryGetProperty(name, out var value))
+            {
+                continue;
+            }
+
+            switch (value.ValueKind)
+            {
+                case JsonValueKind.Array:
+                    foreach (var entry in value.EnumerateArray())
+                    {
+                        yield return entry;
+                    }
+
+                    break;
+                case JsonValueKind.Object:
+                    yield return value;
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    /// <summary>The first <paramref name="limit" /> names in single quotes, with the rest counted rather than listed — which
+    ///     is also what keeps the sentence inside its bound when a schema gets a great many things wrong at once.</summary>
+    private static string Quoted(IReadOnlyList<string> names, int limit) =>
+        string.Join(", ", names.Take(limit).Select(static name => $"'{name}'")) + (names.Count > limit ? $" and {names.Count - limit} more" : string.Empty);
+
+    /// <summary>
     ///     A node that fires on its FIRST satisfied inbound edge — the one successor the pause-context advice must not
     ///     be given for, because an unconditional content edge would admit it on its own, ahead of any approval.
     ///     <para>
@@ -827,35 +1041,56 @@ internal sealed class GraphWorkflowGraph
         return resolved;
     }
 
-    /// <summary>Depth-first colouring: white unvisited, grey on the current path, black finished. A grey hit is the cycle.</summary>
+    /// <summary>
+    ///     Depth-first colouring: white unvisited, grey on the current path, black finished. A grey hit is the cycle.
+    ///     <para>
+    ///         Walked on an EXPLICIT stack rather than by recursion, so a long chain costs heap rather than one stack
+    ///         frame per node — a stack overflow is a process kill nothing can catch, and this parse runs on a
+    ///         thread-pool thread. The frame is the node plus how far through its out-edges the walk has got.
+    ///     </para>
+    /// </summary>
     private void EnsureAcyclic()
     {
         var onPath = new HashSet<string>(StringComparer.Ordinal);
+        var path = new List<string>();
         var finished = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var nodeKey in Nodes.Keys)
+        var pending = new Stack<(string NodeKey, int EdgeIndex)>();
+        foreach (var root in Nodes.Keys.Where(key => !finished.Contains(key)))
         {
-            Walk(nodeKey);
-        }
-
-        void Walk(string nodeKey)
-        {
-            if (finished.Contains(nodeKey))
+            _ = onPath.Add(root);
+            path.Add(root);
+            pending.Push((root, 0));
+            while (pending.Count > 0)
             {
-                return;
-            }
+                var (nodeKey, edgeIndex) = pending.Pop();
+                var outbound = OutboundEdges(nodeKey);
+                if (edgeIndex == outbound.Count)
+                {
+                    _ = onPath.Remove(nodeKey);
+                    path.RemoveAt(path.Count - 1);
+                    _ = finished.Add(nodeKey);
+                    continue;
+                }
 
-            if (!onPath.Add(nodeKey))
-            {
-                throw new GraphWorkflowValidationException($"The graph workflow definition has a cycle through node '{nodeKey}'. Graph workflows are acyclic.");
-            }
+                pending.Push((nodeKey, edgeIndex + 1));
+                var next = outbound[edgeIndex].To;
+                if (finished.Contains(next))
+                {
+                    continue;
+                }
 
-            foreach (var edge in OutboundEdges(nodeKey))
-            {
-                Walk(edge.To);
-            }
+                if (!onPath.Add(next))
+                {
+                    // The path from the repeated key onwards IS the cycle, which is what lets the message name every
+                    // node that made it rather than the one node the walk happened to come back to.
+                    var cycle = string.Join(" -> ", path[path.IndexOf(next)..].Append(next));
+                    throw new GraphWorkflowValidationException($"The graph workflow definition has a cycle through node '{next}': {cycle}. "
+                                                               + "Graph workflows are acyclic.");
+                }
 
-            _ = onPath.Remove(nodeKey);
-            _ = finished.Add(nodeKey);
+                path.Add(next);
+                pending.Push((next, 0));
+            }
         }
     }
 

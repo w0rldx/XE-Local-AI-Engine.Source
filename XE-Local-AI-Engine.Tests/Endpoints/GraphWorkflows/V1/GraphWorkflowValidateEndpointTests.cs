@@ -75,6 +75,34 @@ public sealed class GraphWorkflowValidateEndpointTests
         AssertEx.Equal(0, document.RootElement.GetProperty("warnings").GetArrayLength(), $"the context edge gives the node a non-Pause predecessor: {body}");
     }
 
+    /// <summary>
+    ///     The response-schema warning on the wire (S6-9). The schema an Agent node declares does not reach the grammar
+    ///     as written — the adapter's strict transform drops the value keywords and makes every property required — so
+    ///     the report says so while the graph stays valid, saveable and runnable.
+    /// </summary>
+    [Test]
+    public async Task Validate_WithAResponseSchemaTheRuntimeRewrites_Answers200ValidWithAWarning()
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, Body(GraphWorkflowGraphs.PauseAfterALooseResponseSchema)).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.True(document.RootElement.GetProperty("valid").GetBoolean(), $"a schema warning never makes a graph invalid: {body}");
+        AssertEx.Equal(0, document.RootElement.GetProperty("errors").GetArrayLength());
+
+        var warnings = document.RootElement.GetProperty("warnings").EnumerateArray().ToArray();
+        AssertEx.Equal("analyze, summarize",
+            string.Join(", ", warnings.Select(static warning => warning.GetProperty("key").GetString() ?? string.Empty).Order(StringComparer.Ordinal)),
+            $"the two warning kinds ride the same list, on their own nodes: {body}");
+        var schemaWarning = warnings.Single(static warning => warning.GetProperty("key").GetString() == "analyze");
+        AssertEx.Contains(schemaWarning.GetProperty("message").GetString(), "'pattern'");
+        AssertEx.Contains(schemaWarning.GetProperty("message").GetString(), "requires every declared property");
+    }
+
     [Test]
     public async Task Validate_WithAnUnroutableGraph_Answers200WithEveryError()
     {

@@ -58,7 +58,8 @@ public sealed class GraphWorkflowGraphContractTests
     }
 
     /// <summary>
-    ///     The cap is an option, so it lives here rather than in the parser — which stays testable without a container.
+    ///     The cap is an option, so it is READ here rather than in the parser — which stays testable without a
+    ///     container.
     /// </summary>
     [Test]
     public void ValidateAndCountNodes_OverTheNodeCap_IsRefused()
@@ -68,6 +69,40 @@ public sealed class GraphWorkflowGraphContractTests
 
         AssertEx.Contains(refusal.Message, "more than the 2 one definition may carry");
         AssertEx.Equal(expected: 3, GraphWorkflowGraphContract.ValidateAndCountNodes(GraphWorkflowGraphs.StartAgentEnd, maxNodes: 3), "the cap is inclusive.");
+    }
+
+    /// <summary>
+    ///     A chain of thousands of minimal nodes fits the 1 MiB request body, so the body limit is not what keeps a
+    ///     definition inside the cap. This pins the refusal itself; the ORDER it fires in is pinned by
+    ///     <see cref="ValidateAndCountNodes_OverTheCapWithAMalformedNode_RefusesOnTheCapRatherThanTheNode" />.
+    /// </summary>
+    [Test]
+    public void ValidateAndCountNodes_FarOverTheNodeCap_IsRefusedBeforeTheGraphIsWalked()
+    {
+        var refusal = AssertEx.Throws<GraphWorkflowValidationException>(() =>
+            GraphWorkflowGraphContract.ValidateAndCountNodes(GraphWorkflowGraphs.Chain(nodeCount: 9_000), maxNodes: 200));
+
+        AssertEx.Contains(refusal.Message, "more than the 200 one definition may carry");
+        AssertEx.Equal(expected: 200,
+            GraphWorkflowGraphContract.ValidateAndCountNodes(GraphWorkflowGraphs.Chain(nodeCount: 200), maxNodes: 200),
+            "a chain as deep as the cap allows is still a graph that validates — the cap refuses size, not depth.");
+    }
+
+    /// <summary>
+    ///     The cap fires BEFORE a node is read, which is the whole of what it buys: everything the parse does after
+    ///     counting is proportional to how many nodes there are. Only that ordering can produce the cap message here —
+    ///     the last node's kind is one <c>ParseNodes</c> refuses on its own, so a cap checked after the parse would
+    ///     answer with the node's refusal instead.
+    /// </summary>
+    [Test]
+    public void ValidateAndCountNodes_OverTheCapWithAMalformedNode_RefusesOnTheCapRatherThanTheNode()
+    {
+        var refusal = AssertEx.Throws<GraphWorkflowValidationException>(() =>
+            GraphWorkflowGraphContract.ValidateAndCountNodes(GraphWorkflowGraphs.Chain(nodeCount: 201).Replace("\"kind\": \"End\"", "\"kind\": \"Nonsense\"", StringComparison.Ordinal),
+                maxNodes: 200));
+
+        AssertEx.Contains(refusal.Message, "more than the 200 one definition may carry",
+            message: "a cap checked after the parse would have answered with the last node's unknown 'kind' instead.");
     }
 
     [Test]

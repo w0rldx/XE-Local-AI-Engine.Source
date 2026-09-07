@@ -4,12 +4,12 @@ import { type ReactNode, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import {
 	fitLevelColor,
 	formatContextTokens,
 	formatMemoryMb,
 	formatModelFitMetric,
-	formatModelFitTimestamp,
 } from "@/features/model-fit/components/ModelFitFormatters";
 import {
 	defaultModelFitUseCase,
@@ -100,7 +100,7 @@ export function ModelFitPanel({ modelName }: ModelFitPanelProps) {
 				/>
 				{latest?.lastRefreshedAtUtc ? (
 					<Text size="xs" c="dimmed">
-						Cached {formatModelFitTimestamp(latest.lastRefreshedAtUtc)}
+						Cached {formatTimestamp(latest.lastRefreshedAtUtc)}
 					</Text>
 				) : null}
 			</Group>

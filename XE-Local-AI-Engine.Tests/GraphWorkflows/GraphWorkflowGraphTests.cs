@@ -203,6 +203,40 @@ public sealed class GraphWorkflowGraphTests
         AssertEx.Contains(AssertEx.Throws<GraphWorkflowValidationException>(() => GraphWorkflowGraph.Parse(Cyclic)).Message, "cycle");
     }
 
+    /// <summary>
+    ///     The refusal names every node on the cycle, in the order the walk took them, starting and ending at the node
+    ///     it came back to. Naming only that one node leaves an author with a canvas of edges and a single key, and the
+    ///     back edge is the one thing they have to find.
+    /// </summary>
+    [Test]
+    public void Parse_WithACycle_NamesEveryNodeOnIt()
+    {
+        const string ThreeNodeLoop = """
+                                     { "schemaVersion": 1,
+                                       "nodes": [{ "key": "start", "kind": "Start" },
+                                                 { "key": "a", "kind": "Agent", "config": { "instructions": "a" } },
+                                                 { "key": "b", "kind": "Agent", "config": { "instructions": "b" } },
+                                                 { "key": "c", "kind": "Agent", "config": { "instructions": "c" } },
+                                                 { "key": "done", "kind": "End", "config": { "outcome": "x" } }],
+                                       "edges": [{ "key": "e1", "from": "start", "to": "a" }, { "key": "e2", "from": "a", "to": "b" },
+                                                 { "key": "e3", "from": "b", "to": "c" }, { "key": "e4", "from": "c", "to": "a" },
+                                                 { "key": "e5", "from": "c", "to": "done" }] }
+                                     """;
+
+        AssertEx.Contains(AssertEx.Throws<GraphWorkflowValidationException>(() => GraphWorkflowGraph.Parse(ThreeNodeLoop)).Message,
+            "cycle through node 'a': a -> b -> c -> a");
+    }
+
+    /// <summary>
+    ///     A stored graph is re-parsed by the run engine and the dispatcher without a cap — it was capped when it was
+    ///     saved, and a cap lowered since would make a live run unroutable rather than merely unsaveable. So the walk
+    ///     itself must not be bounded by a stack: this chain is far deeper than a frame-per-node walk could carry, and
+    ///     reaching the assertion is the evidence.
+    /// </summary>
+    [Test]
+    public void Parse_WithAChainDeeperThanTheStackWouldCarry_IsWalkedWithoutRecursion() =>
+        AssertEx.Equal(expected: 10_000, GraphWorkflowGraph.Parse(GraphWorkflowGraphs.Chain(nodeCount: 10_000)).Nodes.Count);
+
     [Test]
     public void Parse_WithAnUnreachableNode_IsRejected()
     {
@@ -822,10 +856,182 @@ public sealed class GraphWorkflowGraphTests
 
     /// <summary>A graph with nothing to say about it says nothing — the warning list is not a place things accumulate.</summary>
     [Test]
-    public void Warnings_OnAGraphWithNoPause_AreEmpty()
+    public void Warnings_OnAGraphWithNoPauseAndNoResponseSchema_AreEmpty()
     {
         AssertEx.Empty(GraphWorkflowGraph.Parse(GraphWorkflowGraphs.StartAgentEnd).Warnings);
-        AssertEx.Empty(GraphWorkflowGraph.Parse(GraphWorkflowGraphs.BranchOnJson).Warnings);
+    }
+
+    /// <summary>
+    ///     The response-schema warning, whole. The schema does not reach the grammar as written: the adapter behind
+    ///     <c>ChatResponseFormat.ForJsonSchema</c> relocates the value keywords into a description, marks every declared
+    ///     property required and closes the object — so an author who writes <c>maxLength</c> or leaves a property
+    ///     optional is believing something no run will hold them to. Asserted as the WHOLE sentence, because the three
+    ///     clauses have to compose into one readable line and a substring check would not notice if they stopped.
+    /// </summary>
+    [Test]
+    public void Warnings_OnAResponseSchemaWithADroppedKeywordAndAnOptionalProperty_NameBoth()
+    {
+        var graph = GraphWorkflowGraph.Parse(Agent("""
+                                                   { "instructions": "Judge it.",
+                                                     "responseJsonSchema": { "type": "object",
+                                                                             "properties": { "summary": { "type": "string", "maxLength": 3 },
+                                                                                             "notes": { "type": "string" } } } }
+                                                   """));
+
+        AssertEx.Equal(expected: 1, graph.Warnings.Count, "one warning per node, however many things the schema got wrong.");
+        AssertEx.Equal("agent", graph.Warnings[0].Key, "keyed on the node, so the editor draws it on the card the author has to open.");
+        AssertEx.Equal("Node 'agent' declares a response schema the runtime rewrites before it becomes a grammar: "
+                       + "it drops 'maxLength' rather than enforcing it, requires every declared property ('summary', 'notes' are optional here) "
+                       + "and forbids additional properties.",
+            graph.Warnings[0].Message);
+    }
+
+    /// <summary>
+    ///     SILENCE about <c>additionalProperties</c> is the third clause, not an explicit <c>true</c>. The transform
+    ///     injects <c>additionalProperties: false</c> ONLY where the key is missing, so the JSON Schema default — an
+    ///     open object — is the one the runtime quietly closes.
+    /// </summary>
+    [Test]
+    public void Warnings_OnAResponseSchemaThatLeavesTheObjectOpenByDefault_SayTheRuntimeClosesIt()
+    {
+        var graph = GraphWorkflowGraph.Parse(Agent("""
+                                                   { "instructions": "Judge it.",
+                                                     "responseJsonSchema": { "type": "object",
+                                                                             "properties": { "summary": { "type": "string" } },
+                                                                             "required": ["summary"] } }
+                                                   """));
+
+        AssertEx.Equal(expected: 1, graph.Warnings.Count);
+        AssertEx.Equal("Node 'agent' declares a response schema the runtime rewrites before it becomes a grammar: it forbids additional properties.",
+            graph.Warnings[0].Message);
+    }
+
+    /// <summary>
+    ///     The mirror, and the reason the clause cannot be written the other way round: a schema that SAYS
+    ///     <c>additionalProperties: true</c> keeps it — the injection guard skips any object that already declares the
+    ///     key — so the object really is open at the grammar and there is nothing to warn about.
+    /// </summary>
+    [Test]
+    public void Warnings_OnAResponseSchemaThatOpensTheObjectExplicitly_AreEmpty()
+    {
+        AssertEx.Empty(GraphWorkflowGraph.Parse(Agent("""
+                                                      { "instructions": "Judge it.",
+                                                        "responseJsonSchema": { "type": "object",
+                                                                                "properties": { "summary": { "type": "string" } },
+                                                                                "required": ["summary"],
+                                                                                "additionalProperties": true } }
+                                                      """)).Warnings,
+            "an explicit 'true' survives the transform, so the author's belief about it holds.");
+    }
+
+    /// <summary>
+    ///     The transform recurses through <c>properties</c>, <c>items</c>, <c>additionalProperties</c>, <c>not</c> and
+    ///     the composition keywords — and through NOTHING else. A constraint parked in a <c>$defs</c> pool is therefore
+    ///     left exactly as written, and warning about it would be teaching the author a rule that is not true.
+    /// </summary>
+    [Test]
+    public void Warnings_OnAConstraintInADefinitionPool_AreEmpty()
+    {
+        AssertEx.Empty(GraphWorkflowGraph.Parse(Agent("""
+                                                      { "instructions": "Judge it.",
+                                                        "responseJsonSchema": { "type": "object",
+                                                                                "$defs": { "tag": { "type": "object",
+                                                                                                    "properties": { "name": { "type": "string", "minLength": 1 } } } },
+                                                                                "properties": { "verdict": { "type": "string" } },
+                                                                                "required": ["verdict"],
+                                                                                "additionalProperties": false } }
+                                                      """)).Warnings,
+            "the transform never descends into $defs, so nothing in it is relocated or made required.");
+    }
+
+    /// <summary>
+    ///     Structure survives the transform, so a schema built out of nothing but structure is warned about not at all —
+    ///     which is also the cure the warning is steering an author towards.
+    /// </summary>
+    [Test]
+    public void Warnings_OnAResponseSchemaTheRuntimeEnforcesAsWritten_AreEmpty()
+    {
+        AssertEx.Empty(GraphWorkflowGraph.Parse(Agent("""
+                                                      { "instructions": "Judge it.",
+                                                        "responseJsonSchema": { "type": "object",
+                                                                                "properties": { "verdict": { "type": "string", "enum": ["pass", "fail"] },
+                                                                                                "score": { "type": "integer" } },
+                                                                                "required": ["verdict", "score"],
+                                                                                "additionalProperties": false } }
+                                                      """)).Warnings,
+            "enum, type, required and the object shape all reach the grammar, so there is nothing to disbelieve.");
+    }
+
+    /// <summary>
+    ///     The walk goes all the way down. A constraint on an array and another inside its <c>items</c> are both
+    ///     dropped, so a warning that only looked at the top level would have left the author believing the half of the
+    ///     schema that is furthest from the eye.
+    /// </summary>
+    [Test]
+    public void Warnings_OnAConstraintNestedUnderItems_FindIt()
+    {
+        var graph = GraphWorkflowGraph.Parse(Agent("""
+                                                   { "instructions": "List them.",
+                                                     "responseJsonSchema": { "type": "object",
+                                                                             "properties": { "tags": { "type": "array", "minItems": 1,
+                                                                                                       "items": { "type": "object",
+                                                                                                                  "properties": { "name": { "type": "string", "minLength": 1 } },
+                                                                                                                  "required": ["name"],
+                                                                                                                  "additionalProperties": false } } },
+                                                                             "required": ["tags"],
+                                                                             "additionalProperties": false } }
+                                                   """));
+
+        AssertEx.Equal(expected: 1, graph.Warnings.Count);
+        AssertEx.Equal("Node 'agent' declares a response schema the runtime rewrites before it becomes a grammar: "
+                       + "it drops 'minItems', 'minLength' rather than enforcing them.",
+            graph.Warnings[0].Message);
+    }
+
+    /// <summary>
+    ///     Only an Agent node's answer is held to a schema. A <c>Start</c> node's <c>inputSchema</c> describes what the
+    ///     RUN is given rather than what a model must produce, never reaches a grammar, and so is nothing to warn about.
+    /// </summary>
+    [Test]
+    public void Warnings_OnASchemaThatIsNotAnAgentResponse_AreEmpty()
+    {
+        AssertEx.Empty(GraphWorkflowGraph.Parse("""
+                                                { "schemaVersion": 1,
+                                                  "nodes": [{ "key": "start", "kind": "Start",
+                                                              "config": { "inputSchema": { "type": "object", "properties": { "topic": { "type": "string", "maxLength": 3 } } } } },
+                                                            { "key": "agent", "kind": "Agent", "config": { "instructions": "Go." } },
+                                                            { "key": "done", "kind": "End", "config": { "outcome": "completed" } }],
+                                                  "edges": [{ "key": "e1", "from": "start", "to": "agent" }, { "key": "e2", "from": "agent", "to": "done" }] }
+                                                """).Warnings);
+    }
+
+    /// <summary>
+    ///     The two warning kinds are independent and both ride out at once, on their own node keys — the strip renders
+    ///     one chip per key, so a graph that has both problems must not report only the first one found.
+    /// </summary>
+    [Test]
+    public void Warnings_OfBothKindsOnOneGraph_AreBothReportedOnTheirOwnNodes()
+    {
+        var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.PauseAfterALooseResponseSchema);
+
+        AssertEx.Equal("analyze, summarize", string.Join(", ", graph.Warnings.Select(static warning => warning.Key).Order(StringComparer.Ordinal)));
+        AssertEx.Contains(AssertEx.NotNull(graph.Warnings.FirstOrDefault(static warning => warning.Key == "analyze")).Message, "'pattern'");
+        AssertEx.Contains(AssertEx.NotNull(graph.Warnings.FirstOrDefault(static warning => warning.Key == "summarize")).Message, "Add an edge from 'analyze' to 'summarize'");
+    }
+
+    /// <summary>
+    ///     A response schema declaring nothing but optional properties is the shape the existing branch fixture carries,
+    ///     and it is exactly the false confidence this warning is for: <c>requiresReview</c> reads as optional and comes
+    ///     back mandatory.
+    /// </summary>
+    [Test]
+    public void Warnings_OnTheBranchFixturesOptionalProperty_NameIt()
+    {
+        var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.BranchOnJson);
+
+        AssertEx.Equal(expected: 1, graph.Warnings.Count);
+        AssertEx.Equal("analyze", graph.Warnings[0].Key);
+        AssertEx.Contains(graph.Warnings[0].Message, "('requiresReview' is optional here)");
     }
 
     /// <summary>A Start, one Agent carrying <paramref name="config" />, and an End — the smallest graph a config fits in.</summary>
