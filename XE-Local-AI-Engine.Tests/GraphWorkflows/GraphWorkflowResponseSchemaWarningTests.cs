@@ -75,6 +75,26 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
     }
 
     /// <summary>
+    ///     The lookup reads the store through a fresh scope and a map read lease, so it can fail for reasons that have
+    ///     nothing to do with the graph. Validation is warning-only and never blocked before: a store fault must not
+    ///     turn the editor's probe into a 500, and the warning it could not rule out stays.
+    /// </summary>
+    [Test]
+    public async Task ValidateAsync_WhenTheProviderLookupFaults_KeepsTheWarningAndDoesNotThrow()
+    {
+        var providers = Substitute.For<ILocalModelProviderResolver>();
+        providers.ResolveProviderNameForModelAsync(LocalModel, Arg.Any<CancellationToken>())
+                 .Returns<Task<string>>(_ => throw new InvalidOperationException("the model-provider map is unavailable"));
+        var service = BuildService(providers);
+
+        var result = await service.ValidateAsync(AgentGraph(LocalModel));
+
+        AssertEx.True(result.IsValid, "an infrastructure fault in a warning lookup must not make the graph invalid either.");
+        var warning = AssertEx.NotNull(result.Warnings.SingleOrDefault(), $"one node, one warning: {string.Join(" | ", result.Warnings)}");
+        AssertEx.Equal("agent", warning.Key);
+    }
+
+    /// <summary>
     ///     The OTHER warning kind travels the same list, and narrowing must not take it with it. This graph's successor
     ///     is reached only through a Pause, so it earns the pause-context warning while its Agent node's schema warning
     ///     is dropped for llama-server — proving the filter is per-warning rather than per-node or wholesale.

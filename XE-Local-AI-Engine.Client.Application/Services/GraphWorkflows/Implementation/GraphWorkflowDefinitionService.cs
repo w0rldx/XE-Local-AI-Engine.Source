@@ -116,13 +116,35 @@ internal sealed class GraphWorkflowDefinitionService(IGraphWorkflowStore store,
                 continue;
             }
 
-            var provider = await _providers.ResolveProviderNameForModelAsync(model, cancellationToken).ConfigureAwait(false);
-            if (string.Equals(provider, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
+            if (await ServedByLlamaServerAsync(model, cancellationToken).ConfigureAwait(false))
             {
                 suppressed.Add(warning);
             }
         }
 
         return suppressed.Count == 0 ? graph.Warnings : [.. graph.Warnings.Where(warning => !suppressed.Contains(warning))];
+    }
+
+    /// <summary>
+    ///     Whether llama-server serves <paramref name="model" />, answering <see langword="false" /> when the lookup
+    ///     cannot say. The resolver opens a scope, takes a map read lease and reads the store, so it can fail for
+    ///     reasons that have nothing to do with the graph being validated — and validation is a warning-only,
+    ///     never-blocking path that until now touched only the parser and the tool catalog. Letting a store fault
+    ///     escape would turn an editor's probe into a 500. Answering <see langword="false" /> keeps the warning, which
+    ///     is the same cheap-error direction an unpinned node already takes.
+    /// </summary>
+    private async Task<bool> ServedByLlamaServerAsync(string model, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var provider = await _providers.ResolveProviderNameForModelAsync(model, cancellationToken).ConfigureAwait(false);
+            return string.Equals(provider, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Broad by intent: every failure mode of the lookup has the same right answer here, and the caller's
+            // contract is that a warning is never worth failing a validation over. Cancellation still propagates.
+            return false;
+        }
     }
 }
