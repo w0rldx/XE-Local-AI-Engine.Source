@@ -33,6 +33,13 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         _databasePath = databasePath;
     }
 
+    /// <summary>
+    ///     The throwaway database this probe migrated. A suite that has to reach the file through something other than
+    ///     this probe — an application-layer reader that takes a <see cref="NodeChatDbContext" />, say — opens its own
+    ///     context over this path rather than re-implementing the migrate-to-a-point plumbing.
+    /// </summary>
+    public string DatabasePath => _databasePath;
+
     /// <summary>Applies the whole <see cref="NodeChatDbContext" /> chain to an empty database.</summary>
     public static Task<MigrationSchemaProbe> MigrateChatAsync(string fileName)
     {
