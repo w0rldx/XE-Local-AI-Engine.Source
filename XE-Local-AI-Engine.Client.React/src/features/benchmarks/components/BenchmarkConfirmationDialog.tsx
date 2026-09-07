@@ -35,12 +35,10 @@ export function BenchmarkConfirmationDialog({
 					: t("pages.benchmarks.project.rejudgeConfirmTitle", "Re-judge this project?")
 			}
 			size="md"
-			// This confirmation is raised OVER the still-open project editor (a judge change is refused with 409
-			// `RejudgeRequired`, and the editor stays open so a cancel returns to the untouched draft). Mantine puts
-			// every portal in one shared node, so two dialogs at the default z-index 200 are ordered by insertion, and
-			// the editor is re-inserted last because its `key` remounts it when it opens. 400 is the same raised layer
-			// ConfirmProvider's shared dialog uses, so the confirmation is on top by declaration rather than by luck.
-			zIndex={400}
+			// This confirmation opens OVER the still-open project editor: a judge change is refused with 409
+			// `RejudgeRequired` and the editor stays open so a cancel returns to the untouched draft. `raised` is what
+			// puts it on top by declaration rather than by portal insertion order — see DialogShell.
+			raised={true}
 			data-testid="benchmark-rejudge-confirm"
 		>
 			<Stack gap="md">
