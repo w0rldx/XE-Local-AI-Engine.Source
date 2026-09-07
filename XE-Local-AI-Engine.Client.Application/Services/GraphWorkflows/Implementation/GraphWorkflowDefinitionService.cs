@@ -2,18 +2,25 @@ namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Tools;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     Validation and the store, in that order. The parse it runs is the RUNTIME's own, so a definition accepted here
 ///     is one that will start, and a rule added to the parser cannot be forgotten on the save path.
 /// </summary>
-internal sealed class GraphWorkflowDefinitionService(IGraphWorkflowStore store, IToolInvocationService tools, IOptions<GraphWorkflowOptions> options)
+internal sealed class GraphWorkflowDefinitionService(IGraphWorkflowStore store,
+    IToolInvocationService tools,
+    ILocalModelProviderResolver providers,
+    IOptions<GraphWorkflowOptions> options)
     : IGraphWorkflowDefinitionService
 {
     private readonly IGraphWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
     private readonly IToolInvocationService _tools = tools ?? throw new ArgumentNullException(nameof(tools));
+
+    private readonly ILocalModelProviderResolver _providers = providers ?? throw new ArgumentNullException(nameof(providers));
 
     private readonly IOptions<GraphWorkflowOptions> _options = options ?? throw new ArgumentNullException(nameof(options));
 
@@ -23,7 +30,8 @@ internal sealed class GraphWorkflowDefinitionService(IGraphWorkflowStore store, 
         {
             // A graph that routes may still have something said about it. Warnings ride out only on this path: they
             // never block, so the save and start paths below discard them rather than pretend to act on them.
-            return GraphWorkflowValidationResult.ValidWith((await ValidateAndParseAsync(graphJson, cancellationToken).ConfigureAwait(false)).Warnings);
+            var graph = await ValidateAndParseAsync(graphJson, cancellationToken).ConfigureAwait(false);
+            return GraphWorkflowValidationResult.ValidWith(await WarningsForRuntimeAsync(graph, cancellationToken).ConfigureAwait(false));
         }
         catch (GraphWorkflowValidationException exception)
         {
@@ -80,5 +88,41 @@ internal sealed class GraphWorkflowDefinitionService(IGraphWorkflowStore store, 
         return toolErrors.Count == 0
             ? graph
             : throw new GraphWorkflowValidationException(GraphWorkflowValidationResult.Invalid(toolErrors));
+    }
+
+    /// <summary>
+    ///     The graph's warnings, minus the response-schema one on any Agent node whose pinned model llama-server
+    ///     serves. That warning describes the <c>Microsoft.Extensions.AI.OpenAI</c> strict-schema rewrite, and the
+    ///     llama.cpp lane no longer suffers it: the schema is written onto the request body as authored
+    ///     (<c>DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough</c>). Telling an author their bounds are
+    ///     dropped when the runtime enforces them is worse than saying nothing.
+    ///     <para>
+    ///         Here rather than in the parser because only this seam can reach the model-to-provider map, and only this
+    ///         path answers warnings at all. A node with no model pin, or one that maps to any other provider, keeps
+    ///         its warning: what an unpinned node inherits is decided at run start, and being wrong in the direction of
+    ///         a warning nobody needed is the cheap error.
+    ///     </para>
+    /// </summary>
+    private async Task<IReadOnlyList<GraphWorkflowValidationError>> WarningsForRuntimeAsync(GraphWorkflowGraph graph, CancellationToken cancellationToken)
+    {
+        var suppressed = new HashSet<GraphWorkflowValidationError>();
+        foreach (var warning in graph.ResponseSchemaWarnings)
+        {
+            if (warning.Key is not { } nodeKey
+                || !graph.Nodes.TryGetValue(nodeKey, out var node)
+                || node.Config is not GraphWorkflowAgentConfig { Model: { } model }
+                || string.IsNullOrWhiteSpace(model))
+            {
+                continue;
+            }
+
+            var provider = await _providers.ResolveProviderNameForModelAsync(model, cancellationToken).ConfigureAwait(false);
+            if (string.Equals(provider, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
+            {
+                suppressed.Add(warning);
+            }
+        }
+
+        return suppressed.Count == 0 ? graph.Warnings : [.. graph.Warnings.Where(warning => !suppressed.Contains(warning))];
     }
 }
