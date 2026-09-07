@@ -749,7 +749,7 @@ in the same build would destroy everything past it as its *normal* outcome.
 | `Start` | `Start`, with the canvas `StartText` as `config.defaultInput = { "text": <StartText> }` (null when empty) — an object, because the editor renders a stored default as JSON text and a bare string would never re-parse. |
 | `Agent` | `Agent` with `maxAttempts: 1`, `instructions` / `model` / `reasoningEffort` carried over, `agentDefinitionId: null`, `responseJsonSchema: null`, `includeUpstreamOutputs: true`. |
 | `Debug` | **Elided.** Every `X → Debug` and `Debug → Y` collapses to `X → Y`. A Debug node was a side-event tap that forwarded its input unchanged, so removing it preserves the run's meaning exactly. |
-| `Pause` | `Pause` with `prompt: "Approve and continue?"`, `allowedDecisions: ["Approve"]`, `requireComment: false`; its single out-edge gains `label: "approved"` and `condition: { "path": "output.decision", "op": "Eq", "value": "Approve" }`. Open Canvas's `Continue` was a resume rather than a decision, so `Approve` alone is the faithful translation — and one allowed decision with one matching out-edge satisfies the Pause pre-flight rule of §2.4. |
+| `Pause` | `Pause` with `prompt: "Approve and continue?"`, `allowedDecisions: ["Approve"]`, `requireComment: false`; its single out-edge gains `label: "approved"` and `condition: { "path": "output.decision", "op": "Eq", "value": "Approve" }`. Open Canvas's `Continue` was a resume rather than a decision, so `Approve` alone is the faithful translation — and one allowed decision with one matching out-edge satisfies the Pause pre-flight rule of §2.4. **Plus one context edge `X → Y`**, unconditional and labelled `context`, where `X` is the pause's nearest non-`Pause` ancestor along the (Debug-elided) chain and `Y` each of its successors — see below. |
 | `End` | `End` with `outcome: "completed"`, `resultPath: null`. |
 | `ModelProfile` (on an Agent) | **Dropped.** An Agent node's config has no profile member. A non-null value records a reason naming the canvas id and the **node key**, never the value. That reason reaches the log as a per-change Warning only when the definition imported cleanly; on the needs-attention path it is folded into the description instead (§9.3). |
 
@@ -767,6 +767,23 @@ update validators cap a name at **200** (`GraphWorkflowRequestLimits.MaxNameLeng
 without one, so generating a second layout rule here would leave one of the two dead. The practical consequence:
 **an imported definition opens laid out and unsaved.** The canvas is dirty the moment you open it, and the layout is
 persisted when you save. That is expected, not a bug.
+
+**The context edge around a `Pause`.** Open Canvas's `Pause` was a pass-through resume: its post-adapter forwarded
+the answer it was waiting on unchanged. A Graph Workflow `Pause` writes a decision document of its own —
+`{decision, comment, payload}` — and a node's `input` is its ONE satisfied predecessor's output document, becoming
+the `upstream` map only when there are several (§3.2). Mapped one-for-one, `Agent A → Pause → Agent B` therefore
+hands B the approval metadata and never A's answer, and a `Pause` before an `End` loses the result the same way.
+That was observed live in the S4 round, not reasoned about.
+
+So the importer emits one extra unconditional edge from the pause's nearest non-`Pause` ancestor `X` to each of its
+successors `Y`. `Y` keeps the default `All` join policy, so it is admitted only once **both** the content edge and
+the pause's own `approved` edge are satisfied — never ahead of the approval — and with two satisfied predecessors
+its `input` is the `upstream` map `{ "<X>": …, "<P>": … }`. An imported Agent carries `includeUpstreamOutputs: true`
+and so sees `X`'s text; an imported End carries `resultPath: null` and so keeps both documents. The rule applies to
+every pause and walks back through consecutive ones, so `A → P1 → P2 → B` gains both `A → P2` and `A → B`. Three
+cases add nothing: a pause with no successor (already an `IMPORT NEEDS ATTENTION:` graph, §9.3), a pair the canvas
+already wires — a second unconditional edge over one pair is a validation error (§2.4) — and a self-loop. `X` may be
+the `Start` node, whose output is the run's own input, which is exactly the content the pause interrupted.
 
 `maxAttempts: 1` on an imported Agent is deliberately below the default of 3. An import is conservative: re-running
 somebody's agent turn twice more, on a graph they have not looked at since it changed shape, is not a decision this
