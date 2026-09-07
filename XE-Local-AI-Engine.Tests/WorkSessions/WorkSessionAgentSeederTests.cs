@@ -123,6 +123,57 @@ public sealed class WorkSessionAgentSeederTests
         }
     }
 
+    /// <summary>
+    ///     The upgrade path. Seeding is additive-only and returns early on an existing slug, so a database written
+    ///     before the spelling was fixed would keep <c>get_current_time</c> — a name no tool carries — and its two
+    ///     personas would silently never get the clock tool again. The seeder repairs that row in place.
+    ///     <para>
+    ///         Everything else on the row has to survive it: the repair rebuilds from the STORED record, because an
+    ///         operator may have edited this persona and re-seeding theirs would be data loss wearing a fix's clothes.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task Seeder_OnADatabaseSeededUnderTheOldClockName_RenamesItAndLeavesTheRestAlone()
+    {
+        // Private host: it writes and then rewrites a seeded row every other test in this class reads.
+        await using var factory = new TestServerWebAppFactory();
+        var edited = WorkSessionAgentSeeder.BuildGeneralSeedInput() with
+        {
+            Description = "Edited by the operator.",
+            AllowedToolNames = [.. WorkSessionAgentSeeder.BuildGeneralSeedInput().AllowedToolNames.Select(static name => name == "GetCurrentTime" ? "get_current_time" : name)],
+            ToolApprovals = WorkSessionAgentSeeder.BuildGeneralSeedInput()
+                                                  .ToolApprovals.ToDictionary(static pair => pair.Key == "GetCurrentTime" ? "get_current_time" : pair.Key,
+                                                      static pair => pair.Value,
+                                                      StringComparer.Ordinal)
+        };
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
+            _ = await store.AddSeededAsync(edited, AgentDefaults.WorkSessionGeneralAgentSeedSlug).ConfigureAwait(false);
+        }
+
+        await new WorkSessionAgentSeeder(factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<WorkSessionAgentSeeder>.Instance)
+              .StartAsync(CancellationToken.None)
+              .ConfigureAwait(false);
+
+        var repaired = await ReadSeededAsync(factory, AgentDefaults.WorkSessionGeneralAgentSeedSlug).ConfigureAwait(false);
+        AssertEx.Contains(repaired.AllowedToolNames, "GetCurrentTime");
+        AssertEx.False(repaired.AllowedToolNames.Contains("get_current_time", StringComparer.Ordinal), "the dead name must be gone, not merely joined by the live one.");
+        AssertEx.True(repaired.ToolApprovals.ContainsKey("GetCurrentTime"), "the approval travels with the rename, or the tool arrives needing a click nobody configured.");
+        AssertEx.False(repaired.ToolApprovals.ContainsKey("get_current_time"));
+
+        AssertEx.Equal("Edited by the operator.", repaired.Description, "the repair rebuilds from the stored row, so an operator's edit survives it.");
+        AssertEx.Equal(edited.AllowedToolNames.Count, repaired.AllowedToolNames.Count, "one name was renamed, none added or dropped.");
+        AssertEx.Equal(AgentDefinitionSource.Seeded, repaired.Source, "the row stays seeded, or the next boot writes a duplicate.");
+
+        await using var check = factory.Services.CreateAsyncScope();
+        var definitions = await check.ServiceProvider.GetRequiredService<IAgentDefinitionStore>().ListAsync().ConfigureAwait(false);
+        AssertEx.Equal(expected: 1,
+            definitions.Count(static definition => definition.SeedSlug == AgentDefaults.WorkSessionGeneralAgentSeedSlug),
+            "the repair updates the row it found; it must not add a second.");
+    }
+
     private static async Task<AgentDefinitionRecord> ReadSeededAsync(TestServerWebAppFactory factory, string slug)
     {
         // The host fixture strips every hosted service, so its InitializeAsync ran the seeder once for the whole class
