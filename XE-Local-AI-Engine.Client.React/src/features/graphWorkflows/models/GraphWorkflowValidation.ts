@@ -460,11 +460,13 @@ export function serverErrorsToIssues(
 // ---------------------------------------------------------------------------------------------------------------
 
 /**
- * `GraphWorkflowTokens.IsDotPath` verbatim: dot-separated segments of anything but whitespace and the bracket, star and
- * parenthesis characters that would make it a wildcard, an index or a function call (brief §3.1). Deliberately not
- * narrower than the server's — a JSON property may be hyphenated, and refusing one the server accepts blocks a save.
+ * `GraphWorkflowTokens.IsDotPath` verbatim: dot-separated segments, each NON-EMPTY and free of whitespace and the
+ * bracket, star and parenthesis characters that would make it a wildcard, an index or a function call (brief §3.1).
+ * Deliberately not narrower than the server's — a JSON property may be hyphenated, and refusing one the server accepts
+ * blocks a save. The dot is excluded from the segment itself, or `a..b`, `.a` and `a.` all match a pattern the server
+ * refuses and the field is green on a path the save then 400s.
  */
-const GRAPH_WORKFLOW_PATH_PATTERN = /^[^\s[\]*()]+(\.[^\s[\]*()]+)*$/;
+const GRAPH_WORKFLOW_PATH_PATTERN = /^[^\s.[\]*()]+(\.[^\s.[\]*()]+)*$/;
 
 function messageKey(field: string, error: string): string {
 	return `pages.graphWorkflows.form.${field}.${error}`;
