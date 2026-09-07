@@ -717,4 +717,59 @@ internal static class DevWorkflowGraphs
                                             ]
                                           }
                                           """;
+
+    /// <summary>
+    ///     One chain of <paramref name="nodeCount" /> nodes — the deepest legal graph of its size, so a walk over it is
+    ///     as long as a walk over a graph of that many nodes can be. Minimal on purpose: the point of this shape is its
+    ///     DEPTH, and a chain of thousands still fits the request body cap.
+    ///     <para>
+    ///         <paramref name="materialized" /> hangs a materialization template off the entry node, adding ONE node and
+    ///         no authored edge — which is what makes the augmented edge set differ from the authored one, and so what
+    ///         makes the second acyclicity walk run at all. <paramref name="gatedApply" /> ends the chain with a
+    ///         validation, a human gate and an apply, adding THREE nodes: that is what makes the gate and apply
+    ///         invariants — and the topological order they are computed over — run at all.
+    ///     </para>
+    ///     <para>
+    ///         That tail also DECLARES the nodes back to front, which is the half that makes the ancestor walk deep.
+    ///         The order the walk takes its roots in is the declared order, so a forward declaration hands it every
+    ///         predecessor already placed and it never descends past one node — the depth is in the EDGES, and only a
+    ///         root at the far end of them reaches it. The edges stay forward, so the graph is the same graph.
+    ///     </para>
+    /// </summary>
+    public static string Chain(int nodeCount, bool materialized = false, bool gatedApply = false)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(nodeCount, other: 2);
+
+        var keys = Enumerable.Range(0, nodeCount).Select(static index => $"n{index}").ToList();
+        var nodes = keys.Select((key, index) => index == 0 && materialized
+                            ? $$"""{ "nodeKey": "{{key}}", "nodeType": "Agent", "materialization": { "templateNodeKey": "tpl", "artifactKind": "TaskPackage", "joinNodeKey": "n1", "maxChildren": 1 } }"""
+                            : $$"""{ "nodeKey": "{{key}}", "nodeType": "Agent" }""")
+                        .ToList();
+        if (materialized)
+        {
+            // No authored edge leaves it: a template subtree is cloned rather than run, and its exemption from the
+            // entry-node and reachability rules is what lets it sit there unwired.
+            nodes.Add("""{ "nodeKey": "tpl", "nodeType": "Agent" }""");
+        }
+
+        if (gatedApply)
+        {
+            keys.AddRange(["check", "gate", "apply"]);
+            nodes.Add("""{ "nodeKey": "check", "nodeType": "Tool" }""");
+            nodes.Add("""{ "nodeKey": "gate", "nodeType": "HumanGate" }""");
+            nodes.Add("""{ "nodeKey": "apply", "nodeType": "Tool", "toolMode": "Apply" }""");
+        }
+
+        // The approval on the gate's own out-edge is half the rule rather than decoration: every answer succeeds a
+        // gate, so an unconditional edge into an apply would carry a rejection through as well.
+        var edges = keys.Zip(keys.Skip(1),
+            static (from, to) => $$"""{ "from": "{{from}}", "to": "{{to}}"{{(string.Equals(to, "apply", StringComparison.Ordinal) ? """, "condition": { "path": "decision", "op": "eq", "value": "Approve" }""" : "")}} }""");
+
+        if (gatedApply)
+        {
+            nodes.Reverse();
+        }
+
+        return $$"""{ "schemaVersion": 1, "nodes": [{{string.Join(", ", nodes)}}], "edges": [{{string.Join(", ", edges)}}] }""";
+    }
 }

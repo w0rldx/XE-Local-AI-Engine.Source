@@ -7,6 +7,10 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
+// Aliased rather than a blanket `using OpenAI.Chat` so the wire type never collides with the MEAI
+// ChatResponseFormat every IChatClient signature in this file speaks — the same discipline
+// OpenAICompatibleRequestBody applies to ChatCompletionOptions.
+using OpenAIChatResponseFormat = OpenAI.Chat.ChatResponseFormat;
 
 /// <summary>
 ///     An <see cref="IChatClient" /> that defers process start to first use: the supervisor's
@@ -60,6 +64,10 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     // window is exhausted, so the turn ends with no final answer at all.
     internal const string ReasoningBudgetMarkerKey = "xe.llama.reasoning_budget_tokens";
 
+    // The OpenAI schema wrapper requires a name and llama-server ignores it, so an unnamed MEAI response format needs
+    // any valid one rather than a meaningful one.
+    private const string DefaultResponseSchemaName = "response";
+
     // The raw utf8 JSON object written at $.chat_template_kwargs. The OpenAI chat body has no typed field for it, so it
     // rides the wire through OpenAICompatibleRequestBody — MEAI's OpenAI adapter uses the request body returned by
     // ChatOptions.RawRepresentationFactory as its serialization base, patch included (verified against MEAI 10.7).
@@ -93,7 +101,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        options = ApplyToolSchemaCompatibility(ApplySamplingPassthrough(ApplyReasoningBudget(ApplyThinkingSwitch(options))));
+        options = ApplyToolSchemaCompatibility(ApplyResponseSchemaPassthrough(ApplySamplingPassthrough(ApplyReasoningBudget(ApplyThinkingSwitch(options)))));
         var healed = false;
         var profilingReEnsures = 0;
         while (true)
@@ -171,7 +179,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
-        options = ApplyToolSchemaCompatibility(ApplySamplingPassthrough(ApplyReasoningBudget(ApplyThinkingSwitch(options))));
+        options = ApplyToolSchemaCompatibility(ApplyResponseSchemaPassthrough(ApplySamplingPassthrough(ApplyReasoningBudget(ApplyThinkingSwitch(options)))));
         var healed = false;
         var profilingReEnsures = 0;
         while (true)
@@ -461,6 +469,66 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
                     OpenAICompatibleRequestBody.SetField(body, "$.repeat_last_n", resolvedRepeatLastN);
                 }
             });
+    }
+
+    /// <summary>
+    ///     When the turn asks for a JSON-schema response format, returns a clone of <paramref name="options" /> whose
+    ///     request body carries the AUTHOR'S schema at <c>$.response_format.json_schema.schema</c> — the only path
+    ///     llama-server reads — sanitised only where llama.cpp's GBNF converter could not compile it. Without a schema
+    ///     the options are returned unchanged, so every other request is byte-identical. A pre-existing
+    ///     <see cref="ChatOptions.RawRepresentationFactory" /> (the thinking switch and the sampling passthrough both
+    ///     set one) is composed rather than dropped.
+    ///     <para>
+    ///         Why this must exist: <c>Microsoft.Extensions.AI.OpenAI</c> maps
+    ///         <see cref="ChatOptions.ResponseFormat" /> through an UNCONDITIONAL strict-schema transform
+    ///         (<c>OpenAIClientExtensions.StrictSchemaTransformCache</c>) that has no opt-out in 10.9.0 or on main. It
+    ///         relocates 22 value keywords — <c>minLength</c>, <c>maxLength</c>, <c>pattern</c>, <c>format</c>,
+    ///         <c>minimum</c>, <c>maximum</c>, the item counts and the rest — into the schema's <c>description</c>
+    ///         PROSE, marks every declared property <c>required</c>, and injects <c>additionalProperties: false</c>
+    ///         into any object that declares <c>properties</c> and omits the key. llama-server compiles what it
+    ///         receives into a real grammar, so the rewrite is the difference between a bound that is enforced and a
+    ///         sentence the model may read: a <c>maxLength: 3</c> schema arrived as
+    ///         <c>{"description":"maxLength: 3","type":"string"}</c> and produced a 1302-character field. See
+    ///         <c>docs/agent-knowledge.md</c> §3. The rewrite is right for the OpenAI API, which refuses those keywords;
+    ///         it is simply wrong for llama.cpp, which honours them.
+    ///     </para>
+    ///     <para>
+    ///         Why patching the body is sufficient: <c>OpenAIChatClient.ToOpenAIOptions</c> takes the
+    ///         <c>ChatCompletionOptions</c> this factory returns as its base and then applies every member with
+    ///         <c>??=</c> — its LAST line being <c>result.ResponseFormat ??= ToOpenAIChatResponseFormat(...)</c>. A
+    ///         response format already set here therefore wins, and the transform is never invoked at all.
+    ///         <see cref="ChatOptions.ResponseFormat" /> is deliberately left in place: it is what the MEAI-level
+    ///         consumers above this client read, and it no longer decides what goes on the wire.
+    ///     </para>
+    ///     <para>
+    ///         Why <c>strict: false</c>: llama-server reads only <c>json_schema.schema</c> and ignores the sibling
+    ///         <c>name</c>/<c>description</c>/<c>strict</c>. Sending <c>strict: true</c> would claim an OpenAI
+    ///         structured-output guarantee llama.cpp does not make, on a body that never left the loopback.
+    ///     </para>
+    ///     <para>
+    ///         Why it is still sanitised: the transform was, by accident, the only thing keeping an over-large
+    ///         repetition bound off this path, and llama.cpp's converter refuses to build a grammar above
+    ///         <see cref="LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound" /> — HTTP 400
+    ///         <c>Failed to initialize samplers</c>, the turn never reaches inference. So the same pass the tools array
+    ///         gets now protects this path ON PURPOSE, and only where it must: a schema whose bounds are all in range
+    ///         travels verbatim.
+    ///     </para>
+    /// </summary>
+    internal static ChatOptions? ApplyResponseSchemaPassthrough(ChatOptions? options)
+    {
+        if (options?.ResponseFormat is not ChatResponseFormatJson { Schema: { } schema } jsonFormat)
+        {
+            return options;
+        }
+
+        // Serialised once, here, rather than inside the factory: the factory runs per request, and the author's
+        // JsonElement must not be captured past the lifetime of whatever document it came from.
+        var payload = BinaryData.FromString(LlamaGrammarToolSchemaCompatibility.Sanitize(schema).GetRawText());
+        var name = jsonFormat.SchemaName ?? DefaultResponseSchemaName;
+        var description = jsonFormat.SchemaDescription;
+
+        return OpenAICompatibleRequestBody.Chain(options,
+            body => body.ResponseFormat = OpenAIChatResponseFormat.CreateJsonSchemaFormat(name, payload, description, jsonSchemaIsStrict: false));
     }
 
     private static float? TryReadSingle(AdditionalPropertiesDictionary? properties, string key)

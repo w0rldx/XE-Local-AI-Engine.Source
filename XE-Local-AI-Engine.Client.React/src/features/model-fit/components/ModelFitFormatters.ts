@@ -1,6 +1,8 @@
 // Presentation helpers shared by the model-fit pages. Kept in a non-component module so the page components can
 // import them without tripping the "components-only export" lint rule.
 
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+
 // Badge color for a recommendation fit level. The advisor emits a run-mode fit level of "GPU" (the model fits the
 // VRAM budget and runs GPU-accelerated) or "CPU" (estimated against the RAM budget). GPU is the desirable outcome
 // (teal); CPU is surfaced separately by the dedicated CPU-mode badge, so anything else falls back to grey.
@@ -16,7 +18,7 @@ export function fitLevelColor(fitLevel: string | null): string {
 }
 
 // Formats a model release date (an ISO date string like "2025-03-12", or an ISO datetime whose leading date we take)
-// as a locale-aware, date-only string, or a dash when absent or unparsable. The calendar date is parsed from its
+// as a date-only string in the active UI language, or a dash when absent or unparsable. The calendar date is parsed from its
 // year/month/day parts and built with the local-time Date constructor — never `new Date("2025-03-12")`, which parses
 // as UTC midnight and renders a day earlier in negative-offset time zones. So the shown day always matches the
 // publisher's intended release day regardless of the viewer's time zone.
@@ -41,7 +43,7 @@ export function formatModelFitReleaseDate(value: string | null): string {
 	) {
 		return "—";
 	}
-	return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+	return formatTimestamp(date.getTime(), { year: "numeric", month: "short", day: "numeric" });
 }
 
 // Formats a numeric metric to a fixed-precision string with an optional unit suffix, or a dash when absent.

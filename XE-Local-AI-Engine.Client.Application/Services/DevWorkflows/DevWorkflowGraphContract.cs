@@ -25,9 +25,14 @@ public static class DevWorkflowGraphContract
     ///         Run start validates again rather than trusting this, because an agent definition can be deleted between
     ///         the save and the start.
     ///     </para>
+    ///     <para>
+    ///         The cap is READ here, because it is an option and the parser stays option-free, but it is ENFORCED
+    ///         inside the parse: everything the parse does after counting the nodes is proportional to how many there
+    ///         are, so a cap applied to the finished graph would bound none of it.
+    ///     </para>
     /// </summary>
-    public static int ValidateAndCountNodes(string graphJson) =>
-        DevWorkflowGraph.Parse(graphJson).Nodes.Count;
+    public static int ValidateAndCountNodes(string graphJson, int maxNodes) =>
+        DevWorkflowGraph.Parse(graphJson, maxNodes).Nodes.Count;
 
     /// <summary>
     ///     A graph node's <c>toolMode</c> in the parser's own spelling, so what is STORED is canonical whatever casing

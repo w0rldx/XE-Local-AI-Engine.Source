@@ -237,6 +237,7 @@ public static class ConfigureServices
                .AddExceptionHandler<WorkSessionNotFoundExceptionHandler>()
                .AddExceptionHandler<DevWorkflowNotFoundExceptionHandler>()
                .AddExceptionHandler<GraphWorkflowNotFoundExceptionHandler>()
+               .AddExceptionHandler<RequestBodyTooLargeExceptionHandler>()
                .AddExceptionHandler<DefaultExceptionHandler>();
         builder.Services.AddProblemDetails();
 

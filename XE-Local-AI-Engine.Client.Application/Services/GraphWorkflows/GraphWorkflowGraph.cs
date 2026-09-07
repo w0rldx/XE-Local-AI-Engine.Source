@@ -177,6 +177,8 @@ internal sealed class GraphWorkflowGraph
     /// <summary>Computed on first ask rather than in the constructor: every dispatcher tick parses, and no tick asks.</summary>
     private IReadOnlyList<GraphWorkflowValidationError>? _warnings;
 
+    private IReadOnlyList<GraphWorkflowValidationError>? _responseSchemaWarnings;
+
     private GraphWorkflowGraph(IReadOnlyDictionary<string, GraphWorkflowGraphNode> nodes, IReadOnlyList<GraphWorkflowGraphEdge> edges)
     {
         Nodes = nodes;
@@ -231,7 +233,16 @@ internal sealed class GraphWorkflowGraph
     ///     <see cref="GraphWorkflowValidationException" />, so a graph with warnings saves, validates as valid and runs.
     ///     Computed on the first ask, because only the validate endpoint asks and every dispatcher tick parses.
     /// </summary>
-    public IReadOnlyList<GraphWorkflowValidationError> Warnings => _warnings ??= [.. PauseContextWarnings(), .. ResponseSchemaWarnings()];
+    public IReadOnlyList<GraphWorkflowValidationError> Warnings => _warnings ??= [.. PauseContextWarnings(), .. ResponseSchemaWarnings];
+
+    /// <summary>
+    ///     The response-schema half of <see cref="Warnings" />, exposed on its own because it is the half a
+    ///     caller may have grounds to drop: the rewrite it warns about is the OpenAI adapter's, and the llama.cpp
+    ///     lane now sends the schema as authored. The parser cannot make that call itself — it has no way to reach
+    ///     the model-to-provider map — so <c>GraphWorkflowDefinitionService</c> filters these per node instead.
+    /// </summary>
+    internal IReadOnlyList<GraphWorkflowValidationError> ResponseSchemaWarnings =>
+        _responseSchemaWarnings ??= BuildResponseSchemaWarnings();
 
     public IReadOnlyList<GraphWorkflowGraphEdge> InboundEdges(string nodeKey) =>
         _inbound.TryGetValue(nodeKey, out var edges) ? edges : [];
@@ -850,9 +861,9 @@ internal sealed class GraphWorkflowGraph
     ///     What an Agent node's <c>responseJsonSchema</c> asks for that the run will not deliver. One warning per node,
     ///     because the author's next move is to open that node and edit one schema whatever the schema got wrong.
     ///     <para>
-    ///         The schema does not reach llama.cpp as written: it travels through <c>ChatResponseFormat.ForJsonSchema</c>
-    ///         and the <c>Microsoft.Extensions.AI.OpenAI</c> adapter, whose strict-schema transform runs unconditionally
-    ///         and cannot be opted out of. That transform relocates the value keywords in
+    ///         What rewrites it: the schema travels through <c>ChatResponseFormat.ForJsonSchema</c> and the
+    ///         <c>Microsoft.Extensions.AI.OpenAI</c> adapter, whose strict-schema transform runs unconditionally and
+    ///         cannot be opted out of. That transform relocates the value keywords in
     ///         <see cref="DroppedSchemaKeywords" /> into the property's <c>description</c>, marks every declared property
     ///         <c>required</c>, and injects <c>additionalProperties: false</c> into any object that declares
     ///         <c>properties</c> and does NOT already say what it wants. The grammar is then built from the REWRITTEN
@@ -861,12 +872,24 @@ internal sealed class GraphWorkflowGraph
     ///         object shape — survives, which is why none of it is warned about.
     ///     </para>
     ///     <para>
+    ///         WHICH NODES THIS IS TRUE OF, since S7: not the llama.cpp ones any more.
+    ///         <c>DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough</c> now writes the AUTHOR'S schema onto
+    ///         the request body itself, which the adapter leaves alone (it fills its own response format in with
+    ///         <c>??=</c>), so a node whose model is served by llama-server receives every keyword as written — bounds
+    ///         above <c>LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound</c> excepted, because llama.cpp
+    ///         cannot compile those into a grammar at all. The rewrite still happens on every other runtime. The parser
+    ///         cannot tell which is which — the model-to-provider map is not reachable from here — so it raises the
+    ///         warning for every Agent node and <c>GraphWorkflowDefinitionService.ValidateAsync</c> drops the ones whose
+    ///         pinned model resolves to llama-server. A node with no model pin keeps its warning: what it inherits is
+    ///         not known at save time.
+    ///     </para>
+    ///     <para>
     ///         Warned rather than refused: a schema is still useful with the constraints in it, the transform is the
     ///         adapter's business and could change, and every one of these graphs runs. The whole point is that the
     ///         author stops believing the parts that do not hold.
     ///     </para>
     /// </summary>
-    private IReadOnlyList<GraphWorkflowValidationError> ResponseSchemaWarnings()
+    private IReadOnlyList<GraphWorkflowValidationError> BuildResponseSchemaWarnings()
     {
         var warnings = new List<GraphWorkflowValidationError>();
         foreach (var (nodeKey, node) in Nodes.OrderBy(static entry => entry.Key, StringComparer.Ordinal))

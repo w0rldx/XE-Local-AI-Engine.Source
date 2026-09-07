@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -92,12 +93,85 @@ public sealed class DevWorkflowGraphContractTests
     [Test]
     public void ValidateAndCountNodes_AnswersTheCountAndRefusesWhatTheDispatcherCouldNotRoute()
     {
-        AssertEx.Equal(expected: 2, DevWorkflowGraphContract.ValidateAndCountNodes(TerminalGate));
+        AssertEx.Equal(expected: 2, DevWorkflowGraphContract.ValidateAndCountNodes(TerminalGate, maxNodes: 500));
 
         var refusal = AssertEx.Throws<DevWorkflowValidationException>(() =>
-            DevWorkflowGraphContract.ValidateAndCountNodes("""{"schemaVersion":1,"nodes":[{"nodeKey":"a","nodeType":"Nonsense"}],"edges":[]}"""));
+            DevWorkflowGraphContract.ValidateAndCountNodes("""{"schemaVersion":1,"nodes":[{"nodeKey":"a","nodeType":"Nonsense"}],"edges":[]}""", maxNodes: 500));
 
         AssertEx.Contains(refusal.Message, "'nodeType'");
+    }
+
+    /// <summary>
+    ///     The cap is an option, so it is READ here rather than in the parser — which stays testable without a
+    ///     container — and it is INCLUSIVE, so a definition of exactly the cap saves.
+    /// </summary>
+    [Test]
+    public void ValidateAndCountNodes_OverTheNodeCap_IsRefused()
+    {
+        var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraphContract.ValidateAndCountNodes(TerminalGate, maxNodes: 1));
+
+        AssertEx.Contains(refusal.Message, "more than the 1 one definition may carry");
+        AssertEx.Equal(expected: 2, DevWorkflowGraphContract.ValidateAndCountNodes(TerminalGate, maxNodes: 2), "the cap is inclusive.");
+    }
+
+    /// <summary>
+    ///     A chain of thousands of minimal nodes fits the request body cap, so the body limit is not what keeps a
+    ///     definition inside the node cap. This pins the refusal itself; the ORDER it fires in is pinned by
+    ///     <see cref="ValidateAndCountNodes_OverTheCapWithNothingButMalformedNodes_RefusesOnTheCap" />.
+    /// </summary>
+    [Test]
+    public void ValidateAndCountNodes_FarOverTheNodeCap_IsRefusedBeforeTheGraphIsWalked()
+    {
+        var refusal = AssertEx.Throws<DevWorkflowValidationException>(() =>
+            DevWorkflowGraphContract.ValidateAndCountNodes(DevWorkflowGraphs.Chain(nodeCount: 9_000), maxNodes: 500));
+
+        AssertEx.Contains(refusal.Message, "more than the 500 one definition may carry");
+        AssertEx.Equal(expected: 500,
+            DevWorkflowGraphContract.ValidateAndCountNodes(DevWorkflowGraphs.Chain(nodeCount: 500), maxNodes: 500),
+            "a chain as deep as the cap allows is still a graph that validates — the cap refuses size, not depth.");
+    }
+
+    /// <summary>
+    ///     The cap fires BEFORE a node is read, which is the whole of what it buys: everything the parse does after
+    ///     counting is proportional to how many nodes there are. Only that ordering can produce the cap message here —
+    ///     EVERY declared node names a type the parser refuses on its own, so a cap checked after the parse could only
+    ///     ever answer with the first node's complaint.
+    /// </summary>
+    [Test]
+    public void ValidateAndCountNodes_OverTheCapWithNothingButMalformedNodes_RefusesOnTheCap()
+    {
+        var nodes = string.Join(",", Enumerable.Range(0, 501).Select(static index => $$"""{"nodeKey":"n{{index}}","nodeType":"Nonsense"}"""));
+        var graphJson = $$"""{"schemaVersion":1,"nodes":[{{nodes}}],"edges":[]}""";
+
+        var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraphContract.ValidateAndCountNodes(graphJson, maxNodes: 500));
+
+        AssertEx.Contains(refusal.Message, "The workflow graph declares 501 nodes, more than the 500 one definition may carry",
+            message: "a cap checked after the parse would have answered with the first node's unknown 'nodeType' instead.");
+    }
+
+    /// <summary>
+    ///     Everything the product ships stays saveable under the cap a node ships with — the two seeded templates and
+    ///     every prior revision the seeder still keeps, since a definition row holding one of those is re-saved by an
+    ///     operator's next edit.
+    /// </summary>
+    [Test]
+    public void EverySeededGraph_FitsUnderTheShippedNodeCap()
+    {
+        var cap = new DevWorkflowOptions().MaxNodesPerDefinition;
+        var graphs = new List<(string Name, string Json)>
+        {
+            (nameof(DevWorkflowDefinitionSeeder.ResearchPlanApprovalGraph), DevWorkflowDefinitionSeeder.ResearchPlanApprovalGraph),
+            (nameof(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph), DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph)
+        };
+        graphs.AddRange(DevWorkflowDefinitionSeeder.FeatureDevelopmentPriorRevisions
+                                                   .Select(static (json, index) => ($"FeatureDevelopmentPriorRevisions[{index}]", json)));
+
+        AssertEx.Equal(expected: 500, cap, "the shipped cap is what these are held to.");
+        AssertEx.True(graphs.Count >= 4, $"every kept revision has to reach this pin; it found {graphs.Count} graphs.");
+        foreach (var (name, json) in graphs)
+        {
+            AssertEx.True(DevWorkflowGraphContract.ValidateAndCountNodes(json, cap) is > 0 and <= 500, $"the seeded graph '{name}' must fit under the shipped cap.");
+        }
     }
 
     /// <summary>

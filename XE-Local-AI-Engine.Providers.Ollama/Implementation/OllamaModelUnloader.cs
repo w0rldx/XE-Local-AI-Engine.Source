@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
+using System.Net;
 using OllamaSharp;
 using OllamaSharp.Models;
 
@@ -22,7 +23,9 @@ public static class OllamaModelUnloader
 {
     /// <summary>
     ///     Requests immediate eviction of <paramref name="modelName" /> from Ollama's memory. Unloading a model the
-    ///     runtime is not currently holding is a harmless no-op, which keeps the eject action idempotent.
+    ///     runtime is not currently holding is a harmless no-op, and a model it does not know at all answers 404, which
+    ///     is absorbed here (see the remarks), so the eject action is idempotent for both callers rather than only for
+    ///     the loaded case. Every other transport or runtime failure propagates.
     /// </summary>
     /// <param name="client">The Ollama API client to send the unload request through.</param>
     /// <param name="modelName">The model to evict. This is sent verbatim as the request's <c>model</c> field.</param>
@@ -39,12 +42,25 @@ public static class OllamaModelUnloader
             Stream = false
         };
 
-        // Fully enumerate the (single, non-stream) response so the request is actually dispatched. GenerateAsync is a
-        // streaming method; without draining the enumerator no HTTP call is sent. The chunks themselves are unused — the
-        // side effect (Ollama setting the model's expiry to zero) is all the eject action needs.
-        await foreach (var chunk in client.GenerateAsync(request, cancellationToken).ConfigureAwait(false))
+        try
         {
-            _ = chunk;
+            // Fully enumerate the (single, non-stream) response so the request is actually dispatched. GenerateAsync is a
+            // streaming method; without draining the enumerator no HTTP call is sent. The chunks themselves are unused — the
+            // side effect (Ollama setting the model's expiry to zero) is all the eject action needs.
+            await foreach (var chunk in client.GenerateAsync(request, cancellationToken).ConfigureAwait(false))
+            {
+                _ = chunk;
+            }
+        }
+        catch (HttpRequestException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            // A model this runtime does not hold is a no-op, but a model it has never HEARD of answers 404 with
+            // "model '<name>' not found, try pulling it first". Match on the STATUS, not that message: OllamaSharp's
+            // EnsureSuccessStatusCodeAsync parses the body into an OllamaException for HTTP 400 ONLY, and every other
+            // failure status falls through to HttpResponseMessage.EnsureSuccessStatusCode(), which throws a bare
+            // HttpRequestException carrying StatusCode. Both callers document eject as idempotent, and a model Ollama
+            // does not know is already in the requested state, so the 404 is absorbed here — the one place the eviction
+            // wire shape lives — rather than at each call site. Every other status still propagates.
         }
     }
 }

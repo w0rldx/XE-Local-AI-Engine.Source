@@ -17,6 +17,7 @@ import {
 import { type KeyboardEvent, memo, type MouseEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 
 /* eslint-disable react-doctor/no-giant-component -- The list and its row menus share selection, mutation, and responsive-collapse state; splitting them would duplicate that coordination. */
@@ -62,7 +63,7 @@ function formatRelative(iso?: string): string {
 		return `${diffMin}m`;
 	}
 
-	return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+	return formatTimestamp(date.getTime(), { month: "short", day: "numeric" });
 }
 
 function initials(title: string): string {

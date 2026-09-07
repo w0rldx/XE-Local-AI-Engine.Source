@@ -27,7 +27,9 @@ public sealed class DevWorkflowDefinitionSeederTests
     {
         var graph = DevWorkflowGraph.Parse(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph);
 
-        AssertEx.Equal(graph.Nodes.Count, DevWorkflowGraphContract.ValidateAndCountNodes(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph));
+        AssertEx.Equal(graph.Nodes.Count,
+            DevWorkflowGraphContract.ValidateAndCountNodes(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph, new DevWorkflowOptions().MaxNodesPerDefinition),
+            "the shipped template has to fit under the cap a node ships with, or a fresh install could not save what it seeded.");
         AssertEx.NotNull(graph.Nodes["decompose"].Materialization);
         AssertEx.Equal(DevWorkflowNodeType.DevTask,
             graph.Nodes[graph.Nodes["decompose"].Materialization!.TemplateNodeKey].NodeType,

@@ -21,19 +21,25 @@ import i18next from "i18next";
  * switch to German leaves `resolvedLanguage` on the English fallback until the chunk lands — and `addResourceBundle`
  * does not recompute it, so it can stay there. `toLocaleString` needs no bundle, only the tag, so the requested
  * language is both the honest answer and the one available first.
+ *
+ * `options` is the same `Intl.DateTimeFormatOptions` a bare `toLocaleString` takes, for the sites that render a
+ * PART of the instant — a day label, a catalog release date. Naming any date field suppresses the clock defaults
+ * exactly as `toLocaleDateString` would, so a site that moves here keeps its rendered output character for
+ * character; passing the options in is what stops those sites needing a third formatter of their own.
  */
-export function formatTimestamp(value: number | string | null | undefined): string {
-	return formatIn(value, (date, language) => date.toLocaleString(language));
+export function formatTimestamp(value: number | string | null | undefined, options?: Intl.DateTimeFormatOptions): string {
+	return formatIn(value, (date, language) => date.toLocaleString(language, options));
 }
 
 /**
  * Formats the CLOCK PART of an instant in the active UI language, or a dash when absent or unusable.
  *
- * Same rule and same absent handling as {@link formatTimestamp}; the event feeds want the time alone because every
- * row shares the day.
+ * Same rule, same absent handling and the same optional `options` as {@link formatTimestamp}; the event feeds want
+ * the time alone because every row shares the day, and the chat bubble wants it narrowed further to hours and
+ * minutes.
  */
-export function formatTime(value: number | string | null | undefined): string {
-	return formatIn(value, (date, language) => date.toLocaleTimeString(language));
+export function formatTime(value: number | string | null | undefined, options?: Intl.DateTimeFormatOptions): string {
+	return formatIn(value, (date, language) => date.toLocaleTimeString(language, options));
 }
 
 // The guard and the language lookup live here so the two renderers cannot drift apart.
@@ -53,7 +59,13 @@ function formatIn(
 	} catch {
 		// A malformed stored tag — `en_US` left in `i18nextLng` by hand — is a RangeError, and it would throw once per
 		// table ROW. The environment's own default is a worse date, not a broken page.
-		return render(date, undefined);
+		try {
+			return render(date, undefined);
+		} catch {
+			// The retry drops the LANGUAGE, so anything that throws again is the options (`dateStyle` beside `year` is
+			// a spec TypeError). Nothing is left to retry with, and the dash this module promises beats a thrown row.
+			return "—";
+		}
 	}
 }
 

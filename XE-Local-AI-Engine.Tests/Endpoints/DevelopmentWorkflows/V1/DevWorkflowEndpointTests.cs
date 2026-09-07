@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Endpoints.DevelopmentWorkflows.V1;
 
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,7 +10,9 @@ using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>The work-item and definition halves of the surface. Runs, feeds and the decision live in their own file.</summary>
@@ -860,8 +863,161 @@ public sealed class DevWorkflowEndpointTests
             CreatedAtUtc: 1,
             UpdatedAtUtc: 2);
 
+    /// <summary>
+    ///     The node cap is the OPTION's, not a constant the endpoint carries: with it configured to one, the two-node
+    ///     graph every other test here saves is refused. An endpoint that read its own number, or passed
+    ///     <c>int.MaxValue</c>, would store this graph and never reach the message.
+    /// </summary>
+    [Test]
+    [Arguments("POST", Definitions)]
+    [Arguments("PUT", Definition)]
+    public async Task DefinitionRoute_WithMoreNodesThanTheConfiguredCap_ReturnsBadRequestAndNeverReachesTheStore(string method, string route)
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store, runs: null, ("DevWorkflows:MaxNodesPerDefinition", "1"));
+
+        using var response = await SendAsync(factory, method, route, CappableDefinitionBody()).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, $"{method} {route} must refuse a graph over the configured cap.");
+        AssertEx.Contains(body, "declares 2 nodes, more than the 1 one definition may carry", StringComparison.Ordinal);
+        AssertEx.Empty(store.ReceivedCalls());
+    }
+
+    /// <summary>
+    ///     The same body under the SHIPPED cap, so the row above is about the cap rather than about the graph: nothing
+    ///     here is refused, and both routes reach the store.
+    /// </summary>
+    [Test]
+    [Arguments("POST", Definitions)]
+    [Arguments("PUT", Definition)]
+    public async Task DefinitionRoute_UnderTheConfiguredCap_ReachesTheStore(string method, string route)
+    {
+        var store = Store();
+        store.CreateDefinitionAsync(Arg.Any<CreateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>()).Returns(DefinitionSnapshot());
+        store.UpdateDefinitionAsync(Arg.Any<UpdateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>()).Returns(DefinitionSnapshot());
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, method, route, CappableDefinitionBody()).ConfigureAwait(false);
+
+        AssertEx.True(response.IsSuccessStatusCode, $"{method} {route} must save a two-node graph under the shipped cap of 500; it answered {response.StatusCode}.");
+        AssertEx.NotEmpty(store.ReceivedCalls());
+    }
+
+    /// <summary>
+    ///     The graph-carrying routes cap their body. Without one they inherit the host's 30 MB default, and a body that
+    ///     size is bound and walked by the runtime's own parser before the node cap could refuse it.
+    /// </summary>
+    [Test]
+    [Arguments("POST", Definitions)]
+    [Arguments("PUT", Definition)]
+    public async Task DefinitionRoute_WithABodyOverTheCap_Returns413AndNeverReachesTheStore(string method, string route)
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, method, route, OversizedDefinitionBody()).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode, $"{method} {route} must refuse a body over the cap.");
+        AssertEx.Empty(store.ReceivedCalls());
+    }
+
+    /// <summary>
+    ///     A chunked body declares no Content-Length at all, and a guard that read that null as "over the cap" would
+    ///     answer 413 to every streamed request, about a size the caller never stated. The cap for a body of unknown
+    ///     length is the host's, counted as the bytes arrive.
+    /// </summary>
+    [Test]
+    public async Task DefinitionRoute_WithoutAContentLength_IsNotRefusedBySize()
+    {
+        var store = Store();
+        store.CreateDefinitionAsync(Arg.Any<CreateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>()).Returns(DefinitionSnapshot());
+        await using var factory = EnabledFactory(store);
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, Definitions)
+        {
+            Content = new UnknownLengthContent(CreateDefinitionBody(SampleGraph))
+        };
+        factory.AddNodeBearerToken(request);
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Null(request.Content.Headers.ContentLength, "the point of the fixture: this body declares no length.");
+        AssertEx.Equal(HttpStatusCode.Created, response.StatusCode, "a body of unknown length is not an oversized body.");
+        await store.Received(1).CreateDefinitionAsync(Arg.Any<CreateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     What the body cap is sized against: every graph the product seeds, at its real byte length. A cap under one
+    ///     of these would make a definition the node itself installed unsaveable by the operator who opened it.
+    /// </summary>
+    [Test]
+    public void EverySeededGraph_FitsUnderTheRequestBodyCap()
+    {
+        var graphs = new List<(string Name, string Json)>
+        {
+            (nameof(DevWorkflowDefinitionSeeder.ResearchPlanApprovalGraph), DevWorkflowDefinitionSeeder.ResearchPlanApprovalGraph),
+            (nameof(DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph), DevWorkflowDefinitionSeeder.FeatureDevelopmentGraph)
+        };
+        graphs.AddRange(DevWorkflowDefinitionSeeder.FeatureDevelopmentPriorRevisions
+                                                   .Select(static (json, index) => ($"FeatureDevelopmentPriorRevisions[{index}]", json)));
+
+        AssertEx.True(graphs.Count >= 4, $"every kept revision has to reach this pin; it found {graphs.Count} graphs.");
+        foreach (var (name, json) in graphs)
+        {
+            var bytes = Encoding.UTF8.GetByteCount(CreateDefinitionBody(json));
+            AssertEx.True(bytes < DevWorkflowRequestSizeLimit.MaxBytes / 100,
+                $"the seeded graph '{name}' is {bytes} bytes, which has to stay a small fraction of the {DevWorkflowRequestSizeLimit.MaxBytes}-byte cap.");
+        }
+    }
+
     private static string CreateDefinitionBody(string graph) =>
         $$"""{"name":"Research → Plan → Approval","graph":{{graph}}}""";
+
+    /// <summary>
+    ///     The two-node sample carried by both definition routes: the create route ignores the definitionId and the
+    ///     version, and the update route needs them, so one body serves both.
+    /// </summary>
+    private static string CappableDefinitionBody() =>
+        $$"""{"definitionId":"22222222-2222-2222-2222-222222222222","version":4,"name":"Triage","graph":{{SampleGraph}}}""";
+
+    /// <summary>
+    ///     A body whose bulk is in the GRAPH rather than in a bounded field: the name has its own length rule, so an
+    ///     oversized one of those would answer 400 from the validator and prove nothing about the cap. The version is
+    ///     there so the update route reaches the handler rather than its own concurrency rule.
+    /// </summary>
+    private static string OversizedDefinitionBody()
+    {
+        var graph = SampleGraph.Replace("Read the plan.", new string('a', (int)DevWorkflowRequestSizeLimit.MaxBytes), StringComparison.Ordinal);
+        return $$"""{"definitionId":"22222222-2222-2222-2222-222222222222","version":4,"name":"Triage","graph":{{graph}}}""";
+    }
+
+    /// <summary>
+    ///     A body that reports no length, which is what a chunked request is. <see cref="StringContent" /> always
+    ///     computes one, so it cannot express the case at all.
+    /// </summary>
+    private sealed class UnknownLengthContent : HttpContent
+    {
+        private readonly byte[] _body;
+
+        public UnknownLengthContent(string body)
+        {
+            _body = Encoding.UTF8.GetBytes(body);
+            Headers.ContentType = new MediaTypeHeaderValue("application/json")
+            {
+                CharSet = "utf-8"
+            };
+        }
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+            stream.WriteAsync(_body.AsMemory()).AsTask();
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+    }
 
     private static IDevWorkflowStore Store()
     {
@@ -944,13 +1100,16 @@ public sealed class DevWorkflowEndpointTests
         return request;
     }
 
-    private static TestServerWebAppFactory EnabledFactory(IDevWorkflowStore store, IDevWorkflowRunService? runs = null) =>
+    private static TestServerWebAppFactory EnabledFactory(IDevWorkflowStore store,
+        IDevWorkflowRunService? runs = null,
+        params (string Key, string Value)[] configuration) =>
         new()
         {
             AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["DevWorkflows:Enabled"] = "true"
-            },
+            }.Concat(configuration.Select(static entry => new KeyValuePair<string, string?>(entry.Key, entry.Value)))
+             .ToDictionary(StringComparer.Ordinal),
             ConfigureAdditionalTestServices = services =>
             {
                 services.RemoveAll<IDevWorkflowStore>();

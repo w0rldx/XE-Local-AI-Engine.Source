@@ -814,7 +814,9 @@ install_skill_tree() {
   zip_file="$scratch/source.zip"
   extract_dir="$scratch/skill-source"
   local zip_url="${API_BASE%/}/repos/$XE_REPOSITORY/zipball/$RESOLVED_VERSION"
-  command -v python3 >/dev/null 2>&1 || die 13 "python3 is required for safe skill archive extraction."
+  # Run it, do not just find it: a shimmed python3 (mise, asdf) is on PATH but aborts when its config is
+  # untrusted, and that failure would otherwise be reported below as a bad source archive.
+  python3 -c '' || die 13 "python3 is required for safe skill archive extraction, but it failed to run; see the error above."
   if ! http_get "$zip_url" "$zip_file" "$scratch/skill.headers"; then
     die 13 "Could not download the source archive for $RESOLVED_VERSION."
   fi
