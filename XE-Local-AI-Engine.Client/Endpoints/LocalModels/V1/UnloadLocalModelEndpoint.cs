@@ -27,8 +27,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///             <description>
 ///                 Then the Ollama <c>keep_alive=0</c> eviction, when the optional Ollama runtime is enabled
 ///                 (<see cref="OllamaRuntimeGate.RuntimeEnabledConfigurationKey" />, the same gate
-///                 <see cref="GetRunningLocalModelsEndpoint" /> reads). An unreachable daemon means nothing is resident
-///                 there, which is not an error.
+///                 <see cref="GetRunningLocalModelsEndpoint" /> reads). An <em>unreachable</em> daemon means nothing
+///                 is resident there, which is not an error; a daemon that answers with a failure status still is.
 ///             </description>
 ///         </item>
 ///     </list>
@@ -114,11 +114,14 @@ public sealed class UnloadLocalModelEndpoint(
         {
             await _modelService.UnloadModelAsync(modelName, ct).ConfigureAwait(false);
         }
-        catch (HttpRequestException exception)
+        catch (HttpRequestException exception) when (exception.StatusCode is null)
         {
-            // Desktop mode runs no Ollama daemon, so the connection is refused. Nothing of this model is resident there,
-            // which is the outcome the caller asked for — not a failure. Debug, mirroring GetRunningLocalModelsEndpoint,
-            // because the operator ejects from a page that polls that endpoint against the same absent daemon.
+            // Desktop mode runs no Ollama daemon, so the connection is refused — a transport failure, which carries NO
+            // status code. Nothing of this model is resident there, which is the outcome the caller asked for. Debug,
+            // mirroring GetRunningLocalModelsEndpoint, because the operator ejects from a page that polls that endpoint
+            // against the same absent daemon. A daemon that ANSWERS with a failure status is deliberately not caught
+            // here: the 404 for an unknown model is already absorbed as idempotent inside OllamaModelUnloader, so
+            // anything still arriving with a status (a 5xx) is a real fault the operator must see.
             _logger.LogDebug(exception, "Ollama not reachable while unloading a model; nothing was resident there.");
         }
     }
