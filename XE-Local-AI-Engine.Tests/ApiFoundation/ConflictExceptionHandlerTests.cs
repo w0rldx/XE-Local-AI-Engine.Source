@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     where the refusal has one — the typed payload member an operator needs to act on it.
 ///     <para>
 ///         The arms asserted here are the ones no endpoint can provoke without staging a race, plus both branches of
-///         <c>SetCapMembers</c> and one arm that fills no payload member at all. The rest are pinned where they are
+///         <c>SetStandingDecision</c> and one arm that fills no payload member at all. The rest are pinned where they are
 ///         provoked end to end: <c>ReadOnlyConversation</c> in <c>NodeChatReadOnlyEndpointTests</c>,
 ///         <c>WorkspaceRevocationBusy</c> in <c>WorkspaceEndpointTests</c>, the worker/image conflicts in
 ///         <c>ConnectionEndpointTests</c>, and <c>InstalledModelHasDependentAdapters</c> in
@@ -28,7 +28,7 @@ public sealed class ConflictExceptionHandlerTests
 
     /// <summary>
     ///     The plain arm: a mapped exception that sets no payload member at all still gets the whole envelope. Without
-    ///     this, a regression that only ever filled the envelope from <c>SetCapMembers</c> would go unnoticed.
+    ///     this, a regression that only ever filled the envelope from <c>SetStandingDecision</c> would go unnoticed.
     /// </summary>
     [Test]
     public async Task TryHandleAsync_ForAWorkSessionInvalidTransition_WritesTheEnvelopeWithNoExtras()
@@ -46,7 +46,7 @@ public sealed class ConflictExceptionHandlerTests
     }
 
     /// <summary>
-    ///     The development-workflow gate's arm, and the other half of <c>SetCapMembers</c>: <c>standingDecision</c>
+    ///     The development-workflow gate's arm, and the other half of <c>SetStandingDecision</c>: <c>standingDecision</c>
     ///     tells the second person to click WHAT was decided rather than only that their click failed.
     /// </summary>
     [Test]

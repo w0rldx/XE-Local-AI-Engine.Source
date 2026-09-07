@@ -730,8 +730,8 @@ So the step is split, in `Program.cs`:
 ```
 var pending = await ReadPendingCanvasWorkflowsAsync(app.Services);   // read + decrypt, BEFORE migrations
 await ApplyNodeChatMigrationsAsync(app.Services);                    // backs up, then runs DropCanvasWorkflows
-await ApplyNodeIdentityMigrationsAsync(app.Services);
-await ImportCanvasWorkflowsAsync(app.Services, pending);             // write, AFTER migrations
+await ImportCanvasWorkflowsAsync(app.Services, pending);             // write, IMMEDIATELY after that pass
+await ApplyNodeIdentityMigrationsAsync(app.Services);                // a different database; runs after the write
 ```
 
 The reader guards on `sqlite_master`, so it is a no-op when the table is absent — which is a fresh install, and every

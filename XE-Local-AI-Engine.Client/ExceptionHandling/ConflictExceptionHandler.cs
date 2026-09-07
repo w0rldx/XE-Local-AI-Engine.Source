@@ -83,7 +83,7 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
             Detail = exception.Message ?? "Conflict"
         }.WithTraceId(httpContext);
 
-        SetCapMembers(problemDetails, exception);
+        SetStandingDecision(problemDetails, exception);
 
         // The content type MUST be passed here: WriteAsJsonAsync overwrites Response.ContentType with
         // application/json when it is not, which silently demoted this problem+json body.
@@ -97,7 +97,7 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
     ///     typed member of the one conflict envelope (omitted when null) so the OpenAPI schema names it; the wire body
     ///     is the same as when it was a problem-details extension.
     /// </summary>
-    private static void SetCapMembers(ConflictProblemDetails problemDetails, Exception exception)
+    private static void SetStandingDecision(ConflictProblemDetails problemDetails, Exception exception)
     {
         switch (exception)
         {

@@ -386,13 +386,16 @@ namespace XE_Local_AI_Engine.Client
             try
             {
                 // Split around the migration pass on purpose: DropCanvasWorkflows removes the table the saved Open
-                // Canvas workflows live in, and no migration can decrypt their graph blob. Read first, write after.
+                // Canvas workflows live in, and no migration can decrypt their graph blob. Read first, write after —
+                // and write IMMEDIATELY after the node-chat pass: the identity pass runs against a different database,
+                // and a throw there would otherwise crash startup with the canvases already dropped and not yet
+                // written, which the next start could never recover (the table's absence is the one-shot marker).
                 var pendingCanvasWorkflows = await ReadPendingCanvasWorkflowsAsync(app.Services).ConfigureAwait(false);
 
                 commandContext?.SetStage(OneShotCommandStage.Migrations);
                 await ApplyNodeChatMigrationsAsync(app.Services).ConfigureAwait(false);
-                await ApplyNodeIdentityMigrationsAsync(app.Services).ConfigureAwait(false);
                 await ImportCanvasWorkflowsAsync(app.Services, pendingCanvasWorkflows).ConfigureAwait(false);
+                await ApplyNodeIdentityMigrationsAsync(app.Services).ConfigureAwait(false);
                 Log.Information("Database migrations applied.");
             }
             catch (Exception migrationException)
