@@ -86,6 +86,106 @@ internal static class CanvasGraphs
                                     }
                                     """;
 
+    /// <summary>
+    ///     A human wait BETWEEN two agents — the shape the S4 live round caught. The second agent has to read the
+    ///     first one's answer, and a Pause's own output is only the approval.
+    /// </summary>
+    public const string AgentAcrossPause = """
+                                           {
+                                             "startText": "Ship it?",
+                                             "nodes": [
+                                               { "id": "start", "kind": "Start" },
+                                               { "id": "agent-1", "kind": "Agent", "instructions": "Prepare the change.", "model": "qwen3:8b" },
+                                               { "id": "pause-1", "kind": "Pause", "label": "Sign off" },
+                                               { "id": "agent-2", "kind": "Agent", "instructions": "Announce it.", "model": "qwen3:8b" },
+                                               { "id": "end", "kind": "End" }
+                                             ],
+                                             "edges": [
+                                               { "sourceId": "start", "targetId": "agent-1" },
+                                               { "sourceId": "agent-1", "targetId": "pause-1" },
+                                               { "sourceId": "pause-1", "targetId": "agent-2" },
+                                               { "sourceId": "agent-2", "targetId": "end" }
+                                             ]
+                                           }
+                                           """;
+
+    /// <summary>A Debug tap between the agent and the pause: the bypass has to start at the ELIDED chain's node.</summary>
+    public const string DebugBeforePause = """
+                                           {
+                                             "startText": "Ship it?",
+                                             "nodes": [
+                                               { "id": "start", "kind": "Start" },
+                                               { "id": "agent-1", "kind": "Agent", "instructions": "Prepare the change.", "model": "qwen3:8b" },
+                                               { "id": "debug-1", "kind": "Debug" },
+                                               { "id": "pause-1", "kind": "Pause" },
+                                               { "id": "end", "kind": "End" }
+                                             ],
+                                             "edges": [
+                                               { "sourceId": "start", "targetId": "agent-1" },
+                                               { "sourceId": "agent-1", "targetId": "debug-1" },
+                                               { "sourceId": "debug-1", "targetId": "pause-1" },
+                                               { "sourceId": "pause-1", "targetId": "end" }
+                                             ]
+                                           }
+                                           """;
+
+    /// <summary>Two pauses back to back, so the walk back to a node that HAS content has to be transitive.</summary>
+    public const string ChainedPauses = """
+                                        {
+                                          "startText": "Ship it?",
+                                          "nodes": [
+                                            { "id": "start", "kind": "Start" },
+                                            { "id": "agent-1", "kind": "Agent", "instructions": "Prepare the change.", "model": "qwen3:8b" },
+                                            { "id": "pause-1", "kind": "Pause" },
+                                            { "id": "pause-2", "kind": "Pause" },
+                                            { "id": "agent-2", "kind": "Agent", "instructions": "Announce it.", "model": "qwen3:8b" },
+                                            { "id": "end", "kind": "End" }
+                                          ],
+                                          "edges": [
+                                            { "sourceId": "start", "targetId": "agent-1" },
+                                            { "sourceId": "agent-1", "targetId": "pause-1" },
+                                            { "sourceId": "pause-1", "targetId": "pause-2" },
+                                            { "sourceId": "pause-2", "targetId": "agent-2" },
+                                            { "sourceId": "agent-2", "targetId": "end" }
+                                          ]
+                                        }
+                                        """;
+
+    /// <summary>A pause whose only predecessor is the Start node, whose output is the run's own input.</summary>
+    public const string PauseAfterStart = """
+                                          {
+                                            "startText": "Ship it?",
+                                            "nodes": [
+                                              { "id": "start", "kind": "Start" },
+                                              { "id": "pause-1", "kind": "Pause" },
+                                              { "id": "agent-1", "kind": "Agent", "instructions": "Do it.", "model": "qwen3:8b" },
+                                              { "id": "end", "kind": "End" }
+                                            ],
+                                            "edges": [
+                                              { "sourceId": "start", "targetId": "pause-1" },
+                                              { "sourceId": "pause-1", "targetId": "agent-1" },
+                                              { "sourceId": "agent-1", "targetId": "end" }
+                                            ]
+                                          }
+                                          """;
+
+    /// <summary>A pause with nothing after it: there is no successor for a context edge to land on.</summary>
+    public const string PauseWithNoSuccessor = """
+                                               {
+                                                 "startText": "Ship it?",
+                                                 "nodes": [
+                                                   { "id": "start", "kind": "Start" },
+                                                   { "id": "agent-1", "kind": "Agent", "instructions": "Go.", "model": "qwen3:8b" },
+                                                   { "id": "pause-1", "kind": "Pause" },
+                                                   { "id": "end", "kind": "End" }
+                                                 ],
+                                                 "edges": [
+                                                   { "sourceId": "start", "targetId": "agent-1" },
+                                                   { "sourceId": "agent-1", "targetId": "pause-1" }
+                                                 ]
+                                               }
+                                               """;
+
     /// <summary>An agent carrying the provider hint that has no destination in the new Agent config.</summary>
     public const string WithModelProfile = """
                                            {

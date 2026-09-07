@@ -25,6 +25,11 @@ public sealed class CanvasWorkflowImportMapperTests
     [Arguments(CanvasGraphs.WithDebug)]
     [Arguments(CanvasGraphs.WithChainedDebug)]
     [Arguments(CanvasGraphs.WithPause)]
+    [Arguments(CanvasGraphs.AgentAcrossPause)]
+    [Arguments(CanvasGraphs.DebugBeforePause)]
+    [Arguments(CanvasGraphs.ChainedPauses)]
+    [Arguments(CanvasGraphs.PauseAfterStart)]
+    [Arguments(CanvasGraphs.PauseWithNoSuccessor)]
     [Arguments(CanvasGraphs.WithModelProfile)]
     [Arguments(CanvasGraphs.AwkwardIds)]
     [Arguments(CanvasGraphs.DuplicateIds)]
@@ -175,6 +180,82 @@ public sealed class CanvasWorkflowImportMapperTests
         _ = GraphWorkflowGraphContract.ValidateAndCountNodes(mapped.Document.ToJsonString(), maxNodes: 200);
         AssertEx.False(GraphWorkflowGraphContract.HasRejectBranch(mapped.Document.ToJsonString(), "pause-1"),
             "only the answer the canvas could give has anywhere to go.");
+    }
+
+    /// <summary>
+    ///     The defect the S4 live round found. Open Canvas's Pause forwarded the answer it was waiting on; a Graph
+    ///     Workflow Pause's output is <c>{decision, comment, payload}</c>, and a node's <c>input</c> is its ONE
+    ///     satisfied predecessor's output — so <c>Agent -> Pause -> Agent</c> mapped one-for-one hands the second
+    ///     agent the approval and never the first agent's answer.
+    ///     <para>
+    ///         The context edge is what restores it: the successor now has TWO predecessors, keeps the default
+    ///         <c>All</c> join so it still waits for the approval, and reads the <c>upstream</c> map.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public void MapGraph_BypassesAPauseSoTheNodeAfterItStillSeesTheContent()
+    {
+        var mapped = CanvasWorkflowImport.MapGraph(CanvasGraphs.AgentAcrossPause);
+
+        AssertEx.Equal("start->agent-1, agent-1->pause-1, pause-1->agent-2, agent-2->end, agent-1->agent-2",
+            Wiring(mapped.Document),
+            "the canvas chain survives and one context edge is added around the pause.");
+
+        var approved = Edges(mapped.Document).Single(static edge => edge!["from"]!.GetValue<string>() == "pause-1")!;
+        AssertEx.Equal("approved", approved["label"]!.GetValue<string>());
+        AssertEx.Equal("Approve", approved["condition"]!["value"]!.GetValue<string>(), "the pause still gates the successor.");
+
+        var context = Edges(mapped.Document).Single(static edge => edge!["from"]!.GetValue<string>() == "agent-1"
+                                                                   && edge["to"]!.GetValue<string>() == "agent-2")!;
+        AssertEx.Null(context["condition"], "the content edge carries no condition: it is satisfied when the agent succeeds.");
+        AssertEx.Equal("context", context["label"]!.GetValue<string>());
+        AssertEx.Null(Node(mapped.Document, "agent-2")["joinPolicy"], "the successor keeps the default All join, so it waits for BOTH edges.");
+
+        AssertEx.Equal(expected: 5, GraphWorkflowGraphContract.ValidateAndCountNodes(mapped.Document.ToJsonString(), maxNodes: 200),
+            "a node with two inbound edges is what the real parser accepts, not a shape only this test believes in.");
+    }
+
+    /// <summary>
+    ///     The bypass starts at the nearest node that has content, which is not always the canvas predecessor: a Debug
+    ///     tap is already elided, and consecutive pauses each carry only their own approval. Every pause gets the same
+    ///     rule rather than the chain getting a special case, so the second pause sees what it is approving too.
+    /// </summary>
+    [Test]
+    public void MapGraph_WalksBackPastElidedAndPausedNodesToFindTheContent()
+    {
+        var debug = CanvasWorkflowImport.MapGraph(CanvasGraphs.DebugBeforePause);
+        AssertEx.Equal("start->agent-1, agent-1->pause-1, pause-1->end, agent-1->end", Wiring(debug.Document),
+            "the tap is elided first, so the bypass starts at the agent behind it.");
+        _ = GraphWorkflowGraphContract.ValidateAndCountNodes(debug.Document.ToJsonString(), maxNodes: 200);
+
+        var chained = CanvasWorkflowImport.MapGraph(CanvasGraphs.ChainedPauses);
+        AssertEx.Equal("start->agent-1, agent-1->pause-1, pause-1->pause-2, pause-2->agent-2, agent-2->end, agent-1->pause-2, agent-1->agent-2",
+            Wiring(chained.Document),
+            "one rule per pause: the second pause is bypassed from the agent, and so is the agent after it.");
+        _ = GraphWorkflowGraphContract.ValidateAndCountNodes(chained.Document.ToJsonString(), maxNodes: 200);
+
+        var chainedKeys = Edges(chained.Document).Select(static edge => edge!["key"]!.GetValue<string>()).ToList();
+        AssertEx.Equal(chainedKeys.Count, chainedKeys.Distinct(StringComparer.Ordinal).Count(),
+            "a context edge mints its key out of the same one namespace the canvas edges took.");
+
+        var fromStart = CanvasWorkflowImport.MapGraph(CanvasGraphs.PauseAfterStart);
+        AssertEx.Equal("start->pause-1, pause-1->agent-1, agent-1->end, start->agent-1", Wiring(fromStart.Document),
+            "Start is a fine source: its output is the run's own input, which is the content the pause interrupted.");
+        _ = GraphWorkflowGraphContract.ValidateAndCountNodes(fromStart.Document.ToJsonString(), maxNodes: 200);
+    }
+
+    /// <summary>
+    ///     A pause with nothing after it has no successor for a context edge to land on. That graph is already an
+    ///     IMPORT NEEDS ATTENTION case — the pause's one answer arrives nowhere — and inventing an edge cannot save it.
+    /// </summary>
+    [Test]
+    public void MapGraph_AddsNoContextEdgeAroundAPauseWithNoSuccessor()
+    {
+        var mapped = CanvasWorkflowImport.MapGraph(CanvasGraphs.PauseWithNoSuccessor);
+
+        AssertEx.Equal("start->agent-1, agent-1->pause-1", Wiring(mapped.Document));
+        _ = AssertEx.Throws<GraphWorkflowValidationException>(() => GraphWorkflowGraphContract.ValidateAndCountNodes(mapped.Document.ToJsonString(), maxNodes: 200),
+            "the row is still preserved, as a definition that cannot run until it is edited.");
     }
 
     /// <summary>

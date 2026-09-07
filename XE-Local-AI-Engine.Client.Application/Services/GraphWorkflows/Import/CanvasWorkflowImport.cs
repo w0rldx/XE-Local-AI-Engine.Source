@@ -185,6 +185,12 @@ public static class CanvasWorkflowImport
     ///     One canvas graph as a Graph Workflow document. PURE and TOTAL: it always answers a document, never throws
     ///     and never refuses a graph. <c>Reasons</c> carries whatever it could not translate faithfully — the graph
     ///     travels either way, and the validator downstream decides whether the definition can run.
+    ///     <para>
+    ///         The wiring is NOT one-for-one. A Debug node is elided and the edge rewired around it, and every Pause
+    ///         gains a context edge past it, because neither node forwarded its predecessor's document the way its
+    ///         Graph Workflow counterpart does. Both are faithfulness, not liberties: see
+    ///         <see cref="AddPauseContextEdges" /> and <see cref="ResolveTargets" />.
+    ///     </para>
     /// </summary>
     internal static ImportMapResult MapGraph(string graphJson)
     {
@@ -552,6 +558,8 @@ public static class CanvasWorkflowImport
             }
         }
 
+        AddPauseContextEdges(pauseKeys, pairs, used, mapped, index);
+
         foreach (var stranded in strandedDebug.Order(StringComparer.Ordinal))
         {
             reasons.Add($"A canvas Debug node ('{Sanitize(stranded)}') had nothing after it, so the path into it now ends nowhere.");
@@ -563,6 +571,109 @@ public static class CanvasWorkflowImport
         }
 
         return mapped;
+    }
+
+    /// <summary>
+    ///     The context edge around every imported Pause: one unconditional edge from the pause's nearest NON-Pause
+    ///     ancestor to each of its successors.
+    ///     <para>
+    ///         Open Canvas's Pause was a pass-through resume — its post-adapter forwarded the answer it was waiting on
+    ///         unchanged — while a Graph Workflow Pause writes a decision document of its own
+    ///         (<c>{decision, comment, payload}</c>, <c>GraphWorkflowDocuments.PauseOutput</c>). A node's <c>input</c>
+    ///         is its ONE satisfied predecessor's output document and becomes the <c>upstream</c> map only when there
+    ///         are several (<c>GraphWorkflowDocuments.ComposeInput</c>, fed by
+    ///         <c>GraphWorkflowInlineExecutor.Upstream</c>). So <c>A -> Pause -> B</c> mapped one-for-one hands B the
+    ///         approval metadata and never A's answer, and a Pause before an End loses the result the same way.
+    ///     </para>
+    ///     <para>
+    ///         The successor keeps the default <c>All</c> join policy, so it is admitted only once BOTH the content
+    ///         edge and the pause's own <c>approved</c> edge are satisfied — never ahead of the approval — and with two
+    ///         satisfied predecessors its <c>input</c> is the <c>upstream</c> map <c>{ "&lt;X&gt;": …, "&lt;P&gt;": … }</c>.
+    ///         An Agent carries <c>includeUpstreamOutputs: true</c> and so sees the ancestor's text; an End maps with
+    ///         <c>resultPath: null</c> and so carries both documents. A node may hold two inbound edges — the graph
+    ///         indexes them per node and fan-in is the node's own join policy — and the only rule over one pair is that
+    ///         at most one edge may be unconditional, which the <paramref name="pairs" /> guard below keeps.
+    ///     </para>
+    ///     <para>
+    ///         Applied to EVERY Pause, walking back through consecutive ones, so <c>A -> P1 -> P2 -> B</c> gains both
+    ///         <c>A -> P2</c> and <c>A -> B</c>: one rule, and the second pause sees the content it is approving too.
+    ///     </para>
+    /// </summary>
+    private static void AddPauseContextEdges(HashSet<string> pauseKeys,
+        HashSet<(string From, string To)> pairs,
+        HashSet<string> used,
+        JsonArray mapped,
+        int index)
+    {
+        // A snapshot: the walk reads the canvas's own wiring and never the context edges this loop adds to it.
+        var wiring = pairs.ToList();
+        foreach (var pause in pauseKeys.Order(StringComparer.Ordinal))
+        {
+            var successors = wiring.Where(pair => string.Equals(pair.From, pause, StringComparison.Ordinal))
+                                   .Select(static pair => pair.To)
+                                   .Order(StringComparer.Ordinal);
+
+            // A pause with no successor gets nothing to bypass to. That graph is already an IMPORT NEEDS ATTENTION
+            // case — the pre-flight rule refuses a pause whose one answer arrives nowhere — and inventing an edge here
+            // would not save it.
+            foreach (var successor in successors)
+            {
+                foreach (var ancestor in NonPauseAncestors(pause, pauseKeys, wiring))
+                {
+                    // A pair the canvas already wires needs no second edge — and a second UNCONDITIONAL one over the
+                    // same pair is a validation error. A self-loop would be a cycle.
+                    if (string.Equals(ancestor, successor, StringComparison.Ordinal) || !pairs.Add((ancestor, successor)))
+                    {
+                        continue;
+                    }
+
+                    mapped.Add(new JsonObject
+                    {
+                        ["key"] = MintKey($"e{index}", $"e{index}", used),
+                        ["from"] = ancestor,
+                        ["to"] = successor,
+                        ["label"] = "context"
+                    });
+                    index++;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    ///     The nodes a pause's content really comes from: its predecessors, with consecutive Pause nodes walked
+    ///     through, because a pause's own output is the approval rather than the answer. The seen-set stops the walk on
+    ///     a damaged row that loops a pause back into itself. <c>Start</c> is a fine answer — its output is the run's
+    ///     input, which is exactly the content a node behind the pause would otherwise have read.
+    /// </summary>
+    private static List<string> NonPauseAncestors(string pause, HashSet<string> pauseKeys, List<(string From, string To)> wiring)
+    {
+        var resolved = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal) { pause };
+        var pending = new Stack<string>();
+        pending.Push(pause);
+        while (pending.Count > 0)
+        {
+            var current = pending.Pop();
+            foreach (var predecessor in wiring.Where(pair => string.Equals(pair.To, current, StringComparison.Ordinal)).Select(static pair => pair.From))
+            {
+                if (!seen.Add(predecessor))
+                {
+                    continue;
+                }
+
+                if (pauseKeys.Contains(predecessor))
+                {
+                    pending.Push(predecessor);
+                }
+                else
+                {
+                    resolved.Add(predecessor);
+                }
+            }
+        }
+
+        return [.. resolved.Order(StringComparer.Ordinal)];
     }
 
     /// <summary>
