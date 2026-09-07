@@ -1,3 +1,5 @@
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+
 import type {
 	XeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse as ProviderTotalsDto,
 	XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse as UsageBucketDto,
@@ -142,9 +144,9 @@ export function aggregateByModel(items: readonly UsageBucketDto[]): UsageModelRo
 		.sort((a, b) => b.totalTokens - a.totalTokens || a.modelName.localeCompare(b.modelName));
 }
 
-// Formats a UTC-day-start unix-ms as a short locale day label (e.g. "5/25") for the x-axis / table.
+// Formats a UTC-day-start unix-ms as a short day label (e.g. "5/25") in the active UI language, for the x-axis / table.
 export function formatDayLabel(dayStartUtcMs: number): string {
-	return new Date(dayStartUtcMs).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+	return formatTimestamp(dayStartUtcMs, { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 // Date controls use whole UTC days and the backend's half-open [from, to) range.
