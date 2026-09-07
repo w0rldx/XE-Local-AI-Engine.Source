@@ -604,15 +604,21 @@ function nonPauseAncestors(pause: string, pauseKeys: ReadonlySet<string>, wiring
  * successor a non-Pause node already feeds is left alone: it has its content, and a second unconditional edge over one
  * pair is a validation error. PURE — the editor runs it on the connect gesture and nowhere else, so an edge the
  * operator deletes stays deleted until they wire the Pause again.
+ *
+ * `only` narrows the pass to the Pause nodes the gesture actually touched. Without it, wiring one Pause would revive
+ * an edge the operator had deleted around a DIFFERENT one, which is the editor arguing with them. The walk back for an
+ * ancestor still crosses every Pause, since that is how the content is found at all.
  */
 export function pauseContextEdges(
 	nodes: readonly GraphWorkflowCanvasNode[],
 	edges: readonly GraphWorkflowCanvasEdge[],
+	only?: Iterable<string>,
 ): readonly GraphWorkflowCanvasEdge[] {
 	const pauseKeys = new Set(nodes.filter((node) => node.data.kind === "Pause").map((node) => node.id));
 	if (pauseKeys.size === 0) {
 		return [];
 	}
+	const considered = only === undefined ? pauseKeys : new Set([...only].filter((key) => pauseKeys.has(key)));
 	// A snapshot: every walk reads the graph as the operator wired it, never the edges this pass adds to it.
 	const wiring: readonly GraphWorkflowWire[] = edges.map((edge) => ({ from: edge.source, to: edge.target }));
 	const fed = new Set(wiring.filter((pair) => !pauseKeys.has(pair.from)).map((pair) => pair.to));
@@ -620,7 +626,7 @@ export function pauseContextEdges(
 	const taken = new Set([...nodes.map((node) => node.id), ...edges.map((edge) => edge.id)]);
 	const added: GraphWorkflowCanvasEdge[] = [];
 
-	for (const pause of [...pauseKeys].toSorted((left, right) => left.localeCompare(right))) {
+	for (const pause of [...considered].toSorted((left, right) => left.localeCompare(right))) {
 		const successors = wiring
 			.filter((pair) => pair.from === pause)
 			.map((pair) => pair.to)

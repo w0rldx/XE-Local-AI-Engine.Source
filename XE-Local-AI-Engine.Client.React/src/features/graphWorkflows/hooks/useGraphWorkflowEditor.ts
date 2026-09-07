@@ -219,11 +219,11 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 				},
 			};
 			// Wiring a Pause is the only gesture that can leave a node reading an approval where its author meant an
-			// answer, so the `context` edges are computed HERE and never on a render or a validate: an edge the operator
-			// deletes has to stay deleted, and only wiring the Pause again may bring it back.
-			const context = [source, target].some((end) => nodes.find((node) => node.id === end)?.data.kind === "Pause")
-				? pauseContextEdges(nodes, [...edges, connected])
-				: [];
+			// answer, so the `context` edges are computed HERE and never on a render or a validate — and only for the
+			// Pause this connection touched. An edge the operator deletes has to stay deleted, and only wiring THAT
+			// pause again may bring it back.
+			const wiredPauses = [source, target].filter((end) => nodes.find((node) => node.id === end)?.data.kind === "Pause");
+			const context = wiredPauses.length > 0 ? pauseContextEdges(nodes, [...edges, connected], wiredPauses) : [];
 			setEdges((current) => [...current, connected, ...context]);
 			if (context.length > 0) {
 				announce("pauseContextEdgeAdded");

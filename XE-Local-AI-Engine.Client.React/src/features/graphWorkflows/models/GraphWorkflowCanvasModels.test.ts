@@ -511,6 +511,19 @@ describe("pauseContextEdges", () => {
 		expect(addedPairs(["hold:Pause", "b:Agent", "done:End"], ["hold>b", "b>done"])).toEqual([]);
 	});
 
+	it("considers only the Pause nodes it was pointed at", () => {
+		const nodes = ["start:Start", "a:Agent", "first:Pause", "b:Agent", "second:Pause", "c:Agent", "done:End"];
+		const edges = ["start>a", "a>first", "first>b", "b>second", "second>c", "c>done"];
+		const canvas = canvasOf(nodes, edges);
+
+		// Both pauses are missing their edge, but a gesture that touched only `second` must leave `first` alone: the
+		// operator may have deleted that edge on purpose, and re-adding it here would be the editor arguing back.
+		expect(pauseContextEdges(canvas.nodes, canvas.edges, ["second"]).map((edge) => `${edge.source}>${edge.target}`)).toEqual([
+			"b>c",
+		]);
+		expect(addedPairs(nodes, edges)).toEqual(["a>b", "b>c"]);
+	});
+
 	it("stops on a Pause wired back into itself instead of walking forever", () => {
 		expect(addedPairs(["hold:Pause", "b:Agent", "done:End"], ["hold>hold", "hold>b", "b>done"])).toEqual([]);
 	});
