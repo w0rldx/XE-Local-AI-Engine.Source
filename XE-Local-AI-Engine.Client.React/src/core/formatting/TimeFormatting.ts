@@ -59,7 +59,13 @@ function formatIn(
 	} catch {
 		// A malformed stored tag — `en_US` left in `i18nextLng` by hand — is a RangeError, and it would throw once per
 		// table ROW. The environment's own default is a worse date, not a broken page.
-		return render(date, undefined);
+		try {
+			return render(date, undefined);
+		} catch {
+			// The retry drops the LANGUAGE, so anything that throws again is the options (`dateStyle` beside `year` is
+			// a spec TypeError). Nothing is left to retry with, and the dash this module promises beats a thrown row.
+			return "—";
+		}
 	}
 }
 
