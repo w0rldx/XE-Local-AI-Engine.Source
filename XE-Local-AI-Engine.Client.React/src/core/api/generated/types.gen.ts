@@ -13772,6 +13772,7 @@ export type CreateDevWorkflowDefinitionErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
 };
 
 export type CreateDevWorkflowDefinitionError = CreateDevWorkflowDefinitionErrors[keyof CreateDevWorkflowDefinitionErrors];
@@ -13880,6 +13881,7 @@ export type UpdateDevWorkflowDefinitionErrors = {
 	 */
 	404: unknown;
 	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
 };
 
 export type UpdateDevWorkflowDefinitionError = UpdateDevWorkflowDefinitionErrors[keyof UpdateDevWorkflowDefinitionErrors];

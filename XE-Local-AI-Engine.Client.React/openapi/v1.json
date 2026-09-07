@@ -13361,6 +13361,16 @@
           },
           "403": {
             "description": "Forbidden"
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -13485,6 +13495,16 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
                 }
               }
             }
