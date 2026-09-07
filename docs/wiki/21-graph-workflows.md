@@ -177,12 +177,12 @@ it. The sentence **names** the pause's nearest non-`Pause` ancestor only when th
 it would ask for is that node's second unconditional out-edge, which the parser refuses — advice that turns a warning
 into an error is worse than the generic sentence.
 
-The second, on an **Agent node** whose `responseJsonSchema` asks for something the grammar will not enforce
-(`GraphWorkflowGraph.ResponseSchemaWarnings`). It fires on three things: a keyword the adapter relocates into
-`description`, a declared property missing from `required`, and an object that declares `properties` and **omits**
-`additionalProperties` — an object that sets that key explicitly, `true` included, is silent. One warning per node
-carries whichever of the three apply, and each list names at most three before counting the rest, because this is a
-sentence and not an inventory:
+The second, on an **Agent node** whose `responseJsonSchema` asks for something the runtime it will run on does not
+enforce (`GraphWorkflowGraph.ResponseSchemaWarnings`). It fires on three things: a keyword the
+`Microsoft.Extensions.AI.OpenAI` strict-schema transform relocates into `description`, a declared property missing
+from `required`, and an object that declares `properties` and **omits** `additionalProperties` — an object that sets
+that key explicitly, `true` included, is silent. One warning per node carries whichever of the three apply, and each
+list names at most three before counting the rest, because this is a sentence and not an inventory:
 
 ```
 Node 'agent' declares a response schema the runtime rewrites before it becomes a grammar: it drops 'maxLength'
@@ -190,10 +190,20 @@ rather than enforcing it, requires every declared property ('summary', 'notes' a
 additional properties.
 ```
 
+**Since S7 this warning is narrowed at the service, not at the parser.** The rewrite it describes is the OpenAI
+adapter's, and the llama.cpp lane no longer suffers it (§4.2): a node whose model llama-server serves receives the
+schema as authored. The parser cannot tell which nodes those are — it has no route to the model-to-provider map — so
+it keeps raising the warning for every Agent node and `GraphWorkflowDefinitionService.ValidateAsync` drops the ones
+whose pinned `model` resolves through `ILocalModelProviderResolver` to `llamacpp`. The filter is per **warning**
+rather than per node: a node that also earns the pause-context warning above keeps that one. A node with **no** model
+pin keeps its schema warning too — what it inherits is decided at run start, and a warning nobody needed is the
+cheaper error. Nothing else moved: the parser's rule set, the warning sentence and the DTO are all unchanged, and a
+warning still never blocks.
+
 The schema is walked breadth-first over exactly the members the transform itself descends — `properties`,
 `additionalProperties`, `items`, `anyOf`, `oneOf`, `allOf` — so a constraint under `items` is found and one parked in
 a `$defs` or `definitions` pool is correctly ignored, since the transform never reaches it either. A `Start` node's
-`inputSchema` never warns: nothing compiles it into a grammar. Like every warning it is non-blocking, and the
+`inputSchema` never warns: nothing compiles it into a grammar, on any runtime. Like every warning it is non-blocking, and the
 editor's validation strip renders it through the same generic channel as the first kind, so neither the DTO nor the
 SPA needed a new shape for it. What it is warning about is §4.2.
 
@@ -468,18 +478,25 @@ and no provider reports all of them.
 **What a response schema actually enforces.** llama-server compiles it into a real GBNF grammar and applies that
 grammar from the first output token, so the **structure** is guaranteed: the object shape, the declared types, an
 `enum`'s member list, the required keys. The compiled `root` rule leaves the model's `<think>` block optional and
-unconstrained and forces the schema only on what follows, so a reasoning model is not fighting the grammar. What is
-**not** enforced is every value bound — `minLength`, `maxLength`, `pattern`, `format`, the numeric minimum and
-maximum, the item counts, the content encoding and sixteen more. Those never reach llama.cpp at all: the
-`Microsoft.Extensions.AI.OpenAI` strict-schema transform relocates all twenty-two of them into the schema's
-`description` string on the way out of the .NET process, where they are advice to the model rather than a constraint
-(a `maxLength: 3` produced a 1302-character field in the S6 live round). The same pass marks every declared property
-`required`, so a property the author left optional is not optional in practice, and closes an object that has
-`properties` and omits `additionalProperties` — an object that sets that key explicitly is left as written. Validate
-a value bound downstream, in an edge condition or the consuming node, and never in the schema alone. You do not have to
-notice any of this unaided: saving or validating a graph raises the non-blocking warning of §2.4 on an Agent node
-whose schema asks for it, naming what was dropped. See `docs/agent-knowledge.md` §3 for the evidence and the
-`--verbose` recipe that shows the compiled grammar.
+unconstrained and forces the schema only on what follows, so a reasoning model is not fighting the grammar.
+
+**Since S7 the value bounds are guaranteed too, on llama-server.** `minLength`, `maxLength`, `pattern`, `format`, the
+numeric minimum and maximum, the item counts and the rest now reach llama.cpp as written, and so does the author's own
+`required` list — a property left optional stays optional, and an object that omits `additionalProperties` stays open.
+`DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough` writes the authored schema onto the request body
+itself, and the MEAI OpenAI adapter fills its own response format in only with `??=`, so its unconditional
+strict-schema transform is never invoked on this lane. The one exception is a repetition bound above
+`LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound` (1024), which is still stripped because llama.cpp's
+GBNF converter cannot compile it into a grammar at all — see §8.
+
+**On every other runtime the old rule stands.** The strict-schema transform relocates twenty-two value keywords into
+the schema's `description` string on the way out of the .NET process, where they are advice to the model rather than a
+constraint (a `maxLength: 3` produced a 1302-character field in the S6 live round), marks every declared property
+`required`, and closes an object that has `properties` and omits `additionalProperties`. There, validate a value bound
+downstream — in an edge condition or the consuming node — and never in the schema alone. You do not have to notice
+this unaided: saving or validating a graph raises the non-blocking warning of §2.4 on an Agent node whose schema asks
+for it, and that warning is now raised only for nodes that are **not** pinned to a llama-server model. See
+`docs/agent-knowledge.md` §3 for the evidence and the `--verbose` recipe that shows the compiled grammar.
 
 A node declaring a response schema must come back a JSON **object**. A parse failure fails `NodeFailed` — the
 retryable class, since a re-ask under the same grammar can land where one attempt did not — naming the finish reason,
@@ -824,9 +841,11 @@ routes that carry one (create, update, validate and start-run), and the 200-row 
 
 One ceiling that lives outside this module: an `Agent` node's `responseJsonSchema` goes down the same llama.cpp GBNF
 path as a tool schema, which has an empirical combined repetition bound
-(`LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound`). Keep a response schema flat. A value bound written
-into that schema is not a limit either — see §4.2. Note that the sanitiser named there covers only **tool** schemas; a
-response schema has no equivalent pass. See
+(`LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound`, 1024). Keep a response schema flat. Since S7 that
+sanitiser covers the response schema too: `DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough` runs the
+authored schema through the same `Sanitize` pass before it reaches the wire, so an over-large bound is dropped rather
+than failing the turn with HTTP 400 `Failed to initialize samplers`. Every bound **within** the cap is now enforced by
+the grammar rather than dropped — see §4.2. See
 [Local Runtime & Providers](03-local-runtime-and-providers.md) and `docs/agent-knowledge.md` §3.
 
 ---

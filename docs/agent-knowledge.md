@@ -350,11 +350,13 @@ The MVID-keyed `/tmp/xe-local-ai-engine-tests-template-*.sqlite` cache intention
   `ASPNETCORE_ENVIRONMENT=Development` for the host it starts, while keeping the `HOME` isolation the desktop port
   contract depends on. Exporting them yourself is still the safe habit, because it is what every other script on this
   list needs.
-- **The same trap is still live in `scripts/tests/install.test.sh`**, reached through `run-release-contract-tests.sh`
-  and so through `scripts/lint-release-scripts.sh`. On a mise box, without those two variables exported, it fails
-  asserting `one safe skills/xe-local-ai-engine tree` — a message about archive contents, for a toolchain problem. CI
-  has no mise and never sees it. Not fixed; export the two variables before running the release-script gate locally.
-  Authority: S6 lane A, 2026-09-07.
+- **`scripts/tests/install.test.sh` isolates `HOME`, which hides mise's trust store from the installer it runs.**
+  Every mise shim on PATH then aborts, `python3` among them, and the installer used to report `one safe
+  skills/xe-local-ai-engine tree` for a toolchain failure. The test now forwards `MISE_TRUSTED_CONFIG_PATHS` and
+  `MISE_DATA_DIR` into each isolated-`HOME` invocation using the `openapi-live-check.sh` shape, so no export is needed,
+  and `install_skill_tree` runs `python3 -c ''` rather than only locating it, so an interpreter that aborts says so.
+  Prevents: reading a toolchain trust failure as a corrupt source archive. Authority: S7 lane A, 2026-09-07,
+  reproduced both ways.
 - The same two variables are needed when you start the regen host BY HAND with an isolated `HOME`. Isolating `HOME` hides the trusted mise config, so mise refuses the toolchain and the host exits with a trust error **before** it ever reaches OpenAPI readiness — which reads as "the spec endpoint is broken", not as a toolchain problem. Point both at the real user paths. Authority: S5 lane A regen, 2026-09-07.
 - **A desktop-mode host ignores `--urls`.** `DesktopPortStore.ResolveBindUrl` owns the bind address in that launch mode, so the port you passed is not the port it listens on. Read the real one from `desktop-port.txt` under the isolated data directory (`scripts/openapi-live-check.sh` does exactly that) and build `OPENAPI_SPEC_URL` from it. Prevents: fetching a spec from a port nothing is bound to and concluding the document is gone.
 - **A schema that gains a `$ref` reorders NSwag's component output.** The referenced schema is emitted where it is first needed, so a spec diff can show several schemas removed at one offset and re-added at another with identical bodies. That is reordering, not loss. Verify it by comparing the PATH SETS (removals must be zero) rather than by reading the diff hunks, which is what `openapi-live-check.sh` reports. Prevents: reverting a correct regen because the diff looked destructive. Authority: the S5 regen that added `graph` to `GraphWorkflowRunResponse` — the live and committed path sets matched exactly while two graph-workflow schemas moved.
@@ -666,9 +668,28 @@ descends `properties`, `items`, `additionalProperties`, `not`, `anyOf`, `oneOf` 
 constraint parked under `$defs`, `definitions` or `prefixItems` is **not** relocated and a `$ref` target is untouched
 — which is a reach to know, not a workaround to rely on.
 
-**Tool** schemas are not transformed by default, which is exactly why XE carries its own
-`LlamaGrammarToolSchemaCompatibility` sanitiser for that path and none for this one. Do not rely on a value bound in a
-response schema; validate it yourself downstream.
+**Tool** schemas are not transformed by default, which is why XE carries its own
+`LlamaGrammarToolSchemaCompatibility` sanitiser for that path.
+
+**Since S7 none of the above describes the llama.cpp lane any more.**
+`DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough` writes the AUTHORED schema onto the outbound
+`ChatCompletionOptions` at `$.response_format.json_schema.schema`, and `OpenAIChatClient.ToOpenAIOptions` applies its
+own members with `??=` — its last line being `result.ResponseFormat ??= ToOpenAIChatResponseFormat(...)` — so a
+response format already set by the factory wins and the strict transform is never invoked at all. Every keyword
+arrives as the author wrote it: bounds, `pattern`, `format`, the author's own `required` list, and no injected
+`additionalProperties: false`. `ChatOptions.ResponseFormat` is deliberately left set, because it is what the
+MEAI-level consumers above the client read; it no longer decides what goes on the wire. `strict` is sent **false**:
+llama-server reads only `json_schema.schema` and ignores the sibling `name`/`description`/`strict`, and claiming
+OpenAI structured-output strictness would be a guarantee llama.cpp does not make.
+
+One thing is still removed on that lane, on purpose: a repetition bound above
+`LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound` (1024), because llama.cpp's GBNF converter refuses to
+compile it — HTTP 400 `Failed to initialize samplers`, the turn never reaches inference. The strict transform used to
+prevent that by accident; the response schema now runs through the same `Sanitize` pass the tools array does, and only
+where it must. A schema whose bounds are all in range travels verbatim.
+
+The rewrite still applies in full to **every other provider**. Do not rely on a value bound in a response schema on a
+cloud runtime; validate it yourself downstream.
 
 Two things that will waste your time here. `InvocationAgentFactoryTests.CreateAsync_WithAResponseJsonSchema_ConstrainsTheTurnToIt`
 is **not** evidence against the above and structurally cannot catch it: it asserts on the `ChatOptions` the factory
@@ -676,15 +697,28 @@ built, which is upstream of the adapter that does the rewriting. Catching it nee
 of the compiled grammar. And the XE Debug log never shows the grammar at any Serilog level —
 `Serilog__MinimumLevel__Default=Debug` greps **zero** hits for `grammar`, `json_schema`, `response_format` or `gbnf`.
 What prints both the compiled GBNF and the schema llama-server actually received is llama-server's own `--verbose`,
-set through `PUT models/{modelName}/launch-args` (`rawArguments`) followed by a **full host restart**: the
-Ollama-shaped `POST models/{modelName}/unload` answers 500 with a connection refused to 11434 for a
-llama.cpp-provider model and cannot respawn its process.
+set through `PUT models/{modelName}/launch-args` (`rawArguments`) followed by `POST models/{modelName}/unload`.
+**No host restart.** Since S7 that route resolves the model's provider first: a llama-server model gets a graceful
+supervisor eject of every role — idempotent, a role that is not running counts as unloaded — and the next request
+respawns the process with the new arguments, while every other provider keeps the Ollama `keep_alive=0` call. The old
+behaviour, and the S6-era note that recorded it, was a 500 with a connection refused to 11434 for a
+llama.cpp-provider model. Authority: operator ruling S7-E, 2026-09-07.
 
 
 `LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound` is empirical for the **whole production offer**, not an upstream constant or per-field limit. Third-party MCP schemas make this an open boundary. If sanitization still fails, translate it to `FailureCategory.ModelCapabilityUnsupported`; do not surface the raw sampler error as a model defect. The live smoke's unsanitized negative control is load-bearing: a 200 means either a reasoning template skipped GBNF or upstream changed the limit.
 
 
 Schema bounds are advisory to the model but handler validation is authoritative. Removing a large `maxLength` from the production schema would also weaken `ToolArgumentRepairAIFunction` and lie to non-llama providers. The compatibility projection strips only the offending wire keyword for llama.cpp. `ChatLocalToolsE2ETests` uses scripted FakeOllama and cannot compile GBNF; unit tests enforce the measured constant but cannot detect an upstream limit change.
+
+### A second patch onto `ChatOptions.RawRepresentationFactory` must compose the first
+
+**Rule:** the slot is single. The response-schema passthrough, the thinking switch, the reasoning budget and the
+sampling passthrough all write the same request body, and a factory that assigns instead of chaining silently discards
+whatever the previous one wrote — no compile error, no runtime signal, just a body missing a field the caller believes
+it sent. Always go through `OpenAICompatibleRequestBody.Chain`. **Prevents:** `chat_template_kwargs` or the raw schema
+vanishing from the wire on exactly the Constrained-mode teacher turn that needs both. **Authority:**
+`DeferredLlamaServerStructuredOutputTests.ResponseFormatAndThinkingSwitch_BothReachWire`, which captures one body
+carrying both.
 
 ### A work session is chat turns in a loop, and it takes the node's only invocation slot
 
@@ -1384,11 +1418,23 @@ An author no longer has to know this unaided, and the two halves are worth knowi
 
 The message and the exception type did not change, so the endpoint contract and the editor's mapping stand. The callers that re-parse an already **stored** graph — `GraphWorkflowRunService`, `GraphWorkflowDispatcher`, `HasRejectBranch`, `ToolNodeNames` — stay uncapped **on purpose**: that graph was capped when it was saved, and a cap an operator lowered afterwards would make a live run unroutable rather than merely unsaveable. The iterative walk is what makes those uncapped paths safe. Threading the path through it also recovered what the copy from Dev Workflows had lost: the refusal now names every node on the cycle in walk order (`a -> b -> c -> a`), not just the node it came back to.
 
+**Dev Workflows had the same hole, and it is now closed too** (S7, operator ruling R7-3 re-opening what S6 recorded as a finding only). `DevWorkflowOptions.MaxNodesPerDefinition` defaults to **500** — twice the Graph cap, because a development workflow decomposes and one materialization expands a template subtree — and is held to `[Range(1, 10_000)]` like every other budget in that section. `DevWorkflowGraphContract.ValidateAndCountNodes(graphJson, maxNodes)` reads the option and hands it to `DevWorkflowGraph.Parse(graphJson, maxNodes)`, which refuses on the **declared length of the `nodes` array** before a node is read; the cap-free overload stays for the read paths that re-parse a stored graph, for the same reason the Graph side keeps its uncapped re-parses. `DevWorkflowRequestSizeLimit` caps the body at **2 MiB** on the two definition-carrying routes, create and update — there is no Dev validate route, and the limit is deliberately not declared as a 413 in the endpoints' OpenAPI description, because that would move the generated hey-api client. The two Graph numbers are unchanged: **200 nodes, 1 MiB**. Note what did **not** change on the Dev side: `DevWorkflowGraph.EnsureAcyclic` and `AncestorsFirst` still walk recursively through local functions, so the node cap is the only thing standing between a deep chain and a stack overflow there — do not remove it, and do not assume the Graph module's iterative walk exists in this copy.
+
 ### Graph Workflows: the response-schema warning mirrors a THIRD-PARTY transform, so it drifts on a package bump
 
 **Rule:** `GraphWorkflowGraph.ResponseSchemaWarnings` warns, non-blocking, on an Agent node whose `responseJsonSchema` carries a relocated keyword, leaves a declared property out of `required`, or declares `properties` while omitting `additionalProperties`. Its `DroppedSchemaKeywords` and its walk are a hand-copy of `Microsoft.Extensions.AI.OpenAI`'s strict-schema transform (§3). **Prevents:** an author trusting a bound the grammar never enforces — and, on the other side, a **false** warning: the walk must descend exactly what the transform descends (`properties`, `additionalProperties`, `items`, `anyOf`, `oneOf`, `allOf`, and nothing else), or a constraint parked under `$defs`, `definitions` or `prefixItems` gets flagged when the transform never touches it either. **Authority:** `GraphWorkflowGraph.ResponseSchemaWarnings` / `DescribeSchema` / `NestedSchemaMembers`, `GraphWorkflowGraphTests`, `GraphWorkflowValidateEndpointTests`.
 
 Re-read the adapter's list on every `Microsoft.Extensions.AI.OpenAI` bump: this copy cannot notice that the original changed, and a stale copy is a warning that lies in whichever direction the upstream moved. `additionalProperties` is the subtle member — only the **absent** case is warned about, because that is the only case the transform rewrites; an explicit `true` stays open and is silent. A `Start` node's `inputSchema` is deliberately never warned about, since nothing compiles it into a grammar. Both name lists cap at three before counting the rest, and the whole message goes through `GraphWorkflowStateMachine.Bounded`. Adding a warning kind needed no DTO, OpenAPI or SPA change: `Warnings` is a concatenation and the validation strip renders kinds generically.
+
+Since S7 the parser still raises it for every Agent node, and `GraphWorkflowDefinitionService.WarningsForRuntimeAsync` drops the ones whose pinned `model` resolves through `ILocalModelProviderResolver` to the llama-server provider, because that lane no longer suffers the rewrite at all (§2, `ApplyResponseSchemaPassthrough`). The narrowing is at the service on purpose: the parser has no route to the model-to-provider map. It filters per **warning**, not per node, so a node that also earned the pause-context warning keeps that one, and a node with **no** model pin keeps its schema warning, since what an unpinned node inherits is decided at run start.
+
+### Graph Workflows: `GraphWorkflowCondition.Order` and `DevWorkflowCondition.Order` are a knowingly duplicated pair
+
+**Rule:** the two modules carry two copies of the same relational-comparison ladder, and a change to either copy is a change to **both** — edit both files and run both `GraphWorkflowConditionTests` and `DevWorkflowConditionTests`. There is no shared evaluator and no `GraphCore` library to move one into: the S7 graph-core extraction was assessed and **shelved**, so the duplication is the standing decision rather than debt awaiting a refactor. **Prevents:** fixing a comparison bug in one module and shipping the other module still wrong, with a green suite in both — each copy has its own tests, so neither notices the other drifted. **Authority:** operator ruling R7-1, 2026-09-07, extraction plan §6.2; the `Mirrors GraphWorkflowCondition.Order` comment in `DevWorkflowCondition`.
+
+### Dev Workflows stays source-plus-agent-knowledge only — there is no wiki page for it
+
+**Rule:** do not write one, and do not re-open the question unless a slice touches the module materially. What is durable about Dev Workflows lives in §4 here and in the XML docs on `DevWorkflowGraph`, `DevWorkflowStateMachine` and `DevWorkflowOptions`. **Prevents:** a second architecture reference that describes a module nobody is currently changing, drifting silently against the copy in the code, and paying `docs-inventory-check.py` upkeep for it. **Authority:** operator ruling R7-4, 2026-09-07.
 
 ## 5. Frontend, chat UX, API boundary
 
@@ -1635,7 +1681,8 @@ These are intentionally terse. Follow the linked/current section for the active 
 | An authored `Agent → Pause → Agent` chain has no affordance and only the importer adds the context edge. | The editor adds it on the connect gesture and the validator warns about the starved node (§4). |
 | `WorkSessionAgentSeeder` allow-lists the clock tool as `get_current_time`. | The registry derives the name from the method: it is `GetCurrentTime` (§4, wiki 19). |
 | Whether an Agent node's `responseJsonSchema` is enforced by a grammar, or merely obeyed by the model, is unproven. | Enforced from generation start, proven live with a negative control and the compiled GBNF captured verbatim (§3). |
-| A `maxLength` in a response schema is dropped by llama.cpp's grammar converter. | llama.cpp never sees it: the MEAI OpenAI 10.9.0 strict-schema transform rewrote it into a `description` before the request left .NET (§3). |
+| A `maxLength` in a response schema never reaches llama.cpp, because the MEAI OpenAI strict-schema transform rewrote it into a `description` first. | True until S7 and still true of every other provider. On llama-server the schema is now written onto the request body by `DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough` and the transform is never invoked, so the bound is compiled into the grammar and enforced (§2). |
 | The Open Canvas importer's pause context edge follows a looser rule than the editor and the validator. | All three apply the same rule and the same three guards; only WHEN they run differs (§4, wiki 21 §9.2). |
-| `MaxNodesPerDefinition` is applied after the parse, so the parser needs no cap. | `GraphWorkflowGraph.Parse` takes the cap and refuses on the declared node count before anything is read (§4, wiki 21 §2.4). |
+| `MaxNodesPerDefinition` is applied after the parse, so the parser needs no cap. | `GraphWorkflowGraph.Parse` takes the cap and refuses on the declared node count before anything is read (§4, wiki 21 §2.4). `DevWorkflowGraph.Parse` does the same since S7, at 500 nodes. |
+| Dev Workflows accepts a definition of any size, and the node cap there is a known-unfixed finding. | Fixed in S7: `DevWorkflowOptions.MaxNodesPerDefinition` (500) is enforced inside the parse and `DevWorkflowRequestSizeLimit` caps create and update at 2 MiB (§4). |
 | Date sites outside `formatTimestamp` were deliberately left on the browser locale. | Every bare `toLocaleString()` date site now uses `formatTimestamp`/`formatTime`; only the options-passing sites remain (§5, wiki 10). |
