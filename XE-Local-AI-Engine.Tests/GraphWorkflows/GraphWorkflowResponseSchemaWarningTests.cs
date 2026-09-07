@@ -75,6 +75,50 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
     }
 
     /// <summary>
+    ///     The lookup reads the store through a fresh scope and a map read lease, so it can fail for reasons that have
+    ///     nothing to do with the graph. Validation is warning-only and never blocked before: a store fault must not
+    ///     turn the editor's probe into a 500, and the warning it could not rule out stays.
+    /// </summary>
+    [Test]
+    public async Task ValidateAsync_WhenTheProviderLookupFaults_KeepsTheWarningAndDoesNotThrow()
+    {
+        var providers = Substitute.For<ILocalModelProviderResolver>();
+        providers.ResolveProviderNameForModelAsync(LocalModel, Arg.Any<CancellationToken>())
+                 .Returns<Task<string>>(_ => throw new InvalidOperationException("the model-provider map is unavailable"));
+        var service = BuildService(providers);
+
+        var result = await service.ValidateAsync(AgentGraph(LocalModel));
+
+        AssertEx.True(result.IsValid, "an infrastructure fault in a warning lookup must not make the graph invalid either.");
+        var warning = AssertEx.NotNull(result.Warnings.SingleOrDefault(), $"one node, one warning: {string.Join(" | ", result.Warnings)}");
+        AssertEx.Equal("agent", warning.Key);
+    }
+
+    /// <summary>
+    ///     The same catch, reached by the route an author can actually take. A model pin carrying an internal newline is
+    ///     well-formed JSON and the parser has no rule against it, so it reaches the resolver — where the map read
+    ///     lease's key normalisation rejects it. Nothing about that is the graph's fault, and it must not 500 the
+    ///     editor's probe.
+    /// </summary>
+    [Test]
+    public async Task ValidateAsync_WhenTheModelPinIsMalformed_KeepsTheWarningAndDoesNotThrow()
+    {
+        const string MalformedPin = "foo\nbar";
+        var providers = Substitute.For<ILocalModelProviderResolver>();
+        providers.ResolveProviderNameForModelAsync(MalformedPin, Arg.Any<CancellationToken>())
+                 .Returns<Task<string>>(_ => throw new ArgumentException("model name contains a line break"));
+        var service = BuildService(providers);
+
+        // Escaped in the document, so what the parser hands the resolver is the real newline the stub is keyed on.
+        var result = await service.ValidateAsync(AgentGraph(@"foo\nbar"));
+
+        AssertEx.True(result.IsValid);
+        var warning = AssertEx.NotNull(result.Warnings.SingleOrDefault(), $"one node, one warning: {string.Join(" | ", result.Warnings)}");
+        AssertEx.Equal("agent", warning.Key);
+        await providers.Received(1).ResolveProviderNameForModelAsync(MalformedPin, Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
     ///     The OTHER warning kind travels the same list, and narrowing must not take it with it. This graph's successor
     ///     is reached only through a Pause, so it earns the pause-context warning while its Agent node's schema warning
     ///     is dropped for llama-server — proving the filter is per-warning rather than per-node or wholesale.
