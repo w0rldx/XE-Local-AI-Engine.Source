@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using System.ComponentModel.DataAnnotations;
 using System.Net;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
@@ -33,6 +35,52 @@ public sealed class DevWorkflowOptionsTests
             });
 
         AssertEx.Equal(expected, result.Succeeded, result.FailureMessage ?? "accepted");
+    }
+
+    /// <summary>
+    ///     The node cap's own bound, probed from both sides. The data annotation IS the gate for this member — the
+    ///     hand-written validator above checks the one cross-section relation and leaves every budget to its range — so
+    ///     a bound quietly widened, or the attribute dropped in a refactor, shows up here rather than as an operator
+    ///     configuration that starts when it should have refused.
+    /// </summary>
+    [Test]
+    [Arguments(0, false, "a cap that admits no graph at all")]
+    [Arguments(1, true, "the floor exactly")]
+    [Arguments(500, true, "the documented default")]
+    [Arguments(10_000, true, "the ceiling exactly")]
+    [Arguments(10_001, false, "a cap above the ceiling")]
+    public void MaxNodesPerDefinition_IsHeldToItsAnnotatedRange(int maxNodesPerDefinition, bool expected, string because)
+    {
+        var options = new DevWorkflowOptions
+        {
+            MaxNodesPerDefinition = maxNodesPerDefinition
+        };
+        var errors = new List<ValidationResult>();
+
+        var accepted = Validator.TryValidateObject(options, new ValidationContext(options), errors, validateAllProperties: true);
+
+        AssertEx.Equal(expected, accepted, $"{because}: {string.Join("; ", errors.Select(static error => error.ErrorMessage))}");
+    }
+
+    /// <summary>
+    ///     The default asserted over the BINDER rather than the constructor, so a drift in either the literal or the
+    ///     section name reds here instead of at the first save.
+    /// </summary>
+    [Test]
+    public void Options_BindTheDocumentedNodeCap()
+    {
+        var configuration = new ConfigurationBuilder()
+                            .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
+                            {
+                                // The section exists and names no budget: what comes back is what a node ships with.
+                                ["DevWorkflows:Enabled"] = "true"
+                            })
+                            .Build();
+
+        var options = AssertEx.NotNull(configuration.GetSection(DevWorkflowOptions.Section).Get<DevWorkflowOptions>(), "the section must bind.");
+
+        AssertEx.Equal("DevWorkflows", DevWorkflowOptions.Section);
+        AssertEx.Equal(expected: 500, options.MaxNodesPerDefinition);
     }
 
     /// <summary>
