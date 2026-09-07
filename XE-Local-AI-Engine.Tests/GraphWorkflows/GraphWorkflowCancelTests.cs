@@ -361,11 +361,12 @@ public sealed class GraphWorkflowCancelTests
     ///     gate holds the drain in exactly that window while a real decide is attempted through the real command
     ///     surface.
     ///     <para>
-    ///         The answer this build gives is that no decision is lost, because none can land: the run is already
-    ///         <c>Cancelling</c> when the drain runs, and <c>GraphWorkflowRunService.DecideAsync</c> refuses on its own
-    ///         run-status read before the store is asked at all — so the operator is refused rather than silently
-    ///         overwritten, and the node terminalizes <c>Cancelled</c> carrying no decision. Delete THAT check and this
-    ///         test fails on the <c>DecisionOperationId</c> the drain would then be writing over.
+    ///         What is pinned here is the OUTCOME, not one guard: no decision is lost, because none can land. The run
+    ///         is already <c>Cancelling</c> when the drain runs, and TWO independent checks read that —
+    ///         <c>GraphWorkflowRunService.DecideAsync</c> before it asks the store, and
+    ///         <c>GraphWorkflowStore.DecideNodeRunAsync</c> inside its own transaction. Either alone produces this
+    ///         result, so the test does not name a single load-bearing one; it fails on the
+    ///         <c>DecisionOperationId</c> the drain would be writing over if BOTH went away.
     ///     </para>
     /// </summary>
     [Test]
