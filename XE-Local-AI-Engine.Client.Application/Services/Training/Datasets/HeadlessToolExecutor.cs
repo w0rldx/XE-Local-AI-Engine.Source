@@ -1,12 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
 using System.Text.Json;
-using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Tools;
-using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Tools;
 
 public enum HeadlessToolOutcomeKind
 {
@@ -39,9 +38,17 @@ public interface IHeadlessToolExecutor
 /// <summary>
 ///     The policy-aware execution seam for dataset generation. It deliberately does NOT go through
 ///     <c>ApiToolCallBridge.ExecuteApiToolCallAsync</c>: that overload is a hub/worker round-trip (it registers a pending
-///     tool call, sends a payload over SignalR and awaits a remote result) and executes nothing in-process. This resolves
-///     the executable <see cref="AIFunction" /> from the registry and invokes it directly, after its own
-///     <see cref="IToolApprovalPolicy.RequiresApproval" /> call — that call is the tested enforcement point.
+///     tool call, sends a payload over SignalR and awaits a remote result) and executes nothing in-process.
+///     <para>
+///         This class owns the two things generation adds on top of a plain in-process call — the teacher model's OFFER
+///         as the catalog (so a capability-gated or custom tool resolves exactly as the teacher saw it) and the MOCK
+///         envelope for everything real execution is not permitted to run. Real execution itself is delegated whole to
+///         <see cref="IToolInvocationService.InvokeAsync" />, which owns executable resolution across BOTH registries,
+///         the structural approval floor, argument validation, the call and its classification. Its own
+///         <see cref="IToolApprovalPolicy.RequiresApproval" /> call below stays the tested enforcement point for the
+///         mock/real routing decision; the shared seam re-composes the same approval because its contract is that no
+///         caller can skip a gate, and the read is an idempotent settings lookup.
+///     </para>
 ///     <para>
 ///         Generation deliberately does not emit <c>IToolApprovalAuditRecorder</c> records in v1. Every layer
 ///         outcome (including this one) is persisted per sample in <c>ValidationJson</c>, which is the audit surface for
@@ -51,19 +58,31 @@ public interface IHeadlessToolExecutor
 internal sealed class HeadlessToolExecutor(
     ILocalToolOfferProvider offerProvider,
     IToolApprovalPolicy approvalPolicy,
-    IAgentToolRegistry toolRegistry,
     ITrainingDatasetStore store,
     IToolMockEngine mockEngine,
     IToolMockStaticVerifier mockVerifier,
-    ILogger<HeadlessToolExecutor> logger) : IHeadlessToolExecutor
+    IToolInvocationService toolInvocation) : IHeadlessToolExecutor
 {
+    /// <summary>
+    ///     The node key the shared seam logs this caller under. Generation has no run or node of its own, so the two
+    ///     ids it carries are <see cref="Guid.Empty" /> and this string is what identifies the call in a Debug log.
+    /// </summary>
+    private const string GenerationNodeKey = "training:dataset-generation";
+
+    /// <summary>
+    ///     Effectively unbounded, and deliberately so: this class imposed no budget before the shared seam existed, and
+    ///     a generation run is already cancellable through the token its caller threads in. It is a finite span rather
+    ///     than <see cref="Timeout.InfiniteTimeSpan" /> because the seam treats a non-positive budget as already spent,
+    ///     and <c>CancelAfter</c> refuses anything past <see cref="int.MaxValue" /> milliseconds.
+    /// </summary>
+    private static readonly TimeSpan UnboundedBudget = TimeSpan.FromMilliseconds(int.MaxValue);
+
     private readonly IToolApprovalPolicy _approvalPolicy = approvalPolicy ?? throw new ArgumentNullException(nameof(approvalPolicy));
-    private readonly ILogger<HeadlessToolExecutor> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly IToolMockEngine _mockEngine = mockEngine ?? throw new ArgumentNullException(nameof(mockEngine));
     private readonly IToolMockStaticVerifier _mockVerifier = mockVerifier ?? throw new ArgumentNullException(nameof(mockVerifier));
     private readonly ILocalToolOfferProvider _offerProvider = offerProvider ?? throw new ArgumentNullException(nameof(offerProvider));
     private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly IAgentToolRegistry _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
+    private readonly IToolInvocationService _toolInvocation = toolInvocation ?? throw new ArgumentNullException(nameof(toolInvocation));
 
     public async Task<HeadlessToolOutcome> ExecuteAsync(string toolName,
         string argumentsJson,
@@ -82,7 +101,7 @@ internal sealed class HeadlessToolExecutor(
             return new HeadlessToolOutcome(HeadlessToolOutcomeKind.Failed, null, $"The tool catalog does not offer '{toolName}'.");
         }
 
-        if (!TryParseArguments(argumentsJson, out var arguments, out var argumentsElement, out var parseError))
+        if (!TryParseArguments(argumentsJson, out var argumentsElement, out var parseError))
         {
             return new HeadlessToolOutcome(HeadlessToolOutcomeKind.Failed, null, parseError);
         }
@@ -91,56 +110,48 @@ internal sealed class HeadlessToolExecutor(
         var requiresApproval = _approvalPolicy.RequiresApproval(offer.Name, offer.Category, offer.RequiresApproval);
         if (offer.Category == ToolCategory.ReadLocal && !requiresApproval)
         {
-            return await ExecuteRealAsync(offer, arguments!, cancellationToken).ConfigureAwait(false);
+            return await ExecuteRealAsync(offer.Name, argumentsJson, argumentsElement, cancellationToken).ConfigureAwait(false);
         }
 
         return await RespondFromMockAsync(offer.Name, argumentsElement, requiresApproval, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<HeadlessToolOutcome> ExecuteRealAsync(AllowedToolDto offer, AIFunctionArguments arguments, CancellationToken cancellationToken)
+    /// <summary>
+    ///     The real call, delegated whole to the shared invocation seam. Its refusals map back onto this class's own
+    ///     vocabulary: a structural approval refusal (the registry pre-wrap, or a policy that tightened between this
+    ///     class's compose and the seam's) is MOCKED, never unwrapped, because headless generation has no route to a
+    ///     human approval round-trip; a risk-class refusal is mocked for the same reason the caller's gate would have
+    ///     mocked it. Everything else — an unresolvable tool, invalid arguments, a spent budget, a throwing tool — is
+    ///     one sample's failure. A cancellation is the generation RUN's, so it is rethrown rather than recorded.
+    /// </summary>
+    private async Task<HeadlessToolOutcome> ExecuteRealAsync(string toolName,
+        string argumentsJson,
+        JsonElement argumentsElement,
+        CancellationToken cancellationToken)
     {
-        var executable = _toolRegistry.GetLocalChatTools()
-                                      .OfType<AIFunction>()
-                                      .FirstOrDefault(tool => string.Equals(tool.Name, offer.Name, StringComparison.Ordinal));
-        if (executable is null)
-        {
-            return new HeadlessToolOutcome(HeadlessToolOutcomeKind.Failed, null, $"'{offer.Name}' has no executable in the local tool registry.");
-        }
+        var outcome = await _toolInvocation.InvokeAsync(toolName,
+                                              argumentsJson,
+                                              new ToolInvocationContext(Guid.Empty, Guid.Empty, GenerationNodeKey, UnboundedBudget),
+                                              cancellationToken)
+                                          .ConfigureAwait(false);
 
-        if (executable is ApprovalRequiredAIFunction)
+        switch (outcome.Kind)
         {
-            // The registry pre-wrap is the structural floor. A wrapped executable can only run behind a human approval
-            // round-trip, which headless generation has no route to — so it is mocked, never unwrapped.
-            return await RespondFromMockAsync(offer.Name, ParseElement(arguments), requiresApproval: true, cancellationToken).ConfigureAwait(false);
-        }
-
-        if (!string.IsNullOrWhiteSpace(offer.ParameterSchema))
-        {
-            try
-            {
-                using var schema = JsonDocument.Parse(offer.ParameterSchema);
-                var validation = ToolArgumentValidator.CoerceAndValidate(schema.RootElement, arguments);
-                if (!validation.IsValid)
-                {
-                    return new HeadlessToolOutcome(HeadlessToolOutcomeKind.Failed, null, validation.Reason ?? "The generated arguments are invalid.");
-                }
-            }
-            catch (JsonException exception)
-            {
-                return new HeadlessToolOutcome(HeadlessToolOutcomeKind.Failed, null, $"The tool's parameter schema is unreadable: {exception.Message}");
-            }
-        }
-
-        try
-        {
-            var result = await executable.InvokeAsync(arguments, cancellationToken).ConfigureAwait(false);
-            return new HeadlessToolOutcome(HeadlessToolOutcomeKind.Executed, Stringify(result), "read-local");
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            // A throwing tool is one sample's failure, never the generation run's.
-            _logger.LogDebug(exception, "Headless execution of {ToolName} failed during dataset generation.", offer.Name);
-            return new HeadlessToolOutcome(HeadlessToolOutcomeKind.Failed, null, $"'{offer.Name}' threw during headless execution.");
+            case ToolInvocationOutcomeKind.Executed:
+                return new HeadlessToolOutcome(HeadlessToolOutcomeKind.Executed, outcome.Result, "read-local");
+            case ToolInvocationOutcomeKind.NotInvocable when string.Equals(outcome.Reason, "approval-gated", StringComparison.Ordinal):
+                return await RespondFromMockAsync(toolName, argumentsElement, requiresApproval: true, cancellationToken).ConfigureAwait(false);
+            case ToolInvocationOutcomeKind.NotInvocable when string.Equals(outcome.Reason, "not-read-local", StringComparison.Ordinal):
+                return await RespondFromMockAsync(toolName, argumentsElement, requiresApproval: false, cancellationToken).ConfigureAwait(false);
+            // The seam answers this one with a structural token rather than a sentence, and a per-sample reason is
+            // written into ValidationJson for a human to read. The other refusals already carry prose.
+            case ToolInvocationOutcomeKind.NotInvocable when string.Equals(outcome.Reason, "no-executable", StringComparison.Ordinal):
+                return new HeadlessToolOutcome(HeadlessToolOutcomeKind.Failed, null, $"'{toolName}' has no executable in the local tool registry.");
+            case ToolInvocationOutcomeKind.Cancelled:
+                cancellationToken.ThrowIfCancellationRequested();
+                return new HeadlessToolOutcome(HeadlessToolOutcomeKind.Failed, null, outcome.Reason);
+            default:
+                return new HeadlessToolOutcome(HeadlessToolOutcomeKind.Failed, null, outcome.Reason);
         }
     }
 
@@ -170,12 +181,14 @@ internal sealed class HeadlessToolExecutor(
                 : $"{reason}; no mock rule matched the generated arguments for '{toolName}'.");
     }
 
-    private static bool TryParseArguments(string argumentsJson,
-        out AIFunctionArguments? arguments,
-        out JsonElement element,
-        out string error)
+    /// <summary>
+    ///     The generated arguments as one JSON object element, which is what the MOCK engine matches its rules against.
+    ///     The real path hands the raw text straight to the shared seam, which parses it into the bag the validator and
+    ///     the function both read — so this parse exists only for the mock, and its message may still carry the parser's
+    ///     detail because a per-sample reason is written into <c>ValidationJson</c>, not onto an operator surface.
+    /// </summary>
+    private static bool TryParseArguments(string argumentsJson, out JsonElement element, out string error)
     {
-        arguments = null;
         element = default;
         error = string.Empty;
         var text = string.IsNullOrWhiteSpace(argumentsJson) ? "{}" : argumentsJson;
@@ -189,13 +202,6 @@ internal sealed class HeadlessToolExecutor(
             }
 
             element = document.RootElement.Clone();
-            var bag = new AIFunctionArguments(StringComparer.Ordinal);
-            foreach (var property in element.EnumerateObject())
-            {
-                bag[property.Name] = property.Value;
-            }
-
-            arguments = bag;
             return true;
         }
         catch (JsonException exception)
@@ -204,20 +210,4 @@ internal sealed class HeadlessToolExecutor(
             return false;
         }
     }
-
-    private static JsonElement ParseElement(AIFunctionArguments arguments) =>
-        JsonSerializer.SerializeToElement(arguments.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal), TrainingJson.Options);
-
-    private static string Stringify(object? result) =>
-        result switch
-        {
-            null => string.Empty,
-            string text => text,
-            // AIFunction.InvokeAsync hands back the serialized return value, so a string-returning tool arrives as a JSON
-            // string element. Unwrap it: the sample's tool result should read like the tool's own output, not a quoted
-            // JSON literal.
-            JsonElement { ValueKind: JsonValueKind.String } text => text.GetString() ?? string.Empty,
-            JsonElement json => json.GetRawText(),
-            _ => JsonSerializer.Serialize(result, TrainingJson.Options)
-        };
 }

@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
 ///     Regression for the gate that makes the tool-relevance filter inert on every array except the single agent's:
@@ -100,15 +101,6 @@ public sealed class ToolRelevanceNonRootArrayTests
         public IReadOnlyList<LocalChatToolDescriptor> GetLocalChatToolDescriptors()
         {
             return [];
-        }
-    }
-
-    private sealed class EmptyClientLocalToolRegistry : IClientLocalToolRegistry
-    {
-        public bool TryResolve(string toolName, [NotNullWhen(true)] out AITool? tool)
-        {
-            tool = null;
-            return false;
         }
     }
 

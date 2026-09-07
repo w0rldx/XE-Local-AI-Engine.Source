@@ -1762,15 +1762,6 @@ public sealed class SubAgentSpawnServiceTests
         }
     }
 
-    private sealed class EmptyClientLocalToolRegistry : IClientLocalToolRegistry
-    {
-        public bool TryResolve(string toolName, [NotNullWhen(true)] out AITool? tool)
-        {
-            tool = null;
-            return false;
-        }
-    }
-
     private sealed class EmptyMcpToolRegistry : IMcpToolRegistry
     {
         public bool TryResolve(string name, [NotNullWhen(true)] out AITool? tool)
