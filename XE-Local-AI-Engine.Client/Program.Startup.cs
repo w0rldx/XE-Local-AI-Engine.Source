@@ -5,17 +5,78 @@ using Microsoft.Extensions.Options;
 using Serilog;
 using XE_Local_AI_Engine.Client.DependencyInjection;
 using XE_Local_AI_Engine.Client.Hosting;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Import;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Shutdown;
 
 public sealed partial class Program
 {
+    /// <summary>
+    ///     Reads every saved Open Canvas workflow BEFORE migrations, because the <c>DropCanvasWorkflows</c> migration
+    ///     removes the table they live in and no migration can decrypt the graph blob. The write half runs after
+    ///     migrations, once the Graph Workflow tables exist.
+    ///     <para>
+    ///         A read that throws is reported and answered with an empty snapshot: the import is best-effort and must
+    ///         never block startup. It logs at Error rather than staying quiet, because "the read threw" and "there
+    ///         were no rows" must not look alike in the log.
+    ///     </para>
+    /// </summary>
+    private static async Task<CanvasWorkflowImportSnapshot> ReadPendingCanvasWorkflowsAsync(IServiceProvider services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        try
+        {
+            await using var scope = services.CreateAsyncScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+            var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(CanvasWorkflowImport));
+
+            return await CanvasWorkflowImport.ReadAsync(dbContext, logger).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            Log.Error(exception, "Saved Open Canvas workflows could not be read before migrations; none will be imported.");
+            return new CanvasWorkflowImportSnapshot([], FailedCount: 0);
+        }
+    }
+
+    /// <summary>
+    ///     Writes the canvases the pre-migration read took, now that the Graph Workflow tables exist. Runs regardless
+    ///     of <c>GraphWorkflows:Enabled</c>: an operator who never turns the feature on must not lose their canvases.
+    /// </summary>
+    private static async Task ImportCanvasWorkflowsAsync(IServiceProvider services, CanvasWorkflowImportSnapshot pending)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(pending);
+
+        if (pending.Candidates.Count == 0 && pending.FailedCount == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var scope = services.CreateAsyncScope();
+            var definitions = scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>();
+            var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
+            var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(CanvasWorkflowImport));
+
+            await CanvasWorkflowImport.ImportAsync(definitions, store, pending, logger).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            Log.Error(exception, "Saved Open Canvas workflows could not be imported; canvas_workflows has already been dropped.");
+        }
+    }
+
     private static async Task ApplyNodeChatMigrationsAsync(IServiceProvider services)
     {
         ArgumentNullException.ThrowIfNull(services);
