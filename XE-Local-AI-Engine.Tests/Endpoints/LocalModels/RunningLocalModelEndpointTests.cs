@@ -9,17 +9,22 @@ using OllamaSharp;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Endpoint tests for the loaded-models surface: <c>GET models/running</c> (footprint mapping + graceful-unavailable)
-///     and <c>POST models/{modelName}/unload</c> (decode-before-validate, idempotent graceful unload, unsafe-name guard).
+///     and <c>POST models/{modelName}/unload</c> (decode-before-validate, idempotent graceful unload, unsafe-name guard,
+///     and the provider routing that sends a llama.cpp-served model to the supervisor instead of the Ollama daemon).
 /// </summary>
 public sealed class RunningLocalModelEndpointTests
 {
+    private const string OllamaProviderName = "ollama";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     [Test]
@@ -101,8 +106,10 @@ public sealed class RunningLocalModelEndpointTests
     }
 
     [Test]
-    public async Task UnloadModel_WhenValid_GracefullyUnloadsAndReportsSuccess()
+    public async Task UnloadModel_WhenModelIsServedByOllama_GracefullyUnloadsAndReportsSuccess()
     {
+        // The context pins the provider to "ollama", so this is the keep_alive=0 branch; the llama.cpp branch is
+        // covered separately below.
         var modelService = Substitute.For<IOllamaModelService>();
         await using var context = CreateContext(modelService);
         using var client = context.Factory.CreateClient();
@@ -193,6 +200,81 @@ public sealed class RunningLocalModelEndpointTests
     }
 
     [Test]
+    public async Task UnloadModel_WhenModelIsServedByLlamaServer_GracefullyEjectsEveryRoleAndNeverCallsOllama()
+    {
+        // Regression: this route used to send every unload to Ollama's keep_alive=0. On a node that runs no Ollama
+        // daemon — the shipped default, where the model is a GGUF served by llama-server — that is a connection-refused
+        // 500, and the operator can never free the VRAM or pick up edited launch arguments.
+        var modelService = Substitute.For<IOllamaModelService>();
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.EjectAsync(Arg.Any<string>(), ModelRole.Chat, Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult(LlamaServerEjectOutcome.Ejected));
+        supervisor.EjectAsync(Arg.Any<string>(), Arg.Is<ModelRole>(role => role != ModelRole.Chat), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult(LlamaServerEjectOutcome.NotRunning));
+        await using var context = CreateContext(modelService, LlamaServerProviderConstants.ProviderName, supervisor);
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/qwen3:8b/unload");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var unloaded = await ReadJsonAsync<UnloadLocalModelResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("qwen3:8b", unloaded.ModelName);
+        AssertEx.True(unloaded.Unloaded);
+
+        // Every role, and never forced: a graceful eject leaves an in-flight turn to drain instead of killing it.
+        foreach (var role in Enum.GetValues<ModelRole>())
+        {
+            await supervisor.Received(1).EjectAsync("qwen3:8b", role, force: false, Arg.Any<CancellationToken>());
+        }
+
+        await supervisor.DidNotReceive().EjectAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), force: true, Arg.Any<CancellationToken>());
+        await modelService.DidNotReceiveWithAnyArgs().UnloadModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UnloadModel_WhenNoLlamaServerProcessIsRunning_IsIdempotentSuccess()
+    {
+        var modelService = Substitute.For<IOllamaModelService>();
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.EjectAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult(LlamaServerEjectOutcome.NotRunning));
+        await using var context = CreateContext(modelService, LlamaServerProviderConstants.ProviderName, supervisor);
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/qwen3:8b/unload");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var unloaded = await ReadJsonAsync<UnloadLocalModelResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.True(unloaded.Unloaded);
+        await modelService.DidNotReceiveWithAnyArgs().UnloadModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UnloadModel_WhenALlamaServerProcessStaysBusy_ReportsNotUnloaded()
+    {
+        // The graceful eject leaves a process that did not drain within the window RUNNING. Reporting Unloaded=true
+        // there would tell the operator the VRAM is free and the next spawn will carry new launch arguments; neither is
+        // true, so the honest answer is a 200 with Unloaded=false.
+        var modelService = Substitute.For<IOllamaModelService>();
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.EjectAsync(Arg.Any<string>(), ModelRole.Chat, Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult(LlamaServerEjectOutcome.TimedOutStillBusy));
+        supervisor.EjectAsync(Arg.Any<string>(), Arg.Is<ModelRole>(role => role != ModelRole.Chat), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult(LlamaServerEjectOutcome.NotRunning));
+        await using var context = CreateContext(modelService, LlamaServerProviderConstants.ProviderName, supervisor);
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/qwen3:8b/unload");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var unloaded = await ReadJsonAsync<UnloadLocalModelResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.False(unloaded.Unloaded);
+    }
+
+    [Test]
     public async Task UnloadModel_WhenNameIsUnsafe_ReturnsValidationProblem()
     {
         // ..%2F..%2Fetc decodes to "../../etc", which the validator rejects AFTER decoding — so decoding cannot smuggle
@@ -225,9 +307,11 @@ public sealed class RunningLocalModelEndpointTests
         }
     }
 
-    private static RunningModelEndpointTestContext CreateContext(IOllamaModelService modelService)
+    private static RunningModelEndpointTestContext CreateContext(IOllamaModelService modelService,
+        string providerName = OllamaProviderName,
+        ILlamaServerProcessSupervisor? supervisor = null)
     {
-        return new RunningModelEndpointTestContext(modelService);
+        return new RunningModelEndpointTestContext(modelService, providerName, supervisor);
     }
 
     private static HttpRequestMessage CreateRequest(TestServerWebAppFactory factory, HttpMethod method, string uri)
@@ -286,17 +370,23 @@ public sealed class RunningLocalModelEndpointTests
             Server = server ?? throw new ArgumentNullException(nameof(server));
             _ollamaClient = new OllamaApiClient(Server.BaseAddress);
             _ownedModelService = new OllamaModelService(_ollamaClient);
-            Factory = CreateFactory(_ownedModelService);
+            Supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+            Factory = CreateFactory(_ownedModelService, OllamaProviderName, Supervisor);
         }
 
-        public RunningModelEndpointTestContext(IOllamaModelService modelService)
+        public RunningModelEndpointTestContext(IOllamaModelService modelService,
+            string providerName,
+            ILlamaServerProcessSupervisor? supervisor)
         {
-            Factory = CreateFactory(modelService ?? throw new ArgumentNullException(nameof(modelService)));
+            Supervisor = supervisor ?? Substitute.For<ILlamaServerProcessSupervisor>();
+            Factory = CreateFactory(modelService ?? throw new ArgumentNullException(nameof(modelService)), providerName, Supervisor);
         }
 
         public TestServerWebAppFactory Factory { get; }
 
         public FakeOllamaServer? Server { get; }
+
+        public ILlamaServerProcessSupervisor Supervisor { get; }
 
         public async ValueTask DisposeAsync()
         {
@@ -311,14 +401,26 @@ public sealed class RunningLocalModelEndpointTests
             }
         }
 
-        private static TestServerWebAppFactory CreateFactory(IOllamaModelService modelService)
+        private static TestServerWebAppFactory CreateFactory(IOllamaModelService modelService,
+            string providerName,
+            ILlamaServerProcessSupervisor supervisor)
         {
+            // The unload route dispatches on ModelName -> ProviderName, so the provider the model is served by is pinned
+            // here rather than left to the real resolver's persisted map (whose unmapped default is llamacpp).
+            var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+            providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                            .Returns(Task.FromResult(providerName));
+
             return new TestServerWebAppFactory
             {
                 ConfigureAdditionalTestServices = services =>
                 {
                     services.RemoveAll<IOllamaModelService>();
                     services.AddSingleton(modelService);
+                    services.RemoveAll<ILocalModelProviderResolver>();
+                    services.AddSingleton(providerResolver);
+                    services.RemoveAll<ILlamaServerProcessSupervisor>();
+                    services.AddSingleton(supervisor);
                     services.RemoveAll<INodeSettingsStore>();
                     services.AddSingleton<INodeSettingsStore>(new StubNodeSettingsStore(new StoredNodeSettings()));
                 }
