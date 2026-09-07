@@ -745,9 +745,13 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
                 return null;
             }
 
-            // A mutation that records no event keeps the watermark it found: nothing was appended, so there is no new
-            // sequence to hand back, and answering with one would tell a subscriber to page for a row that is not there.
-            var sequence = outcome.EventType is { } eventType ? AddEvent(run, eventType, outcome.NodeKey, outcome.DetailJson) : run.Seq;
+            // The watermark is allocated per COMMIT, not per event row. A mutation that records no event — a settle
+            // from Cancelling to Cancelled is the only one — still MOVED the run, and repeating the previous sequence
+            // is a change no hub client that dedupes on it can tell from the last one it already saw.
+            //
+            // The events feed is unaffected: it pages WHERE seq > afterSeq over event ROWS, so the number this skips
+            // is simply a number no row ever carried.
+            var sequence = outcome.EventType is { } eventType ? AddEvent(run, eventType, outcome.NodeKey, outcome.DetailJson) : ++run.Seq;
             run.Version++;
             _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
