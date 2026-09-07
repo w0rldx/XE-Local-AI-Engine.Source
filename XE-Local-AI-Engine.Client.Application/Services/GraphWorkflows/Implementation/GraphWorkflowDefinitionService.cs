@@ -21,8 +21,9 @@ internal sealed class GraphWorkflowDefinitionService(IGraphWorkflowStore store, 
     {
         try
         {
-            _ = await ValidateAndCountNodesAsync(graphJson, cancellationToken).ConfigureAwait(false);
-            return GraphWorkflowValidationResult.Valid;
+            // A graph that routes may still have something said about it. Warnings ride out only on this path: they
+            // never block, so the save and start paths below discard them rather than pretend to act on them.
+            return GraphWorkflowValidationResult.ValidWith((await ValidateAndParseAsync(graphJson, cancellationToken).ConfigureAwait(false)).Warnings);
         }
         catch (GraphWorkflowValidationException exception)
         {
@@ -35,7 +36,7 @@ internal sealed class GraphWorkflowDefinitionService(IGraphWorkflowStore store, 
         string graphJson,
         CancellationToken cancellationToken = default)
     {
-        var nodeCount = await ValidateAndCountNodesAsync(graphJson, cancellationToken).ConfigureAwait(false);
+        var nodeCount = (await ValidateAndParseAsync(graphJson, cancellationToken).ConfigureAwait(false)).Nodes.Count;
         return await _store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(Guid.NewGuid(), name, graphJson, nodeCount, Description: description),
                                cancellationToken)
                            .ConfigureAwait(false);
@@ -50,7 +51,7 @@ internal sealed class GraphWorkflowDefinitionService(IGraphWorkflowStore store, 
     {
         // A null graph leaves the stored one alone, so the node count must stay null with it: writing a count for a
         // graph nobody sent would denormalize a lie the definition list then reports.
-        int? nodeCount = graphJson is null ? null : await ValidateAndCountNodesAsync(graphJson, cancellationToken).ConfigureAwait(false);
+        int? nodeCount = graphJson is null ? null : (await ValidateAndParseAsync(graphJson, cancellationToken).ConfigureAwait(false)).Nodes.Count;
         return await _store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(definitionId, expectedVersion, name, description, graphJson, nodeCount),
                                cancellationToken)
                            .ConfigureAwait(false);
@@ -59,13 +60,15 @@ internal sealed class GraphWorkflowDefinitionService(IGraphWorkflowStore store, 
     /// <summary>
     ///     The one place the option-bearing half of validation lives. A blank document is turned into the same
     ///     structured refusal every other whole-document failure produces, so <see cref="ValidateAsync" /> can promise
-    ///     never to throw rather than leaking the parser's argument guard.
+    ///     never to throw rather than leaking the parser's argument guard. Answers the PARSED graph rather than a node
+    ///     count, because two callers want the count and one wants the warnings, and re-parsing for either would run
+    ///     the rule set twice.
     ///     <para>
     ///         The tool gate runs AFTER the parse and only if it succeeded: the structural rules throw first, and there
     ///         is nothing useful to say about the tools of a graph nobody can walk.
     ///     </para>
     /// </summary>
-    private async Task<int> ValidateAndCountNodesAsync(string graphJson, CancellationToken cancellationToken)
+    private async Task<GraphWorkflowGraph> ValidateAndParseAsync(string graphJson, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(graphJson))
         {
@@ -75,7 +78,7 @@ internal sealed class GraphWorkflowDefinitionService(IGraphWorkflowStore store, 
         var graph = GraphWorkflowGraphContract.ValidateAndParse(graphJson, _options.Value.MaxNodesPerDefinition);
         var toolErrors = await GraphWorkflowToolGate.ErrorsAsync(graph, _tools, cancellationToken).ConfigureAwait(false);
         return toolErrors.Count == 0
-            ? graph.Nodes.Count
+            ? graph
             : throw new GraphWorkflowValidationException(GraphWorkflowValidationResult.Invalid(toolErrors));
     }
 }

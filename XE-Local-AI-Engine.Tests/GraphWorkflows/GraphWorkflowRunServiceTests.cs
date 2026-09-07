@@ -521,6 +521,34 @@ public sealed class GraphWorkflowRunServiceTests
         _ = await AssertEx.ThrowsAsync<GraphWorkflowNotFoundException>(() => runs.GetNodeRunAsync(started.Run.Id, "nosuchnode")).ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     The run detail answers with the graph the run PINNED, not with the definition's current one. The endpoint
+    ///     projects that blob onto the response, so this is where the property it projects is held: a definition edited
+    ///     mid-run must not change what a finished run says it executed.
+    /// </summary>
+    [Test]
+    public async Task GetRunAsync_CarriesThePinnedGraph_AfterTheDefinitionMovedOn()
+    {
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
+        var started = await StartAsync(definitionId, Guid.NewGuid()).ConfigureAwait(false);
+
+        await using (var scope = Host.Factory.Services.CreateAsyncScope())
+        {
+            var current = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetDefinitionAsync(definitionId).ConfigureAwait(false);
+            _ = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>()
+                           .UpdateAsync(definitionId, current.Version, name: null, description: null, GraphWorkflowGraphs.BranchOnJson)
+                           .ConfigureAwait(false);
+        }
+
+        await using var read = Host.Factory.Services.CreateAsyncScope();
+        var detail = await read.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>().GetRunAsync(started.Run.Id).ConfigureAwait(false);
+
+        AssertEx.Equal("analyze, done, start",
+            string.Join(", ", GraphWorkflowGraph.Parse(detail.Run.GraphJson).Nodes.Keys.Order(StringComparer.Ordinal)),
+            "the run executes the graph it pinned; the definition it names has moved on.");
+        AssertEx.NotEqual(GraphWorkflowGraph.Parse(GraphWorkflowGraphs.BranchOnJson).Nodes.Count, GraphWorkflowGraph.Parse(detail.Run.GraphJson).Nodes.Count);
+    }
+
     private RecordingGraphWorkflowDispatcherSignal Signals => (RecordingGraphWorkflowDispatcherSignal)Host.Factory.Services.GetRequiredService<IGraphWorkflowDispatcherSignal>();
 
     private Task<Guid> SeedDefinitionAsync(string graphJson) =>

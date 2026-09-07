@@ -244,7 +244,7 @@ IReadOnlyList<string> allowedToolNames = [ComputeToolDefinition.ToolName];
 {
   "name": "MyMathAgent",
   "modelId": "some-model",
-  "allowedToolNames": ["run_python", "get_current_time"]
+  "allowedToolNames": ["run_python", "GetCurrentTime"]
 }
 ```
 

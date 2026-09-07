@@ -43,7 +43,7 @@ internal sealed class LocalAgentToolRegistry : IAgentToolRegistry
                         function.Description,
                         function.JsonSchema.GetRawText(),
                         CatalogRequiresApproval,
-                        // get_current_time / calculate are side-effect-free node-local reads.
+                        // GetCurrentTime / Calculate are side-effect-free node-local reads.
                         ToolCategory.ReadLocal))
         ];
     }

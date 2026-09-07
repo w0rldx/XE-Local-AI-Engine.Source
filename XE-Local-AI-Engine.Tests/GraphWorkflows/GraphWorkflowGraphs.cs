@@ -517,6 +517,57 @@ internal static class GraphWorkflowGraphs
                                                    }
                                                    """;
 
+    /// <summary>
+    ///     The hand-authored shape a Pause quietly breaks: <c>analyze → review → summarize</c>, where <c>summarize</c>
+    ///     is reached ONLY through the pause and so receives the decision document instead of what was analysed. Legal,
+    ///     routable, and the one graph the pause-context warning is about.
+    /// </summary>
+    public const string PauseBetweenTwoAgents = """
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [
+                                                    { "key": "start", "kind": "Start" },
+                                                    { "key": "analyze", "kind": "Agent", "config": { "instructions": "Analyze the input." } },
+                                                    { "key": "review", "kind": "Pause",
+                                                      "config": { "prompt": "Approve the analysis?", "allowedDecisions": ["Approve"], "requireComment": false } },
+                                                    { "key": "summarize", "kind": "Agent", "config": { "instructions": "Summarize the analysis." } },
+                                                    { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                  ],
+                                                  "edges": [
+                                                    { "key": "e1", "from": "start", "to": "analyze" },
+                                                    { "key": "e2", "from": "analyze", "to": "review" },
+                                                    { "key": "e3", "from": "review", "to": "summarize" },
+                                                    { "key": "e4", "from": "summarize", "to": "done" }
+                                                  ]
+                                                }
+                                                """;
+
+    /// <summary>
+    ///     <see cref="PauseBetweenTwoAgents" /> with the cure: the unconditional <c>context</c> edge from the pause's
+    ///     nearest non-Pause ancestor, which is what the Open Canvas importer adds for itself. <c>summarize</c> keeps
+    ///     the default <c>All</c> join, so it is admitted only once BOTH the content and the approval have arrived.
+    /// </summary>
+    public const string PauseBetweenTwoAgentsWithContextEdge = """
+                                                               {
+                                                                 "schemaVersion": 1,
+                                                                 "nodes": [
+                                                                   { "key": "start", "kind": "Start" },
+                                                                   { "key": "analyze", "kind": "Agent", "config": { "instructions": "Analyze the input." } },
+                                                                   { "key": "review", "kind": "Pause",
+                                                                     "config": { "prompt": "Approve the analysis?", "allowedDecisions": ["Approve"], "requireComment": false } },
+                                                                   { "key": "summarize", "kind": "Agent", "config": { "instructions": "Summarize the analysis." } },
+                                                                   { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                                 ],
+                                                                 "edges": [
+                                                                   { "key": "e1", "from": "start", "to": "analyze" },
+                                                                   { "key": "e2", "from": "analyze", "to": "review" },
+                                                                   { "key": "e3", "from": "review", "to": "summarize" },
+                                                                   { "key": "e4", "from": "summarize", "to": "done" },
+                                                                   { "key": "e5", "from": "analyze", "to": "summarize", "label": "context" }
+                                                                 ]
+                                                               }
+                                                               """;
+
     /// <summary>A pause that will not take an answer without a comment, over an unconditional out-edge.</summary>
     public const string PauseRequiringComment = """
                                                 {

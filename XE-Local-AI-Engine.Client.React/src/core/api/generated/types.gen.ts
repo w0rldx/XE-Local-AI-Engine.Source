@@ -3211,6 +3211,7 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunRespon
 	run?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse;
 	nodeRuns?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunSummaryResponse>;
 	output?: unknown;
+	graph?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse = {
@@ -3238,23 +3239,6 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunSu
 	invocationId?: string | null;
 	startedAtUtc?: number | null;
 	completedAtUtc?: number | null;
-	updatedAtUtc?: number;
-};
-
-export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse = {
-	id?: string;
-	name?: string;
-	description?: string | null;
-	graph?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
-	graphHash?: string;
-	nodeCount?: number;
-	schemaVersion?: number;
-	version?: number;
-	createdAtUtc?: number;
 	updatedAtUtc?: number;
 };
 
@@ -3293,6 +3277,23 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowEdgeCondi
 	path?: string | null;
 	op?: string;
 	value?: unknown;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse = {
+	id?: string;
+	name?: string;
+	description?: string | null;
+	graph?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
+	graphHash?: string;
+	nodeCount?: number;
+	schemaVersion?: number;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1CreateGraphWorkflowDefinitionRequest = {
@@ -3414,6 +3415,7 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowD
 	valid?: boolean;
 	errors?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse>;
 	nodeCount?: number;
+	warnings?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse = {

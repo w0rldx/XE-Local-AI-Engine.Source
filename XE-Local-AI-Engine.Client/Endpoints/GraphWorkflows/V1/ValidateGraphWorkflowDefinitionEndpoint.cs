@@ -44,7 +44,8 @@ public sealed class ValidateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefini
         var nodeCount = req.Graph.Nodes?.Count ?? 0;
         await Send.OkAsync(new ValidateGraphWorkflowDefinitionResponse(result.IsValid,
                 [.. result.Errors.Select(static error => new GraphWorkflowValidationErrorResponse(error.Key, error.Message))],
-                nodeCount),
+                nodeCount,
+                [.. result.Warnings.Select(static warning => new GraphWorkflowValidationErrorResponse(warning.Key, warning.Message))]),
             ct).ConfigureAwait(false);
     }
 }

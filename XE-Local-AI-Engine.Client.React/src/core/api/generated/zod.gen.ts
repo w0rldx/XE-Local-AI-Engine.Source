@@ -3835,14 +3835,6 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRun
 	updatedAtUtc: z.int().optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResponse = z.object({
-	run: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse.optional(),
-	nodeRuns: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunSummaryResponse).optional(),
-	output: z.unknown().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunRequest = z.record(z.string(), z.never());
-
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodePosition = z.object({
 	x: z.number().optional(),
 	y: z.number().optional(),
@@ -3891,6 +3883,15 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph =
 	nodes: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphNode).optional(),
 	edges: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphEdge).optional(),
 });
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResponse = z.object({
+	run: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse.optional(),
+	nodeRuns: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunSummaryResponse).optional(),
+	output: z.unknown().optional(),
+	graph: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse = z.object({
 	id: z.guid().optional(),
@@ -4053,6 +4054,7 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflo
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
+	warnings: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionRequest = z.object({
