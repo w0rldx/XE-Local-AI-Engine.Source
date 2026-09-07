@@ -598,47 +598,58 @@ function nonPauseAncestors(pause: string, pauseKeys: ReadonlySet<string>, wiring
  * authored `X → Pause → Y` hands Y the approval and never X's answer. One unconditional edge from the Pause's nearest
  * NON-Pause ancestor to each of its successors fixes that: with two satisfied predecessors and the default `All` join
  * policy, Y is admitted only once both the content and the approval have arrived, and its `input` is the `upstream`
- * map carrying both.
+ * map carrying both. A Y that several nodes already feed is still given the edge, exactly as the importer does — the
+ * `upstream` map is the legitimate shape for a multi-input node, and skipping it would be the one case where the
+ * affordance silently does nothing.
  *
- * Returns only the edges to ADD, so the caller can tell the operator that something appeared on the canvas. A
- * successor a non-Pause node already feeds is left alone: it has its content, and a second unconditional edge over one
- * pair is a validation error. PURE — the editor runs it on the connect gesture and nowhere else, so an edge the
- * operator deletes stays deleted until they wire the Pause again.
+ * The ONE guard is the importer's: a pair something already wires gets no second edge, and neither does a self-loop.
+ * A `Condition` ancestor is skipped as well, which the importer never meets: the added edge would carry no
+ * `sourceHandle`, so it saves as a second UNCONDITIONAL out-edge of that Condition, which both this client's
+ * `conditionMultipleDefaults` rule and the server's own parser refuse.
  *
- * `only` narrows the pass to the Pause nodes the gesture actually touched. Without it, wiring one Pause would revive
- * an edge the operator had deleted around a DIFFERENT one, which is the editor arguing with them. The walk back for an
- * ancestor still crosses every Pause, since that is how the content is found at all.
+ * Returns only the edges to ADD, so the caller can tell the operator that something appeared on the canvas. PURE — the
+ * editor runs it on the connect gesture and nowhere else, so an edge the operator deletes stays deleted.
+ *
+ * `connection` narrows the pass to what that ONE gesture can have broken, which is what keeps the editor from arguing
+ * with an operator who deleted an edge on purpose:
+ *   - wiring INTO a Pause can starve any of its successors, so all of them are considered;
+ *   - wiring OUT OF a Pause can only starve the node just connected, so only that target is.
+ * Omitted, every Pause and every successor is considered — the whole-graph pass the unit tests read.
  */
 export function pauseContextEdges(
 	nodes: readonly GraphWorkflowCanvasNode[],
 	edges: readonly GraphWorkflowCanvasEdge[],
-	only?: Iterable<string>,
+	connection?: { readonly from: string; readonly to: string },
 ): readonly GraphWorkflowCanvasEdge[] {
+	const kindByKey = new Map(nodes.map((node) => [node.id, node.data.kind]));
 	const pauseKeys = new Set(nodes.filter((node) => node.data.kind === "Pause").map((node) => node.id));
 	if (pauseKeys.size === 0) {
 		return [];
 	}
-	const considered = only === undefined ? pauseKeys : new Set([...only].filter((key) => pauseKeys.has(key)));
 	// A snapshot: every walk reads the graph as the operator wired it, never the edges this pass adds to it.
 	const wiring: readonly GraphWorkflowWire[] = edges.map((edge) => ({ from: edge.source, to: edge.target }));
-	const fed = new Set(wiring.filter((pair) => !pauseKeys.has(pair.from)).map((pair) => pair.to));
+	const successorsOf = (pause: string): readonly string[] => [
+		...new Set(wiring.filter((pair) => pair.from === pause).map((pair) => pair.to)),
+	];
+
+	const byKey = (left: string, right: string) => left.localeCompare(right);
+	const scope: readonly (readonly [string, readonly string[]])[] =
+		connection === undefined
+			? [...pauseKeys].toSorted(byKey).map((pause) => [pause, successorsOf(pause)] as const)
+			: [
+					...(pauseKeys.has(connection.to) ? [[connection.to, successorsOf(connection.to)] as const] : []),
+					...(pauseKeys.has(connection.from) ? [[connection.from, [connection.to]] as const] : []),
+				];
+
 	const pairs = new Set(wiring.map((pair) => `${pair.from}>${pair.to}`));
 	const taken = new Set([...nodes.map((node) => node.id), ...edges.map((edge) => edge.id)]);
 	const added: GraphWorkflowCanvasEdge[] = [];
 
-	for (const pause of [...considered].toSorted((left, right) => left.localeCompare(right))) {
-		const successors = wiring
-			.filter((pair) => pair.from === pause)
-			.map((pair) => pair.to)
-			.toSorted((left, right) => left.localeCompare(right));
-		for (const successor of successors) {
-			if (fed.has(successor)) {
-				continue;
-			}
+	for (const [pause, successors] of scope) {
+		for (const successor of [...successors].toSorted(byKey)) {
 			for (const ancestor of nonPauseAncestors(pause, pauseKeys, wiring)) {
 				const pair = `${ancestor}>${successor}`;
-				// A self-loop would be a cycle, and a pair something already wires needs no second edge.
-				if (ancestor === successor || pairs.has(pair)) {
+				if (ancestor === successor || pairs.has(pair) || kindByKey.get(ancestor) === "Condition") {
 					continue;
 				}
 				pairs.add(pair);

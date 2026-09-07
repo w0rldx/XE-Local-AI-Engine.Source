@@ -26,12 +26,14 @@ const pauseChain: GraphWorkflowGraph = {
 	nodes: [
 		{ key: "start", kind: "Start", position: { x: 0, y: 0 }, config: {} },
 		{ key: "a", kind: "Agent", position: { x: 0, y: 80 }, config: { instructions: "Answer the question." } },
+		{ key: "a2", kind: "Agent", position: { x: 160, y: 80 }, config: { instructions: "Answer it again." } },
 		{ key: "hold", kind: "Pause", position: { x: 0, y: 160 }, config: { prompt: "Ship it?", allowedDecisions: ["Approve"] } },
 		{ key: "b", kind: "Agent", position: { x: 0, y: 240 }, config: { instructions: "Use the answer." } },
 		{ key: "done", kind: "End", position: { x: 0, y: 320 }, config: { outcome: "completed" } },
 	],
 	edges: [
 		{ key: "e1", from: "start", to: "a" },
+		{ key: "e1b", from: "start", to: "a2" },
 		{ key: "e2", from: "a", to: "hold" },
 		{ key: "e3", from: "b", to: "done" },
 	],
@@ -59,19 +61,25 @@ describe("useGraphWorkflowEditor Pause context edges", () => {
 			result.current.onConnect(connection("hold", "b", "Approve"));
 		});
 		const added = result.current.edges.find((edge) => edge.source === "a" && edge.target === "b");
+		expect(added).toBeDefined();
+
 		act(() => {
 			result.current.removeEdge(added?.id ?? "");
 		});
-		// A connect somewhere else must not argue with the operator about an edge they just removed.
+		// A connect somewhere else must not argue with the operator about an edge they just removed — and neither may
+		// one that wires the pause's OUT side to a different node, which cannot have starved `b`.
 		act(() => {
 			result.current.onConnect(connection("start", "done"));
+		});
+		act(() => {
+			result.current.onConnect(connection("hold", "done", "Approve"));
 		});
 
 		expect(result.current.edges.some((edge) => edge.source === "a" && edge.target === "b")).toBe(false);
 
-		// Wiring the Pause again is the gesture that offers it once more.
+		// Wiring something INTO the pause can starve any successor, so that gesture offers the edge once more.
 		act(() => {
-			result.current.onConnect(connection("hold", "done", "Approve"));
+			result.current.onConnect(connection("a2", "hold"));
 		});
 
 		expect(result.current.edges.some((edge) => edge.source === "a" && edge.target === "b")).toBe(true);

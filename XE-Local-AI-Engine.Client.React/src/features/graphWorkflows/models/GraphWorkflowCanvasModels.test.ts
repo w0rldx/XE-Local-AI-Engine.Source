@@ -500,10 +500,20 @@ describe("pauseContextEdges", () => {
 		]);
 	});
 
-	it("leaves a successor alone once a non-Pause node feeds it, and adds nothing to a graph with no Pause", () => {
-		// `b` already reads a real answer from `c`, so a second unconditional edge would only be a validation error.
-		expect(addedPairs([...chain, "c:Agent"], ["start>a", "a>hold", "hold>b", "c>b", "b>done"])).toEqual([]);
+	it("still routes the answer to a successor another node already feeds, and adds nothing without a Pause", () => {
+		// `c` feeding `b` is not `a`'s answer. Two satisfied predecessors make `b`'s input the `upstream` map, which is
+		// the legitimate shape — the importer guards on the PAIR only, and so does this.
+		expect(addedPairs([...chain, "c:Agent"], ["start>a", "a>hold", "hold>b", "c>b", "b>done"])).toEqual(["a>b"]);
 		expect(addedPairs(["start:Start", "a:Agent", "done:End"], ["start>a", "a>done"])).toEqual([]);
+	});
+
+	// A Condition's out-edges carry a `true`/`false` handle; an added edge carries none, so it would save as a SECOND
+	// unconditional branch out of that Condition — refused by `conditionMultipleDefaults` here and by the server there.
+	it("skips a Condition ancestor rather than giving it a second unconditional branch", () => {
+		const nodes = ["start:Start", "a:Agent", "check:Condition", "hold:Pause", "b:Agent", "c:Agent", "done:End"];
+		const edges = ["start>a", "a>check", "check>hold", "check>c", "hold>b", "b>done", "c>done"];
+
+		expect(addedPairs(nodes, edges)).toEqual([]);
 	});
 
 	it("adds nothing for a Pause with no successor and none for a Pause with no ancestor", () => {
@@ -511,16 +521,19 @@ describe("pauseContextEdges", () => {
 		expect(addedPairs(["hold:Pause", "b:Agent", "done:End"], ["hold>b", "b>done"])).toEqual([]);
 	});
 
-	it("considers only the Pause nodes it was pointed at", () => {
+	it("considers only what the one connection can have broken", () => {
 		const nodes = ["start:Start", "a:Agent", "first:Pause", "b:Agent", "second:Pause", "c:Agent", "done:End"];
 		const edges = ["start>a", "a>first", "first>b", "b>second", "second>c", "c>done"];
 		const canvas = canvasOf(nodes, edges);
+		const pairsFor = (from: string, to: string) =>
+			pauseContextEdges(canvas.nodes, canvas.edges, { from, to }).map((edge) => `${edge.source}>${edge.target}`);
 
-		// Both pauses are missing their edge, but a gesture that touched only `second` must leave `first` alone: the
-		// operator may have deleted that edge on purpose, and re-adding it here would be the editor arguing back.
-		expect(pauseContextEdges(canvas.nodes, canvas.edges, ["second"]).map((edge) => `${edge.source}>${edge.target}`)).toEqual([
-			"b>c",
-		]);
+		// Wiring OUT of a pause can only starve the node just connected, so `first` is left alone even though it is
+		// missing its edge too — the operator may have deleted that one on purpose.
+		expect(pairsFor("second", "c")).toEqual(["b>c"]);
+		// Wiring INTO a pause can starve any of its successors, so all of them are considered.
+		expect(pairsFor("a", "first")).toEqual(["a>b"]);
+		// The whole-graph pass, which is what the importer does.
 		expect(addedPairs(nodes, edges)).toEqual(["a>b", "b>c"]);
 	});
 
