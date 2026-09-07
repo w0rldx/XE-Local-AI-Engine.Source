@@ -395,7 +395,10 @@ public static class CanvasWorkflowImport
                 ["config"] = new JsonObject
                 {
                     ["inputSchema"] = null,
-                    ["defaultInput"] = string.IsNullOrEmpty(startText) ? null : JsonValue.Create(startText)
+                    // A run input is a JSON document, and the editor renders a stored default as JSON text — a bare
+                    // string would round-trip as unquoted prose the editor cannot parse. The seed text rides under one
+                    // member, so the first Agent still sees it verbatim inside the Start node's input document.
+                    ["defaultInput"] = string.IsNullOrEmpty(startText) ? null : new JsonObject { ["text"] = startText }
                 }
             };
         }

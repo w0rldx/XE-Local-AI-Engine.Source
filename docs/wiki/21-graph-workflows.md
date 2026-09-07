@@ -746,7 +746,7 @@ in the same build would destroy everything past it as its *normal* outcome.
 
 | Open Canvas node | Graph Workflow node |
 |---|---|
-| `Start` | `Start`, with the canvas `StartText` as `config.defaultInput` (null when empty). |
+| `Start` | `Start`, with the canvas `StartText` as `config.defaultInput = { "text": <StartText> }` (null when empty) — an object, because the editor renders a stored default as JSON text and a bare string would never re-parse. |
 | `Agent` | `Agent` with `maxAttempts: 1`, `instructions` / `model` / `reasoningEffort` carried over, `agentDefinitionId: null`, `responseJsonSchema: null`, `includeUpstreamOutputs: true`. |
 | `Debug` | **Elided.** Every `X → Debug` and `Debug → Y` collapses to `X → Y`. A Debug node was a side-event tap that forwarded its input unchanged, so removing it preserves the run's meaning exactly. |
 | `Pause` | `Pause` with `prompt: "Approve and continue?"`, `allowedDecisions: ["Approve"]`, `requireComment: false`; its single out-edge gains `label: "approved"` and `condition: { "path": "output.decision", "op": "Eq", "value": "Approve" }`. Open Canvas's `Continue` was a resume rather than a decision, so `Approve` alone is the faithful translation — and one allowed decision with one matching out-edge satisfies the Pause pre-flight rule of §2.4. |

@@ -72,12 +72,17 @@ public sealed class CanvasWorkflowImportMapperTests
         AssertEx.True(agent["config"]!["includeUpstreamOutputs"]!.GetValue<bool>());
     }
 
-    /// <summary>The graph-level seed text has exactly one destination: the Start node's default input.</summary>
+    /// <summary>
+    ///     The graph-level seed text has exactly one destination: the Start node's default input, as a JSON OBJECT under
+    ///     <c>text</c>. A bare string is a legal JSON value the parser accepts, but the editor renders a stored default
+    ///     as JSON text and would show unquoted prose it can never re-parse (S4 live round, canvas B).
+    /// </summary>
     [Test]
     public void MapGraph_CarriesTheCanvasStartTextOntoTheStartNodesDefaultInput()
     {
-        AssertEx.Equal("Summarize the release notes.",
-            Node(CanvasWorkflowImport.MapGraph(CanvasGraphs.Linear).Document, "start")["config"]!["defaultInput"]!.GetValue<string>());
+        var defaultInput = Node(CanvasWorkflowImport.MapGraph(CanvasGraphs.Linear).Document, "start")["config"]!["defaultInput"];
+        AssertEx.True(defaultInput is JsonObject, "the default input must be a JSON object, never a bare string");
+        AssertEx.Equal("Summarize the release notes.", defaultInput!["text"]!.GetValue<string>());
 
         AssertEx.Null(Node(CanvasWorkflowImport.MapGraph(CanvasGraphs.BareFields).Document, "start")["config"]!["defaultInput"],
             "an empty seed text is no seed text: a Start node that defaults the input to \"\" is not the same thing.");
