@@ -757,6 +757,22 @@ public sealed class GraphWorkflowGraphTests
             message: "Start is a fine ancestor: its output is the run input, which is what the node behind the pause would have read.");
     }
 
+    /// <summary>
+    ///     A <c>Condition</c> ancestor is never named, unique or not: the edge the advice would ask for is that node's
+    ///     second unconditional out-edge, which the validator refuses — so following the advice would turn a warning
+    ///     into an error.
+    /// </summary>
+    [Test]
+    public void Warnings_WithAConditionAsTheOnlyAncestor_DoNotNameIt()
+    {
+        var graph = GraphWorkflowGraph.Parse(GraphWorkflowGraphs.PauseBehindACondition);
+
+        AssertEx.Equal(expected: 1, graph.Warnings.Count);
+        AssertEx.Equal("shipped", graph.Warnings[0].Key);
+        AssertEx.Contains(graph.Warnings[0].Message, "Add an edge from a node before the pause", message: "the generic sentence, because the ancestor is a Condition.");
+        AssertEx.False(graph.Warnings[0].Message.Contains("'check'", StringComparison.Ordinal), "naming the Condition would advise an edge the validator refuses.");
+    }
+
     /// <summary>A graph with nothing to say about it says nothing — the warning list is not a place things accumulate.</summary>
     [Test]
     public void Warnings_OnAGraphWithNoPause_AreEmpty()

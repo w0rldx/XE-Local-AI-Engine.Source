@@ -744,8 +744,10 @@ internal sealed class GraphWorkflowGraph
     ///     <para>
     ///         Keyed on Y, not on the pause, because Y is the node that loses the content and so the node an editor
     ///         should draw the badge on. One warning per Y however many pauses reach it. The ancestor is NAMED only
-    ///         when it is unique: with two candidates the advice would have to pick one, and picking wrong is worse
-    ///         than saying "a node before the pause".
+    ///         when it is unique AND not a <c>Condition</c>: with two candidates the advice would have to pick one,
+    ///         and a Condition cannot be named because the edge it advises would be that node's second unconditional
+    ///         out-edge, which <see cref="ValidateCondition" /> refuses — advice that turns a warning into an error is
+    ///         worse than the generic sentence.
     ///     </para>
     /// </summary>
     private IReadOnlyList<GraphWorkflowValidationError> PauseContextWarnings()
@@ -758,8 +760,8 @@ internal sealed class GraphWorkflowGraph
         {
             var pauses = InboundEdges(successor).Select(static edge => edge.From).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
             var ancestors = pauses.SelectMany(NearestNonPauseAncestors).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
-            var advice = ancestors.Count == 1
-                ? $"Add an edge from '{ancestors[0]}' to '{successor}' to carry it."
+            var advice = ancestors is [var ancestor] && Nodes[ancestor].Kind != GraphWorkflowNodeKind.Condition
+                ? $"Add an edge from '{ancestor}' to '{successor}' to carry it."
                 : "Add an edge from a node before the pause to that node to carry it.";
             warnings.Add(new GraphWorkflowValidationError(successor,
                 $"Node '{successor}' is reached only through the Pause node(s) {string.Join(", ", pauses.Select(static key => $"'{key}'"))}, "

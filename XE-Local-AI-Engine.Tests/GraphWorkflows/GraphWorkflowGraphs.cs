@@ -568,6 +568,33 @@ internal static class GraphWorkflowGraphs
                                                                }
                                                                """;
 
+    /// <summary>
+    ///     A Pause whose only ancestor is a <c>Condition</c>. The warning still fires on <c>shipped</c>, but the advice
+    ///     must NOT name <c>check</c>: an edge <c>check → shipped</c> would be that Condition's second unconditional
+    ///     out-edge, which the validator refuses.
+    /// </summary>
+    public const string PauseBehindACondition = """
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [
+                                                    { "key": "start", "kind": "Start" },
+                                                    { "key": "analyze", "kind": "Agent", "config": { "instructions": "Judge it." } },
+                                                    { "key": "check", "kind": "Condition", "config": { "path": "output.json.requiresReview" } },
+                                                    { "key": "review", "kind": "Pause",
+                                                      "config": { "prompt": "Approve?", "allowedDecisions": ["Approve"], "requireComment": false } },
+                                                    { "key": "shipped", "kind": "End", "config": { "outcome": "completed" } },
+                                                    { "key": "skipped", "kind": "End", "config": { "outcome": "completed" } }
+                                                  ],
+                                                  "edges": [
+                                                    { "key": "e1", "from": "start", "to": "analyze" },
+                                                    { "key": "e2", "from": "analyze", "to": "check" },
+                                                    { "key": "e3", "from": "check", "to": "review", "condition": { "op": "eq", "value": true } },
+                                                    { "key": "e4", "from": "check", "to": "skipped", "condition": { "op": "ne", "value": true } },
+                                                    { "key": "e5", "from": "review", "to": "shipped" }
+                                                  ]
+                                                }
+                                                """;
+
     /// <summary>A pause that will not take an answer without a comment, over an unconditional out-edge.</summary>
     public const string PauseRequiringComment = """
                                                 {
