@@ -4,8 +4,8 @@
 // issue is a control that takes the operator to its node or edge, an unkeyed one is a sentence in a single Alert, and
 // both arrive through the same `GraphWorkflowGraphIssue` whether the client or the server raised them.
 //
-// The second axis is severity. A warning shares the shape and the click behaviour, and shares nothing else: its own
-// Alert, its own colour, and never the sentence that says the graph cannot be saved.
+// Warnings arrive on their own prop. They share the shape and the click behaviour and share nothing else: their own
+// Alert, their own colour, and never the sentence that says the graph cannot be saved.
 
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -107,10 +107,8 @@ describe("GraphWorkflowValidationStrip", () => {
 	it("renders warnings in their own alert, apart from the errors, and never refuses the save in it", () => {
 		renderWithProviders(
 			<GraphWorkflowValidationStrip
-				issues={[
-					{ rule: "unreachable", subject: "lookup" },
-					{ rule: "serverWarned", subject: "done", message: "'done' is reached only through the Pause node 'review'.", severity: "warning" },
-				]}
+				issues={[{ rule: "unreachable", subject: "lookup" }]}
+				warnings={[{ rule: "serverWarned", subject: "done", message: "'done' is reached only through the Pause node 'review'." }]}
 				onSelectSubject={vi.fn()}
 			/>,
 		);
@@ -128,7 +126,8 @@ describe("GraphWorkflowValidationStrip", () => {
 		const onSelectSubject = vi.fn();
 		renderWithProviders(
 			<GraphWorkflowValidationStrip
-				issues={[{ rule: "serverWarned", subject: "done", message: "'done' loses the content.", severity: "warning" }]}
+				issues={[]}
+				warnings={[{ rule: "serverWarned", subject: "done", message: "'done' loses the content." }]}
 				onSelectSubject={onSelectSubject}
 			/>,
 		);
@@ -148,7 +147,8 @@ describe("GraphWorkflowValidationStrip", () => {
 	it("renders the warning alert alone when nothing is an error", () => {
 		renderWithProviders(
 			<GraphWorkflowValidationStrip
-				issues={[{ rule: "serverWarned", subject: "done", message: "'done' loses the content.", severity: "warning" }]}
+				issues={[]}
+				warnings={[{ rule: "serverWarned", subject: "done", message: "'done' loses the content." }]}
 				onSelectSubject={vi.fn()}
 			/>,
 		);

@@ -20,7 +20,6 @@ import {
 	loadedGraphIssues,
 	nodeCommonSchema,
 	pauseConfigSchema,
-	isGraphWorkflowWarning,
 	serverErrorsToIssues,
 	serverWarningsToIssues,
 	startConfigSchema,
@@ -410,8 +409,8 @@ describe("serverErrorsToIssues", () => {
 		expect(serverErrorsToIssues(undefined)).toEqual([]);
 	});
 
-	it("leaves an error's severity unsaid, which is what makes absent mean error", () => {
-		expect(serverErrorsToIssues([{ key: "analyze", message: "no instructions" }])[0]?.severity).toBeUndefined();
+	it("marks an error with the rule that carries the server's sentence", () => {
+		expect(serverErrorsToIssues([{ key: "analyze", message: "no instructions" }])[0]?.rule).toBe("serverRejected");
 	});
 });
 
@@ -422,26 +421,21 @@ describe("serverWarningsToIssues", () => {
 		]);
 
 		expect(warnings).toEqual([
-			{
-				rule: "serverWarned",
-				subject: "done",
-				message: "'done' is reached only through the Pause node 'review'.",
-				severity: "warning",
-			},
+			{ rule: "serverWarned", subject: "done", message: "'done' is reached only through the Pause node 'review'." },
 		]);
-		expect(warnings.every(isGraphWorkflowWarning)).toBe(true);
 	});
 
 	it("answers an empty list when the server sent no warnings", () => {
 		expect(serverWarningsToIssues(undefined)).toEqual([]);
 	});
 
-	// The strip splits on severity, so a client rule leaking into the warning half would be a rule that silently
-	// stopped blocking Save.
-	it("never marks a client rule as a warning", () => {
-		expect(validateGraphWorkflowGraph(minimal([{ key: "orphan", kind: "Agent", config: { instructions: "x" } }])).some(isGraphWorkflowWarning)).toBe(
-			false,
-		);
+	// Only the server raises warnings; a client rule reaching the non-blocking half would be a rule that silently
+	// stopped refusing the save.
+	it("is the only producer of the warning rule — no client rule raises it", () => {
+		const rules = rulesOf(minimal([{ key: "orphan", kind: "Agent", config: { instructions: "x" } }]));
+
+		expect(rules).not.toContain("serverWarned");
+		expect(rules.length).toBeGreaterThan(0);
 	});
 });
 

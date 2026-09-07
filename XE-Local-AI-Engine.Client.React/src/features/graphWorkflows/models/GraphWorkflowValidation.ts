@@ -83,17 +83,6 @@ export interface GraphWorkflowGraphIssue {
 	readonly subject?: string;
 	/** The server's own text, for `serverRejected` and `serverWarned`. Client rules carry none: their message is the i18n key. */
 	readonly message?: string;
-	/**
-	 * Absent means `"error"`, which is what every client rule is: the canvas only mirrors rules that REFUSE a save.
-	 * `"warning"` is the server's second list — a graph that routes anyway, so it never blocks Save and never joins the
-	 * red strip. Optional rather than required so no error construction site has to say what it already is.
-	 */
-	readonly severity?: "error" | "warning";
-}
-
-/** The one place the "absent means error" default lives, so no caller re-derives it. */
-export function isGraphWorkflowWarning(issue: GraphWorkflowGraphIssue): boolean {
-	return issue.severity === "warning";
 }
 
 /** The wire's `config` as a bag. Anything that is not a plain object reads as empty, so a malformed node still renders. */
@@ -471,8 +460,8 @@ export function serverErrorsToIssues(
 /**
  * The server's `warnings[]` — the same `(key, message)` shape as its errors, and keyed on the node the warning is
  * ABOUT, so a warning selects its subject exactly as an error does. Non-blocking by construction server-side
- * (`GraphWorkflowGraph.Warnings` never reaches `GraphWorkflowValidationException`), and non-blocking here because
- * `severity` keeps them out of the list the save gate reads.
+ * (`GraphWorkflowGraph.Warnings` never reaches `GraphWorkflowValidationException`) and non-blocking here because the
+ * page holds them in their own list, which the save gate never reads.
  */
 export function serverWarningsToIssues(
 	warnings: readonly GraphWorkflowValidationErrorResponse[] | undefined,
@@ -481,7 +470,6 @@ export function serverWarningsToIssues(
 		rule: "serverWarned" as const,
 		subject: warning.key ?? undefined,
 		message: warning.message,
-		severity: "warning" as const,
 	}));
 }
 

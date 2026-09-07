@@ -6,18 +6,21 @@
 // subject, an UNKEYED one is a line in a single Alert above them. Client issues and server issues arrive through the
 // same `GraphWorkflowGraphIssue`, so there is one render path, not two.
 //
-// Warnings (F5-2b) arrive through that same shape with `severity: "warning"` and render in their own Alert below the
-// errors: a different colour, a title that asks rather than refuses, and no claim that the graph cannot be saved —
-// because it can. Only the server raises them; every client rule mirrors a rule that REFUSES a save.
+// Warnings (F5-2b) arrive as their OWN list and render in their own Alert below the errors: a different colour, a
+// title that asks rather than refuses, and no claim that the graph cannot be saved — because it can. Only the server
+// raises them; every client rule mirrors a rule that REFUSES a save, so the page never has to sort them out again.
 
 import { Alert, Button, Group, List, Stack } from "@mantine/core";
 import { IconAlertTriangle, IconInfoCircle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
-import { type GraphWorkflowGraphIssue, isGraphWorkflowWarning } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
+import type { GraphWorkflowGraphIssue } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 
 export interface GraphWorkflowValidationStripProps {
+	/** Everything that REFUSES the save: the client's own rules and the server's `errors[]`. */
 	readonly issues: readonly GraphWorkflowGraphIssue[];
+	/** The server's `warnings[]`. Never blocks a save, so it is a separate list rather than a flag on one. */
+	readonly warnings?: readonly GraphWorkflowGraphIssue[];
 	/** A keyed issue was clicked: the page selects that node or edge. One key namespace, so the subject is unambiguous. */
 	readonly onSelectSubject: (subject: string) => void;
 }
@@ -31,17 +34,17 @@ function split(issues: readonly GraphWorkflowGraphIssue[], issueText: (issue: Gr
 	const keyed = new Map<string, GraphWorkflowGraphIssue>();
 	const unkeyed = new Map<string, string>();
 	for (const issue of issues) {
-		const text = issueText(issue);
 		if (issue.subject !== undefined && issue.subject.length > 0) {
 			keyed.set(`${issue.subject}|${issue.rule}|${issue.message ?? ""}`, issue);
 		} else {
+			const text = issueText(issue);
 			unkeyed.set(text, text);
 		}
 	}
 	return { keyed, unkeyed };
 }
 
-export function GraphWorkflowValidationStrip({ issues, onSelectSubject }: GraphWorkflowValidationStripProps) {
+export function GraphWorkflowValidationStrip({ issues, warnings: warningIssues = [], onSelectSubject }: GraphWorkflowValidationStripProps) {
 	const { t } = useTranslation();
 
 	// `serverRejected` and `serverWarned` carry the server's own sentence; every client rule's message IS its i18n key.
@@ -50,15 +53,12 @@ export function GraphWorkflowValidationStrip({ issues, onSelectSubject }: GraphW
 			? issue.message
 			: t(`pages.graphWorkflows.definition.issues.${issue.rule}`, issue.rule, { subject: issue.subject ?? "" });
 
-	if (issues.length === 0) {
+	if (issues.length === 0 && warningIssues.length === 0) {
 		return null;
 	}
 
-	const errors = split(
-		issues.filter((issue) => !isGraphWorkflowWarning(issue)),
-		issueText,
-	);
-	const warnings = split(issues.filter(isGraphWorkflowWarning), issueText);
+	const errors = split(issues, issueText);
+	const warnings = split(warningIssues, issueText);
 
 	const chip = (issue: GraphWorkflowGraphIssue, identity: string, warning: boolean) => (
 		<Button
