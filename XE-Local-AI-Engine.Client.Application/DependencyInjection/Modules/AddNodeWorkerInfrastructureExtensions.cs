@@ -20,7 +20,10 @@ internal static class AddNodeWorkerInfrastructureExtensions
         builder.Services.AddSingleton<ISensitiveFileExclusionService, SensitiveFileExclusionService>();
         builder.Services.AddSingleton<DeadLetterFlushService>();
         builder.Services.AddSingleton<IWorkerShutdownDrainService, WorkerShutdownDrainService>();
-        builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
+        // IOllamaModelService is registered by AddOllamaRuntime, NOT here: OllamaModelService takes an IOllamaApiClient
+        // that only exists when the Ollama gate is on, so an unconditional registration here made a gate-off node
+        // unbuildable under ValidateOnBuild and threw at every consumer's first resolve otherwise. Both gate branches
+        // register it, so the two services below still always find one.
         // Model-type classification service: resolves each model's effective kind (override ?? detected) over the
         // classification store, lazily probing /api/show and caching by digest. Scoped because it depends on the
         // scoped, DbContext-backed IModelClassificationStore (a singleton could not consume it); the singleton
