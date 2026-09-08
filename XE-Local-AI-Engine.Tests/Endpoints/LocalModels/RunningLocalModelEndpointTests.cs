@@ -424,15 +424,6 @@ public sealed class RunningLocalModelEndpointTests
                 },
                 ConfigureAdditionalTestServices = services =>
                 {
-                    if (!ollamaRuntimeEnabled)
-                    {
-                        // Disabling the runtime skips AddOllamaLocalModelProvider, which holds the ONLY registration of
-                        // IModelCapabilityClient — so the host cannot activate ModelCapabilityProber and fails to start.
-                        // That is a composition-root gap unrelated to unloading; this substitute keeps the gate testable
-                        // here instead of silently widening this lane into the capability wiring.
-                        services.AddSingleton(Substitute.For<IModelCapabilityClient>());
-                    }
-
                     services.RemoveAll<IOllamaModelService>();
                     services.AddSingleton(modelService);
                     services.RemoveAll<ILlamaServerProcessSupervisor>();

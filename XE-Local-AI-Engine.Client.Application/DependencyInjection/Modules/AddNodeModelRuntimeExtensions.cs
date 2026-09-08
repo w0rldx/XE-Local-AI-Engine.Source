@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
+using XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
@@ -296,6 +297,10 @@ internal static class AddNodeModelRuntimeExtensions
     ///     model to either this provider or llama.cpp through a single seam. The runtime is enabled unless
     ///     <c>XE_OLLAMA_RUNTIME_ENABLED=false</c>, so the default registration is byte-identical to the previous inline
     ///     call. The resolved endpoint is loopback-guarded (see <see cref="GuardOllamaEndpointIsLoopback" />).
+    ///     When the gate is OFF the provider stack is skipped but
+    ///     <see cref="UnavailableModelCapabilityClient" /> still supplies <see cref="IModelCapabilityClient" />, whose
+    ///     only registration otherwise lives inside that stack — without it the container cannot activate
+    ///     <c>ModelCapabilityProber</c> and the host fails to build.
     /// </summary>
     private static void AddOllamaRuntime(IHostApplicationBuilder builder, IConfiguration configuration)
     {
@@ -305,6 +310,10 @@ internal static class AddNodeModelRuntimeExtensions
         // Capability gate: enabled unless explicitly disabled, so an un-flagged box keeps today's behavior exactly.
         if (!configuration.GetValue(OllamaRuntimeEnabledConfigurationKey, defaultValue: true))
         {
+            // Opting out of a SECONDARY runtime must not make the host unbuildable: the capability prober is a
+            // mandatory singleton and IModelCapabilityClient has no other registration. The no-op reports
+            // "nothing to probe", which is what a box without an Ollama daemon already reports.
+            builder.Services.AddSingleton<IModelCapabilityClient, UnavailableModelCapabilityClient>();
             return;
         }
 
