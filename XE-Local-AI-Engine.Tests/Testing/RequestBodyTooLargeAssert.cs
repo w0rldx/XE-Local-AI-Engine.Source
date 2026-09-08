@@ -1,13 +1,16 @@
 namespace XE_Local_AI_Engine.Tests.Testing;
 
 using System.Text.Json;
+using XE_Local_AI_Engine.Client.ExceptionHandling;
 
 /// <summary>
 ///     The ONE 413 body a capped route is allowed to answer with. A capped route has two refusal paths — Kestrel's,
 ///     mid-read, and the endpoint's own Content-Length exit — and both DECLARE ASP.NET's <c>ProblemDetails</c> via
 ///     <c>ProducesProblem(413)</c>. The endpoint half used to send FastEndpoints' <c>errors[]</c> body instead, which
 ///     the generated client cannot parse; asserting the status alone could not see that, so these routes assert the
-///     shape.
+///     shape. The Content-Type is pinned whole rather than by media type: both paths run through
+///     <see cref="RequestBodyTooLargeProblem.WriteAsync" />, so a header that differs at all means one of them
+///     stopped doing so.
 /// </summary>
 internal static class RequestBodyTooLargeAssert
 {
@@ -17,9 +20,9 @@ internal static class RequestBodyTooLargeAssert
     {
         ArgumentNullException.ThrowIfNull(response);
 
-        AssertEx.Equal("application/problem+json",
-            response.Content.Headers.ContentType?.MediaType,
-            $"{because} must answer the problem+json media type it declares, not application/json.");
+        AssertEx.Equal(RequestBodyTooLargeProblem.ContentType,
+            response.Content.Headers.ContentType?.ToString(),
+            $"{because} must answer the one Content-Type the shared writer sends, header string and all.");
 
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
         var body = document.RootElement;

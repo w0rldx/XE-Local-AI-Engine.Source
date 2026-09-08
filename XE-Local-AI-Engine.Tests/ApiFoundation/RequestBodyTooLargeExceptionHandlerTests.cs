@@ -27,7 +27,7 @@ public sealed class RequestBodyTooLargeExceptionHandlerTests
 
         AssertEx.True(handled);
         AssertEx.Equal(StatusCodes.Status413PayloadTooLarge, context.Response.StatusCode);
-        AssertEx.Contains(context.Response.ContentType, "application/problem+json", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Equal(RequestBodyTooLargeProblem.ContentType, context.Response.ContentType, "the host path writes the same header the endpoint path does.");
 
         context.Response.Body.Position = 0;
         using var document = await JsonDocument.ParseAsync(context.Response.Body).ConfigureAwait(false);

@@ -64,7 +64,7 @@ public sealed class CreateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store,
 
         if (DevWorkflowRequestSizeLimit.IsOversized(HttpContext.Request))
         {
-            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(HttpContext, DevWorkflowRequestSizeLimit.OversizedDetail)).ConfigureAwait(false);
+            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(DevWorkflowRequestSizeLimit.OversizedDetail)).ConfigureAwait(false);
             return;
         }
 
@@ -125,7 +125,7 @@ public sealed class UpdateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store,
 
         if (DevWorkflowRequestSizeLimit.IsOversized(HttpContext.Request))
         {
-            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(HttpContext, DevWorkflowRequestSizeLimit.OversizedDetail)).ConfigureAwait(false);
+            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(DevWorkflowRequestSizeLimit.OversizedDetail)).ConfigureAwait(false);
             return;
         }
 

@@ -4,52 +4,71 @@ using Microsoft.AspNetCore.Mvc;
 using XE_Local_AI_Engine.Client.Common.Extensions;
 
 /// <summary>
-///     The ONE 413 body a capped route answers with, built here so the two emitters cannot write two bodies.
+///     The ONE 413 answer a capped route gives — status, headers and body — written here so the two emitters cannot
+///     drift apart.
 ///     <para>
 ///         A capped route has two refusal paths and they used to write two different shapes for the same status:
 ///         <see cref="RequestBodyTooLargeExceptionHandler" /> wrote ASP.NET <see cref="ProblemDetails" /> when Kestrel
 ///         refused the body mid-read, while the endpoint's own Content-Length exit sent FastEndpoints' <c>errors[]</c>
 ///         body. Both routes DECLARE <c>ProducesProblem(413)</c> — the ProblemDetails schema — so the second one was a
-///         contract lie the generated client encodes. Both now build from here.
+///         contract lie the generated client encodes.
 ///     </para>
 ///     <para>
-///         The BODY is identical bar <see cref="ProblemDetails.Detail" />, where the host knows nothing but "too
-///         large" while an endpoint can name the cap it enforces. The Content-Type header is the one other
-///         difference, and it is cosmetic — see <see cref="ContentType" />.
+///         Both now go through <see cref="WriteAsync" />, the single writer: the handler awaits it, and an endpoint
+///         sends <see cref="Result" /> — whose only job is to call it — through <c>Send.ResultAsync</c>. Only
+///         <see cref="ProblemDetails.Detail" /> differs between them, because the host knows nothing but "too large"
+///         while an endpoint can name the cap it enforces.
 ///     </para>
 /// </summary>
 public static class RequestBodyTooLargeProblem
 {
-    /// <summary>
-    ///     What <see cref="RequestBodyTooLargeExceptionHandler" /> writes, matching the charset every other
-    ///     handler-written problem body on this surface carries. The endpoint path does NOT use it: it sends through
-    ///     <c>Results.Problem</c>, which writes the bare <c>application/problem+json</c>. Both are the same media type
-    ///     and the generated client parses on that, which is what <c>RequestBodyTooLargeAssert</c> pins.
-    /// </summary>
+    /// <summary>Same string every other problem body on this surface is written with.</summary>
     public const string ContentType = "application/problem+json; charset=utf-8";
 
-    public const string ProblemTitle = "Request body too large";
-
-    public const string ProblemType = "https://tools.ietf.org/html/rfc7231#section-6.5.11";
-
+    /// <summary>
+    ///     Writes the whole answer: status, <see cref="ContentType" /> and body. The single writer, so a change here
+    ///     reaches the host's refusal and the endpoints' own in one edit.
+    /// </summary>
     /// <param name="httpContext">The request being refused; supplies the <c>traceId</c> every problem body carries.</param>
     /// <param name="detail">Operator-safe explanation, written as the ProblemDetails <c>detail</c>.</param>
-    public static ProblemDetails Create(HttpContext httpContext, string detail)
+    /// <param name="cancellationToken">Cancellation for the body write.</param>
+    public static Task WriteAsync(HttpContext httpContext, string detail, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
-        return new ProblemDetails
+        httpContext.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
+
+        var problemDetails = new ProblemDetails
         {
             Status = StatusCodes.Status413PayloadTooLarge,
-            Type = ProblemType,
-            Title = ProblemTitle,
+            Type = "https://tools.ietf.org/html/rfc7231#section-6.5.11",
+            Title = "Request body too large",
             Detail = detail
         }.WithTraceId(httpContext);
+
+        // The content type MUST be passed here: WriteAsJsonAsync overwrites Response.ContentType with
+        // application/json when it is not, which silently demotes the problem body (the trap every sibling carries).
+        return httpContext.Response.WriteAsJsonAsync(problemDetails, options: null, ContentType, cancellationToken);
     }
 
     /// <summary>
-    ///     The same body as an <see cref="IResult" />, for an endpoint that refuses the request itself. Sent with
-    ///     <c>Send.ResultAsync(...)</c>, which writes it as <c>application/problem+json</c>.
+    ///     The same answer as an <see cref="IResult" />, for an endpoint that refuses the request itself before the
+    ///     host ever reads the body. Sent with <c>Send.ResultAsync(...)</c>.
     /// </summary>
-    public static IResult Result(HttpContext httpContext, string detail) => Results.Problem(Create(httpContext, detail));
+    public static IResult Result(string detail) => new RequestBodyTooLargeResult(detail);
+
+    /// <summary>
+    ///     Deliberately not <c>Results.Problem</c>: that writes the bare <c>application/problem+json</c> media type
+    ///     and serializes the body itself, which is a second emitter of this answer and the drift this type exists to
+    ///     stop.
+    /// </summary>
+    private sealed class RequestBodyTooLargeResult(string detail) : IResult
+    {
+        public Task ExecuteAsync(HttpContext httpContext)
+        {
+            ArgumentNullException.ThrowIfNull(httpContext);
+
+            return WriteAsync(httpContext, detail, httpContext.RequestAborted);
+        }
+    }
 }
