@@ -35,6 +35,13 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
+// The runtime card asks the node whether the optional Ollama runtime is configured at all. That probe reaches the
+// generated SDK, and its axios interceptors pull in the app router - neither of which this file is about. `undefined`
+// is the fail-open answer, so the Ollama endpoint field renders exactly as it did before the probe existed.
+vi.mock("@/core/runtime/hooks/useOllamaRuntimeConfigured", () => ({
+	useOllamaRuntimeConfigured: () => ({ data: undefined }),
+}));
+
 const { generatedMock } = vi.hoisted(() => ({
 	generatedMock: {
 		getNodeSettingsOptions: vi.fn(),

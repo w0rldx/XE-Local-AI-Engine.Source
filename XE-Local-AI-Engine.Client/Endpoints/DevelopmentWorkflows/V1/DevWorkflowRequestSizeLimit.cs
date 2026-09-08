@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1;
 
-using FastEndpoints;
+using System.Globalization;
 using Microsoft.AspNetCore.Http.Metadata;
 
 /// <summary>
@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Http.Metadata;
 ///     before the node cap ever gets a chance to refuse it.
 ///     <para>
 ///         Two mechanisms, as on the graph-workflow side: the metadata is what the HOST enforces before the body is
-///         read, and <see cref="RefuseIfOversized" /> is the cheap early exit the handler makes for itself. The
+///         read, and <see cref="IsOversized" /> is the cheap early exit the handler makes for itself. The
 ///         metadata is Kestrel-side, so the in-memory test host neither honours nor disproves it; the early exit is the
 ///         half that is provable without a real connection.
 ///     </para>
@@ -27,27 +27,28 @@ internal sealed class DevWorkflowRequestSizeLimit : IRequestSizeLimitMetadata
     public long? MaxRequestBodySize => MaxBytes;
 
     /// <summary>
-    ///     Whether the request DECLARES more body than this node accepts, recording the refusal on
-    ///     <paramref name="errors" /> when it does. Content-Length is never the limit — a caller can omit or lie about
-    ///     it — which is what the metadata above is for; this is the layer that answers with a message an operator can
-    ///     read instead of a bare host refusal.
+    ///     What an oversized request is told, written as the <c>detail</c> of the shared
+    ///     <c>RequestBodyTooLargeProblem</c> body — the SAME problem+json shape the host's own refusal writes and the
+    ///     one these routes declare, so the caller parses one shape whichever half refused.
+    /// </summary>
+    public static readonly string OversizedDetail =
+        string.Create(CultureInfo.InvariantCulture,
+            $"The request body is larger than the {MaxBytes / (1024 * 1024)} MB this node accepts for a workflow definition.");
+
+    /// <summary>
+    ///     Whether the request DECLARES more body than this node accepts. Content-Length is never the limit — a
+    ///     caller can omit or lie about it — which is what the metadata above is for; this is the layer that answers
+    ///     with a message an operator can read instead of a bare host refusal.
     ///     <para>
     ///         An ABSENT Content-Length is therefore NOT a refusal. A chunked body declares no length at all, and
     ///         reading that null as "over the cap" would answer 413 to every streamed request, about a size nobody ever
     ///         stated. The streamed case belongs to the metadata above, which counts the bytes as they arrive.
     ///     </para>
     /// </summary>
-    public static bool RefuseIfOversized(HttpRequest request, IValidationErrors errors)
+    public static bool IsOversized(HttpRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(errors);
 
-        if (request.ContentLength is not > MaxBytes)
-        {
-            return false;
-        }
-
-        errors.AddError($"The request body is larger than the {MaxBytes / (1024 * 1024)} MB this node accepts for a workflow definition.");
-        return true;
+        return request.ContentLength is > MaxBytes;
     }
 }

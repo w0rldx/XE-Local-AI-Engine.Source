@@ -4,6 +4,7 @@ using FastEndpoints;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
+using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
@@ -61,9 +62,9 @@ public sealed class CreateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store,
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        if (DevWorkflowRequestSizeLimit.RefuseIfOversized(HttpContext.Request, this))
+        if (DevWorkflowRequestSizeLimit.IsOversized(HttpContext.Request))
         {
-            await Send.ErrorsAsync(StatusCodes.Status413PayloadTooLarge, ct).ConfigureAwait(false);
+            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(DevWorkflowRequestSizeLimit.OversizedDetail)).ConfigureAwait(false);
             return;
         }
 
@@ -122,9 +123,9 @@ public sealed class UpdateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store,
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        if (DevWorkflowRequestSizeLimit.RefuseIfOversized(HttpContext.Request, this))
+        if (DevWorkflowRequestSizeLimit.IsOversized(HttpContext.Request))
         {
-            await Send.ErrorsAsync(StatusCodes.Status413PayloadTooLarge, ct).ConfigureAwait(false);
+            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(DevWorkflowRequestSizeLimit.OversizedDetail)).ConfigureAwait(false);
             return;
         }
 

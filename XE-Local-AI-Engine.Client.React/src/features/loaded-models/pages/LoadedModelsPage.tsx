@@ -36,6 +36,10 @@ export function LoadedModelsPage() {
 	const snapshot = loadedModelsQuery.data;
 	const models = snapshot?.models ?? [];
 	const isAvailable = snapshot?.isAvailable ?? false;
+	// The XE_OLLAMA_RUNTIME_ENABLED gate. Absent on an older backend, so default to configured (today's behavior).
+	const ollamaConfigured = snapshot?.ollamaConfigured ?? true;
+	// The query has answered: exactly one of the mutually exclusive states below renders.
+	const settled = !loadedModelsQuery.isLoading && !loadedModelsQuery.error;
 
 	// Tick once per second so the "Expires in" countdown recomputes live between the slower list polls. `now` only
 	// feeds the per-row countdown derivation; the interval is cleared on unmount so it never leaks past the page.
@@ -170,7 +174,21 @@ export function LoadedModelsPage() {
 					</Alert>
 				) : null}
 
-				{!loadedModelsQuery.isLoading && !loadedModelsQuery.error && !isAvailable ? (
+				{settled && !ollamaConfigured ? (
+					// XE_OLLAMA_RUNTIME_ENABLED=false: the no-op runtime answers "nothing there" (isAvailable:true, empty
+					// list), which would otherwise render as an ordinary idle-daemon empty state and send an operator
+					// hunting for a daemon this node will never talk to. Say the runtime is off instead. Same neutral,
+					// dimmed shape as the unreachable state below - an off runtime is a configuration fact, not an error.
+					<EmptyState
+						data-testid="loaded-models-runtime-disabled"
+						message={t(
+							"pages.loadedModels.ollama.disabled",
+							"The Ollama runtime is disabled on this node (XE_OLLAMA_RUNTIME_ENABLED=false), so nothing can be loaded here. llama.cpp models still appear below.",
+						)}
+					/>
+				) : null}
+
+				{settled && ollamaConfigured && !isAvailable ? (
 					// Ollama is an optional secondary provider, deliberately absent on the desktop default. An
 					// unreachable provider is therefore an expected empty state, not an error: render a neutral,
 					// dimmed line (never a red/warning alert) and do NOT surface the raw connection-refused reason
@@ -184,11 +202,11 @@ export function LoadedModelsPage() {
 					/>
 				) : null}
 
-				{!loadedModelsQuery.isLoading && !loadedModelsQuery.error && isAvailable && models.length === 0 ? (
+				{settled && ollamaConfigured && isAvailable && models.length === 0 ? (
 					<EmptyState data-testid="loaded-models-empty" message={t("pages.loadedModels.empty", "No models currently loaded.")} />
 				) : null}
 
-				{!loadedModelsQuery.isLoading && !loadedModelsQuery.error && isAvailable && models.length > 0 ? (
+				{settled && ollamaConfigured && isAvailable && models.length > 0 ? (
 					<Table.ScrollContainer minWidth={640}>
 						<Table verticalSpacing="sm" data-testid="loaded-models-table">
 							<Table.Thead>

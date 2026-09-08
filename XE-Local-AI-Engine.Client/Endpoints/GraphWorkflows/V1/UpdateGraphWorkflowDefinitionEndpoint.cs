@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1.Mappers;
+using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
@@ -30,9 +31,9 @@ public sealed class UpdateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefiniti
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        if (GraphWorkflowRequestSizeLimit.RefuseIfOversized(HttpContext.Request, this))
+        if (GraphWorkflowRequestSizeLimit.IsOversized(HttpContext.Request))
         {
-            await Send.ErrorsAsync(StatusCodes.Status413PayloadTooLarge, ct).ConfigureAwait(false);
+            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(GraphWorkflowRequestSizeLimit.OversizedDetail)).ConfigureAwait(false);
             return;
         }
 

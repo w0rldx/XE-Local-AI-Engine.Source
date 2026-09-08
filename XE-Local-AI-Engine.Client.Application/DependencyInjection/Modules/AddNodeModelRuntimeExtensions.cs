@@ -11,7 +11,10 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
+using XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Client.Services.Connection;
@@ -296,6 +299,11 @@ internal static class AddNodeModelRuntimeExtensions
     ///     model to either this provider or llama.cpp through a single seam. The runtime is enabled unless
     ///     <c>XE_OLLAMA_RUNTIME_ENABLED=false</c>, so the default registration is byte-identical to the previous inline
     ///     call. The resolved endpoint is loopback-guarded (see <see cref="GuardOllamaEndpointIsLoopback" />).
+    ///     When the gate is OFF the provider stack is skipped, so this method supplies the two services whose only
+    ///     Ollama-side dependencies live inside that stack: <see cref="UnavailableModelCapabilityClient" /> for
+    ///     <see cref="IModelCapabilityClient" /> (without it the container cannot activate <c>ModelCapabilityProber</c>)
+    ///     and <see cref="UnavailableOllamaModelService" /> for <see cref="IOllamaModelService" /> (without it every
+    ///     model-catalog, capacity, classification, model-fit and local-model-endpoint resolve throws).
     /// </summary>
     private static void AddOllamaRuntime(IHostApplicationBuilder builder, IConfiguration configuration)
     {
@@ -305,6 +313,12 @@ internal static class AddNodeModelRuntimeExtensions
         // Capability gate: enabled unless explicitly disabled, so an un-flagged box keeps today's behavior exactly.
         if (!configuration.GetValue(OllamaRuntimeEnabledConfigurationKey, defaultValue: true))
         {
+            // Opting out of a SECONDARY runtime must not make the host unbuildable: the capability prober and the model
+            // service are mandatory singletons whose Ollama-side dependencies (IModelCapabilityClient, IOllamaApiClient)
+            // have no registration outside the provider stack above. Both no-ops report "nothing there", which is what
+            // a box without an Ollama daemon already reports.
+            builder.Services.AddSingleton<IModelCapabilityClient, UnavailableModelCapabilityClient>();
+            builder.Services.AddSingleton<IOllamaModelService, UnavailableOllamaModelService>();
             return;
         }
 
@@ -314,6 +328,10 @@ internal static class AddNodeModelRuntimeExtensions
             GuardOllamaEndpointIsLoopback(chatConnectionSettings.Endpoint, configuration);
             return new OllamaLocalModelProviderRegistration(chatConnectionSettings.Endpoint, chatConnectionSettings.Model);
         });
+
+        // Moved here from AddNodeWorkerInfrastructure so it sits on the same side of the gate as the IOllamaApiClient
+        // it depends on. Registered exactly once on each branch, so no path can double-register it.
+        builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
     }
 
     /// <summary>
