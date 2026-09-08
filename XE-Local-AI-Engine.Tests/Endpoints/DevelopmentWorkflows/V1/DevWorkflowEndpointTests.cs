@@ -907,6 +907,10 @@ public sealed class DevWorkflowEndpointTests
     /// <summary>
     ///     The graph-carrying routes cap their body. Without one they inherit the host's 30 MB default, and a body that
     ///     size is bound and walked by the runtime's own parser before the node cap could refuse it.
+    ///     <para>
+    ///         The BODY is asserted, not just the status: this exit declares ASP.NET's ProblemDetails and used to send
+    ///         FastEndpoints' errors[] instead, which a status-only assertion cannot tell apart.
+    ///     </para>
     /// </summary>
     [Test]
     [Arguments("POST", Definitions)]
@@ -919,6 +923,7 @@ public sealed class DevWorkflowEndpointTests
         using var response = await SendAsync(factory, method, route, OversizedDefinitionBody()).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode, $"{method} {route} must refuse a body over the cap.");
+        await RequestBodyTooLargeAssert.DeclaredProblemShapeAsync(response, $"{method} {route}").ConfigureAwait(false);
         AssertEx.Empty(store.ReceivedCalls());
     }
 

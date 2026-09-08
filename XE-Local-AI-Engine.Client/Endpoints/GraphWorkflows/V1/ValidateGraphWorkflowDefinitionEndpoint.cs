@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1.Mappers;
+using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
@@ -31,9 +32,11 @@ public sealed class ValidateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefini
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        if (GraphWorkflowRequestSizeLimit.RefuseIfOversized(HttpContext.Request, this))
+        if (GraphWorkflowRequestSizeLimit.IsOversized(HttpContext.Request))
         {
-            await Send.ErrorsAsync(StatusCodes.Status413PayloadTooLarge, ct).ConfigureAwait(false);
+            // The declared problem+json shape, not FastEndpoints' errors[]: the host's own refusal of this same
+            // request writes that body, and one status must not answer in two shapes.
+            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(HttpContext, GraphWorkflowRequestSizeLimit.OversizedDetail)).ConfigureAwait(false);
             return;
         }
 

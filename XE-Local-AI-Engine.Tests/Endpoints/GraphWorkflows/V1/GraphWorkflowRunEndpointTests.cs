@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
+using XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
@@ -418,6 +419,27 @@ public sealed class GraphWorkflowRunEndpointTests
     {
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
         return document.RootElement.GetProperty("runId").GetGuid();
+    }
+
+    /// <summary>
+    ///     The fourth capped route. Start carries an input rather than a graph, and its cap was the one with no test at
+    ///     all — so the shape it answers with was unpinned on the route where the early exit runs BEFORE the definition
+    ///     lookup, which is what makes an unknown definition id answer 413 here rather than 404.
+    /// </summary>
+    [Test]
+    public async Task StartRun_WithABodyOverTheCap_Returns413InTheDeclaredShape()
+    {
+        using var response = await SendAsync("POST", DefinitionRuns, OversizedStartBody()).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode, "start must refuse a body over the cap before it looks the definition up.");
+        await RequestBodyTooLargeAssert.DeclaredProblemShapeAsync(response, $"POST {DefinitionRuns}").ConfigureAwait(false);
+    }
+
+    /// <summary>A body whose bulk is in the run INPUT, the member this route's cap exists to bound.</summary>
+    private static string OversizedStartBody()
+    {
+        var input = new string('a', (int)GraphWorkflowRequestSizeLimit.MaxBytes);
+        return $$"""{"requestId":"44444444-4444-4444-4444-444444444444","input":"{{input}}"}""";
     }
 
     private static async Task<string?> ConflictTypeAsync(HttpResponseMessage response)
