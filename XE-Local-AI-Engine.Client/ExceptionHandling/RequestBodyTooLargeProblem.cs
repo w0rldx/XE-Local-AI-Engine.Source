@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using XE_Local_AI_Engine.Client.Common.Extensions;
 
 /// <summary>
-///     The ONE 413 body a capped route answers with, built here so the two emitters cannot drift apart.
+///     The ONE 413 body a capped route answers with, built here so the two emitters cannot write two bodies.
 ///     <para>
 ///         A capped route has two refusal paths and they used to write two different shapes for the same status:
 ///         <see cref="RequestBodyTooLargeExceptionHandler" /> wrote ASP.NET <see cref="ProblemDetails" /> when Kestrel
@@ -13,13 +13,19 @@ using XE_Local_AI_Engine.Client.Common.Extensions;
 ///         contract lie the generated client encodes. Both now build from here.
 ///     </para>
 ///     <para>
-///         Only <see cref="ProblemDetails.Detail" /> differs between them: the host knows nothing but "too large",
-///         while an endpoint can name the cap it enforces.
+///         The BODY is identical bar <see cref="ProblemDetails.Detail" />, where the host knows nothing but "too
+///         large" while an endpoint can name the cap it enforces. The Content-Type header is the one other
+///         difference, and it is cosmetic — see <see cref="ContentType" />.
 ///     </para>
 /// </summary>
 public static class RequestBodyTooLargeProblem
 {
-    /// <summary>Same string every other problem body on this surface is written with.</summary>
+    /// <summary>
+    ///     What <see cref="RequestBodyTooLargeExceptionHandler" /> writes, matching the charset every other
+    ///     handler-written problem body on this surface carries. The endpoint path does NOT use it: it sends through
+    ///     <c>Results.Problem</c>, which writes the bare <c>application/problem+json</c>. Both are the same media type
+    ///     and the generated client parses on that, which is what <c>RequestBodyTooLargeAssert</c> pins.
+    /// </summary>
     public const string ContentType = "application/problem+json; charset=utf-8";
 
     public const string ProblemTitle = "Request body too large";

@@ -34,8 +34,6 @@ public sealed class ValidateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefini
 
         if (GraphWorkflowRequestSizeLimit.IsOversized(HttpContext.Request))
         {
-            // The declared problem+json shape, not FastEndpoints' errors[]: the host's own refusal of this same
-            // request writes that body, and one status must not answer in two shapes.
             await Send.ResultAsync(RequestBodyTooLargeProblem.Result(HttpContext, GraphWorkflowRequestSizeLimit.OversizedDetail)).ConfigureAwait(false);
             return;
         }

@@ -64,8 +64,6 @@ public sealed class CreateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store,
 
         if (DevWorkflowRequestSizeLimit.IsOversized(HttpContext.Request))
         {
-            // The declared problem+json shape, not FastEndpoints' errors[]: the host's own refusal of this same
-            // request writes that body, and one status must not answer in two shapes.
             await Send.ResultAsync(RequestBodyTooLargeProblem.Result(HttpContext, DevWorkflowRequestSizeLimit.OversizedDetail)).ConfigureAwait(false);
             return;
         }
@@ -127,8 +125,6 @@ public sealed class UpdateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store,
 
         if (DevWorkflowRequestSizeLimit.IsOversized(HttpContext.Request))
         {
-            // The declared problem+json shape, not FastEndpoints' errors[]: the host's own refusal of this same
-            // request writes that body, and one status must not answer in two shapes.
             await Send.ResultAsync(RequestBodyTooLargeProblem.Result(HttpContext, DevWorkflowRequestSizeLimit.OversizedDetail)).ConfigureAwait(false);
             return;
         }

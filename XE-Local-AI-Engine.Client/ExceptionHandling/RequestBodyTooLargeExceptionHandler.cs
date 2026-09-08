@@ -41,7 +41,7 @@ public sealed class RequestBodyTooLargeExceptionHandler(ILogger<RequestBodyTooLa
 
         httpContext.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
 
-        // Shared with the endpoints' own Content-Length exit so the two emitters of this status cannot drift apart.
+        // Shared with the endpoints' own Content-Length exit; only the detail differs between the two.
         var problemDetails = RequestBodyTooLargeProblem.Create(httpContext, "The request body is larger than this route accepts.");
 
         // The content type MUST be passed here: WriteAsJsonAsync overwrites Response.ContentType with
