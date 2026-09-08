@@ -53,6 +53,9 @@ export interface NodeSettingsFieldsCardProps {
 	// True while the recommended embedding model's GGUF download is running (duplicate-guards the button after the
 	// request returns, until the download reaches a terminal phase).
 	readonly isRecommendedEmbeddingInFlight: boolean;
+	// True only when the node has definitely reported the optional Ollama runtime gated off; the page owns that probe
+	// and fails open. Passed straight through to the runtime card, which hides the endpoint input.
+	readonly ollamaRuntimeDisabled: boolean;
 }
 
 export function NodeSettingsFieldsCard({
@@ -71,6 +74,7 @@ export function NodeSettingsFieldsCard({
 	onDownloadRecommendedEmbedding,
 	isDownloadRecommendedEmbeddingPending,
 	isRecommendedEmbeddingInFlight,
+	ollamaRuntimeDisabled,
 }: NodeSettingsFieldsCardProps) {
 	const { t } = useTranslation();
 
@@ -150,6 +154,7 @@ export function NodeSettingsFieldsCard({
 				draftModelOptions={draftModelOptions}
 				keepWarmModelOptions={keepWarmModelOptions}
 				autoEffortFastModelOptions={autoEffortFastModelOptions}
+				ollamaRuntimeDisabled={ollamaRuntimeDisabled}
 			/>
 
 			<NodeSettingsKnowledgeModelsCard

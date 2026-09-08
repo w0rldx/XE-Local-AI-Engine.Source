@@ -3,7 +3,6 @@ import { IconCpu } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useOllamaRuntimeConfigured } from "@/core/runtime/hooks/useOllamaRuntimeConfigured";
 import {
 	nodeSettingsFieldError,
 	nodeSettingsRestartHint,
@@ -31,6 +30,12 @@ interface Props {
 	readonly draftModelOptions: readonly NodeSettingsModelOption[];
 	readonly keepWarmModelOptions: readonly NodeSettingsModelOption[];
 	readonly autoEffortFastModelOptions: readonly NodeSettingsModelOption[];
+	// Nothing reads the Ollama endpoint when the runtime is gated off (XE_OLLAMA_RUNTIME_ENABLED=false), so offering
+	// the field invites an operator to configure a runtime this node will never start. The page owns the probe and
+	// FAILS OPEN: only a definite `false` arrives as true here, so a still-loading or failed probe leaves the field
+	// exactly as it is. The stored value stays in the form model either way, so hiding the input never changes what a
+	// save round-trips.
+	readonly ollamaRuntimeDisabled: boolean;
 }
 export function NodeSettingsRuntimeCard({
 	form,
@@ -40,6 +45,7 @@ export function NodeSettingsRuntimeCard({
 	draftModelOptions,
 	keepWarmModelOptions,
 	autoEffortFastModelOptions,
+	ollamaRuntimeDisabled,
 }: Props) {
 	const { t } = useTranslation();
 	const autoEffortFastOptions = useMemo(() => {
@@ -73,11 +79,6 @@ export function NodeSettingsRuntimeCard({
 			})),
 		[t],
 	);
-	// Nothing reads the Ollama endpoint when the runtime is gated off (XE_OLLAMA_RUNTIME_ENABLED=false), so
-	// offering the field invites an operator to configure a runtime this node will never start. FAIL OPEN: only a
-	// definite `false` hides it, so a still-loading or failed probe leaves the field exactly as it is today. The
-	// stored value stays in the form model either way, so hiding the input never changes what a save round-trips.
-	const ollamaRuntimeDisabled = useOllamaRuntimeConfigured().data === false;
 	const needsDraftModel = requiresExternalDraftModel(form.speculativeMode);
 	const showsDraftTokensPerStep = usesDraftTokensPerStep(form.speculativeMode);
 	return (

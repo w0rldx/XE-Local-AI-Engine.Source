@@ -32,13 +32,6 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
-// The runtime card asks the node whether the optional Ollama runtime is configured at all. That probe reaches the
-// generated SDK, and its axios interceptors pull in the app router - neither of which this file is about. `undefined`
-// is the fail-open answer, so the Ollama endpoint field renders exactly as it did before the probe existed.
-vi.mock("@/core/runtime/hooks/useOllamaRuntimeConfigured", () => ({
-	useOllamaRuntimeConfigured: () => ({ data: undefined }),
-}));
-
 function installJsdomEnvironmentMocks(): void {
 	Object.defineProperty(window, "matchMedia", {
 		writable: true,
@@ -74,6 +67,7 @@ interface RenderOverrides {
 	onChange?: ReturnType<typeof vi.fn>;
 	errors?: Record<string, string>;
 	keepWarmModelOptions?: NodeSettingsFieldsCardProps["keepWarmModelOptions"];
+	ollamaRuntimeDisabled?: boolean;
 	autoEffortFastModelOptions?: NodeSettingsFieldsCardProps["autoEffortFastModelOptions"];
 }
 
@@ -101,6 +95,7 @@ function renderCard(
 				onDownloadRecommendedEmbedding={onDownloadEmbedding}
 				isDownloadRecommendedEmbeddingPending={overrides.isDownloadRecommendedEmbeddingPending ?? false}
 				isRecommendedEmbeddingInFlight={overrides.isRecommendedEmbeddingInFlight ?? false}
+				ollamaRuntimeDisabled={overrides.ollamaRuntimeDisabled ?? false}
 			/>
 		</MantineProvider>,
 	);
@@ -448,5 +443,29 @@ describe("NodeSettingsFieldsCard — restart-required hint", () => {
 		// Both load a second GGUF, so the draft-model picker and the draft-tokens input must appear for them.
 		expect(screen.getByTestId("node-settings-speculative-draft-model")).toBeTruthy();
 		expect(screen.getByTestId("node-settings-speculative-draft-max-tokens")).toBeTruthy();
+	});
+});
+
+describe("NodeSettingsFieldsCard — Ollama gate pass-through", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+		vi.clearAllMocks();
+	});
+
+	afterEach(() => cleanup());
+
+	it("hides the Ollama endpoint input when the page reports the runtime gated off", () => {
+		renderCard({ ollamaRuntimeDisabled: true });
+
+		// Proves the boolean survives the card group, not only the runtime card that renders the branch.
+		expect(screen.queryByTestId("node-settings-ollama-endpoint")).toBeNull();
+		expect(screen.getByTestId("node-settings-ollama-disabled")).toBeTruthy();
+	});
+
+	it("renders the Ollama endpoint input when the runtime is not gated off", () => {
+		renderCard({ ollamaRuntimeDisabled: false });
+
+		expect(screen.getByTestId("node-settings-ollama-endpoint")).toBeTruthy();
+		expect(screen.queryByTestId("node-settings-ollama-disabled")).toBeNull();
 	});
 });
