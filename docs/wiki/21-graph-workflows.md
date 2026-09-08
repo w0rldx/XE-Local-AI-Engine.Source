@@ -496,7 +496,7 @@ constraint (a `maxLength: 3` produced a 1302-character field in the S6 live roun
 downstream — in an edge condition or the consuming node — and never in the schema alone. You do not have to notice
 this unaided: saving or validating a graph raises the non-blocking warning of §2.4 on an Agent node whose schema asks
 for it, and that warning is now raised only for nodes that are **not** pinned to a llama-server model. See
-`docs/agent-knowledge.md` §3 for the evidence and the `--verbose` recipe that shows the compiled grammar.
+`docs/agent-knowledge.md` §2 for the evidence and the `--verbose` recipe that shows the compiled grammar.
 
 A node declaring a response schema must come back a JSON **object**. A parse failure fails `NodeFailed` — the
 retryable class, since a re-ask under the same grammar can land where one attempt did not — naming the finish reason,
@@ -847,7 +847,7 @@ sanitiser covers the response schema too: `DeferredLlamaServerChatClient.ApplyRe
 authored schema through the same `Sanitize` pass before it reaches the wire, so an over-large bound is dropped rather
 than failing the turn with HTTP 400 `Failed to initialize samplers`. Every bound **within** the cap is now enforced by
 the grammar rather than dropped — see §4.2. See
-[Local Runtime & Providers](03-local-runtime-and-providers.md) and `docs/agent-knowledge.md` §3.
+[Local Runtime & Providers](03-local-runtime-and-providers.md) and `docs/agent-knowledge.md` §2.
 
 ---
 
